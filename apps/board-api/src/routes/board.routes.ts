@@ -7,7 +7,8 @@ import {
   requireBoardEditAccess,
 } from '../middleware/authorize.js';
 import * as boardService from '../services/board.service.js';
-import { publishBoltEvent, buildBoardEventPayload } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
+import { buildBoardEventPayload } from '../lib/enrich-board-event.js';
 
 const BACKGROUNDS = ['dots', 'grid', 'lines', 'plain'] as const;
 const VISIBILITIES = ['private', 'project', 'organization'] as const;

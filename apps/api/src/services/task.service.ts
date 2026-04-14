@@ -11,7 +11,7 @@ import { logActivity } from './activity.service.js';
 import { postToSlack, taskDeepLink } from './slack-notify.service.js';
 import { env } from '../env.js';
 import { escapeLike } from '../lib/escape-like.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { enrichTask, loadActor, loadOrg, loadPhase } from './bolt-event-enricher.service.js';
 
 /** Look up org_id for a project (used for Bolt event publishing). */

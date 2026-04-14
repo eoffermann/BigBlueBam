@@ -1,4 +1,16 @@
 /**
+ * BOLT-API INTERNAL ONLY.
+ *
+ * This is a Redis-PubSub variant of publishBoltEvent used exclusively inside
+ * bolt-api for fan-out back onto the `bolt:events` channel. It is NOT a
+ * drop-in replacement for the canonical HTTP-based publisher in
+ * `@bigbluebam/shared` (which every other BigBlueBam service uses to POST to
+ * bolt-api's `/v1/events/ingest`). Do not import this from any other app or
+ * package and do not merge it with the shared module: the two have different
+ * transports (Redis PubSub vs. HTTP), different argument shapes, and serve
+ * different roles in the event pipeline. See Wave 0.3 / Cross_Product_
+ * Integration_Plan.md Step 3 for the consolidation rationale.
+ *
  * publishBoltEvent — lightweight utility for other BigBlueBam services to
  * trigger Bolt automation evaluation.
  *

@@ -4,7 +4,7 @@ import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import * as invoiceService from '../services/invoice.service.js';
 import * as lineItemService from '../services/line-item.service.js';
 import * as pdfService from '../services/pdf.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   buildInvoiceUrl,
   buildInvoicePdfUrl,

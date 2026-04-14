@@ -205,6 +205,9 @@ importers:
 
   apps/banter-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -375,6 +378,9 @@ importers:
 
   apps/beacon-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -861,6 +867,9 @@ importers:
 
   apps/bill-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -1031,6 +1040,9 @@ importers:
 
   apps/blank-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -1192,6 +1204,9 @@ importers:
 
   apps/blast-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -1353,6 +1368,9 @@ importers:
 
   apps/board-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -1684,6 +1702,9 @@ importers:
 
   apps/bond-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -1839,6 +1860,9 @@ importers:
 
   apps/book-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -2054,6 +2078,9 @@ importers:
 
   apps/brief-api:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
@@ -2493,6 +2520,9 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)

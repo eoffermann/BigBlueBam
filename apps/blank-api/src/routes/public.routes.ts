@@ -3,7 +3,7 @@ import { z } from 'zod';
 import * as formService from '../services/form.service.js';
 import * as submissionService from '../services/submission.service.js';
 import { renderFormHtml } from '../lib/form-renderer.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { enrichSubmission, loadOrg } from '../lib/bolt-enrich.js';
 
 // ---------------------------------------------------------------------------

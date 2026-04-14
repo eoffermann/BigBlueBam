@@ -11,7 +11,7 @@ import {
   beaconEntries,
 } from '../db/schema/index.js';
 import { sanitizeHtml } from '../lib/sanitize.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { enrichDocumentEventPayload } from '../lib/enrich-document-event.js';
 
 // ---------------------------------------------------------------------------

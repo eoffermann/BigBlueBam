@@ -13,7 +13,7 @@ import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import { requireChannelMember, requireChannelAdmin, requireChannelOwner } from '../middleware/channel-auth.js';
 import { broadcastToOrg, broadcastToChannel } from '../services/realtime.js';
 import { getEffectiveBanterPermissions } from '../services/org-permissions-bridge.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { loadEnrichedActor, loadEnrichedOrg } from '../lib/bolt-enrich.js';
 import { channelDeepLink, dmDeepLink } from '../lib/notify.js';
 

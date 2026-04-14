@@ -2,7 +2,7 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bondActivities, bondDeals, bondContacts, bondCompanies } from '../db/schema/index.js';
 import { notFound } from '../lib/utils.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   loadActor,
   loadOrg,
@@ -175,6 +175,7 @@ export async function createActivity(
     const company = input.company_id ? await loadCompanyById(input.company_id) : null;
     await publishBoltEvent(
       'activity.logged',
+      'bond',
       {
         activity: {
           id: a.id,

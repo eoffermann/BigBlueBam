@@ -8,7 +8,7 @@ import {
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireMinOrgRole, requireGoalAccess } from '../middleware/authorize.js';
 import * as krService from '../services/key-result.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   buildGoalUrl,
   buildKeyResultUrl,

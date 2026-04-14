@@ -13,7 +13,7 @@ import { broadcastToChannel } from '../services/realtime.js';
 import { extractMentions } from '../services/notification-queue.js';
 import { emitNotification, threadDeepLink } from '../lib/notify.js';
 import { sanitizeContent } from '../lib/sanitize.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   loadEnrichedChannel,
   loadEnrichedActor,
