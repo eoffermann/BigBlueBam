@@ -29,6 +29,14 @@ const envSchema = z.object({
   MCP_AUTH_REQUIRED: z.coerce.boolean().default(true),
   MCP_RATE_LIMIT_RPM: z.coerce.number().int().positive().default(120),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  // Shared service-to-service secret. When set, the POST /tools/call internal
+  // route requires X-Internal-Secret to match this value (timingSafeEqual).
+  // When unset, /tools/call refuses every request with 503.
+  INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
+  // Bearer token used by /tools/call to authenticate outbound requests to the
+  // Bam REST API on behalf of the caller. Issued by the Bam CLI as an
+  // org-bound service-account API key (see `cli create-service-account`).
+  MCP_INTERNAL_API_TOKEN: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
