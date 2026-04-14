@@ -1,0 +1,46 @@
+name: Lint
+
+# Closes Platform_Plan.md (2026-04-13-revised) gap 2.2.1.
+#
+# Runs Biome / per-package linters across the workspace plus the migration
+# header / idempotency check on every push and PR. The repo currently uses
+# a mix of Biome (frontends) and ESLint (api services); the root `pnpm lint`
+# script delegates to `turbo run lint` which fans out to whichever tool each
+# package has registered.
+
+on:
+  pull_request:
+  push:
+    branches: [main, stable]
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  biome:
+    name: Lint workspace
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Lint migration files
+        run: pnpm lint:migrations

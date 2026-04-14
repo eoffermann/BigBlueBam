@@ -142,6 +142,39 @@ describe('Error Handler', () => {
     expect(sent.error.request_id).toBe('req-500');
   });
 
+  it('mints internal_error_id on 500 envelope and logs it with the cause', () => {
+    const { mockReply, mockRequest } = createMocks('req-internal-id');
+
+    const error = new Error('cause never leaks') as any;
+    errorHandler(error as any, mockRequest as any, mockReply as any);
+
+    const sent = mockReply.send.mock.calls[0][0];
+    expect(sent.error.internal_error_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+
+    // The structured log call should carry the same id alongside the
+    // original error so an operator can grep for it.
+    expect(mockRequest.log.error).toHaveBeenCalledTimes(1);
+    const logCall = (mockRequest.log.error as ReturnType<typeof vi.fn>).mock.calls[0];
+    const logFields = logCall[0];
+    expect(logFields.internal_error_id).toBe(sent.error.internal_error_id);
+    expect(logFields.request_id).toBe('req-internal-id');
+    expect(logFields.err).toBe(error);
+  });
+
+  it('mints a fresh internal_error_id on every 500', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 5; i++) {
+      const reply = { status: vi.fn().mockReturnThis(), send: vi.fn().mockReturnThis() };
+      const request = { id: 'r' + i, log: { error: vi.fn() } };
+      errorHandler(new Error('boom') as any, request as any, reply as any);
+      const sent = (reply.send as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      ids.add(sent.error.internal_error_id);
+    }
+    expect(ids.size).toBe(5);
+  });
+
   it('always includes request_id in response', () => {
     const requestId = 'unique-req-id-abc';
     const { mockReply, mockRequest } = createMocks(requestId);

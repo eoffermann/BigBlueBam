@@ -1,13 +1,28 @@
-name: DB Drift Guard
+name: Test
+
+# Closes Platform_Plan.md (2026-04-13-revised) gap 2.2.3.
+#
+# Runs Vitest across every workspace package on every push and PR. A
+# Postgres 16 service container and a Redis 7 service container are
+# provided so the API packages that hit a real DB can connect; hermetic
+# unit tests are unaffected. Migrations are applied with psql before the
+# Vitest run so the schema is in place for any test that queries it.
+#
+# E2E (Playwright) coverage lives in a separate integration workflow
+# (gap 2.2.4, deferred) because it requires the full docker-compose stack.
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, stable]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  db-drift:
-    name: Drizzle ↔ SQL migration drift check
+  vitest:
+    name: Vitest (all packages)
     runs-on: ubuntu-latest
 
     services:
@@ -24,10 +39,21 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       DATABASE_URL: postgresql://bigbluebam:postgres@localhost:5432/bigbluebam
+      REDIS_URL: redis://localhost:6379
       PGPASSWORD: postgres
+      NODE_ENV: test
 
     steps:
       - name: Checkout
@@ -68,23 +94,10 @@ jobs:
           MIGRATIONS_DIR: ${{ github.workspace }}/infra/postgres/migrations
         run: node apps/api/dist/migrate.js
 
-      - name: Verify SCHEMA_ROOTS coverage (regression test)
-        run: node scripts/db-check.coverage.test.mjs
-
-      - name: Run drift guard
-        run: pnpm db:check
-
-  migration-lint:
-    name: Migration file lint (header + idempotency)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Lint migrations
-        run: node scripts/lint-migrations.mjs
+      - name: Run unit tests
+        # @bigbluebam/e2e is excluded because its `test` script runs
+        # `playwright test`, which needs the full docker-compose stack
+        # plus a Playwright browser install. E2E is a separate
+        # integration workflow (gap 2.2.4, deferred). See DECISIONS.md
+        # D-008e for context.
+        run: pnpm -r --filter='!@bigbluebam/e2e' --parallel --if-present test

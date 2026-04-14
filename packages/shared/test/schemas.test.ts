@@ -128,6 +128,30 @@ describe('errorResponseSchema', () => {
     };
     expect(errorResponseSchema.parse(input)).toEqual(input);
   });
+
+  it('accepts error response with internal_error_id', () => {
+    const input = {
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'An unexpected error occurred',
+        request_id: 'req_789',
+        internal_error_id: '11111111-2222-4333-8444-555555555555',
+      },
+    };
+    expect(errorResponseSchema.parse(input)).toEqual(input);
+  });
+
+  it('rejects internal_error_id that is not a UUID', () => {
+    const input = {
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'An unexpected error occurred',
+        request_id: 'req_789',
+        internal_error_id: 'not-a-uuid',
+      },
+    };
+    expect(() => errorResponseSchema.parse(input)).toThrow();
+  });
 });
 
 // --- Auth schemas ---

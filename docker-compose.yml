@@ -806,12 +806,32 @@ services:
     networks:
       - backend
 
-  # ── One-shot ────────────────────────────────────────────────────
-  # Applies all pending SQL migrations from /app/migrations. Tracks applied
-  # migrations in the `schema_migrations` table. Idempotent: rerunning is a
-  # no-op when the DB is already up to date. Every DB-using service declares
-  # this as a `service_completed_successfully` dependency so migrations
-  # ALWAYS run before app code that assumes the current schema.
+  # ── One-shot migration runner ─────────────────────────────────────────────
+  # Reads infra/postgres/migrations/ and applies any unapplied SQL files in
+  # filename order. Tracks applied migrations in the `schema_migrations`
+  # table with a SHA-256 checksum per file (header comments stripped before
+  # hashing so editing -- Why / -- Client impact lines does not invalidate
+  # an applied migration). Idempotent: rerunning is a no-op when the DB is
+  # already up to date. Every DB-using service declares this as a
+  # `service_completed_successfully` dependency so migrations ALWAYS run
+  # before app code that assumes the current schema.
+  #
+  # GOTCHA: the sidecar is cached on subsequent `docker compose up -d`.
+  # `service_completed_successfully` dependencies are evaluated against the
+  # FIRST successful exit on a given stack lifetime. Once `migrate` has run
+  # to completion, subsequent `docker compose up -d <service>` invocations
+  # see the cached completion and DO NOT re-run the sidecar even if you
+  # just dropped a new SQL file into infra/postgres/migrations/. Simply
+  # rebuilding `bolt-api` (or any other dependent service) will not trigger
+  # the migration. Run the sidecar explicitly:
+  #
+  #   docker compose run --rm migrate                              # apply new migrations
+  #   docker compose build <app-that-uses-the-new-column>          # rebuild affected app
+  #   docker compose up -d --force-recreate <app>                  # restart it
+  #
+  # See CLAUDE.md "Applying a new migration to a long-running stack" for
+  # the full incident history (template_strict, bolt_graph_column,
+  # bond_deal_rotting_alerted) and verification commands.
   #
   # NOTE ON THE BIND MOUNT: `infra/postgres/migrations` is also COPYed into
   # the production image by apps/api/Dockerfile so Helm/k8s deployments ship

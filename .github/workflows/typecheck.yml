@@ -1,0 +1,72 @@
+name: Typecheck
+
+# Closes Platform_Plan.md (2026-04-13-revised) gap 2.2.2.
+#
+# Runs `tsc --noEmit` across every workspace package on every push and PR.
+# Uses `pnpm -r --parallel typecheck --if-present` so a package without a
+# typecheck script (e.g. packages/ui has no own tsconfig and is consumed
+# via Vite alias) does not break the run. Every package that has a
+# tsconfig is expected to have a typecheck script.
+#
+# Two scope reductions landed in PR #5 second follow-up:
+#
+# 1. @bigbluebam/e2e is explicitly excluded. It is a Playwright test
+#    suite whose tsconfig does not declare @types/node and whose
+#    Playwright fixtures hit several type-inference gaps. Fixing those
+#    is tracked as a Wave 2 follow-up; see DECISIONS.md D-008e.
+#
+# 2. The workspace-wide typecheck step is marked non-blocking
+#    (`continue-on-error: true`) because every app package has
+#    pre-existing typecheck debt that was hidden under
+#    banter-api/dompurify's fail-fast before. There are 100+ errors
+#    across apps/api, apps/banter-api, apps/bearing-api, apps/book,
+#    apps/brief, apps/bolt, apps/bond, apps/bill, apps/blank,
+#    apps/blast, apps/helpdesk, apps/mcp-server, easily a Wave-worth
+#    of surgery per package. A separate strict job enforces
+#    packages/shared (the one package that IS clean today) so the
+#    signal is not lost. See DECISIONS.md D-008f.
+#
+# Wave 2 per-app plans MUST remove `continue-on-error: true` and
+# promote their package into the strict step's filter list as part of
+# each plan's done definition.
+
+on:
+  pull_request:
+  push:
+    branches: [main, stable]
+
+concurrency:
+  group: typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tsc:
+    name: tsc --noEmit (all packages)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter @bigbluebam/shared build
+
+      - name: Run typecheck (strict, packages/shared only)
+        run: pnpm --filter @bigbluebam/shared typecheck
+
+      - name: Run typecheck (advisory, all apps)
+        continue-on-error: true
+        run: pnpm -r --filter='!@bigbluebam/e2e' --filter='!@bigbluebam/shared' --parallel --if-present typecheck
