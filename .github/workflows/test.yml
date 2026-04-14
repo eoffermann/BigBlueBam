@@ -95,4 +95,9 @@ jobs:
         run: node apps/api/dist/migrate.js
 
       - name: Run unit tests
-        run: pnpm -r --parallel --if-present test
+        # @bigbluebam/e2e is excluded because its `test` script runs
+        # `playwright test`, which needs the full docker-compose stack
+        # plus a Playwright browser install. E2E is a separate
+        # integration workflow (gap 2.2.4, deferred). See DECISIONS.md
+        # D-008e for context.
+        run: pnpm -r --filter='!@bigbluebam/e2e' --parallel --if-present test
