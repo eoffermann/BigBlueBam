@@ -75,6 +75,19 @@ const envSchema = z.object({
 
   // Bolt workflow automation engine URL (fire-and-forget event publishing)
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
+
+  // Wave 1 / §3.3 — Row-Level Security enforcement flag.
+  // '0' (default): the role the app connects as is granted BYPASSRLS at boot
+  //   so policies enabled by migration 0075 do not break unconverted handlers.
+  //   request.withRls still wraps work in a transaction but the bypass role
+  //   means queries return rows normally while the per-handler conversion in
+  //   Wave 2 lands. See DECISIONS.md D-016 for why this deviates from the
+  //   plan's strict rollout text.
+  // '1': the boot hook flips the role NOBYPASSRLS and request.withRls sets
+  //   app.current_org_id inside a transaction. Any handler that forgets to
+  //   use withRls will see zero rows on RLS-protected tables — which is the
+  //   desired fail-safe once every Bam handler has been converted.
+  BBB_RLS_ENFORCE: z.enum(['0', '1']).default('0'),
 }).transform((data) => ({
   ...data,
   // BAM-010: Default COOKIE_SECURE to true in production when not explicitly set
