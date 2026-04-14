@@ -12,7 +12,9 @@ import { errorHandler } from './middleware/error-handler.js';
 import redisPlugin from './plugins/redis.js';
 import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
+import rlsPlugin from './plugins/rls.js';
 import authRoutes from './routes/auth.routes.js';
+import oauthRoutes from './routes/oauth.routes.js';
 import projectRoutes from './routes/project.routes.js';
 import phaseRoutes from './routes/phase.routes.js';
 import sprintRoutes from './routes/sprint.routes.js';
@@ -163,6 +165,10 @@ await fastify.register(csrfPlugin);
 // Auth plugin
 await fastify.register(authPlugin);
 
+// Wave 1 §3.3 — RLS plugin. Installs request.withRls and toggles the DB
+// role's BYPASSRLS attribute at boot based on BBB_RLS_ENFORCE.
+await fastify.register(rlsPlugin);
+
 // WebSocket handler (realtime events via Redis PubSub)
 await fastify.register(websocketHandlerPlugin);
 
@@ -202,6 +208,7 @@ fastify.get('/health/ready', async (_request, reply) => {
 
 // Routes
 await fastify.register(authRoutes);
+await fastify.register(oauthRoutes);
 await fastify.register(projectRoutes);
 await fastify.register(phaseRoutes);
 await fastify.register(sprintRoutes);

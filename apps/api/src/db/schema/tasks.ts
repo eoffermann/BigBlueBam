@@ -17,6 +17,7 @@ import { phases } from './phases.js';
 import { taskStates } from './task-states.js';
 import { sprints } from './sprints.js';
 import { users } from './users.js';
+import { organizations } from './organizations.js';
 
 export const tasks = pgTable(
   'tasks',
@@ -25,6 +26,13 @@ export const tasks = pgTable(
     project_id: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    // Wave 1 §3.3 — RLS-support column. Added by migration
+    // 0078_reconcile_bam_bearing_drift.sql (nullable) and backfilled +
+    // tightened to NOT NULL by 0075_enable_rls_core_tables.sql. Declared
+    // nullable here so the Drizzle type stays compatible with rows
+    // written before the backfill, but every new insert should
+    // populate it from the parent project's org_id.
+    org_id: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
     human_id: varchar('human_id', { length: 50 }).notNull(),
     parent_task_id: uuid('parent_task_id'),
     title: varchar('title', { length: 500 }).notNull(),
@@ -86,5 +94,6 @@ export const tasks = pgTable(
     index('tasks_priority_idx').on(table.priority),
     index('tasks_phase_position_idx').on(table.phase_id, table.position),
     index('tasks_project_sprint_idx').on(table.project_id, table.sprint_id),
+    index('tasks_org_id_idx').on(table.org_id),
   ],
 );

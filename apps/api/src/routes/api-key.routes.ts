@@ -127,6 +127,11 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
         .insert(apiKeys)
         .values({
           user_id: request.user!.id,
+          // Wave 1 fix: api_keys.org_id is NOT NULL since migration 0007
+          // but the previous insert omitted it, leaving the field at its
+          // Drizzle `.notNull()` constraint violation. Bind the new key
+          // to the caller's currently active org.
+          org_id: request.user!.active_org_id,
           name: data.name,
           key_hash: keyHash,
           key_prefix: prefix,
@@ -146,6 +151,111 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
           project_ids: apiKey!.project_ids,
           expires_at: apiKey!.expires_at,
           created_at: apiKey!.created_at,
+        },
+      });
+    },
+  );
+
+  // Wave 1 / Platform §3.14 — API key rotation. Creates a successor key
+  // that clones the predecessor's org/scope/project restrictions and
+  // marks the predecessor with a 7-day grace window. The auth plugin
+  // already accepts any api_keys row whose expires_at is null or in the
+  // future, so the predecessor keeps working until an operator purges
+  // it (a future sweep job will honor rotation_grace_expires_at).
+  fastify.post<{ Params: { id: string } }>(
+    '/v1/api-keys/:id/rotate',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const [predecessor] = await db
+        .select()
+        .from(apiKeys)
+        .where(eq(apiKeys.id, request.params.id))
+        .limit(1);
+
+      if (!predecessor) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'API key not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      // Callers may only rotate their own keys. SuperUsers get the same
+      // across-the-board access they already have elsewhere.
+      if (!request.user!.is_superuser && predecessor.user_id !== request.user!.id) {
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'You can only rotate your own API keys',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      // Reject rotation of an already-rotated key — the expected shape is
+      // rotate the successor, not chain indefinitely off the original.
+      if (predecessor.rotated_at) {
+        return reply.status(409).send({
+          error: {
+            code: 'ALREADY_ROTATED',
+            message: 'This API key has already been rotated',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const now = new Date();
+      const graceExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const rawKey = randomBytes(32).toString('base64url');
+      const newPrefix = rawKey.slice(0, 8);
+      const newHash = await argon2.hash(rawKey);
+
+      const successor = await db.transaction(async (tx) => {
+        await tx
+          .update(apiKeys)
+          .set({
+            rotated_at: now,
+            rotation_grace_expires_at: graceExpiresAt,
+          })
+          .where(eq(apiKeys.id, predecessor.id));
+
+        const [created] = await tx
+          .insert(apiKeys)
+          .values({
+            user_id: predecessor.user_id,
+            org_id: predecessor.org_id,
+            name: `${predecessor.name} (rotated)`,
+            key_hash: newHash,
+            key_prefix: newPrefix,
+            scope: predecessor.scope,
+            project_ids: predecessor.project_ids,
+            expires_at: predecessor.expires_at,
+            predecessor_id: predecessor.id,
+          })
+          .returning();
+
+        return created!;
+      });
+
+      return reply.status(201).send({
+        data: {
+          id: successor.id,
+          name: successor.name,
+          // Returned exactly once — the raw token never appears in a
+          // later GET /auth/api-keys listing.
+          key: rawKey,
+          key_prefix: newPrefix,
+          scope: successor.scope,
+          project_ids: successor.project_ids,
+          expires_at: successor.expires_at,
+          created_at: successor.created_at,
+          predecessor_id: predecessor.id,
+          predecessor_grace_expires_at: graceExpiresAt.toISOString(),
         },
       });
     },

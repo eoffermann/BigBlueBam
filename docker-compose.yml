@@ -99,6 +99,11 @@ services:
       OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET:-}
       OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
       OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      # Wave 1 §3.3 — Row-Level Security enforcement flag. '0' keeps
+      # the DB role BYPASSRLS while Wave 2 converts handlers to
+      # request.withRls. Flip to '1' only after every core-table
+      # route uses withRls.
+      BBB_RLS_ENFORCE: ${BBB_RLS_ENFORCE:-0}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
