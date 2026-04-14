@@ -36,6 +36,7 @@ import { registerMeTools } from './tools/me-tools.js';
 import { registerPlatformTools } from './tools/platform-tools.js';
 import { registerResources, registerBanterResources } from './resources/index.js';
 import { registerPrompts } from './prompts/index.js';
+import { handleToolsCall } from './routes/tools-call.js';
 
 const env = loadEnv();
 
@@ -224,6 +225,21 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
       return;
     }
+  }
+
+  // ---- Internal /tools/call route ----
+  if (url.pathname === '/tools/call' && req.method === 'POST') {
+    await handleToolsCall(req, res, {
+      env: {
+        INTERNAL_SERVICE_SECRET: env.INTERNAL_SERVICE_SECRET,
+        MCP_INTERNAL_API_TOKEN: env.MCP_INTERNAL_API_TOKEN,
+        API_INTERNAL_URL: env.API_INTERNAL_URL,
+      },
+      logger,
+      apiClientFactory: (baseUrl, token, log) => new ApiClient(baseUrl, token, log),
+      createMcpServer,
+    });
+    return;
   }
 
   // ---- Streamable HTTP Transport Endpoints (default) ----

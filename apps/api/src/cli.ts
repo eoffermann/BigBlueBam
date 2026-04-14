@@ -44,15 +44,16 @@ Usage:
   cli <command> [options]
 
 Commands:
-  create-admin       Create a new organization with an owner user (+ optional SuperUser)
-  create-user        Create a user inside an EXISTING organization with any role
-  grant-superuser    Promote an existing user to SuperUser by email
-  revoke-superuser   Remove SuperUser privileges from a user by email
-  create-api-key     Issue an API key for a user (for agentic / programmatic access)
-  create-helpdesk-agent-key  Issue a per-agent helpdesk API key (HB-28 + HB-49)
-  revoke-api-key     Revoke a Bam API key by its key_prefix (hard delete)
-  revoke-helpdesk-agent-key  Revoke a helpdesk agent API key by its key_prefix (soft by default)
-  list-orgs          List all organizations (id, slug, name) — helper for other commands
+  create-admin              Create a new organization with an owner user (+ optional SuperUser)
+  create-user               Create a user inside an EXISTING organization with any role
+  create-service-account    Create a service-account user + read_write API key for internal callers
+  grant-superuser           Promote an existing user to SuperUser by email
+  revoke-superuser          Remove SuperUser privileges from a user by email
+  create-api-key            Issue an API key for a user (for agentic / programmatic access)
+  create-helpdesk-agent-key Issue a per-agent helpdesk API key (HB-28 + HB-49)
+  revoke-api-key            Revoke a Bam API key by its key_prefix (hard delete)
+  revoke-helpdesk-agent-key Revoke a helpdesk agent API key by its key_prefix (soft by default)
+  list-orgs                 List all organizations (id, slug, name); helper for other commands
 
 Common user roles:       owner, admin, member, viewer, guest
 Common API key scopes:   read, read_write, admin
@@ -79,6 +80,11 @@ Examples:
   # Issue a read-only API key for an agent (prints the key ONCE — store it)
   # --org-slug pins the key to exactly one org even if the user joins others.
   cli create-api-key --email viewer-bot@co.com --name "dashboard-bot" --scope read \\
+      --org-slug acme
+
+  # Create an internal service-account for the worker to call the MCP server.
+  # Prints a bbam_svc_ prefixed token ONCE. Paste it into MCP_INTERNAL_API_TOKEN.
+  cli create-service-account --email svc+bolt@system.local --name "Bolt worker" \\
       --org-slug acme
 
   # Issue a scoped read-write key restricted to one project, 90 day expiry
@@ -368,6 +374,131 @@ async function createApiKey(flags: Record<string, string>) {
   }
 }
 
+async function createServiceAccount(flags: Record<string, string>) {
+  // Service accounts are non-interactive users owned by the platform that
+  // internal callers (the worker, cron jobs, etc.) use to authenticate
+  // against the Bam REST API on behalf of automation. They have:
+  //   - A synthetic @system.local email (cannot sign in via password).
+  //   - No password hash.
+  //   - role=member (the API key scope is what gates write access).
+  //   - A read_write API key, org-bound, no project restriction.
+  // The token is prefixed `bbam_svc_` so it is immediately distinguishable
+  // from a human-issued `bbam_` key in logs and audit trails. The auth
+  // plugin's lookup uses the first 8 characters of the raw token as a
+  // positional prefix (see apps/api/src/plugins/auth.ts), which tolerates
+  // this variant transparently: `bbam_svc` is still exactly 8 chars.
+  requireFlags(flags, ['email', 'name']);
+  const { email, name } = flags;
+  const orgSlug = flags['org-slug'];
+  const orgIdFlag = flags['org-id'];
+
+  if (!orgSlug && !orgIdFlag) {
+    console.error('Error: provide either --org-slug or --org-id (service-account keys are org-bound)');
+    process.exit(1);
+  }
+  if (!email!.includes('@')) {
+    console.error('Error: --email must be a valid email address');
+    process.exit(1);
+  }
+
+  const { db, client } = getDb();
+  try {
+    const [org] = orgIdFlag
+      ? await db.select().from(organizations).where(eq(organizations.id, orgIdFlag!)).limit(1)
+      : await db.select().from(organizations).where(eq(organizations.slug, orgSlug!)).limit(1);
+    if (!org) {
+      console.error(
+        `Error: organization not found (${orgIdFlag ? `id=${orgIdFlag}` : `slug=${orgSlug}`})`,
+      );
+      console.error('Hint: run `cli list-orgs` to see available organizations');
+      process.exit(1);
+    }
+
+    // Create-or-reuse the service-account user. If a row already exists with
+    // the same email, we reuse it and just mint a new API key for that row.
+    const existingRows = await db.select().from(users).where(eq(users.email, email!)).limit(1);
+    let user = existingRows[0];
+    if (!user) {
+      const [inserted] = await db
+        .insert(users)
+        .values({
+          org_id: org.id,
+          email: email!,
+          display_name: name!,
+          password_hash: null,
+          role: 'member',
+          is_superuser: false,
+        })
+        .returning();
+      user = inserted!;
+      await db.insert(organizationMemberships).values({
+        user_id: user.id,
+        org_id: org.id,
+        role: 'member',
+        is_default: true,
+      });
+    } else {
+      // Make sure the existing user has a membership in the target org;
+      // otherwise the key-scoping check below will refuse to issue a key.
+      const existingMembership = await db
+        .select({ id: organizationMemberships.id })
+        .from(organizationMemberships)
+        .where(
+          and(
+            eq(organizationMemberships.user_id, user.id),
+            eq(organizationMemberships.org_id, org.id),
+          ),
+        )
+        .limit(1);
+      if (existingMembership.length === 0) {
+        await db.insert(organizationMemberships).values({
+          user_id: user.id,
+          org_id: org.id,
+          role: 'member',
+          is_default: false,
+        });
+      }
+    }
+
+    // Token format: bbam_svc_<base64url 32 bytes>. The auth plugin slices
+    // the first 8 characters as the lookup prefix, which is positional and
+    // tolerates this variant without any auth.ts change: `bbam_svc` is
+    // exactly 8 characters, so we store it in key_prefix as-is.
+    const randomToken = randomBytes(32).toString('base64url');
+    const fullToken = `bbam_svc_${randomToken}`;
+    const prefix = fullToken.slice(0, 8);
+    const keyHash = await argon2.hash(fullToken);
+
+    const [key] = await db
+      .insert(apiKeys)
+      .values({
+        user_id: user.id,
+        org_id: org.id,
+        name: name!,
+        key_hash: keyHash,
+        key_prefix: prefix,
+        scope: 'read_write',
+        project_ids: null,
+        expires_at: null,
+      })
+      .returning({ id: apiKeys.id, name: apiKeys.name });
+
+    console.log('Service account created successfully:');
+    console.log(`  User ID:   ${user.id}`);
+    console.log(`  Email:     ${user.email}`);
+    console.log(`  Org:       ${org.name} (${org.slug})`);
+    console.log(`  Key ID:    ${key!.id}`);
+    console.log(`  Scope:     read_write`);
+    console.log('');
+    console.log('  ── Store this token NOW. It will not be shown again. ──');
+    console.log(`  Token:     ${fullToken}`);
+    console.log('');
+    console.log('  Set MCP_INTERNAL_API_TOKEN to this value on mcp-server and worker.');
+  } finally {
+    await client.end();
+  }
+}
+
 async function createHelpdeskAgentKey(flags: Record<string, string>) {
   requireFlags(flags, ['email', 'name']);
   const { email, name } = flags;
@@ -582,6 +713,9 @@ async function main() {
         break;
       case 'create-api-key':
         await createApiKey(flags);
+        break;
+      case 'create-service-account':
+        await createServiceAccount(flags);
         break;
       case 'create-helpdesk-agent-key':
         await createHelpdeskAgentKey(flags);
