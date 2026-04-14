@@ -28,6 +28,7 @@
     "db:migrate": "docker compose run --rm migrate",
     "db:check": "node scripts/db-check.mjs",
     "lint:migrations": "node scripts/lint-migrations.mjs",
+    "check:bolt-catalog": "node scripts/check-bolt-catalog.mjs",
     "db:generate": "pnpm --filter @bigbluebam/api db:generate",
     "db:push": "pnpm --filter @bigbluebam/api db:push"
   },
