@@ -7,6 +7,7 @@ import { env } from './env.js';
 import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
+import { errorHandler } from './middleware/error-handler.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -20,42 +21,8 @@ const fastify = Fastify({
   genReqId: () => crypto.randomUUID(),
 });
 
-// Error handler
-fastify.setErrorHandler((error: Error, request, reply) => {
-  // Zod validation errors
-  if (error.name === 'ZodError') {
-    return reply.status(400).send({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Request validation failed',
-        details: (error as any).issues ?? [],
-        request_id: request.id,
-      },
-    });
-  }
-
-  fastify.log.error(error);
-
-  const statusCode = (error as any).statusCode ?? 500;
-  // Only expose error message for known app errors; sanitize everything else
-  const isAppError =
-    error.name === 'BearingError' ||
-    (error as any).code;
-  const message =
-    statusCode >= 500
-      ? 'Internal server error'
-      : isAppError
-        ? error.message
-        : 'Bad request';
-  return reply.status(statusCode).send({
-    error: {
-      code: statusCode >= 500 ? 'INTERNAL_ERROR' : (error as any).code ?? 'BAD_REQUEST',
-      message,
-      details: [],
-      request_id: request.id,
-    },
-  });
-});
+// Error handler (Wave 1.D: shared implementation in @bigbluebam/logging)
+fastify.setErrorHandler(errorHandler);
 
 // Not found handler
 fastify.setNotFoundHandler((request, reply) => {

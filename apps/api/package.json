@@ -9,12 +9,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "lint": "biome check ./src",
+    "lint": "eslint src/",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "@bigbluebam/logging": "workspace:*",
     "@bigbluebam/shared": "workspace:*",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^10.0.0",

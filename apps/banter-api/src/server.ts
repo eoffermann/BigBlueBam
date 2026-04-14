@@ -26,6 +26,7 @@ import searchRoutes from './routes/search.routes.js';
 import callRoutes from './routes/call.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import internalRoutes from './routes/internal.routes.js';
+import { errorHandler } from './middleware/error-handler.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -39,32 +40,8 @@ const fastify = Fastify({
   genReqId: () => crypto.randomUUID(),
 });
 
-// Error handler
-fastify.setErrorHandler((error, request, reply) => {
-  // Zod validation errors
-  if (error.name === 'ZodError') {
-    return reply.status(400).send({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Request validation failed',
-        details: (error as any).issues ?? [],
-        request_id: request.id,
-      },
-    });
-  }
-
-  fastify.log.error(error);
-
-  const statusCode = error.statusCode ?? 500;
-  return reply.status(statusCode).send({
-    error: {
-      code: statusCode >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST',
-      message: statusCode >= 500 ? 'Internal server error' : error.message,
-      details: [],
-      request_id: request.id,
-    },
-  });
-});
+// Error handler (Wave 1.D: shared implementation in @bigbluebam/logging)
+fastify.setErrorHandler(errorHandler);
 
 // Not found handler — standard error envelope for 404s
 fastify.setNotFoundHandler((request, reply) => {

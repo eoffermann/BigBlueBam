@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify, { type FastifyError } from 'fastify';
+import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
@@ -15,6 +15,7 @@ import agentRoutes from './routes/agent.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import helpdeskUploadRoutes from './routes/upload.routes.js';
 import websocketHandler from './ws/handler.js';
+import { errorHandler } from './middleware/error-handler.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -34,31 +35,8 @@ const fastify = Fastify({
   requestTimeout: 30000,
 });
 
-// Error handler
-fastify.setErrorHandler(async (error: FastifyError, request, reply) => {
-  if (error.validation) {
-    return reply.status(400).send({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Request validation failed',
-        details: error.validation,
-        request_id: request.id,
-      },
-    });
-  }
-
-  request.log.error(error);
-
-  const statusCode = error.statusCode ?? 500;
-  return reply.status(statusCode).send({
-    error: {
-      code: statusCode === 500 ? 'INTERNAL_ERROR' : 'ERROR',
-      message: statusCode === 500 ? 'Internal server error' : error.message,
-      details: [],
-      request_id: request.id,
-    },
-  });
-});
+// Error handler (Wave 1.D: shared implementation in @bigbluebam/logging)
+fastify.setErrorHandler(errorHandler);
 
 // Not found handler
 fastify.setNotFoundHandler((request, reply) => {
