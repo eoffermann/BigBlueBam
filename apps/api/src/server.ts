@@ -14,6 +14,7 @@ import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
 import rlsPlugin from './plugins/rls.js';
 import authRoutes from './routes/auth.routes.js';
+import oauthRoutes from './routes/oauth.routes.js';
 import projectRoutes from './routes/project.routes.js';
 import phaseRoutes from './routes/phase.routes.js';
 import sprintRoutes from './routes/sprint.routes.js';
@@ -207,6 +208,7 @@ fastify.get('/health/ready', async (_request, reply) => {
 
 // Routes
 await fastify.register(authRoutes);
+await fastify.register(oauthRoutes);
 await fastify.register(projectRoutes);
 await fastify.register(phaseRoutes);
 await fastify.register(sprintRoutes);

@@ -88,6 +88,15 @@ const envSchema = z.object({
   //   use withRls will see zero rows on RLS-protected tables — which is the
   //   desired fail-safe once every Bam handler has been converted.
   BBB_RLS_ENFORCE: z.enum(['0', '1']).default('0'),
+
+  // Wave 1 / §3.12 — OAuth provider credentials. Optional at process level.
+  // If unset the corresponding /auth/oauth/<provider> start route returns a
+  // helpful 503 instead of crashing. docker-compose.yml already plumbs these
+  // from the host .env file.
+  OAUTH_GITHUB_CLIENT_ID: z.string().optional(),
+  OAUTH_GITHUB_CLIENT_SECRET: z.string().optional(),
+  OAUTH_GOOGLE_CLIENT_ID: z.string().optional(),
+  OAUTH_GOOGLE_CLIENT_SECRET: z.string().optional(),
 }).transform((data) => ({
   ...data,
   // BAM-010: Default COOKIE_SECURE to true in production when not explicitly set
