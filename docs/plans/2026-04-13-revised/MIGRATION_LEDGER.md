@@ -24,10 +24,11 @@ Authoritative registry of migration numbers reserved for the 2026-04-13 implemen
 
 | Number | File | Plan | Wave item | Status |
 |---|---|---|---|---|
-| 0072 | `0072_bolt_rename_prefixed_events.sql` | Cross-Product | Wave 0 item 4 | claimed (Wave 0.4) |
-| 0075 | `0075_enable_rls_core_tables.sql` | Platform | Wave 1 item 1 | pending |
-| 0077 | `0077_api_key_rotation.sql` | Platform | Wave 1 item 1 | pending |
-| 0078 | `0078_reconcile_bam_bearing_drift.sql` | Platform | Wave 0.1 item 1 (PR #5 second follow-up) | in-review |
+| 0072 | `0072_bolt_rename_prefixed_events.sql` | Cross-Product | Wave 0.4 | **merged** (commit `9c6dc0d`) |
+| 0075 | `0075_enable_rls_core_tables.sql` | Platform | Wave 1.A | **merged** (commit `cd38a46` + `3bb99f0` self-start fix; also self-starts `tasks.org_id` so 0075 no longer depends on 0078 filename ordering) |
+| 0076 | (reserved, do NOT ship) activity_log partition shadow | Platform §3.4 | deferred per Platform Plan §3.4 until `activity_log` crosses 500k rows | unclaimed |
+| 0077 | `0077_api_key_rotation.sql` | Platform | Wave 1.A | **merged** (commit `79565a6`) |
+| 0078 | `0078_reconcile_bam_bearing_drift.sql` | Platform | Wave 0.1 second follow-up | **merged** (commit `a8fb19a`) |
 
 ## Overflow pool (0079+)
 
