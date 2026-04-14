@@ -14,3 +14,6 @@ export * from './beacon.js';
 export * from './bench.js';
 export * from './bill.js';
 export * from './blank.js';
+export * from './blast.js';
+export * from './board.js';
+export * from './bolt.js';
