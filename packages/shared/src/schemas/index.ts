@@ -9,3 +9,8 @@ export * from './comment.js';
 export * from './superuser.js';
 export * from './bearing.js';
 export * from './brief.js';
+export * from './banter.js';
+export * from './beacon.js';
+export * from './bench.js';
+export * from './bill.js';
+export * from './blank.js';
