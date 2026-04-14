@@ -58,7 +58,7 @@ describe('Bond Stale Deals Job', () => {
     );
   });
 
-  it('emits bond.deal.rotting and updates rotting_alerted_at for each stale deal', async () => {
+  it('emits deal.rotting and updates rotting_alerted_at for each stale deal', async () => {
     const staleRows = [
       {
         id: 'deal-1',
@@ -104,7 +104,7 @@ describe('Bond Stale Deals Job', () => {
     expect(publishBoltEvent).toHaveBeenCalledTimes(3);
     expect(publishBoltEvent).toHaveBeenNthCalledWith(
       1,
-      'bond.deal.rotting',
+      'deal.rotting',
       'bond',
       {
         deal_id: 'deal-1',
@@ -119,7 +119,7 @@ describe('Bond Stale Deals Job', () => {
     );
     expect(publishBoltEvent).toHaveBeenNthCalledWith(
       3,
-      'bond.deal.rotting',
+      'deal.rotting',
       'bond',
       expect.objectContaining({ deal_id: 'deal-3' }),
       'org-b',
