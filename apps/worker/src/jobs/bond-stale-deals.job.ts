@@ -3,8 +3,8 @@
  *
  * Finds open deals whose time-in-stage has exceeded `bond_pipeline_stages.rotting_days`
  * and which have not yet been alerted for the current stage entry, emits a
- * `bond.deal.rotting` event to Bolt for each one, and marks the deal with
- * `rotting_alerted_at = NOW()` so the same stage-entry is not re-alerted.
+ * `deal.rotting` event (source: `bond`) to Bolt for each one, and marks the deal
+ * with `rotting_alerted_at = NOW()` so the same stage-entry is not re-alerted.
  *
  * Idempotency model:
  *   - A deal is considered newly stale if either
@@ -111,9 +111,8 @@ export async function processBondStaleDealsJob(
     try {
       // Fire-and-forget event emission. publishBoltEvent never throws, so
       // this await will resolve cleanly whether the POST succeeded or not.
-      // event name normalized in wave 0.4
       await publishBoltEvent(
-        'bond.deal.rotting',
+        'deal.rotting',
         'bond',
         {
           deal_id: row.id,

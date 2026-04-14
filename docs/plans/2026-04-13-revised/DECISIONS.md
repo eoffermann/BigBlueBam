@@ -154,3 +154,37 @@ Context: user authorized autonomous execution before bed with the note "use your
 
 **Revert.** Remove `continue-on-error: true` from the apps typecheck step once every apps package is strict-clean. Until then, any Wave 2 per-app plan can narrow the `--filter='!...'` exclusion list to promote its package into the strict step.
 
+## D-011: Wave 0.4 sub-decisions for the event-naming sweep (2026-04-14 overnight)
+
+**Decision.** Three small calls made while executing Wave 0 item 0.4 (event-naming sweep + migration 0072 + drift-guard script extension), each within scope but worth recording. (D-009 and D-010 are reserved by parallel Wave 0 worktrees; D-011 was assigned by the orchestration brief.)
+
+### D-011a: Migration 0072 handles `bolt_executions.trigger_event` as jsonb, not text
+
+**Decision.** The plan's migration template (Cross_Product_Integration_Plan.md lines 685-708) writes `bolt_executions.trigger_event` and `bolt_automations.trigger_event` as if both were text columns. They are not. `apps/bolt-api/src/db/schema/bolt-executions.ts:30` declares `trigger_event` as `jsonb('trigger_event')`, and `apps/bolt-api/src/routes/event-ingestion.routes.ts` writes the full payload `{ ...event.payload, _event_id, _source, _event_type }` into it. The event-type string we want to rewrite lives under the `_event_type` key, not the column root. I rewrote 0072's second UPDATE to use `jsonb_set(trigger_event, '{_event_type}', '"deal.rotting"'::jsonb, false)` with a `WHERE trigger_event->>'_event_type' = 'bond.deal.rotting'` predicate (which naturally skips NULL rows and rows where the key is absent). The first UPDATE on `bolt_automations.trigger_event` (varchar(60), NOT NULL per `bolt-automations.ts:45`) stays as the plan template wrote it.
+
+**Why.** The plan's text version would silently no-op against `bolt_executions` (because no row's full jsonb object equals the bare string `'bond.deal.rotting'`) and the historical execution rows would carry the wrong `_event_type` forever. jsonb_set with predicate-on-key is the minimal change that does what the plan intended.
+
+**Alternatives.** Skip the executions table entirely and only fix automations (rejected: the plan explicitly names `bolt_executions` as a target, and historical execution rows are exactly what the plan wants to normalize). Cast trigger_event to text and string-replace (rejected: brittle, would corrupt nested values that contain the substring). Add a migration that backfills a separate `event_type` column (rejected: scope expansion and schema change for what the plan said is a string rewrite).
+
+**Revert.** Drop migration 0072. Existing rows revert to the legacy `_event_type: 'bond.deal.rotting'`. Bolt rule authors that target `deal.rotting` would miss historical executions, but no data is lost.
+
+### D-011b: `scripts/check-bolt-catalog.mjs` is created in this PR, not extended
+
+**Decision.** The brief says to "extend" the existing `scripts/check-bolt-catalog.mjs` with the two new sweep assertions. The script does not exist on `feature-completion-wip` after Waves 0.1 / 0.2 / 0.3, neither under `scripts/` nor anywhere else, and no `check:bolt` script is wired into the root `package.json`. Wave 0.1's plan §2.1 referenced creating it but the implementing PR (#5) did not land it. I created the script fresh in `scripts/check-bolt-catalog.mjs` with the two assertions the brief asks for (R1 = first arg is a string literal; R2 = first arg is not in the deny-list `PREFIXED_BAD_NAMES`; R3 = second arg is a string literal in the BoltEventSource enum) and wired `pnpm check:bolt-catalog` into root `package.json`. Catalog presence (the original §2.1 responsibility) is NOT implemented here; it remains the §2.1 owner's responsibility because doing it now would require parsing `apps/bolt-api/src/services/event-catalog.ts` and choosing a coverage policy, which is scope creep beyond P0.3.
+
+**Why.** The brief's instruction "extend it rather than rewriting it" assumed the script existed. Reality is a hard dependency: I either create the file or block on a Wave 0.1 follow-up that may not happen. Creating just the two P0.3 assertions keeps the PR's scope tight and gives Wave 0.1 a hook to drop catalog-presence checks into when that work happens. The script is structured so adding catalog-presence is a single new function call in `main()` after the existing per-call rules.
+
+**Alternatives.** Do nothing and document the gap (rejected: the plan explicitly requires the assertions to exist and run in CI). Wait for §2.1 (rejected: §2.1 may not be on the Wave 0 critical path and the user authorized autonomous progress). Inline the assertions into `lint-migrations.mjs` (rejected: that script is migration-scoped and conflating concerns hides the rule).
+
+**Revert.** Delete `scripts/check-bolt-catalog.mjs` and remove the `check:bolt-catalog` script from `package.json`. The two assertions revert to grep-based ad-hoc checks.
+
+### D-011c: PREFIXED_BAD_NAMES is an exact-match deny-list, not a regex on source-prefix
+
+**Decision.** The plan's first sweep grep is heuristic: `publishBoltEvent\(\s*['\"](bam|...|bond|...)\.` matches any event whose first token matches a known service name. That heuristic produces false positives for legitimate canonical names where the entity domain and the source service share a word (e.g. `beacon.created`, `board.updated`, `bolt.execution_completed` if any existed). The plan itself acknowledges this in §660: the catalog "vast majority" uses `beacon.created`-style bare names that the heuristic would incorrectly flag. I implemented R2 as an exact-match deny-list (`PREFIXED_BAD_NAMES = new Set(['bond.deal.rotting'])`) rather than a regex on the source-prefix list. New bad names get added to the set explicitly when a regression is found.
+
+**Why.** A regex-based check would have to enumerate every legitimate name as an exception list, which is exactly the catalog presence check that the plan defers to §2.1. Until the catalog is wired in, an explicit deny-list is the only false-positive-free option. The deny-list is currently length 1 (only `bond.deal.rotting`); the plan asserts that is the only known prefixed name. If a future audit finds another, the fix is one line added to the set.
+
+**Alternatives.** Regex with a deny-list of legitimate names (rejected: maintenance burden and duplicates the catalog). Wait for the catalog wiring to land in §2.1 (rejected: blocks Wave 0.4 indefinitely). Block on every name starting with a source word and force authors to opt out per call site (rejected: extreme false positive rate against current bare-canonical names).
+
+**Revert.** Replace the `PREFIXED_BAD_NAMES` set with a regex against `KNOWN_SOURCES`. The set of bare canonical names that share a domain with a service name (`beacon.*`, `board.*`, `bolt.*` if any) become R2 violations and the script exits 1 until they are catalog-listed.
+

@@ -283,7 +283,7 @@ pnpm --filter @bigbluebam/banter test        # Banter frontend component tests (
 - **WebSocket realtime** uses Redis PubSub for cross-instance broadcasting; rooms are scoped to org, project, and user levels.
 - **Keyboard shortcuts** and a **command palette** (Cmd+K) are built into the frontend for power-user navigation.
 - **User and member management** is consolidated at `/b3/people` (org admins/owners) and `/b3/superuser/people` (platform SuperUsers) — not under Settings — with tabbed user-detail pages covering profile, projects, access (API keys/sessions/passwords), and activity.
-- **Bond stale-deal detection** runs as a daily 2 AM UTC worker job that finds deals where `days_in_stage > rotting_days` and emits `bond.deal.rotting` events to Bolt ingest; `bond_deals.rotting_alerted_at` is the per-stage-entry idempotency marker (reset naturally when `stage_entered_at` changes).
+- **Bond stale-deal detection** runs as a daily 2 AM UTC worker job that finds deals where `days_in_stage > rotting_days` and emits `deal.rotting` events (source `bond`) to Bolt ingest; `bond_deals.rotting_alerted_at` is the per-stage-entry idempotency marker (reset naturally when `stage_entered_at` changes).
 
 ## Error Response Envelope
 
