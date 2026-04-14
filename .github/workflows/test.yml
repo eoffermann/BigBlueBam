@@ -73,9 +73,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared + api packages
+      - name: Build workspace packages + api
         run: |
-          pnpm --filter @bigbluebam/shared build
+          pnpm --filter './packages/*' build
           pnpm --filter @bigbluebam/api build
 
       - name: Wait for Postgres
