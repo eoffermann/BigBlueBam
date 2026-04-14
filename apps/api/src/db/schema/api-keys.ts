@@ -26,6 +26,11 @@ export const apiKeys = pgTable(
     expires_at: timestamp('expires_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     last_used_at: timestamp('last_used_at', { withTimezone: true }),
+    // Wave 1 §3.14 — API key rotation. Populated by the rotate endpoint;
+    // see migration 0077_api_key_rotation.sql.
+    rotated_at: timestamp('rotated_at', { withTimezone: true }),
+    rotation_grace_expires_at: timestamp('rotation_grace_expires_at', { withTimezone: true }),
+    predecessor_id: uuid('predecessor_id'),
   },
   (table) => [
     index('api_keys_user_id_idx').on(table.user_id),
