@@ -17,7 +17,18 @@ BEGIN;
 -- Each step is idempotent.
 -- ─────────────────────────────────────────────────────────────────────
 
--- tasks.org_id was added nullable by 0078_reconcile_bam_bearing_drift.sql.
+-- tasks.org_id: migration 0078_reconcile_bam_bearing_drift.sql also adds
+-- this column (the two migrations were developed in parallel) and the
+-- numbering puts 0075 BEFORE 0078, so 0075 must self-start the column to
+-- unblock a cold-start CI run where 0078 has not yet been applied. The
+-- ADD COLUMN and CREATE INDEX both use IF NOT EXISTS so running 0078
+-- afterwards is a no-op.
+ALTER TABLE tasks
+    ADD COLUMN IF NOT EXISTS org_id uuid
+        REFERENCES organizations(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS tasks_org_id_idx ON tasks(org_id);
+
 -- Backfill from projects, then tighten to NOT NULL once all rows have a
 -- value. If any row is still NULL after the backfill (orphaned task), we
 -- leave the column nullable and RAISE WARNING instead of failing.
