@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "lint": "eslint src/"
+    "lint": "biome check ./src"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",
@@ -35,7 +35,6 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.2.0",
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",

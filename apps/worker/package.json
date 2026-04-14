@@ -6,6 +6,7 @@
     "build": "tsup",
     "dev": "tsx watch src/worker.ts",
     "start": "node dist/worker.js",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

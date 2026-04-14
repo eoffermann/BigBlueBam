@@ -348,6 +348,13 @@ export async function createUpdate(
       author_id: userId,
       status: input.status,
       body: input.body ?? null,
+      // Snapshot the goal's status and progress at update time. These
+      // columns exist on the DB row since migration 0028 (NOT NULL) and
+      // were previously omitted by this insert, which would have failed on
+      // any real call. The snapshot lets historic updates display their
+      // at-time state even after the goal's live status/progress change.
+      status_at_time: goal.status,
+      progress_at_time: String(goal.progress ?? '0'),
     })
     .returning();
 

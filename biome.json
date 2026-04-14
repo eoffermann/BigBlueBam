@@ -20,5 +20,89 @@
   },
   "files": {
     "ignore": ["node_modules", "dist", ".turbo", "coverage"]
-  }
+  },
+  "overrides": [
+    {
+      "include": [
+        "apps/**/src/**",
+        "apps/**/test/**",
+        "src/**",
+        "test/**",
+        "./src/**",
+        "./test/**"
+      ],
+      "formatter": {
+        "enabled": false
+      },
+      "organizeImports": {
+        "enabled": false
+      },
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "warn",
+            "useNumberNamespace": "warn",
+            "useTemplate": "warn",
+            "useNodejsImportProtocol": "warn",
+            "noInferrableTypes": "warn",
+            "useConst": "warn",
+            "noUselessElse": "warn",
+            "noUnusedTemplateLiteral": "warn",
+            "noParameterAssign": "warn",
+            "useSelfClosingElements": "warn",
+            "useImportType": "warn",
+            "useExportType": "warn",
+            "useSingleVarDeclarator": "warn"
+          },
+          "suspicious": {
+            "noExplicitAny": "warn",
+            "noImplicitAnyLet": "warn",
+            "noArrayIndexKey": "warn",
+            "noAssignInExpressions": "warn",
+            "noThenProperty": "warn",
+            "noConfusingVoidType": "warn",
+            "noGlobalIsNan": "warn",
+            "noShadowRestrictedNames": "warn",
+            "noDoubleEquals": "warn",
+            "noRedeclare": "warn"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "warn",
+            "noUnsafeOptionalChaining": "warn",
+            "noUnnecessaryContinue": "warn",
+            "noUnusedVariables": "warn",
+            "noConstantCondition": "warn"
+          },
+          "security": {
+            "noDangerouslySetInnerHtml": "warn"
+          },
+          "complexity": {
+            "noForEach": "warn",
+            "useLiteralKeys": "warn",
+            "noUselessTernary": "warn",
+            "noBannedTypes": "warn",
+            "useOptionalChain": "warn",
+            "noUselessFragments": "warn",
+            "noUselessConstructor": "warn",
+            "noUselessSwitchCase": "warn"
+          },
+          "performance": {
+            "noDelete": "warn"
+          },
+          "a11y": {
+            "useButtonType": "warn",
+            "noLabelWithoutControl": "warn",
+            "useKeyWithClickEvents": "warn",
+            "noSvgWithoutTitle": "warn",
+            "useSemanticElements": "warn",
+            "useFocusableInteractive": "warn",
+            "useValidAnchor": "warn",
+            "useAltText": "warn",
+            "useKeyWithMouseEvents": "warn",
+            "noAutofocus": "warn"
+          }
+        }
+      }
+    }
+  ]
 }

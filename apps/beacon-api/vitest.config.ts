@@ -5,7 +5,12 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['test/**/*.test.ts'],
-    testTimeout: 10000,
+    // testTimeout raised from 10000ms to 30000ms to give the db-mock
+    // tests enough headroom under CI contention; dynamic-importing the
+    // service modules inside each it() costs 2-3s cold. See
+    // DECISIONS.md D-008d.
+    testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

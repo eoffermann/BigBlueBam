@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "End-to-end testing suite for BigBlueBam apps",
   "scripts": {
+    "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "test:b3": "playwright test --project=b3",
     "test:banter": "playwright test --project=banter",

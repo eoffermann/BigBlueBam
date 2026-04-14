@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "lint": "eslint src/"
+    "lint": "biome check ./src"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",

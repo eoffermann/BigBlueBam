@@ -1,11 +1,21 @@
 // ---------------------------------------------------------------------------
-// Condition evaluation engine — pure functions, no DB access
+// Condition evaluation engine: pure functions, no DB access
 // ---------------------------------------------------------------------------
 
 export type ConditionOperator =
-  | 'equals' | 'not_equals' | 'contains' | 'not_contains'
-  | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than'
-  | 'is_empty' | 'is_not_empty' | 'in' | 'not_in' | 'matches_regex';
+  | 'equals'
+  | 'not_equals'
+  | 'contains'
+  | 'not_contains'
+  | 'starts_with'
+  | 'ends_with'
+  | 'greater_than'
+  | 'less_than'
+  | 'is_empty'
+  | 'is_not_empty'
+  | 'in'
+  | 'not_in'
+  | 'matches_regex';
 
 export type LogicGroup = 'and' | 'or';
 
@@ -51,7 +61,7 @@ function resolveField(payload: Record<string, unknown>, field: string): unknown 
   return current;
 }
 
-function toString(val: unknown): string {
+function coerceString(val: unknown): string {
   if (val === null || val === undefined) return '';
   return String(val);
 }
@@ -76,22 +86,22 @@ function isEmpty(val: unknown): boolean {
 function evaluateSingle(operator: ConditionOperator, actual: unknown, expected: unknown): boolean {
   switch (operator) {
     case 'equals':
-      return toString(actual) === toString(expected);
+      return coerceString(actual) === coerceString(expected);
 
     case 'not_equals':
-      return toString(actual) !== toString(expected);
+      return coerceString(actual) !== coerceString(expected);
 
     case 'contains':
-      return toString(actual).toLowerCase().includes(toString(expected).toLowerCase());
+      return coerceString(actual).toLowerCase().includes(coerceString(expected).toLowerCase());
 
     case 'not_contains':
-      return !toString(actual).toLowerCase().includes(toString(expected).toLowerCase());
+      return !coerceString(actual).toLowerCase().includes(coerceString(expected).toLowerCase());
 
     case 'starts_with':
-      return toString(actual).toLowerCase().startsWith(toString(expected).toLowerCase());
+      return coerceString(actual).toLowerCase().startsWith(coerceString(expected).toLowerCase());
 
     case 'ends_with':
-      return toString(actual).toLowerCase().endsWith(toString(expected).toLowerCase());
+      return coerceString(actual).toLowerCase().endsWith(coerceString(expected).toLowerCase());
 
     case 'greater_than':
       return toNumber(actual) > toNumber(expected);
@@ -107,32 +117,35 @@ function evaluateSingle(operator: ConditionOperator, actual: unknown, expected: 
 
     case 'in': {
       const list = Array.isArray(expected) ? expected : [expected];
-      const actualStr = toString(actual);
-      return list.some((item) => toString(item) === actualStr);
+      const actualStr = coerceString(actual);
+      return list.some((item) => coerceString(item) === actualStr);
     }
 
     case 'not_in': {
       const list = Array.isArray(expected) ? expected : [expected];
-      const actualStr = toString(actual);
-      return !list.some((item) => toString(item) === actualStr);
+      const actualStr = coerceString(actual);
+      return !list.some((item) => coerceString(item) === actualStr);
     }
 
     case 'matches_regex': {
       try {
-        const pattern = toString(expected);
+        const pattern = coerceString(expected);
         // Strict pattern length limit to mitigate ReDoS
         if (pattern.length > 100) return false;
         // Reject patterns with obvious ReDoS constructs (nested quantifiers)
-        if (/(\+|\*|\{)\s*(\+|\*|\?)/.test(pattern) || /\([^)]*(\+|\*)\)[^?]?(\+|\*|\{)/.test(pattern)) {
+        if (
+          /(\+|\*|\{)\s*(\+|\*|\?)/.test(pattern) ||
+          /\([^)]*(\+|\*)\)[^?]?(\+|\*|\{)/.test(pattern)
+        ) {
           return false;
         }
         const regex = new RegExp(pattern);
         // Execute regex with a bounded input length
-        const actualStr = toString(actual);
+        const actualStr = coerceString(actual);
         if (actualStr.length > 10_000) return false;
         return regex.test(actualStr);
       } catch {
-        // Invalid regex — treat as not matching
+        // Invalid regex: treat as not matching
         return false;
       }
     }

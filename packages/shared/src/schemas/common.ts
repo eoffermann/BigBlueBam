@@ -26,5 +26,10 @@ export const errorResponseSchema = z.object({
     message: z.string(),
     details: z.array(z.record(z.unknown())).optional(),
     request_id: z.string(),
+    // 500-class envelopes carry a fresh internal_error_id so an end user
+    // pasting the failure id gives the operator a single grep target in
+    // the structured logs without leaking the cause in the HTTP response.
+    // See Platform_Plan.md (2026-04-13-revised) gap 2.3.2.
+    internal_error_id: z.string().uuid().optional(),
   }),
 });

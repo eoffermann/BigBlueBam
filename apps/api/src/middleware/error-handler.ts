@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 
@@ -58,15 +59,27 @@ export function errorHandler(error: FastifyError, request: FastifyRequest, reply
     });
   }
 
-  // Unknown / server errors
-  request.log.error(error, 'Unhandled error');
-
-  // Surface the underlying error cause to clients so "unexpected" is never
-  // the only thing they see. We still use a generic top-line `message` and
-  // `code` for stable error contracts, but include the real cause in
-  // `details` so it's visible in UIs and logs. In production we redact the
-  // stack trace (only name + message + code) to avoid leaking internals.
+  // Unknown / server errors.
+  //
+  // Closes Platform_Plan.md (2026-04-13-revised) gap 2.3.2. Production used
+  // to return a generic envelope with no correlation handle beyond
+  // request_id, so an end user reporting a failure could only paste a
+  // request id that an operator then had to grep for in raw stdout. We now
+  // mint a stable internal_error_id per failure, log the full cause against
+  // it on the structured logger, and return the id to the client. The
+  // operator can grep `internal_error_id=<uuid>` to find the cause without
+  // any cause-bearing fields leaking into the HTTP response.
   const isProd = process.env.NODE_ENV === 'production';
+  const internalErrorId = randomUUID();
+
+  request.log.error(
+    {
+      err: error,
+      internal_error_id: internalErrorId,
+      request_id: requestId,
+    },
+    'Unhandled error',
+  );
 
   if (isProd) {
     return reply.status(500).send({
@@ -75,6 +88,7 @@ export function errorHandler(error: FastifyError, request: FastifyRequest, reply
         message: 'An unexpected error occurred',
         details: [],
         request_id: requestId,
+        internal_error_id: internalErrorId,
       },
     });
   }
@@ -92,6 +106,7 @@ export function errorHandler(error: FastifyError, request: FastifyRequest, reply
       message: 'An unexpected error occurred',
       details: [cause],
       request_id: requestId,
+      internal_error_id: internalErrorId,
     },
   });
 }
