@@ -70,3 +70,10 @@ jobs:
       - name: Run typecheck (advisory, all apps)
         continue-on-error: true
         run: pnpm -r --filter='!@bigbluebam/e2e' --filter='!@bigbluebam/shared' --parallel --if-present typecheck
+
+      # Wave 1.D drift guard: every apps/*/src/db/schema/bbb-refs.ts must
+      # re-export from @bigbluebam/db-stubs and must not declare its own
+      # pgTable(...). Sanctioned local overrides need an inline
+      # "// noqa: local-bbb-ref <reason>" comment.
+      - name: Check no local bbb-refs declarations
+        run: node scripts/check-no-local-bbb-refs.mjs
