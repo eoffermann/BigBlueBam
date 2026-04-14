@@ -24,7 +24,7 @@ Authoritative registry of migration numbers reserved for the 2026-04-13 implemen
 
 | Number | File | Plan | Wave item | Status |
 |---|---|---|---|---|
-| 0072 | `0072_bolt_rename_prefixed_events.sql` | Cross-Product | Wave 0 item 4 | pending |
+| 0072 | `0072_bolt_rename_prefixed_events.sql` | Cross-Product | Wave 0 item 4 | claimed (Wave 0.4) |
 | 0075 | `0075_enable_rls_core_tables.sql` | Platform | Wave 1 item 1 | pending |
 | 0077 | `0077_api_key_rotation.sql` | Platform | Wave 1 item 1 | pending |
 | 0078 | `0078_reconcile_bam_bearing_drift.sql` | Platform | Wave 0.1 item 1 (PR #5 second follow-up) | in-review |
