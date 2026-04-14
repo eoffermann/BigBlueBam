@@ -5,7 +5,7 @@ import { requireMinOrgRole, requireBeaconEditAccess, requireBeaconReadAccess } f
 import * as beaconService from '../services/beacon.service.js';
 import * as verificationService from '../services/verification.service.js';
 import { transitionBeacon } from '../services/lifecycle.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { buildBeaconEventPayload } from '../lib/enrich-beacon-event.js';
 
 const createBeaconSchema = z.object({

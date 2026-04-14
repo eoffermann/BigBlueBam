@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import * as campaignService from '../services/campaign.service.js';
-import { publishBoltEvent, buildCampaignEventPayload } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
+import { buildCampaignEventPayload } from '../lib/enrich-campaign-event.js';
 
 const createCampaignSchema = z.object({
   name: z.string().min(1).max(255),

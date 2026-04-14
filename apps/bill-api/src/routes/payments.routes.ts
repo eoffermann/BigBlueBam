@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import * as paymentService from '../services/payment.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   buildInvoiceUrl,
   buildInvoicePdfUrl,

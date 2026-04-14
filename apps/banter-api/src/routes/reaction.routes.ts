@@ -11,7 +11,7 @@ import {
 } from '../db/schema/index.js';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import { broadcastToChannel } from '../services/realtime.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   loadEnrichedChannel,
   loadEnrichedActor,

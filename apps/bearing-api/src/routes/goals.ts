@@ -11,7 +11,7 @@ import {
   requireGoalEditAccess,
 } from '../middleware/authorize.js';
 import * as goalService from '../services/goal.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   buildGoalUrl,
   loadActor,

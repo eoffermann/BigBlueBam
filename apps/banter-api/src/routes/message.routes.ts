@@ -19,7 +19,7 @@ import {
   threadDeepLink,
 } from '../lib/notify.js';
 import { sanitizeContent } from '../lib/sanitize.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   loadEnrichedChannel,
   loadEnrichedActor,

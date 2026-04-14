@@ -9,7 +9,7 @@ import { sprintTasks } from '../db/schema/sprint-tasks.js';
 import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
 import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
 import { postToSlack } from '../services/slack-notify.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { loadActor, loadOrg, loadProjectContext } from '../services/bolt-event-enricher.service.js';
 import { sprintUrl } from '../lib/urls.js';
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as bookingPageService from '../services/booking-page.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { enrichBooking, loadOrg } from '../lib/bolt-enrich.js';
 
 const slotsQuerySchema = z.object({

@@ -9,7 +9,7 @@ import { users } from '../db/schema/users.js';
 import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
 import { requireProjectAccessForEntity } from '../middleware/authorize.js';
 import * as projectService from '../services/project.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { enrichTask, loadActor, loadOrg } from '../services/bolt-event-enricher.service.js';
 
 export default async function commentRoutes(fastify: FastifyInstance) {

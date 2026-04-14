@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import { billPayments, billInvoices } from '../db/schema/index.js';
 import { notFound, badRequest } from '../lib/utils.js';
 import { recalculateInvoiceTotals } from './invoice.service.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   buildInvoiceUrl,
   buildInvoicePdfUrl,
