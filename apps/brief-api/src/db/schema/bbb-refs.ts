@@ -1,183 +1,45 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  text,
-  jsonb,
-  timestamp,
-  boolean,
-  index,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core';
+/**
+ * Re-exports canonical Bam table declarations from @bigbluebam/db-stubs.
+ *
+ * Wave 1.D of the 2026-04-13 push consolidated the 13 hand-maintained
+ * `bbb-refs.ts` copies behind a single shared package. Adding a local
+ * `pgTable(...)` declaration here will trip
+ * `scripts/check-no-local-bbb-refs.mjs` in CI - update the canonical file
+ * under `packages/db-stubs/src` instead, or annotate the override with
+ * `// noqa: local-bbb-ref <reason>` if it is a transitional stub.
+ *
+ * DRIFT: brief-api/services/link.service.ts reads `tasks.org_id`, but the
+ * canonical `tasks` table (apps/api/src/db/schema/tasks.ts) has NO
+ * `org_id` column - task org is derived via `project_id -> projects.org_id`
+ * in Bam canonical. The live DB matches the canonical shape, so the brief
+ * code path is broken at runtime anyway; this stub keeps the build compiling
+ * while the Brief Wave 2 plan removes the consumer reference. Tracked
+ * against Brief_Plan.md (2026-04-13 revised push). Remove this override
+ * and fix the consumer once that plan lands.
+ */
+import { pgTable, uuid, varchar } from 'drizzle-orm/pg-core';
+import { organizations as _organizations, projects as _projects } from '@bigbluebam/db-stubs';
 
-// Minimal stubs for Bam tables referenced by Brief
-// These mirror the existing Bam schema but are defined here so
-// brief-api can reference them without importing from @bigbluebam/api.
+export {
+  organizations,
+  users,
+  sessions,
+  apiKeys,
+  projects,
+  projectMemberships,
+  organizationMemberships,
+  beaconEntries,
+} from '@bigbluebam/db-stubs';
 
-export const organizations = pgTable('organizations', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 255 }).notNull(),
-  slug: varchar('slug', { length: 100 }).unique().notNull(),
-  logo_url: text('logo_url'),
-  plan: varchar('plan', { length: 50 }).default('free').notNull(),
-  settings: jsonb('settings').default({}).notNull(),
-  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
-export const users = pgTable(
-  'users',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    org_id: uuid('org_id')
-      .notNull()
-      .references(() => organizations.id, { onDelete: 'cascade' }),
-    email: varchar('email', { length: 320 }).unique().notNull(),
-    display_name: varchar('display_name', { length: 100 }).notNull(),
-    avatar_url: text('avatar_url'),
-    password_hash: text('password_hash'),
-    role: varchar('role', { length: 20 }).default('member').notNull(),
-    timezone: varchar('timezone', { length: 50 }).default('UTC').notNull(),
-    notification_prefs: jsonb('notification_prefs').default({}).notNull(),
-    is_active: boolean('is_active').default(true).notNull(),
-    is_superuser: boolean('is_superuser').default(false).notNull(),
-    last_seen_at: timestamp('last_seen_at', { withTimezone: true }),
-    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    index('users_org_id_idx').on(table.org_id),
-    index('users_email_idx').on(table.email),
-  ],
-);
-
-export const sessions = pgTable(
-  'sessions',
-  {
-    id: text('id').primaryKey(),
-    user_id: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
-    data: jsonb('data').default({}).notNull(),
-  },
-  (table) => [
-    index('sessions_user_id_idx').on(table.user_id),
-    index('sessions_expires_at_idx').on(table.expires_at),
-  ],
-);
-
-export const apiKeys = pgTable(
-  'api_keys',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    user_id: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    name: varchar('name', { length: 255 }).notNull(),
-    key_hash: text('key_hash').notNull(),
-    key_prefix: varchar('key_prefix', { length: 12 }).notNull(),
-    scope: varchar('scope', { length: 50 }).default('read').notNull(),
-    project_ids: uuid('project_ids').array(),
-    expires_at: timestamp('expires_at', { withTimezone: true }),
-    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    last_used_at: timestamp('last_used_at', { withTimezone: true }),
-  },
-  (table) => [
-    index('api_keys_user_id_idx').on(table.user_id),
-    index('api_keys_key_prefix_idx').on(table.key_prefix),
-  ],
-);
-
-export const projects = pgTable(
-  'projects',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    org_id: uuid('org_id')
-      .notNull()
-      .references(() => organizations.id, { onDelete: 'cascade' }),
-    name: varchar('name', { length: 255 }).notNull(),
-    slug: varchar('slug', { length: 100 }).notNull(),
-    description: text('description'),
-    is_archived: boolean('is_archived').default(false).notNull(),
-    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    index('projects_org_id_idx').on(table.org_id),
-    uniqueIndex('projects_org_slug_idx').on(table.org_id, table.slug),
-  ],
-);
-
-export const projectMemberships = pgTable(
-  'project_memberships',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    project_id: uuid('project_id')
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade' }),
-    user_id: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    role: varchar('role', { length: 50 }).default('member').notNull(),
-    joined_at: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex('project_memberships_unique_idx').on(table.project_id, table.user_id),
-    index('project_memberships_user_id_idx').on(table.user_id),
-  ],
-);
-
-export const organizationMemberships = pgTable(
-  'organization_memberships',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    user_id: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    org_id: uuid('org_id')
-      .notNull()
-      .references(() => organizations.id, { onDelete: 'cascade' }),
-    role: varchar('role', { length: 20 }).default('member').notNull(),
-    is_default: boolean('is_default').default(false).notNull(),
-    joined_at: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
-    invited_by: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
-  },
-  (table) => [
-    uniqueIndex('org_memberships_user_org_idx').on(table.user_id, table.org_id),
-    index('org_memberships_user_id_idx').on(table.user_id),
-    index('org_memberships_org_id_idx').on(table.org_id),
-  ],
-);
-
-// Stub for tasks table (from Bam) — referenced by brief_task_links
-export const tasks = pgTable('tasks', {
+// Transitional local override - DO NOT copy this pattern. See module doc.
+// eslint-disable-next-line -- local-bbb-ref noqa
+export const tasks = pgTable('tasks', { // noqa: local-bbb-ref brief-api link.service reads tasks.org_id (canonical has no such column)
   id: uuid('id').primaryKey().defaultRandom(),
   org_id: uuid('org_id')
     .notNull()
-    .references(() => organizations.id),
+    .references(() => _organizations.id),
   project_id: uuid('project_id')
     .notNull()
-    .references(() => projects.id),
+    .references(() => _projects.id),
   title: varchar('title', { length: 500 }).notNull(),
-});
-
-// Stub for beacon_entries table — referenced by brief_beacon_links and promoted_to_beacon_id
-export const beaconEntries = pgTable('beacon_entries', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  organization_id: uuid('organization_id')
-    .notNull()
-    .references(() => organizations.id),
-  title: varchar('title', { length: 512 }).notNull(),
-  slug: varchar('slug', { length: 256 }).unique().notNull(),
-  body_markdown: text('body_markdown').notNull(),
-  body_html: text('body_html'),
-  status: varchar('status', { length: 50 }).default('Draft').notNull(),
-  visibility: varchar('visibility', { length: 50 }).default('Project').notNull(),
-  created_by: uuid('created_by')
-    .notNull()
-    .references(() => users.id),
-  owned_by: uuid('owned_by')
-    .notNull()
-    .references(() => users.id),
 });

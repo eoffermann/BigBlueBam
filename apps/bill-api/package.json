@@ -9,10 +9,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "lint": "biome check ./src"
+    "lint": "eslint src/"
   },
   "dependencies": {
-    "@bigbluebam/shared": "workspace:*",
+    "@bigbluebam/db-stubs": "workspace:*",
+    "@bigbluebam/logging": "workspace:*",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^10.0.0",
     "@fastify/rate-limit": "^10.0.0",
