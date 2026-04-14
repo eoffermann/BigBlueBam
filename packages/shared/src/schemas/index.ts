@@ -17,3 +17,6 @@ export * from './blank.js';
 export * from './blast.js';
 export * from './board.js';
 export * from './bolt.js';
+export * from './bond.js';
+export * from './book.js';
+export * from './helpdesk.js';
