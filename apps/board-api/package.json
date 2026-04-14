@@ -12,6 +12,7 @@
     "lint": "biome check ./src"
   },
   "dependencies": {
+    "@bigbluebam/shared": "workspace:*",
     "@bigbluebam/db-stubs": "workspace:*",
     "@bigbluebam/logging": "workspace:*",
     "argon2": "^0.41.1",

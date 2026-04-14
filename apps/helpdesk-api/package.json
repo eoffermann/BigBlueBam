@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bigbluebam/shared": "workspace:*",
     "@bigbluebam/db-stubs": "workspace:*",
     "@bigbluebam/logging": "workspace:*",
     "fastify": "^5.2.0",
