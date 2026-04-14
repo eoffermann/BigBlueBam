@@ -7,17 +7,21 @@ vi.mock('../src/utils/db.js', () => ({
   getDb: vi.fn(),
 }));
 
-// Mock the bolt-events module so we can inspect calls and control failures
-vi.mock('../src/utils/bolt-events.js', () => ({
-  publishBoltEvent: vi.fn(),
-}));
+// Mock the shared bolt-events module so we can inspect calls and control failures
+vi.mock('@bigbluebam/shared', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@bigbluebam/shared');
+  return {
+    ...actual,
+    publishBoltEvent: vi.fn(),
+  };
+});
 
 import {
   processBondStaleDealsJob,
   type BondStaleDealsJobData,
 } from '../src/jobs/bond-stale-deals.job.js';
 import { getDb } from '../src/utils/db.js';
-import { publishBoltEvent } from '../src/utils/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 
 const mockLogger = {
   info: vi.fn(),
@@ -101,6 +105,7 @@ describe('Bond Stale Deals Job', () => {
     expect(publishBoltEvent).toHaveBeenNthCalledWith(
       1,
       'bond.deal.rotting',
+      'bond',
       {
         deal_id: 'deal-1',
         stage_id: 'stage-1',
@@ -108,16 +113,19 @@ describe('Bond Stale Deals Job', () => {
         rotting_days_threshold: 30,
       },
       'org-a',
-      expect.objectContaining({ source: 'bond', actorType: 'system' }),
-      mockLogger,
+      undefined,
+      'system',
+      expect.objectContaining({ logger: mockLogger }),
     );
     expect(publishBoltEvent).toHaveBeenNthCalledWith(
       3,
       'bond.deal.rotting',
+      'bond',
       expect.objectContaining({ deal_id: 'deal-3' }),
       'org-b',
-      expect.anything(),
-      mockLogger,
+      undefined,
+      'system',
+      expect.objectContaining({ logger: mockLogger }),
     );
 
     // Completion log should report 3 alerted, 0 failed

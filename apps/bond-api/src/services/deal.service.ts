@@ -11,7 +11,7 @@ import {
   bondCompanies,
 } from '../db/schema/index.js';
 import { escapeLike, notFound, badRequest } from '../lib/utils.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   loadDealEnrichment,
   loadActor,
@@ -302,6 +302,7 @@ export async function createDeal(
     const owner = enrichment?.owner ?? null;
     await publishBoltEvent(
       'deal.created',
+      'bond',
       {
         deal: {
           id: d.id,
@@ -395,6 +396,7 @@ export async function updateDeal(
     const owner = enrichment?.owner ?? null;
     await publishBoltEvent(
       'deal.updated',
+      'bond',
       {
         deal: {
           id: d.id,
@@ -548,6 +550,7 @@ export async function moveDealStage(
     const owner = enrichment?.owner ?? null;
     await publishBoltEvent(
       'deal.stage_changed',
+      'bond',
       {
         deal: {
           id: d.id,
@@ -688,6 +691,7 @@ export async function closeDealWon(
     const owner = enrichment?.owner ?? null;
     await publishBoltEvent(
       'deal.won',
+      'bond',
       {
         deal: {
           id: d.id,
@@ -831,6 +835,7 @@ export async function closeDealLost(
     const owner = enrichment?.owner ?? null;
     await publishBoltEvent(
       'deal.lost',
+      'bond',
       {
         deal: {
           id: d.id,

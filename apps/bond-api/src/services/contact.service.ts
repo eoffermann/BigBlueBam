@@ -9,7 +9,7 @@ import {
   bondActivities,
 } from '../db/schema/index.js';
 import { escapeLike, notFound, badRequest } from '../lib/utils.js';
-import { publishBoltEvent } from '../lib/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import {
   loadActor,
   loadOrg,
@@ -241,6 +241,7 @@ export async function createContact(
     const owner = await loadActor(c.owner_id);
     await publishBoltEvent(
       'contact.created',
+      'bond',
       {
         contact: {
           id: c.id,

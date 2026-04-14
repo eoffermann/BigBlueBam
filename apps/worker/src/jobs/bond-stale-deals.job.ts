@@ -30,7 +30,7 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
-import { publishBoltEvent } from '../utils/bolt-events.js';
+import { publishBoltEvent } from '@bigbluebam/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,8 +111,10 @@ export async function processBondStaleDealsJob(
     try {
       // Fire-and-forget event emission. publishBoltEvent never throws, so
       // this await will resolve cleanly whether the POST succeeded or not.
+      // event name normalized in wave 0.4
       await publishBoltEvent(
         'bond.deal.rotting',
+        'bond',
         {
           deal_id: row.id,
           stage_id: row.stage_id,
@@ -120,8 +122,9 @@ export async function processBondStaleDealsJob(
           rotting_days_threshold: row.rotting_days,
         },
         row.organization_id,
-        { source: 'bond', actorType: 'system' },
-        logger,
+        undefined,
+        'system',
+        { logger },
       );
 
       // Update marker AFTER emit. A genuine bolt-api outage means publishBoltEvent
