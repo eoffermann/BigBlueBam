@@ -21,7 +21,7 @@ name: Typecheck
 #    banter-api/dompurify's fail-fast before. There are 100+ errors
 #    across apps/api, apps/banter-api, apps/bearing-api, apps/book,
 #    apps/brief, apps/bolt, apps/bond, apps/bill, apps/blank,
-#    apps/blast, apps/helpdesk, apps/mcp-server — easily a Wave-worth
+#    apps/blast, apps/helpdesk, apps/mcp-server, easily a Wave-worth
 #    of surgery per package. A separate strict job enforces
 #    packages/shared (the one package that IS clean today) so the
 #    signal is not lost. See DECISIONS.md D-008f.

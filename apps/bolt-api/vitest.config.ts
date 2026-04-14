@@ -17,6 +17,7 @@ export default defineConfig({
     // the mock plumbing so this override can come back out. See
     // DECISIONS.md D-008d.
     testTimeout: 30000,
+    hookTimeout: 30000,
     include: ['test/**/*.test.ts'],
     coverage: {
       provider: 'v8',

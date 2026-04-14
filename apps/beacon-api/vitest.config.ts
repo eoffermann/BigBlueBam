@@ -10,6 +10,7 @@ export default defineConfig({
     // service modules inside each it() costs 2-3s cold. See
     // DECISIONS.md D-008d.
     testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
