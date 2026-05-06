@@ -2649,7 +2649,7 @@ Namespace: bigbluebam
 
 | Environment | Method | URL Pattern |
 |---|---|---|
-| **Local dev** | `docker compose -f docker-compose.yml -f docker-compose.dev.yml up` | `localhost:3000` (Vite HMR) / `localhost:4000` (API) |
+| **Local dev** | `./scripts/dev/configure.sh -y && node scripts/dev/up.mjs` (see docs/development.md) | `localhost/b3/` (full stack via nginx) |
 | **CI/Test** | Ephemeral Docker Compose in GitHub Actions | Internal only |
 | **Preview** | Per-PR deploy via Render/Railway or `docker compose` on a preview server | `pr-{number}.preview.bigbluebam.io` |
 | **Staging** | Docker Compose on dedicated server, or K8s staging namespace | `staging.bigbluebam.io` |

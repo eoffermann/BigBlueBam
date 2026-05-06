@@ -245,20 +245,30 @@ Day-to-day development: work on feature branches off `main`, merge to `main` via
 ## Common Commands
 
 ```bash
-# First-time setup
-cp .env.example .env   # Edit secrets before starting
-pnpm install           # Install all dependencies
+# Local Docker dev pipeline (cold, three commands — see docs/development.md)
+./scripts/dev/configure.sh -y         # generate .env with random secrets (idempotent)
+node scripts/dev/up.mjs               # build + bring up the stack, wait for api healthy
+./scripts/dev/fixture-base.sh         # provision admin@example.com + run seed sidecar
 
-# Start full stack (production mode)
+# Per-service hot-reload (opt-in via gitignored docker-compose.override.yml)
+./scripts/dev/compose-overrides.sh add api      # api → tsup --watch + node --watch
+./scripts/dev/compose-overrides.sh remove api   # back to prod image
+./scripts/dev/compose-overrides.sh list available
+
+# Tear down (interactive per-category prompts; -y for original defaults)
+./scripts/dev/decommission.sh
+./scripts/dev/decommission.sh -y
+
+# Production deployment
+./scripts/deploy.sh                    # branch prompt + platform adapter (compose / Railway)
+
+# Start full stack (production mode, no scripts)
 docker compose up -d
-
-# Start full stack (dev mode with hot reload)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # Run database migrations (schema lives in infra/postgres/migrations/*.sql, applied by the migrate service)
 docker compose run --rm migrate
 
-# Create initial admin user
+# Create initial admin user (manual; the dev-pipeline path uses scripts/dev/provision-admin.sh)
 docker compose exec api node dist/cli.js create-admin \
   --email admin@example.com --password your-password-here \
   --name "Admin" --org "My Organization"
@@ -272,6 +282,10 @@ docker compose exec api node dist/cli.js create-service-account \
 # Phase B per-app seeders, Phase C banter + helpdesk, Phase D acme scenario)
 docker compose --profile seed run --rm seed
 
+# Snapshot / restore data volumes (pre-upgrade rollback fixture)
+./scripts/dump_data_vols.sh <target_dir>
+./scripts/restore_data_vols.sh <source_dir>
+
 # View logs
 docker compose logs -f api mcp-server worker
 
@@ -279,7 +293,18 @@ docker compose logs -f api mcp-server worker
 pnpm --filter @bigbluebam/shared build
 pnpm --filter @bigbluebam/api build
 
-# Run tests
+# Run tests / typecheck / lint — containerized (recommended; no host pnpm install needed)
+bash scripts/dev/test.sh                                 # full Vitest suite
+bash scripts/dev/test.sh --filter @bigbluebam/api        # vitest filter args
+bash scripts/dev/tools.sh typecheck
+bash scripts/dev/tools.sh check
+bash scripts/dev/tools.sh format                         # writes back to source
+bash scripts/dev/tools.sh db:check                       # Drizzle drift guard (needs stack up)
+# DB-coupled tests need the stack up; run `bash scripts/dev/up.sh` first if you
+# see "connection refused". The workspace container joins the backend network
+# but does NOT auto-start postgres/redis.
+
+# Run tests on host (only if you have local pnpm install)
 pnpm test                                    # All packages
 pnpm --filter @bigbluebam/shared test        # Shared schemas only
 pnpm --filter @bigbluebam/api test           # API unit tests
@@ -298,6 +323,13 @@ pnpm --filter @bigbluebam/integration-tests test   # Cross-app integration harne
 
 ## Key Design Decisions
 
+- **Local Docker dev pipeline** lives in `scripts/dev/` and runs every service from its prod image by default. Per-service hot-reload is opt-in via `scripts/dev/compose-overrides.sh add <service>`, which writes a gitignored `docker-compose.override.yml` that compose auto-merges. Services in dev-watch mode use the same `node dist/<entry>.js` entrypoint as prod, with `tsup --watch` rebuilding `dist/` on save (~1-2s) and `node --watch` restarting on change. No separate dev image flavor; same artifact, just bind-mounted. Frontends and Python services (`voice-agent`) are deliberately refused with pointers to future tracks. See [docs/development.md](docs/development.md).
+- **Dev admin credentials for integration testing**. When running against a local Docker dev deployment (the pipeline above) and you need to log in as the dev admin — for browser-driven integration testing, MCP-driven smoke tests, or agent-mode probing of the SPA — the credentials are NOT in `.env`. They live in [.local-dev-state.json](.local-dev-state.json) under the `devAdmin` block (gitignored, plaintext). Read them via:
+  ```sh
+  node scripts/lib/read-state.mjs devAdmin DEV_ADMIN_EMAIL      # → admin@example.com
+  node scripts/lib/read-state.mjs devAdmin DEV_ADMIN_PASSWORD   # → <48-char hex>
+  ```
+  The dev admin is `admin@example.com` (also what `seed-platform.mjs` looks up by default), provisioned with `--superuser` by `scripts/dev/provision-admin.sh` so the bootstrap-gate is cleared. If `.local-dev-state.json` doesn't exist, the dev environment hasn't been configured yet — run `./scripts/dev/configure.sh -y` first. These credentials are local-only; they have no equivalent in production deployments and should never be referenced from app code.
 - **Zod schemas are shared** between client and API (`@bigbluebam/shared`). Single source of truth for validation.
 - **Optimistic updates** via TanStack Query for all mutations. Rollback on failure with animated revert.
 - **Cursor-based pagination** on all list endpoints. Filter pattern: `?filter[field]=value`. Sort: `?sort=-field`.
@@ -353,7 +385,7 @@ All API errors follow this structure:
 
 Required env vars: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `SESSION_SECRET`, `INTERNAL_SERVICE_SECRET`, `MCP_INTERNAL_API_TOKEN`. See `.env.example` for the full list including optional OAuth, SMTP, and port overrides.
 
-Optional test/dev knobs on the Bam api: set `BBB_E2E_PERMISSIVE_RATE_LIMIT=1` to multiply the global Fastify rate limit ceiling by `RATE_LIMIT_E2E_MULTIPLIER` (default 100x), unblocking parallel Playwright workers on `/auth/login`. Already on by default in `docker-compose.dev.yml` and any non-production `NODE_ENV`; production stays strict unless the flag is set explicitly. Per-route rate limits (org admin, llm-provider, change-password, switch-org, guest-invite) are unaffected.
+Optional test/dev knobs on the Bam api: set `BBB_E2E_PERMISSIVE_RATE_LIMIT=1` to multiply the global Fastify rate limit ceiling by `RATE_LIMIT_E2E_MULTIPLIER` (default 100x), unblocking parallel Playwright workers on `/auth/login`. Already on by default for any non-production `NODE_ENV` (e.g., when a service is brought up via `scripts/dev/compose-overrides.sh add`); production stays strict unless the flag is set explicitly. Per-route rate limits (org admin, llm-provider, change-password, switch-org, guest-invite) are unaffected.
 
 RLS posture is controlled by `BBB_RLS_ENFORCE` (default off during the staged Wave 1.A rollout). Set to `1` to force the api role into NOBYPASSRLS mode so policies bind on every query. Seeding respects `SEED_ORG_SLUG`, which resolves the target org via slug rather than a hardcoded UUID.
 
