@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup",
+    "build:watch": "tsup --watch",
     "dev": "tsx watch src/worker.ts",
     "start": "node dist/worker.js",
     "typecheck": "tsc --noEmit",

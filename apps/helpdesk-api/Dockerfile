@@ -37,22 +37,6 @@ RUN pnpm --filter @bigbluebam/shared build \
 RUN pnpm --filter @bigbluebam/helpdesk-api deploy --prod /app/deployed
 
 
-# ── Stage: dev ────────────────────────────────────────────────────
-FROM deps AS dev
-
-COPY tsconfig.base.json ./
-COPY packages/shared/ ./packages/shared/
-COPY packages/logging/ ./packages/logging/
-COPY packages/service-health/ ./packages/service-health/
-COPY packages/db-stubs/ ./packages/db-stubs/
-COPY apps/helpdesk-api/ ./apps/helpdesk-api/
-
-WORKDIR /app/apps/helpdesk-api
-
-EXPOSE 4001
-
-CMD ["npx", "tsx", "watch", "src/server.ts"]
-
 # ── Stage: production ────────────────────────────────────────────
 FROM node:22-alpine AS production
 
