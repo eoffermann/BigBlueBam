@@ -1038,6 +1038,100 @@ services:
     networks:
       - backend
 
+  # First-class workspace container — pnpm install of every workspace,
+  # used for tests, typecheck, lint, format, db:check, migration linting,
+  # and the Vite Level-1 dev-builder sidecars. See infra/workspace/Dockerfile
+  # for the build details. Runs `pnpm test` by default; override via
+  # `docker compose --profile test run --rm workspace <cmd>` or the
+  # scripts/dev/test.sh / scripts/dev/tools.sh wrappers. Joins backend
+  # network so DB-coupled tests can reach postgres:5432 / redis:6379.
+  # No depends_on — typecheck and lint don't need data services up; tests
+  # that DO need them will error loud with "connection refused" if
+  # postgres is down (operator runs bash scripts/dev/up.sh first).
+  workspace:
+    profiles: ["test"]
+    image: bigbluebam-workspace
+    build:
+      context: .
+      dockerfile: infra/workspace/Dockerfile
+    volumes:
+      # Bind-mount source from host. NOT read-only: turbo creates .turbo/
+      # log dirs and task-graph build steps (shared/dist/) write back.
+      # Both .turbo/ and dist/ are gitignored — writes are non-precious.
+      - ./apps:/app/apps
+      - ./packages:/app/packages
+      # scripts/ is needed for `pnpm db:check`, `pnpm lint:migrations`, and
+      # other root-level pnpm scripts that exec node scripts/*.mjs. NOT
+      # read-only: `pnpm format` / `pnpm check --write` walk the tree and
+      # may rewrite scripts/*.{js,mjs} to fix biome diagnostics.
+      - ./scripts:/app/scripts
+      # infra/postgres/migrations is needed by `pnpm lint:migrations`.
+      # Read-only: lint:migrations only reports, never writes; biome ignores .sql.
+      - ./infra/postgres/migrations:/app/infra/postgres/migrations:ro
+      # Root-level config (stable across runs; biome should not need to
+      # rewrite these, and turbo / tsconfig drift is a host-side concern).
+      - ./tsconfig.base.json:/app/tsconfig.base.json:ro
+      - ./biome.json:/app/biome.json:ro
+      - ./turbo.json:/app/turbo.json:ro
+      # docker-compose.yml is read by apps/mcp-server/test/docker-compose-env.test.ts
+      # to verify env-var alignment between mcp-server's source and the
+      # compose file. Mount it read-only so that test passes inside the
+      # container too (CI ran it at the repo root naturally).
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      # Anonymous volumes mask the host's empty node_modules at every
+      # workspace path so the container's pnpm-installed node_modules
+      # (vitest, tsup, etc.) wins. Without these, the bind mounts above
+      # would replace the image's installed deps with the host's
+      # (probably absent) ones, and `pnpm test` fails with `tsup: not
+      # found` / `vitest: not found`. Each new workspace must add a line.
+      - /app/node_modules
+      - /app/apps/api/node_modules
+      - /app/apps/banter-api/node_modules
+      - /app/apps/beacon-api/node_modules
+      - /app/apps/bearing-api/node_modules
+      - /app/apps/bench-api/node_modules
+      - /app/apps/bill-api/node_modules
+      - /app/apps/blank-api/node_modules
+      - /app/apps/blast-api/node_modules
+      - /app/apps/board-api/node_modules
+      - /app/apps/bolt-api/node_modules
+      - /app/apps/bond-api/node_modules
+      - /app/apps/book-api/node_modules
+      - /app/apps/brief-api/node_modules
+      - /app/apps/helpdesk-api/node_modules
+      - /app/apps/banter/node_modules
+      - /app/apps/beacon/node_modules
+      - /app/apps/bearing/node_modules
+      - /app/apps/bench/node_modules
+      - /app/apps/bill/node_modules
+      - /app/apps/blank/node_modules
+      - /app/apps/blast/node_modules
+      - /app/apps/board/node_modules
+      - /app/apps/bolt/node_modules
+      - /app/apps/bond/node_modules
+      - /app/apps/book/node_modules
+      - /app/apps/brief/node_modules
+      - /app/apps/frontend/node_modules
+      - /app/apps/helpdesk/node_modules
+      - /app/apps/mcp-server/node_modules
+      - /app/apps/worker/node_modules
+      - /app/apps/e2e/node_modules
+      - /app/apps/integration-tests/node_modules
+      - /app/packages/db-stubs/node_modules
+      - /app/packages/docs-capture/node_modules
+      - /app/packages/livekit-tokens/node_modules
+      - /app/packages/logging/node_modules
+      - /app/packages/service-health/node_modules
+      - /app/packages/shared/node_modules
+      - /app/packages/ui/node_modules
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/bigbluebam
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+    restart: "no"
+    networks:
+      - backend
+
 volumes:
   pgdata:
   redisdata:
