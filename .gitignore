@@ -18,6 +18,7 @@ test-*.png
 .deploy-state.json
 .deploy-state-railway.json
 .deploy-state-railway-logs/
+.local-dev-state.json
 # Local TLS certs provisioned by scripts/deploy/main.mjs (self-signed,
 # mkcert, BYO, or Let's Encrypt). Never commit cert material.
 /certs/
@@ -32,3 +33,4 @@ agents/
 # time by scripts/deploy/platforms/docker-compose.mjs::renderLivekitConfig.
 # Never commit this; it carries the deployed LIVEKIT_API_SECRET.
 infra/livekit/livekit.yaml
+docker-compose.override.yml
