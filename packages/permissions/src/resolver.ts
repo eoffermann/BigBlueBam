@@ -18,12 +18,28 @@ const READ_VERBS: ReadonlySet<string> = new Set([
   'preview', 'export', 'summarize', 'detail', 'graph', 'audit',
 ]);
 
-// API-key `read_write` scope refuses any verb that materially escalates
-// privileges or destroys data.
-const ADMIN_ONLY_VERBS: ReadonlySet<string> = new Set([
+// API-key `read_write` scope refuses anything marked is_destructive in the
+// catalog (verbs like delete/archive/transfer/set_role/invite/remove). Used
+// as a fallback verb-list when the permission isn't in the catalog yet.
+//
+// Wave A used this verb set as the source of truth; Wave B follow-up
+// switched the *primary* check to the catalog's is_destructive column so
+// the catalog can be extended without redeploying the resolver.
+const FALLBACK_DESTRUCTIVE_VERBS: ReadonlySet<string> = new Set([
   'delete', 'archive', 'transfer', 'set_role', 'invite', 'remove',
-  'destroy', 'purge', 'wipe', 'demote', 'promote',
+  'destroy', 'purge', 'wipe', 'demote', 'promote', 'cancel',
 ]);
+
+/**
+ * Helpdesk namespace short-circuit. Per the user's design decision (see
+ * docs/permissions-overhaul-plan.md "Decisions resolved"), helpdesk-api
+ * keeps its isolated customer-portal auth model and its ~47 actions
+ * always-resolve-allow for any authenticated session. The catalog still
+ * lists them so the operator can audit the surface, but the resolver
+ * short-circuits before any group/override logic kicks in. Mirrors the
+ * always-permitted core idiom but applied to a whole namespace.
+ */
+const HELPDESK_NAMESPACE_PREFIX = 'helpdesk.';
 
 /**
  * Glob-prefix match used for agent_policies allowed_tools. Mirrors the
@@ -52,9 +68,12 @@ function isReadVerb(permissionId: string): boolean {
   return READ_VERBS.has(verb);
 }
 
-function isAdminOnlyVerb(permissionId: string): boolean {
+function isDestructive(permissionId: string): boolean {
+  const meta = PERMISSIONS_BY_ID.get(permissionId);
+  if (meta) return meta.is_destructive;
+  // Fallback for permissions added between codegen runs.
   const verb = permissionId.split('.').pop() ?? '';
-  return ADMIN_ONLY_VERBS.has(verb);
+  return FALLBACK_DESTRUCTIVE_VERBS.has(verb);
 }
 
 function findMembership(
@@ -159,13 +178,21 @@ export function resolve(
     return { decision: 'allow', reason: 'always_permitted_core' };
   }
 
-  // 3. API-key scope ceiling.
+  // 2.5. Helpdesk namespace short-circuit. The customer-portal auth model
+  // is preserved; helpdesk.* actions resolve allow for any authenticated
+  // session because helpdesk-api enforces visibility at its own layer.
+  if (permissionId.startsWith(HELPDESK_NAMESPACE_PREFIX)) {
+    return { decision: 'allow', reason: 'always_permitted_core' };
+  }
+
+  // 3. API-key scope ceiling. Drives off the catalog's is_destructive
+  // column (with a verb-set fallback) instead of a hardcoded list.
   const keyScope = ctx.subject.api_key_scope;
   if (keyScope != null) {
     if (keyScope === 'read' && !isReadVerb(permissionId)) {
       return { decision: 'deny', reason: 'api_key_ceiling_exceeded' };
     }
-    if (keyScope === 'read_write' && isAdminOnlyVerb(permissionId)) {
+    if (keyScope === 'read_write' && isDestructive(permissionId)) {
       return { decision: 'deny', reason: 'api_key_ceiling_exceeded' };
     }
   }

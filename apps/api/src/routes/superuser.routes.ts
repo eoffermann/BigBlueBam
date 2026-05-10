@@ -24,6 +24,7 @@ import {
 } from '../services/platform-settings.service.js';
 import { requireAuth } from '../plugins/auth.js';
 import { requireSuperuser } from '../middleware/require-superuser.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { setActiveOrgId, clearActiveOrgId } from '../services/session.service.js';
 import {
@@ -421,7 +422,19 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── POST /superuser/context/switch ──────────────────────────────────────
   fastify.post<{ Body: { org_id: string } }>(
     '/context/switch',
-    { preHandler: [requireAuth, requireSuperuser] },
+    {
+      preHandler: [
+        requireAuth,
+        // Wave B sample: requireSuperuser pattern. The resolver short-
+        // circuits for is_superuser=true so this should always agree
+        // with the legacy gate; an Owner non-SuperUser hit would
+        // surface as legacy=deny, resolved=allow (because Owner builtin
+        // group grants everything). That's a real soak-detection
+        // signal — the resolver needs a "requires_superuser" filter
+        // before Wave C flips enforcement.
+        dualReadGate({ legacy: requireSuperuser, permission: 'bam.context.switch' }),
+      ],
+    },
     async (request, reply) => {
       const parsed = superuserSwitchContextSchema.safeParse(request.body);
       if (!parsed.success) {

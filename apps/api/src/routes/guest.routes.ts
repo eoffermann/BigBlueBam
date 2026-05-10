@@ -10,6 +10,7 @@ import { notifications } from '../db/schema/notifications.js';
 import { organizations } from '../db/schema/organizations.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireOrgRole } from '../middleware/authorize.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 import { sendGuestInvitationEmail, isSmtpConfigured } from '../lib/email-queue.js';
 import { env } from '../env.js';
 
@@ -18,7 +19,17 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // Create a guest invitation (requires org admin/owner)
   fastify.post(
     '/v1/guests/invite',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner'), requireScope('admin')] },
+    {
+      preHandler: [
+        requireAuth,
+        // Wave B sample: requireOrgRole pattern (admin OR owner).
+        dualReadGate({
+          legacy: requireOrgRole('admin', 'owner'),
+          permission: 'bam.guest.invite',
+        }),
+        requireScope('admin'),
+      ],
+    },
     async (request, reply) => {
       const schema = z.object({
         email: z.string().email().max(320),

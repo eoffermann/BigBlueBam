@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ZodRawShape, ZodTypeAny, z } from 'zod';
 import type { Logger } from 'pino';
+import { TOOL_TO_PERMISSION } from '@bigbluebam/permissions';
 import type { ApiClient } from '../middleware/api-client.js';
 
 /**
@@ -213,6 +214,9 @@ export function createPolicyGate(opts: CreatePolicyGateOptions): PolicyGate {
     const cached = decisionCache.get(toolName);
     const now = Date.now();
     if (cached && now - cached.cachedAt < ttl) {
+      // Wave B follow-up: dual-read on cache-hit path too. We already
+      // know the decision, so this is just telemetry.
+      recordDualRead(toolName, cached.decision, caller.id);
       return cached.decision;
     }
 
@@ -234,6 +238,7 @@ export function createPolicyGate(opts: CreatePolicyGateOptions): PolicyGate {
           contact: null,
         };
         decisionCache.set(toolName, { decision, cachedAt: now });
+        recordDualRead(toolName, decision, caller.id);
         return decision;
       }
       const decision: PolicyDecision = res.data?.data ?? {
@@ -244,6 +249,7 @@ export function createPolicyGate(opts: CreatePolicyGateOptions): PolicyGate {
         contact: null,
       };
       decisionCache.set(toolName, { decision, cachedAt: now });
+      recordDualRead(toolName, decision, caller.id);
       return decision;
     } catch (err) {
       opts.logger.error(
@@ -269,6 +275,54 @@ export function createPolicyGate(opts: CreatePolicyGateOptions): PolicyGate {
       // Leave callerCache in place; caller identity didn't change, just the
       // policy did. Next call will refetch the decision.
     }
+  }
+
+  /**
+   * Wave B follow-up: fire-and-forget dual-read against the new resolver.
+   * After agent_policies decides, post the decision + the agent's user_id
+   * + the catalog permission_id to the api's internal endpoint, which
+   * runs the resolver and writes a row to permissions_divergence_log.
+   *
+   * The promise is intentionally unawaited — this must never block the
+   * tool invocation. Failure modes (network down, internal secret wrong,
+   * api 5xx) all fall back to "no telemetry row written," which is
+   * acceptable: the legacy agent_policies decision is still authoritative.
+   */
+  function recordDualRead(toolName: string, agentDecision: PolicyDecision, callerId: string | null): void {
+    if (!callerId) return;
+    const permissionId = TOOL_TO_PERMISSION.get(toolName);
+    if (!permissionId) return; // unknown tool — skip silently
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET ?? process.env.INTERNAL_HELPDESK_SECRET;
+    if (!internalSecret) return;
+
+    void (async () => {
+      try {
+        // ApiClient is bearer-auth (caller's session); we can't reuse it
+        // for an internal-secret POST. Use raw fetch against the api's
+        // internal URL.
+        const apiUrl = process.env.BBB_API_INTERNAL_URL ?? 'http://api:4000';
+        const body = {
+          user_id: callerId,
+          permission_id: permissionId,
+          agent_policy_decision: agentDecision.allowed ? 'allow' : 'deny',
+          tool_name: toolName,
+          scope: {},
+        };
+        await fetch(`${apiUrl}/internal/permissions/dual-read`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Secret': internalSecret,
+          },
+          body: JSON.stringify(body),
+        });
+      } catch (err) {
+        opts.logger.debug(
+          { err, sessionId: opts.sessionId, toolName },
+          'PolicyGate: dual-read POST failed (best-effort)',
+        );
+      }
+    })();
   }
 
   return { check, invalidate };

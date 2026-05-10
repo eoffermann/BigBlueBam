@@ -2670,6 +2670,9 @@ importers:
 
   apps/mcp-server:
     dependencies:
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared

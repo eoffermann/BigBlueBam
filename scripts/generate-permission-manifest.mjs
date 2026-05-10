@@ -368,6 +368,21 @@ function inferResourceFromPath(path, app) {
   return nonParam.map((s) => singularize(s).replace(/-/g, '_')).join('_');
 }
 
+// Path prefixes excluded from the catalog. /internal/* routes are
+// shared-secret authenticated (not session/api-key) and don't go through
+// the permissions resolver — gating them would conflict with the
+// inter-service trust model. Health/version probes are similarly
+// public surface that doesn't fit the resolver's mental model.
+const EXCLUDED_PATH_PREFIXES = ['/internal/', '/health', '/healthz', '/readyz', '/version'];
+
+function isPathExcluded(routePath) {
+  return EXCLUDED_PATH_PREFIXES.some((prefix) => {
+    // Normalize: '/internal/' covers '/internal/...' AND '/internal'
+    const trimmed = prefix.replace(/\/$/, '');
+    return routePath === trimmed || routePath.startsWith(trimmed + '/');
+  });
+}
+
 function extractRestRoutes() {
   const routes = [];
   const apps = Object.keys(APP_TO_PREFIX);
@@ -400,6 +415,7 @@ function extractRestRoutes() {
           if (!pathMatch) continue;
           const method = mm[1];
           const routePath = pathMatch[1];
+          if (isPathExcluded(routePath)) continue;
           const prefix = APP_TO_PREFIX[app];
           const hasIdParam = routePath.includes('/:');
           const verb = methodVerb(method, routePath, hasIdParam);

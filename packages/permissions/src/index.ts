@@ -41,6 +41,7 @@ export {
   PERMISSIONS,
   PERMISSIONS_BY_ID,
   ALWAYS_PERMITTED,
+  TOOL_TO_PERMISSION,
   type PermissionId,
   type PermissionMeta,
 } from './generated/permissions.js';

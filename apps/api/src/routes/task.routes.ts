@@ -10,6 +10,7 @@ import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
 import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
 import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 export default async function taskRoutes(fastify: FastifyInstance) {
   fastify.get<{
@@ -357,7 +358,15 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/tasks/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
+    {
+      preHandler: [
+        requireAuth,
+        // Wave B sample: destructive verb + project-scoped entity check.
+        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task.delete' }),
+        requireScope('read_write'),
+        requireProjectAccessForEntity('task'),
+      ],
+    },
     async (request, reply) => {
       const task = await taskService.deleteTask(request.params.id, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
       if (!task) {

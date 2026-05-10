@@ -23,9 +23,13 @@ import { resolve, join, dirname } from 'node:path';
 
 const ROOT = resolve(new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]):\//, '$1:/'), '..');
 
+// Files the codegen regenerates and the drift guard checks for stability.
+// 0145_permissions_seed_actions.sql is intentionally NOT in this list:
+// it's frozen post-deploy per CLAUDE.md's immutability rule, and catalog
+// updates land in delta migrations (0151+) that aren't part of the
+// regenerated output.
 const COMMITTED_FILES = [
   'docs/permissions-action-manifest.json',
-  'infra/postgres/migrations/0145_permissions_seed_actions.sql',
   'packages/permissions/src/generated/permissions.ts',
 ];
 
@@ -94,8 +98,11 @@ function regenerate() {
     console.error('    node scripts/generate-permission-manifest.mjs');
     console.error('    node scripts/build-permission-codegen.mjs');
     console.error('    git add docs/permissions-action-manifest.json \\');
-    console.error('            infra/postgres/migrations/0145_permissions_seed_actions.sql \\');
     console.error('            packages/permissions/src/generated/permissions.ts');
+    console.error('');
+    console.error('  If the catalog gained or lost permissions, also add a delta');
+    console.error('  migration via:');
+    console.error('    node scripts/build-permission-delta.mjs');
     process.exit(1);
   }
 

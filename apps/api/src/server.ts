@@ -79,6 +79,7 @@ import systemSettingsRoutes from './routes/system-settings.routes.js';
 import versionRoutes from './routes/version.routes.js';
 import userRoutes from './routes/user.routes.js';
 import permissionsDivergencesRoutes from './routes/permissions-divergences.routes.js';
+import internalPermissionsRoutes from './routes/internal-permissions.routes.js';
 import { sql } from 'drizzle-orm';
 import websocketHandlerPlugin from './plugins/websocket.js';
 
@@ -283,6 +284,7 @@ await fastify.register(systemSettingsRoutes);
 await fastify.register(versionRoutes);
 await fastify.register(userRoutes);
 await fastify.register(permissionsDivergencesRoutes);
+await fastify.register(internalPermissionsRoutes);
 
 // BAM-029: TODO — Add a periodic session cleanup job to the worker service.
 // Expired sessions (sessions.expires_at < NOW()) accumulate in the database

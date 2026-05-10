@@ -7,11 +7,16 @@
 // Wave C (on):   resolver is canonical, legacy gates retired.
 
 import fp from 'fastify-plugin';
+import Redis from 'ioredis';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { permissionsPlugin } from '@bigbluebam/permissions';
 import type { PermissionScope } from '@bigbluebam/permissions';
 import { env } from '../env.js';
-import { bindPermissionsCache, loadPermissionContext } from '../services/permissions.service.js';
+import {
+  bindPermissionsCache,
+  invalidatePermissionsForUser,
+  loadPermissionContext,
+} from '../services/permissions.service.js';
 import { recordDivergence } from '../services/permissions-telemetry.service.js';
 
 /**
@@ -71,6 +76,73 @@ export const permissionsApiPlugin = fp(
         });
       },
     });
+    // Wave B follow-up: subscribe to Redis pubsub for cache invalidation.
+    // The cache lives behind a per-user/org key and TTLs at 5 minutes; the
+    // subscriber lets a write on one replica push invalidation to every
+    // other replica's cache so a permission edit takes effect within
+    // milliseconds instead of waiting for TTL. Mirrors the agent_policies
+    // pattern in apps/mcp-server/src/server.ts:130.
+    //
+    // Channels (defined in @bigbluebam/permissions::INVALIDATION_CHANNELS):
+    //   perms:invalidate:user:<userId>  — clear one user's cached context
+    //   perms:invalidate:org:<orgId>    — clear every cached context in an org
+    //   perms:invalidate:group:<groupId> — clear every member of one group
+    //
+    // The pattern subscription `perms:invalidate:*` covers all three.
+    let permsSubscriber: Redis | null = null;
+    try {
+      permsSubscriber = new Redis(env.REDIS_URL, {
+        maxRetriesPerRequest: 3,
+        lazyConnect: true,
+      });
+      await permsSubscriber.connect();
+      await permsSubscriber.psubscribe('perms:invalidate:*');
+      permsSubscriber.on('pmessage', async (_pattern: string, channel: string, message: string) => {
+        // channel form: perms:invalidate:{kind}:{id}
+        const parts = channel.split(':');
+        const kind = parts[2];
+        const id = parts[3];
+        if (!kind || !id) return;
+        try {
+          if (kind === 'user') {
+            await invalidatePermissionsForUser(id, message || undefined);
+          } else if (kind === 'org' || kind === 'group') {
+            // Org / group invalidations require enumerating affected
+            // user keys. Wave D's editor publishes a per-user message
+            // alongside, so we keep this listener simple and let the
+            // writer fan out. If a writer publishes only the org/group
+            // form, we fall back to letting the 5-min TTL clean up.
+            fastify.log.info(
+              { kind, id },
+              'perms-invalidate: org/group event observed (TTL fallback)',
+            );
+          }
+        } catch (err) {
+          fastify.log.warn(
+            { err, channel },
+            'perms-invalidate: handler failed; relying on TTL',
+          );
+        }
+      });
+      fastify.log.info('Subscribed to perms:invalidate:*');
+    } catch (err) {
+      fastify.log.warn(
+        { err },
+        'perms:invalidate subscription unavailable; falling back to TTL-only cache',
+      );
+      permsSubscriber = null;
+    }
+
+    fastify.addHook('onClose', async () => {
+      if (permsSubscriber) {
+        try {
+          await permsSubscriber.quit();
+        } catch {
+          // shutdown best-effort
+        }
+      }
+    });
+
     fastify.log.info(
       { mode: env.BBB_PERMISSIONS_ENFORCE },
       'permissions plugin registered',

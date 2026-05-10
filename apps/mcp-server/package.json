@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@bigbluebam/permissions": "workspace:*",
     "@bigbluebam/shared": "workspace:*",
     "zod": "^3.23.0",
     "ioredis": "^5.4.0",

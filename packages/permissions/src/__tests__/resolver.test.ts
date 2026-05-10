@@ -223,6 +223,57 @@ describe('resolver — implicit deny + missing catalog', () => {
   });
 });
 
+describe('resolver — helpdesk namespace short-circuit', () => {
+  it('allows any helpdesk.* action without group membership', () => {
+    const r = resolve(makeCtx(), 'helpdesk.ticket.list', { org_id: 'o1' });
+    expect(r.decision).toBe('allow');
+    expect(r.reason).toBe('always_permitted_core');
+  });
+
+  it('still denies for unauthenticated agent (agent_disabled wins)', () => {
+    // Helpdesk short-circuit runs AT step 2.5, AFTER agent_policies gate
+    // would deny. But ALWAYS_PERMITTED runs at step 2 BEFORE agent gate.
+    // Helpdesk short-circuit is at 2.5 which is also BEFORE agent gate.
+    // For an authenticated portal user (kind='human', no api_key) helpdesk
+    // is allowed.
+    const ctx = makeCtx({
+      subject: { id: 'u1', is_superuser: false, kind: 'human', api_key_scope: null },
+    });
+    expect(resolve(ctx, 'helpdesk.ticket.create', { org_id: null }).decision).toBe('allow');
+  });
+});
+
+describe('resolver — api-key scope uses is_destructive (data-driven)', () => {
+  it('rejects bam.task.delete on read_write key (catalog flag)', () => {
+    const ctx = makeCtx({
+      subject: { id: 'u1', is_superuser: false, kind: 'human', api_key_scope: 'read_write' },
+    });
+    const r = resolve(ctx, 'bam.task.delete', { org_id: 'o1' });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toBe('api_key_ceiling_exceeded');
+  });
+
+  it('rejects an unknown destructive verb via fallback (e.g. bam.task.purge)', () => {
+    // 'bam.task.purge' isn't in the catalog (PERMISSIONS_BY_ID miss);
+    // the fallback verb-set still classifies 'purge' as destructive.
+    const ctx = makeCtx({
+      subject: { id: 'u1', is_superuser: false, kind: 'human', api_key_scope: 'read_write' },
+    });
+    const r = resolve(ctx, 'bam.task.purge', { org_id: 'o1' });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toBe('api_key_ceiling_exceeded');
+  });
+
+  it('allows non-destructive write on read_write key (e.g. bam.task.create)', () => {
+    const ctx = makeCtx({
+      subject: { id: 'u1', is_superuser: false, kind: 'human', api_key_scope: 'read_write' },
+      memberships: [{ group_id: 'g1', scope_type: 'org', scope_id: 'o1', detached_at: null }],
+      group_defaults: new Map([['g1:bam.task.create', true]]),
+    });
+    expect(resolve(ctx, 'bam.task.create', { org_id: 'o1' }).decision).toBe('allow');
+  });
+});
+
 describe('can() convenience helper', () => {
   it('returns true for allow', () => {
     const ctx = makeCtx({

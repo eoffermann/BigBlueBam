@@ -9,6 +9,7 @@ COPY package.json pnpm-workspace.yaml ./
 COPY pnpm-lock.yaml* ./
 COPY apps/mcp-server/package.json ./apps/mcp-server/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/permissions/package.json ./packages/permissions/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -18,10 +19,12 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/shared/src ./packages/shared/src
 COPY packages/shared/tsconfig.json packages/shared/tsup.config.ts ./packages/shared/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/mcp-server/src ./apps/mcp-server/src
 COPY apps/mcp-server/tsconfig.json apps/mcp-server/tsup.config.ts ./apps/mcp-server/
 
 RUN pnpm --filter @bigbluebam/shared build \
+ && pnpm --filter @bigbluebam/permissions build \
  && pnpm --filter @bigbluebam/mcp-server build
 
 RUN pnpm --filter @bigbluebam/mcp-server deploy --prod /app/deployed
@@ -32,6 +35,7 @@ FROM deps AS dev
 
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/mcp-server/ ./apps/mcp-server/
 
 WORKDIR /app/apps/mcp-server

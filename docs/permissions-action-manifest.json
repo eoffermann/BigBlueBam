@@ -1,8 +1,8 @@
 {
   "counts": {
-    "total": 1056,
+    "total": 1055,
     "mcp_tools_scanned": 348,
-    "rest_routes_scanned": 781,
+    "rest_routes_scanned": 780,
     "read_permissions": 417,
     "destructive_permissions": 103
   },
@@ -3373,6 +3373,22 @@
       ]
     },
     {
+      "id": "bam.superuser_permission_divergence_summary.list",
+      "app": "bam",
+      "resource": "superuser_permission_divergence_summary",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /superuser/permissions/divergences/summary",
+          "file": "permissions-divergences.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.system_setting.get",
       "app": "bam",
       "resource": "system_setting",
@@ -4060,38 +4076,6 @@
           "source": "rest",
           "ref": "GET /users/:id",
           "file": "user.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.version_check.create",
-      "app": "bam",
-      "resource": "version_check",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /version/check",
-          "file": "version.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.version.list",
-      "app": "bam",
-      "resource": "version",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /version",
-          "file": "version.routes.ts"
         }
       ]
     },

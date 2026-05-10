@@ -26,7 +26,10 @@ import { resolve, join, dirname } from 'node:path';
 
 const ROOT = resolve(new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]):\//, '$1:/'), '..');
 const MANIFEST_PATH = join(ROOT, 'docs/permissions-action-manifest.json');
-const MIGRATION_PATH = join(ROOT, 'infra/postgres/migrations/0145_permissions_seed_actions.sql');
+// 0145_permissions_seed_actions.sql is the FROZEN snapshot of the catalog
+// at Wave A. After deploy, CLAUDE.md's immutability rule prohibits editing
+// it. Catalog updates land in deltas at 0151+. The codegen no longer
+// writes 0145; new rows go through scripts/build-permission-delta.mjs.
 const TS_PATH = join(ROOT, 'packages/permissions/src/generated/permissions.ts');
 
 function sqlString(s) {
@@ -143,6 +146,30 @@ function buildTypeScript(manifest) {
   lines.push('  "agent.self.heartbeat",');
   lines.push(']);');
   lines.push('');
+
+  // ── Tool name → permission ID lookup. Used by the MCP register-tool
+  //    wrapper's Wave B dual-read so the resolver can be called by tool
+  //    name without recomputing the inference rules at runtime.
+  lines.push('/**');
+  lines.push(' * MCP tool name → catalog permission ID. Generated from the manifest');
+  lines.push(' * at codegen time so the MCP register-tool wrapper can look up a');
+  lines.push(' * permission for a tool name without re-deriving the inference.');
+  lines.push(' * Tools that source from REST routes (no tool name) are absent.');
+  lines.push(' */');
+  lines.push('export const TOOL_TO_PERMISSION: ReadonlyMap<string, string> = new Map([');
+  // Walk every permission's sources; for each `mcp` source emit a row
+  // tool_name -> permission.id. Some permissions have multiple MCP
+  // sources (rare but possible) — last-write-wins is fine for the map.
+  for (const p of manifest.permissions) {
+    for (const s of p.sources ?? []) {
+      if (s.source === 'mcp' && s.ref) {
+        lines.push(`  [${JSON.stringify(s.ref)}, ${JSON.stringify(p.id)}],`);
+      }
+    }
+  }
+  lines.push(']);');
+  lines.push('');
+
   return lines.join('\n');
 }
 
@@ -153,14 +180,12 @@ function main() {
   }
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 
-  mkdirSync(dirname(MIGRATION_PATH), { recursive: true });
   mkdirSync(dirname(TS_PATH), { recursive: true });
-
-  writeFileSync(MIGRATION_PATH, buildMigration(manifest));
-  console.log(`✓ wrote ${MIGRATION_PATH}`);
 
   writeFileSync(TS_PATH, buildTypeScript(manifest));
   console.log(`✓ wrote ${TS_PATH}`);
+  console.log('  (0145_permissions_seed_actions.sql is frozen post-deploy;');
+  console.log('   add catalog deltas via scripts/build-permission-delta.mjs)');
 }
 
 main();

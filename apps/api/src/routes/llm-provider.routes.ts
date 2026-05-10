@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireMinRole } from '../plugins/auth.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 import * as llmService from '../services/llm-provider.service.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
 
@@ -209,7 +210,13 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
   // -----------------------------------------------------------------------
   fastify.patch<{ Params: { id: string } }>(
     '/llm-providers/:id',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    {
+      preHandler: [
+        requireAuth,
+        // Wave B sample: requireMinRole('admin') gate pattern.
+        dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.llm_provider.update' }),
+      ],
+    },
     async (request, reply) => {
       const body = updateSchema.parse(request.body);
 
