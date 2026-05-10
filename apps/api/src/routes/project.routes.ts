@@ -6,6 +6,7 @@ import * as orgService from '../services/org.service.js';
 import { checkOrgPermission, isOrgPrivileged } from '../services/org-permissions.js';
 import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
 import { requireProjectRole } from '../middleware/authorize.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 import { cacheGetOrSet, cacheInvalidate, CACHE_KEYS } from '../lib/cache.js';
 
 const USER_PROJECTS_TTL_SECONDS = 30;
@@ -53,7 +54,21 @@ export default async function projectRoutes(fastify: FastifyInstance) {
     return reply.send({ data: projects });
   });
 
-  fastify.post('/projects', { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] }, async (request, reply) => {
+  fastify.post(
+    '/projects',
+    {
+      preHandler: [
+        requireAuth,
+        // Wave B dual-read sample: legacy `requireMinRole('member')` stays
+        // authoritative; the new resolver runs alongside under permission
+        // `bam.project.create` and divergences land in
+        // permissions_divergence_log. Wave C will replace this with bare
+        // `requireCan('bam.project.create')`.
+        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project.create' }),
+        requireScope('read_write'),
+      ],
+    },
+    async (request, reply) => {
     // Enforce org-level permission: members_can_create_projects
     if (!request.user!.is_superuser && !isOrgPrivileged(request.user!.role)) {
       const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
@@ -164,7 +179,14 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/projects/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    {
+      preHandler: [
+        requireAuth,
+        // Wave B dual-read sample (destructive verb, project scope).
+        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project.delete' }),
+        requireScope('read_write'),
+      ],
+    },
     async (request, reply) => {
       if (!request.user!.is_superuser) {
         const membership = await projectService.getProjectMembership(
@@ -253,7 +275,17 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/members',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectRole('admin')] },
+    {
+      preHandler: [
+        requireAuth,
+        requireMinRole('member'),
+        requireScope('read_write'),
+        // Wave B dual-read sample (project-scoped role gate). The legacy
+        // requireProjectRole('admin') runs canonically; the resolver
+        // shadows under bam.project.add_member at project scope.
+        dualReadGate({ legacy: requireProjectRole('admin'), permission: 'bam.project.add_member' }),
+      ],
+    },
     async (request, reply) => {
       if (!request.user!.is_superuser) {
         const membership = await projectService.getProjectMembership(

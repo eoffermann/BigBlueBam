@@ -11,12 +11,13 @@ import { Input } from '@/components/common/input';
 import { Select } from '@/components/common/select';
 import { Dialog } from '@/components/common/dialog';
 import { formatRelativeTime } from '@/lib/utils';
+import { PermissionsDivergencesPage } from './permissions-divergences';
 
 interface SuperuserPageProps {
   onNavigate: (path: string) => void;
 }
 
-type Tab = 'overview' | 'organizations' | 'platform' | 'beta-signups';
+type Tab = 'overview' | 'organizations' | 'platform' | 'beta-signups' | 'permissions';
 
 export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
   const { user } = useAuthStore();
@@ -71,6 +72,9 @@ export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
           <TabButton active={tab === 'beta-signups'} onClick={() => setTab('beta-signups')}>
             Beta Signups
           </TabButton>
+          <TabButton active={tab === 'permissions'} onClick={() => setTab('permissions')}>
+            Permissions
+          </TabButton>
         </div>
       </header>
 
@@ -79,6 +83,7 @@ export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
         {tab === 'organizations' && <OrganizationsTab onNavigate={onNavigate} />}
         {tab === 'platform' && <PlatformTab />}
         {tab === 'beta-signups' && <BetaSignupsTab />}
+        {tab === 'permissions' && <PermissionsDivergencesPage />}
       </main>
     </div>
   );

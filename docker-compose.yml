@@ -112,6 +112,13 @@ services:
       # safe HTTP-only default; TLS deploys set COOKIE_SECURE=true in .env.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      # Per-action permissions (Waves A-E). Default 'warn' starts the
+      # divergence-soak window: legacy gates remain canonical, the new
+      # resolver runs alongside on annotated routes, mismatches land in
+      # permissions_divergence_log. See docs/permissions-overhaul-plan.md.
+      # Flip to 'on' only after the SuperUser dashboard is clean for the
+      # configured soak duration.
+      BBB_PERMISSIONS_ENFORCE: ${BBB_PERMISSIONS_ENFORCE:-warn}
       INTERNAL_HELPDESK_SECRET: ${INTERNAL_HELPDESK_SECRET:?INTERNAL_HELPDESK_SECRET is required}
       # BAM-RL-E2E: opt-in flag to multiply the global rate limit ceiling for
       # parallel e2e runs. Leave unset on real production deployments.

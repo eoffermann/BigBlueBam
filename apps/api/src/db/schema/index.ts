@@ -47,3 +47,12 @@ export type {
 } from './agent-webhook-deliveries.js';
 // §7 Wave 5 dedupe
 export { dedupeDecisions } from './dedupe-decisions.js';
+// Per-action permissions (Waves A-E)
+export {
+  permissions,
+  permissionGroups,
+  permissionGroupDefaults,
+  accountPermissions,
+  accountGroupMemberships,
+  permissionsDivergenceLog,
+} from './permissions.js';

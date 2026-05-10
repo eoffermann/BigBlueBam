@@ -9,6 +9,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { resolve, can } from './resolver.js';
 import { PermissionsCache, CACHE_KEYS, DEFAULT_TTL_SECONDS } from './cache.js';
 import type {
+  AccountGroupMembership,
+  AccountPermissionRow,
   AuthSubject,
   Decision,
   PermissionContext,
@@ -25,6 +27,8 @@ export {
   DEFAULT_TTL_SECONDS,
 };
 export type {
+  AccountGroupMembership,
+  AccountPermissionRow,
   AuthSubject,
   Decision,
   PermissionContext,
@@ -108,15 +112,22 @@ export const permissionsPlugin = fp<PermissionsPluginOptions>(
       (permissionId: string) =>
         async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
           const ctx = await opts.contextLoader(request);
+
+          // Warn mode is 100% non-blocking: if context can't load (e.g.
+          // unauthenticated request reaching a route that doesn't require
+          // auth, or contextLoader returning null), record nothing and
+          // return. The legacy gate is canonical at this stage.
           if (!ctx) {
-            reply.code(401).send({
-              error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' },
-            });
+            if (opts.mode === 'on') {
+              reply.code(401).send({
+                error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' },
+              });
+            }
             return;
           }
           const scope = opts.scopeLoader
             ? opts.scopeLoader(request)
-            : { org_id: ctx.subject.id ? null : null }; // host must supply scopeLoader for non-trivial scopes
+            : { org_id: null };
           const result = resolve(ctx, permissionId, scope);
           request.permissionsResolution = result;
 

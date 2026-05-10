@@ -11,6 +11,7 @@ COPY apps/api/package.json ./apps/api/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/logging/package.json ./packages/logging/
 COPY packages/service-health/package.json ./packages/service-health/
+COPY packages/permissions/package.json ./packages/permissions/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -22,12 +23,14 @@ COPY packages/shared/src ./packages/shared/src
 COPY packages/shared/tsconfig.json packages/shared/tsup.config.ts ./packages/shared/
 COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/api/src ./apps/api/src
 COPY apps/api/tsconfig.json apps/api/tsup.config.ts ./apps/api/
 
 RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/logging build \
  && pnpm --filter @bigbluebam/service-health build \
+ && pnpm --filter @bigbluebam/permissions build \
  && pnpm --filter @bigbluebam/api build
 
 # Create a deploy-ready directory with all prod deps
@@ -41,6 +44,7 @@ COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
 COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/api/ ./apps/api/
 
 WORKDIR /app/apps/api
