@@ -44,3 +44,6 @@ jobs:
 
       - name: Lint migration files
         run: pnpm lint:migrations
+
+      - name: Check permission catalog drift
+        run: pnpm check:permission-catalog

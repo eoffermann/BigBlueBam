@@ -93,6 +93,17 @@ const envSchema = z.object({
 
   // Helpdesk API internal URL for agent queue proxy
   HELPDESK_API_INTERNAL_URL: z.string().default('http://helpdesk-api:4001'),
+
+  // Per-action permissions enforcement mode (Wave A foundation in this PR).
+  //   off  — plugin loads but every requireCan() check no-ops to ALLOW.
+  //          Day-1 default; behavior is identical to the legacy role gate.
+  //   warn — dual-read: legacy gate decides, new resolver runs alongside
+  //          and divergences land in permissions.divergence telemetry.
+  //          Wave B uses this for at-least-14-day soak.
+  //   on   — new resolver is authoritative; route handlers enforce via
+  //          requireCan(permission_id). Wave C target.
+  // See docs/permissions-overhaul-plan.md for the rollout sequence.
+  BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('off'),
 }).transform((data) => ({
   ...data,
   // BAM-010: Default COOKIE_SECURE to true in production when not explicitly set

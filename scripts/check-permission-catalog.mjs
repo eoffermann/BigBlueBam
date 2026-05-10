@@ -1,0 +1,105 @@
+#!/usr/bin/env node
+//
+// CI drift guard for the permission catalog.
+//
+// Re-runs scripts/generate-permission-manifest.mjs and
+// scripts/build-permission-codegen.mjs into a temp directory, then diffs
+// the generated artifacts against the committed copies. Any drift fails
+// the build — the developer must regenerate and commit.
+//
+// Catches:
+//   - A new MCP tool / REST route added without re-running the codegen.
+//   - A renamed tool / route whose permission ID changed.
+//   - A direct edit to docs/permissions-action-manifest.json /
+//     0145_permissions_seed_actions.sql / generated/permissions.ts that
+//     wasn't produced by the codegen.
+//
+// Mirrors the pattern from scripts/check-bolt-catalog.mjs.
+
+import { execSync } from 'node:child_process';
+import { readFileSync, mkdtempSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, join, dirname } from 'node:path';
+
+const ROOT = resolve(new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]):\//, '$1:/'), '..');
+
+const COMMITTED_FILES = [
+  'docs/permissions-action-manifest.json',
+  'infra/postgres/migrations/0145_permissions_seed_actions.sql',
+  'packages/permissions/src/generated/permissions.ts',
+];
+
+function readFile(path) {
+  return readFileSync(path, 'utf8');
+}
+
+function ensureDir(path) {
+  mkdirSync(dirname(path), { recursive: true });
+}
+
+function regenerate() {
+  // Re-run both scripts in-place. They're idempotent — overwriting the
+  // committed files means git diff is the source of truth for drift.
+  // We capture the file contents BEFORE regenerating so the comparison
+  // happens after.
+  const before = new Map();
+  for (const f of COMMITTED_FILES) {
+    const path = join(ROOT, f);
+    if (!existsSync(path)) {
+      console.error(`✗ committed artifact missing: ${f}. Run pnpm permissions:codegen and commit.`);
+      process.exit(1);
+    }
+    before.set(f, readFile(path));
+  }
+
+  // Stash committed copies in a tmpdir so we can diff after regen.
+  const tmp = mkdtempSync(join(tmpdir(), 'bbb-perm-check-'));
+  for (const f of COMMITTED_FILES) {
+    const dest = join(tmp, f);
+    ensureDir(dest);
+    copyFileSync(join(ROOT, f), dest);
+  }
+
+  // Run both codegen steps.
+  try {
+    execSync(`node "${join(ROOT, 'scripts/generate-permission-manifest.mjs')}"`, { stdio: 'pipe', cwd: ROOT });
+    execSync(`node "${join(ROOT, 'scripts/build-permission-codegen.mjs')}"`, { stdio: 'pipe', cwd: ROOT });
+  } catch (err) {
+    const stderr = err.stderr ? err.stderr.toString() : '';
+    const stdout = err.stdout ? err.stdout.toString() : '';
+    console.error('✗ codegen failed:\n' + stderr + stdout);
+    process.exit(1);
+  }
+
+  // Compare regenerated against the committed copies in tmp.
+  const drifted = [];
+  for (const f of COMMITTED_FILES) {
+    const fresh = readFile(join(ROOT, f));
+    const committed = readFile(join(tmp, f));
+    if (fresh !== committed) drifted.push(f);
+  }
+
+  // Restore the committed copies on drift, so this script doesn't leave
+  // half-regenerated state in the tree if it runs on a developer
+  // machine. (CI will fail before this matters; the restore is a
+  // courtesy for `pnpm check-permission-catalog` run manually.)
+  if (drifted.length > 0) {
+    for (const f of COMMITTED_FILES) {
+      copyFileSync(join(tmp, f), join(ROOT, f));
+    }
+    console.error('✗ permission catalog drift detected:');
+    for (const f of drifted) console.error(`    ${f}`);
+    console.error('');
+    console.error('  Re-run the codegen and commit the diff:');
+    console.error('    node scripts/generate-permission-manifest.mjs');
+    console.error('    node scripts/build-permission-codegen.mjs');
+    console.error('    git add docs/permissions-action-manifest.json \\');
+    console.error('            infra/postgres/migrations/0145_permissions_seed_actions.sql \\');
+    console.error('            packages/permissions/src/generated/permissions.ts');
+    process.exit(1);
+  }
+
+  console.log(`✓ permission catalog up to date (${COMMITTED_FILES.length} artifacts checked)`);
+}
+
+regenerate();

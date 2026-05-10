@@ -14,6 +14,7 @@ import redisPlugin from './plugins/redis.js';
 import csrfPlugin from './plugins/csrf.js';
 import authPlugin from './plugins/auth.js';
 import rlsPlugin from './plugins/rls.js';
+import { permissionsApiPlugin } from './plugins/permissions.js';
 import { rlsBoot } from './boot/rls-boot.js';
 import authRoutes from './routes/auth.routes.js';
 import projectRoutes from './routes/project.routes.js';
@@ -198,6 +199,12 @@ await fastify.register(rlsPlugin);
 // which is the same call surface. Cast to unknown to bridge the nominal
 // type mismatch.
 await rlsBoot(fastify.log as unknown as Parameters<typeof rlsBoot>[0]);
+
+// Wave A foundation: per-action permissions plugin. Default mode='off'
+// means every requireCan() check no-ops to ALLOW; behavior is identical
+// to the legacy role gate until BBB_PERMISSIONS_ENFORCE flips to 'warn'
+// (Wave B) or 'on' (Wave C). See docs/permissions-overhaul-plan.md.
+await fastify.register(permissionsApiPlugin);
 
 // WebSocket handler (realtime events via Redis PubSub)
 await fastify.register(websocketHandlerPlugin);

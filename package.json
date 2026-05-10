@@ -29,6 +29,8 @@
     "db:check": "node scripts/db-check.mjs",
     "seed": "node scripts/seed-all.mjs",
     "check:bolt-catalog": "node scripts/check-bolt-catalog.mjs",
+    "check:permission-catalog": "node scripts/check-permission-catalog.mjs",
+    "permissions:codegen": "node scripts/generate-permission-manifest.mjs && node scripts/build-permission-codegen.mjs",
     "lint:migrations": "node scripts/lint-migrations.mjs",
     "db:generate": "pnpm --filter @bigbluebam/api db:generate",
     "db:push": "pnpm --filter @bigbluebam/api db:push",
