@@ -8,6 +8,7 @@ import { phases } from '../db/schema/phases.js';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import { requireProjectRole, requireProjectAccessForEntity } from '../middleware/authorize.js';
 import { generateWebhookSecret } from '../services/github-integration.service.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 /**
  * Phase 6: GitHub integration CRUD + task ref listing.
@@ -30,7 +31,7 @@ const putIntegrationBodySchema = z.object({
 export default async function githubIntegrationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/github-integration',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), requireMinRole('admin')] },
+    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.project_github_integration.get' })] },
     async (request, reply) => {
       const [row] = await db
         .select({
@@ -59,7 +60,7 @@ export default async function githubIntegrationRoutes(fastify: FastifyInstance) 
       preHandler: [
         requireAuth,
         requireProjectRole('admin'),
-        requireMinRole('admin'),
+        dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.project_github_integration.update' }),
         requireScope('read_write'),
       ],
     },
@@ -175,7 +176,7 @@ export default async function githubIntegrationRoutes(fastify: FastifyInstance) 
       preHandler: [
         requireAuth,
         requireProjectRole('admin'),
-        requireMinRole('admin'),
+        dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.project_github_integration.delete' }),
         requireScope('read_write'),
       ],
     },

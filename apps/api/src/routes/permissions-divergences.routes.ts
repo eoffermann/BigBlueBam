@@ -12,6 +12,7 @@ import { db } from '../db/index.js';
 import { permissionsDivergenceLog } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
 import { requireSuperuser } from '../middleware/require-superuser.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 export default async function permissionsDivergencesRoutes(fastify: FastifyInstance) {
   // ─── GET /superuser/permissions/divergences/summary ─────────────
@@ -20,7 +21,7 @@ export default async function permissionsDivergencesRoutes(fastify: FastifyInsta
   // dashboard's main table view.
   fastify.get(
     '/superuser/permissions/divergences/summary',
-    { preHandler: [requireAuth, requireSuperuser] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.superuser_permission_divergence_summary.list' })] },
     async (_request, reply) => {
       const rows = await db
         .select({
@@ -58,7 +59,7 @@ export default async function permissionsDivergencesRoutes(fastify: FastifyInsta
     };
   }>(
     '/superuser/permissions/divergences',
-    { preHandler: [requireAuth, requireSuperuser] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.superuser_permission_divergence.list' })] },
     async (request, reply) => {
       const limit = Math.min(Number(request.query.limit ?? 50), 200);
       const onlyDivergent = request.query.only_divergent === 'true';

@@ -8,6 +8,7 @@ import { phases } from '../db/schema/phases.js';
 import { projects } from '../db/schema/projects.js';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 async function generateHumanId(projectId: string): Promise<string> {
   const [updated] = await db
@@ -53,7 +54,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/task-templates ─────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/task-templates',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_task_template.create' }), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         name: z.string().min(1).max(255),
@@ -91,7 +92,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/task-templates/:templateId/apply ───────────────
   fastify.post<{ Params: { id: string; templateId: string } }>(
     '/projects/:id/task-templates/:templateId/apply',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_task_template_apply.create' }), requireScope('read_write')] },
     async (request, reply) => {
       const overrideSchema = z.object({
         title: z.string().optional(),
@@ -224,7 +225,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // ── DELETE /task-templates/:id ────────────────────────────────────────
   fastify.delete<{ Params: { id: string } }>(
     '/task-templates/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('task_template')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task_template.delete' }), requireScope('read_write'), requireProjectAccessForEntity('task_template')] },
     async (request, reply) => {
       const [deleted] = await db
         .delete(taskTemplates)

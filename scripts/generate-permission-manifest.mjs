@@ -47,6 +47,27 @@ const DESTRUCTIVE_VERBS = new Set([
   'destroy', 'purge', 'wipe',
 ]);
 
+// ── Permissions that require SuperUser caller regardless of group
+//    defaults. Mirrors migration 0152's UPDATE clauses. Editing this list
+//    requires a follow-up delta migration that sets requires_superuser=true
+//    for the added IDs.
+const REQUIRES_SUPERUSER_IDS = new Set([
+  'platform.org.create',
+  'platform.org.delete',
+  'platform.org.update',
+  'platform.system.set_launchpad_defaults',
+  'platform.system.set_public_signup_disabled',
+  'platform.system.list_beta_signups',
+  'platform.system.test_slack_webhook',
+  'bam.context.switch',
+]);
+
+function computeRequiresSuperuser(id, resource) {
+  if (REQUIRES_SUPERUSER_IDS.has(id)) return true;
+  if (resource.startsWith('superuser_')) return true;
+  return false;
+}
+
 // ── App prefixes — first segment of the permission ID. Tool names and
 //    REST mount paths use these prefixes consistently. Anything else is
 //    `platform.*` (cross-cutting) or `shared.*` (utility).
@@ -402,16 +423,19 @@ function extractRestRoutes() {
         if (!entry.endsWith('.ts') && !entry.endsWith('.routes.ts')) continue;
         const text = readFileSync(path, 'utf8');
         // fastify.get('/path', { ... }, handler)
-        // fastify.post('/path/:id', ...)
-        const regex = /fastify\.(get|post|put|patch|delete)\s*[<\(]/g;
+        // fastify.post<{...}>('/path/:id', ...)
+        // Multi-line type args are common, so the lookahead spans 15
+        // lines (a real-world max in apps/api is ~8 lines of generics
+        // followed by the path string).
         const lines = text.split('\n');
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           const mm = line.match(/fastify\.(get|post|put|patch|delete)/);
           if (!mm) continue;
-          // Extract the path argument from this line or the next 2 lines.
-          const block = lines.slice(i, i + 3).join('\n');
-          const pathMatch = block.match(/fastify\.(?:get|post|put|patch|delete)\s*[<\(][^'"`]*['"`]([^'"`]+)['"`]/);
+          const block = lines.slice(i, i + 15).join('\n');
+          // After the verb, allow balanced <...> type args, then ( then
+          // the first string literal (the path).
+          const pathMatch = block.match(/fastify\.(?:get|post|put|patch|delete)\s*(?:<[\s\S]*?>)?\s*\(\s*['"`]([^'"`]+)['"`]/);
           if (!pathMatch) continue;
           const method = mm[1];
           const routePath = pathMatch[1];
@@ -460,6 +484,7 @@ function buildManifest() {
         is_destructive: DESTRUCTIVE_VERBS.has(entry.inferred.verb),
         is_read: READ_VERBS.has(entry.inferred.verb),
         requires_confirmation: DESTRUCTIVE_VERBS.has(entry.inferred.verb),
+        requires_superuser: computeRequiresSuperuser(id, resource),
         sources: [],
       });
     }
@@ -483,7 +508,14 @@ function buildManifest() {
   ];
   for (const c of ALWAYS_PERMITTED) {
     if (!byId.has(c.id)) {
-      byId.set(c.id, { ...c, is_destructive: false, is_read: true, requires_confirmation: false, sources: [{ source: 'core', ref: 'always_permitted', file: 'register-tool.ts' }] });
+      byId.set(c.id, {
+        ...c,
+        is_destructive: false,
+        is_read: true,
+        requires_confirmation: false,
+        requires_superuser: false,
+        sources: [{ source: 'core', ref: 'always_permitted', file: 'register-tool.ts' }],
+      });
     } else {
       // Mark as core in metadata.
       byId.get(c.id).is_core = true;

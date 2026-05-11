@@ -8,6 +8,7 @@ import { requireAuth } from '../plugins/auth.js';
 import { requireOrgRole } from '../middleware/authorize.js';
 import * as orgService from '../services/org.service.js';
 import { LAUNCHPAD_APP_IDS, type LaunchpadAppId } from './system-settings.routes.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 /**
  * Launchpad app visibility. Two-tier:
@@ -90,7 +91,7 @@ export default async function launchpadRoutes(fastify: FastifyInstance) {
   // checkbox list without a second round-trip.
   fastify.get(
     '/org/launchpad-apps',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_launchpad_app.list' })] },
     async (request, reply) => {
       const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
       if (!org) {
@@ -117,7 +118,7 @@ export default async function launchpadRoutes(fastify: FastifyInstance) {
   // `launchpad_apps` key is touched.
   fastify.put(
     '/org/launchpad-apps',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_launchpad_app.update' })] },
     async (request, reply) => {
       const schema = z.object({ apps: appsArraySchema.nullable() });
       const parsed = schema.safeParse(request.body);

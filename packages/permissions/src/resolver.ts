@@ -185,6 +185,18 @@ export function resolve(
     return { decision: 'allow', reason: 'always_permitted_core' };
   }
 
+  // 2.7. SuperUser-required check. Surfaces like /superuser/* and
+  // /platform/orgs are marked requires_superuser=true in the catalog
+  // (migration 0152). If the permission has that flag set AND the
+  // caller is not a SuperUser, deny — no operator-defined group can
+  // grant these regardless of the group's defaults. Without this, the
+  // Owner builtin (which grants every permission) would let any org
+  // owner reach platform admin surfaces under enforcement.
+  const meta = PERMISSIONS_BY_ID.get(permissionId);
+  if (meta?.requires_superuser) {
+    return { decision: 'deny', reason: 'requires_superuser' };
+  }
+
   // 3. API-key scope ceiling. Drives off the catalog's is_destructive
   // column (with a verb-set fallback) instead of a hardcoded list.
   const keyScope = ctx.subject.api_key_scope;

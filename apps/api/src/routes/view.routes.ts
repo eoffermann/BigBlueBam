@@ -5,6 +5,7 @@ import { db } from '../db/index.js';
 import { savedViews } from '../db/schema/saved-views.js';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 export default async function viewRoutes(fastify: FastifyInstance) {
   // ── GET /projects/:id/views ───────────────────────────────────────────
@@ -37,7 +38,7 @@ export default async function viewRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/views ──────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/views',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_view.create' }), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         name: z.string().min(1).max(255),
@@ -71,7 +72,7 @@ export default async function viewRoutes(fastify: FastifyInstance) {
   // ── PATCH /views/:id ──────────────────────────────────────────────────
   fastify.patch<{ Params: { id: string } }>(
     '/views/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('saved_view')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.view.update' }), requireScope('read_write'), requireProjectAccessForEntity('saved_view')] },
     async (request, reply) => {
       const bodySchema = z.object({
         name: z.string().min(1).max(255).optional(),
@@ -137,7 +138,7 @@ export default async function viewRoutes(fastify: FastifyInstance) {
   // ── DELETE /views/:id ─────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string } }>(
     '/views/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('saved_view')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.view.delete' }), requireScope('read_write'), requireProjectAccessForEntity('saved_view')] },
     async (request, reply) => {
       const [existing] = await db
         .select()

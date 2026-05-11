@@ -162,7 +162,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // List pending invitations for the org (requires org admin/owner)
   fastify.get(
     '/v1/guests/invitations',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner'), requireScope('admin')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_invitation.list' }), requireScope('admin')] },
     async (request, reply) => {
       // (P1-30) Never return the raw invitation token in list responses —
       // tokens are bearer credentials and must only be delivered to the
@@ -190,7 +190,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // Revoke an invitation (requires org admin/owner)
   fastify.delete<{ Params: { id: string } }>(
     '/v1/guests/invitations/:id',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner'), requireScope('admin')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_invitation.delete' }), requireScope('admin')] },
     async (request, reply) => {
       const [deleted] = await db
         .delete(guestInvitations)
@@ -230,7 +230,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/v1/guests/invitations/:id/resend',
     {
-      preHandler: [requireAuth, requireOrgRole('admin', 'owner'), requireScope('admin')],
+      preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_invitation_resend.create' }), requireScope('admin')],
       config: {
         rateLimit: {
           max: 5,
@@ -472,7 +472,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // List current guest users in the org (requires org admin/owner)
   fastify.get(
     '/v1/guests',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner'), requireScope('admin')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest.list' }), requireScope('admin')] },
     async (request, reply) => {
       const guests = await db
         .select({
@@ -502,7 +502,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // Update a guest's project and channel access (requires org admin/owner)
   fastify.patch<{ Params: { id: string } }>(
     '/v1/guests/:id/scope',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner'), requireScope('admin')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_scope.update' }), requireScope('admin')] },
     async (request, reply) => {
       const bodySchema = z.object({
         project_ids: z.array(z.string().uuid()).optional(),
@@ -609,7 +609,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // Remove a guest from the org (deactivate) (requires org admin/owner)
   fastify.delete<{ Params: { id: string } }>(
     '/v1/guests/:id',
-    { preHandler: [requireAuth, requireOrgRole('admin', 'owner'), requireScope('admin')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest.delete' }), requireScope('admin')] },
     async (request, reply) => {
       // Verify the user is a guest in this org
       const [guestUser] = await db

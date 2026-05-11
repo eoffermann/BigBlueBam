@@ -30,14 +30,24 @@ const MANIFEST_PATH = join(ROOT, 'docs/permissions-action-manifest.json');
 const MIGRATIONS_DIR = join(ROOT, 'infra/postgres/migrations');
 
 function nextDeltaNumber() {
-  // Find max 0NNN_permissions_seed_actions_delta_*.sql + 1; or 0151 if
-  // none exist yet (Wave A snapshot is 0145).
-  const files = readdirSync(MIGRATIONS_DIR).filter((f) =>
+  // Returns the next free 4-digit migration number for the new delta
+  // file PLUS the sequential delta-index (001, 002, ...) for the
+  // filename's _delta_NNN suffix. We can't just bump the max delta
+  // number because the migrate runner orders by FULL filename and a
+  // non-delta migration (e.g. 0152_permissions_requires_superuser.sql)
+  // could occupy the next slot.
+  const allFiles = readdirSync(MIGRATIONS_DIR);
+  const maxMigrationNum = allFiles
+    .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+    .reduce((m, f) => Math.max(m, parseInt(f.slice(0, 4), 10)), 0);
+  const deltaFiles = allFiles.filter((f) =>
     /^\d{4}_permissions_seed_actions_delta_/.test(f),
   );
-  if (files.length === 0) return '0151';
-  const max = files.reduce((m, f) => Math.max(m, parseInt(f.slice(0, 4), 10)), 0);
-  return String(max + 1).padStart(4, '0');
+  const nextDeltaIdx = deltaFiles.length + 1;
+  return {
+    migrationNum: String(maxMigrationNum + 1).padStart(4, '0'),
+    deltaIdx: String(nextDeltaIdx).padStart(3, '0'),
+  };
 }
 
 async function fetchAppliedCatalog() {
@@ -75,8 +85,8 @@ async function main() {
     return;
   }
 
-  const num = nextDeltaNumber();
-  const filename = `${num}_permissions_seed_actions_delta_${num}.sql`;
+  const { migrationNum, deltaIdx } = nextDeltaNumber();
+  const filename = `${migrationNum}_permissions_seed_actions_delta_${deltaIdx}.sql`;
   const path = join(MIGRATIONS_DIR, filename);
 
   const lines = [];

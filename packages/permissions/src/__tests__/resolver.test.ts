@@ -243,6 +243,28 @@ describe('resolver — helpdesk namespace short-circuit', () => {
   });
 });
 
+describe('resolver — requires_superuser flag (Wave C prep)', () => {
+  it('denies non-SuperUser for a requires_superuser permission even with Owner group', () => {
+    // platform.org.delete has requires_superuser=true in the catalog.
+    const ctx = makeCtx({
+      memberships: [{ group_id: 'gOwner', scope_type: 'global', scope_id: null, detached_at: null }],
+      group_defaults: new Map([['gOwner:platform.org.delete', true]]),
+    });
+    const r = resolve(ctx, 'platform.org.delete', { org_id: 'o1' });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toBe('requires_superuser');
+  });
+
+  it('SuperUser still gets through (short-circuited at step 1)', () => {
+    const ctx = makeCtx({
+      subject: { id: 'u1', is_superuser: true, kind: 'human', api_key_scope: null },
+    });
+    const r = resolve(ctx, 'platform.org.delete', { org_id: 'o1' });
+    expect(r.decision).toBe('allow');
+    expect(r.reason).toBe('superuser_bypass');
+  });
+});
+
 describe('resolver — api-key scope uses is_destructive (data-driven)', () => {
   it('rejects bam.task.delete on read_write key (catalog flag)', () => {
     const ctx = makeCtx({

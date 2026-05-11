@@ -84,6 +84,7 @@ export interface ResolveResult {
     | 'api_key_ceiling_exceeded'
     | 'agent_disabled'
     | 'agent_tool_not_allowed'
+    | 'requires_superuser'
     | 'project_override'
     | 'project_group_default'
     | 'project_snapshot'

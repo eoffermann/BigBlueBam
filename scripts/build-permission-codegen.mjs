@@ -102,6 +102,7 @@ function buildTypeScript(manifest) {
   lines.push('  readonly is_destructive: boolean;');
   lines.push('  readonly requires_confirmation: boolean;');
   lines.push('  readonly is_read: boolean;');
+  lines.push('  readonly requires_superuser: boolean;');
   lines.push('}');
   lines.push('');
   lines.push('/**');
@@ -115,7 +116,7 @@ function buildTypeScript(manifest) {
   // when consumers index into it.
   lines.push('const _PERMISSIONS_DATA: readonly PermissionMeta[] = [');
   for (const p of manifest.permissions) {
-    lines.push(`  { id: ${JSON.stringify(p.id)}, app: ${JSON.stringify(p.app)}, resource: ${JSON.stringify(p.resource)}, verb: ${JSON.stringify(p.verb)}, is_destructive: ${p.is_destructive}, requires_confirmation: ${p.requires_confirmation}, is_read: ${p.is_read} },`);
+    lines.push(`  { id: ${JSON.stringify(p.id)}, app: ${JSON.stringify(p.app)}, resource: ${JSON.stringify(p.resource)}, verb: ${JSON.stringify(p.verb)}, is_destructive: ${p.is_destructive}, requires_confirmation: ${p.requires_confirmation}, is_read: ${p.is_read}, requires_superuser: ${p.requires_superuser ?? false} },`);
   }
   lines.push('];');
   lines.push('');
@@ -163,6 +164,27 @@ function buildTypeScript(manifest) {
   for (const p of manifest.permissions) {
     for (const s of p.sources ?? []) {
       if (s.source === 'mcp' && s.ref) {
+        lines.push(`  [${JSON.stringify(s.ref)}, ${JSON.stringify(p.id)}],`);
+      }
+    }
+  }
+  lines.push(']);');
+  lines.push('');
+
+  // ── Route → permission ID lookup. Used by the Wave C codemod to
+  //    map a Fastify route declaration to its catalog permission. Keys
+  //    are 'METHOD /path' strings matching the `ref` field in the
+  //    manifest's `sources` array for `rest` entries.
+  lines.push('/**');
+  lines.push(' * "METHOD /path" → catalog permission ID. Used by the Wave C codemod');
+  lines.push(' * and by the contract test that asserts every route maps to a known');
+  lines.push(' * permission. Generated from the manifest, so any new REST route');
+  lines.push(' * needs the codegen re-run + delta migration committed.');
+  lines.push(' */');
+  lines.push('export const ROUTE_TO_PERMISSION: ReadonlyMap<string, string> = new Map([');
+  for (const p of manifest.permissions) {
+    for (const s of p.sources ?? []) {
+      if (s.source === 'rest' && s.ref) {
         lines.push(`  [${JSON.stringify(s.ref)}, ${JSON.stringify(p.id)}],`);
       }
     }

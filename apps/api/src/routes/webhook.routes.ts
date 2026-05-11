@@ -6,6 +6,7 @@ import { db } from '../db/index.js';
 import { webhooks } from '../db/schema/webhooks.js';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 /** BAM-028: Hash a webhook secret with SHA-256 before storage. */
 function hashWebhookSecret(secret: string): string {
@@ -37,7 +38,7 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/webhooks',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_webhook.create' }), requireScope('read_write')] },
     async (request, reply) => {
       const schema = z.object({
         url: z.string().url(),
@@ -75,7 +76,7 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/webhooks/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('webhook')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.webhook.update' }), requireScope('read_write'), requireProjectAccessForEntity('webhook')] },
     async (request, reply) => {
       const schema = z.object({
         url: z.string().url().optional(),
@@ -122,7 +123,7 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/webhooks/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('webhook')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.webhook.delete' }), requireScope('read_write'), requireProjectAccessForEntity('webhook')] },
     async (request, reply) => {
       const [deleted] = await db
         .delete(webhooks)

@@ -5,6 +5,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import { env } from '../env.js';
 import { uploadFile, getFileStream } from '../services/upload.service.js';
 import { requireAuth, requireMinRole } from '../plugins/auth.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 const MAX_FILE_SIZE = env.UPLOAD_MAX_FILE_SIZE; // 25MB
 
@@ -38,7 +39,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // POST /upload — accept multipart file upload, store in MinIO
   fastify.post(
     '/upload',
-    { preHandler: [requireAuth, requireMinRole('member')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.upload.create' })] },
     async (request, reply) => {
       const file = await request.file();
 

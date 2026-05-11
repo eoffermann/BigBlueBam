@@ -6,6 +6,7 @@ import { slackIntegrations } from '../db/schema/slack-integrations.js';
 import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
 import { requireProjectRole } from '../middleware/authorize.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Slack integration CRUD (per-project, admin-gated)
@@ -46,7 +47,7 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        requireMinRole('member'),
+        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_slack_integration.update' }),
         requireScope('read_write'),
         requireProjectRole('admin'),
       ],
@@ -117,7 +118,7 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        requireMinRole('member'),
+        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_slack_integration_test.create' }),
         requireScope('read_write'),
         requireProjectRole('admin'),
       ],
@@ -180,7 +181,7 @@ export default async function slackIntegrationRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        requireMinRole('member'),
+        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_slack_integration.delete' }),
         requireScope('read_write'),
         requireProjectRole('admin'),
       ],

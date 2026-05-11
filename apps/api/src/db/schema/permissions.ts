@@ -29,6 +29,7 @@ export const permissions = pgTable(
     is_destructive: boolean('is_destructive').default(false).notNull(),
     requires_confirmation: boolean('requires_confirmation').default(false).notNull(),
     is_read: boolean('is_read').default(false).notNull(),
+    requires_superuser: boolean('requires_superuser').default(false).notNull(),
     introduced_at: timestamp('introduced_at', { withTimezone: true })
       .default(sql`now()`)
       .notNull(),

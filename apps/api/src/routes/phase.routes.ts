@@ -6,6 +6,7 @@ import { phases } from '../db/schema/phases.js';
 import { tasks } from '../db/schema/tasks.js';
 import { requireAuth } from '../plugins/auth.js';
 import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 export default async function phaseRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
@@ -24,7 +25,7 @@ export default async function phaseRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/phases',
-    { preHandler: [requireAuth, requireProjectRole('admin')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireProjectRole('admin'), permission: 'bam.project_phas.create' })] },
     async (request, reply) => {
       const data = createPhaseSchema.parse(request.body);
 
@@ -129,7 +130,7 @@ export default async function phaseRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/phases/reorder',
-    { preHandler: [requireAuth, requireProjectRole('admin')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireProjectRole('admin'), permission: 'bam.project_phas_reorder.create' })] },
     async (request, reply) => {
       const data = reorderPhasesSchema.parse(request.body);
 

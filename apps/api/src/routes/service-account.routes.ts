@@ -11,6 +11,7 @@ import { organizationMemberships } from '../db/schema/organization-memberships.j
 import { requireAuth, requireMinRole } from '../plugins/auth.js';
 import { getOrgPermissions, isOrgPrivileged } from '../services/org-permissions.js';
 import * as orgService from '../services/org.service.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 /**
  * Service-account REST routes.
@@ -165,7 +166,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post(
     '/auth/service-accounts',
-    { preHandler: [requireAuth, requireMinRole('member')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.auth_service_account.create' })] },
     async (request, reply) => {
       const parsed = createSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -331,7 +332,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string } }>(
     '/auth/service-accounts/:id',
-    { preHandler: [requireAuth, requireMinRole('member')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.auth_service_account.delete' })] },
     async (request, reply) => {
       const caller = request.user!;
       const [svc] = await db

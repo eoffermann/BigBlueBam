@@ -11,6 +11,7 @@ import { requireProjectAccessForEntity } from '../middleware/authorize.js';
 import * as projectService from '../services/project.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichTask, loadActor, loadOrg } from '../services/bolt-event-enricher.service.js';
+import { dualReadGate } from '../middleware/dual-read.js';
 
 export default async function commentRoutes(fastify: FastifyInstance) {
   fastify.get<{
@@ -112,7 +113,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/tasks/:id/comments',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task_comment.create' }), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const data = createCommentSchema.parse(request.body);
 
@@ -216,7 +217,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/comments/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.comment.update' }), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
     async (request, reply) => {
       const data = updateCommentSchema.parse(request.body);
 
@@ -264,7 +265,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/comments/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.comment.delete' }), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
     async (request, reply) => {
       const [existing] = await db
         .select()

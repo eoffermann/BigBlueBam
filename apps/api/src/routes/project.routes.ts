@@ -138,7 +138,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/projects/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project.update' }), requireScope('read_write')] },
     async (request, reply) => {
       // Check admin role
       if (!request.user!.is_superuser) {
@@ -282,8 +282,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         requireScope('read_write'),
         // Wave B dual-read sample (project-scoped role gate). The legacy
         // requireProjectRole('admin') runs canonically; the resolver
-        // shadows under bam.project.add_member at project scope.
-        dualReadGate({ legacy: requireProjectRole('admin'), permission: 'bam.project.add_member' }),
+        // shadows under bam.project_member.create at project scope.
+        dualReadGate({ legacy: requireProjectRole('admin'), permission: 'bam.project_member.create' }),
       ],
     },
     async (request, reply) => {
