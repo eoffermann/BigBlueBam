@@ -377,7 +377,7 @@ describe('beacon-expiry-sweep', () => {
     const draft = {
       id: BEACON_D,
       status: 'Draft',
-      created_at: new Date('2026-03-15'), // ~21 days ago
+      created_at: new Date(Date.now() - 21 * 86_400_000), // 21 days ago — always inside the 60-day window
     };
 
     const sixtyDaysAgo = new Date(Date.now() - 60 * 86_400_000);
