@@ -1,7 +1,8 @@
-// Checks GitHub API for latest commit on main branch.
+// Checks GitHub API for latest commit on stable branch.
 // Cached — refreshes every 6 hours. No git binary needed.
 
 const GITHUB_REPO = 'eoffermann/BigBlueBam';
+const GITHUB_BRANCH = 'stable';
 const CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
 
 let cache: { sha: string; date: string; message: string } | null = null;
@@ -9,7 +10,7 @@ let lastCheck = 0;
 
 async function fetchLatestRemoteCommit() {
   try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/main`, {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_BRANCH}`, {
       headers: { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'BigBlueBam-VersionCheck' },
       signal: AbortSignal.timeout(10000),
     });
