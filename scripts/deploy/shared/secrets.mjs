@@ -322,6 +322,12 @@ export function buildEnvConfig(choices) {
       env.LETSENCRYPT_EMAIL = tlsConfig.letsencrypt.email;
       env.LETSENCRYPT_AGREE_TOS = tlsConfig.letsencrypt.agreeTos ? 'true' : 'false';
     }
+  } else {
+    // HTTP-only deploy (no TLS). Must pin COOKIE_SECURE=false explicitly:
+    // apps/api/src/env.ts defaults it to true when NODE_ENV=production, which
+    // makes browsers silently drop the Set-Cookie over plain HTTP and every
+    // post-login request 401s. See BAM-010.
+    env.COOKIE_SECURE = 'false';
   }
 
   return env;
