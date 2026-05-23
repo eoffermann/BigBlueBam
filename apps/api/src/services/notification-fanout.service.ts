@@ -17,6 +17,9 @@
 import IORedis from 'ioredis';
 import { Queue } from 'bullmq';
 import { env } from '../env.js';
+import type { NotificationJobData } from '@bigbluebam/shared';
+
+export type { NotificationJobData };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,6 +64,18 @@ function getEmailQueue(): Queue {
     _emailQueue = new Queue('email', { connection });
   }
   return _emailQueue;
+}
+
+let _notificationsQueue: Queue | null = null;
+
+function getNotificationsQueue(): Queue {
+  if (!_notificationsQueue) {
+    const connection = new IORedis(env.REDIS_URL, {
+      maxRetriesPerRequest: null,
+    });
+    _notificationsQueue = new Queue('notifications', { connection });
+  }
+  return _notificationsQueue;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,5 +200,23 @@ export async function fanoutNotification(
     r.status === 'fulfilled'
       ? r.value
       : { channel: 'email' as NotificationChannel, status: 'error' as const, error: String(r.reason) },
+  );
+}
+
+/**
+ * Enqueue a persistent notification into the `notifications` BullMQ queue.
+ * The worker picks this up and inserts a row into the `notifications` table,
+ * which is what `list_my_notifications` reads.
+ */
+export async function enqueueNotification(data: NotificationJobData): Promise<void> {
+  await getNotificationsQueue().add(
+    `notif-${data.user_id}-${Date.now()}`,
+    data,
+    {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5_000 },
+      removeOnComplete: 100,
+      removeOnFail: 500,
+    },
   );
 }

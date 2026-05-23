@@ -13,7 +13,7 @@ import { env } from '../env.js';
 import { escapeLike } from '../lib/escape-like.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichTask, loadActor, loadOrg, loadPhase } from './bolt-event-enricher.service.js';
-import { fanoutNotification } from './notification-fanout.service.js';
+import { fanoutNotification, enqueueNotification } from './notification-fanout.service.js';
 
 /** Look up org_id for a project (used for Bolt event publishing). */
 async function getProjectOrgId(projectId: string): Promise<string | null> {
@@ -261,26 +261,40 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
       );
 
       // Cross-product notification fan-out: when a task is assigned,
-      // notify the new assignee via email + Banter DM (G6).
+      // notify the new assignee via email + Banter DM (G6) and persist
+      // a notification row via the notifications queue.
       if (
         data.assignee_id &&
         enriched.assignee &&
         data.assignee_id !== actorId
       ) {
+        const notifTitle = `Task assigned: ${task.title}`;
+        const notifBody = `${actor?.name ?? 'Someone'} assigned you to "${task.title}" in project ${enriched.project?.name ?? 'unknown'}.`;
+
         fanoutNotification(
           {
             recipient_user_id: data.assignee_id,
             recipient_email: enriched.assignee.email ?? undefined,
-            subject: `Task assigned: ${task.title}`,
-            body: `${actor?.name ?? 'Someone'} assigned you to "${task.title}" in project ${enriched.project?.name ?? 'unknown'}.`,
+            subject: notifTitle,
+            body: notifBody,
             url: `/b3/tasks/${task.id}`,
             org_id: orgId,
             actor_name: actor?.name ?? undefined,
           },
           ['email', 'banter_dm'],
-        ).catch(() => {
-          // Fire-and-forget; never block task updates on notification failures.
-        });
+        ).catch(() => {});
+
+        enqueueNotification({
+          user_id: data.assignee_id,
+          project_id: task.project_id,
+          task_id: task.id,
+          type: 'task.assigned',
+          category: 'assignment',
+          source_app: 'bbb',
+          title: notifTitle,
+          body: notifBody,
+          deep_link: `/b3/tasks/${task.id}`,
+        }).catch(() => {});
       }
     }).catch(() => {});
   }

@@ -6,6 +6,8 @@ import { phases } from '../db/schema/phases.js';
 import { taskStates } from '../db/schema/task-states.js';
 import { sprints } from '../db/schema/sprints.js';
 import type { CreateProjectInput, UpdateProjectInput } from '@bigbluebam/shared';
+import { logActivity } from './activity.service.js';
+import { enqueueNotification } from './notification-fanout.service.js';
 
 function slugify(text: string): string {
   return text
@@ -298,7 +300,12 @@ export async function getProjectMembers(projectId: string) {
   }));
 }
 
-export async function addProjectMember(projectId: string, userId: string, role: string) {
+export async function addProjectMember(
+  projectId: string,
+  userId: string,
+  role: string,
+  actorId?: string,
+) {
   const [membership] = await db
     .insert(projectMemberships)
     .values({
@@ -307,6 +314,29 @@ export async function addProjectMember(projectId: string, userId: string, role: 
       role,
     })
     .returning();
+
+  if (actorId) {
+    logActivity(projectId, actorId, 'member.added', membership!.id, { user_id: userId, role }).catch(() => {});
+
+    const { users: usersTable } = await import('../db/schema/users.js');
+    Promise.all([
+      db.select({ name: projects.name }).from(projects).where(eq(projects.id, projectId)).limit(1),
+      db.select({ name: usersTable.display_name }).from(usersTable).where(eq(usersTable.id, actorId)).limit(1),
+    ]).then(([[project], [actor]]) => {
+      const projectName = project?.name ?? 'a project';
+      const actorName = actor?.name ?? 'Someone';
+      enqueueNotification({
+        user_id: userId,
+        project_id: projectId,
+        type: 'project.member_added',
+        category: 'membership_added',
+        source_app: 'bbb',
+        title: `Added to project: ${projectName}`,
+        body: `${actorName} added you to "${projectName}" as ${role}.`,
+        deep_link: `/b3/projects/${projectId}`,
+      });
+    }).catch(() => {});
+  }
 
   return membership!;
 }

@@ -277,6 +277,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
         request.params.id,
         data.user_id,
         data.role,
+        request.user!.id,
       );
       await invalidateProjectListsForProject(fastify.redis, request.params.id);
 

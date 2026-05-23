@@ -282,3 +282,16 @@ export type BearingGoalScopeInput = z.infer<typeof import('../schemas/bearing.js
 export type BearingGoalStatusInput = z.infer<typeof import('../schemas/bearing.js').BearingGoalStatus>;
 export type BearingMetricTypeInput = z.infer<typeof import('../schemas/bearing.js').BearingMetricType>;
 export type BearingProgressModeInput = z.infer<typeof import('../schemas/bearing.js').BearingProgressMode>;
+
+// ── Notification queue types ────────────────────────────────────────────
+export interface NotificationJobData {
+  user_id: string;
+  project_id: string;
+  task_id?: string;
+  type: string;
+  title: string;
+  body: string;
+  category?: string;
+  source_app?: string;
+  deep_link?: string;
+}
