@@ -1,0 +1,1542 @@
+{
+  "counts": {
+    "manifest": 1083,
+    "manifestCountsTotal": 1083,
+    "generatedTs": 1083,
+    "database": 1083,
+    "dbArrayLen": 1083
+  },
+  "idDiff": {
+    "manifest_minus_gen": {
+      "count": 0,
+      "sample": []
+    },
+    "gen_minus_manifest": {
+      "count": 0,
+      "sample": []
+    },
+    "manifest_minus_db": {
+      "count": 0,
+      "sample": []
+    },
+    "db_minus_manifest": {
+      "count": 0,
+      "sample": []
+    },
+    "gen_minus_db": {
+      "count": 0,
+      "sample": []
+    },
+    "db_minus_gen": {
+      "count": 0,
+      "sample": []
+    }
+  },
+  "flagMismatchesSummary": {
+    "manifest_vs_gen": 0,
+    "manifest_vs_db": 1,
+    "gen_vs_db": 1,
+    "sample_manifest_vs_gen": [],
+    "sample_manifest_vs_db": [
+      {
+        "id": "bam.superuser_permission_divergence.list",
+        "field": "requires_superuser",
+        "manifest": true,
+        "db": false
+      }
+    ],
+    "sample_gen_vs_db": [
+      {
+        "id": "bam.superuser_permission_divergence.list",
+        "field": "requires_superuser",
+        "generated": true,
+        "db": false
+      }
+    ]
+  },
+  "sampleRowsCount": 51,
+  "sampleAllOk": true,
+  "sampleRows": [
+    {
+      "id": "agent.audit.read",
+      "app": "agent",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "agent.self.report",
+      "app": "agent",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "agent.webhook.rotate_secret",
+      "app": "agent",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bam.account.view",
+      "app": "bam",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bam.project_activity.get",
+      "app": "bam",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bam.webhook.update",
+      "app": "bam",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "banter.active_huddle.get",
+      "app": "banter",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "banter.dm.send",
+      "app": "banter",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "banter.webhook_livekit.create",
+      "app": "banter",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "beacon.add.tag",
+      "app": "beacon",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "beacon.graph_neighbor.list",
+      "app": "beacon",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "beacon.tag.list",
+      "app": "beacon",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bearing.create.goal",
+      "app": "bearing",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bearing.key_result.delete",
+      "app": "bearing",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bearing.update.kr",
+      "app": "bearing",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bench.ad_hoc.query",
+      "app": "bench",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bench.report_send_now.create",
+      "app": "bench",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bench.widgets.list",
+      "app": "bench",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bill.client.create",
+      "app": "bill",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bill.invoice.delete",
+      "app": "bill",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bill.setting.update",
+      "app": "bill",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "blank.field.delete",
+      "app": "blank",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "blank.form.duplicate",
+      "app": "blank",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "blank.submissions.list",
+      "app": "blank",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "blast.analytic_engagement_trend.list",
+      "app": "blast",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "blast.segment.get",
+      "app": "blast",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "blast.webhook_complaint.create",
+      "app": "blast",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "board.board_audio_token.create",
+      "app": "board",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "board.board.delete",
+      "app": "board",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "board.to_tasks.promote",
+      "app": "board",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bolt.action.list",
+      "app": "bolt",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bolt.event_trace.get",
+      "app": "bolt",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bolt.trace.event",
+      "app": "bolt",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bond.activity.create",
+      "app": "bond",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bond.deal_activity.get",
+      "app": "bond",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "bond.stale_deals.get",
+      "app": "bond",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "book.availability_meeting_time_mixed.create",
+      "app": "book",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "book.event_rsvp.create",
+      "app": "book",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "book.working_hour.update",
+      "app": "book",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "brief.add.comment",
+      "app": "brief",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "brief.document_yjs_state.get",
+      "app": "brief",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "brief.to_beacon.promote",
+      "app": "brief",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "helpdesk.admin_project.list",
+      "app": "helpdesk",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "helpdesk.ticket_analytic_count_by_phrase.list",
+      "app": "helpdesk",
+      "is_read": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "helpdesk.user.upsert",
+      "app": "helpdesk",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "platform.org.create",
+      "app": "platform",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": true,
+        "g": true,
+        "d": true,
+        "ok": true
+      }
+    },
+    {
+      "id": "platform.system.submit_beta_signup",
+      "app": "platform",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "platform.visibility.can_access",
+      "app": "platform",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "shared.activity.by_actor",
+      "app": "shared",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "shared.entity_link.create",
+      "app": "shared",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    },
+    {
+      "id": "shared.system.search_global",
+      "app": "shared",
+      "is_read": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "is_destructive": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_confirmation": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      },
+      "requires_superuser": {
+        "m": false,
+        "g": false,
+        "d": false,
+        "ok": true
+      }
+    }
+  ],
+  "mapCompleteness": {
+    "manifest_rest_unique_refs": 793,
+    "gen_route_entries": 793,
+    "manifest_mcp_unique_refs": 348,
+    "gen_tool_entries": 348,
+    "missing_route_in_gen": {
+      "count": 0,
+      "sample": []
+    },
+    "orphan_routes_in_gen": {
+      "count": 0,
+      "sample": []
+    },
+    "missing_tool_in_gen": {
+      "count": 0,
+      "sample": []
+    },
+    "orphan_tools_in_gen": {
+      "count": 0,
+      "sample": []
+    },
+    "route_map_bad_ids": {
+      "count": 0,
+      "sample": []
+    },
+    "tool_map_bad_ids": {
+      "count": 0,
+      "sample": []
+    }
+  },
+  "requiresSuperuser": {
+    "manifest_count": 11,
+    "generated_count": 11,
+    "db_count": 10,
+    "manifest_minus_db": [
+      "bam.superuser_permission_divergence.list"
+    ],
+    "db_minus_manifest": [],
+    "manifest_minus_gen": [],
+    "gen_minus_manifest": [],
+    "ids_manifest_sample": [
+      "bam.context.switch",
+      "bam.superuser_calling_credential.list",
+      "bam.superuser_permission_divergence.list",
+      "bam.superuser_permission_divergence_summary.list",
+      "platform.org.create",
+      "platform.org.delete",
+      "platform.org.update",
+      "platform.system.list_beta_signups",
+      "platform.system.set_launchpad_defaults",
+      "platform.system.set_public_signup_disabled"
+    ]
+  }
+}
