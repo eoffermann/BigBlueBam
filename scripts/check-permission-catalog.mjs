@@ -109,4 +109,110 @@ function regenerate() {
   console.log(`✓ permission catalog up to date (${COMMITTED_FILES.length} artifacts checked)`);
 }
 
+// ─── DB drift check (optional, opt-in via env or reachable postgres) ──
+//
+// Catches the failure mode that bit Wave A/B/C: build-permission-delta.mjs
+// emitted seed deltas that silently dropped flag columns (the original
+// requires_superuser drift), and the committed-artifact diff above cannot
+// see it — only the DB knows. Runs only when Postgres is reachable;
+// developer machines without the stack up just skip it, and CI's
+// db-drift.yml job has the service container available.
+//
+// Skipped entirely if BBB_SKIP_PERM_DB_CHECK=1 (escape hatch for the
+// occasional case where the stack is up but the catalog is mid-rebuild).
+
+function fetchCatalogFromDb() {
+  try {
+    const out = execSync(
+      'docker compose exec -T postgres psql -U bigbluebam -d bigbluebam -t -A -F"|" -c ' +
+        '"SELECT id, is_destructive, requires_confirmation, is_read, requires_superuser FROM permissions ORDER BY id;"',
+      { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', cwd: ROOT },
+    );
+    const rows = new Map();
+    for (const line of out.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const parts = trimmed.split('|');
+      if (parts.length < 5) continue;
+      rows.set(parts[0], {
+        is_destructive: parts[1] === 't',
+        requires_confirmation: parts[2] === 't',
+        is_read: parts[3] === 't',
+        requires_superuser: parts[4] === 't',
+      });
+    }
+    return rows;
+  } catch {
+    return null;
+  }
+}
+
+function checkDb() {
+  if (process.env.BBB_SKIP_PERM_DB_CHECK === '1') {
+    console.log('  (db check skipped via BBB_SKIP_PERM_DB_CHECK=1)');
+    return;
+  }
+  const dbRows = fetchCatalogFromDb();
+  if (!dbRows) {
+    console.log('  (db check skipped: postgres unreachable)');
+    return;
+  }
+
+  const manifest = JSON.parse(readFile(join(ROOT, 'docs/permissions-action-manifest.json')));
+  const manifestRows = new Map(
+    manifest.permissions.map((p) => [
+      p.id,
+      {
+        is_destructive: !!p.is_destructive,
+        requires_confirmation: !!p.requires_confirmation,
+        is_read: !!p.is_read,
+        requires_superuser: !!p.requires_superuser,
+      },
+    ]),
+  );
+
+  const inManifestNotDb = [...manifestRows.keys()].filter((id) => !dbRows.has(id)).sort();
+  const inDbNotManifest = [...dbRows.keys()].filter((id) => !manifestRows.has(id)).sort();
+  const flagDrift = [];
+  for (const [id, m] of manifestRows.entries()) {
+    const d = dbRows.get(id);
+    if (!d) continue;
+    for (const flag of ['is_destructive', 'requires_confirmation', 'is_read', 'requires_superuser']) {
+      if (m[flag] !== d[flag]) {
+        flagDrift.push({ id, flag, manifest: m[flag], db: d[flag] });
+      }
+    }
+  }
+
+  if (inManifestNotDb.length === 0 && inDbNotManifest.length === 0 && flagDrift.length === 0) {
+    console.log(`✓ permission catalog also in sync with DB (${dbRows.size} rows checked)`);
+    return;
+  }
+
+  console.error('✗ permission catalog DB drift detected:');
+  if (inManifestNotDb.length > 0) {
+    console.error(`  in manifest, missing from DB (${inManifestNotDb.length}): need a delta migration`);
+    for (const id of inManifestNotDb.slice(0, 10)) console.error(`    ${id}`);
+    if (inManifestNotDb.length > 10) console.error(`    ... and ${inManifestNotDb.length - 10} more`);
+  }
+  if (inDbNotManifest.length > 0) {
+    console.error(`  in DB, missing from manifest (${inDbNotManifest.length}): need a delta migration removing them`);
+    for (const id of inDbNotManifest.slice(0, 10)) console.error(`    ${id}`);
+    if (inDbNotManifest.length > 10) console.error(`    ... and ${inDbNotManifest.length - 10} more`);
+  }
+  if (flagDrift.length > 0) {
+    console.error(`  flag mismatches (${flagDrift.length}):`);
+    for (const d of flagDrift.slice(0, 10)) {
+      console.error(`    ${d.id}.${d.flag}: manifest=${d.manifest} db=${d.db}`);
+    }
+    if (flagDrift.length > 10) console.error(`    ... and ${flagDrift.length - 10} more`);
+  }
+  console.error('');
+  console.error('  Fix: regenerate the delta and apply it:');
+  console.error('    node scripts/build-permission-delta.mjs');
+  console.error('    docker compose run --rm migrate');
+  process.exit(1);
+}
+
 regenerate();
+checkDb();

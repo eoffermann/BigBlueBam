@@ -100,12 +100,12 @@ async function main() {
 
   if (added.length > 0) {
     lines.push(`-- ${added.length} new permission(s)`);
-    lines.push('INSERT INTO permissions (id, app, resource, verb, description, is_destructive, requires_confirmation, is_read) VALUES');
+    lines.push('INSERT INTO permissions (id, app, resource, verb, description, is_destructive, requires_confirmation, is_read, requires_superuser) VALUES');
     const rows = added.map((p) => {
       const desc = `${p.app} ${p.resource} ${p.verb}`;
       const sqlBool = (b) => (b ? 'true' : 'false');
       const sqlString = (s) => "'" + String(s).replace(/'/g, "''") + "'";
-      return `    (${sqlString(p.id)}, ${sqlString(p.app)}, ${sqlString(p.resource)}, ${sqlString(p.verb)}, ${sqlString(desc)}, ${sqlBool(p.is_destructive)}, ${sqlBool(p.requires_confirmation)}, ${sqlBool(p.is_read)})`;
+      return `    (${sqlString(p.id)}, ${sqlString(p.app)}, ${sqlString(p.resource)}, ${sqlString(p.verb)}, ${sqlString(desc)}, ${sqlBool(p.is_destructive)}, ${sqlBool(p.requires_confirmation)}, ${sqlBool(p.is_read)}, ${sqlBool(p.requires_superuser)})`;
     });
     lines.push(rows.join(',\n'));
     lines.push('ON CONFLICT (id) DO UPDATE SET');
@@ -115,7 +115,8 @@ async function main() {
     lines.push('    description = EXCLUDED.description,');
     lines.push('    is_destructive = EXCLUDED.is_destructive,');
     lines.push('    requires_confirmation = EXCLUDED.requires_confirmation,');
-    lines.push('    is_read = EXCLUDED.is_read;');
+    lines.push('    is_read = EXCLUDED.is_read,');
+    lines.push('    requires_superuser = EXCLUDED.requires_superuser;');
     lines.push('');
   }
 

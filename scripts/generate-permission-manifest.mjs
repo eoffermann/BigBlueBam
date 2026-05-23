@@ -367,8 +367,8 @@ function inferResourceFromPath(path, app) {
   if (segments.length > 0 && ACTION_SEGMENTS.has(segments[segments.length - 1])) {
     segments.pop();
   }
-  // Drop trailing params.
-  while (segments.length > 0 && segments[segments.length - 1].startsWith(':')) {
+  // Drop trailing params and wildcards.
+  while (segments.length > 0 && (segments[segments.length - 1].startsWith(':') || segments[segments.length - 1].includes('*'))) {
     segments.pop();
   }
   // Build resource. Multiple non-param segments compose with underscores
@@ -376,13 +376,19 @@ function inferResourceFromPath(path, app) {
   // app.resource.verb — nested resources like /channels/:id/members
   // become `channel_member`, not `channel.member`. The schema's
   // permissions(app, resource, verb) columns would otherwise be ambiguous.
-  const nonParam = segments.filter((s) => !s.startsWith(':'));
+  // Wildcards (e.g. `/files/*` for file-download) are skipped along with
+  // :id params; the resource becomes the parent segment ('file').
+  const nonParam = segments.filter((s) => !s.startsWith(':') && !s.includes('*'));
   if (nonParam.length === 0) return 'self';
   // Singularize each segment if it ends in 's' (very rough; avoids
   // 'agent_policies' -> 'agent_policie' artifact by special-casing 'ies').
   function singularize(s) {
     if (s.endsWith('ies') && s.length > 3) return s.slice(0, -3) + 'y';
-    if (s.endsWith('ses') && s.length > 3) return s.slice(0, -2);  // statuses -> status
+    // 'es' is the correct plural suffix only after sibilant clusters
+    // (-s, -x, -ch, -sh). Naive 'ses -> s' wrecks normal -e words: it
+    // turned 'expenses' into 'expens' and 'phases' into 'phas' for Wave
+    // A's catalog. Restrict the rule to actual sibilant plurals.
+    if (/(?:ss|x|ch|sh|z)es$/.test(s)) return s.slice(0, -2);
     if (s.endsWith('s') && !s.endsWith('ss')) return s.slice(0, -1);
     return s;
   }
@@ -394,7 +400,62 @@ function inferResourceFromPath(path, app) {
 // the permissions resolver — gating them would conflict with the
 // inter-service trust model. Health/version probes are similarly
 // public surface that doesn't fit the resolver's mental model.
-const EXCLUDED_PATH_PREFIXES = ['/internal/', '/health', '/healthz', '/readyz', '/version'];
+//
+// Phase 1 of the Wave D rollout added the rest of this list: login/
+// oauth/webhook/ical/files endpoints that are intentionally unauthenticated
+// or whose authentication channel isn't the session/api-key resolver.
+// Decisions live in docs/wave-d-audit/phase1-triage.json.
+const EXCLUDED_PATH_PREFIXES = [
+  '/internal/',
+  '/health',
+  '/healthz',
+  '/readyz',
+  '/version',
+  // Wave D Phase 1 additions: public / non-action routes.
+  // Note: /auth/ and /files/ were considered for this list but excluded —
+  // /auth/api-keys and /auth/service-accounts are real authenticated
+  // user actions, and /files/* is the authenticated download proxy. The
+  // public-auth file basenames are handled via EXCLUDED_FILE_BASENAMES.
+  '/public/',
+  '/webhooks/github',
+  '/webhooks/slack',
+  '/me/calendar.ics',
+  '/projects/:id/calendar.ics',
+  '/root-redirect',
+  '/v1/agents/heartbeat',
+  '/v1/guests/accept/',
+];
+
+// File basenames whose every route is non-action (unauthenticated, internal-
+// service-secret, or webhook receiver). Added in Wave D Phase 1 after the
+// triage in docs/wave-d-audit/phase1-triage.json found that mount-prefix
+// resolution would be needed to catch these via path prefixes alone (the
+// internal-helpdesk routes declare 'POST /tasks' and rely on the server.ts
+// '/internal/helpdesk' mount prefix). File-level exclusion is the simple
+// fix; teaching the generator to compose mount prefixes is the long-term
+// fix tracked as a follow-up.
+const EXCLUDED_FILE_BASENAMES = new Set([
+  'auth.routes.ts',
+  'oauth.routes.ts',
+  'email-verify.routes.ts',
+  'public-config.routes.ts',
+  'github-webhook.routes.ts',
+  'slack-webhook.routes.ts',
+  'internal-helpdesk.routes.ts',
+  'internal-llm.routes.ts',
+  'ical.routes.ts',
+  // Wave F: permissions-admin routes use contract-document ids
+  // (e.g. bam.superuser_permission_group.set_defaults) rather than
+  // path-derived ids (bam.superuser_permission_group_default.update).
+  // The hand-curated ids are authored by migration 0160 and exposed
+  // via requireCan() at the route's preHandler. Auto-deriving from
+  // the route path would create duplicates with different shapes.
+  'permissions-admin.routes.ts',
+  // Wave B: permissions-divergences uses bam.superuser_permission_divergence.list
+  // which the generator already correctly derives from the path; including
+  // here as belt-and-suspenders so the audit doesn't churn the manifest.
+  'permissions-divergences.routes.ts',
+]);
 
 function isPathExcluded(routePath) {
   return EXCLUDED_PATH_PREFIXES.some((prefix) => {
@@ -402,6 +463,10 @@ function isPathExcluded(routePath) {
     const trimmed = prefix.replace(/\/$/, '');
     return routePath === trimmed || routePath.startsWith(trimmed + '/');
   });
+}
+
+function isFileExcluded(fileBasename) {
+  return EXCLUDED_FILE_BASENAMES.has(fileBasename);
 }
 
 function extractRestRoutes() {
@@ -421,6 +486,7 @@ function extractRestRoutes() {
           continue;
         }
         if (!entry.endsWith('.ts') && !entry.endsWith('.routes.ts')) continue;
+        if (isFileExcluded(entry)) continue;
         const text = readFileSync(path, 'utf8');
         // fastify.get('/path', { ... }, handler)
         // fastify.post<{...}>('/path/:id', ...)
@@ -519,6 +585,47 @@ function buildManifest() {
     } else {
       // Mark as core in metadata.
       byId.get(c.id).is_core = true;
+    }
+  }
+
+  // Wave F + Wave B: hand-curated admin permissions for the SU permissions
+  // editor and divergence dashboard. The route files that consume them are
+  // in EXCLUDED_FILE_BASENAMES because the auto-deriver would mangle the
+  // ids (e.g. /groups/:id/defaults → bam.superuser_permission_group_default.update
+  // instead of bam.superuser_permission_group.set_defaults). Keep these
+  // in sync with migration 0160 (and 0146 for divergence rows).
+  const HAND_AUTHORED = [
+    // Wave B — divergence dashboard (migration 0146-era)
+    { id: 'bam.superuser_permission_divergence.list', resource: 'superuser_permission_divergence', verb: 'list', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_divergence_summary.list', resource: 'superuser_permission_divergence_summary', verb: 'list', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    // Wave F — admin surface (migration 0160)
+    { id: 'bam.superuser_permission_catalog.list', resource: 'superuser_permission_catalog', verb: 'list', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_group.list', resource: 'superuser_permission_group', verb: 'list', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_group.create', resource: 'superuser_permission_group', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_group.get', resource: 'superuser_permission_group', verb: 'get', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_group.update', resource: 'superuser_permission_group', verb: 'update', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_group.delete', resource: 'superuser_permission_group', verb: 'delete', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_group.set_defaults', resource: 'superuser_permission_group', verb: 'set_defaults', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_group.reset', resource: 'superuser_permission_group', verb: 'reset', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_user.get', resource: 'superuser_permission_user', verb: 'get', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_user.set_membership', resource: 'superuser_permission_user', verb: 'set_membership', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_user.set_override', resource: 'superuser_permission_user', verb: 'set_override', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_user.clear_override', resource: 'superuser_permission_user', verb: 'clear_override', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_permission_user.reattach', resource: 'superuser_permission_user', verb: 'reattach', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: true },
+  ];
+  for (const c of HAND_AUTHORED) {
+    if (!byId.has(c.id)) {
+      byId.set(c.id, {
+        id: c.id,
+        app: 'bam',
+        resource: c.resource,
+        verb: c.verb,
+        is_destructive: c.is_destructive,
+        is_read: c.is_read,
+        requires_confirmation: c.requires_confirmation,
+        requires_superuser: c.requires_superuser,
+        sources: [{ source: 'rest', ref: `hand_authored (migration ${c.id.includes('divergence') ? '0146' : '0160'})`, file: 'permissions-admin.routes.ts' }],
+      });
     }
   }
 
