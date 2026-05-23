@@ -68,7 +68,6 @@ infra/
   postgres/         migrations/ (numbered, idempotent SQL migrations). 140 files as of tip 0140_agent_runner_webhooks.sql (Wave 5 §20 outbound webhooks).
   nginx/            nginx.conf, certs.
   livekit/          LiveKit SFU configuration (livekit.yaml).
-  helm/             Kubernetes Helm chart (bigbluebam/).
 scripts/            Utility scripts: deploy adapters, seed-all.mjs master orchestrator, per-app seeders, check-bolt-catalog.mjs drift guard, db-check.mjs, lint-migrations.mjs, and screenshot generators.
 ```
 
@@ -149,7 +148,7 @@ The `migrate` service (reuses the api image, runs `node dist/migrate.js`) is a `
 
 1. Update the Drizzle schema file in `apps/*/src/db/schema/`.
 2. Add a **new** numbered file in `infra/postgres/migrations/` that applies the change idempotently (use `ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `DROP TRIGGER IF EXISTS ... ; CREATE TRIGGER ...`, or guarded `DO $$ ... EXCEPTION WHEN duplicate_object THEN NULL; END $$;` blocks). **Never edit an existing migration**: the runner records a SHA-256 checksum per file and aborts on mismatch.
-3. Run `docker compose run --rm migrate` to apply it. The `migrate` service bind-mounts `./infra/postgres/migrations` into `/app/migrations` at runtime, so the new file is picked up instantly. **No rebuild is required** on developer hosts. Then rebuild and restart whichever app container now depends on the new schema (`docker compose build <app> && docker compose up -d --force-recreate <app>`). Production deployments (k8s/Helm) still bake the migrations into the image via `apps/api/Dockerfile`, so `docker compose build api` is only needed when shipping.
+3. Run `docker compose run --rm migrate` to apply it. The `migrate` service bind-mounts `./infra/postgres/migrations` into `/app/migrations` at runtime, so the new file is picked up instantly. **No rebuild is required** on developer hosts. Then rebuild and restart whichever app container now depends on the new schema (`docker compose build <app> && docker compose up -d --force-recreate <app>`). Production deployments (Railway, future Helm) still bake the migrations into the image via `apps/api/Dockerfile`, so `docker compose build api` is only needed when shipping.
 
 Every migration must be idempotent so the same migration file is safe to run against both empty DBs and DBs that may already have the object (e.g., from the historical init.sql bootstrap).
 

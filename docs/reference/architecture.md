@@ -194,8 +194,11 @@ BigBlueBam/
 |   |-- postgres/
 |   |   +-- migrations/       Forward-only numbered SQL migrations (0000_init.sql, 0001_baseline.sql, ...)
 |   |-- nginx/            nginx.conf, TLS certificates
-|   +-- helm/             Kubernetes Helm chart
-|       +-- bigbluebam/
+|   |-- livekit/          LiveKit SFU configuration (livekit.yaml)
+|   |-- railway/          Railway-specific config files
+|   +-- site/             Static marketing site assets
+|       NOTE: a Kubernetes Helm chart at infra/helm/bigbluebam/ is planned but
+|       not yet authored (see docs/plans/remaining-work-2026-04-16.md).
 |
 |-- scripts/                  Utility scripts (seed-frndo.js)
 |-- docker-compose.yml        Production stack (8 services + 1 migration one-shot)

@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Deploy BigBlueBam from zero to running in about 10 minutes. No IT department required. BigBlueBam is Docker-native from day one and supports a progression from a single-machine Docker Compose deployment to a fully orchestrated Kubernetes cluster, with no application code changes at any tier.
+Deploy BigBlueBam from zero to running in about 10 minutes. No IT department required. BigBlueBam is Docker-native from day one. The application services are designed to scale horizontally with no code changes — env-driven config, Redis-backed sessions and pubsub, and BullMQ for worker coordination. Today's shipped deployment targets are **Tier 1** (single-machine Docker Compose) and **Railway** (managed cloud, fully automated). The Tier 2/3/4 substrate works (`docker compose up --scale` already coordinates correctly across replicas), but Tier 4's Kubernetes Helm chart is planned and not yet authored.
 
 This guide is structured to take you from quickstart → "everything's running" → scaling concerns. Read top-to-bottom on your first deploy; come back to the later sections when you outgrow Tier 1.
 
@@ -370,7 +370,7 @@ When scaling any of the API services horizontally, cross-instance broadcast is h
 
 ## Deployment Tiers — Where to Go After Tier 1
 
-The architecture supports a progression from a single-machine Docker Compose deployment to a fully orchestrated Kubernetes cluster, with no application code changes at any tier:
+The architecture is designed to support a progression from a single-machine Docker Compose deployment to a fully orchestrated Kubernetes cluster, with no application code changes between tiers. Tier 1 and Railway (managed cloud) are fully implemented today; Tiers 2 and 3 work via env-var swaps and `docker compose up --scale`; Tier 4 (Helm chart) is on the roadmap. The progression:
 
 ```mermaid
 graph LR
@@ -574,7 +574,9 @@ docker compose up -d --scale api=3 --scale worker=2 --scale mcp-server=2
 
 ### Tier 4: Kubernetes
 
-Full orchestration with the Helm chart at `infra/helm/bigbluebam/`.
+> **Status: planned, not yet implemented.** A Helm chart at `infra/helm/bigbluebam/` is on the roadmap (see `docs/plans/remaining-work-2026-04-16.md` Infrastructure → P1) but does not exist yet. The shape below is the design target; today's production target is Railway via the deploy script's Railway adapter, which provides equivalent multi-replica behavior for the application services without requiring k8s ops expertise.
+
+Full orchestration via a Helm chart at `infra/helm/bigbluebam/`.
 
 ```
 bigbluebam-production/

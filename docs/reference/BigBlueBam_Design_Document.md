@@ -2620,7 +2620,7 @@ Namespace: bigbluebam
 └── PersistentVolumeClaim: (only if self-hosting PostgreSQL)
 ```
 
-**Helm chart** provided in `infra/helm/bigbluebam/` for templated deployments across environments.
+**Helm chart** is planned at `infra/helm/bigbluebam/` (see `docs/plans/remaining-work-2026-04-16.md` Infrastructure → P1) but not yet authored. Today's managed-cloud target is Railway via the deploy script's Railway adapter, which provides equivalent multi-replica behavior without requiring a k8s cluster.
 
 #### Tier 5: Edge & CDN (Global Scale)
 - **Trigger:** Global user base, latency requirements.
