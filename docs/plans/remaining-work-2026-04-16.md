@@ -16,6 +16,7 @@ All P0 items closed. All P1 items closed (or have working backend + frontend con
 - [P2] **Activity log partitioning.** Plain table works; partitioning is a scaling concern for later.
 
 ### Platform
+- [P1] **Slack workspace → Banter import.** End-to-end importer accessible from `/b3/settings`, restricted to org owners/admins (SuperUser bypasses). Accepts a Slack workspace export (.zip), maps Slack users → BAM users by email (creates stubs if needed), creates a `banter_channel_groups` row scoped to a chosen project (existing or freshly created), imports channels + threaded messages + reactions + files + pins with idempotent re-import. Detailed design at `docs/plans/slack-import-design.md`. Scope: ~2 weeks (upload route + worker job + admin UI + 3-4 new catalog permissions + ~1 schema migration for project linkage on channel groups).
 - [P2] **Admin UI for OAuth provider configuration.** Providers are seeded via DB; no UI.
 - [P2] **Bam admin UI for Helpdesk default project.** MCP tool + PATCH endpoint cover it; `/b3/settings/helpdesk` page deferred.
 
