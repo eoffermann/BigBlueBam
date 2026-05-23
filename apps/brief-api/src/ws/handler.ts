@@ -6,9 +6,14 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import Redis from 'ioredis';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { sessions, users } from '../db/schema/index.js';
+import {
+  sessions,
+  users,
+  accountGroupMemberships,
+  permissionGroups,
+} from '../db/schema/index.js';
 import { env } from '../env.js';
 import {
   loadYjsState,
@@ -228,7 +233,6 @@ export default async function websocketHandler(fastify: FastifyInstance) {
           org_id: users.org_id,
           email: users.email,
           display_name: users.display_name,
-          role: users.role,
           is_active: users.is_active,
           is_superuser: users.is_superuser,
         },
@@ -254,12 +258,27 @@ export default async function websocketHandler(fastify: FastifyInstance) {
       return;
     }
 
+    // Wave E.F: role is resolved from the user's org-scope group membership.
+    const [roleRow] = await db
+      .select({ legacy_role: permissionGroups.legacy_role })
+      .from(accountGroupMemberships)
+      .innerJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
+      .where(
+        and(
+          eq(accountGroupMemberships.user_id, row.user.id),
+          eq(accountGroupMemberships.scope_type, 'org'),
+          eq(accountGroupMemberships.scope_id, row.user.org_id),
+        ),
+      )
+      .limit(1);
+    const userRole = roleRow?.legacy_role ?? 'member';
+
     // Check document access
     const access = await checkDocumentAccessForWs(
       docId,
       row.user.id,
       row.user.org_id,
-      row.user.role,
+      userRole,
       row.user.is_superuser,
     );
 

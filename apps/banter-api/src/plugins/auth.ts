@@ -1,9 +1,16 @@
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { db } from '../db/index.js';
-import { sessions, users, apiKeys, organizationMemberships } from '../db/schema/index.js';
+import {
+  sessions,
+  users,
+  apiKeys,
+  organizationMemberships,
+  accountGroupMemberships,
+  permissionGroups,
+} from '../db/schema/index.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -50,7 +57,6 @@ interface BaseUserRow {
   email: string;
   display_name: string;
   avatar_url: string | null;
-  role: string;
   timezone: string;
   is_active: boolean;
   is_superuser: boolean;
@@ -71,33 +77,42 @@ interface BaseUserRow {
 async function resolveOrgContext(
   userId: string,
   fallbackOrgId: string,
-  fallbackRole: string,
   requestedOrgId: string | undefined,
   sessionActiveOrgId: string | null = null,
   isSuperuser = false,
 ): Promise<{ memberships: OrgMembership[]; activeOrgId: string; activeRole: string }> {
+  // Wave E.F: role resolves via account_group_memberships → permission_groups.
   const rows = await db
     .select({
       org_id: organizationMemberships.org_id,
-      role: organizationMemberships.role,
+      role: permissionGroups.legacy_role,
       is_default: organizationMemberships.is_default,
       joined_at: organizationMemberships.joined_at,
     })
     .from(organizationMemberships)
+    .leftJoin(
+      accountGroupMemberships,
+      and(
+        eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+        eq(accountGroupMemberships.scope_type, 'org'),
+        eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+      ),
+    )
+    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
     .where(eq(organizationMemberships.user_id, userId));
 
   if (rows.length === 0) {
-    // User hasn't been backfilled yet — fall back to users.org_id/role.
-    // If users.org_id is also NULL/empty, the user has no valid org context.
+    // User hasn't been backfilled yet — fall back to users.org_id with a
+    // 'member' default role.
     if (!fallbackOrgId) {
       throw new OrgMembershipError('User has no organization memberships and no fallback org_id');
     }
     return {
       memberships: [
-        { org_id: fallbackOrgId, role: fallbackRole, is_default: true },
+        { org_id: fallbackOrgId, role: 'member', is_default: true },
       ],
       activeOrgId: fallbackOrgId,
-      activeRole: fallbackRole,
+      activeRole: 'member',
     };
   }
 
@@ -105,7 +120,7 @@ async function resolveOrgContext(
 
   const memberships: OrgMembership[] = rows.map((r) => ({
     org_id: r.org_id,
-    role: r.role,
+    role: r.role ?? 'member',
     is_default: r.is_default,
   }));
 
@@ -179,7 +194,6 @@ async function buildAuthUser(
   const { memberships, activeOrgId, activeRole } = await resolveOrgContext(
     row.id,
     row.org_id,
-    row.role,
     requestedOrgId,
     sessionActiveOrgId,
     row.is_superuser,
@@ -234,7 +248,6 @@ async function authPlugin(fastify: FastifyInstance) {
             email: users.email,
             display_name: users.display_name,
             avatar_url: users.avatar_url,
-            role: users.role,
             timezone: users.timezone,
             is_active: users.is_active,
             is_superuser: users.is_superuser,
@@ -269,7 +282,6 @@ async function authPlugin(fastify: FastifyInstance) {
             email: users.email,
             display_name: users.display_name,
             avatar_url: users.avatar_url,
-            role: users.role,
             timezone: users.timezone,
             is_active: users.is_active,
             is_superuser: users.is_superuser,
@@ -350,7 +362,6 @@ async function authPlugin(fastify: FastifyInstance) {
         email: users.email,
         display_name: users.display_name,
         avatar_url: users.avatar_url,
-        role: users.role,
         timezone: users.timezone,
         is_active: users.is_active,
         is_superuser: users.is_superuser,
@@ -394,90 +405,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     });
   }
 }
-
-export function requireRole(roles: string[]) {
-  return async function checkRole(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    if (request.user.is_superuser) return;
-    if (!roles.includes(request.user.role)) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `Requires one of roles: ${roles.join(', ')}`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
-
-const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
-const SCOPE_HIERARCHY = ['read', 'read_write', 'admin'] as const;
-
-export function requireSuperUser() {
-  return async function checkSuperUser(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    if (!request.user.is_superuser) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: 'SuperUser access required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
-
-export function requireMinRole(minRole: string) {
-  return async function checkMinRole(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    if (request.user.is_superuser) return;
-    const userLevel = ROLE_HIERARCHY.indexOf(request.user.role as (typeof ROLE_HIERARCHY)[number]);
-    const requiredLevel = ROLE_HIERARCHY.indexOf(minRole as (typeof ROLE_HIERARCHY)[number]);
-    if (userLevel < requiredLevel) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `Requires at least ${minRole} role`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
-
-export function requireScope(minScope: string) {
+const SCOPE_HIERARCHY = ['read', 'read_write', 'admin'] as const;export function requireScope(minScope: string) {
   return async function checkScope(request: FastifyRequest, reply: FastifyReply) {
     if (!request.user) {
       return reply.status(401).send({

@@ -40,7 +40,6 @@ export const users = pgTable(
     display_name: varchar('display_name', { length: 100 }).notNull(),
     avatar_url: text('avatar_url'),
     password_hash: text('password_hash'),
-    role: varchar('role', { length: 20 }).default('member').notNull(),
     timezone: varchar('timezone', { length: 50 }).default('UTC').notNull(),
     notification_prefs: jsonb('notification_prefs').default({}).notNull(),
     is_active: boolean('is_active').default(true).notNull(),
@@ -142,7 +141,6 @@ export const organizationMemberships = pgTable(
     org_id: uuid('org_id')
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
-    role: varchar('role', { length: 20 }).default('member').notNull(),
     is_default: boolean('is_default').default(false).notNull(),
     joined_at: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
     invited_by: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
@@ -184,4 +182,29 @@ export const beaconEntries = pgTable('beacon_entries', {
   owned_by: uuid('owned_by')
     .notNull()
     .references(() => users.id),
+});
+
+// Wave E.F: per-action permissions group memberships, used to resolve role
+// in the auth plugin. Full schema lives in apps/api.
+export const permissionGroups = pgTable('permission_groups', {
+  id: uuid('id').primaryKey(),
+  name: text('name').notNull(),
+  scope_type: text('scope_type').notNull(),
+  scope_id: uuid('scope_id'),
+  is_builtin: boolean('is_builtin').default(false).notNull(),
+  legacy_role: text('legacy_role'),
+  deleted_at: timestamp('deleted_at', { withTimezone: true }),
+});
+
+export const accountGroupMemberships = pgTable('account_group_memberships', {
+  user_id: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  group_id: uuid('group_id')
+    .notNull()
+    .references(() => permissionGroups.id, { onDelete: 'restrict' }),
+  scope_type: text('scope_type').notNull(),
+  scope_id: uuid('scope_id'),
+  detached_at: timestamp('detached_at', { withTimezone: true }),
+  granted_at: timestamp('granted_at', { withTimezone: true }).defaultNow().notNull(),
 });

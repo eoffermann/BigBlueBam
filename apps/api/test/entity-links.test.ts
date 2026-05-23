@@ -93,6 +93,11 @@ const DEAL_A = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  // Wave E test scaffolding: decorate a pass-through requireCan so route
+  // bindings don't throw at registration time. Real permission decisions
+  // are exercised by the resolver tests; here we only care about route
+  // plumbing and auth gating.
+  (app as any).decorate('requireCan', () => async () => undefined);
   app.decorateRequest('user', null);
   app.addHook('preHandler', async (request) => {
     if (request.headers['x-test-user'] === 'human') {

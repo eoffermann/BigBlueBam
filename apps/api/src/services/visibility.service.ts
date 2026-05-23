@@ -5,6 +5,7 @@ import { projects } from '../db/schema/projects.js';
 import { tasks } from '../db/schema/tasks.js';
 import { sprints } from '../db/schema/sprints.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
+import { resolveUserOrgRole } from './role-resolver.js';
 import {
   helpdeskTicketsStub,
   bondDealsStub,
@@ -95,12 +96,15 @@ async function loadAsker(askerUserId: string): Promise<AskerContext | null> {
     .select({
       id: users.id,
       org_id: users.org_id,
-      role: users.role,
     })
     .from(users)
     .where(eq(users.id, askerUserId))
     .limit(1);
-  return rows[0] ?? null;
+  if (rows.length === 0) return null;
+  const row = rows[0]!;
+  // Wave E.F: role is resolved from the user's home-org group membership.
+  const role = (await resolveUserOrgRole(row.id, row.org_id)) ?? 'member';
+  return { id: row.id, org_id: row.org_id, role };
 }
 
 function isOrgAdmin(role: string): boolean {

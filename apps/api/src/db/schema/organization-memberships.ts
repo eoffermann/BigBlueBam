@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, integer, timestamp, uniqueIndex, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, boolean, integer, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { organizations } from './organizations.js';
 import { users } from './users.js';
@@ -13,7 +13,9 @@ export const organizationMemberships = pgTable(
     org_id: uuid('org_id')
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
-    role: varchar('role', { length: 20 }).default('member').notNull(),
+    // Wave E.F: organization_memberships.role was dropped in migration 0159.
+    // Per-org role is resolved from account_group_memberships →
+    // permission_groups.legacy_role with scope_type='org' and scope_id=<org_id>.
     is_default: boolean('is_default').default(false).notNull(),
     joined_at: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
     invited_by: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
@@ -30,9 +32,5 @@ export const organizationMemberships = pgTable(
     uniqueIndex('org_memberships_user_default_unique')
       .on(table.user_id)
       .where(sql`is_default = true`),
-    check(
-      'org_memberships_role_check',
-      sql`role IN ('owner', 'admin', 'member', 'viewer', 'guest')`,
-    ),
   ],
 );

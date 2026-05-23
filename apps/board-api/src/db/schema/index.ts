@@ -8,6 +8,8 @@ export {
   organizationMemberships,
   tasks,
   projectMembers,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Board-specific tables

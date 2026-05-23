@@ -90,16 +90,25 @@ describe('Auth Service', () => {
 
   describe('register', () => {
     it('creates org + user + session and returns all three', async () => {
-      // The transaction callback receives tx and we control what it returns
+      // The transaction callback receives tx and we control what it returns.
+      // Wave E.F: register now also inserts an organization_memberships row
+      // and an account_group_memberships row (the latter via
+      // setUserOrgRole, which uses .values().onConflictDoUpdate()).
       mockDb.transaction.mockImplementation(async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
-        // Wire up the tx mock chain for this call
         const txInsertReturning = vi.fn();
-        const txInsertValues = vi.fn().mockReturnValue({ returning: txInsertReturning });
+        // Each .values() call returns a chain that supports both
+        // .returning() (for org/user/session inserts) and
+        // .onConflictDoUpdate() (for the setUserOrgRole upsert).
+        const txInsertValues = vi.fn().mockReturnValue({
+          returning: txInsertReturning,
+          onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        });
         const txInsert = vi.fn().mockReturnValue({ values: txInsertValues });
 
-        // First call: insert org -> returns org
-        // Second call: insert user -> returns user
-        // Third call: insert session -> returns session
+        // Insert order: org -> user -> organization_memberships ->
+        //   (setUserOrgRole INSERT, onConflictDoUpdate) -> session
+        // Only the org / user / session inserts call .returning().
         txInsertReturning
           .mockResolvedValueOnce([fakeOrg])
           .mockResolvedValueOnce([fakeUser])
@@ -130,7 +139,13 @@ describe('Auth Service', () => {
           .mockResolvedValueOnce([fakeOrg])
           .mockResolvedValueOnce([fakeUser])
           .mockResolvedValueOnce([fakeSession]);
-        const txInsertValues = vi.fn().mockReturnValue({ returning: txInsertReturning });
+        // Wave E.F: setUserOrgRole uses .onConflictDoUpdate(), and the
+        // organization_memberships insert has no .returning() call.
+        const txInsertValues = vi.fn().mockReturnValue({
+          returning: txInsertReturning,
+          onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        });
         const txInsert = vi.fn().mockReturnValue({ values: txInsertValues });
         return cb({ insert: txInsert });
       });

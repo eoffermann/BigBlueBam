@@ -9,8 +9,15 @@ import type {
   AccountGroupMembership,
   AccountPermissionRow,
   PermissionContext,
+  PermissionScope,
 } from '@bigbluebam/permissions';
-import { PermissionsCache, CACHE_KEYS, DEFAULT_TTL_SECONDS } from '@bigbluebam/permissions';
+import {
+  PermissionsCache,
+  CACHE_KEYS,
+  DEFAULT_TTL_SECONDS,
+  PERMISSIONS,
+  can,
+} from '@bigbluebam/permissions';
 
 import { db } from '../db/index.js';
 import {
@@ -184,8 +191,75 @@ export async function loadPermissionContext(
  *  account_group_memberships / permission_group_defaults. */
 export async function invalidatePermissionsForUser(userId: string, orgId?: string): Promise<void> {
   if (!cache) return;
-  const keys: string[] = [CACHE_KEYS.context(userId, orgId ?? 'global')];
+  const keys: string[] = [
+    CACHE_KEYS.context(userId, orgId ?? 'global'),
+    matrixCacheKey(userId, orgId ?? 'global'),
+  ];
   await cache.del(keys).catch(() => {});
+}
+
+/** Cache key for the materialized per-(user, org) permission matrix. */
+function matrixCacheKey(userId: string, orgId: string): string {
+  return `perms:matrix:${userId}:${orgId}`;
+}
+
+/**
+ * Build the full permission-matrix payload served on `/auth/me`. For every
+ * permission in the codegen catalog, run the resolver against the user's
+ * loaded context and emit `{ [id]: true|false }`. SuperUsers and the
+ * always-permitted core short-circuit to ALLOW; the catalog has
+ * ~1047 entries, so this is a ~1 ms in-memory walk after the context loads.
+ *
+ * Cached at `perms:matrix:<user_id>:<org_id>` for DEFAULT_TTL_SECONDS so
+ * repeat `/auth/me` hits (e.g. tab switches, websocket reconnects, refetch
+ * on focus) skip the resolver loop entirely. Invalidated alongside the
+ * PermissionContext cache by `invalidatePermissionsForUser`.
+ *
+ * Returns `null` only when the request has no authenticated user (the route
+ * handler is responsible for short-circuiting before then).
+ */
+export async function computePermissionMatrix(
+  request: FastifyRequest,
+): Promise<Record<string, boolean> | null> {
+  const user = (request as unknown as { user?: {
+    id: string;
+    active_org_id?: string;
+  } }).user;
+  if (!user) return null;
+
+  const orgId = user.active_org_id ?? '';
+  const cacheKey = matrixCacheKey(user.id, orgId || 'global');
+
+  if (cache) {
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as Record<string, boolean>;
+      } catch {
+        // Fall through on parse error.
+      }
+    }
+  }
+
+  const ctx = await loadPermissionContext(request);
+  if (!ctx) return null;
+
+  // Project_id isn't part of the matrix — checks that need a project
+  // scope make a one-shot RPC client-side via /v1/permissions/check.
+  // The matrix answers the org-or-global question only, which is what
+  // the ~100 inline frontend gates actually check today.
+  const scope: PermissionScope = { org_id: orgId || null, project_id: null };
+
+  const matrix: Record<string, boolean> = {};
+  for (const meta of PERMISSIONS) {
+    matrix[meta.id] = can(ctx, meta.id, scope);
+  }
+
+  if (cache) {
+    await cache.set(cacheKey, JSON.stringify(matrix), DEFAULT_TTL_SECONDS).catch(() => {});
+  }
+
+  return matrix;
 }
 
 // ─────────────────────────────────────────────────────────────────────

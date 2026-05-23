@@ -6,6 +6,7 @@ import { organizations } from '../db/schema/organizations.js';
 import { users } from '../db/schema/users.js';
 import { sessions } from '../db/schema/sessions.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
+import { setUserOrgRole } from './role-resolver.js';
 import { env } from '../env.js';
 import type { BootstrapInput, RegisterInput, UpdateProfileInput } from '@bigbluebam/shared';
 
@@ -143,7 +144,6 @@ export async function bootstrap(data: BootstrapInput, meta?: SessionMetadata) {
         email: data.email,
         display_name: data.display_name,
         password_hash: passwordHash,
-        role: 'owner',
         is_superuser: true,
       })
       .returning();
@@ -151,9 +151,10 @@ export async function bootstrap(data: BootstrapInput, meta?: SessionMetadata) {
     await tx.insert(organizationMemberships).values({
       user_id: user!.id,
       org_id: org!.id,
-      role: 'owner',
       is_default: true,
     });
+    // Wave E.F: role is stored in account_group_memberships.
+    await setUserOrgRole(user!.id, org!.id, 'owner', {}, tx);
 
     const session = await createSessionInTx(tx, user!.id, meta);
 
@@ -190,9 +191,16 @@ export async function register(data: RegisterInput, meta?: SessionMetadata) {
         email: data.email,
         display_name: data.display_name,
         password_hash: passwordHash,
-        role: 'owner',
       })
       .returning();
+
+    await tx.insert(organizationMemberships).values({
+      user_id: user!.id,
+      org_id: org!.id,
+      is_default: true,
+    });
+    // Wave E.F: role lives in account_group_memberships.
+    await setUserOrgRole(user!.id, org!.id, 'owner', {}, tx);
 
     const session = await createSessionInTx(tx, user!.id, meta);
 

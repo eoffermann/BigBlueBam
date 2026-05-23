@@ -125,7 +125,6 @@ async function authenticateRequest(request: FastifyRequest): Promise<AuthUser | 
         email: users.email,
         display_name: users.display_name,
         avatar_url: users.avatar_url,
-        role: users.role,
         timezone: users.timezone,
         is_active: users.is_active,
         is_superuser: users.is_superuser,

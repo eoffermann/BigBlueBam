@@ -4,6 +4,8 @@ import { users } from '../db/schema/users.js';
 import { escapeLike } from '../lib/escape-like.js';
 import { organizations } from '../db/schema/organizations.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
+import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
+import { setUserOrgRole } from './role-resolver.js';
 import { superuserAuditLog } from '../db/schema/superuser-audit-log.js';
 import { sessions } from '../db/schema/sessions.js';
 import { projects } from '../db/schema/projects.js';
@@ -134,11 +136,12 @@ export async function listUsers(params: ListUsersParams): Promise<{
   }
 
   const userIds = pageRows.map((r) => r.id);
+  // Wave E.F: role is resolved via account_group_memberships → permission_groups.
   const orgRows = await db
     .select({
       user_id: organizationMemberships.user_id,
       org_id: organizationMemberships.org_id,
-      role: organizationMemberships.role,
+      role: permissionGroups.legacy_role,
       is_default: organizationMemberships.is_default,
       name: organizations.name,
       slug: organizations.slug,
@@ -148,6 +151,15 @@ export async function listUsers(params: ListUsersParams): Promise<{
       organizations,
       eq(organizationMemberships.org_id, organizations.id),
     )
+    .leftJoin(
+      accountGroupMemberships,
+      and(
+        eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+        eq(accountGroupMemberships.scope_type, 'org'),
+        eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+      ),
+    )
+    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
     .where(
       sql`${organizationMemberships.user_id} IN (${sql.join(
         userIds.map((id) => sql`${id}::uuid`),
@@ -162,7 +174,7 @@ export async function listUsers(params: ListUsersParams): Promise<{
       org_id: row.org_id,
       name: row.name,
       slug: row.slug,
-      role: row.role,
+      role: row.role ?? 'member',
       is_default: row.is_default,
     });
     orgsByUser.set(row.user_id, arr);
@@ -251,7 +263,7 @@ export async function getUserDetail(userId: string): Promise<UserDetail | null> 
       org_id: organizationMemberships.org_id,
       org_name: organizations.name,
       org_slug: organizations.slug,
-      role: organizationMemberships.role,
+      role: permissionGroups.legacy_role,
       is_default: organizationMemberships.is_default,
       joined_at: organizationMemberships.joined_at,
     })
@@ -260,6 +272,15 @@ export async function getUserDetail(userId: string): Promise<UserDetail | null> 
       organizations,
       eq(organizationMemberships.org_id, organizations.id),
     )
+    .leftJoin(
+      accountGroupMemberships,
+      and(
+        eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+        eq(accountGroupMemberships.scope_type, 'org'),
+        eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+      ),
+    )
+    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
     .where(eq(organizationMemberships.user_id, userId))
     .orderBy(desc(organizationMemberships.is_default), organizations.name);
 
@@ -293,7 +314,7 @@ export async function getUserDetail(userId: string): Promise<UserDetail | null> 
       org_id: m.org_id,
       org_name: m.org_name,
       org_slug: m.org_slug,
-      role: m.role,
+      role: m.role ?? 'member',
       is_default: m.is_default,
       joined_at: m.joined_at.toISOString(),
     })),
@@ -344,11 +365,14 @@ export async function addMembership(
   orgId: string,
   role: string,
 ): Promise<void> {
-  await db.insert(organizationMemberships).values({
-    user_id: userId,
-    org_id: orgId,
-    role,
-    is_default: false,
+  // Wave E.F: role lives in account_group_memberships now.
+  await db.transaction(async (tx) => {
+    await tx.insert(organizationMemberships).values({
+      user_id: userId,
+      org_id: orgId,
+      is_default: false,
+    });
+    await setUserOrgRole(userId, orgId, role, {}, tx);
   });
 }
 
@@ -371,18 +395,21 @@ export async function updateMembershipRole(
   orgId: string,
   role: string,
 ): Promise<void> {
-  // Bump optimistic-concurrency token (P1-25) — the SuperUser path shares
-  // a table with org admins, so we keep the version monotonic regardless
-  // of who edited.
-  await db
-    .update(organizationMemberships)
-    .set({ role, version: sql`${organizationMemberships.version} + 1` })
-    .where(
-      and(
-        eq(organizationMemberships.user_id, userId),
-        eq(organizationMemberships.org_id, orgId),
-      ),
-    );
+  // Wave E.F: role is stored in account_group_memberships. We still bump
+  // the membership row's optimistic-concurrency token (P1-25) so any UI
+  // holding a stale copy is forced to re-read.
+  await db.transaction(async (tx) => {
+    await setUserOrgRole(userId, orgId, role, {}, tx);
+    await tx
+      .update(organizationMemberships)
+      .set({ version: sql`${organizationMemberships.version} + 1` })
+      .where(
+        and(
+          eq(organizationMemberships.user_id, userId),
+          eq(organizationMemberships.org_id, orgId),
+        ),
+      );
+  });
 }
 
 export async function countUserMemberships(userId: string): Promise<number> {

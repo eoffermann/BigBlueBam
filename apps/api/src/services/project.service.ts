@@ -278,7 +278,12 @@ export async function archiveProject(projectId: string) {
 
 export async function getProjectMembers(projectId: string) {
   const { users: usersTable } = await import('../db/schema/users.js');
+  const { accountGroupMemberships, permissionGroups } = await import(
+    '../db/schema/permissions.js'
+  );
 
+  // Wave E.F: is_guest comes from the user's org-scope group membership
+  // (permission_groups.legacy_role === 'guest'), joined via the project's org.
   const result = await db
     .select({
       id: usersTable.id,
@@ -287,10 +292,20 @@ export async function getProjectMembers(projectId: string) {
       avatar_url: usersTable.avatar_url,
       role: projectMemberships.role,
       joined_at: projectMemberships.joined_at,
-      user_role: usersTable.role,
+      user_role: permissionGroups.legacy_role,
     })
     .from(projectMemberships)
     .innerJoin(usersTable, eq(projectMemberships.user_id, usersTable.id))
+    .innerJoin(projects, eq(projects.id, projectMemberships.project_id))
+    .leftJoin(
+      accountGroupMemberships,
+      and(
+        eq(accountGroupMemberships.user_id, usersTable.id),
+        eq(accountGroupMemberships.scope_type, 'org'),
+        eq(accountGroupMemberships.scope_id, projects.org_id),
+      ),
+    )
+    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
     .where(eq(projectMemberships.project_id, projectId))
     .orderBy(usersTable.display_name);
 

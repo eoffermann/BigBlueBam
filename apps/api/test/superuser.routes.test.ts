@@ -86,6 +86,27 @@ const VALID_ORG_ID = '11111111-1111-1111-1111-111111111111';
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
+  // Wave E test scaffolding: decorate a synthetic requireCan that gates
+  // every superuser.* route on request.user.is_superuser. Real permission
+  // decisions are exercised by the resolver tests; here we only care about
+  // route plumbing and the SuperUser-vs-normal split.
+  (app as any).decorate(
+    'requireCan',
+    () =>
+      async (request: any, reply: any) => {
+        if (!request.user) {
+          return reply.status(401).send({
+            error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+          });
+        }
+        if (!request.user.is_superuser) {
+          return reply.status(403).send({
+            error: { code: 'FORBIDDEN', message: 'SuperUser required' },
+          });
+        }
+      },
+  );
+
   // Synthetic auth: read x-test-user header to populate request.user.
   app.decorateRequest('user', null);
   app.decorateRequest('sessionId', null);

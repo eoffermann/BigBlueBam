@@ -9,7 +9,20 @@ import { users } from './db/schema/users.js';
 import { organizationMemberships } from './db/schema/organization-memberships.js';
 import { apiKeys } from './db/schema/api-keys.js';
 import { agentPolicies } from './db/schema/agent-policies.js';
+import { accountGroupMemberships } from './db/schema/permissions.js';
 import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
+
+// Wave E.F: fixed UUIDs of the five built-in permission groups (seeded by
+// migration 0146). Used by cli.ts to upsert account_group_memberships
+// rows when creating users, replacing the dropped users.role and
+// organization_memberships.role columns.
+const BUILTIN_GROUP_IDS: Record<string, string> = {
+  owner: '11111111-1111-4111-8111-111111111111',
+  admin: '22222222-2222-4222-8222-222222222222',
+  member: '33333333-3333-4333-8333-333333333333',
+  viewer: '44444444-4444-4444-8444-444444444444',
+  guest: '55555555-5555-4555-8555-555555555555',
+};
 
 // Local reference to the helpdesk_agent_api_keys table (owned by the
 // helpdesk-api app) — duplicated here rather than imported so cli.js
@@ -181,7 +194,6 @@ async function createAdmin(flags: Record<string, string>) {
         email: email!,
         display_name: name!,
         password_hash: passwordHash,
-        role: 'owner',
         is_superuser: isSuperuser,
       })
       .returning();
@@ -189,9 +201,25 @@ async function createAdmin(flags: Record<string, string>) {
     await db.insert(organizationMemberships).values({
       user_id: user!.id,
       org_id: org!.id,
-      role: 'owner',
       is_default: true,
     });
+    // Wave E.F: role lives in account_group_memberships.
+    await db
+      .insert(accountGroupMemberships)
+      .values({
+        user_id: user!.id,
+        group_id: BUILTIN_GROUP_IDS.owner!,
+        scope_type: 'org',
+        scope_id: org!.id,
+      })
+      .onConflictDoUpdate({
+        target: [
+          accountGroupMemberships.user_id,
+          accountGroupMemberships.scope_type,
+          accountGroupMemberships.scope_id,
+        ],
+        set: { group_id: BUILTIN_GROUP_IDS.owner! },
+      });
 
     console.log('Admin user created successfully:');
     console.log(`  User ID:   ${user!.id}`);
@@ -244,7 +272,6 @@ async function createUser(flags: Record<string, string>) {
         email: email!,
         display_name: name!,
         password_hash: passwordHash,
-        role,
         is_superuser: false,
       })
       .returning();
@@ -252,9 +279,30 @@ async function createUser(flags: Record<string, string>) {
     await db.insert(organizationMemberships).values({
       user_id: user!.id,
       org_id: org.id,
-      role,
       is_default: true,
     });
+    // Wave E.F: role lives in account_group_memberships.
+    const groupId = BUILTIN_GROUP_IDS[role];
+    if (!groupId) {
+      console.error(`Error: no built-in group for role "${role}"`);
+      process.exit(1);
+    }
+    await db
+      .insert(accountGroupMemberships)
+      .values({
+        user_id: user!.id,
+        group_id: groupId,
+        scope_type: 'org',
+        scope_id: org.id,
+      })
+      .onConflictDoUpdate({
+        target: [
+          accountGroupMemberships.user_id,
+          accountGroupMemberships.scope_type,
+          accountGroupMemberships.scope_id,
+        ],
+        set: { group_id: groupId },
+      });
 
     console.log('User created successfully:');
     console.log(`  User ID:  ${user!.id}`);
@@ -456,7 +504,6 @@ async function createServiceAccount(flags: Record<string, string>) {
           email,
           display_name: `svc:${name}`,
           password_hash: passwordHash,
-          role: 'member',
           is_superuser: false,
           kind: 'service',
         })
@@ -465,9 +512,18 @@ async function createServiceAccount(flags: Record<string, string>) {
       await db.insert(organizationMemberships).values({
         user_id: user!.id,
         org_id: org.id,
-        role: 'member',
         is_default: true,
       });
+      // Wave E.F: role lives in account_group_memberships.
+      await db
+        .insert(accountGroupMemberships)
+        .values({
+          user_id: user!.id,
+          group_id: BUILTIN_GROUP_IDS.member!,
+          scope_type: 'org',
+          scope_id: org.id,
+        })
+        .onConflictDoNothing();
 
       // Permissive §15 policy so the first tool call doesn't fail-closed.
       // Migration 0139 backfilled existing service accounts; new ones

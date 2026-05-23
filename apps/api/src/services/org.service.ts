@@ -12,6 +12,8 @@ import { projects } from '../db/schema/projects.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { activityLog } from '../db/schema/activity-log.js';
+import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
+import { resolveUserOrgRole, setUserOrgRole } from './role-resolver.js';
 
 export async function getOrganization(orgId: string) {
   const [org] = await db
@@ -85,17 +87,16 @@ export async function updateOrganization(
 }
 
 export async function listOrgMembers(orgId: string) {
-  // Source of truth is organization_memberships — a user may be in many
-  // orgs via membership rows even if users.org_id still points somewhere
-  // else (legacy). Each member's role is the MEMBERSHIP role for this org,
-  // not users.role (which is the legacy home-org role).
+  // Source of truth is organization_memberships joined with the
+  // account_group_memberships → permission_groups path (Wave E.F). Each
+  // member's per-org role is resolved from the org-scope group row.
   const result = await db
     .select({
       id: users.id,
       email: users.email,
       display_name: users.display_name,
       avatar_url: users.avatar_url,
-      role: organizationMemberships.role,
+      role: permissionGroups.legacy_role,
       is_active: users.is_active,
       created_at: users.created_at,
       last_seen_at: users.last_seen_at,
@@ -103,10 +104,19 @@ export async function listOrgMembers(orgId: string) {
     })
     .from(organizationMemberships)
     .innerJoin(users, eq(organizationMemberships.user_id, users.id))
+    .leftJoin(
+      accountGroupMemberships,
+      and(
+        eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+        eq(accountGroupMemberships.scope_type, 'org'),
+        eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+      ),
+    )
+    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
     .where(eq(organizationMemberships.org_id, orgId))
     .orderBy(users.display_name);
 
-  return result;
+  return result.map((r) => ({ ...r, role: r.role ?? 'member' }));
 }
 
 /** Counts members of an org who are also currently active (is_active=true). */
@@ -114,13 +124,24 @@ export async function getOrgMemberCounts(orgId: string): Promise<{
   active_owner_count: number;
   member_count: number;
 }> {
+  // Wave E.F: owner status is the group's legacy_role joined via
+  // account_group_memberships, not organization_memberships.role.
   const [row] = await db
     .select({
-      active_owner_count: sql<number>`COUNT(*) FILTER (WHERE ${organizationMemberships.role} = 'owner' AND ${users.is_active} = true)::int`,
+      active_owner_count: sql<number>`COUNT(*) FILTER (WHERE ${permissionGroups.legacy_role} = 'owner' AND ${users.is_active} = true)::int`,
       member_count: sql<number>`COUNT(*) FILTER (WHERE ${users.is_active} = true)::int`,
     })
     .from(organizationMemberships)
     .innerJoin(users, eq(organizationMemberships.user_id, users.id))
+    .leftJoin(
+      accountGroupMemberships,
+      and(
+        eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+        eq(accountGroupMemberships.scope_type, 'org'),
+        eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+      ),
+    )
+    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
     .where(eq(organizationMemberships.org_id, orgId));
 
   return {
@@ -173,18 +194,22 @@ export async function inviteMember(
     // Add them as a member of this org. is_default stays false — their
     // existing default org is preserved so their next login lands where
     // they expect.
-    await db.insert(organizationMemberships).values({
-      user_id: existingUser.id,
-      org_id: orgId,
-      role,
-      is_default: false,
+    await db.transaction(async (tx) => {
+      await tx.insert(organizationMemberships).values({
+        user_id: existingUser.id,
+        org_id: orgId,
+        is_default: false,
+      });
+      // Wave E.F: role is stored in account_group_memberships, not on the
+      // membership row.
+      await setUserOrgRole(existingUser.id, orgId, role, {}, tx);
     });
     const safeExisting = {
       id: existingUser.id,
       email: existingUser.email,
       display_name: existingUser.display_name,
       avatar_url: existingUser.avatar_url,
-      role: existingUser.role,
+      role,
       is_active: existingUser.is_active,
       created_at: existingUser.created_at,
     };
@@ -192,9 +217,8 @@ export async function inviteMember(
   }
 
   // Brand-new user — create the user row + their first membership. This
-  // org becomes their default. users.org_id + users.role are filled in as
-  // the legacy single-org fallback until they're retired in a later
-  // migration; organization_memberships is the authoritative source.
+  // org becomes their default. users.org_id is filled in as the legacy
+  // single-org fallback; per-org role lives in account_group_memberships.
   return await db.transaction(async (tx) => {
     const [user] = await tx
       .insert(users)
@@ -202,23 +226,24 @@ export async function inviteMember(
         org_id: orgId,
         email: normalizedEmail,
         display_name: displayName ?? normalizedEmail.split('@')[0]!,
-        role,
       })
       .returning();
 
     await tx.insert(organizationMemberships).values({
       user_id: user!.id,
       org_id: orgId,
-      role,
       is_default: true,
     });
+
+    // Wave E.F: role lives in account_group_memberships now.
+    await setUserOrgRole(user!.id, orgId, role, {}, tx);
 
     const safeUser = {
       id: user!.id,
       email: user!.email,
       display_name: user!.display_name,
       avatar_url: user!.avatar_url,
-      role: user!.role,
+      role,
       is_active: user!.is_active,
       created_at: user!.created_at,
     };
@@ -277,10 +302,13 @@ export function checkRankAbove(
   return { allowed: true };
 }
 
-/** Fetches a user's membership role for a given org, or null if not a member. */
+/** Fetches a user's membership role for a given org, or null if not a member.
+ *  Wave E.F: role is resolved from account_group_memberships → permission_groups. */
 async function getMembershipRole(orgId: string, userId: string): Promise<string | null> {
+  // Confirm membership first; users without a membership row return null
+  // even if a stale group row still exists.
   const [m] = await db
-    .select({ role: organizationMemberships.role })
+    .select({ id: organizationMemberships.id })
     .from(organizationMemberships)
     .where(
       and(
@@ -289,7 +317,8 @@ async function getMembershipRole(orgId: string, userId: string): Promise<string 
       ),
     )
     .limit(1);
-  return m?.role ?? null;
+  if (!m) return null;
+  return await resolveUserOrgRole(userId, orgId);
 }
 
 /** Validates that every project in `projectIds` belongs to `orgId`. Returns
@@ -314,27 +343,20 @@ export async function updateMemberRole(
   userId: string,
   role: string,
   opts: { callerRole: string; callerIsSuperuser: boolean; expectedVersion?: number },
-): Promise<(typeof users.$inferSelect & { membership_version: number }) | null> {
-  // Update the organization_memberships row — that's the per-org role.
-  // Locking via SELECT FOR UPDATE serializes concurrent role changes,
-  // and the `version` column (P1-25) catches the narrower window where
-  // two tabs both read the SAME version and then race: the second UPDATE
-  // will see version mismatch and throw VersionConflictError.
-  // users.role is a legacy single-org column; keep it synced ONLY when
-  // the target user's home org matches the org we're editing, otherwise
-  // we'd clobber their role in a different org.
+): Promise<(typeof users.$inferSelect & { membership_version: number; role: string }) | null> {
+  // Wave E.F: role is no longer a column on organization_memberships —
+  // it's resolved from account_group_memberships → permission_groups.
+  // We still lock the membership row and bump its version so the UI's
+  // optimistic-concurrency gate keeps working unchanged.
   return await db.transaction(async (tx) => {
     await tx.execute(
       sql`SELECT 1 FROM organization_memberships WHERE user_id = ${userId} AND org_id = ${orgId} FOR UPDATE`,
     );
 
-    // Load target's current membership role + version for the rank check
-    // and for the optimistic-concurrency gate.
+    // Load target's current membership version + resolved role for the
+    // rank check and for the optimistic-concurrency gate.
     const [existing] = await tx
-      .select({
-        role: organizationMemberships.role,
-        version: organizationMemberships.version,
-      })
+      .select({ version: organizationMemberships.version })
       .from(organizationMemberships)
       .where(
         and(
@@ -346,7 +368,9 @@ export async function updateMemberRole(
 
     if (!existing) return null;
 
-    const rank = checkRankAbove(opts.callerRole, existing.role, opts.callerIsSuperuser);
+    const existingRole = (await resolveUserOrgRole(userId, orgId, tx)) ?? 'member';
+
+    const rank = checkRankAbove(opts.callerRole, existingRole, opts.callerIsSuperuser);
     if (!rank.allowed) {
       throw new InsufficientRankError(rank.reason);
     }
@@ -358,11 +382,10 @@ export async function updateMemberRole(
       throw new VersionConflictError(existing.version);
     }
 
-    // Even when the caller didn't send expected_version, we still bump
-    // the column so any CONCURRENT opted-in caller sees the drift.
+    // Bump the membership version so any opted-in caller observes the drift.
     const [membership] = await tx
       .update(organizationMemberships)
-      .set({ role, version: sql`${organizationMemberships.version} + 1` })
+      .set({ version: sql`${organizationMemberships.version} + 1` })
       .where(
         and(
           eq(organizationMemberships.user_id, userId),
@@ -373,21 +396,17 @@ export async function updateMemberRole(
 
     if (!membership) return null;
 
+    // Write the new role into account_group_memberships.
+    await setUserOrgRole(userId, orgId, role, {}, tx);
+
     const [user] = await tx
       .select()
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (user && user.org_id === orgId) {
-      await tx
-        .update(users)
-        .set({ role, updated_at: new Date() })
-        .where(eq(users.id, userId));
-    }
-
     if (!user) return null;
-    return { ...user, membership_version: membership.version };
+    return { ...user, role, membership_version: membership.version };
   });
 }
 
@@ -527,6 +546,7 @@ export async function removeMember(
  *  user's project memberships scoped to THIS org. Returns null if the
  *  target is not a member of this org. */
 export async function getOrgMemberDetail(orgId: string, userId: string) {
+  // Wave E.F: role resolves via account_group_memberships → permission_groups.
   const [row] = await db
     .select({
       id: users.id,
@@ -539,13 +559,22 @@ export async function getOrgMemberDetail(orgId: string, userId: string) {
       disabled_by: users.disabled_by,
       created_at: users.created_at,
       last_seen_at: users.last_seen_at,
-      role: organizationMemberships.role,
+      role: permissionGroups.legacy_role,
       joined_at: organizationMemberships.joined_at,
       is_default_org: organizationMemberships.is_default,
       version: organizationMemberships.version,
     })
     .from(organizationMemberships)
     .innerJoin(users, eq(organizationMemberships.user_id, users.id))
+    .leftJoin(
+      accountGroupMemberships,
+      and(
+        eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+        eq(accountGroupMemberships.scope_type, 'org'),
+        eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+      ),
+    )
+    .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
     .where(
       and(
         eq(organizationMemberships.user_id, userId),
@@ -595,7 +624,7 @@ export async function getOrgMemberDetail(orgId: string, userId: string) {
     display_name: row.display_name,
     avatar_url: row.avatar_url,
     timezone: row.timezone,
-    role: row.role,
+    role: row.role ?? 'member',
     is_active: row.is_active,
     disabled_at: row.disabled_at,
     disabled_by: disabledBy,
@@ -781,26 +810,20 @@ export async function transferOwnership(opts: {
       sql`SELECT 1 FROM organization_memberships WHERE org_id = ${orgId} AND user_id IN (${callerUserId}, ${targetUserId}) FOR UPDATE`,
     );
 
-    const [callerMembership] = await tx
-      .select({ role: organizationMemberships.role })
-      .from(organizationMemberships)
-      .where(
-        and(
-          eq(organizationMemberships.user_id, callerUserId),
-          eq(organizationMemberships.org_id, orgId),
-        ),
-      )
-      .limit(1);
+    // Wave E.F: caller role is resolved from account_group_memberships now.
+    const callerRole = await resolveUserOrgRole(callerUserId, orgId, tx);
+    const callerHasMembership = callerRole !== null;
 
-    if (!callerIsSuperuser && callerMembership?.role !== 'owner') {
+    if (!callerIsSuperuser && callerRole !== 'owner') {
       throw new TransferOwnershipError(
         'Only an owner may transfer ownership',
         'CALLER_NOT_OWNER',
       );
     }
 
+    // Confirm target is a member of this org.
     const [targetMembership] = await tx
-      .select({ role: organizationMemberships.role })
+      .select({ id: organizationMemberships.id })
       .from(organizationMemberships)
       .where(
         and(
@@ -820,10 +843,11 @@ export async function transferOwnership(opts: {
     // Demote caller to admin (only if caller had a membership — SuperUsers
     // may not be members of this org). Bump membership `version` (P1-25)
     // so any UI holding a stale copy of either row is forced to re-read.
-    if (callerMembership) {
+    if (callerHasMembership) {
+      await setUserOrgRole(callerUserId, orgId, 'admin', { grantedBy: callerUserId }, tx);
       await tx
         .update(organizationMemberships)
-        .set({ role: 'admin', version: sql`${organizationMemberships.version} + 1` })
+        .set({ version: sql`${organizationMemberships.version} + 1` })
         .where(
           and(
             eq(organizationMemberships.user_id, callerUserId),
@@ -833,29 +857,16 @@ export async function transferOwnership(opts: {
     }
 
     // Promote target to owner.
+    await setUserOrgRole(targetUserId, orgId, 'owner', { grantedBy: callerUserId }, tx);
     await tx
       .update(organizationMemberships)
-      .set({ role: 'owner', version: sql`${organizationMemberships.version} + 1` })
+      .set({ version: sql`${organizationMemberships.version} + 1` })
       .where(
         and(
           eq(organizationMemberships.user_id, targetUserId),
           eq(organizationMemberships.org_id, orgId),
         ),
       );
-
-    // Mirror to users.role when users.org_id matches — legacy single-org sync.
-    const legacy = await tx
-      .select({ id: users.id, org_id: users.org_id })
-      .from(users)
-      .where(inArray(users.id, [callerUserId, targetUserId]));
-    for (const u of legacy) {
-      if (u.org_id !== orgId) continue;
-      const newRole = u.id === targetUserId ? 'owner' : 'admin';
-      await tx
-        .update(users)
-        .set({ role: newRole, updated_at: new Date() })
-        .where(eq(users.id, u.id));
-    }
 
     return {
       previous_owner_id: callerUserId,

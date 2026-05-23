@@ -63,7 +63,6 @@ export default async function websocketHandler(fastify: FastifyInstance) {
           org_id: users.org_id,
           email: users.email,
           display_name: users.display_name,
-          role: users.role,
           is_active: users.is_active,
         },
       })

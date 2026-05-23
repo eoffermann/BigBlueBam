@@ -70,9 +70,12 @@ function pushSelect(rows: unknown[]) {
   void innerJoin;
 }
 
-// Helper for an asker lookup (users WHERE id)
+// Helper for an asker lookup (users WHERE id). Wave E.F: loadAsker now
+// runs two SELECTs — the user row, then the role join against
+// account_group_memberships → permission_groups.
 function mockAsker(org_id: string, role: string) {
-  pushSelect([{ id: USER_ASKER, org_id, role }]);
+  pushSelect([{ id: USER_ASKER, org_id }]);
+  pushSelect([{ legacy_role: role }]);
 }
 
 function mockAskerMissing() {

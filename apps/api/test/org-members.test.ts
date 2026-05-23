@@ -44,7 +44,11 @@ vi.mock('../src/env.js', () => ({
 
 /**
  * Build a minimal tx object whose chain methods return pre-scripted rows.
- * - `existing`: the row returned by `tx.select({ role, version })` on
+ * Wave E.F: updateMemberRole now issues three SELECTs (membership version,
+ * resolveUserOrgRole join, users row), one UPDATE (bump version), and one
+ * INSERT-onConflictDoUpdate (setUserOrgRole into account_group_memberships).
+ *
+ * - `existing`: the row returned by `tx.select({ version })` on
  *               the membership lookup.
  * - `updatedMembership`: the row returned by the `update(...).returning`
  *               on the membership UPDATE (null to simulate 0 rows affected).
@@ -55,21 +59,37 @@ function makeTx(opts: {
   updatedMembership: { version: number } | null;
   user: { id: string; org_id: string; role: string } | null;
 }) {
-  // Every chained call returns `thenable` until a terminal method is hit.
-  // Track which SELECT we're resolving by call-order: first SELECT is the
-  // membership probe, second (if any) is the users lookup.
+  // Wave E.F: the call order is:
+  //   1. SELECT version FROM organization_memberships ...
+  //   2. SELECT legacy_role FROM account_group_memberships INNER JOIN ... (resolveUserOrgRole)
+  //   3. UPDATE organization_memberships ... RETURNING version
+  //   4. INSERT INTO account_group_memberships ... ON CONFLICT DO UPDATE (setUserOrgRole)
+  //   5. SELECT * FROM users WHERE id = ...
   let selectCall = 0;
 
   const tx = {
     execute: vi.fn().mockResolvedValue(undefined),
     select: vi.fn(() => {
       const thisSelect = selectCall++;
-      const chain = {
+      const chain: any = {
         from: vi.fn(() => chain),
+        innerJoin: vi.fn(() => chain),
+        leftJoin: vi.fn(() => chain),
         where: vi.fn(() => chain),
         limit: vi.fn(() => {
-          // membership lookup first, then users lookup.
-          if (thisSelect === 0) return Promise.resolve(opts.existing ? [opts.existing] : []);
+          if (thisSelect === 0) {
+            // SELECT version FROM organization_memberships
+            return Promise.resolve(
+              opts.existing ? [{ version: opts.existing.version }] : [],
+            );
+          }
+          if (thisSelect === 1) {
+            // resolveUserOrgRole join
+            return Promise.resolve(
+              opts.existing ? [{ legacy_role: opts.existing.role }] : [],
+            );
+          }
+          // users row
           return Promise.resolve(opts.user ? [opts.user] : []);
         }),
       };
@@ -82,8 +102,16 @@ function makeTx(opts: {
         returning: vi.fn(() =>
           Promise.resolve(opts.updatedMembership ? [opts.updatedMembership] : []),
         ),
-        // For the users-table UPDATE at the end (no .returning call)
         then: (resolve: (v: unknown) => void) => resolve(undefined),
+      };
+      return chain;
+    }),
+    insert: vi.fn(() => {
+      const chain: any = {
+        values: vi.fn(() => chain),
+        onConflictDoUpdate: vi.fn(() => Promise.resolve(undefined)),
+        onConflictDoNothing: vi.fn(() => Promise.resolve(undefined)),
+        returning: vi.fn(() => Promise.resolve([])),
       };
       return chain;
     }),

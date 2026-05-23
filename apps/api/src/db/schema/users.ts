@@ -1,5 +1,4 @@
-import { pgTable, pgEnum, uuid, varchar, text, jsonb, timestamp, boolean, index, check, type AnyPgColumn } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { pgTable, pgEnum, uuid, varchar, text, jsonb, timestamp, boolean, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { organizations } from './organizations.js';
 
 /**
@@ -21,7 +20,9 @@ export const users = pgTable(
     display_name: varchar('display_name', { length: 100 }).notNull(),
     avatar_url: text('avatar_url'),
     password_hash: text('password_hash'),
-    role: varchar('role', { length: 20 }).default('member').notNull(),
+    // Wave E.F: users.role was dropped in migration 0159. The per-org role
+    // is resolved from account_group_memberships → permission_groups.legacy_role
+    // with scope_type='org' and scope_id=<org_id>. See services/role-resolver.ts.
     timezone: varchar('timezone', { length: 50 }).default('UTC').notNull(),
     notification_prefs: jsonb('notification_prefs').default({}).notNull(),
     is_active: boolean('is_active').default(true).notNull(),
@@ -43,6 +44,5 @@ export const users = pgTable(
     index('users_org_id_idx').on(table.org_id),
     index('users_email_idx').on(table.email),
     index('users_kind_idx').on(table.kind),
-    check('users_role_check', sql`role IN ('owner', 'admin', 'member', 'viewer', 'guest')`),
   ],
 );

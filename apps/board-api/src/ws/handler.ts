@@ -3,7 +3,15 @@ import type { WebSocket } from '@fastify/websocket';
 import Redis from 'ioredis';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { sessions, users, boards, boardCollaborators, projectMembers } from '../db/schema/index.js';
+import {
+  sessions,
+  users,
+  boards,
+  boardCollaborators,
+  projectMembers,
+  accountGroupMemberships,
+  permissionGroups,
+} from '../db/schema/index.js';
 import { env } from '../env.js';
 import { saveScene } from './persistence.js';
 import { BoardRedisState } from './redis-state.js';
@@ -314,7 +322,6 @@ export default async function websocketHandler(fastify: FastifyInstance) {
           org_id: users.org_id,
           email: users.email,
           display_name: users.display_name,
-          role: users.role,
           is_active: users.is_active,
           is_superuser: users.is_superuser,
         },
@@ -334,8 +341,23 @@ export default async function websocketHandler(fastify: FastifyInstance) {
     const orgId = row.user.org_id;
     const displayName = row.user.display_name;
 
+    // Wave E.F: role is resolved from the user's org-scope group membership.
+    const [roleRow] = await db
+      .select({ legacy_role: permissionGroups.legacy_role })
+      .from(accountGroupMemberships)
+      .innerJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
+      .where(
+        and(
+          eq(accountGroupMemberships.user_id, userId),
+          eq(accountGroupMemberships.scope_type, 'org'),
+          eq(accountGroupMemberships.scope_id, orgId),
+        ),
+      )
+      .limit(1);
+    const userRole = roleRow?.legacy_role ?? 'member';
+
     const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
-    const roleIdx = ROLE_HIERARCHY.indexOf(row.user.role as (typeof ROLE_HIERARCHY)[number]);
+    const roleIdx = ROLE_HIERARCHY.indexOf(userRole as (typeof ROLE_HIERARCHY)[number]);
     const isAdminOrOwner = row.user.is_superuser || roleIdx >= 2;
 
     const client: ConnectedClient = {
@@ -387,7 +409,7 @@ export default async function websocketHandler(fastify: FastifyInstance) {
             if (row.user.is_superuser) {
               canEdit = true;
             } else {
-              const access = await checkBoardAccess(boardId, userId, orgId, row.user.role);
+              const access = await checkBoardAccess(boardId, userId, orgId, userRole);
               if (!access.hasAccess) {
                 socket.send(
                   JSON.stringify({

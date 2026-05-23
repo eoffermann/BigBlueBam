@@ -9,6 +9,8 @@ export {
   organizationMemberships,
   tasks,
   beaconEntries,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Brief-specific tables
