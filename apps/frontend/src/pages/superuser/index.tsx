@@ -13,6 +13,7 @@ import { Dialog } from '@/components/common/dialog';
 import { formatRelativeTime } from '@/lib/utils';
 import { PermissionsDivergencesPage } from './permissions-divergences';
 import { PermissionsGroupsListPage } from './permissions/groups-list';
+import { DeploySettingsCard } from '@/components/superuser/deploy-settings-card';
 
 interface SuperuserPageProps {
   onNavigate: (path: string) => void;
@@ -913,6 +914,7 @@ function PlatformTab() {
 
       <LaunchpadDefaultsCard />
       <CallingCredentialsCard />
+      <DeploySettingsCard />
     </div>
   );
 }
