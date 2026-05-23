@@ -7,6 +7,8 @@ export {
   projects,
   projectMemberships,
   organizationMemberships,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Beacon-specific tables

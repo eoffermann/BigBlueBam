@@ -5,6 +5,8 @@ export {
   sessions,
   apiKeys,
   organizationMemberships,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Bond-specific tables

@@ -4,6 +4,7 @@ import { Button } from '@/components/common/button';
 import { Input } from '@/components/common/input';
 import { Select } from '@/components/common/select';
 import { useAuthStore } from '@/stores/auth.store';
+import { useCan } from '@bigbluebam/ui/use-can';
 import {
   useLlmProviders,
   useCreateProvider,
@@ -56,8 +57,15 @@ const MODEL_PLACEHOLDERS: Record<string, string> = {
 
 export function SettingsLlmProviders() {
   const { user } = useAuthStore();
+  // is_superuser stays as-is — it gates the "System (site-wide)" scope
+  // option, which is a genuine platform-admin bypass (not a per-action
+  // permission). See docs/wave-d-audit/wave-e-C-useCan.md "What stays as-is".
   const isSuperUser = user?.is_superuser === true;
-  const isPrivileged = isSuperUser || user?.role === 'admin' || user?.role === 'owner';
+  // Wave E.D: gate Add/Edit/Delete provider buttons on the matrix
+  // (POST /llm-providers → bam.llm_provider.create); the per-row edit/delete
+  // ops resolve to the same role tier on the backend, so a single create
+  // gate matches the prior `isPrivileged = admin|owner|superuser` semantics.
+  const isPrivileged = useCan('bam.llm_provider.create');
 
   const { data: providersResponse, isLoading } = useLlmProviders();
   const { data: projectsResponse } = useProjects();

@@ -6,6 +6,8 @@ export {
   sessions,
   apiKeys,
   organizationMemberships,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Bench-specific tables

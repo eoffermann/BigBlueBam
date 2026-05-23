@@ -6,6 +6,8 @@ export {
   apiKeys,
   projects,
   organizationMemberships,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Bolt-specific tables

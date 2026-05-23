@@ -374,6 +374,8 @@ describe('beacon-expiry-sweep', () => {
   });
 
   it('does not delete drafts under 60 days old', async () => {
+    // Use a date relative to "now" so the test stays stable as the calendar
+    // rolls forward; was a hardcoded 2026-03-15 before, which became stale.
     const draft = {
       id: BEACON_D,
       status: 'Draft',

@@ -7,4 +7,6 @@ export {
   sessions,
   apiKeys,
   organizationMemberships,
+  permissionGroups,
+  accountGroupMemberships,
 } from '@bigbluebam/db-stubs';

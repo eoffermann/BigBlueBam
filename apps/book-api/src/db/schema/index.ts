@@ -6,6 +6,8 @@ export {
   apiKeys,
   organizationMemberships,
   projects,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Book-specific tables

@@ -6,6 +6,8 @@ export {
   apiKeys,
   organizationMemberships,
   bondContacts,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Blast-specific tables

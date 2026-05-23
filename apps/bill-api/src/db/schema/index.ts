@@ -9,6 +9,8 @@ export {
   tasks,
   timeEntries,
   bondDeals,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Bill-specific tables

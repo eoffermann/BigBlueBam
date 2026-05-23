@@ -7,6 +7,8 @@ export {
   apiKeys,
   organizationMemberships,
   projectMemberships,
+  permissionGroups,
+  accountGroupMemberships,
 } from './bbb-refs.js';
 
 // Blank-specific tables

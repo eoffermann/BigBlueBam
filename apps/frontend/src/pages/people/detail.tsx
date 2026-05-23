@@ -24,6 +24,7 @@ import { Avatar } from '@/components/common/avatar';
 import { Badge } from '@/components/common/badge';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { useAuthStore } from '@/stores/auth.store';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { api, ApiError } from '@/lib/api';
 import {
   peopleApi,
@@ -228,7 +229,12 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
 
   const canAct = canActOn(currentUser, member);
   const isSelf = member.id === currentUser?.id;
-  const callerIsOwner = currentUser?.role === 'owner' || currentUser?.is_superuser === true;
+  // Wave E.D: replace inline `role === 'owner' || is_superuser` check with
+  // the per-action permission for the Transfer-ownership endpoint
+  // (POST /org/members/:userId/transfer-ownership → bam.org_member_transfer_ownership.create).
+  // The matrix already reflects SuperUser bypass, so the explicit
+  // is_superuser disjunct is no longer needed.
+  const callerIsOwner = useCan('bam.org_member_transfer_ownership.create');
 
   return (
     <AppLayout
