@@ -207,7 +207,7 @@ open http://localhost/brief/       # Brief
 Read these documents in order:
 1. **CLAUDE.md** — project conventions, tech stack, key decisions
 2. **BigBlueBam_Design_Document.md** — full design spec
-3. **docs/mcp-server.md** — how AI agents interact with the system
+3. **docs/reference/mcp-server.md** — how AI agents interact with the system
 
 ### Key Concepts
 - **Monorepo** with Turborepo + pnpm workspaces

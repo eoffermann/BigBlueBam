@@ -629,7 +629,7 @@ When the BBB call fails transiently, the ticket is already persisted and the exi
 
 A user can belong to many organizations simultaneously. The legacy `users.org_id` FK has been replaced by a join table:
 
-- **`organization_memberships`** — `(user_id, org_id, role, ...)` with a unique constraint on `(user_id, org_id)`. Role hierarchy and permission resolution live in `apps/api/src/services/org-permissions.ts`. See `docs/permissions.md` for the full role matrix.
+- **`organization_memberships`** — `(user_id, org_id, role, ...)` with a unique constraint on `(user_id, org_id)`. Role hierarchy and permission resolution live in `apps/api/src/services/org-permissions.ts`. See [`./permissions.md`](./permissions.md) for the full role matrix.
 - **`sessions.active_org_id`** — persists the user's currently-selected org across requests. Updated by `POST /orgs/switch`, which also rotates the session token.
 - **`X-Org-Id` request header** — clients may override the session's active org on a per-request basis. The auth plugin (`apps/api/src/plugins/auth.ts`) validates the header against the user's memberships and falls back to `sessions.active_org_id`, then to the user's default org.
 - **`request.user.active_org_id`** — resolved once per request and used by all downstream authorization checks and row-level filters.
@@ -650,7 +650,7 @@ Admins (and SuperUsers) can act as another user for support and debugging:
 2. **Use** — subsequent requests include the `X-Impersonate-User` header; the auth plugin validates the token against `impersonation_sessions` and swaps `request.user` to the target while retaining `impersonator_id` on the request.
 3. **Audit** — every activity log entry written during impersonation carries `impersonator_id` (see the `activity_log.impersonator_id` column added in migration `0004_activity_log_impersonator.sql`).
 
-Further detail on roles, resource isolation, and guest invitations lives in [`docs/permissions.md`](./permissions.md).
+Further detail on roles, resource isolation, and guest invitations lives in [`./permissions.md`](./permissions.md).
 
 ---
 
@@ -676,4 +676,4 @@ graph LR
 - **docker-compose wiring** — a `migrate` one-shot service runs `node dist/migrate.js` against the `migrations/` folder baked into the api image. Every DB-using app (`api`, `helpdesk-api`, `banter-api`, `worker`) declares `migrate: condition: service_completed_successfully` as a depends-on, so migrations always complete before app code that assumes the new schema can boot.
 - **Drift guard** — a `.github/workflows/db-drift.yml` CI workflow diffs the Drizzle schema against the migrations and fails the build if the two drift.
 
-See [`docs/database.md`](./database.md) for the full schema reference.
+See [`./database.md`](./database.md) for the full schema reference.

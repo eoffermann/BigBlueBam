@@ -237,7 +237,7 @@ async function deploy(envConfig, { branch = 'stable', tlsConfig = null } = {}) {
   // `docker compose up` so the frontend container's entrypoint detects
   // certs at first boot. Letsencrypt is the exception — its provisioning
   // happens AFTER nginx is up so certbot can serve the ACME challenge.
-  // See docs/local-ssl-notes.md for the full picture.
+  // See docs/guides/local-ssl-notes.md for the full picture.
   if (tlsConfig && tlsConfig.source !== 'letsencrypt') {
     const certsDir = path.resolve(process.cwd(), 'certs');
     process.stdout.write(`Provisioning TLS cert (${tlsConfig.source})... `);
@@ -333,7 +333,7 @@ async function deploy(envConfig, { branch = 'stable', tlsConfig = null } = {}) {
     } catch (err) {
       console.log(`\n${red('Migration step failed.')} ${dim(String(err?.message || err))}`);
       console.log(dim('  Check logs with: docker compose logs migrate'));
-      console.log(dim('  See docs/deployment-guide.md → Updating for the manual fallback.'));
+      console.log(dim('  See docs/guides/deployment.md → Updating for the manual fallback.'));
       throw err;
     }
   }

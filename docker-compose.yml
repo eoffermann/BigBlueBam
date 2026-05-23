@@ -268,7 +268,7 @@ services:
       - "${HTTPS_PORT:-443}:443"
     environment:
       # Read by infra/nginx/entrypoint.sh to render the TLS placeholders in
-      # the bind-mounted nginx-with-site.conf. See docs/local-ssl-notes.md.
+      # the bind-mounted nginx-with-site.conf. See docs/guides/local-ssl-notes.md.
       TLS_HTTP_MODE: ${TLS_HTTP_MODE:-none}
       EXT_HTTPS_PORT: ${EXT_HTTPS_PORT:-${HTTPS_PORT:-443}}
       TLS_CERT_SOURCE: ${TLS_CERT_SOURCE:-self-signed}
@@ -888,7 +888,7 @@ services:
   # ./certs/local.{crt,key} for nginx to pick up. Renewal is driven by a
   # host-side cron entry the deploy script writes — NOT by an in-container
   # loop, because that would require mounting the docker socket into this
-  # sidecar (anti-pattern; see docs/local-ssl-notes.md).
+  # sidecar (anti-pattern; see docs/guides/local-ssl-notes.md).
   certbot:
     image: certbot/certbot:latest
     profiles: ["letsencrypt"]

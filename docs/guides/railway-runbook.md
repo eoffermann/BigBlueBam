@@ -307,7 +307,7 @@ See `scripts/deploy/shared/railway-orchestrator.mjs:13-18` for the explicit idem
 - **`scripts/deploy/shared/services.mjs`** — the service catalog (20 services + their Dockerfile paths, env hints, start commands)
 - **`scripts/deploy/shared/env-hints.mjs`** — env var resolution logic (plugin refs, internal DNS, generated secrets)
 - **`scripts/gen-railway-configs.mjs`** — generates `infra/nginx/nginx.railway.conf` and `railway/<service>.json` files (useful if you need to inspect what the orchestrator will configure before running)
-- **`docs/deployment-guide.md`** — the main deployment guide that this runbook sits alongside
+- **`docs/guides/deployment.md`** — the main deployment guide that this runbook sits alongside
 
 ## Verification checklist
 
@@ -322,7 +322,7 @@ End-to-end success means all of these are true:
 - [ ] You can create a project in Bam and see it in the dashboard list (verifies Postgres + schema migrations + SPA → API wiring).
 - [ ] Railway dashboard → `postgres` service → **Data** tab shows the `bigbluebam` database with 40+ tables (verifies migrations ran end-to-end).
 
-If any of those fail, the Railway service logs are the first place to look. `docs/deployment-guide.md` has a "Migration failures" troubleshooting section that applies to Railway too.
+If any of those fail, the Railway service logs are the first place to look. `docs/guides/deployment.md` has a "Migration failures" troubleshooting section that applies to Railway too.
 
 ## Known gotchas
 

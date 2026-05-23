@@ -356,7 +356,7 @@ Goal: drop `organization_memberships.role`, `users.role`, the old `requireMinRol
 1. **Migration `0150_permissions_contract.sql`** drops `organization_memberships.role` (after 4 weeks of dual-read at 0 % divergence). The column was already de-canonicalized in Wave B; this just removes the storage.
 2. **Code removal**. Delete the legacy helpers from `apps/api/src/plugins/auth.ts`. Delete `apps/api/src/lib/org-permissions.ts::isOrgPrivileged`. Remove the dual-read paths from satellite plugins.
 3. **`db:check` passes**. Drizzle schema no longer references the dropped columns.
-4. **Final docs sweep**. Update `CLAUDE.md`, `docs/agent-conventions.md`, and the deployment guide to reference the new permission model exclusively.
+4. **Final docs sweep**. Update `CLAUDE.md`, `docs/reference/agent-conventions.md`, and the deployment guide to reference the new permission model exclusively.
 
 Files removed: ~6 helpers, ~2 services. Files modified: ~30 plugin files. One migration file.
 
@@ -404,7 +404,7 @@ Files removed: ~6 helpers, ~2 services. Files modified: ~30 plugin files. One mi
 - `apps/api/src/db/schema/permissions.ts` — Drizzle schemas for the 5 new tables (Wave B)
 - `apps/frontend/src/pages/superuser/permissions-divergences.tsx` (Wave B), `permissions/groups.tsx` + per-account editor (Wave D)
 - `apps/api/test/permissions-contract.test.ts` — every-route check (Wave C)
-- `docs/permissions-overhaul-plan.md` — durable copy of this plan (shipped)
+- `docs/plans/permissions-overhaul-plan.md` — durable copy of this plan (shipped)
 - `docs/permissions-action-manifest.json` — committed source of truth for the catalog (Wave A, shipped)
 
 **To modify (high blast radius):**

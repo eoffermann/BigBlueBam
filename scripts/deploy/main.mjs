@@ -282,7 +282,7 @@ async function main() {
     // Local TLS. Only meaningful for docker-compose (Railway terminates
     // TLS at its edge) and only when useTls was selected — either via the
     // advanced-port-mapping flow or by default for non-localhost domains.
-    // See docs/local-ssl-notes.md.
+    // See docs/guides/local-ssl-notes.md.
     let tlsConfig = null;
     if (!isRailway) {
       const httpPort = portMapping?.ports?.HTTP_PORT ?? 80;

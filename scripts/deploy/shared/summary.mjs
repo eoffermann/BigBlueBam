@@ -97,7 +97,7 @@ export function printSummary(config) {
 
   // TLS callout — surfaces the cert source and HTTP-coexistence mode so
   // operators know whether they need to install a CA, expect a cert
-  // warning, or watch for the renewal cron entry. See docs/local-ssl-notes.md.
+  // warning, or watch for the renewal cron entry. See docs/guides/local-ssl-notes.md.
   if (config.tlsConfig) {
     const tls = config.tlsConfig;
     const sourceLabels = {

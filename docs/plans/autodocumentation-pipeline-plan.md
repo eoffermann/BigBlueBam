@@ -30,7 +30,7 @@ The goal is a fully automatic pipeline that, on demand, regenerates for every ap
 - Video or animated GIF capture. Still images only in v1.
 - Translating documentation to other languages.
 - Generating per-endpoint REST API reference. The design document already covers that.
-- Replacing the authoritative `docs/BigBlueBam_Design_Document.md`. The new docs are complementary: user and marketing facing rather than design facing.
+- Replacing the authoritative `docs/reference/BigBlueBam_Design_Document.md`. The new docs are complementary: user and marketing facing rather than design facing.
 
 ## Output Layout
 

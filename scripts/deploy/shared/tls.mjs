@@ -6,7 +6,7 @@
 // skipped from main.mjs and no certs are provisioned.
 //
 // Sharp edges deliberately handled here are catalogued in
-// docs/local-ssl-notes.md — read that file before extending or refactoring.
+// docs/guides/local-ssl-notes.md — read that file before extending or refactoring.
 //
 // Why not Node's `crypto` for self-signed: node:crypto's X509Certificate
 // is a parser, not a generator. node:forge would add a runtime dependency

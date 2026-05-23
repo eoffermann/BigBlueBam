@@ -453,7 +453,7 @@ claude mcp add --transport http bigbluebam https://YOUR_DOMAIN/mcp/ \
   --header "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For server-to-server integrations, mint a `bbam_svc_`-prefixed service-account key instead (see the Provision the internal MCP service account section below). `/mcp/health` returns a liveness JSON with no auth; see [docs/mcp-server.md](docs/mcp-server.md#endpoint-paths) for the full endpoint map.
+Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For server-to-server integrations, mint a `bbam_svc_`-prefixed service-account key instead (see the Provision the internal MCP service account section below). `/mcp/health` returns a liveness JSON with no auth; see [docs/reference/mcp-server.md](docs/reference/mcp-server.md#endpoint-paths) for the full endpoint map.
 
 ---
 
@@ -609,7 +609,7 @@ Configure providers in **Settings → AI Providers** in the Bam frontend. If no 
 
 ## Quick Start
 
-> **📖 Full deployment guide:** [docs/deployment-guide.md](docs/deployment-guide.md) — step-by-step walkthrough with interactive setup wizard, password generation, and platform selection (Docker Compose for self-hosted; Railway for managed cloud — both fully automated).
+> **📖 Full deployment guide:** [docs/guides/deployment.md](docs/guides/deployment.md) — step-by-step walkthrough with interactive setup wizard, password generation, platform selection (Docker Compose for self-hosted; Railway for managed cloud — both fully automated), and tier progression from single-machine to Kubernetes.
 
 ### Guided Setup (Recommended)
 
@@ -871,15 +871,16 @@ site/               → Marketing site (served at /)
 
 | Document | Description |
 |----------|-------------|
-| [Getting Started](docs/getting-started.md) | Setup, first run, troubleshooting |
-| [Architecture](docs/architecture.md) | System design, data flow, components |
-| [Database](docs/database.md) | ER diagrams, table descriptions, indexing |
-| [API Reference](docs/api-reference.md) | All REST endpoints with examples |
-| [MCP Server](docs/mcp-server.md) | Tools, resources, prompts, configuration |
-| [Operations](docs/operations.md) | Updates, backups, scaling, troubleshooting |
-| [Deployment Guide](docs/deployment-guide.md) | Interactive setup wizard, Docker Compose and Railway |
-| [Deployment](docs/deployment.md) | Docker, Kubernetes, scaling, backup |
-| [Development](docs/development.md) | Contributing, testing, code style |
+| [Getting Started](docs/guides/getting-started.md) | Setup, first run, troubleshooting |
+| [Deployment](docs/guides/deployment.md) | Quickstart wizard, tiers, scaling, Docker Compose + Railway |
+| [Operations](docs/guides/operations.md) | Updates, backups, maintenance, troubleshooting |
+| [Development](docs/guides/development.md) | Contributing, testing, code style, monorepo workflow |
+| [Architecture](docs/reference/architecture.md) | System design, data flow, components |
+| [Database](docs/reference/database.md) | ER diagrams, table descriptions, indexing |
+| [API Reference](docs/reference/api-reference.md) | All REST endpoints with examples |
+| [MCP Server](docs/reference/mcp-server.md) | Tools, resources, prompts, configuration |
+| [Permissions](docs/reference/permissions.md) | Permission model, roles, scoping |
+| [Agent Conventions](docs/reference/agent-conventions.md) | Rules agents must follow (visibility preflight, audit) |
 | | |
 | **Per-App Guides** | |
 | [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
