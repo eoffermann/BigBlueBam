@@ -1,4 +1,7 @@
 -- 0158_permissions_viewer_self_care.sql
+-- Client impact: viewer role gains ~12 additional permissions for personal
+--   self-care and universal utility actions. Member also re-grants any that
+--   were caught by the same misclassification. Owner/admin/guest unchanged.
 -- Why: End-to-end testing of the viewer role after 0156/0157 surfaced that
 --   the catalog generator's is_read inference is too narrow — it only flags
 --   verbs that match bare patterns (list, get, search, view, find, count,
@@ -23,9 +26,6 @@
 --   the catalog flags themselves — that would require a manifest regenerate
 --   and a separate catalog migration. The narrow fix is to grant the specific
 --   permissions to viewer directly in permission_group_defaults.
--- Client impact: viewer role gains ~12 additional permissions for personal
---   self-care and universal utility actions. Member also re-grants any that
---   were caught by the same misclassification. Owner/admin/guest unchanged.
 
 BEGIN;
 

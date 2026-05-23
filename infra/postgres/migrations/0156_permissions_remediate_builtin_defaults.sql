@@ -1,10 +1,15 @@
 -- 0156_permissions_remediate_builtin_defaults.sql
+-- Client impact: significant authorization tightening for non-SU users on routes
+--   gated by pure requireCan(...). Routes still wrapped by dualReadGate retain
+--   their legacy gate as defense-in-depth, so behavior change there is bounded.
+--   Account-level overrides (account_permissions) and detached memberships
+--   are untouched — only the live built-in group defaults change.
 -- Why: Wave A migration 0146 authored built-in role defaults that were far too
 --   permissive — member role had 1007/1019 (98.8%) permissions allowed, owner and
 --   admin had 100%. With Wave D's per-action resolver canonical (mode=on), this
 --   makes enforcement a no-op for non-SuperUser members on any route gated by
---   pure requireCan(...). See docs/wave-d-audit/SYNTHESIS_PROGRESS.md §4.6 for
---   the incident report.
+--   pure requireCan(...). See docs/history/permissions-wave-d-audit/progress-log.md
+--   §4.6 for the incident report.
 --
 --   This migration replaces all built-in group defaults with a deliberate matrix
 --   derived from the role hierarchy:
@@ -17,12 +22,7 @@
 --     - bill.invoice.finalize is admin-or-owner (not member)
 --     - agent.self.heartbeat granted at role; users.kind='agent' enforced at handler
 --
---   Detailed proposal: docs/wave-d-audit/builtin-role-defaults-proposal.md
--- Client impact: significant authorization tightening for non-SU users on routes
---   gated by pure requireCan(...). Routes still wrapped by dualReadGate retain
---   their legacy gate as defense-in-depth, so behavior change there is bounded.
---   Account-level overrides (account_permissions) and detached memberships
---   are untouched — only the live built-in group defaults change.
+--   Detailed proposal: docs/history/permissions-wave-d-audit/builtin-role-defaults-proposal.md
 
 BEGIN;
 

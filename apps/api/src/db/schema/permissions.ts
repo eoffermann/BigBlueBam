@@ -99,6 +99,30 @@ export const permissionGroupDefaults = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────
+// permission_group_defaults_baseline: factory-defaults snapshot (Wave F.1.a,
+// migration 0161). Mirrors permission_group_defaults with snapshot_at; read
+// by POST /superuser/permissions/groups/:id/reset to restore the canonical
+// defaults established by 0146/0156/0157/0158 without recomputing them.
+// ─────────────────────────────────────────────────────────────────────
+export const permissionGroupDefaultsBaseline = pgTable(
+  'permission_group_defaults_baseline',
+  {
+    group_id: uuid('group_id')
+      .notNull()
+      .references(() => permissionGroups.id, { onDelete: 'cascade' }),
+    permission_id: text('permission_id')
+      .notNull()
+      .references(() => permissions.id, { onDelete: 'cascade' }),
+    granted: boolean('granted').notNull(),
+    snapshot_at: timestamp('snapshot_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.group_id, t.permission_id] }),
+    groupIdx: index('idx_perm_group_defaults_baseline_group').on(t.group_id),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────
 // account_permissions: explicit operator overrides + auto-snapshots.
 // ─────────────────────────────────────────────────────────────────────
 //
