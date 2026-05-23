@@ -27,6 +27,14 @@
     "./markdown": {
       "types": "./markdown.ts",
       "default": "./markdown.ts"
+    },
+    "./use-can": {
+      "types": "./use-can.tsx",
+      "default": "./use-can.tsx"
+    },
+    "./permissions-context": {
+      "types": "./permissions-context.tsx",
+      "default": "./permissions-context.tsx"
     }
   },
   "dependencies": {

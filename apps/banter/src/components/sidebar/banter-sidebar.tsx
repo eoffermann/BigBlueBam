@@ -18,6 +18,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { useChannels, useCreateChannel, channelDisplayName, type Channel } from '@/hooks/use-channels';
 import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
@@ -94,7 +95,10 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
     return activeRoute.page === 'dm' && activeRoute.id === slug;
   };
 
-  const canManagePeople = user?.role === 'owner' || user?.role === 'admin' || user?.is_superuser === true;
+  // Wave E.D: gate the People sidebar entry on the per-action permission
+  // for listing org members (GET /org/members → bam.org_member.list).
+  // SuperUser bypass is already baked into the matrix server-side.
+  const canManagePeople = useCan('bam.org_member.list');
 
   return (
     <div className="flex flex-col h-full text-zinc-300">

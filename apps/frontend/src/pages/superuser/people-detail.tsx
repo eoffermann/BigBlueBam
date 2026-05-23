@@ -25,6 +25,7 @@ import { Avatar } from '@/components/common/avatar';
 import { Badge } from '@/components/common/badge';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { superuserApi } from '@/lib/api/superuser';
+import { UserPermissionsTab } from '@/components/superuser/user-permissions-tab';
 import {
   superuserUsersApi,
   type OrgRole,
@@ -42,7 +43,7 @@ interface SuperuserPeopleDetailPageProps {
   onNavigate: (path: string) => void;
 }
 
-type DetailTab = 'overview' | 'memberships' | 'projects' | 'sessions' | 'activity';
+type DetailTab = 'overview' | 'memberships' | 'projects' | 'permissions' | 'sessions' | 'activity';
 
 const ORG_ROLE_OPTIONS: { value: OrgRole; label: string }[] = [
   { value: 'owner', label: 'Owner' },
@@ -203,6 +204,7 @@ export function SuperuserPeopleDetailPage({ userId, onNavigate }: SuperuserPeopl
             </span>
           </TabButton>
           <TabButton active={tab === 'projects'} onClick={() => setTab('projects')}>Projects</TabButton>
+          <TabButton active={tab === 'permissions'} onClick={() => setTab('permissions')}>Permissions</TabButton>
           <TabButton active={tab === 'sessions'} onClick={() => setTab('sessions')}>Sessions</TabButton>
           <TabButton active={tab === 'activity'} onClick={() => setTab('activity')}>Activity</TabButton>
         </div>
@@ -218,6 +220,7 @@ export function SuperuserPeopleDetailPage({ userId, onNavigate }: SuperuserPeopl
           />
         )}
         {tab === 'projects' && <ProjectsTab userId={userId} />}
+        {tab === 'permissions' && <UserPermissionsTab userId={userId} />}
         {tab === 'sessions' && (
           <SessionsTab userId={userId} onRevokeAll={() => setConfirmRevokeAll(true)} />
         )}

@@ -7,6 +7,7 @@ import { Button } from '@/components/common/button';
 import { Input } from '@/components/common/input';
 import { Select } from '@/components/common/select';
 import { useAuthStore } from '@/stores/auth.store';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { SettingsLlmProviders } from '@/pages/settings-llm-providers';
@@ -543,7 +544,9 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgRes]);
 
-  const canEditPermissions = user?.role === 'admin' || user?.role === 'owner';
+  // Wave E.D: gate Org settings/permissions tab on the per-action permission
+  // matrix (PATCH /org → bam.org.update) instead of inline role lookup.
+  const canEditPermissions = useCan('bam.org.update');
 
   const updatePermissions = useMutation({
     mutationFn: (perms: OrgPermissions) => {

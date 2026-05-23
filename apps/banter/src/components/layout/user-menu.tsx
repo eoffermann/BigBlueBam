@@ -1,6 +1,7 @@
 import { LogOut } from 'lucide-react';
 import * as RadixDropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Avatar from '@radix-ui/react-avatar';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { bbbPost } from '@/lib/bbb-api';
 import { useAuthStore } from '@/stores/auth.store';
 import { cn, generateAvatarInitials } from '@/lib/utils';
@@ -36,8 +37,10 @@ export function UserMenu({ onNavigate, hasLocalSettings = true }: UserMenuProps)
   // present (the shared user object includes it).
   const isSuperUser =
     (user as unknown as { is_superuser?: boolean } | null)?.is_superuser === true;
-  const canSeePeople =
-    user?.role === 'owner' || user?.role === 'admin' || isSuperUser;
+  // Wave E.D: gate the People menu entry on the per-action permission
+  // for listing org members (GET /org/members → bam.org_member.list).
+  // SuperUser bypass is already baked into the matrix server-side.
+  const canSeePeople = useCan('bam.org_member.list');
 
   const handleSettings = () => {
     if (hasLocalSettings && onNavigate) {

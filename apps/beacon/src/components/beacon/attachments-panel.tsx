@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Paperclip, Upload, Loader2, Download, Trash2, File, Image as ImageIcon } from 'lucide-react';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { Button } from '@/components/common/button';
 import { useAuthStore } from '@/stores/auth.store';
 import {
@@ -31,7 +32,11 @@ export function AttachmentsPanel({ beaconId }: AttachmentsPanelProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const isAdmin = currentUser?.is_superuser || currentUser?.role === 'admin' || currentUser?.role === 'owner';
+  // Wave E.D: replace inline role/is_superuser check with the per-action
+  // permission for deleting any attachment (DELETE /beacons/:id/attachments/:aid →
+  // beacon.beacon_attachment.delete). Authors can still delete their own
+  // (canDelete below ORs in author identity); this controls cross-author delete.
+  const isAdmin = useCan('beacon.beacon_attachment.delete');
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;

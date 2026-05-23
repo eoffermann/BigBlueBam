@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Loader2, MessageSquare, Reply, Trash2 } from 'lucide-react';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { Button } from '@/components/common/button';
 import { Avatar } from '@/components/common/avatar';
 import { useAuthStore } from '@/stores/auth.store';
@@ -53,7 +54,11 @@ export function CommentsSection({ beaconId }: CommentsSectionProps) {
   const [replyBody, setReplyBody] = useState('');
 
   const tree = useMemo(() => buildTree(comments ?? []), [comments]);
-  const isAdmin = currentUser?.is_superuser || currentUser?.role === 'admin' || currentUser?.role === 'owner';
+  // Wave E.D: replace inline role/is_superuser check with the per-action
+  // permission for deleting any beacon comment (DELETE /beacons/:id/comments/:cid →
+  // beacon.beacon_comment.delete). Authors can still delete their own; this
+  // controls cross-author delete (canDelete below ORs in author identity).
+  const isAdmin = useCan('beacon.beacon_comment.delete');
 
   const handleTopLevelSubmit = () => {
     const body = topLevelBody.trim();
