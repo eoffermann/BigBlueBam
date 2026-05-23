@@ -14,6 +14,8 @@ import { SuperuserPage } from '@/pages/superuser';
 import { SuperuserPeopleListPage } from '@/pages/superuser/people-list';
 import { SuperuserPeopleDetailPage } from '@/pages/superuser/people-detail';
 import { SuperuserAgentsListPage } from '@/pages/superuser/agents-list';
+import { PermissionsGroupDetailPage } from '@/pages/superuser/permissions/group-detail';
+import { Shield, ArrowLeft } from 'lucide-react';
 import { PeoplePage } from '@/pages/people';
 import { PersonDetailPage } from '@/pages/people/detail';
 import { GuestAcceptPage } from '@/pages/guest-accept';
@@ -43,6 +45,7 @@ type Route =
   | { page: 'superuser-people' }
   | { page: 'superuser-person-detail'; userId: string }
   | { page: 'superuser-agents' }
+  | { page: 'superuser-permissions-group-detail'; groupId: string }
   | { page: 'people' }
   | { page: 'person-detail'; userId: string }
   | { page: 'guest-accept'; token: string }
@@ -101,6 +104,10 @@ function parseRoute(path: string): Route {
   }
   if (p === '/superuser/agents' || p === '/superuser/agents/') {
     return { page: 'superuser-agents' };
+  }
+  const superuserPermGroupMatch = p.match(/^\/superuser\/permissions\/groups\/([^/]+)$/);
+  if (superuserPermGroupMatch) {
+    return { page: 'superuser-permissions-group-detail', groupId: superuserPermGroupMatch[1]! };
   }
   const personDetailMatch = p.match(/^\/people\/([^/]+)$/);
   if (personDetailMatch) {
@@ -287,6 +294,10 @@ export function App() {
       return <SuperuserPeopleDetailPage userId={route.userId} onNavigate={navigate} />;
     case 'superuser-agents':
       return <SuperuserAgentsListPage onNavigate={navigate} />;
+    case 'superuser-permissions-group-detail':
+      return (
+        <SuperuserPermissionsGroupDetailLayout groupId={route.groupId} onNavigate={navigate} />
+      );
     case 'people':
       return <PeoplePage onNavigate={navigate} />;
     case 'person-detail':
@@ -303,4 +314,57 @@ export function App() {
     default:
       return <DashboardPage onNavigate={navigate} />;
   }
+}
+
+// ─── SuperUser permissions group detail layout ──────────────────────────────
+// Wraps PermissionsGroupDetailPage in the standard SuperUser console chrome
+// (back-button + SU badge header). Inline here rather than in a dedicated
+// page file because the page itself can be reused from anywhere.
+function SuperuserPermissionsGroupDetailLayout({
+  groupId,
+  onNavigate,
+}: {
+  groupId: string;
+  onNavigate: (path: string) => void;
+}) {
+  const { user } = useAuthStore();
+  useEffect(() => {
+    if (user && user.is_superuser !== true) onNavigate('/');
+  }, [user, onNavigate]);
+
+  if (!user || user.is_superuser !== true) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-zinc-50 dark:bg-zinc-950">
+        <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
+          <button
+            onClick={() => onNavigate('/superuser')}
+            className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            title="Back to SuperUser Console"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-red-100 dark:bg-red-900/30">
+            <Shield className="h-4.5 w-4.5 text-red-600 dark:text-red-400" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Permission group
+            </h1>
+            <p className="text-xs text-zinc-500">Edit per-permission defaults</p>
+          </div>
+        </div>
+      </header>
+      <main className="max-w-7xl mx-auto px-6 py-6">
+        <PermissionsGroupDetailPage groupId={groupId} onNavigate={onNavigate} />
+      </main>
+    </div>
+  );
 }

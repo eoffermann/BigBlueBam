@@ -2,6 +2,7 @@ import { LayoutDashboard, Settings, User, Plus, Shield, Users, UsersRound } from
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/hooks/use-projects';
 import { useAuthStore } from '@/stores/auth.store';
+import { useCan } from '@bigbluebam/ui/use-can';
 
 interface SidebarProps {
   currentProjectId?: string;
@@ -13,6 +14,9 @@ export function Sidebar({ currentProjectId, onNavigate, onCreateProject }: Sideb
   const { data: projectsResponse } = useProjects();
   const projects = projectsResponse?.data ?? [];
   const user = useAuthStore((s) => s.user);
+  // Wave E.D: gate the People sidebar entry on the per-action permission
+  // for listing org members (GET /org/members → bam.org_member.list).
+  const canListOrgMembers = useCan('bam.org_member.list');
 
   return (
     <aside className="flex flex-col h-full w-60 bg-sidebar text-zinc-300 border-r border-zinc-800">
@@ -95,7 +99,7 @@ export function Sidebar({ currentProjectId, onNavigate, onCreateProject }: Sideb
             All users
           </button>
         )}
-        {(user?.role === 'owner' || user?.role === 'admin' || user?.is_superuser === true) && (
+        {canListOrgMembers && (
           <button
             onClick={() => onNavigate('/people')}
             className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-sidebar-hover transition-colors"

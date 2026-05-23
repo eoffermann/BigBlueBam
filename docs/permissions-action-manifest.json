@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1083,
+    "total": 1060,
     "mcp_tools_scanned": 348,
-    "rest_routes_scanned": 809,
-    "read_permissions": 436,
-    "destructive_permissions": 103
+    "rest_routes_scanned": 770,
+    "read_permissions": 428,
+    "destructive_permissions": 106
   },
   "permissions": [
     {
@@ -400,23 +400,6 @@
       ]
     },
     {
-      "id": "bam.agent.heartbeat",
-      "app": "bam",
-      "resource": "agent",
-      "verb": "heartbeat",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /v1/agents/heartbeat",
-          "file": "agent.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "bam.agent.list",
       "app": "bam",
       "resource": "agent",
@@ -604,210 +587,6 @@
       ]
     },
     {
-      "id": "bam.auth_bootstrap.create",
-      "app": "bam",
-      "resource": "auth_bootstrap",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/bootstrap",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_change_password.create",
-      "app": "bam",
-      "resource": "auth_change_password",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/change-password",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_login.create",
-      "app": "bam",
-      "resource": "auth_login",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/login",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_logout.create",
-      "app": "bam",
-      "resource": "auth_logout",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/logout",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_me.list",
-      "app": "bam",
-      "resource": "auth_me",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /auth/me",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_me.update",
-      "app": "bam",
-      "resource": "auth_me",
-      "verb": "update",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "PATCH /auth/me",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_oauth_authorize.get",
-      "app": "bam",
-      "resource": "auth_oauth_authorize",
-      "verb": "get",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /auth/oauth/:provider/authorize",
-          "file": "oauth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_oauth_callback.create",
-      "app": "bam",
-      "resource": "auth_oauth_callback",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/oauth/:provider/callback",
-          "file": "oauth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_oauth_link.create",
-      "app": "bam",
-      "resource": "auth_oauth_link",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/oauth/:provider/link",
-          "file": "oauth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_oauth_provider.list",
-      "app": "bam",
-      "resource": "auth_oauth_provider",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /auth/oauth/providers",
-          "file": "oauth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_org.list",
-      "app": "bam",
-      "resource": "auth_org",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /auth/orgs",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_register.create",
-      "app": "bam",
-      "resource": "auth_register",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/register",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "bam.auth_service_account.create",
       "app": "bam",
       "resource": "auth_service_account",
@@ -859,40 +638,6 @@
       ]
     },
     {
-      "id": "bam.auth_switch_org.create",
-      "app": "bam",
-      "resource": "auth_switch_org",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/switch-org",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.auth_verify_email.create",
-      "app": "bam",
-      "resource": "auth_verify_email",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /auth/verify-email/:token",
-          "file": "email-verify.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "bam.beta_signup.list",
       "app": "bam",
       "resource": "beta_signup",
@@ -906,23 +651,6 @@
           "source": "rest",
           "ref": "GET /beta-signups",
           "file": "superuser.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.chat.create",
-      "app": "bam",
-      "resource": "chat",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /chat",
-          "file": "internal-llm.routes.ts"
         }
       ]
     },
@@ -974,11 +702,6 @@
           "source": "mcp",
           "ref": "add_comment",
           "file": "comment-tools.ts"
-        },
-        {
-          "source": "rest",
-          "ref": "POST /comments",
-          "file": "internal-helpdesk.routes.ts"
         }
       ]
     },
@@ -1272,9 +995,9 @@
       ]
     },
     {
-      "id": "bam.file_*.list",
+      "id": "bam.file.list",
       "app": "bam",
-      "resource": "file_*",
+      "resource": "file",
       "verb": "list",
       "is_destructive": false,
       "is_read": true,
@@ -1285,23 +1008,6 @@
           "source": "rest",
           "ref": "GET /files/*",
           "file": "upload.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.guest_accept.create",
-      "app": "bam",
-      "resource": "guest_accept",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /v1/guests/accept/:token",
-          "file": "guest.routes.ts"
         }
       ]
     },
@@ -1676,23 +1382,6 @@
           "source": "rest",
           "ref": "PATCH /llm-providers/:id",
           "file": "llm-provider.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.me_calendar.list",
-      "app": "bam",
-      "resource": "me_calendar",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /me/calendar.ics",
-          "file": "ical.routes.ts"
         }
       ]
     },
@@ -2241,9 +1930,9 @@
       ]
     },
     {
-      "id": "bam.phas.delete",
+      "id": "bam.phase.delete",
       "app": "bam",
-      "resource": "phas",
+      "resource": "phase",
       "verb": "delete",
       "is_destructive": true,
       "is_read": false,
@@ -2258,9 +1947,9 @@
       ]
     },
     {
-      "id": "bam.phas.update",
+      "id": "bam.phase.update",
       "app": "bam",
-      "resource": "phas",
+      "resource": "phase",
       "verb": "update",
       "is_destructive": false,
       "is_read": false,
@@ -2547,23 +2236,6 @@
       ]
     },
     {
-      "id": "bam.project_calendar.get",
-      "app": "bam",
-      "resource": "project_calendar",
-      "verb": "get",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /projects/:id/calendar.ics",
-          "file": "ical.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "bam.project_custom_field.create",
       "app": "bam",
       "resource": "project_custom_field",
@@ -2819,9 +2491,9 @@
       ]
     },
     {
-      "id": "bam.project_phas_reorder.create",
+      "id": "bam.project_phase_reorder.create",
       "app": "bam",
-      "resource": "project_phas_reorder",
+      "resource": "project_phase_reorder",
       "verb": "create",
       "is_destructive": false,
       "is_read": false,
@@ -2836,9 +2508,9 @@
       ]
     },
     {
-      "id": "bam.project_phas.create",
+      "id": "bam.project_phase.create",
       "app": "bam",
-      "resource": "project_phas",
+      "resource": "project_phase",
       "verb": "create",
       "is_destructive": false,
       "is_read": false,
@@ -2853,9 +2525,9 @@
       ]
     },
     {
-      "id": "bam.project_phas.get",
+      "id": "bam.project_phase.get",
       "app": "bam",
-      "resource": "project_phas",
+      "resource": "project_phase",
       "verb": "get",
       "is_destructive": false,
       "is_read": true,
@@ -3463,57 +3135,6 @@
       ]
     },
     {
-      "id": "bam.public_beta_signup.create",
-      "app": "bam",
-      "resource": "public_beta_signup",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /public/beta-signup",
-          "file": "public-config.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.public_config.list",
-      "app": "bam",
-      "resource": "public_config",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /public/config",
-          "file": "public-config.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.queue.list",
-      "app": "bam",
-      "resource": "queue",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /queue",
-          "file": "internal-helpdesk.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "bam.report.burndown",
       "app": "bam",
       "resource": "report",
@@ -3629,23 +3250,6 @@
           "source": "mcp",
           "ref": "get_workload",
           "file": "report-tools.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.root_redirect.list",
-      "app": "bam",
-      "resource": "root_redirect",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /root-redirect",
-          "file": "system-settings.routes.ts"
         }
       ]
     },
@@ -3871,6 +3475,23 @@
       ]
     },
     {
+      "id": "bam.superuser_permission_catalog.list",
+      "app": "bam",
+      "resource": "superuser_permission_catalog",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.superuser_permission_divergence_summary.list",
       "app": "bam",
       "resource": "superuser_permission_divergence_summary",
@@ -3882,8 +3503,8 @@
       "sources": [
         {
           "source": "rest",
-          "ref": "GET /superuser/permissions/divergences/summary",
-          "file": "permissions-divergences.routes.ts"
+          "ref": "hand_authored (migration 0146)",
+          "file": "permissions-admin.routes.ts"
         }
       ]
     },
@@ -3899,8 +3520,212 @@
       "sources": [
         {
           "source": "rest",
-          "ref": "GET /superuser/permissions/divergences",
-          "file": "permissions-divergences.routes.ts"
+          "ref": "hand_authored (migration 0146)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_group.create",
+      "app": "bam",
+      "resource": "superuser_permission_group",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_group.delete",
+      "app": "bam",
+      "resource": "superuser_permission_group",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_group.get",
+      "app": "bam",
+      "resource": "superuser_permission_group",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_group.list",
+      "app": "bam",
+      "resource": "superuser_permission_group",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_group.reset",
+      "app": "bam",
+      "resource": "superuser_permission_group",
+      "verb": "reset",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_group.set_defaults",
+      "app": "bam",
+      "resource": "superuser_permission_group",
+      "verb": "set_defaults",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_group.update",
+      "app": "bam",
+      "resource": "superuser_permission_group",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_user.clear_override",
+      "app": "bam",
+      "resource": "superuser_permission_user",
+      "verb": "clear_override",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_user.get",
+      "app": "bam",
+      "resource": "superuser_permission_user",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_user.reattach",
+      "app": "bam",
+      "resource": "superuser_permission_user",
+      "verb": "reattach",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_user.set_membership",
+      "app": "bam",
+      "resource": "superuser_permission_user",
+      "verb": "set_membership",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_permission_user.set_override",
+      "app": "bam",
+      "resource": "superuser_permission_user",
+      "verb": "set_override",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
         }
       ]
     },
@@ -4126,23 +3951,6 @@
       ]
     },
     {
-      "id": "bam.task_move_to_terminal_phase.create",
-      "app": "bam",
-      "resource": "task_move_to_terminal_phase",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /tasks/:id/move-to-terminal-phase",
-          "file": "internal-helpdesk.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "bam.task_template.delete",
       "app": "bam",
       "resource": "task_template",
@@ -4241,11 +4049,6 @@
           "source": "mcp",
           "ref": "create_task",
           "file": "task-tools.ts"
-        },
-        {
-          "source": "rest",
-          "ref": "POST /tasks",
-          "file": "internal-helpdesk.routes.ts"
         }
       ]
     },
@@ -4351,23 +4154,6 @@
           "source": "rest",
           "ref": "POST /tasks/:id/move",
           "file": "task.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.task.reopen",
-      "app": "bam",
-      "resource": "task",
-      "verb": "reopen",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /tasks/:id/reopen",
-          "file": "internal-helpdesk.routes.ts"
         }
       ]
     },
@@ -4842,40 +4628,6 @@
           "source": "rest",
           "ref": "POST /v1/visibility/can_access",
           "file": "visibility.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.webhook_github.create",
-      "app": "bam",
-      "resource": "webhook_github",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /webhooks/github",
-          "file": "github-webhook.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bam.webhook_slack_command.create",
-      "app": "bam",
-      "resource": "webhook_slack_command",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /webhooks/slack/command",
-          "file": "slack-webhook.routes.ts"
         }
       ]
     },
@@ -9951,9 +9703,9 @@
       ]
     },
     {
-      "id": "bill.expens_receipt.create",
+      "id": "bill.expense_receipt.create",
       "app": "bill",
-      "resource": "expens_receipt",
+      "resource": "expense_receipt",
       "verb": "create",
       "is_destructive": false,
       "is_read": false,
@@ -9968,9 +9720,9 @@
       ]
     },
     {
-      "id": "bill.expens.approve",
+      "id": "bill.expense.approve",
       "app": "bill",
-      "resource": "expens",
+      "resource": "expense",
       "verb": "approve",
       "is_destructive": false,
       "is_read": false,
@@ -9980,91 +9732,6 @@
         {
           "source": "rest",
           "ref": "POST /expenses/:id/approve",
-          "file": "expenses.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bill.expens.create",
-      "app": "bill",
-      "resource": "expens",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /expenses",
-          "file": "expenses.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bill.expens.delete",
-      "app": "bill",
-      "resource": "expens",
-      "verb": "delete",
-      "is_destructive": true,
-      "is_read": false,
-      "requires_confirmation": true,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "DELETE /expenses/:id",
-          "file": "expenses.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bill.expens.list",
-      "app": "bill",
-      "resource": "expens",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /expenses",
-          "file": "expenses.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bill.expens.reject",
-      "app": "bill",
-      "resource": "expens",
-      "verb": "reject",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /expenses/:id/reject",
-          "file": "expenses.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bill.expens.update",
-      "app": "bill",
-      "resource": "expens",
-      "verb": "update",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "PATCH /expenses/:id",
           "file": "expenses.routes.ts"
         }
       ]
@@ -10083,6 +9750,79 @@
           "source": "mcp",
           "ref": "bill_create_expense",
           "file": "bill-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "POST /expenses",
+          "file": "expenses.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.expense.delete",
+      "app": "bill",
+      "resource": "expense",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /expenses/:id",
+          "file": "expenses.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.expense.list",
+      "app": "bill",
+      "resource": "expense",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /expenses",
+          "file": "expenses.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.expense.reject",
+      "app": "bill",
+      "resource": "expense",
+      "verb": "reject",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /expenses/:id/reject",
+          "file": "expenses.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.expense.update",
+      "app": "bill",
+      "resource": "expense",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PATCH /expenses/:id",
+          "file": "expenses.routes.ts"
         }
       ]
     },
@@ -15403,40 +15143,6 @@
       ]
     },
     {
-      "id": "book.calendar_ical.create",
-      "app": "book",
-      "resource": "calendar_ical",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /calendars/:id/ical",
-          "file": "ical.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "book.calendar_ical.get",
-      "app": "book",
-      "resource": "calendar_ical",
-      "verb": "get",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /calendars/:id/ical",
-          "file": "ical.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "book.calendar.create",
       "app": "book",
       "resource": "calendar",
@@ -17152,91 +16858,6 @@
       ]
     },
     {
-      "id": "helpdesk.auth_login.create",
-      "app": "helpdesk",
-      "resource": "auth_login",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /helpdesk/auth/login",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "helpdesk.auth_logout.create",
-      "app": "helpdesk",
-      "resource": "auth_logout",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /helpdesk/auth/logout",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "helpdesk.auth_me.list",
-      "app": "helpdesk",
-      "resource": "auth_me",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /helpdesk/auth/me",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "helpdesk.auth_register.create",
-      "app": "helpdesk",
-      "resource": "auth_register",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /helpdesk/auth/register",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "helpdesk.auth_verify_email.create",
-      "app": "helpdesk",
-      "resource": "auth_verify_email",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /helpdesk/auth/verify-email",
-          "file": "auth.routes.ts"
-        }
-      ]
-    },
-    {
       "id": "helpdesk.count_by_phrase.ticket",
       "app": "helpdesk",
       "resource": "count_by_phrase",
@@ -17301,23 +16922,6 @@
           "source": "rest",
           "ref": "POST /v1/helpdesk-users/upsert",
           "file": "users.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "helpdesk.public_config.list",
-      "app": "helpdesk",
-      "resource": "public_config",
-      "verb": "list",
-      "is_destructive": false,
-      "is_read": true,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "GET /helpdesk/public/config",
-          "file": "auth.routes.ts"
         }
       ]
     },

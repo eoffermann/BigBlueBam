@@ -12,16 +12,19 @@ import { Select } from '@/components/common/select';
 import { Dialog } from '@/components/common/dialog';
 import { formatRelativeTime } from '@/lib/utils';
 import { PermissionsDivergencesPage } from './permissions-divergences';
+import { PermissionsGroupsListPage } from './permissions/groups-list';
 
 interface SuperuserPageProps {
   onNavigate: (path: string) => void;
 }
 
 type Tab = 'overview' | 'organizations' | 'platform' | 'beta-signups' | 'permissions';
+type PermissionsSubTab = 'groups' | 'users' | 'divergences';
 
 export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
   const { user } = useAuthStore();
   const [tab, setTab] = useState<Tab>('overview');
+  const [permissionsSubTab, setPermissionsSubTab] = useState<PermissionsSubTab>('groups');
 
   // Guard: only SuperUsers can see this page
   useEffect(() => {
@@ -83,7 +86,13 @@ export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
         {tab === 'organizations' && <OrganizationsTab onNavigate={onNavigate} />}
         {tab === 'platform' && <PlatformTab />}
         {tab === 'beta-signups' && <BetaSignupsTab />}
-        {tab === 'permissions' && <PermissionsDivergencesPage />}
+        {tab === 'permissions' && (
+          <PermissionsTab
+            subTab={permissionsSubTab}
+            onSubTabChange={setPermissionsSubTab}
+            onNavigate={onNavigate}
+          />
+        )}
       </main>
     </div>
   );
@@ -98,6 +107,82 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
         (active
           ? 'border-primary-600 text-primary-700 dark:text-primary-400'
           : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300')
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Permissions Tab (Wave F.2 + F.3) ────────────────────────────────────────
+// Three sub-tabs:
+//   - Groups: permission-group CRUD + per-group defaults editor (F.2)
+//   - Users: per-user effective permissions / overrides (F.3, stub until landed)
+//   - Divergences: existing Wave-B shadow-mode telemetry dashboard
+
+function PermissionsTab({
+  subTab,
+  onSubTabChange,
+  onNavigate,
+}: {
+  subTab: PermissionsSubTab;
+  onSubTabChange: (t: PermissionsSubTab) => void;
+  onNavigate: (path: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1 self-start">
+        <SubTabButton
+          active={subTab === 'groups'}
+          onClick={() => onSubTabChange('groups')}
+        >
+          Groups
+        </SubTabButton>
+        <SubTabButton
+          active={subTab === 'users'}
+          onClick={() => onSubTabChange('users')}
+        >
+          Users
+        </SubTabButton>
+        <SubTabButton
+          active={subTab === 'divergences'}
+          onClick={() => onSubTabChange('divergences')}
+        >
+          Divergences
+        </SubTabButton>
+      </div>
+
+      {subTab === 'groups' && <PermissionsGroupsListPage onNavigate={onNavigate} />}
+      {subTab === 'users' && (
+        <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            User permissions editor lands in Wave F.3. Use the SuperUser →
+            People list for now to view individual user details.
+          </p>
+        </div>
+      )}
+      {subTab === 'divergences' && <PermissionsDivergencesPage />}
+    </div>
+  );
+}
+
+function SubTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        'px-3 py-1.5 text-xs font-medium rounded-md transition-colors ' +
+        (active
+          ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300'
+          : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-300')
       }
     >
       {children}

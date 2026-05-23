@@ -114,8 +114,8 @@ class ApiClient {
     return this.request<T>('PUT', path, body);
   }
 
-  delete<T = void>(path: string): Promise<T> {
-    return this.request<T>('DELETE', path);
+  delete<T = void>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>('DELETE', path, body);
   }
 
   async upload<T>(path: string, formData: FormData): Promise<T> {

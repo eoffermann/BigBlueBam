@@ -9,6 +9,7 @@ import { CommandPalette } from '@/components/common/command-palette';
 import { SuperuserContextBanner } from '@/components/superuser-context-banner';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
 import { useAuthStore } from '@/stores/auth.store';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { useOrgSummary } from '@/hooks/use-org-summary';
 import { useProjects } from '@/hooks/use-projects';
 import { useVersion } from '@/hooks/use-version';
@@ -109,7 +110,9 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
 
   const showNoOwnerBanner =
     !!orgSummary && orgSummary.active_owner_count === 0 && !noOwnerDismissed;
-  const canManageOwners = user?.role === 'owner' || user?.role === 'admin';
+  // Wave E.D: gate "Go to People" / People sidebar entry on the per-action
+  // permission for listing org members (GET /org/members → bam.org_member.list).
+  const canManageOwners = useCan('bam.org_member.list');
 
   const { data: notificationsRes } = useQuery({
     queryKey: ['notifications'],
@@ -313,7 +316,7 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
                 <p className="text-xs text-zinc-500">{user?.email}</p>
               </div>
               <DropdownMenuItem onSelect={() => onNavigate('/settings')}>Settings</DropdownMenuItem>
-              {(user?.role === 'owner' || user?.role === 'admin' || user?.is_superuser === true) && (
+              {canManageOwners && (
                 <DropdownMenuItem onSelect={() => onNavigate('/people')}>People</DropdownMenuItem>
               )}
               {user?.is_superuser === true && (
