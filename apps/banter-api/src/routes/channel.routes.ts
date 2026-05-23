@@ -9,7 +9,7 @@ import {
   banterSettings,
   users,
 } from '../db/schema/index.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireChannelMember, requireChannelAdmin, requireChannelOwner } from '../middleware/channel-auth.js';
 import { broadcastToOrg, broadcastToChannel, broadcastToUser } from '../services/realtime.js';
 import { getEffectiveBanterPermissions } from '../services/org-permissions-bridge.js';
@@ -259,7 +259,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
   // POST /v1/channels — create channel
   fastify.post(
     '/v1/channels',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.channel.create'), requireScope('read_write')] },
     async (request, reply) => {
       const user = request.user!;
       const body = createChannelSchema.parse(request.body);
@@ -753,7 +753,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
   // POST /v1/channels/:id/join — join public channel
   fastify.post(
     '/v1/channels/:id/join',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.channel.join'), requireScope('read_write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;

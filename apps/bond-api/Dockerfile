@@ -12,6 +12,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/logging/package.json ./packages/logging/
 COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/db-stubs/package.json ./packages/db-stubs/
+COPY packages/permissions/package.json ./packages/permissions/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -24,6 +25,7 @@ COPY packages/shared/tsconfig.json packages/shared/tsup.config.ts ./packages/sha
 COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/bond-api/src ./apps/bond-api/src
 COPY apps/bond-api/tsconfig.json apps/bond-api/tsup.config.ts ./apps/bond-api/
 
@@ -31,6 +33,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/logging build \
  && pnpm --filter @bigbluebam/service-health build \
  && pnpm --filter @bigbluebam/db-stubs build \
+ && pnpm --filter @bigbluebam/permissions build \
  && pnpm --filter @bigbluebam/bond-api build
 
 # Create a deploy-ready directory with all prod deps
@@ -45,6 +48,7 @@ COPY packages/shared/ ./packages/shared/
 COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/bond-api/ ./apps/bond-api/
 
 WORKDIR /app/apps/bond-api

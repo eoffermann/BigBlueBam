@@ -7,7 +7,7 @@ import {
   banterUserGroupMemberships,
   users,
 } from '../db/schema/index.js';
-import { requireAuth, requireRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { broadcastToOrg } from '../services/realtime.js';
 
 const createUserGroupSchema = z.object({
@@ -36,7 +36,13 @@ const addMembersSchema = z.object({
 });
 
 export default async function userGroupRoutes(fastify: FastifyInstance) {
-  const adminPreHandler = [requireAuth, requireRole(['owner', 'admin']), requireScope('admin')];
+  // Wave D Phase 3: factory wraps the org admin/owner role gate with the
+  // dual-read resolver for each route's specific permission_id.
+  const adminPreHandler = (permission: string) => [
+    requireAuth,
+    fastify.requireCan(permission),
+    requireScope('admin'),
+  ];
 
   // GET /v1/user-groups
   fastify.get(
@@ -58,7 +64,7 @@ export default async function userGroupRoutes(fastify: FastifyInstance) {
   // POST /v1/user-groups
   fastify.post(
     '/v1/user-groups',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.user_group.create') },
     async (request, reply) => {
       const user = request.user!;
       const body = createUserGroupSchema.parse(request.body);
@@ -141,7 +147,7 @@ export default async function userGroupRoutes(fastify: FastifyInstance) {
   // PATCH /v1/user-groups/:id
   fastify.patch(
     '/v1/user-groups/:id',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.user_group.update') },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -189,7 +195,7 @@ export default async function userGroupRoutes(fastify: FastifyInstance) {
   // DELETE /v1/user-groups/:id
   fastify.delete(
     '/v1/user-groups/:id',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.user_group.delete') },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -223,7 +229,7 @@ export default async function userGroupRoutes(fastify: FastifyInstance) {
   // POST /v1/user-groups/:id/members
   fastify.post(
     '/v1/user-groups/:id/members',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.user_group_member.create') },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -314,7 +320,7 @@ export default async function userGroupRoutes(fastify: FastifyInstance) {
   // DELETE /v1/user-groups/:id/members/:userId
   fastify.delete(
     '/v1/user-groups/:id/members/:userId',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.user_group_member.delete') },
     async (request, reply) => {
       const { id, userId } = request.params as { id: string; userId: string };
       const user = request.user!;

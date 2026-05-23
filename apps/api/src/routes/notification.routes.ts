@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { notifications } from '../db/schema/notifications.js';
 import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function notificationRoutes(fastify: FastifyInstance) {
   fastify.get<{
@@ -17,7 +18,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     };
   }>(
     '/me/notifications',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.me_notification.list')] },
     async (request, reply) => {
       const limit = Math.min(request.query.limit ? parseInt(request.query.limit, 10) : 50, 200);
       const conditions = [eq(notifications.user_id, request.user!.id)];
@@ -98,7 +99,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/me/notifications/mark-read',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.me_notification_mark_read.create')] },
     async (request, reply) => {
       const schema = z.union([
         z.object({ notification_ids: z.array(z.string().uuid()) }),
@@ -136,7 +137,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // posting {all: true} to /mark-read.
   fastify.post(
     '/me/notifications/mark-all-read',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.me_notification_mark_all_read.create')] },
     async (request, reply) => {
       await db
         .update(notifications)
@@ -155,7 +156,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // frontend bell wants to POST to when the user clicks a row.
   fastify.post<{ Params: { id: string } }>(
     '/me/notifications/:id/read',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.me_notification_read.create')] },
     async (request, reply) => {
       await db
         .update(notifications)

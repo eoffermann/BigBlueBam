@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as policyService from '../services/policy.service.js';
 
 const setPolicySchema = z.object({
@@ -22,7 +22,7 @@ export default async function policyRoutes(fastify: FastifyInstance) {
   // GET /policies — returns the effective policy for the requester's scope
   fastify.get(
     '/policies',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('beacon.policy.list')] },
     async (request, reply) => {
       const query = resolveQuerySchema.parse(request.query);
       const policy = await policyService.resolveExpiryPolicy(
@@ -36,7 +36,7 @@ export default async function policyRoutes(fastify: FastifyInstance) {
   // PUT /policies — set or update a policy (Admin+ only)
   fastify.put(
     '/policies',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('beacon.policy.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = setPolicySchema.parse(request.body);
 
@@ -72,7 +72,7 @@ export default async function policyRoutes(fastify: FastifyInstance) {
   // GET /policies/resolve — preview resolved policy for a project
   fastify.get(
     '/policies/resolve',
-    { preHandler: [requireAuth, requireMinOrgRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('beacon.policy_resolve.list')] },
     async (request, reply) => {
       const query = resolveQuerySchema.parse(request.query);
       const policy = await policyService.resolveExpiryPolicy(

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 
 /**
@@ -47,7 +48,7 @@ import { publishBoltEvent } from '../lib/bolt-events.js';
 export default async function approvalRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/v1/approvals',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.approval.create')] },
     async (request, reply) => {
       const schema = z.object({
         approver_id: z.string().uuid(),

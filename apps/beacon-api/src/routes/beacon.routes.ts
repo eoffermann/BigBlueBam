@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole, requireBeaconEditAccess, requireBeaconReadAccess } from '../middleware/authorize.js';
+import { requireBeaconEditAccess, requireBeaconReadAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as beaconService from '../services/beacon.service.js';
 import * as entryUpsertService from '../services/entry-upsert.service.js';
 import * as verificationService from '../services/verification.service.js';
@@ -64,7 +65,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
     '/entries/upsert',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('beacon.entry_upsert.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = upsertEntrySchema.parse(request.body);
@@ -111,7 +112,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
     '/beacons',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('beacon.beacon.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createBeaconSchema.parse(request.body);
@@ -141,7 +142,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
   // GET /beacons/stats — Org-wide beacon statistics
   fastify.get(
     '/beacons/stats',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('beacon.beacon_stat.list')] },
     async (request, reply) => {
       const stats = await beaconService.getStats(request.user!.org_id);
       return reply.send({ data: stats });
@@ -151,7 +152,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
   // GET /beacons — List beacons with filters
   fastify.get(
     '/beacons',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('beacon.beacon.list')] },
     async (request, reply) => {
       const query = listBeaconsQuerySchema.parse(request.query);
       const filters: beaconService.ListBeaconsFilters = {
@@ -196,6 +197,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
           (request.params as { id?: string }).id = (request.params as { slug: string }).slug;
         },
         requireBeaconReadAccess(),
+        shadowOnly('beacon.beacon_by_slug.get'),
       ],
     },
     async (request, reply) => {
@@ -206,7 +208,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
   // GET /beacons/:id — Get a single beacon by UUID or slug
   fastify.get<{ Params: { id: string } }>(
     '/beacons/:id',
-    { preHandler: [requireAuth, requireBeaconReadAccess()] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon.get')] },
     async (request, reply) => {
       // beacon already loaded and attached by middleware
       return reply.send({ data: (request as any).beacon });
@@ -216,7 +218,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
   // PUT /beacons/:id — Update beacon (creates new version)
   fastify.put<{ Params: { id: string } }>(
     '/beacons/:id',
-    { preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateBeaconSchema.parse(request.body);
       const beacon = await beaconService.updateBeacon(
@@ -256,7 +258,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
   // DELETE /beacons/:id — Retire a beacon (soft delete)
   fastify.delete<{ Params: { id: string } }>(
     '/beacons/:id',
-    { preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const beacon = await beaconService.retireBeacon(
         request.params.id,
@@ -289,7 +291,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
   // POST /beacons/:id/publish — Draft → Active
   fastify.post<{ Params: { id: string } }>(
     '/beacons/:id/publish',
-    { preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon.publish'), requireScope('read_write')] },
     async (request, reply) => {
       const beacon = await beaconService.publishBeacon(
         request.params.id,
@@ -316,7 +318,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
   // POST /beacons/:id/restore — Archived → Active
   fastify.post<{ Params: { id: string } }>(
     '/beacons/:id/restore',
-    { preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon.restore'), requireScope('read_write')] },
     async (request, reply) => {
       const beacon = await beaconService.restoreBeacon(
         request.params.id,
@@ -337,7 +339,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/beacons/:id/verify',
-    { preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon.verify'), requireScope('read_write')] },
     async (request, reply) => {
       const data = verifySchema.parse(request.body);
       const result = await verificationService.verifyBeacon(
@@ -386,7 +388,7 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/beacons/:id/challenge',
-    { preHandler: [requireAuth, requireBeaconReadAccess(), requireMinOrgRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), fastify.requireCan('beacon.beacon_challenge.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = challengeSchema.parse(request.body ?? {});
       const beacon = await transitionBeacon(

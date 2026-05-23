@@ -5,10 +5,9 @@ import { randomBytes } from 'crypto';
 import argon2 from 'argon2';
 import { db } from '../db/index.js';
 import { apiKeys } from '../db/schema/api-keys.js';
-import { requireAuth, requireMinRole } from '../plugins/auth.js';
+import { requireAuth } from '../plugins/auth.js';
 import * as orgService from '../services/org.service.js';
 import { getOrgPermissions, isOrgPrivileged } from '../services/org-permissions.js';
-import { dualReadGate } from '../middleware/dual-read.js';
 
 // Wave 1.A: rotation grace period in milliseconds (7 days by default).
 // Override with API_KEY_ROTATION_GRACE_MS for shorter windows in tests.
@@ -23,7 +22,7 @@ function getRotationGraceMs(): number {
 export default async function apiKeyRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/auth/api-keys',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.auth_api_key.list')] },
     async (request, reply) => {
       const result = await db
         .select({
@@ -52,7 +51,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/auth/api-keys',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.auth_api_key.create' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.auth_api_key.create')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(255),
@@ -170,7 +169,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
   // on the new key points at the predecessor so we can clean up later.
   fastify.post<{ Params: { id: string } }>(
     '/auth/api-keys/:id/rotate',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.auth_api_key.rotate' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.auth_api_key.rotate')] },
     async (request, reply) => {
       const [existing] = await db
         .select()
@@ -261,7 +260,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/auth/api-keys/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.auth_api_key.delete' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.auth_api_key.delete')] },
     async (request, reply) => {
       // Ensure the key belongs to the current user
       const [existing] = await db

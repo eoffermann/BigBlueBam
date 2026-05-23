@@ -7,7 +7,7 @@ import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { resolve, can } from './resolver.js';
-import { PermissionsCache, CACHE_KEYS, DEFAULT_TTL_SECONDS } from './cache.js';
+import { PermissionsCache, CACHE_KEYS, DEFAULT_TTL_SECONDS, INVALIDATION_CHANNELS } from './cache.js';
 import type {
   AccountGroupMembership,
   AccountPermissionRow,
@@ -25,6 +25,7 @@ export {
   PermissionsCache,
   CACHE_KEYS,
   DEFAULT_TTL_SECONDS,
+  INVALIDATION_CHANNELS,
 };
 export type {
   AccountGroupMembership,
@@ -121,7 +122,7 @@ export const permissionsPlugin = fp<PermissionsPluginOptions>(
           // return. The legacy gate is canonical at this stage.
           if (!ctx) {
             if (opts.mode === 'on') {
-              reply.code(401).send({
+              return reply.code(401).send({
                 error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' },
               });
             }
@@ -148,14 +149,16 @@ export const permissionsPlugin = fp<PermissionsPluginOptions>(
 
           // mode === 'on'
           if (result.decision === 'deny') {
-            reply.code(403).send({
+            // Return the reply so Fastify knows the response is done; otherwise
+            // a stray FST_ERR_REP_ALREADY_SENT warning fires when the route's
+            // own handler runs after this preHandler.
+            return reply.code(403).send({
               error: {
                 code: 'PERMISSION_DENIED',
                 message: `Permission denied: ${permissionId}`,
                 details: [{ permission_id: permissionId, reason: result.reason }],
               },
             });
-            return;
           }
         },
     );
@@ -191,4 +194,148 @@ declare module 'fastify' {
       scope?: PermissionScope,
     ): Promise<boolean>;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Satellite plugin: HTTP-backed requireCan
+// ─────────────────────────────────────────────────────────────────────
+//
+// Wave D Phase 3. Satellite apis (banter, bond, etc.) don't carry their
+// own permissions DB schemas; instead they POST to apps/api's
+// /internal/permissions/dual-read endpoint, which loads the context,
+// runs the resolver, and writes the divergence row.
+//
+// Mirrors the MCP wrapper pattern from apps/mcp-server/src/lib/register
+// -tool.ts:checkPermissionViaResolver — same endpoint, same internal-
+// secret auth, same pass-through-on-error semantics.
+
+export interface HttpPermissionsPluginOptions {
+  mode: EnforcementMode;
+  /** apps/api internal URL, e.g. 'http://api:4000'. */
+  apiInternalUrl: string;
+  /** Shared INTERNAL_SERVICE_SECRET. */
+  internalSecret: string;
+  /** Pull `user_id` and (optional) `org_id` out of the request. */
+  getCaller: (request: FastifyRequest) => { user_id: string | null; org_id?: string | null };
+  /** Optional: extract project_id for project-scoped checks. */
+  getProjectId?: (request: FastifyRequest) => string | null;
+}
+
+export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
+  async (fastify: FastifyInstance, opts) => {
+    if (opts.mode === 'off') {
+      fastify.decorate('requireCan', (_permissionId: string) => {
+        return async (_request: FastifyRequest, _reply: FastifyReply) => {
+          // no-op
+        };
+      });
+      fastify.decorate('canResolve', async () => true);
+      return;
+    }
+
+    async function callResolver(
+      userId: string,
+      permissionId: string,
+      scope: { org_id: string | null; project_id: string | null },
+      logger: { warn: (obj: object, msg: string) => void },
+    ): Promise<'allow' | 'deny' | 'unknown'> {
+      try {
+        const res = await fetch(
+          opts.apiInternalUrl.replace(/\/$/, '') + '/internal/permissions/dual-read',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Secret': opts.internalSecret,
+            },
+            body: JSON.stringify({
+              user_id: userId,
+              permission_id: permissionId,
+              agent_policy_decision: 'allow',
+              scope,
+            }),
+          },
+        );
+        if (!res.ok) return 'unknown';
+        const json = (await res.json()) as { data?: { decision?: string } };
+        const d = json?.data?.decision;
+        if (d === 'allow' || d === 'deny') return d;
+        return 'unknown';
+      } catch (err) {
+        logger.warn({ err, permissionId }, 'httpPermissionsPlugin: resolver POST failed; pass-through');
+        return 'unknown';
+      }
+    }
+
+    fastify.decorate(
+      'requireCan',
+      (permissionId: string) =>
+        async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+          const caller = opts.getCaller(request);
+          // Unauthenticated → can't resolve. In 'on' mode the legacy
+          // requireAuth gate should have already rejected; if it didn't,
+          // fail closed.
+          if (!caller.user_id) {
+            if (opts.mode === 'on') {
+              return reply.code(401).send({
+                error: { code: 'UNAUTHENTICATED', message: 'Authentication required.' },
+              });
+            }
+            return;
+          }
+          const scope = {
+            org_id: caller.org_id ?? null,
+            project_id: opts.getProjectId ? opts.getProjectId(request) : null,
+          };
+          const decision = await callResolver(caller.user_id, permissionId, scope, request.log as { warn: (obj: object, msg: string) => void });
+          if (opts.mode === 'warn') return; // resolver call already recorded divergence
+          if (decision === 'deny') {
+            // Return the reply so Fastify knows the response is done; otherwise
+            // a stray FST_ERR_REP_ALREADY_SENT warning fires when the route's
+            // own handler runs after this preHandler.
+            return reply.code(403).send({
+              error: {
+                code: 'PERMISSION_DENIED',
+                message: `Permission denied: ${permissionId}`,
+                details: [{ permission_id: permissionId }],
+              },
+            });
+          }
+        },
+    );
+
+    fastify.decorate(
+      'canResolve',
+      async (
+        _request: FastifyRequest,
+        _permissionId: string,
+        _scope?: PermissionScope,
+      ): Promise<boolean> => {
+        // The HTTP plugin doesn't expose a synchronous probe today. Callers
+        // that need this can either issue a full requireCan check or query
+        // the api directly. For Wave D satellites this isn't on a hot path.
+        return true;
+      },
+    );
+  },
+  {
+    name: '@bigbluebam/permissions:http',
+    fastify: '5.x',
+  },
+);
+
+/** Telemetry-only wrapper for routes that had no legacy gate.
+ *  Wave E.E note: dualReadGate has been removed — Waves E.A/E.B replaced
+ *  every call site with bare `fastify.requireCan(...)`. */
+export function shadowOnly(permission: string): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  return async function shadowHandler(request: FastifyRequest, reply: FastifyReply) {
+    request.legacyPermissionDecision = 'allow';
+    const fi = request.server as FastifyInstance;
+    if (typeof fi.requireCan !== 'function') return;
+    try {
+      await fi.requireCan(permission)(request, reply);
+    } catch (err) {
+      request.log.warn({ err, permission }, 'shadowOnly: resolver threw');
+    }
+  };
 }

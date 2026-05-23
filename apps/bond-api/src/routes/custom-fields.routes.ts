@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as customFieldService from '../services/custom-field.service.js';
 
 // ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ export default async function customFieldRoutes(fastify: FastifyInstance) {
     '/custom-field-definitions',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bond.custom_field_definition.create'), requireScope('admin')],
     },
     async (request, reply) => {
       const body = createFieldSchema.parse(request.body);
@@ -94,7 +94,7 @@ export default async function customFieldRoutes(fastify: FastifyInstance) {
   // PATCH /custom-field-definitions/:id — Update a custom field definition
   fastify.patch<{ Params: { id: string } }>(
     '/custom-field-definitions/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.custom_field_definition.update'), requireScope('admin')] },
     async (request, reply) => {
       const body = updateFieldSchema.parse(request.body);
       const field = await customFieldService.updateCustomFieldDefinition(
@@ -109,7 +109,7 @@ export default async function customFieldRoutes(fastify: FastifyInstance) {
   // DELETE /custom-field-definitions/:id — Delete a custom field definition
   fastify.delete<{ Params: { id: string } }>(
     '/custom-field-definitions/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.custom_field_definition.delete'), requireScope('admin')] },
     async (request, reply) => {
       await customFieldService.deleteCustomFieldDefinition(
         request.params.id,

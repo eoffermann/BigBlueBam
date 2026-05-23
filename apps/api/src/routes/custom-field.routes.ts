@@ -3,14 +3,14 @@ import { eq, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { customFieldDefinitions } from '../db/schema/custom-fields.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
-import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function customFieldRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/custom-fields',
-    { preHandler: [requireAuth, requireProjectAccess()] },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_custom_field.get')] },
     async (request, reply) => {
       const result = await db
         .select()
@@ -24,7 +24,7 @@ export default async function customFieldRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/custom-fields',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_custom_field.create' }), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_custom_field.create'), requireScope('read_write')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(255),
@@ -55,7 +55,7 @@ export default async function customFieldRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/custom-fields/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.custom_field.update' }), requireScope('read_write'), requireProjectAccessForEntity('custom_field')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.custom_field.update'), requireScope('read_write'), requireProjectAccessForEntity('custom_field')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(255).optional(),
@@ -98,7 +98,7 @@ export default async function customFieldRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/custom-fields/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.custom_field.delete' }), requireScope('read_write'), requireProjectAccessForEntity('custom_field')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.custom_field.delete'), requireScope('read_write'), requireProjectAccessForEntity('custom_field')] },
     async (request, reply) => {
       const [deleted] = await db
         .delete(customFieldDefinitions)

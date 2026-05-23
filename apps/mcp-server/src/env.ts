@@ -28,6 +28,13 @@ const envSchema = z.object({
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   MCP_AUTH_REQUIRED: z.coerce.boolean().default(true),
   MCP_RATE_LIMIT_RPM: z.coerce.number().int().positive().default(120),
+  // Wave D Phase 2: per-action permissions enforcement. Mirrors the api's
+  // BBB_PERMISSIONS_ENFORCE setting. 'off' = no resolver call from MCP;
+  // 'warn' = call resolver, record divergence, never block; 'on' = call
+  // resolver, deny tool invocation on resolver-deny. The ALWAYS_PERMITTED
+  // core tools (get_server_info, get_me, agent_heartbeat) bypass this in
+  // all three modes — same shape as the §15 agent_policies gate.
+  BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('warn'),
   // Wave 0.2: shared secret for the internal POST /tools/call HTTP route.
   // Must match INTERNAL_SERVICE_SECRET on the calling services (bolt-api,
   // worker, api). Absent, empty, or short means /tools/call returns 503.

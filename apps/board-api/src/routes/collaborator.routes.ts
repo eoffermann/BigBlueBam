@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBoardAccess, requireBoardEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { db } from '../db/index.js';
 import { boardCollaborators } from '../db/schema/index.js';
 import * as collaboratorService from '../services/collaborator.service.js';
@@ -62,7 +63,7 @@ export default async function collaboratorRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/collaborators - List collaborators
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/collaborators',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_collaborator.get')] },
     async (request, reply) => {
       const collaborators = await collaboratorService.listCollaborators(
         (request as any).board.id,
@@ -74,7 +75,7 @@ export default async function collaboratorRoutes(fastify: FastifyInstance) {
   // POST /boards/:id/collaborators - Add collaborator
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/collaborators',
-    { preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_collaborator.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = addCollaboratorSchema.parse(request.body);
       const collab = await collaboratorService.addCollaborator(
@@ -89,7 +90,7 @@ export default async function collaboratorRoutes(fastify: FastifyInstance) {
   // PATCH /collaborators/:collabId - Update collaborator permission
   fastify.patch<{ Params: { collabId: string } }>(
     '/collaborators/:collabId',
-    { preHandler: [requireAuth, resolveCollabBoard, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, resolveCollabBoard, requireBoardEditAccess(), shadowOnly('board.collaborator.update'), requireScope('read_write')] },
     async (request, reply) => {
       const { collabId } = request.params;
       const data = updateCollaboratorSchema.parse(request.body);
@@ -105,7 +106,7 @@ export default async function collaboratorRoutes(fastify: FastifyInstance) {
   // DELETE /collaborators/:collabId - Remove collaborator
   fastify.delete<{ Params: { collabId: string } }>(
     '/collaborators/:collabId',
-    { preHandler: [requireAuth, resolveCollabBoard, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, resolveCollabBoard, requireBoardEditAccess(), shadowOnly('board.collaborator.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const { collabId } = request.params;
       await collaboratorService.deleteCollaborator(collabId, request.user!.org_id);

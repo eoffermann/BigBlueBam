@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
   DEDUPE_DECISION_VALUES,
   listPending,
@@ -46,7 +47,7 @@ export default async function dedupeDecisionsRoutes(fastify: FastifyInstance) {
     '/v1/dedupe-decisions',
     {
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireScope('read_write')],
+      preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.dedupe_decision.create')],
     },
     async (request, reply) => {
       const parsed = recordSchema.safeParse(request.body);
@@ -99,7 +100,7 @@ export default async function dedupeDecisionsRoutes(fastify: FastifyInstance) {
     '/v1/dedupe-decisions/pending',
     {
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireScope('read')],
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.dedupe_decision_pending.list')],
     },
     async (request, reply) => {
       const parsed = listPendingQuerySchema.safeParse(request.query);

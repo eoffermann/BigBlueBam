@@ -4,9 +4,8 @@ import { createProjectSchema, updateProjectSchema, addProjectMemberSchema } from
 import * as projectService from '../services/project.service.js';
 import * as orgService from '../services/org.service.js';
 import { checkOrgPermission, isOrgPrivileged } from '../services/org-permissions.js';
-import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
-import { requireProjectRole } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { cacheGetOrSet, cacheInvalidate, CACHE_KEYS } from '../lib/cache.js';
 
 const USER_PROJECTS_TTL_SECONDS = 30;
@@ -31,7 +30,7 @@ function userProjectsKey(userId: string, orgId: string): string {
 }
 
 export default async function projectRoutes(fastify: FastifyInstance) {
-  fastify.get('/projects', { preHandler: [requireAuth] }, async (request, reply) => {
+  fastify.get('/projects', { preHandler: [requireAuth, shadowOnly('bam.project.list')] }, async (request, reply) => {
     // SuperUsers see every project in the org; skip caching for them so
     // they don't share a key space with regular members whose views may
     // legitimately differ.
@@ -59,12 +58,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        // Wave B dual-read sample: legacy `requireMinRole('member')` stays
-        // authoritative; the new resolver runs alongside under permission
-        // `bam.project.create` and divergences land in
-        // permissions_divergence_log. Wave C will replace this with bare
-        // `requireCan('bam.project.create')`.
-        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project.create' }),
+        fastify.requireCan('bam.project.create'),
         requireScope('read_write'),
       ],
     },
@@ -101,7 +95,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.project.get')] },
     async (request, reply) => {
       const project = await projectService.getProject(request.params.id);
       if (!project) {
@@ -138,7 +132,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/projects/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project.update' }), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project.update'), requireScope('read_write')] },
     async (request, reply) => {
       // Check admin role
       if (!request.user!.is_superuser) {
@@ -183,7 +177,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
       preHandler: [
         requireAuth,
         // Wave B dual-read sample (destructive verb, project scope).
-        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project.delete' }),
+        fastify.requireCan('bam.project.delete'),
         requireScope('read_write'),
       ],
     },
@@ -249,7 +243,7 @@ export default async function projectRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/members',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.project_member.get')] },
     async (request, reply) => {
       if (!request.user!.is_superuser) {
         const membership = await projectService.getProjectMembership(
@@ -278,12 +272,8 @@ export default async function projectRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        requireMinRole('member'),
         requireScope('read_write'),
-        // Wave B dual-read sample (project-scoped role gate). The legacy
-        // requireProjectRole('admin') runs canonically; the resolver
-        // shadows under bam.project_member.create at project scope.
-        dualReadGate({ legacy: requireProjectRole('admin'), permission: 'bam.project_member.create' }),
+        fastify.requireCan('bam.project_member.create'),
       ],
     },
     async (request, reply) => {

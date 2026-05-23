@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { agentProposals } from '../db/schema/agent-proposals.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 
 /**
@@ -68,7 +69,7 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post(
     '/v1/proposals',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.proposal.create')] },
     async (request, reply) => {
       const parsed = createSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -156,7 +157,7 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
     };
   }>(
     '/v1/proposals',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.proposal.list')] },
     async (request, reply) => {
       const user = request.user!;
       const isOrgAdmin = user.role === 'owner' || user.role === 'admin' || user.is_superuser;
@@ -229,7 +230,7 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
     Params: { id: string };
   }>(
     '/v1/proposals/:id/decide',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.proposal_decide.create')] },
     async (request, reply) => {
       const user = request.user!;
       const isOrgAdmin = user.role === 'owner' || user.role === 'admin' || user.is_superuser;

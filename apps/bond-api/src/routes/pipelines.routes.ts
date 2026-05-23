@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as pipelineService from '../services/pipeline.service.js';
 
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ export default async function pipelineRoutes(fastify: FastifyInstance) {
     '/pipelines',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bond.pipeline.create'), requireScope('admin')],
     },
     async (request, reply) => {
       const body = createPipelineSchema.parse(request.body);
@@ -86,7 +86,7 @@ export default async function pipelineRoutes(fastify: FastifyInstance) {
   // PATCH /pipelines/:id — Update pipeline
   fastify.patch<{ Params: { id: string } }>(
     '/pipelines/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.pipeline.update'), requireScope('admin')] },
     async (request, reply) => {
       const body = updatePipelineSchema.parse(request.body);
       const pipeline = await pipelineService.updatePipeline(
@@ -101,7 +101,7 @@ export default async function pipelineRoutes(fastify: FastifyInstance) {
   // DELETE /pipelines/:id — Delete pipeline
   fastify.delete<{ Params: { id: string } }>(
     '/pipelines/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.pipeline.delete'), requireScope('admin')] },
     async (request, reply) => {
       await pipelineService.deletePipeline(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -124,7 +124,7 @@ export default async function pipelineRoutes(fastify: FastifyInstance) {
   // POST /pipelines/:id/stages — Create stage
   fastify.post<{ Params: { id: string } }>(
     '/pipelines/:id/stages',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.pipeline_stage.create'), requireScope('admin')] },
     async (request, reply) => {
       const body = createStageSchema.parse(request.body);
       const stage = await pipelineService.createStage(
@@ -139,7 +139,7 @@ export default async function pipelineRoutes(fastify: FastifyInstance) {
   // PATCH /pipelines/:id/stages/:stageId — Update stage
   fastify.patch<{ Params: { id: string; stageId: string } }>(
     '/pipelines/:id/stages/:stageId',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.pipeline_stage.update'), requireScope('admin')] },
     async (request, reply) => {
       const body = updateStageSchema.parse(request.body);
       const stage = await pipelineService.updateStage(
@@ -155,7 +155,7 @@ export default async function pipelineRoutes(fastify: FastifyInstance) {
   // DELETE /pipelines/:id/stages/:stageId — Delete stage
   fastify.delete<{ Params: { id: string; stageId: string } }>(
     '/pipelines/:id/stages/:stageId',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.pipeline_stage.delete'), requireScope('admin')] },
     async (request, reply) => {
       await pipelineService.deleteStage(
         request.params.id,
@@ -169,7 +169,7 @@ export default async function pipelineRoutes(fastify: FastifyInstance) {
   // POST /pipelines/:id/stages/reorder — Reorder stages
   fastify.post<{ Params: { id: string } }>(
     '/pipelines/:id/stages/reorder',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.pipeline_stage_reorder.create'), requireScope('admin')] },
     async (request, reply) => {
       const body = reorderStagesSchema.parse(request.body);
       const stages = await pipelineService.reorderStages(

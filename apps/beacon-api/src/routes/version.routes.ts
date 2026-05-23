@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../plugins/auth.js';
 import { requireBeaconReadAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as versionService from '../services/version.service.js';
 
 export default async function versionRoutes(fastify: FastifyInstance) {
   // GET /beacons/:id/versions — List version history
   fastify.get<{ Params: { id: string } }>(
     '/beacons/:id/versions',
-    { preHandler: [requireAuth, requireBeaconReadAccess()] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_version.get')] },
     async (request, reply) => {
       const beacon = (request as any).beacon;
       const versions = await versionService.listVersions(beacon.id);
@@ -18,7 +19,7 @@ export default async function versionRoutes(fastify: FastifyInstance) {
   // GET /beacons/:id/versions/:v — Get a specific version
   fastify.get<{ Params: { id: string; v: string } }>(
     '/beacons/:id/versions/:v',
-    { preHandler: [requireAuth, requireBeaconReadAccess()] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_version.get')] },
     async (request, reply) => {
       const beacon = (request as any).beacon;
       const versionNumber = parseInt(request.params.v, 10);

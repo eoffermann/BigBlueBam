@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
   configureWebhook,
   listDeliveries,
@@ -45,7 +46,7 @@ export default async function agentWebhooksRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { runner_user_id: string } }>(
     '/v1/agent-runners/:runner_user_id/webhook',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.agent_runner_webhook.create')] },
     async (request, reply) => {
       const parsed = configureBodySchema.safeParse(request.body);
       if (!parsed.success) {
@@ -105,7 +106,7 @@ export default async function agentWebhooksRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { runner_user_id: string } }>(
     '/v1/agent-runners/:runner_user_id/webhook/rotate',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.agent_runner_webhook.rotate')] },
     async (request, reply) => {
       const redis = (fastify as unknown as { redis?: import('ioredis').Redis }).redis ?? null;
       const result = await rotateWebhookSecret(
@@ -145,7 +146,7 @@ export default async function agentWebhooksRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.get(
     '/v1/agent-webhook-deliveries',
-    { preHandler: [requireAuth, requireScope('read')] },
+    { preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.agent_webhook_delivery.list')] },
     async (request, reply) => {
       const parsed = listQuerySchema.safeParse(request.query);
       if (!parsed.success) {
@@ -175,7 +176,7 @@ export default async function agentWebhooksRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { delivery_id: string } }>(
     '/v1/agent-webhook-deliveries/:delivery_id/redeliver',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.agent_webhook_delivery.redeliver')] },
     async (request, reply) => {
       // Enqueue via BullMQ. We construct a short-lived queue here rather
       // than caching a module-level instance because agent webhook volume

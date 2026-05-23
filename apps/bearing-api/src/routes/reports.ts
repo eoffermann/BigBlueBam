@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as reportGenerator from '../services/report-generator.js';
 import * as goalService from '../services/goal.service.js';
 import * as krService from '../services/key-result.service.js';
@@ -29,7 +30,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     '/reports/period/:periodId',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bearing.report_period.get')],
     },
     async (request, reply) => {
       if (!UUID_REGEX.test(request.params.periodId)) {
@@ -55,7 +56,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     '/reports/at-risk',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bearing.report_at_risk.list')],
     },
     async (request, reply) => {
       const report = await reportGenerator.generateAtRiskReport(request.user!.org_id);
@@ -68,7 +69,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     '/reports/owner/:userId',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bearing.report_owner.get')],
     },
     async (request, reply) => {
       if (!UUID_REGEX.test(request.params.userId)) {
@@ -94,7 +95,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     '/reports/generate',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bearing.report_generate.create')],
     },
     async (request, reply) => {
       const { type, period_id, user_id } = generateReportSchema.parse(request.body);
@@ -136,7 +137,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     '/goals/export',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bearing.goal.list')],
     },
     async (request, reply) => {
       const query = exportGoalsQuerySchema.parse(request.query);
@@ -194,7 +195,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     '/key-results/export',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bearing.key_result.list')],
     },
     async (request, reply) => {
       const query = exportKrQuerySchema.parse(request.query);

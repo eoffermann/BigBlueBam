@@ -2,7 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
+import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
 import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 /**
  * Cross-app user resolver endpoints.
@@ -23,12 +25,14 @@ export default async function userRoutes(fastify: FastifyInstance) {
   // `name` as an alias for `display_name` so callers that expect a generic
   // "name" column work without additional mapping — the underlying schema
   // only has `display_name`, but both shapes are compatible.
+  // Wave E.F: role is resolved via account_group_memberships → permission_groups.
+  // Each query inlines a leftJoin scoped to the caller's active org.
   const selectCols = {
     id: users.id,
     email: users.email,
     display_name: users.display_name,
     avatar_url: users.avatar_url,
-    role: users.role,
+    role: permissionGroups.legacy_role,
     is_active: users.is_active,
     kind: users.kind,
   } as const;
@@ -38,7 +42,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     email: string;
     display_name: string;
     avatar_url: string | null;
-    role: string;
+    role: string | null;
     is_active: boolean;
     kind: 'human' | 'agent' | 'service';
   };
@@ -50,7 +54,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     name: r.display_name,
     display_name: r.display_name,
     avatar_url: r.avatar_url,
-    role: r.role,
+    role: r.role ?? 'member',
     is_active: r.is_active,
     kind: r.kind,
   });
@@ -69,7 +73,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     Querystring: { active_only?: string; limit?: string };
   }>(
     '/users',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.user.list')] },
     async (request, reply) => {
       const activeOnly = request.query.active_only !== 'false'; // default true
       const limit = Math.min(
@@ -85,6 +89,15 @@ export default async function userRoutes(fastify: FastifyInstance) {
       const rows = await db
         .select(selectCols)
         .from(users)
+        .leftJoin(
+          accountGroupMemberships,
+          and(
+            eq(accountGroupMemberships.user_id, users.id),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, request.user!.org_id),
+          ),
+        )
+        .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
         .where(and(...conditions))
         .orderBy(asc(users.display_name))
         .limit(limit);
@@ -104,11 +117,20 @@ export default async function userRoutes(fastify: FastifyInstance) {
    */
   fastify.get<{ Params: { id: string } }>(
     '/users/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.user.get')] },
     async (request, reply) => {
       const [row] = await db
         .select(selectCols)
         .from(users)
+        .leftJoin(
+          accountGroupMemberships,
+          and(
+            eq(accountGroupMemberships.user_id, users.id),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, request.user!.org_id),
+          ),
+        )
+        .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
         .where(
           and(
             eq(users.id, request.params.id),
@@ -141,7 +163,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
    */
   fastify.get<{ Querystring: { email?: string } }>(
     '/users/by-email',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.user_by_email.list')] },
     async (request, reply) => {
       const email = (request.query.email ?? '').trim();
       if (!email) {
@@ -158,6 +180,15 @@ export default async function userRoutes(fastify: FastifyInstance) {
       const [row] = await db
         .select(selectCols)
         .from(users)
+        .leftJoin(
+          accountGroupMemberships,
+          and(
+            eq(accountGroupMemberships.user_id, users.id),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, request.user!.org_id),
+          ),
+        )
+        .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
         .where(
           and(
             eq(users.org_id, request.user!.org_id),
@@ -185,7 +216,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
    */
   fastify.get<{ Querystring: { q?: string; limit?: string } }>(
     '/users/search',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.user_search.list')] },
     async (request, reply) => {
       const q = (request.query.q ?? '').trim();
       if (!q) {
@@ -216,6 +247,15 @@ export default async function userRoutes(fastify: FastifyInstance) {
           rank,
         })
         .from(users)
+        .leftJoin(
+          accountGroupMemberships,
+          and(
+            eq(accountGroupMemberships.user_id, users.id),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, request.user!.org_id),
+          ),
+        )
+        .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
         .where(
           and(
             eq(users.org_id, request.user!.org_id),

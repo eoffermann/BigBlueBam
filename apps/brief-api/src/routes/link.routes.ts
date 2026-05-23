@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireDocumentAccess, requireDocumentEditAccess, requireMinOrgRole } from '../middleware/authorize.js';
+import { requireDocumentAccess, requireDocumentEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { db } from '../db/index.js';
 import { briefDocuments } from '../db/schema/index.js';
 import { eq, and } from 'drizzle-orm';
@@ -21,7 +22,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/links — List all links for a document
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id/links',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_link.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const links = await linkService.getLinks(doc.id);
@@ -34,7 +35,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
     '/documents/:id/links/task',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireDocumentEditAccess(), requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, requireDocumentEditAccess(), fastify.requireCan('brief.document_link_task.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const { task_id, link_type } = createTaskLinkSchema.parse(request.body);
@@ -67,7 +68,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
     '/documents/:id/links/beacon',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireDocumentEditAccess(), requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, requireDocumentEditAccess(), fastify.requireCan('brief.document_link_beacon.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const { beacon_id, link_type } = createBeaconLinkSchema.parse(request.body);
@@ -98,7 +99,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
   // DELETE /links/:linkId — Delete a link
   fastify.delete<{ Params: { linkId: string } }>(
     '/links/:linkId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('brief.link.delete'), requireScope('read_write')] },
     async (request, reply) => {
       // We need a document_id context — get it from query param
       const query = z.object({ document_id: z.string().uuid() }).parse(request.query);

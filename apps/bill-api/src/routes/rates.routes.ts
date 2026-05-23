@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as rateService from '../services/rate.service.js';
 
 const createRateSchema = z.object({
@@ -49,7 +49,7 @@ export default async function rateRoutes(fastify: FastifyInstance) {
   // POST /rates
   fastify.post(
     '/rates',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.rate.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = createRateSchema.parse(request.body);
       const rate = await rateService.createRate(body, request.user!.org_id);
@@ -60,7 +60,7 @@ export default async function rateRoutes(fastify: FastifyInstance) {
   // PATCH /rates/:id
   fastify.patch<{ Params: { id: string } }>(
     '/rates/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.rate.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateRateSchema.parse(request.body);
       const rate = await rateService.updateRate(request.params.id, request.user!.org_id, body);
@@ -71,7 +71,7 @@ export default async function rateRoutes(fastify: FastifyInstance) {
   // DELETE /rates/:id
   fastify.delete<{ Params: { id: string } }>(
     '/rates/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.rate.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await rateService.deleteRate(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

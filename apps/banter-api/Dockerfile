@@ -13,6 +13,7 @@ COPY packages/logging/package.json ./packages/logging/
 COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/db-stubs/package.json ./packages/db-stubs/
 COPY packages/livekit-tokens/package.json ./packages/livekit-tokens/
+COPY packages/permissions/package.json ./packages/permissions/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -26,6 +27,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/livekit-tokens/ ./packages/livekit-tokens/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/banter-api/src ./apps/banter-api/src
 COPY apps/banter-api/tsconfig.json apps/banter-api/tsup.config.ts ./apps/banter-api/
 
@@ -34,6 +36,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/service-health build \
  && pnpm --filter @bigbluebam/db-stubs build \
  && pnpm --filter @bigbluebam/livekit-tokens build \
+ && pnpm --filter @bigbluebam/permissions build \
  && pnpm --filter @bigbluebam/banter-api build
 
 # Create a deploy-ready directory with all prod deps
@@ -49,6 +52,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/livekit-tokens/ ./packages/livekit-tokens/
+COPY packages/permissions/ ./packages/permissions/
 COPY apps/banter-api/ ./apps/banter-api/
 
 WORKDIR /app/apps/banter-api

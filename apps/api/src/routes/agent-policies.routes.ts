@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
   checkPolicy,
   getPolicy,
@@ -52,7 +53,7 @@ export default async function agentPoliciesRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.get<{ Params: { agent_user_id: string } }>(
     '/v1/agent-policies/:agent_user_id',
-    { preHandler: [requireAuth, requireScope('read')] },
+    { preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.agent_policy.get')] },
     async (request, reply) => {
       const policy = await getPolicy(request.params.agent_user_id);
       if (!policy) {
@@ -98,7 +99,7 @@ export default async function agentPoliciesRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { agent_user_id: string } }>(
     '/v1/agent-policies/:agent_user_id',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.agent_policy.create')] },
     async (request, reply) => {
       const parsed = patchSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -168,7 +169,7 @@ export default async function agentPoliciesRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.get(
     '/v1/agent-policies',
-    { preHandler: [requireAuth, requireScope('read')] },
+    { preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.agent_policy.list')] },
     async (request, reply) => {
       const parsed = listQuerySchema.safeParse(request.query);
       if (!parsed.success) {
@@ -208,7 +209,7 @@ export default async function agentPoliciesRoutes(fastify: FastifyInstance) {
     Querystring: { tool?: string };
   }>(
     '/v1/agent-policies/:agent_user_id/check',
-    { preHandler: [requireAuth, requireScope('read')] },
+    { preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.agent_policy_check.create')] },
     async (request, reply) => {
       const parsed = checkQuerySchema.safeParse(request.query);
       if (!parsed.success) {

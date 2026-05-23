@@ -4,11 +4,12 @@ import { db } from '../db/index.js';
 import { taskStates } from '../db/schema/task-states.js';
 import { requireAuth } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function taskStateRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/states',
-    { preHandler: [requireAuth, requireProjectAccess()] },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_state.get')] },
     async (request, reply) => {
       const result = await db
         .select()

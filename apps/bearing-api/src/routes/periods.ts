@@ -5,7 +5,7 @@ import {
   BearingPeriodStatus,
 } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as periodService from '../services/period.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { loadActor, loadOrg } from '../lib/bolt-event-enrich.js';
@@ -87,7 +87,7 @@ export default async function periodRoutes(fastify: FastifyInstance) {
   // GET /periods — List periods
   fastify.get(
     '/periods',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bearing.period.list')] },
     async (request, reply) => {
       const query = listPeriodsQuerySchema.parse(request.query);
       const result = await periodService.listPeriods({
@@ -106,7 +106,7 @@ export default async function periodRoutes(fastify: FastifyInstance) {
     '/periods',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bearing.period.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createPeriodSchema.parse(request.body);
@@ -118,7 +118,7 @@ export default async function periodRoutes(fastify: FastifyInstance) {
   // GET /periods/:id — Get period with stats
   fastify.get<{ Params: { id: string } }>(
     '/periods/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bearing.period.get')] },
     async (request, reply) => {
       const period = await periodService.getPeriod(request.params.id, request.user!.org_id);
       if (!period) {
@@ -138,7 +138,7 @@ export default async function periodRoutes(fastify: FastifyInstance) {
   // PATCH /periods/:id — Update period
   fastify.patch<{ Params: { id: string } }>(
     '/periods/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bearing.period.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updatePeriodSchema.parse(request.body);
       const previous = await periodService.getPeriodById(
@@ -174,7 +174,7 @@ export default async function periodRoutes(fastify: FastifyInstance) {
   // DELETE /periods/:id — Delete period
   fastify.delete<{ Params: { id: string } }>(
     '/periods/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bearing.period.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await periodService.deletePeriod(request.params.id, request.user!.org_id);
       return reply.status(204).send();
@@ -184,7 +184,7 @@ export default async function periodRoutes(fastify: FastifyInstance) {
   // POST /periods/:id/activate — Activate period
   fastify.post<{ Params: { id: string } }>(
     '/periods/:id/activate',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bearing.period_activate.create'), requireScope('read_write')] },
     async (request, reply) => {
       const period = await periodService.activatePeriod(request.params.id, request.user!.org_id);
       await emitPeriodLifecycleEvent(
@@ -200,7 +200,7 @@ export default async function periodRoutes(fastify: FastifyInstance) {
   // POST /periods/:id/complete — Complete period
   fastify.post<{ Params: { id: string } }>(
     '/periods/:id/complete',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bearing.period_complete.create'), requireScope('read_write')] },
     async (request, reply) => {
       const period = await periodService.completePeriod(request.params.id, request.user!.org_id);
       await emitPeriodLifecycleEvent(

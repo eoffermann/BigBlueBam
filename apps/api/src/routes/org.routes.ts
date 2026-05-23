@@ -6,12 +6,12 @@ import { projectMemberships } from '../db/schema/project-memberships.js';
 import { users } from '../db/schema/users.js';
 import * as orgService from '../services/org.service.js';
 import { checkOrgPermission, isOrgPrivileged } from '../services/org-permissions.js';
+import { resolveOrgUserRoles } from '../services/role-resolver.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireOrgRole } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function orgRoutes(fastify: FastifyInstance) {
-  fastify.get('/org', { preHandler: [requireAuth] }, async (request, reply) => {
+  fastify.get('/org', { preHandler: [requireAuth, shadowOnly('bam.org.list')] }, async (request, reply) => {
     const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
     if (!org) {
       return reply.status(404).send({
@@ -40,7 +40,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.patch(
     '/org',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org.update' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org.update'), requireScope('admin')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(255).optional(),
@@ -69,7 +69,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/org/members',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.org_member.list')] },
     async (request, reply) => {
       // Guest users should only see members who share at least one project
       if (request.user!.role === 'guest') {
@@ -80,14 +80,15 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           .where(eq(projectMemberships.user_id, request.user!.id));
 
         if (guestProjects.length === 0) {
-          // Guest has no project access — return only themselves
+          // Guest has no project access — return only themselves. Wave E.F:
+          // role is the caller's resolved per-org role (already on the
+          // AuthUser).
           const [self] = await db
             .select({
               id: users.id,
               email: users.email,
               display_name: users.display_name,
               avatar_url: users.avatar_url,
-              role: users.role,
               is_active: users.is_active,
               created_at: users.created_at,
               last_seen_at: users.last_seen_at,
@@ -96,7 +97,9 @@ export default async function orgRoutes(fastify: FastifyInstance) {
             .where(eq(users.id, request.user!.id))
             .limit(1);
 
-          return reply.send({ data: self ? [self] : [] });
+          return reply.send({
+            data: self ? [{ ...self, role: request.user!.role }] : [],
+          });
         }
 
         const projectIds = guestProjects.map((p) => p.project_id);
@@ -109,13 +112,18 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
         const sharedUserIds = sharedMembers.map((m) => m.user_id);
 
+        // Wave E.F: role is resolved from the org-scope group membership.
+        const memberRoles = await resolveOrgUserRoles(
+          request.user!.org_id,
+          sharedUserIds,
+        );
+
         const members = await db
           .select({
             id: users.id,
             email: users.email,
             display_name: users.display_name,
             avatar_url: users.avatar_url,
-            role: users.role,
             is_active: users.is_active,
             created_at: users.created_at,
             last_seen_at: users.last_seen_at,
@@ -129,7 +137,9 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           )
           .orderBy(users.display_name);
 
-        return reply.send({ data: members });
+        return reply.send({
+          data: members.map((m) => ({ ...m, role: memberRoles.get(m.id) ?? 'member' })),
+        });
       }
 
       const members = await orgService.listOrgMembers(request.user!.org_id);
@@ -184,7 +194,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { userId: string } }>(
     '/org/members/:userId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member.get' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member.get'), requireScope('admin')] },
     async (request, reply) => {
       const detail = await orgService.getOrgMemberDetail(
         request.user!.org_id,
@@ -206,7 +216,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { userId: string } }>(
     '/org/members/:userId/profile',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_profile.update' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_profile.update'), requireScope('admin')] },
     async (request, reply) => {
       const schema = z.object({
         display_name: z.string().max(100).optional(),
@@ -244,7 +254,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { userId: string } }>(
     '/org/members/:userId/active',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_active.update' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_active.update'), requireScope('admin')] },
     async (request, reply) => {
       const schema = z.object({
         is_active: z.boolean(),
@@ -295,7 +305,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { userId: string } }>(
     '/org/members/:userId/transfer-ownership',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_transfer_ownership.create' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_transfer_ownership.create'), requireScope('admin')] },
     async (request, reply) => {
       try {
         const result = await orgService.transferOwnership({
@@ -346,7 +356,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { userId: string } }>(
     '/org/members/:userId/projects',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_project.get' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_project.get'), requireScope('admin')] },
     async (request, reply) => {
       const rows = await orgService.getMemberProjectsInOrg(
         request.user!.org_id,
@@ -368,7 +378,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { userId: string } }>(
     '/org/members/:userId/projects',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_project.create' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_project.create'), requireScope('admin')] },
     async (request, reply) => {
       const schema = z.object({
         assignments: z
@@ -415,7 +425,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { userId: string; projectId: string } }>(
     '/org/members/:userId/projects/:projectId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_project.update' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_project.update'), requireScope('admin')] },
     async (request, reply) => {
       const schema = z.object({ role: z.enum(['admin', 'member', 'viewer']) });
       const data = schema.parse(request.body);
@@ -451,7 +461,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { userId: string; projectId: string } }>(
     '/org/members/:userId/projects/:projectId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_project.delete' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_project.delete'), requireScope('admin')] },
     async (request, reply) => {
       try {
         const removed = await orgService.removeMemberFromProject(
@@ -483,7 +493,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { userId: string } }>(
     '/org/members/:userId/force-password-change',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_force_password_change.create' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_force_password_change.create'), requireScope('admin')] },
     async (request, reply) => {
       try {
         const result = await orgService.forcePasswordChange(
@@ -523,7 +533,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { userId: string } }>(
     '/org/members/:userId/sign-out-everywhere',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_sign_out_everywhere.create' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_sign_out_everywhere.create'), requireScope('admin')] },
     async (request, reply) => {
       try {
         const result = await orgService.signOutMemberEverywhere(
@@ -564,7 +574,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { userId: string } }>(
     '/org/members/:userId/api-keys',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_api_key.get' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_api_key.get'), requireScope('admin')] },
     async (request, reply) => {
       try {
         const rows = await orgService.listMemberApiKeys(
@@ -595,7 +605,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { userId: string } }>(
     '/org/members/:userId/api-keys',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_api_key.create' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_api_key.create'), requireScope('admin')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().min(1).max(255),
@@ -664,7 +674,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { userId: string; keyId: string } }>(
     '/org/members/:userId/api-keys/:keyId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_api_key.delete' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_api_key.delete'), requireScope('admin')] },
     async (request, reply) => {
       try {
         const removed = await orgService.deleteMemberApiKey(
@@ -709,7 +719,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
     Querystring: { limit?: string; cursor?: string };
   }>(
     '/org/members/:userId/activity',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_activity.get' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member_activity.get'), requireScope('admin')] },
     async (request, reply) => {
       const limit = Math.min(
         Math.max(parseInt(request.query.limit ?? '50', 10) || 50, 1),
@@ -747,7 +757,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/org/members/invite',
-    { preHandler: [requireAuth, requireScope('admin')] },
+    { preHandler: [requireAuth, requireScope('admin'), shadowOnly('bam.org_member.invite')] },
     async (request, reply) => {
       // Allow org admins/owners/superusers, OR members if the org permission
       // `members_can_invite_members` is enabled.
@@ -826,7 +836,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/org/members/invite/bulk',
     {
-      preHandler: [requireAuth, requireScope('admin')],
+      preHandler: [requireAuth, requireScope('admin'), shadowOnly('bam.org_member_invite_bulk.create')],
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
@@ -937,7 +947,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { userId: string } }>(
     '/org/members/:userId/reset-password',
     {
-      preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member_reset_password.create' }), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bam.org_member_reset_password.create'), requireScope('admin')],
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
@@ -997,7 +1007,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { userId: string } }>(
     '/org/members/:userId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member.update' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member.update'), requireScope('admin')] },
     async (request, reply) => {
       const schema = z.object({
         role: z.enum(['member', 'admin', 'viewer']),
@@ -1041,7 +1051,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { userId: string } }>(
     '/org/members/:userId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_member.delete' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_member.delete'), requireScope('admin')] },
     async (request, reply) => {
       if (request.params.userId === request.user!.id) {
         return reply.status(400).send({

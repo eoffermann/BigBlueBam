@@ -77,6 +77,13 @@ export interface PolicyGate {
    */
   check(toolName: string): Promise<PolicyDecision>;
   /**
+   * Resolve the bearer-token's caller identity once. Cached for the session.
+   * Wave D uses this so the per-action resolver knows who is calling — for
+   * humans the §15 check short-circuits to ALLOW without surfacing the id,
+   * but per-action enforcement still needs it.
+   */
+  getCaller(): Promise<{ kind: 'human' | 'agent' | 'service' | 'unknown'; id: string | null }>;
+  /**
    * Drop the policy cache for the given agent_user_id. Invoked from the
    * Redis PubSub listener when a policy row changes.
    */
@@ -290,6 +297,15 @@ export function createPolicyGate(opts: CreatePolicyGateOptions): PolicyGate {
    */
   function recordDualRead(toolName: string, agentDecision: PolicyDecision, callerId: string | null): void {
     if (!callerId) return;
+    // Wave D Phase 2: when per-action enforcement is on/warn AND the policy
+    // accepted, the wrapper will call checkPermissionViaResolver itself —
+    // which writes the same divergence row this would. Skip here to avoid
+    // double rows. We still fire on policy DENIES at every mode because the
+    // wrapper returns early before reaching the resolver, and the FAIL-side
+    // divergence ("policy denied but resolver would have allowed") is
+    // exactly the kind of triage data the dashboard exists for.
+    const enforceMode = process.env.BBB_PERMISSIONS_ENFORCE ?? 'off';
+    if (agentDecision.allowed && enforceMode !== 'off') return;
     const permissionId = TOOL_TO_PERMISSION.get(toolName);
     if (!permissionId) return; // unknown tool — skip silently
     const internalSecret = process.env.INTERNAL_SERVICE_SECRET ?? process.env.INTERNAL_HELPDESK_SECRET;
@@ -325,7 +341,15 @@ export function createPolicyGate(opts: CreatePolicyGateOptions): PolicyGate {
     })();
   }
 
-  return { check, invalidate };
+  // Wave D: getCaller() exposes the resolved bearer-token identity so the
+  // per-action resolver can run on every code path (including humans, who
+  // §15 short-circuits to ALLOW without surfacing their id).
+  async function getCaller(): Promise<{ kind: 'human' | 'agent' | 'service' | 'unknown'; id: string | null }> {
+    const c = await resolveCaller();
+    return { kind: c.kind, id: c.id };
+  }
+
+  return { check, getCaller, invalidate };
 }
 
 // ---------------------------------------------------------------------------
@@ -375,6 +399,92 @@ export function buildPolicyDenialResult(
   };
 }
 
+/**
+ * Wave D Phase 2: per-action permission enforcement at the MCP layer.
+ *
+ * `buildPermissionDenialResult` mirrors `buildPolicyDenialResult` for the
+ * resolver-deny case. The error code `PERMISSION_DENIED` is distinct from
+ * `AGENT_DISABLED` / `TOOL_NOT_ALLOWED` so triage can tell the two layers
+ * apart: §15 policy denials are operator kill-switches; PERMISSION_DENIED
+ * means the caller's group / overrides do not grant the action.
+ */
+export function buildPermissionDenialResult(
+  toolName: string,
+  permissionId: string,
+): { content: { type: 'text'; text: string }[]; isError: true } {
+  const message = `Tool '${toolName}' requires permission '${permissionId}', which is not granted to this caller. Contact a platform administrator if this should be allowed.`;
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          {
+            error: {
+              code: 'PERMISSION_DENIED',
+              permission_id: permissionId,
+              tool_name: toolName,
+              message,
+            },
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+    isError: true,
+  };
+}
+
+/**
+ * Synchronously consult the api's resolver for one (caller, permission)
+ * pair. Returns the resolver's decision plus the permission_id it
+ * checked (caller may want to log it). Returns `'unknown'` whenever the
+ * call cannot be made (missing tool→permission mapping, missing internal
+ * secret, network error, non-2xx); the wrapper treats `'unknown'` as
+ * pass-through to preserve availability — only an explicit `'deny'` in
+ * `enforce === 'on'` mode blocks invocation.
+ *
+ * Reuses `/internal/permissions/dual-read` because the endpoint already
+ * runs the resolver AND writes the divergence row. In Wave D Phase 2 this
+ * call goes from fire-and-forget (Wave B telemetry) to synchronous so the
+ * decision can gate the handler.
+ */
+export async function checkPermissionViaResolver(
+  toolName: string,
+  callerId: string,
+): Promise<{ decision: 'allow' | 'deny' | 'unknown'; permissionId: string | null }> {
+  const permissionId = TOOL_TO_PERMISSION.get(toolName);
+  if (!permissionId) return { decision: 'unknown', permissionId: null };
+  const internalSecret = process.env.INTERNAL_SERVICE_SECRET ?? process.env.INTERNAL_HELPDESK_SECRET;
+  if (!internalSecret) return { decision: 'unknown', permissionId };
+  const apiUrl = process.env.BBB_API_INTERNAL_URL ?? 'http://api:4000';
+  try {
+    const res = await fetch(`${apiUrl}/internal/permissions/dual-read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': internalSecret,
+      },
+      body: JSON.stringify({
+        user_id: callerId,
+        permission_id: permissionId,
+        agent_policy_decision: 'allow', // §15 already accepted to reach here
+        tool_name: toolName,
+        scope: {},
+      }),
+    });
+    if (!res.ok) return { decision: 'unknown', permissionId };
+    const json = (await res.json()) as { data?: { decision?: string } };
+    const d = json?.data?.decision;
+    if (d === 'allow' || d === 'deny') return { decision: d, permissionId };
+    return { decision: 'unknown', permissionId };
+  } catch {
+    // Pass-through on network / parse errors. Resolver outages must not
+    // wedge tool invocations — only an explicit `deny` in 'on' mode blocks.
+    return { decision: 'unknown', permissionId };
+  }
+}
+
 export function registerTool<TInput extends ZodRawShape, TReturn extends ZodTypeAny>(
   server: McpServer,
   opts: RegisterToolOptions<TInput, TReturn>,
@@ -382,14 +492,33 @@ export function registerTool<TInput extends ZodRawShape, TReturn extends ZodType
   returnSchemas.set(opts.name, opts.returns);
 
   // Wrap the original handler so every invocation passes through the
-  // per-session PolicyGate (if one is attached). Humans bypass, core tools
-  // bypass, everyone else gets gated.
+  // per-session PolicyGate (if one is attached). Humans bypass §15, core
+  // tools bypass everything, everyone else gets gated.
+  //
+  // Wave D Phase 2 layers per-action permission enforcement on top: after
+  // §15 accepts, run the resolver synchronously. `BBB_PERMISSIONS_ENFORCE`
+  // controls the mode: 'off' skips, 'warn' records divergence (existing
+  // Wave B behavior — but now sync rather than fire-and-forget so a single
+  // path covers both), 'on' blocks on resolver-deny.
   const wrappedHandler = (async (args: z.infer<z.ZodObject<TInput>>) => {
     const gate = gateRegistry.get(server);
     if (gate) {
       const decision = await gate.check(opts.name);
       if (!decision.allowed) {
         return buildPolicyDenialResult(opts.name, decision);
+      }
+
+      // Wave D per-action check. Always-permitted core tools bypass.
+      const enforce = (process.env.BBB_PERMISSIONS_ENFORCE ?? 'off') as 'off' | 'warn' | 'on';
+      if (enforce !== 'off' && !ALWAYS_PERMITTED_TOOLS.has(opts.name)) {
+        const caller = await gate.getCaller();
+        if (caller.id) {
+          const { decision: resolverDecision, permissionId } =
+            await checkPermissionViaResolver(opts.name, caller.id);
+          if (enforce === 'on' && resolverDecision === 'deny' && permissionId) {
+            return buildPermissionDenialResult(opts.name, permissionId);
+          }
+        }
       }
     }
     return opts.handler(args);

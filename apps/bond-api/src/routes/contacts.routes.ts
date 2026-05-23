@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as contactService from '../services/contact.service.js';
 import * as contactUpsertService from '../services/contact-upsert.service.js';
 
@@ -112,7 +112,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
     '/contacts',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bond.contact.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createContactSchema.parse(request.body);
@@ -151,7 +151,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
     '/contacts/upsert',
     {
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bond.contact.upsert'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = upsertContactSchema.parse(request.body);
@@ -169,7 +169,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
     '/contacts/import',
     {
       config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bond.contact.import'), requireScope('admin')],
     },
     async (request, reply) => {
       const body = importContactsSchema.parse(request.body);
@@ -185,7 +185,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
   // GET /contacts/export — Export contacts
   fastify.get(
     '/contacts/export',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.contact.list')] },
     async (request, reply) => {
       const data = await contactService.exportContacts(request.user!.org_id);
       return reply.send({ data });
@@ -208,7 +208,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
   // PATCH /contacts/:id — Update contact
   fastify.patch<{ Params: { id: string } }>(
     '/contacts/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.contact.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateContactSchema.parse(request.body);
       const contact = await contactService.updateContact(
@@ -223,7 +223,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
   // DELETE /contacts/:id — Delete contact
   fastify.delete<{ Params: { id: string } }>(
     '/contacts/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.contact.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await contactService.deleteContact(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -233,7 +233,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
   // POST /contacts/:id/restore — Undelete a soft-deleted contact (G4)
   fastify.post<{ Params: { id: string } }>(
     '/contacts/:id/restore',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.contact.restore'), requireScope('read_write')] },
     async (request, reply) => {
       const contact = await contactService.restoreContact(
         request.params.id,
@@ -246,7 +246,7 @@ export default async function contactRoutes(fastify: FastifyInstance) {
   // POST /contacts/:id/merge — Merge contacts
   fastify.post<{ Params: { id: string } }>(
     '/contacts/:id/merge',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.contact.merge'), requireScope('read_write')] },
     async (request, reply) => {
       const body = mergeContactSchema.parse(request.body);
       const result = await contactService.mergeContacts(

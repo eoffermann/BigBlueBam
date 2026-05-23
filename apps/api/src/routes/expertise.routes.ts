@@ -25,6 +25,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 import { requireAuth, requireScope, type AuthUser } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { expertiseForTopic, ExpertiseError } from '../services/expertise.service.js';
 
 const bodySchema = z.object({
@@ -46,7 +47,7 @@ export default async function expertiseRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/v1/expertise/for-topic',
     {
-      preHandler: [requireAuth, requireScope('read')],
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.expertise_for_topic.create')],
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
     },
     async (request, reply) => {

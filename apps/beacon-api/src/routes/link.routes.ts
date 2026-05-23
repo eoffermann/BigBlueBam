@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole, requireBeaconReadAccess, requireBeaconEditAccess } from '../middleware/authorize.js';
+import { requireBeaconReadAccess, requireBeaconEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as linkService from '../services/link.service.js';
 
 const createLinkSchema = z.object({
@@ -13,7 +14,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
   // POST /beacons/:id/links — Create a link (Member+ can create)
   fastify.post<{ Params: { id: string } }>(
     '/beacons/:id/links',
-    { preHandler: [requireAuth, requireMinOrgRole('member'), requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('beacon.beacon_link.create'), requireBeaconEditAccess(), requireScope('read_write')] },
     async (request, reply) => {
       const { target_id, link_type } = createLinkSchema.parse(request.body);
       const link = await linkService.createLink(
@@ -41,7 +42,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
   // GET /beacons/:id/links — List all links for a beacon
   fastify.get<{ Params: { id: string } }>(
     '/beacons/:id/links',
-    { preHandler: [requireAuth, requireBeaconReadAccess()] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_link.get')] },
     async (request, reply) => {
       const beacon = (request as any).beacon;
       const links = await linkService.getLinks(beacon.id);
@@ -52,7 +53,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
   // DELETE /beacons/:id/links/:linkId — Remove a link (Owner/Admin)
   fastify.delete<{ Params: { id: string; linkId: string } }>(
     '/beacons/:id/links/:linkId',
-    { preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon_link.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const beacon = (request as any).beacon;
       const deleted = await linkService.removeLink(request.params.linkId, beacon.id);

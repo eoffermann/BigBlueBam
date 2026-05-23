@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as activityService from '../services/activity.service.js';
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ export default async function activityRoutes(fastify: FastifyInstance) {
     '/activities',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bond.activity.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createActivitySchema.parse(request.body);
@@ -92,7 +92,7 @@ export default async function activityRoutes(fastify: FastifyInstance) {
   // PATCH /activities/:id — Update activity
   fastify.patch<{ Params: { id: string } }>(
     '/activities/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.activity.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateActivitySchema.parse(request.body);
       const activity = await activityService.updateActivity(
@@ -107,7 +107,7 @@ export default async function activityRoutes(fastify: FastifyInstance) {
   // DELETE /activities/:id — Delete activity
   fastify.delete<{ Params: { id: string } }>(
     '/activities/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.activity.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await activityService.deleteActivity(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

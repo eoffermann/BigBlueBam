@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as clientService from '../services/client.service.js';
 
 const createClientSchema = z.object({
@@ -44,7 +44,7 @@ export default async function clientRoutes(fastify: FastifyInstance) {
   // POST /clients
   fastify.post(
     '/clients',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.client.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = createClientSchema.parse(request.body);
       const client = await clientService.createClient(body, request.user!.org_id, request.user!.id);
@@ -65,7 +65,7 @@ export default async function clientRoutes(fastify: FastifyInstance) {
   // PATCH /clients/:id
   fastify.patch<{ Params: { id: string } }>(
     '/clients/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.client.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateClientSchema.parse(request.body);
       const client = await clientService.updateClient(request.params.id, request.user!.org_id, body);
@@ -76,7 +76,7 @@ export default async function clientRoutes(fastify: FastifyInstance) {
   // DELETE /clients/:id
   fastify.delete<{ Params: { id: string } }>(
     '/clients/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.client.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await clientService.deleteClient(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

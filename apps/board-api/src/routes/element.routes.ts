@@ -3,6 +3,7 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBoardAccess, requireBoardEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as elementService from '../services/element.service.js';
 import { loadScene, saveScene, type SceneData } from '../ws/persistence.js';
 import { sceneToSvg, sceneToPng } from '../services/export.service.js';
@@ -40,7 +41,7 @@ export default async function elementRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/elements - All elements with positions, text, types
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/elements',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_element.get')] },
     async (request, reply) => {
       const elements = await elementService.getElements((request as any).board.id);
       return reply.send({ data: elements });
@@ -50,7 +51,7 @@ export default async function elementRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/elements/stickies - Sticky notes only
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/elements/stickies',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_element_sticky.get')] },
     async (request, reply) => {
       const stickies = await elementService.getStickies((request as any).board.id);
       return reply.send({ data: stickies });
@@ -60,7 +61,7 @@ export default async function elementRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/elements/frames - Frames with contained elements
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/elements/frames',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_element_frame.get')] },
     async (request, reply) => {
       const frames = await elementService.getFrames((request as any).board.id);
       return reply.send({ data: frames });
@@ -75,7 +76,7 @@ export default async function elementRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/elements/sticky',
     {
-      preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_element_sticky.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const board = (request as any).board;
@@ -187,7 +188,7 @@ export default async function elementRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/elements/text',
     {
-      preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_element_text.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const board = (request as any).board;
@@ -273,7 +274,7 @@ export default async function elementRoutes(fastify: FastifyInstance) {
   // POST /boards/:id/export — Export the board scene
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/export',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board.export')] },
     async (request, reply) => {
       const board = (request as any).board;
       const body = exportSchema.parse(request.body ?? {});
@@ -326,7 +327,7 @@ export default async function elementRoutes(fastify: FastifyInstance) {
   // PNG rendering uses sharp to rasterize the server-generated SVG.
   fastify.get<{ Params: { id: string; format: string } }>(
     '/boards/:id/export/:format',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_export.get')] },
     async (request, reply) => {
       const board = (request as any).board;
       const format = request.params.format;

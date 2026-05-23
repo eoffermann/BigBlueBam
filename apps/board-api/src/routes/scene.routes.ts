@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBoardAccess, requireBoardEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { loadScene, saveScene, type SceneData } from '../ws/persistence.js';
 
 const sceneBodySchema = z.object({
@@ -14,7 +15,7 @@ export default async function sceneRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/scene — Load saved Excalidraw scene
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/scene',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_scene.get')] },
     async (request, reply) => {
       const board = (request as any).board;
       const scene = await loadScene(board.id, request.user!.org_id);
@@ -33,7 +34,7 @@ export default async function sceneRoutes(fastify: FastifyInstance) {
   fastify.put<{ Params: { id: string } }>(
     '/boards/:id/scene',
     {
-      preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_scene.update'), requireScope('read_write')],
     },
     async (request, reply) => {
       const board = (request as any).board;
@@ -64,7 +65,7 @@ export default async function sceneRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/scene/beacon',
     {
-      preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_scene_beacon.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const board = (request as any).board;

@@ -10,7 +10,7 @@ import {
   banterChannelMemberships,
   users,
 } from '../db/schema/index.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireChannelMember } from '../middleware/channel-auth.js';
 import { broadcastToChannel } from '../services/realtime.js';
 import { generateLiveKitToken, buildRoomName } from '../services/livekit-token.js';
@@ -32,7 +32,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
   // POST /v1/channels/:id/calls — start a call/huddle
   fastify.post(
     '/v1/channels/:id/calls',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.channel_call.create'), requireScope('read_write')] },
     async (request, reply) => {
       const { id: channelId } = request.params as { id: string };
       const user = request.user!;

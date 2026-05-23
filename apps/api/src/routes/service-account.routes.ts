@@ -8,10 +8,11 @@ import { users } from '../db/schema/users.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { agentPolicies } from '../db/schema/agent-policies.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
-import { requireAuth, requireMinRole } from '../plugins/auth.js';
+import { requireAuth } from '../plugins/auth.js';
 import { getOrgPermissions, isOrgPrivileged } from '../services/org-permissions.js';
+import { setUserOrgRole } from '../services/role-resolver.js';
 import * as orgService from '../services/org.service.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 /**
  * Service-account REST routes.
@@ -57,7 +58,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.get(
     '/auth/service-accounts',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.auth_service_account.list')] },
     async (request, reply) => {
       const caller = request.user!;
       const orgId = caller.active_org_id;
@@ -166,7 +167,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post(
     '/auth/service-accounts',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.auth_service_account.create' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.auth_service_account.create')] },
     async (request, reply) => {
       const parsed = createSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -264,7 +265,6 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
             email,
             display_name: body.name,
             password_hash: passwordHash,
-            role: 'member',
             is_superuser: false,
             kind: 'service',
             created_by: caller.id,
@@ -274,9 +274,10 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
         await tx.insert(organizationMemberships).values({
           user_id: svc!.id,
           org_id: caller.active_org_id,
-          role: 'member',
           is_default: true,
         });
+        // Wave E.F: role lives in account_group_memberships.
+        await setUserOrgRole(svc!.id, caller.active_org_id, 'member', { grantedBy: caller.id }, tx);
 
         await tx.insert(agentPolicies).values({
           agent_user_id: svc!.id,
@@ -332,7 +333,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string } }>(
     '/auth/service-accounts/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.auth_service_account.delete' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.auth_service_account.delete')] },
     async (request, reply) => {
       const caller = request.user!;
       const [svc] = await db

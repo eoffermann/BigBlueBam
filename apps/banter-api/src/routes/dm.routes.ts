@@ -7,7 +7,7 @@ import {
   banterChannelMemberships,
   users,
 } from '../db/schema/index.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { getEffectiveBanterPermissions } from '../services/org-permissions-bridge.js';
 
 const createDmSchema = z.object({
@@ -22,7 +22,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
   // POST /v1/dm — create or retrieve DM
   fastify.post(
     '/v1/dm',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.dm.create'), requireScope('read_write')] },
     async (request, reply) => {
       const user = request.user!;
       const body = createDmSchema.parse(request.body);
@@ -154,7 +154,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
   // POST /v1/group-dm — create group DM
   fastify.post(
     '/v1/group-dm',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.group_dm.create'), requireScope('read_write')] },
     async (request, reply) => {
       const user = request.user!;
       const body = createGroupDmSchema.parse(request.body);

@@ -8,9 +8,10 @@ import { users } from '../db/schema/users.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
 import { notifications } from '../db/schema/notifications.js';
 import { organizations } from '../db/schema/organizations.js';
+import { organizationMemberships } from '../db/schema/organization-memberships.js';
+import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
+import { setUserOrgRole } from '../services/role-resolver.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireOrgRole } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
 import { sendGuestInvitationEmail, isSmtpConfigured } from '../lib/email-queue.js';
 import { env } from '../env.js';
 
@@ -22,11 +23,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        // Wave B sample: requireOrgRole pattern (admin OR owner).
-        dualReadGate({
-          legacy: requireOrgRole('admin', 'owner'),
-          permission: 'bam.guest.invite',
-        }),
+        fastify.requireCan('bam.guest.invite'),
         requireScope('admin'),
       ],
     },
@@ -162,7 +159,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // List pending invitations for the org (requires org admin/owner)
   fastify.get(
     '/v1/guests/invitations',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_invitation.list' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.guest_invitation.list'), requireScope('admin')] },
     async (request, reply) => {
       // (P1-30) Never return the raw invitation token in list responses —
       // tokens are bearer credentials and must only be delivered to the
@@ -190,7 +187,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // Revoke an invitation (requires org admin/owner)
   fastify.delete<{ Params: { id: string } }>(
     '/v1/guests/invitations/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_invitation.delete' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.guest_invitation.delete'), requireScope('admin')] },
     async (request, reply) => {
       const [deleted] = await db
         .delete(guestInvitations)
@@ -230,7 +227,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/v1/guests/invitations/:id/resend',
     {
-      preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_invitation_resend.create' }), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bam.guest_invitation_resend.create'), requireScope('admin')],
       config: {
         rateLimit: {
           max: 5,
@@ -412,7 +409,8 @@ export default async function guestRoutes(fastify: FastifyInstance) {
 
           const invitation = claimedResult[0]!;
 
-          // Create the guest user account
+          // Create the guest user account. Wave E.F: role lives in
+          // account_group_memberships now, not on users or org_memberships.
           const [guestUser] = await tx
             .insert(users)
             .values({
@@ -420,9 +418,17 @@ export default async function guestRoutes(fastify: FastifyInstance) {
               email: invitation.email,
               display_name: data.display_name,
               password_hash: passwordHash,
-              role: 'guest',
             })
             .returning();
+
+          // Establish org membership + guest role via the per-action
+          // permissions group system.
+          await tx.insert(organizationMemberships).values({
+            user_id: guestUser!.id,
+            org_id: invitation.org_id,
+            is_default: true,
+          });
+          await setUserOrgRole(guestUser!.id, invitation.org_id, 'guest', {}, tx);
 
           // Add the guest to specified projects as 'member' role
           if (invitation.project_ids && invitation.project_ids.length > 0) {
@@ -434,7 +440,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
             await tx.insert(projectMemberships).values(membershipValues);
           }
 
-          return { invitation, guestUser: guestUser! };
+          return { invitation, guestUser: { ...guestUser!, role: 'guest' } };
         });
 
         // NOTE: Channel membership auto-add would go here once the Banter
@@ -472,29 +478,40 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // List current guest users in the org (requires org admin/owner)
   fastify.get(
     '/v1/guests',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest.list' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.guest.list'), requireScope('admin')] },
     async (request, reply) => {
+      // Wave E.F: "guest" is a value of permission_groups.legacy_role; we
+      // filter via the user's org-scope group membership.
       const guests = await db
         .select({
           id: users.id,
           email: users.email,
           display_name: users.display_name,
           avatar_url: users.avatar_url,
-          role: users.role,
+          role: permissionGroups.legacy_role,
           is_active: users.is_active,
           created_at: users.created_at,
           last_seen_at: users.last_seen_at,
         })
         .from(users)
+        .innerJoin(
+          accountGroupMemberships,
+          and(
+            eq(accountGroupMemberships.user_id, users.id),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, request.user!.org_id),
+          ),
+        )
+        .innerJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
         .where(
           and(
             eq(users.org_id, request.user!.org_id),
-            eq(users.role, 'guest'),
+            eq(permissionGroups.legacy_role, 'guest'),
           ),
         )
         .orderBy(users.display_name);
 
-      return reply.send({ data: guests });
+      return reply.send({ data: guests.map((g) => ({ ...g, role: g.role ?? 'guest' })) });
     },
   );
 
@@ -502,7 +519,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // Update a guest's project and channel access (requires org admin/owner)
   fastify.patch<{ Params: { id: string } }>(
     '/v1/guests/:id/scope',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest_scope.update' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.guest_scope.update'), requireScope('admin')] },
     async (request, reply) => {
       const bodySchema = z.object({
         project_ids: z.array(z.string().uuid()).optional(),
@@ -510,18 +527,35 @@ export default async function guestRoutes(fastify: FastifyInstance) {
       });
       const data = bodySchema.parse(request.body);
 
-      // Verify the user is a guest in this org
-      const [guestUser] = await db
-        .select()
+      // Verify the user is a guest in this org. Wave E.F: filter by the
+      // user's org-scope group membership's legacy_role.
+      const [guestUserRow] = await db
+        .select({
+          user: users,
+          legacy_role: permissionGroups.legacy_role,
+        })
         .from(users)
+        .innerJoin(
+          accountGroupMemberships,
+          and(
+            eq(accountGroupMemberships.user_id, users.id),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, request.user!.org_id),
+          ),
+        )
+        .innerJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
         .where(
           and(
             eq(users.id, request.params.id),
             eq(users.org_id, request.user!.org_id),
-            eq(users.role, 'guest'),
+            eq(permissionGroups.legacy_role, 'guest'),
           ),
         )
         .limit(1);
+
+      const guestUser = guestUserRow
+        ? { ...guestUserRow.user, role: guestUserRow.legacy_role ?? 'guest' }
+        : undefined;
 
       if (!guestUser) {
         return reply.status(404).send({
@@ -609,20 +643,32 @@ export default async function guestRoutes(fastify: FastifyInstance) {
   // Remove a guest from the org (deactivate) (requires org admin/owner)
   fastify.delete<{ Params: { id: string } }>(
     '/v1/guests/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.guest.delete' }), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.guest.delete'), requireScope('admin')] },
     async (request, reply) => {
-      // Verify the user is a guest in this org
-      const [guestUser] = await db
-        .select()
+      // Verify the user is a guest in this org. Wave E.F: filter via
+      // account_group_memberships → permission_groups.legacy_role.
+      const [guestUserRow] = await db
+        .select({ user: users })
         .from(users)
+        .innerJoin(
+          accountGroupMemberships,
+          and(
+            eq(accountGroupMemberships.user_id, users.id),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, request.user!.org_id),
+          ),
+        )
+        .innerJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
         .where(
           and(
             eq(users.id, request.params.id),
             eq(users.org_id, request.user!.org_id),
-            eq(users.role, 'guest'),
+            eq(permissionGroups.legacy_role, 'guest'),
           ),
         )
         .limit(1);
+
+      const guestUser = guestUserRow?.user;
 
       if (!guestUser) {
         return reply.status(404).send({

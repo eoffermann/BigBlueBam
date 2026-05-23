@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBoardAccess, requireBoardEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as linkService from '../services/link.service.js';
 import { publishBoltEvent, buildBoardEventPayload } from '../lib/bolt-events.js';
 
@@ -19,7 +20,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
     '/boards/:id/elements/promote',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_element.promote'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = promoteSchema.parse(request.body);
@@ -68,7 +69,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/links - List element-task links
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/links',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_link.get')] },
     async (request, reply) => {
       const links = await linkService.getLinks((request as any).board.id);
       return reply.send({ data: links });
@@ -78,7 +79,7 @@ export default async function linkRoutes(fastify: FastifyInstance) {
   // DELETE /links/:linkId - Delete a link
   fastify.delete<{ Params: { linkId: string } }>(
     '/links/:linkId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('board.link.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const { linkId } = request.params;
       if (!linkId || !UUID_REGEX.test(linkId)) {

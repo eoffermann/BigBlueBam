@@ -6,7 +6,8 @@ import {
   BearingProgressMode,
 } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole, requireGoalAccess } from '../middleware/authorize.js';
+import { requireGoalAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as krService from '../services/key-result.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import {
@@ -203,7 +204,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
   // GET /goals/:id/key-results — List KRs for goal
   fastify.get<{ Params: { id: string } }>(
     '/goals/:id/key-results',
-    { preHandler: [requireAuth, requireGoalAccess()] },
+    { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal_key_result.get')] },
     async (request, reply) => {
       const result = await krService.listKeyResults((request as any).goal.id);
       return reply.send(result);
@@ -215,7 +216,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
     '/goals/:id/key-results',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireGoalAccess(), requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, requireGoalAccess(), fastify.requireCan('bearing.goal_key_result.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const goalId = (request as any).goal.id;
@@ -287,7 +288,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
   // GET /key-results/:id — Get KR
   fastify.get<{ Params: { id: string } }>(
     '/key-results/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bearing.key_result.get')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!UUID_REGEX.test(id)) {
@@ -321,7 +322,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
     '/key-results/:id',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bearing.key_result.update'), requireScope('read_write')],
     },
     async (request, reply) => {
       const { id } = request.params;
@@ -346,7 +347,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
     '/key-results/:id',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bearing.key_result.delete'), requireScope('read_write')],
     },
     async (request, reply) => {
       // Capture the KR snapshot before deletion so we can enrich the
@@ -421,7 +422,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
     '/key-results/:id/value',
     {
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireScope('read_write')],
+      preHandler: [requireAuth, shadowOnly('bearing.key_result_value.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const { value } = setValueSchema.parse(request.body);
@@ -503,7 +504,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
   // GET /key-results/:id/links — List links
   fastify.get<{ Params: { id: string } }>(
     '/key-results/:id/links',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bearing.key_result_link.get')] },
     async (request, reply) => {
       const result = await krService.listLinks(request.params.id, request.user!.org_id);
       return reply.send(result);
@@ -515,7 +516,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
     '/key-results/:id/links',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireScope('read_write')],
+      preHandler: [requireAuth, shadowOnly('bearing.key_result_link.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = addLinkSchema.parse(request.body);
@@ -581,7 +582,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
   // DELETE /key-results/:id/links/:linkId — Remove link
   fastify.delete<{ Params: { id: string; linkId: string } }>(
     '/key-results/:id/links/:linkId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('bearing.key_result_link.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await krService.removeLink(request.params.linkId, request.user!.org_id);
       return reply.status(204).send();
@@ -591,7 +592,7 @@ export default async function keyResultRoutes(fastify: FastifyInstance) {
   // GET /key-results/:id/history — Snapshot history
   fastify.get<{ Params: { id: string } }>(
     '/key-results/:id/history',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bearing.key_result_history.get')] },
     async (request, reply) => {
       const result = await krService.getHistory(request.params.id, request.user!.org_id);
       return reply.send(result);

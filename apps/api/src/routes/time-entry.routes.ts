@@ -4,14 +4,14 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { timeEntries } from '../db/schema/time-entries.js';
 import { tasks } from '../db/schema/tasks.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireProjectAccessForEntity } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function timeEntryRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/tasks/:id/time-entries',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task_time_entry.create' }), requireScope('read_write'), requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.task_time_entry.create'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const schema = z.object({
         minutes: z.number().int().positive(),
@@ -46,7 +46,7 @@ export default async function timeEntryRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string } }>(
     '/tasks/:id/time-entries',
-    { preHandler: [requireAuth, requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, requireProjectAccessForEntity('task'), shadowOnly('bam.task_time_entry.get')] },
     async (request, reply) => {
       const result = await db
         .select()
@@ -62,7 +62,7 @@ export default async function timeEntryRoutes(fastify: FastifyInstance) {
     Querystring: { start_date?: string; end_date?: string };
   }>(
     '/me/time-entries',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.me_time_entry.list')] },
     async (request, reply) => {
       const conditions = [eq(timeEntries.user_id, request.user!.id)];
 

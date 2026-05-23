@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as paymentService from '../services/payment.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import {
@@ -27,7 +27,7 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
   // POST /invoices/:id/payments
   fastify.post<{ Params: { id: string } }>(
     '/invoices/:id/payments',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice_payment.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = recordPaymentSchema.parse(request.body);
       const payment = await paymentService.recordPayment(
@@ -100,7 +100,7 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
   // DELETE /payments/:id
   fastify.delete<{ Params: { id: string } }>(
     '/payments/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.payment.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await paymentService.deletePayment(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

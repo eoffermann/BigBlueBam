@@ -5,10 +5,9 @@ import { db } from '../db/index.js';
 import { organizations } from '../db/schema/organizations.js';
 import { systemSettings } from '../db/schema/system-settings.js';
 import { requireAuth } from '../plugins/auth.js';
-import { requireOrgRole } from '../middleware/authorize.js';
 import * as orgService from '../services/org.service.js';
 import { LAUNCHPAD_APP_IDS, type LaunchpadAppId } from './system-settings.routes.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 /**
  * Launchpad app visibility. Two-tier:
@@ -60,7 +59,7 @@ export default async function launchpadRoutes(fastify: FastifyInstance) {
   // Any authenticated user. Returns the resolved list for the caller's active
   // org plus metadata about which layer won, so the UI can show
   // "inherits from platform" hints.
-  fastify.get('/launchpad/apps', { preHandler: [requireAuth] }, async (request) => {
+  fastify.get('/launchpad/apps', { preHandler: [requireAuth, shadowOnly('bam.launchpad_app.list')] }, async (request) => {
     const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
     const orgOverride = org ? readOrgOverride(org.settings) : null;
     const platformDefault = await readPlatformDefault();
@@ -91,7 +90,7 @@ export default async function launchpadRoutes(fastify: FastifyInstance) {
   // checkbox list without a second round-trip.
   fastify.get(
     '/org/launchpad-apps',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_launchpad_app.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_launchpad_app.list')] },
     async (request, reply) => {
       const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
       if (!org) {
@@ -118,7 +117,7 @@ export default async function launchpadRoutes(fastify: FastifyInstance) {
   // `launchpad_apps` key is touched.
   fastify.put(
     '/org/launchpad-apps',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireOrgRole('admin', 'owner'), permission: 'bam.org_launchpad_app.update' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.org_launchpad_app.update')] },
     async (request, reply) => {
       const schema = z.object({ apps: appsArraySchema.nullable() });
       const parsed = schema.safeParse(request.body);

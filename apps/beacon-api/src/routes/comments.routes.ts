@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBeaconReadAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as commentService from '../services/comment.service.js';
 import { CommentError } from '../services/comment.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
@@ -24,7 +25,7 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
   // GET /beacons/:id/comments — list all comments on a beacon
   fastify.get<{ Params: { id: string } }>(
     '/beacons/:id/comments',
-    { preHandler: [requireAuth, requireBeaconReadAccess()] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_comment.get')] },
     async (request, reply) => {
       const beacon = (request as any).beacon;
       const comments = await commentService.listComments(beacon.id);
@@ -37,7 +38,7 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
     '/beacons/:id/comments',
     {
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireBeaconReadAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_comment.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createCommentSchema.parse(request.body);
@@ -97,7 +98,7 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
   // PUT /beacons/:id/comments/:commentId — update own comment
   fastify.put<{ Params: { id: string; commentId: string } }>(
     '/beacons/:id/comments/:commentId',
-    { preHandler: [requireAuth, requireBeaconReadAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_comment.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateCommentSchema.parse(request.body);
       try {
@@ -126,7 +127,7 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
   // DELETE /beacons/:id/comments/:commentId — author or admin only
   fastify.delete<{ Params: { id: string; commentId: string } }>(
     '/beacons/:id/comments/:commentId',
-    { preHandler: [requireAuth, requireBeaconReadAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_comment.delete'), requireScope('read_write')] },
     async (request, reply) => {
       try {
         // Cross-beacon safety: confirm the comment belongs to the beacon

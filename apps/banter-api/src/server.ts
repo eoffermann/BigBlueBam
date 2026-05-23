@@ -92,6 +92,10 @@ fastify.addHook('onReady', async () => {
 // Auth plugin
 await fastify.register(authPlugin);
 
+// Per-action permissions plugin (Wave D Phase 3)
+import permissionsPlugin from './plugins/permissions.js';
+await fastify.register(permissionsPlugin);
+
 // Health + readiness probes (shared plugin)
 await fastify.register(healthCheckPlugin, {
   service: 'banter-api',

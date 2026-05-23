@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { boards, boardCollaborators, projectMembers } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { generateBoardAudioToken } from '../services/livekit.service.js';
 
 const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
@@ -16,7 +17,7 @@ export default async function audioRoutes(fastify: FastifyInstance) {
   // POST /v1/boards/:id/audio/token — get a LiveKit JWT for the board's audio room
   fastify.post(
     '/v1/boards/:id/audio/token',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('board.board_audio_token.create')] },
     async (request, reply) => {
       const { id: boardId } = request.params as { id: string };
       const user = request.user!;

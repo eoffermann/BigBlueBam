@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { requireAuth, requireMinRole } from '../plugins/auth.js';
+import { requireAuth } from '../plugins/auth.js';
 import * as mvService from '../services/materialized-view.service.js';
 
 /**
@@ -28,7 +28,7 @@ export default async function materializedViewsRoutes(fastify: FastifyInstance) 
 
   fastify.post<{ Params: { viewName: string } }>(
     '/materialized-views/:viewName/refresh',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bench.materialized_view_refresh.create')] },
     async (request, reply) => {
       const { viewName } = request.params;
       const result = await mvService.refreshView(viewName);

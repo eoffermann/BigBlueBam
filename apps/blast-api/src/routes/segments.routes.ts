@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as segmentService from '../services/segment.service.js';
 
 const filterConditionSchema = z.object({
@@ -46,7 +46,7 @@ export default async function segmentRoutes(fastify: FastifyInstance) {
     '/segments',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('blast.segment.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createSegmentSchema.parse(request.body);
@@ -75,7 +75,7 @@ export default async function segmentRoutes(fastify: FastifyInstance) {
   // PATCH /segments/:id
   fastify.patch<{ Params: { id: string } }>(
     '/segments/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.segment.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateSegmentSchema.parse(request.body);
       const segment = await segmentService.updateSegment(
@@ -90,7 +90,7 @@ export default async function segmentRoutes(fastify: FastifyInstance) {
   // DELETE /segments/:id
   fastify.delete<{ Params: { id: string } }>(
     '/segments/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.segment.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await segmentService.deleteSegment(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

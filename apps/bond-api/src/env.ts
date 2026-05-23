@@ -31,6 +31,11 @@ const envSchema = z.object({
   // Public base URL for deep-linking into the Bond SPA from event payloads
   // (e.g. ${PUBLIC_URL}/bond/deals/:id). Matches book-api / bill-api convention.
   PUBLIC_URL: z.string().default('http://localhost'),
+
+  // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
+  // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records
+  // divergence; 'on' additionally blocks on resolver-deny.
+  BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('warn'),
 });
 
 export type Env = z.infer<typeof envSchema>;

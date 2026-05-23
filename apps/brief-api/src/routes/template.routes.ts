@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as templateService from '../services/template.service.js';
 
 const createTemplateSchema = z.object({
@@ -26,7 +26,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // GET /templates — List system + org templates
   fastify.get(
     '/templates',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.template.list')] },
     async (request, reply) => {
       const templates = await templateService.listTemplates(request.user!.org_id);
       return reply.send({ data: templates });
@@ -38,7 +38,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
     '/templates',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('brief.template.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createTemplateSchema.parse(request.body);
@@ -54,7 +54,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // PATCH /templates/:id — Update a template
   fastify.patch<{ Params: { id: string } }>(
     '/templates/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('brief.template.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateTemplateSchema.parse(request.body);
       const template = await templateService.updateTemplate(
@@ -69,7 +69,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // DELETE /templates/:id — Delete a template
   fastify.delete<{ Params: { id: string } }>(
     '/templates/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('brief.template.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const deleted = await templateService.deleteTemplate(
         request.params.id,

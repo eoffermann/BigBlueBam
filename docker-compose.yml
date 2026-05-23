@@ -120,6 +120,11 @@ services:
       # configured soak duration.
       BBB_PERMISSIONS_ENFORCE: ${BBB_PERMISSIONS_ENFORCE:-warn}
       INTERNAL_HELPDESK_SECRET: ${INTERNAL_HELPDESK_SECRET:?INTERNAL_HELPDESK_SECRET is required}
+      # Wave D Phase 2/3: satellites + mcp-server POST to /internal/permissions/
+      # dual-read with this shared secret. Without it, the api only accepts
+      # the helpdesk secret, every satellite resolver call returns 401, and
+      # mode=on falls back to "unknown" → pass-through → enforcement no-op.
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       # BAM-RL-E2E: opt-in flag to multiply the global rate limit ceiling for
       # parallel e2e runs. Leave unset on real production deployments.
       BBB_E2E_PERMISSIVE_RATE_LIMIT: ${BBB_E2E_PERMISSIVE_RATE_LIMIT:-}
@@ -170,6 +175,15 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       MCP_INTERNAL_API_TOKEN: ${MCP_INTERNAL_API_TOKEN:-}
+      # Wave D Phase 2: per-action enforcement at the MCP layer. 'warn' runs
+      # the resolver after §15 PolicyGate accepts and records divergence;
+      # 'on' additionally returns PERMISSION_DENIED on resolver-deny. Flip
+      # to 'on' only after the divergence dashboard sits at ~0 for the
+      # configured soak window. Always-permitted core tools bypass.
+      BBB_PERMISSIONS_ENFORCE: ${BBB_PERMISSIONS_ENFORCE:-warn}
+      # The resolver lives on the api side; checkPermissionViaResolver hits
+      # this URL via POST /internal/permissions/dual-read.
+      BBB_API_INTERNAL_URL: http://api:4000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 15s
@@ -381,6 +395,10 @@ services:
       VOICE_AGENT_URL: http://voice-agent:4003
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      BBB_PERMISSIONS_ENFORCE: ${BBB_PERMISSIONS_ENFORCE:-warn}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4002/health"]
       interval: 15s
@@ -417,6 +435,10 @@ services:
       BBB_API_INTERNAL_URL: http://api:4000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      BBB_PERMISSIONS_ENFORCE: ${BBB_PERMISSIONS_ENFORCE:-warn}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4004/health"]
       interval: 15s
@@ -444,6 +466,10 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -481,6 +507,9 @@ services:
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -516,6 +545,10 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -557,6 +590,10 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -592,6 +629,10 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -635,6 +676,10 @@ services:
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-}
       - TRACKING_BASE_URL=${PUBLIC_URL:-http://localhost}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -675,6 +720,10 @@ services:
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET:-}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -713,6 +762,10 @@ services:
       - RATE_LIMIT_WINDOW_MS=60000
       - QUERY_TIMEOUT_MS=${BENCH_QUERY_TIMEOUT_MS:-10000}
       - CACHE_TTL_SECONDS=${BENCH_CACHE_TTL:-60}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -749,6 +802,10 @@ services:
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -787,6 +844,10 @@ services:
       - RATE_LIMIT_WINDOW_MS=60000
       - PUBLIC_FORM_RATE_LIMIT=10
       - PUBLIC_FORM_RATE_WINDOW_MS=3600000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

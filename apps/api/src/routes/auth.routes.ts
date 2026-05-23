@@ -4,12 +4,15 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import * as authService from '../services/auth.service.js';
 import * as orgService from '../services/org.service.js';
+import { computePermissionMatrix } from '../services/permissions.service.js';
 import { requireAuth } from '../plugins/auth.js';
 import { env } from '../env.js';
 import { db } from '../db/index.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { organizations } from '../db/schema/organizations.js';
 import { users } from '../db/schema/users.js';
+import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
+import { resolveUserOrgRole } from '../services/role-resolver.js';
 import { loginHistory } from '../db/schema/login-history.js';
 import type { LoginFailureReason } from '../services/auth.service.js';
 import {
@@ -109,7 +112,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
             id: result.user.id,
             email: result.user.email,
             display_name: result.user.display_name,
-            role: result.user.role,
+            // Bootstrap mints the first SuperUser as the owner of the new org.
+            role: 'owner',
             org_id: result.user.org_id,
             is_superuser: result.user.is_superuser,
             active_org_id: result.user.org_id,
@@ -172,7 +176,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
           id: result.user.id,
           email: result.user.email,
           display_name: result.user.display_name,
-          role: result.user.role,
+          // Register mints the new account as owner of the new org.
+          role: 'owner',
           org_id: result.user.org_id,
           is_superuser: result.user.is_superuser,
           active_org_id: result.user.org_id,
@@ -236,13 +241,16 @@ export default async function authRoutes(fastify: FastifyInstance) {
         failureReason: null,
       });
 
+      // Wave E.F: role is resolved from the user's home-org group membership.
+      const loginRole = (await resolveUserOrgRole(result.user.id, result.user.org_id)) ?? 'member';
+
       return reply.send({
         data: {
           user: {
             id: result.user.id,
             email: result.user.email,
             display_name: result.user.display_name,
-            role: result.user.role,
+            role: loginRole,
             org_id: result.user.org_id,
             is_superuser: result.user.is_superuser,
             active_org_id: result.user.org_id,
@@ -319,6 +327,25 @@ export default async function authRoutes(fastify: FastifyInstance) {
       });
     }
 
+    // Wave E.C: materialize the full per-action permission matrix and
+    // ship it alongside the user payload so the frontend `useCan` hook
+    // can answer "may I show this button?" without a per-call RPC.
+    // Resolver runs over the cached PermissionContext; matrix itself is
+    // cached at `perms:matrix:<user_id>:<org_id>` with the same 5-min TTL
+    // and the same invalidation listener that clears the context cache.
+    // Failures here are non-fatal — the hook deny-by-defaults until it
+    // has a matrix, but the rest of /auth/me must not be blocked.
+    let permissions: Record<string, boolean> = {};
+    try {
+      const matrix = await computePermissionMatrix(request);
+      if (matrix) permissions = matrix;
+    } catch (err) {
+      request.log.warn(
+        { err, user_id: request.user!.id },
+        'computePermissionMatrix failed; serving /auth/me without permissions',
+      );
+    }
+
     return reply.send({
       data: {
         id: user.id,
@@ -349,6 +376,10 @@ export default async function authRoutes(fastify: FastifyInstance) {
         notification_prefs: user.notification_prefs,
         force_password_change: user.force_password_change,
         created_at: user.created_at.toISOString(),
+        // Wave E.C: per-action permission matrix consumed by the
+        // `useCan` hook in @bigbluebam/ui/use-can. Empty `{}` when the
+        // resolver couldn't load (deny-by-default on the client).
+        permissions,
       },
     });
   });
@@ -356,10 +387,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.get('/auth/orgs', { preHandler: [requireAuth] }, async (request, reply) => {
     const userId = request.user!.id;
 
+    // Wave E.F: role resolved via account_group_memberships → permission_groups.
     const memberships = await db
       .select({
         org_id: organizationMemberships.org_id,
-        role: organizationMemberships.role,
+        role: permissionGroups.legacy_role,
         is_default: organizationMemberships.is_default,
         joined_at: organizationMemberships.joined_at,
         org_name: organizations.name,
@@ -368,6 +400,15 @@ export default async function authRoutes(fastify: FastifyInstance) {
       })
       .from(organizationMemberships)
       .innerJoin(organizations, eq(organizationMemberships.org_id, organizations.id))
+      .leftJoin(
+        accountGroupMemberships,
+        and(
+          eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+          eq(accountGroupMemberships.scope_type, 'org'),
+          eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+        ),
+      )
+      .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
       .where(eq(organizationMemberships.user_id, userId));
 
     return reply.send({
@@ -378,7 +419,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
           name: m.org_name,
           slug: m.org_slug,
           logo_url: m.org_logo_url,
-          role: m.role,
+          role: m.role ?? 'member',
           is_default: m.is_default,
           joined_at: m.joined_at.toISOString(),
         })),
@@ -415,17 +456,27 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const { org_id } = parsed.data;
     const userId = request.user!.id;
 
-    // Verify the user is a member of the requested org
+    // Verify the user is a member of the requested org. Wave E.F: role
+    // is resolved via account_group_memberships → permission_groups.
     const [membership] = await db
       .select({
         org_id: organizationMemberships.org_id,
-        role: organizationMemberships.role,
+        role: permissionGroups.legacy_role,
         is_default: organizationMemberships.is_default,
         org_name: organizations.name,
         org_slug: organizations.slug,
       })
       .from(organizationMemberships)
       .innerJoin(organizations, eq(organizationMemberships.org_id, organizations.id))
+      .leftJoin(
+        accountGroupMemberships,
+        and(
+          eq(accountGroupMemberships.user_id, organizationMemberships.user_id),
+          eq(accountGroupMemberships.scope_type, 'org'),
+          eq(accountGroupMemberships.scope_id, organizationMemberships.org_id),
+        ),
+      )
+      .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
       .where(
         and(
           eq(organizationMemberships.user_id, userId),
@@ -470,7 +521,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
           name: membership.org_name,
           slug: membership.org_slug,
         },
-        role: membership.role,
+        role: membership.role ?? 'member',
         is_default: membership.is_default,
         cache_bust: Date.now().toString(),
       },

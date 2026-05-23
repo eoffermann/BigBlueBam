@@ -9,7 +9,7 @@ import {
   banterChannelMemberships,
   users,
 } from '../db/schema/index.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { broadcastToChannel } from '../services/realtime.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import {
@@ -27,7 +27,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
   // POST /v1/messages/:id/reactions — toggle reaction
   fastify.post(
     '/v1/messages/:id/reactions',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.message_reaction.create'), requireScope('read_write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;

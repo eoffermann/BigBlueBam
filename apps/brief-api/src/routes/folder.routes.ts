@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as folderService from '../services/folder.service.js';
 
 const createFolderSchema = z.object({
@@ -25,7 +25,7 @@ export default async function folderRoutes(fastify: FastifyInstance) {
   // GET /folders — List folder tree for project/org
   fastify.get(
     '/folders',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.folder.list')] },
     async (request, reply) => {
       const query = listFoldersQuerySchema.parse(request.query);
       const folders = await folderService.listFolders(
@@ -41,7 +41,7 @@ export default async function folderRoutes(fastify: FastifyInstance) {
     '/folders',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('brief.folder.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createFolderSchema.parse(request.body);
@@ -57,7 +57,7 @@ export default async function folderRoutes(fastify: FastifyInstance) {
   // PATCH /folders/:id — Update a folder
   fastify.patch<{ Params: { id: string } }>(
     '/folders/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('brief.folder.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateFolderSchema.parse(request.body);
       const folder = await folderService.updateFolder(
@@ -72,7 +72,7 @@ export default async function folderRoutes(fastify: FastifyInstance) {
   // DELETE /folders/:id — Delete a folder
   fastify.delete<{ Params: { id: string } }>(
     '/folders/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('brief.folder.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const deleted = await folderService.deleteFolder(
         request.params.id,

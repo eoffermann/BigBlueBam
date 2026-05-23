@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as eventService from '../services/event.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichEvent, loadActor, loadOrg } from '../lib/bolt-enrich.js';
@@ -85,7 +85,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
     '/events',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('book.event.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createEventSchema.parse(request.body);
@@ -135,7 +135,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
   // PATCH /events/:id
   fastify.patch<{ Params: { id: string } }>(
     '/events/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.event.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateEventSchema.parse(request.body);
       const event = await eventService.updateEvent(
@@ -172,7 +172,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
   // DELETE /events/:id
   fastify.delete<{ Params: { id: string } }>(
     '/events/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.event.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const event = await eventService.deleteEvent(
         request.params.id,

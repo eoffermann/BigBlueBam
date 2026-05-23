@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
   LINK_KINDS,
   createLink,
@@ -44,7 +45,7 @@ export default async function entityLinksRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.get(
     '/v1/entity-links',
-    { preHandler: [requireAuth, requireScope('read')] },
+    { preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.entity_link.list')] },
     async (request, reply) => {
       const parsed = listQuerySchema.safeParse(request.query);
       if (!parsed.success) {
@@ -96,7 +97,7 @@ export default async function entityLinksRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post(
     '/v1/entity-links',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), shadowOnly('bam.entity_link.create')] },
     async (request, reply) => {
       const parsed = createBodySchema.safeParse(request.body);
       if (!parsed.success) {
@@ -160,7 +161,7 @@ export default async function entityLinksRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.delete<{ Params: { id: string } }>(
     '/v1/entity-links/:id',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bam.entity_link.delete')] },
     async (request, reply) => {
       const user = request.user!;
       const result = await removeLink({

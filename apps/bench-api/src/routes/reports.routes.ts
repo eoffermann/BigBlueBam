@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as reportService from '../services/report.service.js';
 
 // ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   // GET /reports — List reports (optional fuzzy search on name)
   fastify.get(
     '/reports',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bench.report.list')] },
     async (request, reply) => {
       const query = z.object({ search: z.string().optional() }).parse(request.query);
       const reports = await reportService.listReports(
@@ -52,7 +52,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     '/reports',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bench.report.create'), requireScope('admin')],
     },
     async (request, reply) => {
       const body = createReportSchema.parse(request.body);
@@ -68,7 +68,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   // PATCH /reports/:id — Update report
   fastify.patch<{ Params: { id: string } }>(
     '/reports/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bench.report.update'), requireScope('admin')] },
     async (request, reply) => {
       const body = updateReportSchema.parse(request.body);
       const report = await reportService.updateReport(
@@ -83,7 +83,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   // DELETE /reports/:id — Delete report
   fastify.delete<{ Params: { id: string } }>(
     '/reports/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bench.report.delete'), requireScope('admin')] },
     async (request, reply) => {
       await reportService.deleteReport(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -93,7 +93,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   // POST /reports/:id/send-now — Trigger immediate report
   fastify.post<{ Params: { id: string } }>(
     '/reports/:id/send-now',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bench.report_send_now.create')] },
     async (request, reply) => {
       const result = await reportService.sendReportNow(
         request.params.id,

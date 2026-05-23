@@ -26,6 +26,11 @@ const envSchema = z.object({
 
   // Internal service-to-service secret (shared with other BigBlueBam services)
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
+
+  // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
+  // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records
+  // divergence; 'on' additionally blocks on resolver-deny.
+  BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('warn'),
 });
 
 export type Env = z.infer<typeof envSchema>;

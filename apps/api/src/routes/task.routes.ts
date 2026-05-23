@@ -8,9 +8,9 @@ import * as projectService from '../services/project.service.js';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
-import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
-import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function taskRoutes(fastify: FastifyInstance) {
   fastify.get<{
@@ -28,7 +28,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     };
   }>(
     '/projects/:id/tasks',
-    { preHandler: [requireAuth, requireProjectAccess()] },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_task.get')] },
     async (request, reply) => {
       const query = request.query;
       const result = await taskService.listTasks(request.params.id, {
@@ -49,7 +49,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string }; Querystring: { sprint_id?: string } }>(
     '/projects/:id/board',
-    { preHandler: [requireAuth, requireProjectAccess()] },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_board.get')] },
     async (request, reply) => {
       const project = await projectService.getProject(request.params.id);
       if (!project) {
@@ -89,7 +89,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/tasks',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_task.create' }), requireScope('read_write'), requireProjectRole('admin', 'member')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_task.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = createTaskSchema.parse(request.body);
 
@@ -144,7 +144,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
   });
   fastify.post(
     '/v1/tasks/upsert-by-external-id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task_upsert_by_external_id.create' }), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.task_upsert_by_external_id.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = taskUpsertBodySchema.parse(request.body);
 
@@ -207,7 +207,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
   // to the right project board with the task drawer open.
   fastify.get<{ Params: { ref: string } }>(
     '/tasks/by-ref/:ref',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.task_by_ref.get')] },
     async (request, reply) => {
       // Normalize: uppercase prefix, drop accidental '#' / whitespace.
       const raw = request.params.ref.trim().replace(/^#/, '');
@@ -277,7 +277,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string } }>(
     '/tasks/:id',
-    { preHandler: [requireAuth, requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, requireProjectAccessForEntity('task'), shadowOnly('bam.task.get')] },
     async (request, reply) => {
       const task = await taskService.getTask(request.params.id);
       if (!task) {
@@ -314,7 +314,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/tasks/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task.update' }), requireScope('read_write'), requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.task.update'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const data = updateTaskSchema.parse(request.body);
       const task = await taskService.updateTask(request.params.id, data, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
@@ -336,7 +336,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/tasks/:id/move',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task.move' }), requireScope('read_write'), requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.task.move'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const data = moveTaskSchema.parse(request.body);
       const task = await taskService.moveTask(request.params.id, data, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
@@ -362,7 +362,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       preHandler: [
         requireAuth,
         // Wave B sample: destructive verb + project-scoped entity check.
-        dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task.delete' }),
+        fastify.requireCan('bam.task.delete'),
         requireScope('read_write'),
         requireProjectAccessForEntity('task'),
       ],
@@ -386,7 +386,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/tasks/bulk',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task_bulk.create' }), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.task_bulk.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = bulkUpdateSchema.parse(request.body);
 
@@ -432,7 +432,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
   // ── POST /tasks/:id/duplicate ─────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/tasks/:id/duplicate',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task.duplicate' }), requireScope('read_write'), requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.task.duplicate'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const bodySchema = z.object({
         include_subtasks: z.boolean().optional().default(false),

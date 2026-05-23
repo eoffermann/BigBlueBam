@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
-import { requireMinOrgRole, requireAutomationAccess } from '../middleware/authorize.js';
+import { requireAutomationAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as executionService from '../services/execution.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -16,7 +17,7 @@ export default async function executionRoutes(fastify: FastifyInstance) {
   // GET /automations/:id/executions — List executions for an automation
   fastify.get<{ Params: { id: string } }>(
     '/automations/:id/executions',
-    { preHandler: [requireAuth, requireAutomationAccess()] },
+    { preHandler: [requireAuth, requireAutomationAccess(), shadowOnly('bolt.automation_execution.get')] },
     async (request, reply) => {
       const query = listExecutionsQuerySchema.parse(request.query);
       const result = await executionService.listExecutions({
@@ -33,7 +34,7 @@ export default async function executionRoutes(fastify: FastifyInstance) {
   // GET /executions — Org-wide execution list (admin only)
   fastify.get(
     '/executions',
-    { preHandler: [requireAuth, requireMinOrgRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bolt.execution.list')] },
     async (request, reply) => {
       const query = listExecutionsQuerySchema.parse(request.query);
       const result = await executionService.listOrgExecutions({
@@ -49,7 +50,7 @@ export default async function executionRoutes(fastify: FastifyInstance) {
   // GET /executions/:id — Get execution detail with steps
   fastify.get<{ Params: { id: string } }>(
     '/executions/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.execution.get')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!id || !UUID_REGEX.test(id)) {
@@ -81,7 +82,7 @@ export default async function executionRoutes(fastify: FastifyInstance) {
   // POST /executions/:id/retry — Retry a failed execution
   fastify.post<{ Params: { id: string } }>(
     '/executions/:id/retry',
-    { preHandler: [requireAuth, requireMinOrgRole('member')] },
+    { preHandler: [requireAuth, fastify.requireCan('bolt.execution_retry.create')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!id || !UUID_REGEX.test(id)) {

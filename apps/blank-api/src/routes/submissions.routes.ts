@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { requireAuth, requireMinRole } from '../plugins/auth.js';
+import { requireAuth } from '../plugins/auth.js';
 import * as submissionService from '../services/submission.service.js';
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ export default async function submissionRoutes(fastify: FastifyInstance) {
   // DELETE /submissions/:id — Delete a submission
   fastify.delete<{ Params: { id: string } }>(
     '/submissions/:id',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('blank.submission.delete')] },
     async (request, reply) => {
       await submissionService.deleteSubmission(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

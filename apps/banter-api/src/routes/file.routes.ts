@@ -4,7 +4,7 @@ import multipart from '@fastify/multipart';
 import { randomUUID } from 'node:crypto';
 import * as Minio from 'minio';
 import { env } from '../env.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { getBanterSettingsCached } from '../services/settings-cache.js';
 
 const DEFAULT_MAX_FILE_SIZE_MB = 25;
@@ -67,7 +67,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   // POST /v1/files/upload — multipart file upload to MinIO
   fastify.post(
     '/v1/files/upload',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.file_upload.create'), requireScope('read_write')] },
     async (request, reply) => {
       const file = await request.file();
 
@@ -142,7 +142,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   // POST /v1/files/presigned-upload — generate a presigned PUT URL
   fastify.post(
     '/v1/files/presigned-upload',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.file_presigned_upload.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = z
         .object({

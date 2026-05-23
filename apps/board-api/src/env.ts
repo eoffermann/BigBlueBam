@@ -35,6 +35,11 @@ const envSchema = z.object({
   // Build metadata
   GIT_COMMIT: z.string().default('dev'),
   BUILD_DATE: z.string().default(new Date().toISOString()),
+
+  // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
+  // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records
+  // divergence; 'on' additionally blocks on resolver-deny.
+  BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('warn'),
 });
 
 export type Env = z.infer<typeof envSchema>;

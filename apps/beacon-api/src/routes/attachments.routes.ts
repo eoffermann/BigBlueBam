@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBeaconReadAccess, requireBeaconEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as attachmentService from '../services/attachment.service.js';
 import { AttachmentError } from '../services/attachment.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
@@ -22,7 +23,7 @@ export default async function attachmentsRoutes(fastify: FastifyInstance) {
   // GET /beacons/:id/attachments — list all attachments on a beacon
   fastify.get<{ Params: { id: string } }>(
     '/beacons/:id/attachments',
-    { preHandler: [requireAuth, requireBeaconReadAccess()] },
+    { preHandler: [requireAuth, requireBeaconReadAccess(), shadowOnly('beacon.beacon_attachment.get')] },
     async (request, reply) => {
       const beacon = (request as any).beacon;
       const attachments = await attachmentService.listAttachments(beacon.id);
@@ -35,7 +36,7 @@ export default async function attachmentsRoutes(fastify: FastifyInstance) {
     '/beacons/:id/attachments',
     {
       config: { rateLimit: { max: 100, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon_attachment.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const file = await request.file();
@@ -124,7 +125,7 @@ export default async function attachmentsRoutes(fastify: FastifyInstance) {
   // DELETE /beacons/:id/attachments/:attachmentId
   fastify.delete<{ Params: { id: string; attachmentId: string } }>(
     '/beacons/:id/attachments/:attachmentId',
-    { preHandler: [requireAuth, requireBeaconEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon_attachment.delete'), requireScope('read_write')] },
     async (request, reply) => {
       try {
         const withBeacon = await attachmentService.getAttachmentWithBeacon(

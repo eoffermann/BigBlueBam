@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole } from '../plugins/auth.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { requireAuth } from '../plugins/auth.js';
 import * as llmService from '../services/llm-provider.service.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
 
@@ -42,7 +41,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
   // -----------------------------------------------------------------------
   fastify.get(
     '/llm-providers',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.llm_provider.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.llm_provider.list')] },
     async (request, reply) => {
       const { project_id } = request.query as { project_id?: string };
       const data = await llmService.listProviders(
@@ -60,7 +59,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/llm-providers',
     {
-      preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.llm_provider.create' })],
+      preHandler: [requireAuth, fastify.requireCan('bam.llm_provider.create')],
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
@@ -158,7 +157,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
   // -----------------------------------------------------------------------
   fastify.get(
     '/llm-providers/resolve',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.llm_provider_resolve.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.llm_provider_resolve.list')] },
     async (request, reply) => {
       const { project_id } = request.query as { project_id?: string };
       const provider = await llmService.resolveProvider(
@@ -182,7 +181,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
   // -----------------------------------------------------------------------
   fastify.get<{ Params: { id: string } }>(
     '/llm-providers/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.llm_provider.get' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.llm_provider.get')] },
     async (request, reply) => {
       const provider = await llmService.getProvider(
         request.params.id,
@@ -213,8 +212,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
     {
       preHandler: [
         requireAuth,
-        // Wave B sample: requireMinRole('admin') gate pattern.
-        dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.llm_provider.update' }),
+        fastify.requireCan('bam.llm_provider.update'),
       ],
     },
     async (request, reply) => {
@@ -266,7 +264,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
   // -----------------------------------------------------------------------
   fastify.delete<{ Params: { id: string } }>(
     '/llm-providers/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.llm_provider.delete' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.llm_provider.delete')] },
     async (request, reply) => {
       const deleted = await llmService.deleteProvider(
         request.params.id,
@@ -295,7 +293,7 @@ export default async function llmProviderRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/llm-providers/:id/test',
     {
-      preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.llm_provider_test.create' })],
+      preHandler: [requireAuth, fastify.requireCan('bam.llm_provider_test.create')],
       config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
     },
     async (request, reply) => {

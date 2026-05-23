@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../plugins/auth.js';
 import { requireDocumentAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 const HTML_TEMPLATE = (title: string, body: string) => `<!DOCTYPE html>
 <html lang="en">
@@ -35,7 +36,7 @@ export default async function exportRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/export/markdown — Export as Markdown
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id/export/markdown',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_export_markdown.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const content = doc.plain_text ?? '';
@@ -51,7 +52,7 @@ export default async function exportRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/export/html — Export as styled HTML
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id/export/html',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_export_html.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const body = doc.html_snapshot ?? `<p>${(doc.plain_text ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;

@@ -2,10 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import {
-  requireMinOrgRole,
   requireBoardAccess,
   requireBoardEditAccess,
 } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as boardService from '../services/board.service.js';
 import { publishBoltEvent, buildBoardEventPayload } from '../lib/bolt-events.js';
 
@@ -52,7 +52,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // GET /boards — List boards
   fastify.get(
     '/boards',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('board.board.list')] },
     async (request, reply) => {
       const query = listBoardsQuerySchema.parse(request.query);
       const result = await boardService.listBoards({
@@ -75,7 +75,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
     '/boards',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('board.board.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createBoardSchema.parse(request.body);
@@ -108,7 +108,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // GET /boards/recent — Recently updated boards
   fastify.get(
     '/boards/recent',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('board.board_recent.list')] },
     async (request, reply) => {
       const result = await boardService.getRecent(request.user!.id, request.user!.org_id);
       return reply.send(result);
@@ -118,7 +118,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // GET /boards/starred — User's starred boards
   fastify.get(
     '/boards/starred',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('board.board_starred.list')] },
     async (request, reply) => {
       const result = await boardService.getStarred(request.user!.id, request.user!.org_id);
       return reply.send(result);
@@ -128,7 +128,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // GET /boards/stats — Org-level board statistics
   fastify.get(
     '/boards/stats',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('board.board_stat.list')] },
     async (request, reply) => {
       const stats = await boardService.getStats(
         request.user!.org_id,
@@ -143,7 +143,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
     '/boards/search',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('board.board_search.list')],
     },
     async (request, reply) => {
       const { q } = searchQuerySchema.parse(request.query);
@@ -155,7 +155,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // GET /boards/:id — Get board by ID (excludes yjs_state)
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board.get')] },
     async (request, reply) => {
       const board = await boardService.getBoard(
         (request as any).board.id,
@@ -172,7 +172,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // remediation dialog.
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/integrity',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_integrity.get')] },
     async (request, reply) => {
       const issues = await boardService.checkBoardIntegrity(
         (request as any).board.id,
@@ -189,7 +189,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // 0143 means a malformed reassign target is caught at the DB level too.
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/remediate',
-    { preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_remediate.create'), requireScope('read_write')] },
     async (request, reply) => {
       const schema = z.discriminatedUnion('action', [
         z.object({ action: z.literal('detach') }),
@@ -209,7 +209,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // GET /boards/:id/stats — Board statistics
   fastify.get<{ Params: { id: string } }>(
     '/boards/:id/stats',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_stat.get')] },
     async (request, reply) => {
       const stats = await boardService.getBoardStats(
         (request as any).board.id,
@@ -232,7 +232,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // PATCH /boards/:id — Update board metadata
   fastify.patch<{ Params: { id: string } }>(
     '/boards/:id',
-    { preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateBoardSchema.parse(request.body);
       const board = await boardService.updateBoard(
@@ -273,7 +273,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // DELETE /boards/:id — Archive board
   fastify.delete<{ Params: { id: string } }>(
     '/boards/:id',
-    { preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const board = await boardService.archiveBoard(
         (request as any).board.id,
@@ -291,7 +291,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // param like ?permanent=true would conflate the two in audit grep.
   fastify.delete<{ Params: { id: string } }>(
     '/boards/:id/permanent',
-    { preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board_permanent.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const result = await boardService.permanentlyDeleteBoard(
         (request as any).board.id,
@@ -304,7 +304,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // POST /boards/:id/restore — Restore archived board
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/restore',
-    { preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board.restore'), requireScope('read_write')] },
     async (request, reply) => {
       const board = await boardService.restoreBoard(
         (request as any).board.id,
@@ -320,7 +320,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
     '/boards/:id/duplicate',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireBoardAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board.duplicate'), requireScope('read_write')],
     },
     async (request, reply) => {
       const board = await boardService.duplicateBoard(
@@ -335,7 +335,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // POST /boards/:id/star — Toggle star on board
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/star',
-    { preHandler: [requireAuth, requireBoardAccess()] },
+    { preHandler: [requireAuth, requireBoardAccess(), shadowOnly('board.board_star.create')] },
     async (request, reply) => {
       const result = await boardService.toggleStar(
         (request as any).board.id,
@@ -348,7 +348,7 @@ export default async function boardRoutes(fastify: FastifyInstance) {
   // POST /boards/:id/lock — Toggle lock on board (admin/owner only)
   fastify.post<{ Params: { id: string } }>(
     '/boards/:id/lock',
-    { preHandler: [requireAuth, requireBoardEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireBoardEditAccess(), shadowOnly('board.board.lock'), requireScope('read_write')] },
     async (request, reply) => {
       const { board, previousLocked } = await boardService.toggleLock(
         (request as any).board.id,

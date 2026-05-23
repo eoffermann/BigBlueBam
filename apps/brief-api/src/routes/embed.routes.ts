@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireDocumentAccess, requireDocumentEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as embedService from '../services/embed.service.js';
 
 const createEmbedSchema = z.object({
@@ -19,7 +20,7 @@ export default async function embedRoutes(fastify: FastifyInstance) {
     '/documents/:id/embeds',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document_embed.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createEmbedSchema.parse(request.body);
@@ -46,7 +47,7 @@ export default async function embedRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/embeds — List embeds for a document
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id/embeds',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_embed.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const embeds = await embedService.listEmbeds(doc.id);
@@ -57,7 +58,7 @@ export default async function embedRoutes(fastify: FastifyInstance) {
   // DELETE /embeds/:embedId — Delete an embed
   fastify.delete<{ Params: { embedId: string } }>(
     '/embeds/:embedId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('brief.embed.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const deleted = await embedService.deleteEmbed(request.params.embedId, request.user!.org_id);
       if (!deleted) {

@@ -5,15 +5,15 @@ import { db } from '../db/index.js';
 import { commentReactions } from '../db/schema/comment-reactions.js';
 import { comments } from '../db/schema/comments.js';
 import { users } from '../db/schema/users.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireProjectAccessForEntity } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function reactionRoutes(fastify: FastifyInstance) {
   // ── POST /comments/:id/reactions ──────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/comments/:id/reactions',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.comment_reaction.create' }), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.comment_reaction.create'), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
     async (request, reply) => {
       const bodySchema = z.object({
         emoji: z.string().min(1).max(50),
@@ -85,7 +85,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
   // ── GET /comments/:id/reactions ───────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/comments/:id/reactions',
-    { preHandler: [requireAuth, requireProjectAccessForEntity('comment')] },
+    { preHandler: [requireAuth, requireProjectAccessForEntity('comment'), shadowOnly('bam.comment_reaction.get')] },
     async (request, reply) => {
       const commentId = request.params.id;
 

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as calendarService from '../services/calendar.service.js';
 
 const createCalendarSchema = z.object({
@@ -42,7 +42,7 @@ export default async function calendarRoutes(fastify: FastifyInstance) {
   // POST /calendars
   fastify.post(
     '/calendars',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.calendar.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = createCalendarSchema.parse(request.body);
       const calendar = await calendarService.createCalendar(
@@ -57,7 +57,7 @@ export default async function calendarRoutes(fastify: FastifyInstance) {
   // PATCH /calendars/:id
   fastify.patch<{ Params: { id: string } }>(
     '/calendars/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.calendar.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateCalendarSchema.parse(request.body);
       const calendar = await calendarService.updateCalendar(
@@ -72,7 +72,7 @@ export default async function calendarRoutes(fastify: FastifyInstance) {
   // DELETE /calendars/:id
   fastify.delete<{ Params: { id: string } }>(
     '/calendars/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.calendar.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await calendarService.deleteCalendar(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

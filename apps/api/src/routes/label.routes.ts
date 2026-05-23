@@ -5,14 +5,14 @@ import { db } from '../db/index.js';
 import { labels } from '../db/schema/labels.js';
 import { projects } from '../db/schema/projects.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
-import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function labelRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/labels',
-    { preHandler: [requireAuth, requireProjectAccess()] },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_label.get')] },
     async (request, reply) => {
       const result = await db
         .select()
@@ -31,7 +31,7 @@ export default async function labelRoutes(fastify: FastifyInstance) {
   // projects for guests, and everything for superusers.
   fastify.get(
     '/labels',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.label.list')] },
     async (request, reply) => {
       let projectIds: string[] = [];
 
@@ -75,7 +75,7 @@ export default async function labelRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/labels',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_label.create' }), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_label.create'), requireScope('read_write')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(100),
@@ -102,7 +102,7 @@ export default async function labelRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/labels/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.label.update' }), requireScope('read_write'), requireProjectAccessForEntity('label')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.label.update'), requireScope('read_write'), requireProjectAccessForEntity('label')] },
     async (request, reply) => {
       const schema = z.object({
         name: z.string().max(100).optional(),
@@ -141,7 +141,7 @@ export default async function labelRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/labels/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.label.delete' }), requireScope('read_write'), requireProjectAccessForEntity('label')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.label.delete'), requireScope('read_write'), requireProjectAccessForEntity('label')] },
     async (request, reply) => {
       const [deleted] = await db
         .delete(labels)

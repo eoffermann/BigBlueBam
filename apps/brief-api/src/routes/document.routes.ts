@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole, requireDocumentAccess, requireDocumentEditAccess } from '../middleware/authorize.js';
+import { requireDocumentAccess, requireDocumentEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as documentService from '../services/document.service.js';
 import {
   loadYjsState,
@@ -91,7 +92,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
     '/documents',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('brief.document.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createDocumentSchema.parse(request.body);
@@ -107,7 +108,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // GET /documents/starred — User's starred documents
   fastify.get(
     '/documents/starred',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.document_starred.list')] },
     async (request, reply) => {
       const docs = await documentService.getStarredDocuments(
         request.user!.id,
@@ -120,7 +121,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // GET /documents/recent — Recently updated documents
   fastify.get(
     '/documents/recent',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.document_recent.list')] },
     async (request, reply) => {
       const query = z.object({ limit: z.coerce.number().int().min(1).max(50).optional() }).parse(request.query);
       const docs = await documentService.getRecentDocuments(
@@ -137,7 +138,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
     '/documents/search',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('brief.document_search.list')],
     },
     async (request, reply) => {
       const query = searchDocumentsQuerySchema.parse(request.query);
@@ -161,7 +162,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
     '/documents/semantic-search',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('brief.document_semantic_search.list')],
     },
     async (request, reply) => {
       const query = z
@@ -235,7 +236,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // GET /documents/stats — Org-wide document statistics
   fastify.get(
     '/documents/stats',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.document_stat.list')] },
     async (request, reply) => {
       const stats = await documentService.getStats(
         request.user!.org_id,
@@ -248,7 +249,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // GET /documents — List documents with filters
   fastify.get(
     '/documents',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.document.list')] },
     async (request, reply) => {
       const query = listDocumentsQuerySchema.parse(request.query);
       const result = await documentService.listDocuments({
@@ -283,6 +284,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
           (request.params as { id?: string }).id = (request.params as { slug: string }).slug;
         },
         requireDocumentAccess(),
+        shadowOnly('brief.document_by_slug.get'),
       ],
     },
     async (request, reply) => {
@@ -295,7 +297,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // GET /documents/:id — Get a single document
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       // Exclude yjs_state from default response for size; clients fetch it separately
@@ -307,7 +309,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // PATCH /documents/:id — Update document metadata
   fastify.patch<{ Params: { id: string } }>(
     '/documents/:id',
-    { preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateDocumentSchema.parse(request.body);
       const doc = await documentService.updateDocument(
@@ -323,7 +325,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // DELETE /documents/:id — Archive document
   fastify.delete<{ Params: { id: string } }>(
     '/documents/:id',
-    { preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const doc = await documentService.archiveDocument(
         (request as any).document.id,
@@ -337,7 +339,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // POST /documents/:id/restore — Unarchive
   fastify.post<{ Params: { id: string } }>(
     '/documents/:id/restore',
-    { preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document.restore'), requireScope('read_write')] },
     async (request, reply) => {
       const doc = await documentService.restoreDocument(
         (request as any).document.id,
@@ -353,7 +355,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
     '/documents/:id/duplicate',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireDocumentAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document.duplicate'), requireScope('read_write')],
     },
     async (request, reply) => {
       const doc = await documentService.duplicateDocument(
@@ -368,7 +370,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // POST /documents/:id/star — Toggle star
   fastify.post<{ Params: { id: string } }>(
     '/documents/:id/star',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_star.create')] },
     async (request, reply) => {
       const result = await documentService.toggleStar(
         (request as any).document.id,
@@ -381,7 +383,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // POST /documents/:id/promote — Graduate to Beacon
   fastify.post<{ Params: { id: string } }>(
     '/documents/:id/promote',
-    { preHandler: [requireAuth, requireDocumentEditAccess(), requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireDocumentEditAccess(), fastify.requireCan('brief.document.promote'), requireScope('read_write')] },
     async (request, reply) => {
       const result = await documentService.promoteToBeacon(
         (request as any).document.id,
@@ -395,7 +397,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // PUT /documents/:id/content — Replace document content (used by MCP brief_update_content)
   fastify.put<{ Params: { id: string } }>(
     '/documents/:id/content',
-    { preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document_content.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateContentSchema.parse(request.body);
       const plainText = data.plain_text ?? data.content ?? null;
@@ -421,7 +423,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // POST /documents/:id/append — Append content to document (used by MCP brief_append_content)
   fastify.post<{ Params: { id: string } }>(
     '/documents/:id/append',
-    { preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document_append.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = appendContentSchema.parse(request.body);
       const doc = (request as any).document;
@@ -457,7 +459,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
   // large and most callers do not need it.
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id/yjs-state',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_yjs_state.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const result = await loadYjsState(doc.id, request.user!.org_id);
@@ -490,7 +492,7 @@ export default async function documentRoutes(fastify: FastifyInstance) {
     '/documents/:id/yjs-state',
     {
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document_yjs_state.update'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = yjsStateSchema.parse(request.body);

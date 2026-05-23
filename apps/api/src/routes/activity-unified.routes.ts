@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 import { requireAuth, type AuthUser } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as activityUnified from '../services/activity-unified.service.js';
 
 /**
@@ -48,7 +49,7 @@ export default async function activityUnifiedRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.get(
     '/v1/activity/unified',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.activity_unified.list')] },
     async (request, reply) => {
       const user = request.user as AuthUser;
       const parsed = unifiedQuerySchema.safeParse(request.query);
@@ -88,7 +89,7 @@ export default async function activityUnifiedRoutes(fastify: FastifyInstance) {
   // existence cannot be probed via timing / response codes.
   fastify.get(
     '/v1/activity/unified/by-actor',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.activity_unified_by_actor.list')] },
     async (request, reply) => {
       const user = request.user as AuthUser;
       const parsed = byActorQuerySchema.safeParse(request.query);

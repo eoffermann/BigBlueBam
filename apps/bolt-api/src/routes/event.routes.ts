@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { getAllEvents, getEventsBySource, getAvailableActions } from '../services/event-catalog.js';
 
 const VALID_SOURCES = new Set([
@@ -23,7 +24,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
   // GET /events — Full event catalog
   fastify.get(
     '/events',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.event.list')] },
     async (_request, reply) => {
       const events = getAllEvents();
       return reply.send({ data: events });
@@ -33,7 +34,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
   // GET /events/:source — Events for a specific source
   fastify.get<{ Params: { source: string } }>(
     '/events/:source',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.event.get')] },
     async (request, reply) => {
       const { source } = request.params;
       if (!VALID_SOURCES.has(source)) {
@@ -55,7 +56,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
   // GET /actions — List all MCP tools usable as actions
   fastify.get(
     '/actions',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.action.list')] },
     async (_request, reply) => {
       const actions = getAvailableActions();
       return reply.send({ data: actions });

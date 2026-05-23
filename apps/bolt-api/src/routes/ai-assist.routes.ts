@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { env } from '../env.js';
 
 const generateSchema = z.object({
@@ -128,7 +129,7 @@ export default async function aiAssistRoutes(fastify: FastifyInstance) {
     '/ai/generate',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bolt.ai_generate.create')],
     },
     async (request, reply) => {
       const { prompt, context, project_id } = generateSchema.parse(request.body);
@@ -217,7 +218,7 @@ export default async function aiAssistRoutes(fastify: FastifyInstance) {
     '/ai/explain',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('bolt.ai_explain.create')],
     },
     async (request, reply) => {
       const { automation, project_id } = explainSchema.parse(request.body);

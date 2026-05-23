@@ -6,18 +6,18 @@ import { sprints } from '../db/schema/sprints.js';
 import { tasks } from '../db/schema/tasks.js';
 import { taskStates } from '../db/schema/task-states.js';
 import { sprintTasks } from '../db/schema/sprint-tasks.js';
-import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
-import { requireProjectRole, requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireProjectAccess, requireProjectAccessForEntity } from '../middleware/authorize.js';
 import { postToSlack } from '../services/slack-notify.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { loadActor, loadOrg, loadProjectContext } from '../services/bolt-event-enricher.service.js';
 import { sprintUrl } from '../lib/urls.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function sprintRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/sprints',
-    { preHandler: [requireAuth, requireProjectAccess()] },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_sprint.get')] },
     async (request, reply) => {
       const projectSprints = await db
         .select()
@@ -31,7 +31,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/sprints',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_sprint.create' }), requireScope('read_write'), requireProjectRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_sprint.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = createSprintSchema.parse(request.body);
 
@@ -53,7 +53,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string } }>(
     '/sprints/:id',
-    { preHandler: [requireAuth, requireProjectAccessForEntity('sprint')] },
+    { preHandler: [requireAuth, requireProjectAccessForEntity('sprint'), shadowOnly('bam.sprint.get')] },
     async (request, reply) => {
       const [sprint] = await db
         .select()
@@ -78,7 +78,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/sprints/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.sprint.update' }), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.sprint.update'), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
     async (request, reply) => {
       const data = updateSprintSchema.parse(request.body);
 
@@ -111,7 +111,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/sprints/:id/start',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.sprint_start.create' }), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.sprint_start.create'), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
     async (request, reply) => {
       // BAM-024: Wrap status check + active-sprint check + update in a
       // transaction with SELECT ... FOR UPDATE to serialize concurrent starts.
@@ -242,7 +242,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/sprints/:id/complete',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.sprint_complete.create' }), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.sprint_complete.create'), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
     async (request, reply) => {
       const data = completeSprintSchema.parse(request.body);
 
@@ -462,7 +462,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/sprints/:id/cancel',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.sprint.cancel' }), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.sprint.cancel'), requireScope('read_write'), requireProjectAccessForEntity('sprint')] },
     async (request, reply) => {
       const [sprint] = await db
         .select()
@@ -525,7 +525,7 @@ export default async function sprintRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { id: string } }>(
     '/sprints/:id/report',
-    { preHandler: [requireAuth, requireProjectAccessForEntity('sprint')] },
+    { preHandler: [requireAuth, requireProjectAccessForEntity('sprint'), shadowOnly('bam.sprint_report.get')] },
     async (request, reply) => {
       const [sprint] = await db
         .select()

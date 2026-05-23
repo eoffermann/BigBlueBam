@@ -10,6 +10,7 @@ import { users } from '../db/schema/users.js';
 import { organizations } from '../db/schema/organizations.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { sessions } from '../db/schema/sessions.js';
+import { setUserOrgRole } from '../services/role-resolver.js';
 import { requireAuth } from '../plugins/auth.js';
 
 /**
@@ -318,7 +319,6 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
           email: profile.email,
           display_name: profile.name ?? profile.email,
           password_hash: passwordHash,
-          role: 'owner',
           is_superuser: false,
         })
         .returning();
@@ -326,9 +326,10 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
       await tx.insert(organizationMemberships).values({
         user_id: user!.id,
         org_id: org!.id,
-        role: 'owner',
         is_default: true,
       });
+      // Wave E.F: role lives in account_group_memberships.
+      await setUserOrgRole(user!.id, org!.id, 'owner', {}, tx);
 
       await tx.insert(oauthUserLinks).values({
         user_id: user!.id,

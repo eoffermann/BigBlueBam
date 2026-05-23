@@ -5,11 +5,12 @@ import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { requireAuth } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function exportRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/export',
-    { preHandler: [requireAuth, requireProjectAccess()], config: { rateLimit: { max: 3, timeWindow: '1 minute' } } },
+    { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project.export')], config: { rateLimit: { max: 3, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const schema = z.object({
         format: z.enum(['json', 'csv']),

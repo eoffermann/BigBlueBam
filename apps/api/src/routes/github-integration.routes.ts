@@ -5,10 +5,10 @@ import { db } from '../db/index.js';
 import { githubIntegrations, taskGithubRefs } from '../db/schema/github-integrations.js';
 import { tasks } from '../db/schema/tasks.js';
 import { phases } from '../db/schema/phases.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
-import { requireProjectRole, requireProjectAccessForEntity } from '../middleware/authorize.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireProjectAccessForEntity } from '../middleware/authorize.js';
 import { generateWebhookSecret } from '../services/github-integration.service.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 /**
  * Phase 6: GitHub integration CRUD + task ref listing.
@@ -31,7 +31,7 @@ const putIntegrationBodySchema = z.object({
 export default async function githubIntegrationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/projects/:id/github-integration',
-    { preHandler: [requireAuth, requireProjectRole('admin', 'member'), dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.project_github_integration.get' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_github_integration.get')] },
     async (request, reply) => {
       const [row] = await db
         .select({
@@ -59,8 +59,7 @@ export default async function githubIntegrationRoutes(fastify: FastifyInstance) 
     {
       preHandler: [
         requireAuth,
-        requireProjectRole('admin'),
-        dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.project_github_integration.update' }),
+        fastify.requireCan('bam.project_github_integration.update'),
         requireScope('read_write'),
       ],
     },
@@ -175,8 +174,7 @@ export default async function githubIntegrationRoutes(fastify: FastifyInstance) 
     {
       preHandler: [
         requireAuth,
-        requireProjectRole('admin'),
-        dualReadGate({ legacy: requireMinRole('admin'), permission: 'bam.project_github_integration.delete' }),
+        fastify.requireCan('bam.project_github_integration.delete'),
         requireScope('read_write'),
       ],
     },
@@ -204,7 +202,7 @@ export default async function githubIntegrationRoutes(fastify: FastifyInstance) 
 
   fastify.get<{ Params: { id: string } }>(
     '/tasks/:id/github-refs',
-    { preHandler: [requireAuth, requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, requireProjectAccessForEntity('task'), shadowOnly('bam.task_github_ref.get')] },
     async (request, reply) => {
       // Gate on the task's project membership — a user who can read a
       // task's details should be able to see its linked commits/PRs.

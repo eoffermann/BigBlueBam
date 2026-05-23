@@ -13,7 +13,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as searchService from '../services/search.service.js';
 import * as savedQueryService from '../services/saved-query.service.js';
 
@@ -64,7 +64,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
     '/search',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, shadowOnly('beacon.search.create')],
     },
     async (request, reply) => {
       const body = searchRequestSchema.parse(request.body);
@@ -91,7 +91,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
   // GET /search/suggest — Typeahead suggestions
   fastify.get(
     '/search/suggest',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('beacon.search_suggest.list')] },
     async (request, reply) => {
       const query = suggestQuerySchema.parse(request.query);
       const results = await searchService.suggestBeacons(
@@ -107,7 +107,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
   // POST /search/context — Same as /search but with enriched linked beacons
   fastify.post(
     '/search/context',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('beacon.search_context.create')] },
     async (request, reply) => {
       const body = searchRequestSchema.parse(request.body);
 
@@ -138,7 +138,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
   // POST /search/saved — Save a named query
   fastify.post(
     '/search/saved',
-    { preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('beacon.search_saved.create'), requireScope('read_write')] },
     async (request, reply) => {
       const data = saveQuerySchema.parse(request.body);
       const saved = await savedQueryService.saveQuery(
@@ -153,7 +153,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
   // GET /search/saved — List saved queries
   fastify.get(
     '/search/saved',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('beacon.search_saved.list')] },
     async (request, reply) => {
       const query = z
         .object({ project_id: z.string().uuid().optional() })
@@ -171,7 +171,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
   // GET /search/saved/:id — Get a saved query
   fastify.get<{ Params: { id: string } }>(
     '/search/saved/:id',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('beacon.search_saved.get')] },
     async (request, reply) => {
       const result = await savedQueryService.getQuery(
         request.params.id,
@@ -195,7 +195,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
   // DELETE /search/saved/:id — Delete a saved query
   fastify.delete<{ Params: { id: string } }>(
     '/search/saved/:id',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('beacon.search_saved.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await savedQueryService.deleteQuery(request.params.id, request.user!.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });

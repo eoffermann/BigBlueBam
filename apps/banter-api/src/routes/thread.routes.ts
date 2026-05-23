@@ -8,7 +8,7 @@ import {
   banterChannelMemberships,
   users,
 } from '../db/schema/index.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { broadcastToChannel } from '../services/realtime.js';
 import { extractMentions } from '../services/notification-queue.js';
 import { emitNotification, threadDeepLink } from '../lib/notify.js';
@@ -177,7 +177,7 @@ export default async function threadRoutes(fastify: FastifyInstance) {
   // POST /v1/messages/:id/thread — post reply
   fastify.post(
     '/v1/messages/:id/thread',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.message_thread.create'), requireScope('read_write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;

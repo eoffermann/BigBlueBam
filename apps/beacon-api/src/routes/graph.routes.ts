@@ -9,7 +9,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
 import * as graphService from '../services/graph.service.js';
 
 // ---------------------------------------------------------------------------
@@ -53,7 +52,7 @@ export default async function graphRoutes(fastify: FastifyInstance) {
   // GET /graph/neighbors
   fastify.get(
     '/graph/neighbors',
-    { preHandler: [requireAuth, requireMinOrgRole('member')] },
+    { preHandler: [requireAuth, fastify.requireCan('beacon.graph_neighbor.list')] },
     async (request, reply) => {
       const query = neighborsQuerySchema.parse(request.query);
 
@@ -74,7 +73,7 @@ export default async function graphRoutes(fastify: FastifyInstance) {
   // GET /graph/hubs
   fastify.get(
     '/graph/hubs',
-    { preHandler: [requireAuth, requireMinOrgRole('member')] },
+    { preHandler: [requireAuth, fastify.requireCan('beacon.graph_hub.list')] },
     async (request, reply) => {
       const query = hubsQuerySchema.parse(request.query);
 
@@ -93,7 +92,7 @@ export default async function graphRoutes(fastify: FastifyInstance) {
   // GET /graph/recent
   fastify.get(
     '/graph/recent',
-    { preHandler: [requireAuth, requireMinOrgRole('member')] },
+    { preHandler: [requireAuth, fastify.requireCan('beacon.graph_recent.list')] },
     async (request, reply) => {
       const query = recentQuerySchema.parse(request.query);
 

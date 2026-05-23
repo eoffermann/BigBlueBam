@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { fileTypeFromBuffer } from 'file-type';
 import { env } from '../env.js';
 import { uploadFile, getFileStream } from '../services/upload.service.js';
-import { requireAuth, requireMinRole } from '../plugins/auth.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 const MAX_FILE_SIZE = env.UPLOAD_MAX_FILE_SIZE; // 25MB
 
@@ -39,7 +39,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // POST /upload — accept multipart file upload, store in MinIO
   fastify.post(
     '/upload',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.upload.create' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.upload.create')] },
     async (request, reply) => {
       const file = await request.file();
 
@@ -120,7 +120,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // GET /files/*  — proxy file downloads from MinIO (BAM-005: require auth)
   fastify.get(
     '/files/*',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.file.list')] },
     async (request, reply) => {
       const key = (request.params as Record<string, string>)['*'];
 

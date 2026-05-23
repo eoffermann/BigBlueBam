@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as templateService from '../services/template.service.js';
 
 const templateTypes = ['campaign', 'drip_step', 'transactional', 'system'] as const;
@@ -45,7 +45,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
     '/templates',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('blast.template.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createTemplateSchema.parse(request.body);
@@ -74,7 +74,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // PATCH /templates/:id
   fastify.patch<{ Params: { id: string } }>(
     '/templates/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.template.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateTemplateSchema.parse(request.body);
       const template = await templateService.updateTemplate(
@@ -90,7 +90,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // DELETE /templates/:id
   fastify.delete<{ Params: { id: string } }>(
     '/templates/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.template.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await templateService.deleteTemplate(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -118,7 +118,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // POST /templates/:id/duplicate
   fastify.post<{ Params: { id: string } }>(
     '/templates/:id/duplicate',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.template.duplicate'), requireScope('read_write')] },
     async (request, reply) => {
       const template = await templateService.duplicateTemplate(
         request.params.id,

@@ -6,6 +6,7 @@ import { activityLog } from '../db/schema/activity-log.js';
 import { agentRunners } from '../db/schema/agent-runners.js';
 import { users } from '../db/schema/users.js';
 import { requireAuth, type AuthUser } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 /**
  * Agent identity / audit / heartbeat routes (AGENTIC_TODO §10, Wave 1).
@@ -145,7 +146,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // under.
   fastify.post(
     '/v1/agents/self-report',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.agent_self_report.create')] },
     async (request, reply) => {
       if (!requireServiceKind(request, reply)) return;
 
@@ -202,7 +203,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     Querystring: { since?: string; limit?: string; cursor?: string };
   }>(
     '/v1/agents/:agent_user_id/audit',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.agent_audit.get')] },
     async (request, reply) => {
       const callerOrgId = request.user!.active_org_id;
       const { agent_user_id } = request.params;
@@ -280,7 +281,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // we expose the raw timestamp and let callers decide.
   fastify.get(
     '/v1/agents',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.agent.list')] },
     async (request, reply) => {
       const orgId = request.user!.active_org_id;
 

@@ -27,6 +27,11 @@ const envSchema = z.object({
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),
+
+  // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
+  // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records
+  // divergence; 'on' additionally blocks on resolver-deny.
+  BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('warn'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -20,6 +20,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { projects } from '../db/schema/projects.js';
 import { requireAuth, requireScope, type AuthUser } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
   countTasksByPhrase,
   TaskPhraseCountError,
@@ -56,7 +57,7 @@ export default async function taskAnalyticsRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/v1/tasks/analytics/count-by-phrase',
     {
-      preHandler: [requireAuth, requireScope('read')],
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.task_analytic_count_by_phrase.list')],
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
     },
     async (request, reply) => {

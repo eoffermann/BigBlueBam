@@ -9,9 +9,7 @@ import { users } from '../db/schema/users.js';
 import { sprints } from '../db/schema/sprints.js';
 import { projects } from '../db/schema/projects.js';
 import { comments } from '../db/schema/comments.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
-import { requireProjectRole } from '../middleware/authorize.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 
 // ── helpers ─────────────────────────────────────────────────────────────
 
@@ -162,7 +160,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/import/csv ─────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/import/csv',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_import_csv.create' }), requireScope('read_write'), requireProjectRole('admin', 'member')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_import_csv.create'), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         rows: z.array(z.record(z.string())).max(5000),
@@ -270,7 +268,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/import/trello ──────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/import/trello',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_import_trello.create' }), requireScope('read_write'), requireProjectRole('admin', 'member')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_import_trello.create'), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         lists: z.array(z.object({
@@ -391,7 +389,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/import/jira ────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/import/jira',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_import_jira.create' }), requireScope('read_write'), requireProjectRole('admin', 'member')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_import_jira.create'), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         rows: z.array(z.record(z.string())).max(5000),
@@ -487,7 +485,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/import/github ──────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/import/github',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.project_import_github.create' }), requireScope('read_write'), requireProjectRole('admin', 'member')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.project_import_github.create'), requireScope('read_write')] },
     async (request, reply) => {
       const bodySchema = z.object({
         issues: z.array(z.object({

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as bookingPageService from '../services/booking-page.service.js';
 
 const createBookingPageSchema = z.object({
@@ -42,7 +42,7 @@ export default async function bookingPageRoutes(fastify: FastifyInstance) {
   // POST /booking-pages
   fastify.post(
     '/booking-pages',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.booking_page.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = createBookingPageSchema.parse(request.body);
       const page = await bookingPageService.createBookingPage(
@@ -57,7 +57,7 @@ export default async function bookingPageRoutes(fastify: FastifyInstance) {
   // PATCH /booking-pages/:id
   fastify.patch<{ Params: { id: string } }>(
     '/booking-pages/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.booking_page.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateBookingPageSchema.parse(request.body);
       const page = await bookingPageService.updateBookingPage(
@@ -72,7 +72,7 @@ export default async function bookingPageRoutes(fastify: FastifyInstance) {
   // DELETE /booking-pages/:id
   fastify.delete<{ Params: { id: string } }>(
     '/booking-pages/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('book.booking_page.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await bookingPageService.deleteBookingPage(
         request.params.id,

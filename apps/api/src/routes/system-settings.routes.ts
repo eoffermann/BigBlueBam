@@ -4,10 +4,9 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { systemSettings } from '../db/schema/system-settings.js';
 import { requireAuth } from '../plugins/auth.js';
-import { requireSuperuser } from '../middleware/require-superuser.js';
 import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 // Canonical Launchpad app catalog. Mirrors the APPS array in
 // packages/ui/launchpad.tsx — keep them in sync. The launchpad_default_apps
@@ -106,7 +105,7 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
   // ─── GET /system-settings — list all settings (SuperUser only) ────────
   fastify.get(
     '/system-settings',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.system_setting.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.system_setting.list')] },
     async () => {
       const rows = await db.select().from(systemSettings);
       return { data: rows };
@@ -116,7 +115,7 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
   // ─── GET /system-settings/:key — read a single setting (authenticated) ─
   fastify.get<{ Params: { key: string } }>(
     '/system-settings/:key',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bam.system_setting.get')] },
     async (request, reply) => {
       const { key } = request.params;
       const [row] = await db
@@ -142,7 +141,7 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
   // ─── PUT /system-settings/:key — update a setting (SuperUser only) ─────
   fastify.put<{ Params: { key: string } }>(
     '/system-settings/:key',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.system_setting.update' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.system_setting.update')] },
     async (request, reply) => {
       const { key } = request.params;
 

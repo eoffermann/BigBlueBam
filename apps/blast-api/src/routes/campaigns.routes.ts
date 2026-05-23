@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as campaignService from '../services/campaign.service.js';
 import * as analyticsService from '../services/analytics.service.js';
 import { publishBoltEvent, buildCampaignEventPayload } from '../lib/bolt-events.js';
@@ -54,7 +54,7 @@ export default async function campaignRoutes(fastify: FastifyInstance) {
     '/campaigns',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('blast.campaign.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createCampaignSchema.parse(request.body);
@@ -102,7 +102,7 @@ export default async function campaignRoutes(fastify: FastifyInstance) {
   // PATCH /campaigns/:id
   fastify.patch<{ Params: { id: string } }>(
     '/campaigns/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.campaign.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateCampaignSchema.parse(request.body);
       const campaign = await campaignService.updateCampaign(
@@ -117,7 +117,7 @@ export default async function campaignRoutes(fastify: FastifyInstance) {
   // DELETE /campaigns/:id
   fastify.delete<{ Params: { id: string } }>(
     '/campaigns/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.campaign.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await campaignService.deleteCampaign(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -127,7 +127,7 @@ export default async function campaignRoutes(fastify: FastifyInstance) {
   // POST /campaigns/:id/send
   fastify.post<{ Params: { id: string } }>(
     '/campaigns/:id/send',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.campaign.send'), requireScope('read_write')] },
     async (request, reply) => {
       const result = await campaignService.sendCampaign(
         request.params.id,
@@ -159,7 +159,7 @@ export default async function campaignRoutes(fastify: FastifyInstance) {
   // POST /campaigns/:id/schedule
   fastify.post<{ Params: { id: string } }>(
     '/campaigns/:id/schedule',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.campaign_schedule.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = scheduleCampaignSchema.parse(request.body);
       const result = await campaignService.scheduleCampaign(
@@ -174,7 +174,7 @@ export default async function campaignRoutes(fastify: FastifyInstance) {
   // POST /campaigns/:id/pause
   fastify.post<{ Params: { id: string } }>(
     '/campaigns/:id/pause',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.campaign_pause.create'), requireScope('read_write')] },
     async (request, reply) => {
       const result = await campaignService.pauseCampaign(
         request.params.id,
@@ -187,7 +187,7 @@ export default async function campaignRoutes(fastify: FastifyInstance) {
   // POST /campaigns/:id/cancel
   fastify.post<{ Params: { id: string } }>(
     '/campaigns/:id/cancel',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.campaign.cancel'), requireScope('read_write')] },
     async (request, reply) => {
       const result = await campaignService.cancelCampaign(
         request.params.id,

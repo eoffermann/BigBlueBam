@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as templateService from '../services/template.service.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,7 +50,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // GET /templates - List system + org templates
   fastify.get(
     '/templates',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('board.template.list')] },
     async (request, reply) => {
       const { category } = listTemplatesQuerySchema.parse(request.query);
       const templates = await templateService.listTemplates(
@@ -66,7 +66,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
     '/templates',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('board.template.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createTemplateSchema.parse(request.body);
@@ -82,7 +82,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // PATCH /templates/:id - Update template
   fastify.patch<{ Params: { id: string } }>(
     '/templates/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('board.template.update'), requireScope('read_write')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!validateUuid(id, request, reply)) return;
@@ -95,7 +95,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // DELETE /templates/:id - Delete template
   fastify.delete<{ Params: { id: string } }>(
     '/templates/:id',
-    { preHandler: [requireAuth, requireMinOrgRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('board.template.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!validateUuid(id, request, reply)) return;
@@ -109,7 +109,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
     '/templates/:id/instantiate',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireScope('read_write')],
+      preHandler: [requireAuth, shadowOnly('board.template_instantiate.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const { id } = request.params;

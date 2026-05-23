@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { banterSettings, banterChannelGroups } from '../db/schema/index.js';
-import { requireAuth, requireRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { broadcastToOrg } from '../services/realtime.js';
 import { logAudit } from '../services/audit.js';
 import { invalidateBanterSettingsCache } from '../services/settings-cache.js';
@@ -168,12 +168,18 @@ function maskSensitiveFields<T extends Record<string, unknown>>(settings: T): T 
 // ── Routes ───────────────────────────────────────────────────────
 
 export default async function adminRoutes(fastify: FastifyInstance) {
-  const adminPreHandler = [requireAuth, requireRole(['owner', 'admin']), requireScope('admin')];
+  // Wave D Phase 3: factory wraps the org admin/owner role gate with the
+  // dual-read resolver for each route's specific permission_id.
+  const adminPreHandler = (permission: string) => [
+    requireAuth,
+    fastify.requireCan(permission),
+    requireScope('admin'),
+  ];
 
   // GET /v1/admin/settings
   fastify.get(
     '/v1/admin/settings',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_setting.list') },
     async (request, reply) => {
       const user = request.user!;
 
@@ -209,7 +215,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // PATCH /v1/admin/settings
   fastify.patch(
     '/v1/admin/settings',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_setting.update') },
     async (request, reply) => {
       const user = request.user!;
       const body = updateSettingsSchema.parse(request.body);
@@ -294,7 +300,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/settings/test-livekit
   fastify.post(
     '/v1/admin/settings/test-livekit',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_setting_test_livekit.create') },
     async (request, reply) => {
       const user = request.user!;
 
@@ -352,7 +358,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/settings/test-stt — test STT provider connectivity
   fastify.post(
     '/v1/admin/settings/test-stt',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_setting_test_stt.create') },
     async (request, reply) => {
       const user = request.user!;
 
@@ -443,7 +449,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/settings/test-tts — test TTS provider connectivity
   fastify.post(
     '/v1/admin/settings/test-tts',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_setting_test_tt.create') },
     async (request, reply) => {
       const user = request.user!;
 
@@ -532,7 +538,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/settings/push-voice-config — push STT/TTS/LLM config to voice agent
   fastify.post(
     '/v1/admin/settings/push-voice-config',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_setting_push_voice_config.create') },
     async (request, reply) => {
       const user = request.user!;
 
@@ -635,7 +641,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/channel-groups
   fastify.post(
     '/v1/admin/channel-groups',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_channel_group.create') },
     async (request, reply) => {
       const user = request.user!;
       const body = createChannelGroupSchema.parse(request.body);
@@ -711,7 +717,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // PATCH /v1/admin/channel-groups/:id
   fastify.patch(
     '/v1/admin/channel-groups/:id',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_channel_group.update') },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -762,7 +768,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // DELETE /v1/admin/channel-groups/:id
   fastify.delete(
     '/v1/admin/channel-groups/:id',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_channel_group.delete') },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -805,7 +811,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/channel-groups/reorder
   fastify.post(
     '/v1/admin/channel-groups/reorder',
-    { preHandler: adminPreHandler },
+    { preHandler: adminPreHandler('banter.admin_channel_group_reorder.create') },
     async (request, reply) => {
       const user = request.user!;
       const body = reorderGroupsSchema.parse(request.body);

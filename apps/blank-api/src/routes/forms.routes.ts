@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as formService from '../services/form.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichForm, loadActor, loadOrg } from '../lib/bolt-enrich.js';
@@ -170,7 +170,7 @@ export default async function formRoutes(fastify: FastifyInstance) {
   // POST /forms/:id/publish — Publish form
   fastify.post<{ Params: { id: string } }>(
     '/forms/:id/publish',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('blank.form.publish')] },
     async (request, reply) => {
       const form = await formService.publishForm(request.params.id, request.user!.org_id);
       // Fire-and-forget enriched Bolt event (Phase B / Tier 1)
@@ -206,7 +206,7 @@ export default async function formRoutes(fastify: FastifyInstance) {
   // POST /forms/:id/close — Close form
   fastify.post<{ Params: { id: string } }>(
     '/forms/:id/close',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('blank.form.close')] },
     async (request, reply) => {
       const form = await formService.closeForm(request.params.id, request.user!.org_id);
       // Fire-and-forget enriched Bolt event. The submission count is the

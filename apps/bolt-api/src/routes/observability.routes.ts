@@ -9,6 +9,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
   getTraceByEventId,
   listRecentEvents,
@@ -27,7 +28,7 @@ export default async function observabilityRoutes(fastify: FastifyInstance) {
   // GET /events/:event_id/trace — Full evaluation trail for one ingest event
   fastify.get<{ Params: { event_id: string } }>(
     '/events/:event_id/trace',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.event_trace.get')] },
     async (request, reply) => {
       const { event_id } = request.params;
       if (!event_id || !UUID_REGEX.test(event_id)) {
@@ -57,7 +58,7 @@ export default async function observabilityRoutes(fastify: FastifyInstance) {
   // so we keep the trace-side listing under /events/recent.
   fastify.get(
     '/events/recent',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.event_recent.list')] },
     async (request, reply) => {
       const query = recentEventsQuerySchema.parse(request.query);
       const events = await listRecentEvents({

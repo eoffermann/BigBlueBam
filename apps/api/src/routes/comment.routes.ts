@@ -6,12 +6,12 @@ import { comments } from '../db/schema/comments.js';
 import { commentReactions } from '../db/schema/comment-reactions.js';
 import { tasks } from '../db/schema/tasks.js';
 import { users } from '../db/schema/users.js';
-import { requireAuth, requireScope, requireMinRole } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireProjectAccessForEntity } from '../middleware/authorize.js';
 import * as projectService from '../services/project.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichTask, loadActor, loadOrg } from '../services/bolt-event-enricher.service.js';
-import { dualReadGate } from '../middleware/dual-read.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function commentRoutes(fastify: FastifyInstance) {
   fastify.get<{
@@ -19,7 +19,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
     Querystring: { cursor?: string; limit?: string };
   }>(
     '/tasks/:id/comments',
-    { preHandler: [requireAuth, requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, requireProjectAccessForEntity('task'), shadowOnly('bam.task_comment.get')] },
     async (request, reply) => {
       const limit = Math.min(request.query.limit ? parseInt(request.query.limit, 10) : 50, 200);
       const conditions = [eq(comments.task_id, request.params.id)];
@@ -113,7 +113,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Params: { id: string } }>(
     '/tasks/:id/comments',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.task_comment.create' }), requireScope('read_write'), requireProjectAccessForEntity('task')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.task_comment.create'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const data = createCommentSchema.parse(request.body);
 
@@ -217,7 +217,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
 
   fastify.patch<{ Params: { id: string } }>(
     '/comments/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.comment.update' }), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.comment.update'), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
     async (request, reply) => {
       const data = updateCommentSchema.parse(request.body);
 
@@ -265,7 +265,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { id: string } }>(
     '/comments/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireMinRole('member'), permission: 'bam.comment.delete' }), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.comment.delete'), requireScope('read_write'), requireProjectAccessForEntity('comment')] },
     async (request, reply) => {
       const [existing] = await db
         .select()

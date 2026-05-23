@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as senderDomainService from '../services/sender-domain.service.js';
 
 const addDomainSchema = z.object({
@@ -21,7 +21,7 @@ export default async function senderDomainRoutes(fastify: FastifyInstance) {
   // POST /sender-domains
   fastify.post(
     '/sender-domains',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.sender_domain.create'), requireScope('admin')] },
     async (request, reply) => {
       const body = addDomainSchema.parse(request.body);
       const domain = await senderDomainService.addSenderDomain(
@@ -35,7 +35,7 @@ export default async function senderDomainRoutes(fastify: FastifyInstance) {
   // POST /sender-domains/:id/verify
   fastify.post<{ Params: { id: string } }>(
     '/sender-domains/:id/verify',
-    { preHandler: [requireAuth, requireMinRole('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.sender_domain.verify')] },
     async (request, reply) => {
       const result = await senderDomainService.verifySenderDomain(
         request.params.id,
@@ -48,7 +48,7 @@ export default async function senderDomainRoutes(fastify: FastifyInstance) {
   // DELETE /sender-domains/:id
   fastify.delete<{ Params: { id: string } }>(
     '/sender-domains/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('blast.sender_domain.delete'), requireScope('admin')] },
     async (request, reply) => {
       await senderDomainService.removeSenderDomain(
         request.params.id,

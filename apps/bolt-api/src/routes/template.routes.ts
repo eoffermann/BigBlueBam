@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
-import { requireMinOrgRole } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as templateService from '../services/template.service.js';
 import * as automationService from '../services/automation.service.js';
 
@@ -17,7 +17,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
   // GET /templates — List pre-built automation templates
   fastify.get(
     '/templates',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.template.list')] },
     async (_request, reply) => {
       const templates = templateService.listTemplates();
       return reply.send({ data: templates });
@@ -29,7 +29,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
     '/templates/:id/instantiate',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bolt.template_instantiate.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const { id } = request.params;

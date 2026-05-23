@@ -229,6 +229,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -414,6 +417,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -599,6 +605,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -778,6 +787,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -942,6 +954,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -1133,6 +1148,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -1309,6 +1327,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -1485,6 +1506,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -1664,6 +1688,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -1846,6 +1873,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -2016,6 +2046,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health
@@ -2276,6 +2309,9 @@ importers:
       '@bigbluebam/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@bigbluebam/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@bigbluebam/service-health':
         specifier: workspace:*
         version: link:../../packages/service-health

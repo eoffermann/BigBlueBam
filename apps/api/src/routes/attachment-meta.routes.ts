@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
   getAttachmentMetaById,
   listAttachmentsForParent,
@@ -35,7 +36,7 @@ export default async function attachmentMetaRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/v1/attachments/:id',
     {
-      preHandler: [requireAuth, requireScope('read')],
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.attachment.get')],
       config: { rateLimit: { max: 200, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
@@ -87,7 +88,7 @@ export default async function attachmentMetaRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/v1/attachments',
     {
-      preHandler: [requireAuth, requireScope('read')],
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.attachment.list')],
       config: { rateLimit: { max: 200, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
@@ -177,7 +178,7 @@ export default async function attachmentMetaRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/v1/attachments/_meta',
     {
-      preHandler: [requireAuth, requireScope('read')],
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.attachment__meta.list')],
     },
     async (_request, reply) => {
       return reply.send({

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as importService from '../services/import.service.js';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
     '/imports/mappings',
     {
       config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bond.import_mapping.create'), requireScope('admin')],
     },
     async (request, reply) => {
       const body = createMappingSchema.parse(request.body);
@@ -55,7 +55,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/imports/mappings',
     {
-      preHandler: [requireAuth, requireMinRole('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bond.import_mapping.list')],
     },
     async (request, reply) => {
       const query = listMappingsQuerySchema.parse(request.query);

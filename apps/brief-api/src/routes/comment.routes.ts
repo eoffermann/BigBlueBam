@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireDocumentAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as commentService from '../services/comment.service.js';
 
 const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
@@ -30,7 +31,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/comments — List threaded comments
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id/comments',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_comment.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const comments = await commentService.listComments(doc.id);
@@ -43,7 +44,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
     '/documents/:id/comments',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireDocumentAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_comment.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createCommentSchema.parse(request.body);
@@ -60,7 +61,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
   // PATCH /comments/:commentId — Edit comment body
   fastify.patch<{ Params: { commentId: string } }>(
     '/comments/:commentId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('brief.comment.update'), requireScope('read_write')] },
     async (request, reply) => {
       const { body } = updateCommentSchema.parse(request.body);
       const comment = await commentService.updateComment(
@@ -76,7 +77,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
   // DELETE /comments/:commentId — Delete a comment
   fastify.delete<{ Params: { commentId: string } }>(
     '/comments/:commentId',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('brief.comment.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const isAdmin =
         request.user!.is_superuser || roleLevel(request.user!.role) >= roleLevel('admin');
@@ -93,7 +94,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
   // POST /comments/:commentId/resolve — Toggle resolve
   fastify.post<{ Params: { commentId: string } }>(
     '/comments/:commentId/resolve',
-    { preHandler: [requireAuth, requireScope('read_write')] },
+    { preHandler: [requireAuth, shadowOnly('brief.comment_resolve.create'), requireScope('read_write')] },
     async (request, reply) => {
       const comment = await commentService.toggleResolve(
         request.params.commentId,
@@ -107,7 +108,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
   // POST /comments/:commentId/reactions — Add a reaction
   fastify.post<{ Params: { commentId: string } }>(
     '/comments/:commentId/reactions',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.comment_reaction.create')] },
     async (request, reply) => {
       const { emoji } = addReactionSchema.parse(request.body);
       const reaction = await commentService.addReaction(
@@ -133,7 +134,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
   // DELETE /comments/:commentId/reactions/:emoji — Remove a reaction
   fastify.delete<{ Params: { commentId: string; emoji: string } }>(
     '/comments/:commentId/reactions/:emoji',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('brief.comment_reaction.delete')] },
     async (request, reply) => {
       const deleted = await commentService.removeReaction(
         request.params.commentId,

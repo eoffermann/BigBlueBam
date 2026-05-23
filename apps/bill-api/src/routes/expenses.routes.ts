@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as expenseService from '../services/expense.service.js';
 import * as receiptService from '../services/receipt.service.js';
 
@@ -45,7 +45,7 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
   // POST /expenses
   fastify.post(
     '/expenses',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = createExpenseSchema.parse(request.body);
       const expense = await expenseService.createExpense(body, request.user!.org_id, request.user!.id);
@@ -56,7 +56,7 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
   // PATCH /expenses/:id
   fastify.patch<{ Params: { id: string } }>(
     '/expenses/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateExpenseSchema.parse(request.body);
       const expense = await expenseService.updateExpense(request.params.id, request.user!.org_id, body);
@@ -67,7 +67,7 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
   // DELETE /expenses/:id
   fastify.delete<{ Params: { id: string } }>(
     '/expenses/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await expenseService.deleteExpense(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -77,7 +77,7 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
   // POST /expenses/:id/approve
   fastify.post<{ Params: { id: string } }>(
     '/expenses/:id/approve',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.approve'), requireScope('read_write')] },
     async (request, reply) => {
       const expense = await expenseService.approveExpense(
         request.params.id,
@@ -91,7 +91,7 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
   // POST /expenses/:id/reject
   fastify.post<{ Params: { id: string } }>(
     '/expenses/:id/reject',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.reject'), requireScope('read_write')] },
     async (request, reply) => {
       const expense = await expenseService.rejectExpense(
         request.params.id,
@@ -107,7 +107,7 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
     '/expenses/:id/receipt',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bill.expense_receipt.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const file = await request.file();

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as invoiceService from '../services/invoice.service.js';
 import * as lineItemService from '../services/line-item.service.js';
 import * as pdfService from '../services/pdf.service.js';
@@ -76,7 +76,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // POST /invoices
   fastify.post(
     '/invoices',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = createInvoiceSchema.parse(request.body);
       const invoice = await invoiceService.createInvoice(body, request.user!.org_id, request.user!.id);
@@ -141,7 +141,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // PATCH /invoices/:id
   fastify.patch<{ Params: { id: string } }>(
     '/invoices/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateInvoiceSchema.parse(request.body);
       const invoice = await invoiceService.updateInvoice(request.params.id, request.user!.org_id, body);
@@ -152,7 +152,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // DELETE /invoices/:id
   fastify.delete<{ Params: { id: string } }>(
     '/invoices/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await invoiceService.deleteInvoice(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -162,7 +162,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // POST /invoices/:id/line-items
   fastify.post<{ Params: { id: string } }>(
     '/invoices/:id/line-items',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice_line_item.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = createLineItemSchema.parse(request.body);
       const item = await lineItemService.addLineItem(request.params.id, request.user!.org_id, body);
@@ -173,7 +173,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // PATCH /invoices/:id/line-items/:itemId
   fastify.patch<{ Params: { id: string; itemId: string } }>(
     '/invoices/:id/line-items/:itemId',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice_line_item.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateLineItemSchema.parse(request.body);
       const item = await lineItemService.updateLineItem(
@@ -189,7 +189,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // DELETE /invoices/:id/line-items/:itemId
   fastify.delete<{ Params: { id: string; itemId: string } }>(
     '/invoices/:id/line-items/:itemId',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice_line_item.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await lineItemService.deleteLineItem(request.params.id, request.params.itemId, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -199,7 +199,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // POST /invoices/:id/finalize
   fastify.post<{ Params: { id: string } }>(
     '/invoices/:id/finalize',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.finalize'), requireScope('read_write')] },
     async (request, reply) => {
       const invoice = await invoiceService.finalizeInvoice(
         request.params.id,
@@ -272,7 +272,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // POST /invoices/:id/send
   fastify.post<{ Params: { id: string } }>(
     '/invoices/:id/send',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.send'), requireScope('read_write')] },
     async (request, reply) => {
       const invoice = await invoiceService.sendInvoice(
         request.params.id,
@@ -343,7 +343,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // POST /invoices/:id/void
   fastify.post<{ Params: { id: string } }>(
     '/invoices/:id/void',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice_void.create'), requireScope('read_write')] },
     async (request, reply) => {
       const invoice = await invoiceService.voidInvoice(request.params.id, request.user!.org_id);
       return reply.send({ data: invoice });
@@ -353,7 +353,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // POST /invoices/:id/duplicate
   fastify.post<{ Params: { id: string } }>(
     '/invoices/:id/duplicate',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice.duplicate'), requireScope('read_write')] },
     async (request, reply) => {
       const invoice = await invoiceService.duplicateInvoice(
         request.params.id,
@@ -424,7 +424,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/invoices/from-time-entries',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice_from_time_entry.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = fromTimeEntriesSchema.parse(request.body);
       const invoice = await invoiceService.createInvoiceFromTimeEntries(
@@ -444,7 +444,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/invoices/from-deal',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.invoice_from_deal.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = fromDealSchema.parse(request.body);
       const invoice = await invoiceService.createInvoiceFromDeal(

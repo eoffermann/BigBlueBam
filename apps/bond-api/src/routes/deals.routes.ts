@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as dealService from '../services/deal.service.js';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
     '/deals',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bond.deal.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createDealSchema.parse(request.body);
@@ -129,7 +129,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // PATCH /deals/:id — Update deal
   fastify.patch<{ Params: { id: string } }>(
     '/deals/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateDealSchema.parse(request.body);
       const deal = await dealService.updateDeal(
@@ -145,7 +145,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // DELETE /deals/:id — Delete deal (soft-delete via deleted_at)
   fastify.delete<{ Params: { id: string } }>(
     '/deals/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await dealService.deleteDeal(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -155,7 +155,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // POST /deals/:id/restore — Undelete a soft-deleted deal (G4)
   fastify.post<{ Params: { id: string } }>(
     '/deals/:id/restore',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal.restore'), requireScope('read_write')] },
     async (request, reply) => {
       const deal = await dealService.restoreDeal(
         request.params.id,
@@ -168,7 +168,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // PATCH /deals/:id/stage — Move deal to new stage
   fastify.patch<{ Params: { id: string } }>(
     '/deals/:id/stage',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal_stage.move'), requireScope('read_write')] },
     async (request, reply) => {
       const body = moveStageSchema.parse(request.body);
       const deal = await dealService.moveDealStage(
@@ -184,7 +184,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // POST /deals/:id/won — Close deal won
   fastify.post<{ Params: { id: string } }>(
     '/deals/:id/won',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal_won.close'), requireScope('read_write')] },
     async (request, reply) => {
       const body = closeWonSchema.parse(request.body ?? {});
       const deal = await dealService.closeDealWon(
@@ -200,7 +200,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // POST /deals/:id/lost — Close deal lost
   fastify.post<{ Params: { id: string } }>(
     '/deals/:id/lost',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal_lost.close'), requireScope('read_write')] },
     async (request, reply) => {
       const body = closeLostSchema.parse(request.body ?? {});
       const deal = await dealService.closeDealLost(
@@ -217,7 +217,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // POST /deals/:id/duplicate — Duplicate deal
   fastify.post<{ Params: { id: string } }>(
     '/deals/:id/duplicate',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal.duplicate'), requireScope('read_write')] },
     async (request, reply) => {
       const deal = await dealService.duplicateDeal(
         request.params.id,
@@ -244,7 +244,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // POST /deals/:id/contacts — Add contact to deal
   fastify.post<{ Params: { id: string } }>(
     '/deals/:id/contacts',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal_contact.create'), requireScope('read_write')] },
     async (request, reply) => {
       const body = addContactSchema.parse(request.body);
       const link = await dealService.addDealContact(
@@ -260,7 +260,7 @@ export default async function dealRoutes(fastify: FastifyInstance) {
   // DELETE /deals/:id/contacts/:contactId — Remove contact from deal
   fastify.delete<{ Params: { id: string; contactId: string } }>(
     '/deals/:id/contacts/:contactId',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.deal_contact.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await dealService.removeDealContact(
         request.params.id,

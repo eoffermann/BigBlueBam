@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import {
-  requireMinOrgRole,
   requireAutomationAccess,
   requireAutomationEditAccess,
 } from '../middleware/authorize.js';
@@ -184,7 +184,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // GET /automations — List automations
   fastify.get(
     '/automations',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.automation.list')] },
     async (request, reply) => {
       const query = listAutomationsQuerySchema.parse(request.query);
       const result = await automationService.listAutomations({
@@ -205,7 +205,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
     '/automations',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bolt.automation.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createAutomationSchema.parse(request.body);
@@ -279,7 +279,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // list (the list filtered by project, the stats didn't).
   fastify.get(
     '/automations/stats',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.automation_stat.list')] },
     async (request, reply) => {
       const query = z
         .object({ project_id: z.string().uuid().optional() })
@@ -300,7 +300,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // directly without special-casing error envelopes.
   fastify.get<{ Params: { name: string } }>(
     '/automations/by-name/:name',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bolt.automation_by_name.get')] },
     async (request, reply) => {
       const rawName = request.params.name;
       if (!rawName || rawName.trim().length === 0) {
@@ -325,7 +325,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // GET /automations/:id — Get automation with conditions and actions
   fastify.get<{ Params: { id: string } }>(
     '/automations/:id',
-    { preHandler: [requireAuth, requireAutomationAccess()] },
+    { preHandler: [requireAuth, requireAutomationAccess(), shadowOnly('bolt.automation.get')] },
     async (request, reply) => {
       const full = await automationService.getAutomation(
         (request as any).automation.id,
@@ -338,7 +338,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // PUT /automations/:id — Full update
   fastify.put<{ Params: { id: string } }>(
     '/automations/:id',
-    { preHandler: [requireAuth, requireAutomationEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireAutomationEditAccess(), shadowOnly('bolt.automation.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateAutomationSchema.parse(request.body);
 
@@ -418,7 +418,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // PATCH /automations/:id — Partial metadata update
   fastify.patch<{ Params: { id: string } }>(
     '/automations/:id',
-    { preHandler: [requireAuth, requireAutomationEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireAutomationEditAccess(), shadowOnly('bolt.automation.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = patchAutomationSchema.parse(request.body);
       const automation = await automationService.patchAutomation(
@@ -434,7 +434,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // DELETE /automations/:id
   fastify.delete<{ Params: { id: string } }>(
     '/automations/:id',
-    { preHandler: [requireAuth, requireAutomationEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireAutomationEditAccess(), shadowOnly('bolt.automation.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await automationService.deleteAutomation(
         (request as any).automation.id,
@@ -447,7 +447,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // POST /automations/:id/enable
   fastify.post<{ Params: { id: string } }>(
     '/automations/:id/enable',
-    { preHandler: [requireAuth, requireAutomationEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireAutomationEditAccess(), shadowOnly('bolt.automation_enable.create'), requireScope('read_write')] },
     async (request, reply) => {
       const automation = await automationService.enableAutomation(
         (request as any).automation.id,
@@ -461,7 +461,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // POST /automations/:id/disable
   fastify.post<{ Params: { id: string } }>(
     '/automations/:id/disable',
-    { preHandler: [requireAuth, requireAutomationEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireAutomationEditAccess(), shadowOnly('bolt.automation_disable.create'), requireScope('read_write')] },
     async (request, reply) => {
       const automation = await automationService.disableAutomation(
         (request as any).automation.id,
@@ -477,7 +477,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
     '/automations/:id/duplicate',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireAutomationAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireAutomationAccess(), shadowOnly('bolt.automation.duplicate'), requireScope('read_write')],
     },
     async (request, reply) => {
       const automation = await automationService.duplicateAutomation(
@@ -494,7 +494,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
     '/automations/:id/test',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireAutomationAccess()],
+      preHandler: [requireAuth, requireAutomationAccess(), shadowOnly('bolt.automation_test.create')],
     },
     async (request, reply) => {
       const { event } = testAutomationSchema.parse(request.body);
@@ -512,7 +512,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
   // GET /automations/:id/versions — List versions for an automation
   fastify.get<{ Params: { id: string } }>(
     '/automations/:id/versions',
-    { preHandler: [requireAuth, requireAutomationAccess()] },
+    { preHandler: [requireAuth, requireAutomationAccess(), shadowOnly('bolt.automation_version.get')] },
     async (request, reply) => {
       const versions = await automationService.listAutomationVersions(
         (request as any).automation.id,
@@ -526,7 +526,7 @@ export default async function automationRoutes(fastify: FastifyInstance) {
     '/automations/:id/versions/:vid/restore',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireAutomationEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireAutomationEditAccess(), shadowOnly('bolt.automation_version.restore'), requireScope('read_write')],
     },
     async (request, reply) => {
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

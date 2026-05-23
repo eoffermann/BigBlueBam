@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireDocumentAccess, requireDocumentEditAccess } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as versionService from '../services/version.service.js';
 
 const createVersionSchema = z.object({
@@ -13,7 +14,7 @@ export default async function versionRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/versions — List version history
   fastify.get<{ Params: { id: string } }>(
     '/documents/:id/versions',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_version.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const versions = await versionService.listVersions(doc.id);
@@ -26,7 +27,7 @@ export default async function versionRoutes(fastify: FastifyInstance) {
     '/documents/:id/versions',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document_version.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createVersionSchema.parse(request.body ?? {});
@@ -44,7 +45,7 @@ export default async function versionRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/versions/:versionId — Get a specific version
   fastify.get<{ Params: { id: string; versionId: string } }>(
     '/documents/:id/versions/:versionId',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_version.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const version = await versionService.getVersion(doc.id, request.params.versionId);
@@ -67,7 +68,7 @@ export default async function versionRoutes(fastify: FastifyInstance) {
   // POST /documents/:id/versions/:versionId/restore — Restore a version
   fastify.post<{ Params: { id: string; versionId: string } }>(
     '/documents/:id/versions/:versionId/restore',
-    { preHandler: [requireAuth, requireDocumentEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireDocumentEditAccess(), shadowOnly('brief.document_version.restore'), requireScope('read_write')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const restored = await versionService.restoreVersion(
@@ -83,7 +84,7 @@ export default async function versionRoutes(fastify: FastifyInstance) {
   // GET /documents/:id/versions/:v1/diff/:v2 — Compare two versions
   fastify.get<{ Params: { id: string; v1: string; v2: string } }>(
     '/documents/:id/versions/:v1/diff/:v2',
-    { preHandler: [requireAuth, requireDocumentAccess()] },
+    { preHandler: [requireAuth, requireDocumentAccess(), shadowOnly('brief.document_version_diff.get')] },
     async (request, reply) => {
       const doc = (request as any).document;
       const { v1, v2 } = request.params;

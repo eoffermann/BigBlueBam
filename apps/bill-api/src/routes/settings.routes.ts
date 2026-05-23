@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as settingsService from '../services/settings.service.js';
 
 const updateSettingsSchema = z.object({
@@ -33,7 +33,7 @@ export default async function settingsRoutes(fastify: FastifyInstance) {
   // PUT /settings
   fastify.put(
     '/settings',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bill.setting.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateSettingsSchema.parse(request.body);
       const settings = await settingsService.updateSettings(request.user!.org_id, body);

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as companyService from '../services/company.service.js';
 
 // ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ export default async function companyRoutes(fastify: FastifyInstance) {
     '/companies',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bond.company.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = createCompanySchema.parse(request.body);
@@ -122,7 +122,7 @@ export default async function companyRoutes(fastify: FastifyInstance) {
   // PATCH /companies/:id — Update company
   fastify.patch<{ Params: { id: string } }>(
     '/companies/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.company.update'), requireScope('read_write')] },
     async (request, reply) => {
       const body = updateCompanySchema.parse(request.body);
       const company = await companyService.updateCompany(
@@ -137,7 +137,7 @@ export default async function companyRoutes(fastify: FastifyInstance) {
   // DELETE /companies/:id — Delete company
   fastify.delete<{ Params: { id: string } }>(
     '/companies/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.company.delete'), requireScope('read_write')] },
     async (request, reply) => {
       await companyService.deleteCompany(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -182,7 +182,7 @@ export default async function companyRoutes(fastify: FastifyInstance) {
   // POST /companies/:id/restore — Undelete a soft-deleted company (G4)
   fastify.post<{ Params: { id: string } }>(
     '/companies/:id/restore',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.company.restore'), requireScope('read_write')] },
     async (request, reply) => {
       const company = await companyService.restoreCompany(
         request.params.id,

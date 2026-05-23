@@ -21,6 +21,7 @@ const envSchema = z.object({
   // Internal service URLs
   MCP_INTERNAL_URL: z.string().default('http://mcp-server:3001'),
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
+  INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),
@@ -28,6 +29,11 @@ const envSchema = z.object({
   // Query execution settings
   QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
   CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
+
+  // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
+  // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records
+  // divergence; 'on' additionally blocks on resolver-deny.
+  BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('warn'),
 });
 
 export type Env = z.infer<typeof envSchema>;

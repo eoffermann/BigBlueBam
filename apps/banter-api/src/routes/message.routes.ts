@@ -8,7 +8,7 @@ import {
   banterMessages,
   users,
 } from '../db/schema/index.js';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireChannelMember } from '../middleware/channel-auth.js';
 import { broadcastToChannel } from '../services/realtime.js';
 import { extractMentions } from '../services/notification-queue.js';
@@ -192,7 +192,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   // POST /v1/channels/:id/messages — post message
   fastify.post(
     '/v1/channels/:id/messages',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write'), requireChannelMember] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.channel_message.create'), requireScope('read_write'), requireChannelMember] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -802,7 +802,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   // PATCH /v1/messages/:id — edit (own only)
   fastify.patch(
     '/v1/messages/:id',
-    { preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')] },
+    { preHandler: [requireAuth, fastify.requireCan('banter.message.edit'), requireScope('read_write')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import { preflightAccess, SUPPORTED_ENTITY_TYPES } from '../services/visibility.service.js';
 import { logActivity } from '../services/activity.service.js';
 import { projects } from '../db/schema/projects.js';
@@ -36,7 +37,7 @@ export default async function visibilityRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/v1/visibility/can_access',
     {
-      preHandler: [requireAuth, requireScope('read')],
+      preHandler: [requireAuth, requireScope('read'), shadowOnly('bam.visibility_can_access.create')],
       config: { rateLimit: { max: 100, timeWindow: '1 minute' } },
     },
     async (request, reply) => {

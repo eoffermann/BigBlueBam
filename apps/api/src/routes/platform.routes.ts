@@ -9,7 +9,8 @@ import { users } from '../db/schema/users.js';
 import { superuserAuditLog } from '../db/schema/superuser-audit-log.js';
 import { notifications } from '../db/schema/notifications.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
-import { requireAuth, requireSuperUser } from '../plugins/auth.js';
+import { resolveOrgUserRoles, resolveUserOrgRole } from '../services/role-resolver.js';
+import { requireAuth } from '../plugins/auth.js';
 
 const IMPERSONATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -59,12 +60,10 @@ async function logSuperuserAction(
  * Provides cross-org management capabilities.
  */
 export default async function platformRoutes(fastify: FastifyInstance) {
-  const suPreHandler = [requireAuth, requireSuperUser];
-
   // GET /v1/platform/orgs — list all organizations
   fastify.get(
     '/v1/platform/orgs',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_org.list')] },
     async (request, reply) => {
       const query = request.query as { search?: string; limit?: string; offset?: string };
       const limit = Math.min(parseInt(query.limit || '50', 10), 100);
@@ -95,7 +94,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // POST /v1/platform/orgs — create a new organization
   fastify.post(
     '/v1/platform/orgs',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_org.create')] },
     async (request, reply) => {
       const user = request.user!;
       const body = createOrgSchema.parse(request.body);
@@ -122,7 +121,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // GET /v1/platform/orgs/:id — get organization details
   fastify.get(
     '/v1/platform/orgs/:id',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_org.get')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
@@ -152,7 +151,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // PATCH /v1/platform/orgs/:id — update organization
   fastify.patch(
     '/v1/platform/orgs/:id',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_org.update')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -187,7 +186,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // DELETE /v1/platform/orgs/:id — delete organization and all data
   fastify.delete(
     '/v1/platform/orgs/:id',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_org.delete')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const user = request.user!;
@@ -227,7 +226,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // GET /v1/platform/orgs/:id/members — list members of any org
   fastify.get(
     '/v1/platform/orgs/:id/members',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_org_member.get')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
 
@@ -236,7 +235,6 @@ export default async function platformRoutes(fastify: FastifyInstance) {
           id: users.id,
           email: users.email,
           display_name: users.display_name,
-          role: users.role,
           is_active: users.is_active,
           is_superuser: users.is_superuser,
           created_at: users.created_at,
@@ -246,14 +244,18 @@ export default async function platformRoutes(fastify: FastifyInstance) {
         .where(eq(users.org_id, id))
         .orderBy(users.display_name);
 
-      return reply.send({ data: members });
+      // Wave E.F: role is resolved from the org-scope group membership.
+      const roleByUser = await resolveOrgUserRoles(id, members.map((m) => m.id));
+      return reply.send({
+        data: members.map((m) => ({ ...m, role: roleByUser.get(m.id) ?? 'member' })),
+      });
     },
   );
 
   // PATCH /v1/platform/users/:id/superuser — toggle SuperUser status
   fastify.patch(
     '/v1/platform/users/:id/superuser',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_user_superuser.update')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const caller = request.user!;
@@ -286,19 +288,18 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // POST /v1/platform/impersonate — start impersonating a user
   fastify.post(
     '/v1/platform/impersonate',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_impersonate.create')] },
     async (request, reply) => {
       const caller = request.user!;
       const body = z.object({ user_id: z.string().uuid() }).parse(request.body);
 
-      const [targetUser] = await db
+      const [targetUserRow] = await db
         .select({
           id: users.id,
           org_id: users.org_id,
           email: users.email,
           display_name: users.display_name,
           avatar_url: users.avatar_url,
-          role: users.role,
           timezone: users.timezone,
           is_active: users.is_active,
           is_superuser: users.is_superuser,
@@ -309,11 +310,15 @@ export default async function platformRoutes(fastify: FastifyInstance) {
         .where(eq(users.id, body.user_id))
         .limit(1);
 
-      if (!targetUser) {
+      if (!targetUserRow) {
         return reply.status(404).send({
           error: { code: 'NOT_FOUND', message: 'User not found', details: [], request_id: request.id },
         });
       }
+
+      // Wave E.F: role resolved from the user's home-org group membership.
+      const targetRole = await resolveUserOrgRole(targetUserRow.id, targetUserRow.org_id);
+      const targetUser = { ...targetUserRow, role: targetRole ?? 'member' };
 
       if (targetUser.is_active === false) {
         return reply.status(400).send({
@@ -366,7 +371,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // POST /v1/platform/stop-impersonation — stop impersonating
   fastify.post(
     '/v1/platform/stop-impersonation',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_stop_impersonation.create')] },
     async (request, reply) => {
       if (!request.isImpersonating) {
         return reply.status(400).send({
@@ -405,7 +410,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // GET /v1/platform/impersonation-sessions — list active impersonation sessions
   fastify.get(
     '/v1/platform/impersonation-sessions',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_impersonation_session.list')] },
     async (_request, reply) => {
       const superuser = alias(users, 'superuser');
       const target = alias(users, 'target');
@@ -441,7 +446,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
   // GET /v1/platform/audit-log — SuperUser audit trail
   fastify.get(
     '/v1/platform/audit-log',
-    { preHandler: suPreHandler },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_audit_log.list')] },
     async (request, reply) => {
       const query = request.query as { limit?: string; offset?: string };
       const limit = Math.min(parseInt(query.limit || '50', 10), 100);

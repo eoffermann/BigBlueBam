@@ -6,10 +6,10 @@ import {
 } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import {
-  requireMinOrgRole,
   requireGoalAccess,
   requireGoalEditAccess,
 } from '../middleware/authorize.js';
+import { shadowOnly } from '../middleware/dual-read.js';
 import * as goalService from '../services/goal.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import {
@@ -73,7 +73,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // GET /goals — List goals (filterable)
   fastify.get(
     '/goals',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, shadowOnly('bearing.goal.list')] },
     async (request, reply) => {
       const query = listGoalsQuerySchema.parse(request.query);
       const result = await goalService.listGoals({
@@ -96,7 +96,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     '/goals',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinOrgRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bearing.goal.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createGoalSchema.parse(request.body);
@@ -161,7 +161,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // GET /goals/:id — Get goal with KRs
   fastify.get<{ Params: { id: string } }>(
     '/goals/:id',
-    { preHandler: [requireAuth, requireGoalAccess()] },
+    { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal.get')] },
     async (request, reply) => {
       const goal = await goalService.getGoal(
         (request as any).goal.id,
@@ -175,7 +175,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // PATCH /goals/:id — Update goal
   fastify.patch<{ Params: { id: string } }>(
     '/goals/:id',
-    { preHandler: [requireAuth, requireGoalEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireGoalEditAccess(), shadowOnly('bearing.goal.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateGoalSchema.parse(request.body);
       // Capture the pre-update row so we can emit a `changes` diff in the
@@ -339,7 +339,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // DELETE /goals/:id — Delete goal
   fastify.delete<{ Params: { id: string } }>(
     '/goals/:id',
-    { preHandler: [requireAuth, requireGoalEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireGoalEditAccess(), shadowOnly('bearing.goal.delete'), requireScope('read_write')] },
     async (request, reply) => {
       // `requireGoalEditAccess` loaded the goal onto the request; capture
       // its fields before deletion for the fire-and-forget Bolt emission.
@@ -395,7 +395,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // POST /goals/:id/status — Override status
   fastify.post<{ Params: { id: string } }>(
     '/goals/:id/status',
-    { preHandler: [requireAuth, requireGoalEditAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireGoalEditAccess(), shadowOnly('bearing.goal_statu.create'), requireScope('read_write')] },
     async (request, reply) => {
       const { status } = statusOverrideSchema.parse(request.body);
       const previousGoal = (request as any).goal as {
@@ -493,7 +493,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // GET /goals/:id/updates — List updates
   fastify.get<{ Params: { id: string } }>(
     '/goals/:id/updates',
-    { preHandler: [requireAuth, requireGoalAccess()] },
+    { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal_update.get')] },
     async (request, reply) => {
       const result = await goalService.listUpdates(
         (request as any).goal.id,
@@ -508,7 +508,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     '/goals/:id/updates',
     {
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireGoalEditAccess(), requireScope('read_write')],
+      preHandler: [requireAuth, requireGoalEditAccess(), shadowOnly('bearing.goal_update.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const data = createUpdateSchema.parse(request.body);
@@ -525,7 +525,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // GET /goals/:id/watchers — List watchers
   fastify.get<{ Params: { id: string } }>(
     '/goals/:id/watchers',
-    { preHandler: [requireAuth, requireGoalAccess()] },
+    { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal_watcher.get')] },
     async (request, reply) => {
       const result = await goalService.listWatchers(
         (request as any).goal.id,
@@ -538,7 +538,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // POST /goals/:id/watchers — Add watcher
   fastify.post<{ Params: { id: string } }>(
     '/goals/:id/watchers',
-    { preHandler: [requireAuth, requireGoalAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal_watcher.create'), requireScope('read_write')] },
     async (request, reply) => {
       const goalRow = (request as any).goal as {
         id: string;
@@ -594,7 +594,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // Users can remove themselves. Goal owner or org admin/owner can remove others.
   fastify.delete<{ Params: { id: string; userId: string } }>(
     '/goals/:id/watchers/:userId',
-    { preHandler: [requireAuth, requireGoalAccess(), requireScope('read_write')] },
+    { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal_watcher.delete'), requireScope('read_write')] },
     async (request, reply) => {
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!UUID_REGEX.test(request.params.userId)) {
@@ -677,7 +677,7 @@ export default async function goalRoutes(fastify: FastifyInstance) {
   // GET /goals/:id/history — Progress history
   fastify.get<{ Params: { id: string } }>(
     '/goals/:id/history',
-    { preHandler: [requireAuth, requireGoalAccess()] },
+    { preHandler: [requireAuth, requireGoalAccess(), shadowOnly('bearing.goal_history.get')] },
     async (request, reply) => {
       const result = await goalService.getGoalHistory(
         (request as any).goal.id,

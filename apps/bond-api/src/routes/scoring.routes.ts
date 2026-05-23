@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireMinRole, requireScope } from '../plugins/auth.js';
+import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as scoringService from '../services/scoring.service.js';
 
 // ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ export default async function scoringRoutes(fastify: FastifyInstance) {
     '/scoring-rules',
     {
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')],
+      preHandler: [requireAuth, fastify.requireCan('bond.scoring_rule.create'), requireScope('admin')],
     },
     async (request, reply) => {
       const body = createRuleSchema.parse(request.body);
@@ -59,7 +59,7 @@ export default async function scoringRoutes(fastify: FastifyInstance) {
   // PATCH /scoring-rules/:id — Update scoring rule
   fastify.patch<{ Params: { id: string } }>(
     '/scoring-rules/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.scoring_rule.update'), requireScope('admin')] },
     async (request, reply) => {
       const body = updateRuleSchema.parse(request.body);
       const rule = await scoringService.updateScoringRule(
@@ -74,7 +74,7 @@ export default async function scoringRoutes(fastify: FastifyInstance) {
   // DELETE /scoring-rules/:id — Delete scoring rule
   fastify.delete<{ Params: { id: string } }>(
     '/scoring-rules/:id',
-    { preHandler: [requireAuth, requireMinRole('admin'), requireScope('admin')] },
+    { preHandler: [requireAuth, fastify.requireCan('bond.scoring_rule.delete'), requireScope('admin')] },
     async (request, reply) => {
       await scoringService.deleteScoringRule(request.params.id, request.user!.org_id);
       return reply.send({ data: { deleted: true } });
@@ -86,7 +86,7 @@ export default async function scoringRoutes(fastify: FastifyInstance) {
     '/scoring/recalculate',
     {
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      preHandler: [requireAuth, requireMinRole('member'), requireScope('read_write')],
+      preHandler: [requireAuth, fastify.requireCan('bond.scoring_recalculate.create'), requireScope('read_write')],
     },
     async (request, reply) => {
       const body = scoreContactSchema.parse(request.body);

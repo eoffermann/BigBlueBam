@@ -16,15 +16,14 @@ import { tickets } from '../db/schema/tickets.js';
 import { sessions } from '../db/schema/sessions.js';
 import { loginHistory } from '../db/schema/login-history.js';
 import { activityLog } from '../db/schema/activity-log.js';
-import { organizationMemberships } from '../db/schema/organization-memberships.js';
+import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
+import { resolveUserOrgRole } from '../services/role-resolver.js';
 import { betaSignupNotifications } from '../db/schema/beta-signup-notifications.js';
 import {
   getPlatformSettings,
   setPublicSignupDisabled,
 } from '../services/platform-settings.service.js';
 import { requireAuth } from '../plugins/auth.js';
-import { requireSuperuser } from '../middleware/require-superuser.js';
-import { dualReadGate } from '../middleware/dual-read.js';
 import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { setActiveOrgId, clearActiveOrgId } from '../services/session.service.js';
 import {
@@ -90,7 +89,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Querystring: { cursor?: string; limit?: string; search?: string };
   }>(
     '/organizations',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.organization.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.organization.list')] },
     async (request, reply) => {
       const parsed = superuserListOrgsQuerySchema.safeParse(request.query);
       if (!parsed.success) {
@@ -215,7 +214,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── GET /superuser/organizations/:id ────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/organizations/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.organization.get' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.organization.get')] },
     async (request, reply) => {
       const { id } = request.params;
 
@@ -236,19 +235,23 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Owners: users whose organization_memberships.role = 'owner' for this org.
+      // Owners: users whose org-scope group membership maps to legacy_role='owner'.
+      // Wave E.F: org_memberships.role was dropped — role lives in
+      // account_group_memberships → permission_groups.
       const owners = await db
         .select({
           id: users.id,
           email: users.email,
           display_name: users.display_name,
         })
-        .from(organizationMemberships)
-        .innerJoin(users, eq(organizationMemberships.user_id, users.id))
+        .from(accountGroupMemberships)
+        .innerJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
+        .innerJoin(users, eq(users.id, accountGroupMemberships.user_id))
         .where(
           and(
-            eq(organizationMemberships.org_id, id),
-            eq(organizationMemberships.role, 'owner'),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, id),
+            eq(permissionGroups.legacy_role, 'owner'),
           ),
         );
 
@@ -266,19 +269,25 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
         .where(eq(projects.org_id, id))
         .orderBy(projects.name);
 
-      // Member counts grouped by role.
+      // Member counts grouped by role (resolved via group membership).
       const roleRows = await db
         .select({
-          role: organizationMemberships.role,
+          role: permissionGroups.legacy_role,
           count: sql<number>`count(*)::int`,
         })
-        .from(organizationMemberships)
-        .where(eq(organizationMemberships.org_id, id))
-        .groupBy(organizationMemberships.role);
+        .from(accountGroupMemberships)
+        .innerJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
+        .where(
+          and(
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, id),
+          ),
+        )
+        .groupBy(permissionGroups.legacy_role);
 
       const memberCountsByRole: Record<string, number> = {};
       for (const r of roleRows) {
-        memberCountsByRole[r.role] = r.count ?? 0;
+        if (r.role) memberCountsByRole[r.role] = r.count ?? 0;
       }
 
       // Recent activity tail (last 20 across all projects in this org).
@@ -337,7 +346,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── GET /superuser/overview ─────────────────────────────────────────────
   fastify.get(
     '/overview',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.overview.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.overview.list')] },
     async (request, reply) => {
       const now = new Date();
       // postgres-js cannot bind raw Date instances as parameters inside Drizzle
@@ -423,17 +432,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: { org_id: string } }>(
     '/context/switch',
     {
-      preHandler: [
-        requireAuth,
-        // Wave B sample: requireSuperuser pattern. The resolver short-
-        // circuits for is_superuser=true so this should always agree
-        // with the legacy gate; an Owner non-SuperUser hit would
-        // surface as legacy=deny, resolved=allow (because Owner builtin
-        // group grants everything). That's a real soak-detection
-        // signal — the resolver needs a "requires_superuser" filter
-        // before Wave C flips enforcement.
-        dualReadGate({ legacy: requireSuperuser, permission: 'bam.context.switch' }),
-      ],
+      preHandler: [requireAuth, fastify.requireCan('bam.context.switch')],
     },
     async (request, reply) => {
       const parsed = superuserSwitchContextSchema.safeParse(request.body);
@@ -488,7 +487,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── POST /superuser/context/clear ───────────────────────────────────────
   fastify.post(
     '/context/clear',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.context_clear.create' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.context_clear.create')] },
     async (request, reply) => {
       await clearActiveOrgId(request.sessionId!);
 
@@ -514,7 +513,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     };
   }>(
     '/users',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user.list')] },
     async (request, reply) => {
       const q = request.query;
       const limit = Math.min(
@@ -560,7 +559,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── GET /superuser/users/:id ────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/users/:id',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user.get' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user.get')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!uuidSchema.safeParse(id).success) {
@@ -605,7 +604,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Body: { org_id: string; role: string };
   }>(
     '/users/:id/memberships',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_membership.create' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_membership.create')] },
     async (request, reply) => {
       const { id } = request.params;
       const bodySchema = z.object({
@@ -686,7 +685,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── DELETE /superuser/users/:id/memberships/:orgId ──────────────────────
   fastify.delete<{ Params: { id: string; orgId: string } }>(
     '/users/:id/memberships/:orgId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_membership.delete' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_membership.delete')] },
     async (request, reply) => {
       const { id, orgId } = request.params;
 
@@ -701,6 +700,9 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
           },
         });
       }
+
+      // Wave E.F: role resolves via account_group_memberships → permission_groups.
+      const previousRole = (await resolveUserOrgRole(id, orgId)) ?? 'member';
 
       const count = await countUserMemberships(id);
       if (count <= 1) {
@@ -723,7 +725,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
         targetId: id,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'] as string | undefined,
-        details: { org_id: orgId, previous_role: existing.role },
+        details: { org_id: orgId, previous_role: previousRole },
       });
 
       return reply.status(204).send();
@@ -736,7 +738,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Body: { role: string };
   }>(
     '/users/:id/memberships/:orgId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_membership.update' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_membership.update')] },
     async (request, reply) => {
       const { id, orgId } = request.params;
       const bodySchema = z.object({ role: roleSchema });
@@ -767,7 +769,8 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const fromRole = existing.role;
+      // Wave E.F: role resolves via account_group_memberships → permission_groups.
+      const fromRole = (await resolveUserOrgRole(id, orgId)) ?? 'member';
       await updateMembershipRole(id, orgId, parsed.data.role);
 
       await logSuperuserAction({
@@ -801,7 +804,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Body: { org_id: string };
   }>(
     '/users/:id/set-default-org',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_set_default_org.create' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_set_default_org.create')] },
     async (request, reply) => {
       const { id } = request.params;
       const bodySchema = z.object({ org_id: z.string().uuid() });
@@ -853,7 +856,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── GET /superuser/users/:id/sessions ───────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/users/:id/sessions',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_session.get' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_session.get')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!(await userExists(id))) {
@@ -886,7 +889,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── DELETE /superuser/users/:id/sessions/:sessionId ─────────────────────
   fastify.delete<{ Params: { id: string; sessionId: string } }>(
     '/users/:id/sessions/:sessionId',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_session.delete' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_session.delete')] },
     async (request, reply) => {
       const { id, sessionId } = request.params;
 
@@ -924,7 +927,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Body: { is_active: boolean };
   }>(
     '/users/:id/active',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_active.update' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_active.update')] },
     async (request, reply) => {
       const { id } = request.params;
       const bodySchema = z.object({ is_active: z.boolean() });
@@ -1031,7 +1034,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── POST /superuser/users/:id/sessions/revoke-all ───────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/users/:id/sessions/revoke-all',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_session_revoke_all.create' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_session_revoke_all.create')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!(await userExists(id))) {
@@ -1067,7 +1070,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Body: { new_email: string };
   }>(
     '/users/:id/email',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_email.update' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_email.update')] },
     async (request, reply) => {
       const { id } = request.params;
       const bodySchema = z.object({
@@ -1165,7 +1168,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Querystring: { scope?: string };
   }>(
     '/users/:id/projects',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_project.get' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_project.get')] },
     async (request, reply) => {
       const { id } = request.params;
       const scope: 'active' | 'all' =
@@ -1210,7 +1213,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     };
   }>(
     '/audit-log',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.audit_log.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.audit_log.list')] },
     async (request, reply) => {
       const q = request.query;
       const limit = Math.min(
@@ -1250,7 +1253,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     Querystring: { limit?: string; cursor?: string; success?: string };
   }>(
     '/users/:id/login-history',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.user_login_history.get' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.user_login_history.get')] },
     async (request, reply) => {
       const { id } = request.params;
       if (!(await userExists(id))) {
@@ -1340,7 +1343,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── GET /superuser/platform-settings ────────────────────────────────────
   fastify.get(
     '/platform-settings',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.platform_setting.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_setting.list')] },
     async () => {
       const settings = await getPlatformSettings();
       return {
@@ -1356,7 +1359,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── PATCH /superuser/platform-settings ──────────────────────────────────
   fastify.patch(
     '/platform-settings',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.platform_setting.update' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.platform_setting.update')] },
     async (request, reply) => {
       const schema = z.object({
         public_signup_disabled: z.boolean(),
@@ -1393,7 +1396,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // ─── GET /superuser/beta-signups ─────────────────────────────────────────
   fastify.get(
     '/beta-signups',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.beta_signup.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.beta_signup.list')] },
     async () => {
       const rows = await db
         .select()
@@ -1425,7 +1428,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
   // script — this endpoint is the visibility layer.
   fastify.get(
     '/superuser/calling-credentials',
-    { preHandler: [requireAuth, dualReadGate({ legacy: requireSuperuser, permission: 'bam.superuser_calling_credential.list' })] },
+    { preHandler: [requireAuth, fastify.requireCan('bam.superuser_calling_credential.list')] },
     async () => {
       const apiKey = process.env.LIVEKIT_API_KEY ?? '';
       // "devkey" is the literal placeholder fallback baked into the
