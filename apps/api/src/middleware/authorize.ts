@@ -221,8 +221,7 @@ export function requireProjectAccessForEntity(
  * by `:paramName` (default `:id`) and that the project belongs to the user's org.
  *
  * Use this for project-scoped routes like GET /projects/:id/tasks.
- * Unlike `requireProjectRole`, this does NOT check a specific role — just membership.
- * Returns 404 on denial (anti-enumeration).
+ * Membership-only check (no role required). Returns 404 on denial (anti-enumeration).
  */
 export function requireProjectAccess(paramName: string = 'id') {
   return async function checkProjectAccess(
@@ -299,108 +298,3 @@ export function requireProjectAccess(paramName: string = 'id') {
   };
 }
 
-export function requireProjectRole(...roles: string[]) {
-  return async function checkProjectRole(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    if (request.user.is_superuser) return; // SuperUsers bypass project role checks
-
-    // Extract project ID from route params or request body
-    const params = request.params as Record<string, string>;
-    const body = request.body as Record<string, unknown> | undefined;
-    const projectId = params?.id ?? (body?.project_id as string | undefined);
-
-    if (!projectId) {
-      return reply.status(400).send({
-        error: {
-          code: 'BAD_REQUEST',
-          message: 'Project ID is required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    // Verify project belongs to user's org (anti cross-org access)
-    const [project] = await db
-      .select({ org_id: projects.org_id })
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .limit(1);
-
-    if (!project || project.org_id !== request.user.org_id) {
-      return reply.status(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Project not found',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    // Guest users are scoped to specific projects. When a guest accepts an
-    // invitation, they are added to project_memberships for their allowed
-    // projects. The membership check below therefore naturally enforces
-    // guest project access — no special-case logic is needed here.
-
-    const [membership] = await db
-      .select()
-      .from(projectMemberships)
-      .where(
-        and(
-          eq(projectMemberships.project_id, projectId),
-          eq(projectMemberships.user_id, request.user.id),
-        ),
-      )
-      .limit(1);
-
-    if (!membership || !roles.includes(membership.role)) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `Requires one of project roles: ${roles.join(', ')}`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
-
-export function requireOrgRole(...roles: string[]) {
-  return async function checkOrgRole(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-
-    if (request.user.is_superuser) return; // SuperUsers bypass org role checks
-
-    if (!roles.includes(request.user.role)) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `Requires one of org roles: ${roles.join(', ')}`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}

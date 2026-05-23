@@ -8,6 +8,7 @@ import { users } from '../db/schema/users.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
+import { resolveUserOrgRoles } from '../services/role-resolver.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -80,7 +81,6 @@ interface BaseUserRow {
   email: string;
   display_name: string;
   avatar_url: string | null;
-  role: string;
   timezone: string;
   is_active: boolean;
   is_superuser: boolean;
@@ -99,25 +99,31 @@ interface BaseUserRow {
 async function resolveOrgContext(
   userId: string,
   fallbackOrgId: string,
-  fallbackRole: string,
   requestedOrgId: string | undefined,
 ): Promise<{ memberships: OrgMembership[]; activeOrgId: string; activeRole: string }> {
-  const rows = await db
-    .select({
-      org_id: organizationMemberships.org_id,
-      role: organizationMemberships.role,
-      is_default: organizationMemberships.is_default,
-      joined_at: organizationMemberships.joined_at,
-    })
-    .from(organizationMemberships)
-    .where(eq(organizationMemberships.user_id, userId));
+  // Wave E.F: role is no longer a column on organization_memberships. It
+  // is resolved per-org from account_group_memberships → permission_groups.
+  // We fetch both in a single round-trip via resolveUserOrgRoles, then
+  // zip the per-membership row with its resolved role.
+  const [rows, rolesByOrg] = await Promise.all([
+    db
+      .select({
+        org_id: organizationMemberships.org_id,
+        is_default: organizationMemberships.is_default,
+        joined_at: organizationMemberships.joined_at,
+      })
+      .from(organizationMemberships)
+      .where(eq(organizationMemberships.user_id, userId)),
+    resolveUserOrgRoles(userId),
+  ]);
 
   if (rows.length === 0) {
-    // User hasn't been backfilled yet — fall back to users.org_id/role.
+    // User hasn't been backfilled yet — fall back to users.org_id.
     // If users.org_id is also NULL/empty, the user has no valid org context.
     if (!fallbackOrgId) {
       throw new OrgMembershipError('User has no organization memberships and no fallback org_id');
     }
+    const fallbackRole = rolesByOrg.get(fallbackOrgId) ?? 'member';
     return {
       memberships: [
         { org_id: fallbackOrgId, role: fallbackRole, is_default: true },
@@ -132,7 +138,11 @@ async function resolveOrgContext(
 
   const memberships: OrgMembership[] = rows.map((r) => ({
     org_id: r.org_id,
-    role: r.role,
+    // A membership without a group row is treated as 'member' by default.
+    // The Wave A backfill (migration 0148) ensured every existing
+    // membership had a matching group row, so this fallback is only hit
+    // when a row is created outside the supported write paths.
+    role: rolesByOrg.get(r.org_id) ?? 'member',
     is_default: r.is_default,
   }));
 
@@ -187,7 +197,6 @@ export async function buildAuthUser(
   const { memberships, activeOrgId, activeRole } = await resolveOrgContext(
     row.id,
     row.org_id,
-    row.role,
     requestedOrgId,
   );
 
@@ -308,7 +317,6 @@ async function authPlugin(fastify: FastifyInstance) {
             email: users.email,
             display_name: users.display_name,
             avatar_url: users.avatar_url,
-            role: users.role,
             timezone: users.timezone,
             is_active: users.is_active,
             is_superuser: users.is_superuser,
@@ -379,7 +387,6 @@ async function authPlugin(fastify: FastifyInstance) {
             email: users.email,
             display_name: users.display_name,
             avatar_url: users.avatar_url,
-            role: users.role,
             timezone: users.timezone,
             is_active: users.is_active,
             is_superuser: users.is_superuser,
@@ -496,7 +503,6 @@ async function authPlugin(fastify: FastifyInstance) {
         email: users.email,
         display_name: users.display_name,
         avatar_url: users.avatar_url,
-        role: users.role,
         timezone: users.timezone,
         is_active: users.is_active,
         is_superuser: users.is_superuser,
@@ -564,64 +570,6 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
   }
 }
 
-/** Requires the user to be a SuperUser */
-export async function requireSuperUser(request: FastifyRequest, reply: FastifyReply) {
-  if (!request.user) {
-    return reply.status(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-  if (!request.user.is_superuser) {
-    return reply.status(403).send({
-      error: {
-        code: 'FORBIDDEN',
-        message: 'SuperUser access required',
-        details: [],
-        request_id: request.id,
-      },
-    });
-  }
-}
-
-/** Requires the user's role to be at or above the minimum level.
- *  Hierarchy: owner > admin > member > viewer
- *  SuperUsers always pass. */
-export function requireMinRole(minRole: 'viewer' | 'member' | 'admin' | 'owner') {
-  const hierarchy = ['viewer', 'member', 'admin', 'owner'];
-  const minLevel = hierarchy.indexOf(minRole);
-
-  return async function checkMinRole(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    if (request.user.is_superuser) return; // SuperUsers bypass role checks
-
-    const userLevel = hierarchy.indexOf(request.user.role);
-    if (userLevel < minLevel) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `Requires at least ${minRole} role`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
-
 /** Requires the API key scope to allow the given operation type.
  *  Hierarchy: admin > read_write > read
  *  Session auth (no API key) always passes.
@@ -662,28 +610,3 @@ export function requireScope(minScope: 'read' | 'read_write' | 'admin') {
   };
 }
 
-export function requireRole(roles: string[]) {
-  return async function checkRole(request: FastifyRequest, reply: FastifyReply) {
-    if (!request.user) {
-      return reply.status(401).send({
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Authentication required',
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-    if (request.user.is_superuser) return;
-    if (!roles.includes(request.user.role)) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: `Requires one of roles: ${roles.join(', ')}`,
-          details: [],
-          request_id: request.id,
-        },
-      });
-    }
-  };
-}
