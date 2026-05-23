@@ -19,6 +19,7 @@
 import { execSync } from 'node:child_process';
 import { select } from './prompt.mjs';
 import { dim, yellow, check } from './colors.mjs';
+import { loadDeploySettings } from './db-settings.mjs';
 
 /**
  * Return the list of branches that exist on origin (without the `origin/`
@@ -109,29 +110,101 @@ export async function chooseDeployBranch({ previous } = {}) {
     return 'main';
   }
 
-  // Build the choice menu.
-  const options = [
-    {
+  // Consult the running stack's SuperUser-managed deploy settings, if
+  // any. This lets the operator pin the default deploy branch via the
+  // SuperUser UI without modifying the script. If the stack is down,
+  // postgres unreachable, or the row simply doesn't exist, settings is
+  // null / null-valued and we fall back to the hardcoded `stable`
+  // default. See docs/plans/deploy-settings-contract.md.
+  let settings = null;
+  try {
+    settings = await loadDeploySettings();
+  } catch {
+    settings = null;
+  }
+  let suDefaultBranch = null;
+  if (settings?.deploy_branch && branches.has(settings.deploy_branch)) {
+    suDefaultBranch = settings.deploy_branch;
+  } else if (settings?.deploy_branch) {
+    console.log(
+      yellow(
+        `  SuperUser-configured branch "${settings.deploy_branch}" does not exist on origin — ignoring.`,
+      ),
+    );
+  }
+
+  // The hardcoded fallback default is `stable`. The SU override wins if
+  // present-and-valid, otherwise stable.
+  const defaultBranch = suDefaultBranch ?? 'stable';
+
+  // Build the choice menu, with the resolved default first so the
+  // select helper picks it up as the [enter]-to-accept option.
+  const options = [];
+  if (defaultBranch === 'stable') {
+    options.push({
       label: 'stable',
       value: 'stable',
       description: 'Recommended — production branch, validated on main first',
-    },
-  ];
-  if (hasMain) {
+    });
+    if (hasMain) {
+      options.push({
+        label: 'main',
+        value: 'main',
+        description: 'Bleeding-edge — latest features, may be unstable',
+      });
+    }
+  } else if (defaultBranch === 'main') {
+    // SU pinned `main` as default — still show stable as an option.
     options.push({
       label: 'main',
       value: 'main',
       description: 'Bleeding-edge — latest features, may be unstable',
     });
+    options.push({
+      label: 'stable',
+      value: 'stable',
+      description: 'Recommended — production branch, validated on main first',
+    });
+  } else {
+    // SU pinned an arbitrary branch (e.g. a release line). Show it
+    // first as the default, then stable, then main.
+    options.push({
+      label: defaultBranch,
+      value: defaultBranch,
+      description: 'SuperUser-configured deploy branch',
+    });
+    options.push({
+      label: 'stable',
+      value: 'stable',
+      description: 'Recommended — production branch, validated on main first',
+    });
+    if (hasMain) {
+      options.push({
+        label: 'main',
+        value: 'main',
+        description: 'Bleeding-edge — latest features, may be unstable',
+      });
+    }
   }
 
   const current = detectCurrentBranch();
-  if (current && current !== 'stable' && current !== 'main') {
+  if (
+    current &&
+    current !== 'stable' &&
+    current !== 'main' &&
+    current !== defaultBranch
+  ) {
     options.push({
       label: current,
       value: current,
       description: 'Your current local branch (advanced)',
     });
+  }
+
+  // Surface the SU override above the prompt so the operator
+  // understands why the default may have changed.
+  if (suDefaultBranch) {
+    console.log(dim(`  (using SuperUser-configured default: ${suDefaultBranch})`));
   }
 
   // If a previous choice was saved, nudge the user to reuse it.

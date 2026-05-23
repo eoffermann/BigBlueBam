@@ -9,6 +9,8 @@ import { confirm, ask } from '../shared/prompt.mjs';
 import { checkDockerPrerequisites } from '../shared/prerequisites.mjs';
 import { provisionCerts } from '../shared/tls.mjs';
 import { runInitialIssuance, buildRenewalTask } from '../shared/letsencrypt.mjs';
+import { loadDeploySettings } from '../shared/db-settings.mjs';
+import { decryptDeployToken } from '../shared/decrypt-token.mjs';
 
 const name = 'Docker Compose';
 const description = 'Run everything locally with Docker (simplest)';
@@ -59,6 +61,186 @@ function runShell(cmd, opts = {}) {
  */
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Wrapper around loadDeploySettings that never throws. If anything goes
+ * wrong (stack down, postgres unreachable, malformed rows, etc.) the
+ * deploy script keeps going with hardcoded defaults.
+ */
+async function safeLoadDeploySettings() {
+  try {
+    return await loadDeploySettings();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalize a git remote URL for equality comparison. Strips trailing
+ * `.git`, lowercases the host, and drops trailing slashes. Returns the
+ * input unchanged if it doesn't parse — better to compare too strictly
+ * than to misidentify two unrelated repos as the same.
+ */
+function normalizeRepoUrl(input) {
+  if (typeof input !== 'string') return input;
+  let s = input.trim();
+  // Strip trailing whitespace + .git
+  if (s.endsWith('.git')) s = s.slice(0, -4);
+  // SSH form (git@github.com:owner/repo) → normalize to https for compare
+  const sshMatch = s.match(/^git@([^:]+):(.+)$/);
+  if (sshMatch) {
+    s = `https://${sshMatch[1].toLowerCase()}/${sshMatch[2]}`;
+  } else {
+    try {
+      const u = new URL(s);
+      u.hash = '';
+      u.search = '';
+      u.username = '';
+      u.password = '';
+      u.host = u.host.toLowerCase();
+      s = u.toString();
+    } catch {
+      // not a URL — fall through with the trimmed string
+    }
+  }
+  return s.replace(/\/+$/, '');
+}
+
+/**
+ * Read SESSION_SECRET from .env at the repo root. Returns null if .env
+ * is missing or the key isn't present. Kept local to this module so the
+ * decryption flow doesn't depend on a process-wide env load.
+ */
+function readSessionSecretFromEnv() {
+  try {
+    const envPath = path.resolve(process.cwd(), '.env');
+    if (!fs.existsSync(envPath)) return null;
+    const text = fs.readFileSync(envPath, 'utf8');
+    const match = text.match(/^SESSION_SECRET=(.+)$/m);
+    if (!match) return null;
+    let value = match[1].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Inject a GitHub PAT into an https://github.com/... URL via basic auth
+ * (`https://oauth2:<token>@github.com/...`). Returns null if the URL is
+ * not https or not on github.com — we don't want to silently leak a
+ * PAT to an arbitrary host.
+ */
+function injectGitHubToken(url, token) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return null;
+    if (!/(^|\.)github\.com$/i.test(u.host)) return null;
+    u.username = 'oauth2';
+    u.password = encodeURIComponent(token);
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pull updates for `branch`, honoring SuperUser-overridden repo URL and
+ * (optionally) injecting a decrypted GitHub PAT into the pull URL for
+ * private-repo authentication. The token is wiped from local memory
+ * immediately after the pull completes (subject to GC; we can't force
+ * Node to scrub the buffer, but we drop our references and shadow the
+ * variable).
+ *
+ * @param {object} args
+ * @param {string} args.branch - Branch to pull.
+ * @param {string|null} args.pullUrl - Override repo URL, or null to use origin.
+ * @param {string|null} args.encryptedToken - SU-stored `enc:`-prefixed token, or null.
+ */
+async function runPullWithSettings({ branch, pullUrl, encryptedToken }) {
+  let plaintextToken = null;
+  let authedUrl = null;
+
+  if (encryptedToken) {
+    const sessionSecret = readSessionSecretFromEnv();
+    if (!sessionSecret) {
+      console.log(
+        dim('  (SESSION_SECRET not in .env — cannot decrypt SuperUser PAT; pulling without it)'),
+      );
+    } else {
+      plaintextToken = decryptDeployToken(encryptedToken, sessionSecret);
+      if (!plaintextToken) {
+        console.log(
+          dim('  (SuperUser PAT failed to decrypt — has SESSION_SECRET rotated? Pulling without it)'),
+        );
+      }
+    }
+  }
+
+  // If we have an override URL OR a token to inject, do a manual fetch
+  // + merge against an explicit URL rather than `git pull origin <branch>`.
+  // Otherwise fall back to the simpler invocation against the locally
+  // configured origin.
+  const effectiveUrl = pullUrl ?? null;
+  if (effectiveUrl || plaintextToken) {
+    // Use the override URL if present, else origin's URL.
+    let targetUrl = effectiveUrl;
+    if (!targetUrl) {
+      try {
+        targetUrl = execSync('git remote get-url origin', {
+          stdio: 'pipe',
+          encoding: 'utf8',
+          timeout: 5000,
+        }).trim();
+      } catch {
+        targetUrl = null;
+      }
+    }
+
+    if (plaintextToken && targetUrl) {
+      const injected = injectGitHubToken(targetUrl, plaintextToken);
+      if (injected) {
+        authedUrl = injected;
+      } else {
+        console.log(
+          dim('  (SuperUser PAT only supports https://github.com/... URLs — pulling without it)'),
+        );
+      }
+    }
+
+    const urlForPull = authedUrl ?? targetUrl;
+    if (urlForPull) {
+      try {
+        // Use array form via spawnSync-style execFileSync to keep the
+        // URL out of the shell — the URL may legally contain `:` `@`
+        // `?` and other characters that shells interpret. We also pass
+        // it as an explicit positional so no quoting is required.
+        const { execFileSync } = await import('node:child_process');
+        execFileSync('git', ['pull', urlForPull, branch], {
+          stdio: 'inherit',
+        });
+      } finally {
+        // Drop references to the plaintext token + authed URL ASAP.
+        // Node won't zero the heap for us, but losing the references
+        // makes the windows for accidental capture (closures, error
+        // traces) as short as possible.
+        plaintextToken = null;
+        authedUrl = null;
+      }
+      return;
+    }
+  }
+
+  // No override / no token / no resolvable URL — fall through to the
+  // simple `git pull origin <branch>` against the configured remote.
+  execSync(`git pull origin ${branch}`, { stdio: 'inherit' });
 }
 
 /**
@@ -251,31 +433,82 @@ async function deploy(envConfig, { branch = 'stable', tlsConfig = null } = {}) {
     }
   }
 
-  // Check for updates if this is an existing installation
+  // Check for updates if this is an existing installation. The behavior
+  // here is overlaid by SuperUser-managed deploy settings (see
+  // docs/plans/deploy-settings-contract.md):
+  //   - deploy_auto_update_enabled === false → skip the pull entirely
+  //   - deploy_repo_url override → use that URL for the pull (not the
+  //     configured origin remote); we never modify the actual origin URL
+  //   - deploy_github_token (encrypted) → inject into the pull URL via
+  //     basic auth for this one pull and wipe from memory immediately
+  // Any of the lookups can fail silently; we fall back to current behavior.
   const isUpgrade = fs.existsSync(path.resolve(process.cwd(), '.deploy-state.json'));
   if (isUpgrade) {
-    console.log(`\nChecking for updates on ${bold(branch)}...`);
-    try {
-      execSync(`git fetch origin ${branch}`, { stdio: 'pipe', timeout: 15000 });
-      const behind = execSync(`git rev-list HEAD..origin/${branch} --count`, { stdio: 'pipe', encoding: 'utf8' }).trim();
+    const settings = await safeLoadDeploySettings();
 
-      if (behind !== '0') {
-        console.log(`\n${yellow(`${behind} new commit(s) available on ${branch}.`)}\n`);
-        try {
-          const log = execSync(`git log HEAD..origin/${branch} --oneline --max-count=10`, { stdio: 'pipe', encoding: 'utf8' }).trim();
-          console.log(dim(log));
-          console.log('');
-        } catch {}
+    if (settings?.deploy_auto_update_enabled === false) {
+      console.log('');
+      console.log(dim('  (auto-update disabled via SuperUser settings — skipping pull)'));
+      console.log('');
+    } else {
+      console.log(`\nChecking for updates on ${bold(branch)}...`);
 
-        if (await confirm('Pull updates before rebuilding?', true)) {
-          execSync(`git pull origin ${branch}`, { stdio: 'inherit' });
-          console.log(`${check} Code updated.\n`);
-        }
-      } else {
-        console.log(`${check} Already up to date.\n`);
+      // Resolve the pull URL. Defaults to origin (`git pull origin
+      // <branch>` uses the existing remote). If SuperUser configured an
+      // override that differs from the configured origin URL, swap to
+      // the override for this pull only.
+      let pullUrl = null;
+      let pullRefspec = branch;
+      let originUrl = null;
+      try {
+        originUrl = execSync('git remote get-url origin', {
+          stdio: 'pipe',
+          encoding: 'utf8',
+          timeout: 5000,
+        }).trim();
+      } catch {
+        originUrl = null;
       }
-    } catch {
-      console.log(dim(`  Could not check for updates on ${branch} (no git or no network).\n`));
+
+      if (
+        settings?.deploy_repo_url &&
+        originUrl &&
+        normalizeRepoUrl(settings.deploy_repo_url) !== normalizeRepoUrl(originUrl)
+      ) {
+        console.log(dim(`  (SuperUser override active: ${settings.deploy_repo_url})`));
+        pullUrl = settings.deploy_repo_url;
+      } else if (settings?.deploy_repo_url && !originUrl) {
+        // No origin configured locally — use the override directly.
+        console.log(dim(`  (SuperUser override active: ${settings.deploy_repo_url})`));
+        pullUrl = settings.deploy_repo_url;
+      }
+
+      try {
+        execSync(`git fetch origin ${branch}`, { stdio: 'pipe', timeout: 15000 });
+        const behind = execSync(`git rev-list HEAD..origin/${branch} --count`, { stdio: 'pipe', encoding: 'utf8' }).trim();
+
+        if (behind !== '0') {
+          console.log(`\n${yellow(`${behind} new commit(s) available on ${branch}.`)}\n`);
+          try {
+            const log = execSync(`git log HEAD..origin/${branch} --oneline --max-count=10`, { stdio: 'pipe', encoding: 'utf8' }).trim();
+            console.log(dim(log));
+            console.log('');
+          } catch {}
+
+          if (await confirm('Pull updates before rebuilding?', true)) {
+            await runPullWithSettings({
+              branch,
+              pullUrl,
+              encryptedToken: settings?.deploy_github_token_encrypted ?? null,
+            });
+            console.log(`${check} Code updated.\n`);
+          }
+        } else {
+          console.log(`${check} Already up to date.\n`);
+        }
+      } catch {
+        console.log(dim(`  Could not check for updates on ${branch} (no git or no network).\n`));
+      }
     }
   }
 
