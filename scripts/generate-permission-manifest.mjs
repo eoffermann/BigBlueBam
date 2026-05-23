@@ -455,6 +455,11 @@ const EXCLUDED_FILE_BASENAMES = new Set([
   // which the generator already correctly derives from the path; including
   // here as belt-and-suspenders so the audit doesn't churn the manifest.
   'permissions-divergences.routes.ts',
+  // Deploy-settings backend: routes use the hand-authored ids
+  // bam.superuser_deploy_settings.{get,update,verify}. The path-derived
+  // auto-ids would singularize 'settings' to 'setting' and would not
+  // capture the verify-repo verb cleanly.
+  'deploy-settings.routes.ts',
 ]);
 
 function isPathExcluded(routePath) {
@@ -612,6 +617,16 @@ function buildManifest() {
     { id: 'bam.superuser_permission_user.set_override', resource: 'superuser_permission_user', verb: 'set_override', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
     { id: 'bam.superuser_permission_user.clear_override', resource: 'superuser_permission_user', verb: 'clear_override', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: true },
     { id: 'bam.superuser_permission_user.reattach', resource: 'superuser_permission_user', verb: 'reattach', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: true },
+    // Deploy-settings backend (companion to the SU permissions editor — read/
+    // write the deploy_branch / deploy_repo_url / deploy_github_token /
+    // deploy_auto_update_enabled keys in system_settings, plus a GitHub-
+    // repo verifier). Routes live in apps/api/src/routes/deploy-settings.routes.ts;
+    // ids are hand-authored because the path-derived auto-id would be
+    // bam.superuser_deploy_setting.{get,update} (singular, drops the
+    // verify-repo verb entirely).
+    { id: 'bam.superuser_deploy_settings.get', resource: 'superuser_deploy_settings', verb: 'get', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_deploy_settings.update', resource: 'superuser_deploy_settings', verb: 'update', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    { id: 'bam.superuser_deploy_settings.verify', resource: 'superuser_deploy_settings', verb: 'verify', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {

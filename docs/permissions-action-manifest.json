@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1060,
+    "total": 1063,
     "mcp_tools_scanned": 348,
     "rest_routes_scanned": 770,
-    "read_permissions": 428,
+    "read_permissions": 429,
     "destructive_permissions": 106
   },
   "permissions": [
@@ -3471,6 +3471,57 @@
           "source": "rest",
           "ref": "GET /superuser/calling-credentials",
           "file": "superuser.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_deploy_settings.get",
+      "app": "bam",
+      "resource": "superuser_deploy_settings",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_deploy_settings.update",
+      "app": "bam",
+      "resource": "superuser_deploy_settings",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_deploy_settings.verify",
+      "app": "bam",
+      "resource": "superuser_deploy_settings",
+      "verb": "verify",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0160)",
+          "file": "permissions-admin.routes.ts"
         }
       ]
     },
