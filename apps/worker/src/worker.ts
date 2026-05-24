@@ -97,6 +97,11 @@ import {
   processAgentWebhookDlqJob,
   type AgentWebhookDlqJobData,
 } from './jobs/agent-webhook-dlq.job.js';
+// Slack workspace -> Banter importer (docs/plans/slack-import-design.md).
+import {
+  processSlackImportJob,
+  type SlackImportJobData,
+} from './jobs/slack-import.job.js';
 
 const env = loadEnv();
 
@@ -878,6 +883,23 @@ helpdeskEmailNotifyWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'helpdesk-email-notify', err }, 'Job failed');
 });
 
+// Slack -> Banter import worker. Long-running per job (seconds to hours
+// for big workspaces); kept at concurrency 1 so a single archive doesn't
+// monopolize the DB and so cancellation semantics stay simple.
+const slackImportWorker = new Worker<SlackImportJobData>(
+  'slack-import',
+  async (job: Job<SlackImportJobData>) => {
+    await processSlackImportJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+slackImportWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'slack-import' }, 'Job completed');
+});
+slackImportWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'slack-import', err }, 'Job failed');
+});
+
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(
   'analytics',
@@ -975,6 +997,7 @@ const workers = [
   // §20 Wave 5 webhooks
   agentWebhookDispatchWorker,
   agentWebhookDlqWorker,
+  slackImportWorker,
   analyticsWorker,
 ];
 
@@ -1019,6 +1042,7 @@ logger.info(
       // §20 Wave 5 webhooks
       'agent-webhook-dispatch',
       'agent-webhook-dlq',
+      'slack-import',
       'analytics',
     ],
   },
