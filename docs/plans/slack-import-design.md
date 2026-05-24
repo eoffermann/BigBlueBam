@@ -34,12 +34,14 @@ The card transitions to a multi-section preview with:
 - Help text: every imported channel will land in a new `banter_channel_groups` row named after this project + the source workspace name + today's date
 
 **B. User mapping**
-- Auto-mapped (read-only list): Slack users whose `profile.email` matches an existing BAM user in this org. Shows N matches.
-- Unmatched (table with per-row dropdown): Slack user → action selector. Options:
-  - `Create stub user` (default) — creates a placeholder user with the Slack display name + email if present, marked `is_active=false`, no password. Owner can promote later.
-  - `Map to existing user` (typeahead from this org's users) — operator-chosen target
-  - `Skip user` — their messages get imported under a system "Slack Migration" bot user, with original author name preserved in `metadata.slack_author_name`
-- "Match by display name" button (best-effort — looser than email match; needs operator confirmation per row before applying)
+- Auto-mapped (read-only list, collapsed by default): Slack users whose `profile.email` matches an existing BAM user in this org. Shows N matches with a "Review" expander.
+- Unmatched (table with per-row dropdown): Slack user → action selector. Four actions:
+  - **`Send invite`** (recommended default when the Slack user has an email) — creates a stub user immediately AND queues an org-member invite email to their Slack email. The stub IS the invitee; when they click the invite link, the existing org-invite acceptance flow promotes the stub from `is_active=false` to a fully-active member. Their imported messages stay attributed to the same user the whole time — no reconciliation needed. Helper text: "We'll create an inactive user now and email them an invitation to claim the account."
+  - **`Create stub user`** (default when no email present) — same as above without the invite email. Owner can manually promote later via `/b3/superuser/people/:id`.
+  - **`Map to existing user`** (typeahead from this org's users) — operator-chosen target for users whose Slack email differs from their BAM email (e.g. workspace rename, personal vs. work email)
+  - **`Skip user`** — their messages get imported under the migration bot user with original author name preserved in `metadata.slack_source.original_author_name`
+- "Match by display name" button (best-effort — looser than email match; surfaces probable matches for per-row operator confirmation before applying)
+- Bulk-action header: "Send invite to all unmapped users with email" + "Stub all unmapped users" (one-click for the two common bulk operations)
 
 **C. Channel mapping**
 - Table of every Slack channel with columns: `Slack name`, `Slack type` (public/private/dm/mpdm), `Members`, `Messages`, `Mapping`
@@ -52,6 +54,7 @@ The card transitions to a multi-section preview with:
 - Toggle: "Import attachments" (default ON) — re-uploads files to MinIO. Off skips files (saves disk + time for huge workspaces).
 - Toggle: "Import reactions" (default ON)
 - Toggle: "Import pins" (default ON)
+- Toggle: "Import DMs and group DMs" (default OFF) — when on, Slack DMs become Banter DMs between mapped users; multi-party DMs become Banter group DMs. Implemented in v1 but off by default for privacy. Skipped when either side isn't a mapped user.
 - Toggle: "Notify members on import completion" (default OFF) — when on, every mapped existing user gets a Banter notification "X channels imported from Slack into project Y"
 - Toggle: "Dry run" (default OFF) — runs the entire pipeline without writing anything; produces a diff report
 - Number input: "Daily message rate cap" (default 5000) — for very large workspaces, throttles the worker so import doesn't saturate the DB
@@ -156,7 +159,14 @@ The importer must handle both: if a file is referenced by a Slack URL we can't r
 
 Three additions, one migration. All idempotent per `CLAUDE.md` migration conventions.
 
-### 4a. `banter_channel_groups.project_id` (nullable FK)
+### 4a. Project linkage on both `banter_channels` and `banter_channel_groups` (nullable FKs)
+
+Per the resolved sign-off on §13.3: a Slack workspace maps 1:1 to a Banter project; each Slack channel becomes a Banter channel scoped to that project. So `project_id` lives on both:
+
+- **`banter_channel_groups.project_id`** — the import-created group ties to the project. Lets the operator move the whole group to a different project later by editing one FK.
+- **`banter_channels.project_id`** — each individual channel also carries the project FK. Lets queries skip the group join ("show me all channels for project X" is a single-table scan) and lets a channel survive being un-grouped without losing its project association.
+
+When a channel is created via the import wizard, the worker sets both columns to the same value. When a channel is created via the normal Banter UI (no project context), both stay NULL.
 
 ```sql
 ALTER TABLE banter_channel_groups
@@ -164,9 +174,17 @@ ALTER TABLE banter_channel_groups
 
 CREATE INDEX IF NOT EXISTS banter_channel_groups_project_id_idx
   ON banter_channel_groups (project_id) WHERE project_id IS NOT NULL;
+
+ALTER TABLE banter_channels
+  ADD COLUMN IF NOT EXISTS project_id uuid REFERENCES projects(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS banter_channels_project_id_idx
+  ON banter_channels (project_id, is_archived) WHERE project_id IS NOT NULL;
 ```
 
-This is the project linkage. Existing groups stay un-linked (NULL); imports always set it.
+`ON DELETE SET NULL` (not CASCADE): deleting a project nulls out the linkage on both tables but preserves the channels and their messages. Chat history doesn't vanish because a project was deleted.
+
+Existing channels and groups stay un-linked (NULL); imports always set both.
 
 ### 4b. `banter_slack_imports` (new table)
 
@@ -233,7 +251,7 @@ Same idea for attachments + reactions — they get a `slack_source` block on the
 
 ## 5. User mapping strategy
 
-Three actions per Slack user, chosen in the Step 2 wizard:
+Four actions per Slack user, chosen in the Step 2 wizard:
 
 ### 5a. Auto-match (default for users with email in Slack export)
 
@@ -242,9 +260,26 @@ Three actions per Slack user, chosen in the Step 2 wizard:
 - If found → that user is the message author for everything they wrote
 - The wizard shows these in a "Auto-mapped (N)" collapsed section; operator can override
 
-### 5b. Stub user creation
+### 5b. Send invite (recommended for unmapped users who have an email)
 
-For unmapped Slack users where the operator wants their messages preserved:
+This is the path for the common case: "this Slack user isn't in BAM yet, but they should be."
+
+Mechanism:
+
+1. **Stub user created immediately** with `is_active=false`, password_hash=NULL, the Slack email + display name, `notification_prefs.slack_stub=true`, `notification_prefs.invited_at=<timestamp>`, `notification_prefs.invite_token=<random>`
+2. **Org membership created** with the built-in `Member` group (so when they accept, they have full member access from day one — operator can downgrade in §1 Step 4 if they want a stricter default)
+3. **Invite email queued** via the existing SMTP path (`apps/worker/src/handlers/email.ts` or whatever the org-invite handler is). Email contains a magic link `/b3/accept-invite?token=<invite_token>` that lands on a "set your password" flow which flips `is_active=true` and clears the invite_token.
+4. **Messages imported as authored by this stub** — when the user later accepts, they see THEIR existing message history immediately because the author_id was already correct.
+
+The wizard summarizes invites at the bottom of Step 2: "We'll send N invitations. The recipients will see their message history once they accept." Operator can review the per-user invite list before clicking Start Import.
+
+**Invite acceptance happens asynchronously**: the operator's import completes in minutes; invites trickle in over days. The system handles this cleanly because the stub is a real user the whole time — acceptance is a permission/auth state change, not a data change.
+
+**If acceptance never happens**: stub stays inactive forever. Owner can clean up via `/b3/superuser/people` (which already lists inactive users) or via a separate "Remove unaccepted invites older than N days" worker job (post-v1).
+
+### 5c. Stub user creation (no email or no-invite preference)
+
+For unmapped Slack users without an email, OR when the operator explicitly picks "Stub" instead of "Send invite":
 
 ```sql
 INSERT INTO users (
@@ -262,22 +297,28 @@ INSERT INTO users (
 );
 ```
 
-Plus a row in `organization_memberships` so the user is bound to the org. The membership gets the built-in `Viewer` group so an accidentally-promoted stub can read but not write.
+Plus a row in `organization_memberships` so the user is bound to the org. Stubs created via this path (no invite) get the `Viewer` group (read-only) so an accidentally-promoted stub can't unexpectedly write things. Stubs created via the invite path (§5b) get the `Member` group because the user is expected to come online.
 
-Stub users are tagged in metadata: `users.notification_prefs = { "slack_stub": true, "imported_at": "...", "slack_workspace": "..." }`. The owner can later promote a stub via the existing `/b3/superuser/people/:id` flow.
+Stub users are tagged in metadata: `users.notification_prefs = { "slack_stub": true, "imported_at": "...", "slack_workspace": "...", "invite_sent": <bool> }`. The owner can later promote a stub via the existing `/b3/superuser/people/:id` flow.
 
-### 5c. System "Slack Migration" bot
+### 5d. System "Slack Migration" bot
 
 A single platform-level user `system+slack-migration@bigbluebam.internal` (created lazily on first import). When the operator chooses "Skip user" for a Slack user, that user's messages are imported with the bot as author + the original Slack author name preserved in `metadata.slack_source.original_author_name`. The Banter UI renders these as "<original_author_name> via Slack Migration".
 
 This is the safety hatch for "I don't want to recreate this person's user" — preserves the conversation without auto-creating accounts.
 
-### 5d. DMs (deferred, mentioned for completeness)
+### 5e. DMs (implemented in v1, default OFF)
 
-If the operator opts into DM import (default OFF):
-- Each Slack DM (`dms.json` entries) becomes a Banter DM thread between the two mapped users
+When the operator opts into DM import:
+- Each Slack DM (`dms.json` entries) becomes a Banter DM thread between the two mapped users — reuses the existing Banter DM creation code path (`apps/banter-api/src/routes/dm.routes.ts`), just with messages backdated to the original Slack timestamps
 - Multi-party DMs (`mpims.json`) become Banter group DMs
-- If either side is "skipped" (no mapped user), the whole DM is skipped (DMs imply two real participants; can't be imported under the migration bot meaningfully)
+- **If either side is "skipped"** (operator chose Skip in §5a-d, OR side is an external Slack workspace user not present in users.json) → the whole DM is skipped. DMs imply two specific participants; importing one side as the migration bot would lose the actual two-person nature
+- **If either side is "send invite"** → the DM imports normally, attributed to the stub. When the invitee accepts, their DM history is waiting for them
+- DM message ordering preserved via the same `ts`-based sort as channels
+
+The toggle in §1 Step 2D ("Import DMs and group DMs") defaults to OFF because DMs are privacy-sensitive — an operator importing a workspace they own may not realize the export includes employees' private conversations. The toggle reads: "Import DMs and group DMs from the export. Off by default for privacy." with a tooltip explaining what's included.
+
+Behind the toggle the code path is fully shipped — toggling on at import time fully imports all DM types in the export.
 
 ---
 
@@ -423,27 +464,31 @@ All idempotent. None destructive.
 
 ---
 
-## 13. Design forks needing sign-off before implementation
+## 13. Design forks — resolved
 
-These are the calls that need to be made before code lands. My recommended default is in **bold**.
+All forks resolved with operator sign-off on 2026-05-23. Implementation proceeds with these decisions:
 
-1. **DM import default**: ON or OFF? Recommend **OFF** in v1 — DMs are privacy-sensitive and the mapping UX is more complex (both sides must be real users). Operator can opt in per import.
+1. **DM import**: ✓ **Implemented in v1, toggle defaults to OFF.** The code path fully handles DMs and group DMs; the operator can flip the Step 2D toggle on per-import. Privacy-sensitive content stays opt-in.
 
-2. **Stub-user cleanup on abort**: separate toggle or always-on? Recommend **separate toggle** (off by default) — the most common abort reason is "redo with different mapping" and the stubs should persist.
+2. **Stub-user cleanup on abort**: ✓ **Separate toggle, default off.** Aborting an import preserves stubs unless operator explicitly opts into stub cleanup.
 
-3. **File download credentials**: how does the operator supply a Slack bearer token for standard exports? Recommend **a separate Step 2D field** for the bearer token (password input, never stored — used only during this import job and discarded). Acceptable that "no token + standard export = files become stubs."
+3. **File download credentials**: ✓ **Per-import bearer-token field** (password input, never stored, used only by the worker for this one job and discarded).
 
-4. **Where the upload endpoint lives**: `apps/banter-api` or `apps/api`? Recommend **`apps/banter-api`** since the data lands there and the worker reads from there too. The Bam settings UI just calls the cross-app endpoint via the existing nginx proxy (`/banter/api/...`).
+4. **Upload endpoint location**: ✓ **`apps/banter-api`.** Data lands there, worker reads from there. Bam settings UI calls cross-app via nginx proxy `/banter/api/...`.
 
-5. **WebSocket vs polling for status**: build a new `import:status:*` channel on the Banter WS, or just poll the REST endpoint every 2s? Recommend **start with polling** (simpler, no new WS surface), upgrade to WS in a follow-up if the UX feels laggy.
+5. **Status delivery**: ✓ **Start with polling** every 2s on the REST status endpoint. WS upgrade is a v2 concern if the UX feels laggy.
 
-6. **Project linkage location**: `project_id` on `banter_channel_groups` (my pick) vs on each `banter_channels` row? Recommend **on the group** — a project owns a thematic bundle of channels, which is exactly what a group represents. Lets the operator move all imported channels to a different project later by editing one FK.
+6. **Project linkage**: ✓ **`project_id` on BOTH `banter_channels` and `banter_channel_groups`** — a Slack workspace maps 1:1 to a Banter project; each Slack channel becomes a Banter channel scoped to that project. See §4a for the schema. Channels carry project_id directly so "show all channels for project X" is a single-table query.
 
-7. **System "Slack Migration" bot user — created where + named what?** Recommend **lazily-created on first import**, email `system+slack-migration@bigbluebam.internal`, display_name `Slack Migration`, kind=`service`, marked `is_active=false`. Mirrors the existing helpdesk-system user pattern.
+7. **Migration bot user**: ✓ **Lazily-created on first import.** Name and email not load-bearing — implementation will use `system+slack-migration@bigbluebam.internal` / display_name `Slack Migration`, `kind=service`, `is_active=false`. Mirrors the existing helpdesk-system user pattern.
 
-8. **Re-import behavior when target channels already exist**: skip, merge, or refuse? Recommend **the wizard handles it per-channel** — operator picks "Import as new" (with auto-renamed `engineering-2` if conflict) or "Merge into existing" or "Skip". The default is "Import as new" with a conflict warning.
+8. **Re-import conflict handling**: ✓ **Per-channel wizard handles it.** Operator picks "Import as new" (auto-renamed on conflict), "Merge into existing", or "Skip". Default is "Import as new" with a conflict warning shown inline.
 
-9. **What happens to existing Banter channels when the import's containing project is later deleted?** With `ON DELETE SET NULL` on the project FK, the channel group becomes project-less but the channels survive. Recommend **this default** — destroying a project shouldn't accidentally destroy chat history.
+9. **Project deletion behavior**: ✓ **`ON DELETE SET NULL` on both project FKs.** Channels and groups survive — chat history isn't destroyed by deleting a project.
+
+### Additional operator decisions on §5
+
+- **"Send invite" added as a 4th user-mapping action** alongside auto-match, stub, and skip. When the Slack user has an email and isn't auto-matched, the wizard defaults to "Send invite" — operator can override per row or in bulk. See §5b for the full flow: creates a stub immediately, queues an org-member invite email, the same stub gets activated when the invitee clicks the magic link.
 
 ---
 
@@ -459,20 +504,15 @@ These are the calls that need to be made before code lands. My recommended defau
 
 ---
 
-## Sign-off checklist
+## Sign-off — complete (2026-05-23)
 
-Before implementation starts, operator should confirm:
+All design forks resolved. Implementation breaks into 4 parallel agents:
 
-- [ ] §13 design forks: green-light the recommended defaults, or override
-- [ ] §6 permission model: confirm admin can import (not just owner)
-- [ ] §10 worker memory bound: 4 GB worker container is large enough for the streaming approach
-- [ ] §4 schema additions: no objections to adding `project_id` to channel groups + the new `banter_slack_imports` table
+- **Agent A — Schema + permissions catalog**: 5 migrations (0163-0167) covering `project_id` on `banter_channels` + `banter_channel_groups`, the `banter_slack_imports` audit table, `is_stub`/`original_url` on attachments, the unique partial index for message idempotency, and the 3 new `banter.admin_import.*` catalog permissions. Updates Drizzle schemas; verifies via `db:check` + `check-permission-catalog`.
+- **Agent B — Backend routes + service in banter-api**: `apps/banter-api/src/routes/slack-import.routes.ts` with the 6 endpoints from §9, plus the multipart upload handler + MinIO stash + fast-scan preview (channels.json + users.json only) + BullMQ job enqueue + status read. Gates each route with `fastify.requireCan('banter.admin_import.<verb>')`.
+- **Agent C — Worker job + fixtures**: `apps/worker/src/handlers/slack-import.ts` with the 10-phase state machine from §10. Includes streaming-unzip via `node-stream-zip`, chunked message inserts (500/txn), thread reconciliation pass, file download with optional bearer token + stub-attachment fallback, cancellation checks, status pubsub. Ships a 50 KB fixture .zip at `apps/worker/test/fixtures/slack-mini-workspace.zip` and the 4 test files from §11.
+- **Agent D — Frontend Slack Import card in `/b3/settings`**: multi-step wizard (upload → mapping → confirmation → live progress → completion) per §1. Includes the per-row invite/stub/skip/map dropdown from §5b with bulk-action header, the project picker (new or existing), all option toggles from Step 2D, the per-channel mapping table with conflict detection, the polling-based status view, and the abort flow. Gated by `useCan('banter.admin_import.create')`.
 
-Once those land, implementation breaks down naturally into 3-4 parallel agents:
-- Agent A: schema migrations + permissions catalog
-- Agent B: backend routes + service in banter-api
-- Agent C: worker job + fixtures
-- Agent D: frontend Slack Import card in /b3/settings
-- (Optional Agent E: integration test that round-trips the fixture)
+Estimated build time: **~2 weeks** with parallel agents.
 
-Estimated build time: **~2 weeks** with parallel agents, **~3-4 weeks** sequential.
+Implementation is unblocked. Awaiting operator's "go" to launch the swarm.
