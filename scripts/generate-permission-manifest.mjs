@@ -460,6 +460,13 @@ const EXCLUDED_FILE_BASENAMES = new Set([
   // auto-ids would singularize 'settings' to 'setting' and would not
   // capture the verify-repo verb cleanly.
   'deploy-settings.routes.ts',
+  // Slack-import (banter-api): routes use the hand-authored ids
+  // banter.admin_import.{create,status,abort}. The path-derived auto-ids
+  // would explode into per-endpoint perms like
+  // banter.admin_import_slack_upload.create and would singularize
+  // 'status' to 'statu'. Three real catalog rows are seeded by 0168;
+  // routes call fastify.requireCan() against those ids directly.
+  'slack-import.routes.ts',
 ]);
 
 function isPathExcluded(routePath) {
@@ -627,19 +634,46 @@ function buildManifest() {
     { id: 'bam.superuser_deploy_settings.get', resource: 'superuser_deploy_settings', verb: 'get', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: true },
     { id: 'bam.superuser_deploy_settings.update', resource: 'superuser_deploy_settings', verb: 'update', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
     { id: 'bam.superuser_deploy_settings.verify', resource: 'superuser_deploy_settings', verb: 'verify', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: true },
+    // Slack-import (docs/plans/slack-import-design.md §6). Three admin-level
+    // permissions for the operator-facing Slack workspace import flow exposed
+    // at /banter/api/v1/admin/import/slack/*. Hand-authored because the
+    // route file does not exist yet in this wave (Agent B's scope) — the
+    // catalog rows need to land first so Agent B can call requireCan() with
+    // a valid id. Not requires_superuser=true: org admin/owner-level gate
+    // delivered via the built-in group defaults logic.
+    { id: 'banter.admin_import.create', app: 'banter', resource: 'admin_import', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'banter.admin_import.status', app: 'banter', resource: 'admin_import', verb: 'status', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'banter.admin_import.abort', app: 'banter', resource: 'admin_import', verb: 'abort', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
+      // App defaults to 'bam' (Wave B/F admin surfaces all live there); any
+      // entry that targets a different product must set c.app explicitly
+      // (e.g. the banter.admin_import.* trio).
+      const app = c.app ?? 'bam';
+      // Pick the most informative source label we can without rebuilding the
+      // full migration map. The id itself carries the app, so the heuristic
+      // is "which delta seeded this row first":
+      //   divergence → 0146 (Wave B)
+      //   banter.admin_import → 0168 (Slack import, this wave)
+      //   everything else → 0160 (Wave F SU permissions editor + deploy)
+      let migrationLabel = '0160';
+      let sourceFile = 'permissions-admin.routes.ts';
+      if (c.id.includes('divergence')) migrationLabel = '0146';
+      if (c.id.startsWith('banter.admin_import.')) {
+        migrationLabel = '0168';
+        sourceFile = 'slack-import.routes.ts';
+      }
       byId.set(c.id, {
         id: c.id,
-        app: 'bam',
+        app,
         resource: c.resource,
         verb: c.verb,
         is_destructive: c.is_destructive,
         is_read: c.is_read,
         requires_confirmation: c.requires_confirmation,
         requires_superuser: c.requires_superuser,
-        sources: [{ source: 'rest', ref: `hand_authored (migration ${c.id.includes('divergence') ? '0146' : '0160'})`, file: 'permissions-admin.routes.ts' }],
+        sources: [{ source: 'rest', ref: `hand_authored (migration ${migrationLabel})`, file: sourceFile }],
       });
     }
   }

@@ -30,3 +30,5 @@ export type { BanterPresenceStatus } from './user-presence.js';
 export { banterScheduledMessages } from './scheduled-messages.js';
 // §1 Wave 5 banter subs
 export { banterAgentSubscriptions } from './agent-subscriptions.js';
+// Slack workspace import (docs/plans/slack-import-design.md)
+export { banterSlackImports } from './slack-imports.js';

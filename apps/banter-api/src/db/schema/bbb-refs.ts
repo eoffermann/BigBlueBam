@@ -29,6 +29,17 @@ export const organizations = pgTable('organizations', {
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Minimal stub of the Bam projects table. Banter doesn't need the full
+// column set — the Slack import wizard only links its channel groups and
+// channels to a project_id (migrations 0163/0164/0165). Full schema lives
+// in apps/api/src/db/schema/projects.ts.
+export const projects = pgTable('projects', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  org_id: uuid('org_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+});
+
 export const users = pgTable(
   'users',
   {

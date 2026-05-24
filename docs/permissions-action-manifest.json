@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1063,
+    "total": 1066,
     "mcp_tools_scanned": 348,
     "rest_routes_scanned": 770,
-    "read_permissions": 429,
-    "destructive_permissions": 106
+    "read_permissions": 430,
+    "destructive_permissions": 107
   },
   "permissions": [
     {
@@ -4832,6 +4832,57 @@
           "source": "rest",
           "ref": "PATCH /v1/admin/channel-groups/:id",
           "file": "admin.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.admin_import.abort",
+      "app": "banter",
+      "resource": "admin_import",
+      "verb": "abort",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0168)",
+          "file": "slack-import.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.admin_import.create",
+      "app": "banter",
+      "resource": "admin_import",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0168)",
+          "file": "slack-import.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.admin_import.status",
+      "app": "banter",
+      "resource": "admin_import",
+      "verb": "status",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0168)",
+          "file": "slack-import.routes.ts"
         }
       ]
     },

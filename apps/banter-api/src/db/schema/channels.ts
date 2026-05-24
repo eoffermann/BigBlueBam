@@ -10,7 +10,7 @@ import {
   index,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { organizations, users } from './bbb-refs.js';
+import { organizations, projects, users } from './bbb-refs.js';
 import { banterChannelGroups } from './channel-groups.js';
 
 export const banterChannels = pgTable(
@@ -30,6 +30,10 @@ export const banterChannels = pgTable(
     channel_group_id: uuid('channel_group_id').references(() => banterChannelGroups.id, {
       onDelete: 'set null',
     }),
+    // Slack import (migration 0164). Nullable FK to projects.id — the
+    // import wizard sets this so a channel is scoped to a project; standard
+    // Banter channels stay NULL. ON DELETE SET NULL preserves chat history.
+    project_id: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
     created_by: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -60,5 +64,6 @@ export const banterChannels = pgTable(
     uniqueIndex('banter_channels_org_slug_idx').on(table.org_id, table.slug),
     index('banter_channels_org_type_idx').on(table.org_id, table.type, table.is_archived),
     index('banter_channels_org_last_msg_idx').on(table.org_id, table.last_message_at),
+    index('banter_channels_project_id_idx').on(table.project_id, table.is_archived),
   ],
 );
