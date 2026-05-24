@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { SettingsLlmProviders } from '@/pages/settings-llm-providers';
 import { SmtpSettingsForm } from '@/components/settings/smtp-settings-form';
+import { SlackImportCard } from '@/components/settings/slack-import-card';
 
 interface ApiKeyData {
   id: string;
@@ -1693,6 +1694,12 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Slack Import — multi-step workspace import wizard.
+                    The card returns null for users without
+                    banter.admin_import.create, so it cleanly disappears for
+                    non-admins. */}
+                <SlackImportCard onNavigate={onNavigate} />
 
                 {/* Email Configuration — editable SMTP form, SuperUser only */}
                 <SmtpSettingsForm isSuperuser={Boolean(user?.is_superuser)} />
