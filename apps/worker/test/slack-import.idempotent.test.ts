@@ -166,22 +166,22 @@ describe('processSlackImportJob — idempotency', () => {
       phase: null,
       totals_imported: {},
       mapping: {
-        user_mapping: fixture.users.map((u) => ({
+        users: fixture.users.map((u) => ({
           slack_user_id: u.id,
           action: 'stub',
           slack_email: u.email ?? null,
           slack_display_name: u.name,
         })),
-        channel_mapping: fixture.channels.map((c) => ({
+        channels: fixture.channels.map((c) => ({
           slack_channel_id: c.id,
           slack_name: c.name,
           slack_type: 'public_channel',
-          action: 'new',
+          action: 'import_new',
           target_name: c.name,
           creator_slack_id: c.created_by,
           member_slack_ids: ['U001','U002','U003','U004'],
         })),
-        project: { mode: 'existing', project_id: 'proj-1' },
+        project: { mode: 'use_existing', project_id: 'proj-1' },
         options: {
           preserve_timestamps: true,
           import_attachments: true,

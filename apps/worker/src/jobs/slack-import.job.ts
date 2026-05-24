@@ -59,8 +59,8 @@ export type SlackImportPhase =
   | 'reconciling'
   | 'done';
 
-type UserMappingAction = 'auto_match' | 'invite' | 'stub' | 'map' | 'skip';
-type ChannelMappingAction = 'new' | 'merge' | 'skip';
+type UserMappingAction = 'auto_match' | 'send_invite' | 'stub' | 'map_existing' | 'skip';
+type ChannelMappingAction = 'import_new' | 'merge_existing' | 'skip';
 
 interface UserMappingEntry {
   slack_user_id: string;
@@ -68,6 +68,8 @@ interface UserMappingEntry {
   target_user_id?: string | null;
   slack_email?: string | null;
   slack_display_name?: string | null;
+  /** When action='send_invite', false defers the invite email (default true). */
+  send_email?: boolean;
 }
 
 interface ChannelMappingEntry {
@@ -86,12 +88,9 @@ interface ChannelMappingEntry {
   is_mpim?: boolean | null;
 }
 
-interface ProjectChoice {
-  mode: 'new' | 'existing';
-  project_id?: string | null;
-  project_name?: string | null;
-  project_key?: string | null;
-}
+type ProjectChoice =
+  | { mode: 'create_new'; name: string; key: string }
+  | { mode: 'use_existing'; project_id: string };
 
 interface ImportOptions {
   preserve_timestamps?: boolean;
@@ -106,8 +105,8 @@ interface ImportOptions {
 }
 
 interface ImportMapping {
-  user_mapping: UserMappingEntry[];
-  channel_mapping: ChannelMappingEntry[];
+  users: UserMappingEntry[];
+  channels: ChannelMappingEntry[];
   project: ProjectChoice;
   options: ImportOptions;
 }
@@ -223,7 +222,7 @@ export async function processSlackImportJob(
       // -----------------------------------------------------------------
       // Phase 2 — map users (create stubs, queue invites, build cache)
       // -----------------------------------------------------------------
-      await advancePhase(ctx, 'mapping_users', 0, row.mapping.user_mapping.length);
+      await advancePhase(ctx, 'mapping_users', 0, row.mapping.users.length);
       const userMap = await mapUsers(ctx);
 
       // -----------------------------------------------------------------
@@ -235,7 +234,7 @@ export async function processSlackImportJob(
       // -----------------------------------------------------------------
       // Phase 4 — import channels (+ memberships)
       // -----------------------------------------------------------------
-      const importableChannels = row.mapping.channel_mapping.filter(
+      const importableChannels = row.mapping.channels.filter(
         (c) => c.action !== 'skip' && (!isDmLike(c) || ctx.options.import_dms),
       );
       await advancePhase(ctx, 'importing_channels', 0, importableChannels.length);
@@ -560,7 +559,7 @@ type UserMap = Map<string, string>; // slack_user_id -> bam_user_id
 async function mapUsers(ctx: ImportContext): Promise<UserMap> {
   const map: UserMap = new Map();
   const orgId = ctx.row.org_id;
-  const mapping = ctx.row.mapping.user_mapping ?? [];
+  const mapping = ctx.row.mapping.users ?? [];
   let migrationBotId: string | null = null;
 
   let done = 0;
@@ -569,14 +568,14 @@ async function mapUsers(ctx: ImportContext): Promise<UserMap> {
 
     switch (entry.action) {
       case 'auto_match':
-      case 'map': {
+      case 'map_existing': {
         if (entry.target_user_id) {
           map.set(entry.slack_user_id, entry.target_user_id);
         }
         break;
       }
 
-      case 'invite':
+      case 'send_invite':
       case 'stub': {
         // Idempotent stub/invite. Re-running the import must not produce
         // duplicate users. Lookup by email when present, else by display_name
@@ -594,15 +593,20 @@ async function mapUsers(ctx: ImportContext): Promise<UserMap> {
           orgId,
           userId,
           ctx.row.initiated_by,
-          entry.action === 'invite'
+          entry.action === 'send_invite'
             ? BUILTIN_GROUP_IDS.member
             : BUILTIN_GROUP_IDS.viewer,
         );
 
         // Fire the invite email exactly once per stub by looking at
         // notification_prefs.invite_sent_at. If a re-run hits an existing
-        // invited stub the email is NOT re-queued.
-        if (entry.action === 'invite' && entry.slack_email) {
+        // invited stub the email is NOT re-queued. Operator can also
+        // defer by setting send_email=false in the mapping wizard.
+        if (
+          entry.action === 'send_invite' &&
+          entry.slack_email &&
+          entry.send_email !== false
+        ) {
           await maybeSendInvite(ctx, userId, entry.slack_email);
         }
 
@@ -680,8 +684,8 @@ async function createStubUser(
     slack_user_id: entry.slack_user_id,
     slack_workspace: ctx.row.workspace_name,
     imported_at: new Date().toISOString(),
-    invited_at: entry.action === 'invite' ? new Date().toISOString() : null,
-    invite_token: entry.action === 'invite' ? inviteToken : null,
+    invited_at: entry.action === 'send_invite' ? new Date().toISOString() : null,
+    invite_token: entry.action === 'send_invite' ? inviteToken : null,
     invite_sent: false,
   };
 
@@ -838,19 +842,20 @@ async function createChannelGroup(
   ctx: ImportContext,
 ): Promise<{ channelGroupId: string; projectId: string | null }> {
   const db = getDb();
-  const project = ctx.row.mapping.project ?? { mode: 'existing', project_id: null };
-  let projectId: string | null = project.project_id ?? ctx.row.project_id ?? null;
+  const project = ctx.row.mapping.project ?? ({ mode: 'use_existing', project_id: '' } as ProjectChoice);
+  let projectId: string | null =
+    (project.mode === 'use_existing' ? project.project_id : null) ?? ctx.row.project_id ?? null;
 
-  if (project.mode === 'new' && project.project_name && !projectId) {
+  if (project.mode === 'create_new' && project.name && !projectId) {
     // Create a fresh project. The minimum NOT NULLs on projects are
     // (org_id, name, key, owner_id) per apps/api/src/db/schema/projects.ts.
     const key =
-      project.project_key?.toUpperCase().slice(0, 10) ??
-      slugify(project.project_name).toUpperCase().slice(0, 10) ??
+      project.key?.toUpperCase().slice(0, 10) ??
+      slugify(project.name).toUpperCase().slice(0, 10) ??
       'SLACK';
     const result = await db.execute(sql`
       INSERT INTO projects (org_id, name, key, owner_id)
-      VALUES (${ctx.row.org_id}, ${project.project_name}, ${key}, ${ctx.row.initiated_by})
+      VALUES (${ctx.row.org_id}, ${project.name}, ${key}, ${ctx.row.initiated_by})
       ON CONFLICT (org_id, key) DO UPDATE SET updated_at = NOW()
       RETURNING id
     `);
@@ -922,9 +927,9 @@ async function importChannels(
     await checkCancellation(ctx);
     let bamChannelId: string | null = null;
 
-    if (c.action === 'merge' && c.target_channel_id) {
+    if (c.action === 'merge_existing' && c.target_channel_id) {
       bamChannelId = c.target_channel_id;
-    } else if (c.action === 'new') {
+    } else if (c.action === 'import_new') {
       const baseName = c.target_name ?? c.slack_name;
       const slug = slugify(baseName);
       const channelType = mapChannelType(c);

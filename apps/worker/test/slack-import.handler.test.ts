@@ -231,18 +231,18 @@ describe('processSlackImportJob — happy path', () => {
       source_size_bytes: fixture.zip.length,
       source_minio_key: 'slack-imports/org-1/import-1.zip',
       mapping: {
-        user_mapping: fixture.users.map((u, idx) => ({
+        users: fixture.users.map((u, idx) => ({
           slack_user_id: u.id,
           action: idx === 0 ? 'auto_match' : 'stub',
           target_user_id: idx === 0 ? 'user-eddie' : null,
           slack_email: u.email ?? null,
           slack_display_name: u.name,
         })),
-        channel_mapping: fixture.channels.map((c) => ({
+        channels: fixture.channels.map((c) => ({
           slack_channel_id: c.id,
           slack_name: c.name,
           slack_type: 'public_channel',
-          action: 'new',
+          action: 'import_new',
           target_name: c.name,
           creator_slack_id: c.created_by,
           member_slack_ids: ['U001', 'U002', 'U003', 'U004'],
@@ -252,7 +252,7 @@ describe('processSlackImportJob — happy path', () => {
             ? [{ id: 'p1', user: 'U001', ts: '1704367320.002002' }]
             : [],
         })),
-        project: { mode: 'existing', project_id: 'proj-1' },
+        project: { mode: 'use_existing', project_id: 'proj-1' },
         options: {
           preserve_timestamps: true,
           import_attachments: true,

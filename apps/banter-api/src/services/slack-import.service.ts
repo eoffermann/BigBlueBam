@@ -95,7 +95,7 @@ export async function downloadToTempfile(key: string): Promise<{ path: string; c
 // ── Slack export preview ───────────────────────────────────────────
 
 export interface SlackPreviewUser {
-  slack_id: string;
+  slack_user_id: string;
   email: string | null;
   display_name: string;
   real_name: string | null;
@@ -104,7 +104,7 @@ export interface SlackPreviewUser {
 }
 
 export interface SlackPreviewChannel {
-  slack_id: string;
+  slack_channel_id: string;
   name: string;
   type: 'public' | 'private' | 'dm' | 'mpim';
   topic: string | null;
@@ -155,7 +155,7 @@ interface SlackChannelRow {
 function mapUser(row: SlackUserRow): SlackPreviewUser {
   const profile = row.profile ?? {};
   return {
-    slack_id: row.id ?? '',
+    slack_user_id: row.id ?? '',
     email: profile.email ?? null,
     display_name: profile.display_name || row.name || profile.real_name || row.real_name || row.id || 'unknown',
     real_name: profile.real_name ?? row.real_name ?? null,
@@ -178,7 +178,7 @@ function mapChannel(
           ? 2
           : 0;
   return {
-    slack_id: row.id ?? '',
+    slack_channel_id: row.id ?? '',
     name: row.name ?? row.id ?? 'unnamed',
     type,
     topic: row.topic?.value ?? null,
@@ -372,28 +372,27 @@ export async function loadImportRow(
 
 // ── Mapping validation ─────────────────────────────────────────────
 
-export type UserMappingAction = 'auto_match' | 'invite' | 'stub' | 'map' | 'skip';
-export type ChannelMappingAction = 'new' | 'merge' | 'skip';
+export type UserMappingAction = 'auto_match' | 'send_invite' | 'stub' | 'map_existing' | 'skip';
+export type ChannelMappingAction = 'import_new' | 'merge_existing' | 'skip';
 
 export interface UserMappingEntry {
-  slack_id: string;
+  slack_user_id: string;
   action: UserMappingAction;
   target_user_id?: string | null;
+  /** When action='send_invite', false defers the email send (default true). */
+  send_email?: boolean;
 }
 
 export interface ChannelMappingEntry {
-  slack_id: string;
+  slack_channel_id: string;
   action: ChannelMappingAction;
   target_channel_id?: string | null;
   target_name?: string | null;
 }
 
-export interface ProjectSelection {
-  mode: 'create' | 'existing';
-  id?: string | null;
-  name?: string | null;
-  key?: string | null;
-}
+export type ProjectSelection =
+  | { mode: 'create_new'; name: string; key: string }
+  | { mode: 'use_existing'; project_id: string };
 
 export interface MappingOptions {
   preserve_timestamps: boolean;
@@ -409,8 +408,8 @@ export interface MappingOptions {
 
 export interface MappingPayload {
   project: ProjectSelection;
-  user_mapping: UserMappingEntry[];
-  channel_mapping: ChannelMappingEntry[];
+  users: UserMappingEntry[];
+  channels: ChannelMappingEntry[];
   options: MappingOptions;
 }
 
@@ -434,45 +433,45 @@ export function validateMapping(
   const issues: ValidationIssue[] = [];
 
   // Project
-  if (!mapping.project || (mapping.project.mode !== 'create' && mapping.project.mode !== 'existing')) {
-    issues.push({ field: 'project.mode', issue: 'must be "create" or "existing"' });
-  } else if (mapping.project.mode === 'create') {
+  if (!mapping.project || (mapping.project.mode !== 'create_new' && mapping.project.mode !== 'use_existing')) {
+    issues.push({ field: 'project.mode', issue: 'must be "create_new" or "use_existing"' });
+  } else if (mapping.project.mode === 'create_new') {
     if (!mapping.project.name || mapping.project.name.trim().length === 0) {
-      issues.push({ field: 'project.name', issue: 'required when mode=create' });
+      issues.push({ field: 'project.name', issue: 'required when mode=create_new' });
     }
     if (!mapping.project.key || mapping.project.key.trim().length === 0) {
-      issues.push({ field: 'project.key', issue: 'required when mode=create' });
+      issues.push({ field: 'project.key', issue: 'required when mode=create_new' });
     }
-  } else if (mapping.project.mode === 'existing') {
-    if (!mapping.project.id) {
-      issues.push({ field: 'project.id', issue: 'required when mode=existing' });
+  } else if (mapping.project.mode === 'use_existing') {
+    if (!mapping.project.project_id) {
+      issues.push({ field: 'project.project_id', issue: 'required when mode=use_existing' });
     }
   }
 
   // User mapping coverage + per-entry validation.
   const userIndex = new Map<string, UserMappingEntry>();
-  for (const entry of mapping.user_mapping ?? []) {
-    if (entry?.slack_id) userIndex.set(entry.slack_id, entry);
+  for (const entry of mapping.users ?? []) {
+    if (entry?.slack_user_id) userIndex.set(entry.slack_user_id, entry);
   }
   for (const u of preview.users) {
-    const entry = userIndex.get(u.slack_id);
+    const entry = userIndex.get(u.slack_user_id);
     if (!entry) {
       issues.push({
-        field: `user_mapping[${u.slack_id}]`,
-        issue: `missing mapping for slack user ${u.slack_id} (${u.display_name})`,
+        field: `users[${u.slack_user_id}]`,
+        issue: `missing mapping for slack user ${u.slack_user_id} (${u.display_name})`,
       });
       continue;
     }
-    if (entry.action === 'map' && !entry.target_user_id) {
+    if (entry.action === 'map_existing' && !entry.target_user_id) {
       issues.push({
-        field: `user_mapping[${u.slack_id}].target_user_id`,
-        issue: 'required when action=map',
+        field: `users[${u.slack_user_id}].target_user_id`,
+        issue: 'required when action=map_existing',
       });
     }
-    if (entry.action === 'invite' && !u.email) {
+    if (entry.action === 'send_invite' && !u.email) {
       issues.push({
-        field: `user_mapping[${u.slack_id}].action`,
-        issue: 'invite requires the slack user to have an email',
+        field: `users[${u.slack_user_id}].action`,
+        issue: 'send_invite requires the slack user to have an email',
       });
     }
   }
@@ -484,28 +483,28 @@ export function validateMapping(
     ...preview.mpims,
   ];
   const channelIndex = new Map<string, ChannelMappingEntry>();
-  for (const entry of mapping.channel_mapping ?? []) {
-    if (entry?.slack_id) channelIndex.set(entry.slack_id, entry);
+  for (const entry of mapping.channels ?? []) {
+    if (entry?.slack_channel_id) channelIndex.set(entry.slack_channel_id, entry);
   }
   for (const c of allChannels) {
-    const entry = channelIndex.get(c.slack_id);
+    const entry = channelIndex.get(c.slack_channel_id);
     if (!entry) {
       issues.push({
-        field: `channel_mapping[${c.slack_id}]`,
-        issue: `missing mapping for slack channel ${c.slack_id} (${c.name})`,
+        field: `channels[${c.slack_channel_id}]`,
+        issue: `missing mapping for slack channel ${c.slack_channel_id} (${c.name})`,
       });
       continue;
     }
-    if (entry.action === 'merge' && !entry.target_channel_id) {
+    if (entry.action === 'merge_existing' && !entry.target_channel_id) {
       issues.push({
-        field: `channel_mapping[${c.slack_id}].target_channel_id`,
-        issue: 'required when action=merge',
+        field: `channels[${c.slack_channel_id}].target_channel_id`,
+        issue: 'required when action=merge_existing',
       });
     }
-    if (entry.action === 'new' && !entry.target_name && !c.name) {
+    if (entry.action === 'import_new' && !entry.target_name && !c.name) {
       issues.push({
-        field: `channel_mapping[${c.slack_id}].target_name`,
-        issue: 'required when action=new and source has no name',
+        field: `channels[${c.slack_channel_id}].target_name`,
+        issue: 'required when action=import_new and source has no name',
       });
     }
   }

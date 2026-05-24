@@ -43,24 +43,33 @@ import {
 // ── Schemas ────────────────────────────────────────────────────────
 
 const userMappingEntrySchema = z.object({
-  slack_id: z.string().min(1),
-  action: z.enum(['auto_match', 'invite', 'stub', 'map', 'skip']),
+  slack_user_id: z.string().min(1),
+  action: z.enum(['auto_match', 'send_invite', 'stub', 'map_existing', 'skip']),
   target_user_id: z.string().uuid().nullable().optional(),
+  // When action='send_invite', operator can defer the email send (UI checkbox).
+  // Defaulting true means "fire the invite email immediately on import start";
+  // false creates the stub + queues the invite_token but skips the email.
+  send_email: z.boolean().optional(),
 });
 
 const channelMappingEntrySchema = z.object({
-  slack_id: z.string().min(1),
-  action: z.enum(['new', 'merge', 'skip']),
+  slack_channel_id: z.string().min(1),
+  action: z.enum(['import_new', 'merge_existing', 'skip']),
   target_channel_id: z.string().uuid().nullable().optional(),
   target_name: z.string().min(1).max(80).nullable().optional(),
 });
 
-const projectSelectionSchema = z.object({
-  mode: z.enum(['create', 'existing']),
-  id: z.string().uuid().nullable().optional(),
-  name: z.string().min(1).max(255).nullable().optional(),
-  key: z.string().min(1).max(50).nullable().optional(),
-});
+const projectSelectionSchema = z.discriminatedUnion('mode', [
+  z.object({
+    mode: z.literal('create_new'),
+    name: z.string().min(1).max(255),
+    key: z.string().min(1).max(50),
+  }),
+  z.object({
+    mode: z.literal('use_existing'),
+    project_id: z.string().uuid(),
+  }),
+]);
 
 const optionsSchema = z.object({
   preserve_timestamps: z.boolean().default(true),
@@ -76,8 +85,8 @@ const optionsSchema = z.object({
 
 const startBodySchema = z.object({
   project: projectSelectionSchema,
-  user_mapping: z.array(userMappingEntrySchema).default([]),
-  channel_mapping: z.array(channelMappingEntrySchema).default([]),
+  users: z.array(userMappingEntrySchema).default([]),
+  channels: z.array(channelMappingEntrySchema).default([]),
   options: optionsSchema.default({} as never),
 });
 
@@ -376,13 +385,14 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
         // schema's defaulted values, but TS doesn't see them as required —
         // re-apply with the parsed result to satisfy the MappingPayload type.
         options: parsed.data.options as MappingPayload['options'],
-        user_mapping: parsed.data.user_mapping.map((u) => ({
-          slack_id: u.slack_id,
+        users: parsed.data.users.map((u) => ({
+          slack_user_id: u.slack_user_id,
           action: u.action,
           target_user_id: u.target_user_id ?? null,
+          send_email: u.send_email,
         })),
-        channel_mapping: parsed.data.channel_mapping.map((c) => ({
-          slack_id: c.slack_id,
+        channels: parsed.data.channels.map((c) => ({
+          slack_channel_id: c.slack_channel_id,
           action: c.action,
           target_channel_id: c.target_channel_id ?? null,
           target_name: c.target_name ?? null,
@@ -422,12 +432,12 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
 
       const issues = validateMapping(preview, mapping);
 
-      // Verify project ownership if mode=existing. Done via raw SQL so we
+      // Verify project ownership if mode=use_existing. Done via raw SQL so we
       // don't drag the full Bam projects schema into the satellite.
-      if (mapping.project.mode === 'existing' && mapping.project.id) {
+      if (mapping.project.mode === 'use_existing' && mapping.project.project_id) {
         const projectRows = await db.execute<{ id: string }>(sql`
           SELECT id FROM projects
-          WHERE id = ${mapping.project.id} AND org_id = ${user.org_id}
+          WHERE id = ${mapping.project.project_id} AND org_id = ${user.org_id}
           LIMIT 1
         `);
         const projectFound = Array.isArray(projectRows)
@@ -435,15 +445,15 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
           : ((projectRows as { rows?: unknown[] })?.rows?.length ?? 0) > 0;
         if (!projectFound) {
           issues.push({
-            field: 'project.id',
+            field: 'project.project_id',
             issue: 'project does not exist or is not in your organization',
           });
         }
       }
 
       // Verify merge targets and map targets belong to this org.
-      const mergeTargets = mapping.channel_mapping
-        .filter((c) => c.action === 'merge' && c.target_channel_id)
+      const mergeTargets = mapping.channels
+        .filter((c) => c.action === 'merge_existing' && c.target_channel_id)
         .map((c) => c.target_channel_id as string);
       if (mergeTargets.length > 0) {
         const channelsCheck = await db.execute<{ id: string }>(sql`
@@ -454,18 +464,18 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
           ? channelsCheck
           : ((channelsCheck as { rows?: { id: string }[] })?.rows ?? []);
         const foundSet = new Set(rows.map((r) => r.id));
-        for (const c of mapping.channel_mapping) {
-          if (c.action === 'merge' && c.target_channel_id && !foundSet.has(c.target_channel_id)) {
+        for (const c of mapping.channels) {
+          if (c.action === 'merge_existing' && c.target_channel_id && !foundSet.has(c.target_channel_id)) {
             issues.push({
-              field: `channel_mapping[${c.slack_id}].target_channel_id`,
+              field: `channels[${c.slack_channel_id}].target_channel_id`,
               issue: 'target channel does not exist or is not in your organization',
             });
           }
         }
       }
 
-      const mapTargets = mapping.user_mapping
-        .filter((u) => u.action === 'map' && u.target_user_id)
+      const mapTargets = mapping.users
+        .filter((u) => u.action === 'map_existing' && u.target_user_id)
         .map((u) => u.target_user_id as string);
       if (mapTargets.length > 0) {
         const usersCheck = await db.execute<{ user_id: string }>(sql`
@@ -476,10 +486,10 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
           ? usersCheck
           : ((usersCheck as { rows?: { user_id: string }[] })?.rows ?? []);
         const foundSet = new Set(rows.map((r) => r.user_id));
-        for (const u of mapping.user_mapping) {
-          if (u.action === 'map' && u.target_user_id && !foundSet.has(u.target_user_id)) {
+        for (const u of mapping.users) {
+          if (u.action === 'map_existing' && u.target_user_id && !foundSet.has(u.target_user_id)) {
             issues.push({
-              field: `user_mapping[${u.slack_id}].target_user_id`,
+              field: `users[${u.slack_user_id}].target_user_id`,
               issue: 'target user is not a member of your organization',
             });
           }
@@ -518,8 +528,8 @@ export default async function slackImportRoutes(fastify: FastifyInstance) {
         details: {
           bullmq_job_id: bullJobId,
           project_mode: mapping.project.mode,
-          user_mapping_count: mapping.user_mapping.length,
-          channel_mapping_count: mapping.channel_mapping.length,
+          user_mapping_count: mapping.users.length,
+          channel_mapping_count: mapping.channels.length,
           options: mapping.options,
         },
       }).catch(() => {});

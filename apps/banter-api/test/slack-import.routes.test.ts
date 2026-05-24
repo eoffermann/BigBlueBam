@@ -75,7 +75,7 @@ const SAMPLE_PREVIEW: SlackPreview = {
   workspace_name: 'acme',
   users: [
     {
-      slack_id: 'U001',
+      slack_user_id: 'U001',
       email: 'alice@example.com',
       display_name: 'alice',
       real_name: 'Alice Anderson',
@@ -83,7 +83,7 @@ const SAMPLE_PREVIEW: SlackPreview = {
       is_deleted: false,
     },
     {
-      slack_id: 'U002',
+      slack_user_id: 'U002',
       email: null,
       display_name: 'bob',
       real_name: 'Bob Brown',
@@ -93,7 +93,7 @@ const SAMPLE_PREVIEW: SlackPreview = {
   ],
   channels: [
     {
-      slack_id: 'C001',
+      slack_channel_id: 'C001',
       name: 'engineering',
       type: 'public',
       topic: null,
@@ -112,13 +112,13 @@ const SAMPLE_PREVIEW: SlackPreview = {
 
 function baseMapping(overrides: Partial<MappingPayload> = {}): MappingPayload {
   return {
-    project: { mode: 'create', name: 'Slack Migration', key: 'slk', id: null },
-    user_mapping: [
-      { slack_id: 'U001', action: 'auto_match', target_user_id: null },
-      { slack_id: 'U002', action: 'stub', target_user_id: null },
+    project: { mode: 'create_new', name: 'Slack Migration', key: 'slk' },
+    users: [
+      { slack_user_id: 'U001', action: 'auto_match', target_user_id: null },
+      { slack_user_id: 'U002', action: 'stub', target_user_id: null },
     ],
-    channel_mapping: [
-      { slack_id: 'C001', action: 'new', target_channel_id: null, target_name: 'engineering' },
+    channels: [
+      { slack_channel_id: 'C001', action: 'import_new', target_channel_id: null, target_name: 'engineering' },
     ],
     options: {
       preserve_timestamps: true,
@@ -150,8 +150,8 @@ describe('validateMapping', () => {
 
   it('flags missing user mapping entries', () => {
     const mapping = baseMapping({
-      user_mapping: [
-        { slack_id: 'U001', action: 'auto_match', target_user_id: null },
+      users: [
+        { slack_user_id: 'U001', action: 'auto_match', target_user_id: null },
         // U002 deliberately missing
       ],
     });
@@ -160,16 +160,16 @@ describe('validateMapping', () => {
   });
 
   it('flags missing channel mapping entries', () => {
-    const mapping = baseMapping({ channel_mapping: [] });
+    const mapping = baseMapping({ channels: [] });
     const issues = validateMapping(SAMPLE_PREVIEW, mapping);
     expect(issues.some((i) => i.field.includes('C001'))).toBe(true);
   });
 
-  it('requires target_user_id when action=map', () => {
+  it('requires target_user_id when action=map_existing', () => {
     const mapping = baseMapping({
-      user_mapping: [
-        { slack_id: 'U001', action: 'map', target_user_id: null },
-        { slack_id: 'U002', action: 'stub', target_user_id: null },
+      users: [
+        { slack_user_id: 'U001', action: 'map_existing', target_user_id: null },
+        { slack_user_id: 'U002', action: 'stub', target_user_id: null },
       ],
     });
     const issues = validateMapping(SAMPLE_PREVIEW, mapping);
@@ -181,10 +181,10 @@ describe('validateMapping', () => {
     ).toBe(true);
   });
 
-  it('requires target_channel_id when action=merge', () => {
+  it('requires target_channel_id when action=merge_existing', () => {
     const mapping = baseMapping({
-      channel_mapping: [
-        { slack_id: 'C001', action: 'merge', target_channel_id: null, target_name: null },
+      channels: [
+        { slack_channel_id: 'C001', action: 'merge_existing', target_channel_id: null, target_name: null },
       ],
     });
     const issues = validateMapping(SAMPLE_PREVIEW, mapping);
@@ -196,62 +196,68 @@ describe('validateMapping', () => {
     ).toBe(true);
   });
 
-  it('rejects invite when the slack user has no email', () => {
+  it('rejects send_invite when the slack user has no email', () => {
     const mapping = baseMapping({
-      user_mapping: [
-        { slack_id: 'U001', action: 'auto_match', target_user_id: null },
-        { slack_id: 'U002', action: 'invite', target_user_id: null },
+      users: [
+        { slack_user_id: 'U001', action: 'auto_match', target_user_id: null },
+        { slack_user_id: 'U002', action: 'send_invite', target_user_id: null },
       ],
     });
     const issues = validateMapping(SAMPLE_PREVIEW, mapping);
     expect(
       issues.some(
-        (i) => i.field.includes('U002') && /invite requires/.test(i.issue),
+        (i) => i.field.includes('U002') && /send_invite requires/.test(i.issue),
       ),
     ).toBe(true);
   });
 
-  it('requires project.name + key when mode=create', () => {
+  it('requires project.name + key when mode=create_new', () => {
     const mapping = baseMapping({
-      project: { mode: 'create', name: '', key: '', id: null },
+      project: { mode: 'create_new', name: '', key: '' },
     });
     const issues = validateMapping(SAMPLE_PREVIEW, mapping);
     expect(issues.some((i) => i.field === 'project.name')).toBe(true);
     expect(issues.some((i) => i.field === 'project.key')).toBe(true);
   });
 
-  it('requires project.id when mode=existing', () => {
+  it('requires project.project_id when mode=use_existing', () => {
     const mapping = baseMapping({
-      project: { mode: 'existing', id: null, name: null, key: null },
+      // intentionally missing project_id to exercise the validation path
+      project: { mode: 'use_existing', project_id: '' } as MappingPayload['project'],
     });
     const issues = validateMapping(SAMPLE_PREVIEW, mapping);
-    expect(issues.some((i) => i.field === 'project.id')).toBe(true);
+    expect(issues.some((i) => i.field === 'project.project_id')).toBe(true);
   });
 });
 
 describe('startBodySchema', () => {
   // Mirrors the schema in slack-import.routes.ts.
   const startBodySchema = z.object({
-    project: z.object({
-      mode: z.enum(['create', 'existing']),
-      id: z.string().uuid().nullable().optional(),
-      name: z.string().min(1).max(255).nullable().optional(),
-      key: z.string().min(1).max(50).nullable().optional(),
-    }),
-    user_mapping: z
+    project: z.discriminatedUnion('mode', [
+      z.object({
+        mode: z.literal('create_new'),
+        name: z.string().min(1).max(255),
+        key: z.string().min(1).max(50),
+      }),
+      z.object({
+        mode: z.literal('use_existing'),
+        project_id: z.string().uuid(),
+      }),
+    ]),
+    users: z
       .array(
         z.object({
-          slack_id: z.string().min(1),
-          action: z.enum(['auto_match', 'invite', 'stub', 'map', 'skip']),
+          slack_user_id: z.string().min(1),
+          action: z.enum(['auto_match', 'send_invite', 'stub', 'map_existing', 'skip']),
           target_user_id: z.string().uuid().nullable().optional(),
         }),
       )
       .default([]),
-    channel_mapping: z
+    channels: z
       .array(
         z.object({
-          slack_id: z.string().min(1),
-          action: z.enum(['new', 'merge', 'skip']),
+          slack_channel_id: z.string().min(1),
+          action: z.enum(['import_new', 'merge_existing', 'skip']),
           target_channel_id: z.string().uuid().nullable().optional(),
           target_name: z.string().min(1).max(80).nullable().optional(),
         }),
@@ -274,7 +280,7 @@ describe('startBodySchema', () => {
 
   it('accepts a minimal valid payload', () => {
     const r = startBodySchema.safeParse({
-      project: { mode: 'create', name: 'Migration', key: 'mig' },
+      project: { mode: 'create_new', name: 'Migration', key: 'mig' },
     });
     expect(r.success).toBe(true);
     if (r.success) {
@@ -285,23 +291,23 @@ describe('startBodySchema', () => {
 
   it('rejects unknown user mapping action', () => {
     const r = startBodySchema.safeParse({
-      project: { mode: 'create', name: 'Migration', key: 'mig' },
-      user_mapping: [{ slack_id: 'U001', action: 'invalid' }],
+      project: { mode: 'create_new', name: 'Migration', key: 'mig' },
+      users: [{ slack_user_id: 'U001', action: 'invalid' }],
     });
     expect(r.success).toBe(false);
   });
 
   it('rejects unknown channel mapping action', () => {
     const r = startBodySchema.safeParse({
-      project: { mode: 'create', name: 'Migration', key: 'mig' },
-      channel_mapping: [{ slack_id: 'C001', action: 'rename' }],
+      project: { mode: 'create_new', name: 'Migration', key: 'mig' },
+      channels: [{ slack_channel_id: 'C001', action: 'rename' }],
     });
     expect(r.success).toBe(false);
   });
 
   it('rejects daily_message_rate_cap <= 0', () => {
     const r = startBodySchema.safeParse({
-      project: { mode: 'create', name: 'Migration', key: 'mig' },
+      project: { mode: 'create_new', name: 'Migration', key: 'mig' },
       options: { daily_message_rate_cap: 0 },
     });
     expect(r.success).toBe(false);
