@@ -48,6 +48,16 @@ const envSchema = z.object({
   // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records
   // divergence; 'on' additionally blocks on resolver-deny.
   BBB_PERMISSIONS_ENFORCE: z.enum(['off', 'warn', 'on']).default('warn'),
+
+  // Slack workspace import (docs/plans/slack-import-design.md §1 Step 1).
+  // Max upload size for the multipart .zip stash. Default 5 GB. Operators
+  // who routinely import larger workspaces can raise this; the worker
+  // streams the archive, so the ceiling is mostly about ingress patience.
+  BANTER_SLACK_IMPORT_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5_368_709_120),
 });
 
 export type Env = z.infer<typeof envSchema>;

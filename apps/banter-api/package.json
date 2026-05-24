@@ -35,6 +35,7 @@
     "livekit-server-sdk": "^2.15.0",
     "minio": "^8.0.0",
     "nanoid": "^5.0.0",
+    "node-stream-zip": "^1.15.0",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
     "postgres": "^3.4.0",
