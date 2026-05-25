@@ -72,11 +72,12 @@ COPY apps/worker/package.json ./apps/worker/
 COPY apps/e2e/package.json ./apps/e2e/
 COPY apps/integration-tests/package.json ./apps/integration-tests/
 
-# Workspace packages (7)
+# Workspace packages (8)
 COPY packages/db-stubs/package.json ./packages/db-stubs/
 COPY packages/docs-capture/package.json ./packages/docs-capture/
 COPY packages/livekit-tokens/package.json ./packages/livekit-tokens/
 COPY packages/logging/package.json ./packages/logging/
+COPY packages/permissions/package.json ./packages/permissions/
 COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/

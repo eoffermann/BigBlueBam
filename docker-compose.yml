@@ -1121,6 +1121,7 @@ services:
       - /app/packages/docs-capture/node_modules
       - /app/packages/livekit-tokens/node_modules
       - /app/packages/logging/node_modules
+      - /app/packages/permissions/node_modules
       - /app/packages/service-health/node_modules
       - /app/packages/shared/node_modules
       - /app/packages/ui/node_modules
