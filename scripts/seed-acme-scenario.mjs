@@ -42,6 +42,19 @@ const DATABASE_URL =
 
 const sql = postgres(DATABASE_URL, { max: 2 });
 
+// Built-in permission-group UUIDs seeded by migration 0146. The per-org role
+// dropped off `users` / `organization_memberships` in migration 0159 and now
+// lives in `account_group_memberships → permission_groups.legacy_role`.
+// Mirrors the constant in apps/api/src/cli.ts + services/role-resolver.ts +
+// scripts/seed-platform.mjs.
+const BUILTIN_GROUP_IDS = {
+  owner: '11111111-1111-4111-8111-111111111111',
+  admin: '22222222-2222-4222-8222-222222222222',
+  member: '33333333-3333-4333-8333-333333333333',
+  viewer: '44444444-4444-4444-8444-444444444444',
+  guest: '55555555-5555-4555-8555-555555555555',
+};
+
 // ─── helpers ──────────────────────────────────────────────────────────────
 
 function uuid() {
@@ -854,11 +867,17 @@ async function main() {
   }
   console.log(`Acme scenario seed: org "${org.name}" (${org.slug}) ${org.id}`);
 
-  // Admin user (reporter + owner for everything).
+  // Admin user (reporter + owner for everything). Wave E.F: org role lives
+  // in account_group_memberships → permission_groups, identified by the
+  // fixed owner group UUID (seeded by migration 0146).
   const [admin] = await sql`
-    SELECT id, email FROM users
-    WHERE org_id = ${org.id} AND role = 'owner'
-    ORDER BY created_at LIMIT 1
+    SELECT u.id, u.email FROM users u
+    JOIN account_group_memberships agm
+      ON agm.user_id = u.id
+     AND agm.scope_type = 'org'
+     AND agm.scope_id = ${org.id}
+    WHERE u.org_id = ${org.id} AND agm.group_id = ${BUILTIN_GROUP_IDS.owner}
+    ORDER BY u.created_at LIMIT 1
   `;
   if (!admin) {
     console.error('No owner user found. Run seed-platform first.');
