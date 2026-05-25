@@ -39,6 +39,18 @@ const sql = postgres(DATABASE_URL, { max: 2 });
 
 const DEFAULT_PASSWORD = 'dev-password-change-me';
 
+// Built-in permission-group UUIDs seeded by migration 0146. The per-org role
+// dropped off `users` / `organization_memberships` in migration 0159 and now
+// lives in `account_group_memberships → permission_groups.legacy_role`.
+// Mirrors the constant in apps/api/src/cli.ts + services/role-resolver.ts.
+const BUILTIN_GROUP_IDS = {
+  owner: '11111111-1111-4111-8111-111111111111',
+  admin: '22222222-2222-4222-8222-222222222222',
+  member: '33333333-3333-4333-8333-333333333333',
+  viewer: '44444444-4444-4444-8444-444444444444',
+  guest: '55555555-5555-4555-8555-555555555555',
+};
+
 // ─── helpers ──────────────────────────────────────────────────────────────
 
 function uuid() {
@@ -64,32 +76,53 @@ function dateOnly(d) {
 // ─── users ────────────────────────────────────────────────────────────────
 
 async function ensureUser(orgId, spec) {
+  const groupId = BUILTIN_GROUP_IDS[spec.role];
+  if (!groupId) {
+    throw new Error(`Unknown role for ${spec.email}: ${spec.role}`);
+  }
+
   const [existing] = await sql`
-    SELECT id, email, role FROM users WHERE email = ${spec.email} LIMIT 1
+    SELECT id, email FROM users WHERE email = ${spec.email} LIMIT 1
   `;
   if (existing) {
     // Make sure the user is a member of the target org. This handles the
     // case where a platform seed ran earlier against a different org.
     await sql`
-      INSERT INTO organization_memberships (user_id, org_id, role, is_default)
-      VALUES (${existing.id}, ${orgId}, ${spec.role}, false)
+      INSERT INTO organization_memberships (user_id, org_id, is_default)
+      VALUES (${existing.id}, ${orgId}, false)
       ON CONFLICT (user_id, org_id) DO NOTHING
     `;
-    return { id: existing.id, email: existing.email, role: existing.role, isNew: false };
+    await sql`
+      INSERT INTO account_group_memberships (user_id, group_id, scope_type, scope_id)
+      VALUES (${existing.id}, ${groupId}, 'org', ${orgId})
+      ON CONFLICT (user_id, scope_type, scope_id) DO UPDATE
+        SET group_id = EXCLUDED.group_id,
+            detached_at = NULL,
+            detached_by = NULL
+    `;
+    return { id: existing.id, email: existing.email, role: spec.role, isNew: false };
   }
 
   const passwordHash = await argon2.hash(DEFAULT_PASSWORD);
   const [user] = await sql`
-    INSERT INTO users (org_id, email, display_name, password_hash, role, is_superuser)
-    VALUES (${orgId}, ${spec.email}, ${spec.displayName}, ${passwordHash}, ${spec.role}, false)
-    RETURNING id, email, role
+    INSERT INTO users (org_id, email, display_name, password_hash, is_superuser)
+    VALUES (${orgId}, ${spec.email}, ${spec.displayName}, ${passwordHash}, false)
+    RETURNING id, email
   `;
   await sql`
-    INSERT INTO organization_memberships (user_id, org_id, role, is_default)
-    VALUES (${user.id}, ${orgId}, ${spec.role}, true)
+    INSERT INTO organization_memberships (user_id, org_id, is_default)
+    VALUES (${user.id}, ${orgId}, true)
     ON CONFLICT (user_id, org_id) DO NOTHING
   `;
-  return { id: user.id, email: user.email, role: user.role, isNew: true };
+  await sql`
+    INSERT INTO account_group_memberships (user_id, group_id, scope_type, scope_id)
+    VALUES (${user.id}, ${groupId}, 'org', ${orgId})
+    ON CONFLICT (user_id, scope_type, scope_id) DO UPDATE
+      SET group_id = EXCLUDED.group_id,
+          detached_at = NULL,
+          detached_by = NULL
+  `;
+  return { id: user.id, email: user.email, role: spec.role, isNew: true };
 }
 
 // ─── projects ─────────────────────────────────────────────────────────────
@@ -489,7 +522,7 @@ async function main() {
   // Pull every user in the org, including the pre-existing admin, for the
   // round-robin assignment pool.
   const allUsersRows = await sql`
-    SELECT u.id, u.email, u.display_name, u.role
+    SELECT u.id, u.email, u.display_name
     FROM users u
     JOIN organization_memberships m ON m.user_id = u.id
     WHERE m.org_id = ${org.id} AND u.is_active = true
@@ -499,15 +532,20 @@ async function main() {
     id: u.id,
     email: u.email,
     displayName: u.display_name,
-    role: u.role,
   }));
   console.log(`  total active users in org: ${users.length}`);
 
   // The admin from create-admin is the canonical reporter / creator.
+  // Wave E.F: org role lives in account_group_memberships → permission_groups,
+  // identified by the fixed owner group UUID (seeded by migration 0146).
   const [adminUser] = await sql`
     SELECT u.id FROM users u
     JOIN organization_memberships m ON m.user_id = u.id
-    WHERE m.org_id = ${org.id} AND (u.role = 'owner' OR m.role = 'owner')
+    JOIN account_group_memberships agm
+      ON agm.user_id = u.id
+     AND agm.scope_type = 'org'
+     AND agm.scope_id = ${org.id}
+    WHERE m.org_id = ${org.id} AND agm.group_id = ${BUILTIN_GROUP_IDS.owner}
     ORDER BY m.joined_at
     LIMIT 1
   `;
