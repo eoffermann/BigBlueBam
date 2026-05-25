@@ -78,6 +78,7 @@ function makeUser(overrides: Record<string, unknown> = {}) {
 async function buildApp(user?: Record<string, unknown>): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorateRequest('user', null);
+  app.decorate('requireCan', (_action: string) => async (_request: unknown, _reply: unknown) => {});
   app.addHook('preHandler', async (request) => {
     if (user !== undefined) {
       (request as any).user = user;
@@ -275,5 +276,39 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
       url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
     });
     expect(res.statusCode).toBe(201);
+  });
+
+  it('stores key_prefix matching the first 8 chars of the returned token', async () => {
+    app = await buildApp(makeUser()); // creator
+    mockSelectSimple([svcRow]);
+    mockSelectChain([activeKeyRow]);
+
+    let capturedValues: any = null;
+    mockDb.transaction.mockImplementation(async (cb: (tx: any) => Promise<unknown>) => {
+      const returning = vi.fn().mockResolvedValueOnce([successorRow]);
+      const values = vi.fn().mockImplementation((v: unknown) => {
+        capturedValues = v;
+        return { returning };
+      });
+      const txInsert = vi.fn().mockReturnValue({ values });
+
+      const updateWhere = vi.fn().mockResolvedValue(undefined);
+      const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+      const txUpdate = vi.fn().mockReturnValue({ set: updateSet });
+
+      return cb({ insert: txInsert, update: txUpdate });
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(capturedValues).not.toBeNull();
+
+    const returnedKey: string = res.json().data.key;
+    expect(capturedValues.key_prefix).toBe(returnedKey.slice(0, 8));
+    expect(capturedValues.key_prefix.length).toBe(8);
   });
 });

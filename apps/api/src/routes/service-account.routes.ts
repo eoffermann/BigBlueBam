@@ -13,6 +13,7 @@ import { getOrgPermissions, isOrgPrivileged } from '../services/org-permissions.
 import { setUserOrgRole } from '../services/role-resolver.js';
 import * as orgService from '../services/org.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+import { mintApiKey } from '../lib/api-key-mint.js';
 
 const DEFAULT_ROTATION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 function getRotationGraceMs(): number {
@@ -260,10 +261,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
       const lockedPassword = randomBytes(32).toString('base64url');
       const passwordHash = await argon2.hash(lockedPassword);
 
-      const randomToken = randomBytes(32).toString('base64url');
-      const fullToken = `bbam_svc_${randomToken}`;
-      const prefix = fullToken.slice(0, 8);
-      const keyHash = await argon2.hash(fullToken);
+      const { fullToken, keyPrefix, keyHash } = await mintApiKey('service');
 
       const result = await db.transaction(async (tx) => {
         const [svc] = await tx
@@ -303,7 +301,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
             org_id: caller.active_org_id,
             name: `${body.name} (service account)`,
             key_hash: keyHash,
-            key_prefix: prefix,
+            key_prefix: keyPrefix,
             scope: body.scope,
             project_ids: body.project_ids ?? null,
             expires_at: null,
@@ -323,7 +321,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
             id: result.key.id,
             name: result.key.name,
             key: fullToken,
-            key_prefix: prefix,
+            key_prefix: keyPrefix,
             scope: result.key.scope,
             project_ids: result.key.project_ids,
           },
@@ -346,7 +344,10 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/auth/service-accounts/:id/rotate-key',
-    { preHandler: [requireAuth, requireMinRole('member')] },
+    {
+      preHandler: [requireAuth, fastify.requireCan('bam.auth_service_account.create')],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
     async (request, reply) => {
       const caller = request.user!;
 
@@ -412,10 +413,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const rawKey = randomBytes(32).toString('base64url');
-      const fullToken = `bbam_svc_${rawKey}`;
-      const prefix = fullToken.slice(0, 12);
-      const keyHash = await argon2.hash(fullToken);
+      const { fullToken, keyPrefix, keyHash } = await mintApiKey('service');
       const now = new Date();
       const graceExpires = new Date(now.getTime() + getRotationGraceMs());
 
@@ -427,7 +425,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
             org_id: existing.org_id,
             name: existing.name,
             key_hash: keyHash,
-            key_prefix: prefix,
+            key_prefix: keyPrefix,
             scope: existing.scope,
             project_ids: existing.project_ids,
             expires_at: existing.expires_at,
@@ -448,7 +446,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
           id: successor!.id,
           name: svc.display_name,
           key: fullToken,
-          key_prefix: prefix,
+          key_prefix: keyPrefix,
           scope: successor!.scope,
           predecessor_grace_expires_at: graceExpires,
         },

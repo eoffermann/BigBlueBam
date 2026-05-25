@@ -9,6 +9,7 @@ import { apiKeys } from '../db/schema/api-keys.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
 import { resolveUserOrgRoles } from '../services/role-resolver.js';
+import { KEY_PREFIX_LENGTH } from '../lib/api-key-mint.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -376,7 +377,7 @@ async function authPlugin(fastify: FastifyInstance) {
     const authHeader = request.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
-      const prefix = token.slice(0, 8);
+      const prefix = token.slice(0, KEY_PREFIX_LENGTH);
 
       const candidates = await db
         .select({

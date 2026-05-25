@@ -1,13 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, asc, and } from 'drizzle-orm';
 import { z } from 'zod';
-import { randomBytes } from 'crypto';
-import argon2 from 'argon2';
 import { db } from '../db/index.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { requireAuth } from '../plugins/auth.js';
 import * as orgService from '../services/org.service.js';
 import { getOrgPermissions, isOrgPrivileged } from '../services/org-permissions.js';
+import { mintApiKey } from '../lib/api-key-mint.js';
 
 // Wave 1.A: rotation grace period in milliseconds (7 days by default).
 // Override with API_KEY_ROTATION_GRACE_MS for shorter windows in tests.
@@ -128,10 +127,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
 
       const data = body;
 
-      // Generate a random API key
-      const rawKey = randomBytes(32).toString('base64url');
-      const prefix = rawKey.slice(0, 8);
-      const keyHash = await argon2.hash(rawKey);
+      const { fullToken, keyPrefix, keyHash } = await mintApiKey('user_legacy');
 
       const [apiKey] = await db
         .insert(apiKeys)
@@ -140,7 +136,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
           org_id: request.user!.active_org_id,
           name: data.name,
           key_hash: keyHash,
-          key_prefix: prefix,
+          key_prefix: keyPrefix,
           scope: data.scope,
           project_ids: data.project_ids ?? null,
           expires_at: data.expires_at ? new Date(data.expires_at) : null,
@@ -151,8 +147,8 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
         data: {
           id: apiKey!.id,
           name: apiKey!.name,
-          key: rawKey,
-          key_prefix: prefix,
+          key: fullToken,
+          key_prefix: keyPrefix,
           scope: apiKey!.scope,
           project_ids: apiKey!.project_ids,
           expires_at: apiKey!.expires_at,
@@ -204,10 +200,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const rawKey = randomBytes(32).toString('base64url');
-      const fullToken = `bbam_${rawKey}`;
-      const prefix = fullToken.slice(0, 8);
-      const keyHash = await argon2.hash(fullToken);
+      const { fullToken, keyPrefix, keyHash } = await mintApiKey('user');
       const now = new Date();
       const graceExpires = new Date(now.getTime() + getRotationGraceMs());
 
@@ -222,7 +215,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
             org_id: existing.org_id,
             name: existing.name,
             key_hash: keyHash,
-            key_prefix: prefix,
+            key_prefix: keyPrefix,
             scope: existing.scope,
             project_ids: existing.project_ids,
             expires_at: existing.expires_at,
@@ -246,7 +239,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
           id: successor!.id,
           name: successor!.name,
           key: fullToken,
-          key_prefix: prefix,
+          key_prefix: keyPrefix,
           scope: successor!.scope,
           project_ids: successor!.project_ids,
           expires_at: successor!.expires_at,
