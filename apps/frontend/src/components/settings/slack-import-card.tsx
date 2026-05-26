@@ -147,8 +147,9 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function formatNumber(n: number): string {
-  return n.toLocaleString();
+function formatNumber(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return '0';
+  return Number(n).toLocaleString();
 }
 
 function defaultUserAction(u: ImportPreviewUser): UserMappingAction {
@@ -1880,11 +1881,11 @@ function HistoryTable({
                 <tr className="border-t border-zinc-100 dark:border-zinc-800">
                   <td className="px-3 py-2 text-xs text-zinc-500">{formatDate(it.created_at)}</td>
                   <td className="px-3 py-2 text-zinc-900 dark:text-zinc-100">{it.workspace_name}</td>
-                  <td className="px-3 py-2 text-xs text-zinc-500">{it.project_name ?? '—'}</td>
-                  <td className="px-3 py-2 text-xs">{formatNumber(it.channels_imported)}</td>
-                  <td className="px-3 py-2 text-xs">{formatNumber(it.messages_imported)}</td>
+                  <td className="px-3 py-2 text-xs text-zinc-500">{it.project_id ? it.project_id.slice(0, 8) : '—'}</td>
+                  <td className="px-3 py-2 text-xs">{formatNumber(it.totals_imported?.channels)}</td>
+                  <td className="px-3 py-2 text-xs">{formatNumber(it.totals_imported?.messages)}</td>
                   <td className="px-3 py-2">
-                    <StatusBadge status={it.status} />
+                    <StatusBadge status={it.status as ImportPhase} />
                   </td>
                   <td className="px-3 py-2 text-right">
                     <Button size="sm" variant="ghost" onClick={() => onView(it.id)}>

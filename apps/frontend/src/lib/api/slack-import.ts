@@ -156,13 +156,17 @@ export interface ImportStatus {
 
 export interface ImportHistoryItem {
   id: string;
-  status: ImportPhase;
+  status: ImportPhase | string;
   workspace_name: string;
   project_id: string | null;
-  project_name: string | null;
-  channels_imported: number;
-  messages_imported: number;
-  initiated_by: { id: string; display_name: string } | null;
+  channel_group_id: string | null;
+  initiated_by: string | null;
+  source_filename: string;
+  source_size_bytes: number;
+  /** Per-phase tallies from the worker: { users, channels, messages, files, reactions, pins }. */
+  totals_imported: Record<string, number>;
+  totals_skipped: Record<string, number>;
+  error_message: string | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
