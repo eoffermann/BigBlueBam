@@ -88,3 +88,32 @@ assert_postgres_healthy() {
     exit 1
   fi
 }
+
+# workspace_run — execute a command in the workspace container,
+# propagating the container's actual exit code.
+#
+# `docker compose run --rm` is unreliable: with Docker Desktop's bundled
+# compose (observed on v5.1.3 / Apr 2026) the wrapper exits 0 regardless
+# of whether the command inside the container succeeded. test.sh and
+# tools.sh previously suffered from this — a failing pnpm test would
+# look successful to any script wrapping them.
+#
+# Workaround: give the container a deterministic name, ignore the
+# always-0 return from `docker compose run`, and read the real exit
+# code out of `docker inspect`. Cleanup is best-effort on SIGINT/SIGTERM
+# and unconditional on normal return.
+#
+# Usage:
+#   workspace_run pnpm test --filter @bigbluebam/api
+#   workspace_run sh -c 'pnpm a && pnpm b'
+workspace_run() {
+  local container_name="bbb-ws-$$-${RANDOM}"
+  trap "docker rm -f '$container_name' >/dev/null 2>&1; trap - INT TERM" INT TERM
+  docker compose --profile test run --build --name "$container_name" workspace "$@" || true
+  trap - INT TERM
+
+  local exit_code
+  exit_code=$(docker inspect --format='{{.State.ExitCode}}' "$container_name" 2>/dev/null) || exit_code=1
+  docker rm -f "$container_name" >/dev/null 2>&1 || true
+  return "$exit_code"
+}

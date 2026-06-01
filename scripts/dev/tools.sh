@@ -38,4 +38,4 @@ source "${SCRIPT_DIR}/../lib/preflight.sh"
 assert_repo_root
 assert_docker_running
 
-exec docker compose --profile test run --build --rm workspace pnpm "$@"
+workspace_run pnpm "$@"
