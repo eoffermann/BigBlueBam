@@ -335,7 +335,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   );
 
   // ────────────────────────────────────────────────────────────────────
-  // POST /auth/service-accounts/:id/rotate-key
+  // POST /auth/service-accounts/:id/rotate
   // Rotates the active key for a service account. Requires the caller to
   // be the creator, an org admin/owner, or a SuperUser — the same gate as
   // DELETE /auth/service-accounts/:id. Returns the new plaintext token
@@ -343,9 +343,9 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
   // key remains valid.
   // ────────────────────────────────────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
-    '/auth/service-accounts/:id/rotate-key',
+    '/auth/service-accounts/:id/rotate',
     {
-      preHandler: [requireAuth, fastify.requireCan('bam.auth_service_account.create')],
+      preHandler: [requireAuth, fastify.requireCan('bam.auth_service_account.rotate')],
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {

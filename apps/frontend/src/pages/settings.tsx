@@ -232,7 +232,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
 
   const rotateAgentKey = useMutation({
     mutationFn: (agentId: string) =>
-      api.post<{ data: { key: string; name: string } }>(`/auth/service-accounts/${agentId}/rotate-key`),
+      api.post<{ data: { key: string; name: string } }>(`/auth/service-accounts/${agentId}/rotate`),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['service-accounts'] });
       setRotatedAgentKey({ key: res.data.key, name: res.data.name });

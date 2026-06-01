@@ -160,7 +160,7 @@ const successorRow = {
 
 // ---------- tests ----------
 
-describe('POST /auth/service-accounts/:id/rotate-key', () => {
+describe('POST /auth/service-accounts/:id/rotate', () => {
   let app: FastifyInstance;
 
   beforeEach(() => {
@@ -173,7 +173,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
 
   it('returns 401 with no auth', async () => {
     app = await buildApp(undefined);
-    const res = await app.inject({ method: 'POST', url: `/auth/service-accounts/${SVC_ID}/rotate-key` });
+    const res = await app.inject({ method: 'POST', url: `/auth/service-accounts/${SVC_ID}/rotate` });
     expect(res.statusCode).toBe(401);
   });
 
@@ -182,7 +182,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
     mockSelectSimple([]); // no user row
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(404);
     expect(res.json().error.code).toBe('NOT_FOUND');
@@ -193,7 +193,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
     mockSelectSimple([{ ...svcRow, org_id: ORG_A }]); // svc is in ORG_A, caller is in ORG_B
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(404);
   });
@@ -203,7 +203,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
     mockSelectSimple([svcRow]); // svc created_by = CREATOR_ID, caller is MEMBER_ID
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe('FORBIDDEN');
@@ -215,7 +215,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
     mockSelectChain([]); // no active key
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(404);
     expect(res.json().error.code).toBe('NOT_FOUND');
@@ -227,7 +227,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
     mockSelectChain([{ ...activeKeyRow, rotated_at: new Date() }]);
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().error.code).toBe('ALREADY_ROTATED');
@@ -241,7 +241,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(201);
     const { data } = res.json();
@@ -259,7 +259,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().data.key).toMatch(/^bbam_svc_/);
@@ -273,7 +273,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
     expect(res.statusCode).toBe(201);
   });
@@ -301,7 +301,7 @@ describe('POST /auth/service-accounts/:id/rotate-key', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: `/auth/service-accounts/${SVC_ID}/rotate-key`,
+      url: `/auth/service-accounts/${SVC_ID}/rotate`,
     });
 
     expect(res.statusCode).toBe(201);

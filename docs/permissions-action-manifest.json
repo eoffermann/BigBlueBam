@@ -1,8 +1,8 @@
 {
   "counts": {
-    "total": 1066,
+    "total": 1067,
     "mcp_tools_scanned": 348,
-    "rest_routes_scanned": 770,
+    "rest_routes_scanned": 771,
     "read_permissions": 430,
     "destructive_permissions": 107
   },
@@ -633,6 +633,23 @@
         {
           "source": "rest",
           "ref": "GET /auth/service-accounts",
+          "file": "service-account.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.auth_service_account.rotate",
+      "app": "bam",
+      "resource": "auth_service_account",
+      "verb": "rotate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /auth/service-accounts/:id/rotate",
           "file": "service-account.routes.ts"
         }
       ]
