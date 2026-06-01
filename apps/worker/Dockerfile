@@ -27,17 +27,6 @@ RUN pnpm --filter @bigbluebam/shared build \
 RUN pnpm --filter @bigbluebam/worker deploy --prod /app/deployed
 
 
-# ── Stage: dev ────────────────────────────────────────────────────
-FROM deps AS dev
-
-COPY tsconfig.base.json ./
-COPY packages/shared/ ./packages/shared/
-COPY apps/worker/ ./apps/worker/
-
-WORKDIR /app/apps/worker
-
-CMD ["npx", "tsx", "watch", "src/worker.ts"]
-
 # ── Stage: production ────────────────────────────────────────────
 FROM node:22-alpine AS production
 

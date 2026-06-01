@@ -737,17 +737,41 @@ Infrastructure services (internal, not exposed via nginx):
 
 ### Development Mode
 
+The local Docker dev pipeline is full-Docker (no native `pnpm install` required).
+Three commands cold-start a fully populated dev environment:
+
 ```bash
-pnpm install
-pnpm --filter @bigbluebam/shared build
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+./scripts/dev/configure.sh -y         # generate .env with random secrets
+node scripts/dev/up.mjs               # build + bring up the stack
+./scripts/dev/fixture-base.sh         # provision admin + run seed sidecar
 ```
+
+Open `http://localhost/b3/` and sign in as `admin@example.com` with the
+password in `.local-dev-state.json` under `devAdmin.DEV_ADMIN_PASSWORD`
+(or `node scripts/lib/read-state.mjs devAdmin DEV_ADMIN_PASSWORD`).
+Per-service hot-reload is opt-in:
+
+```bash
+./scripts/dev/compose-overrides.sh add api    # api now hot-reloads on save
+./scripts/dev/compose-overrides.sh remove api # back to prod image
+```
+
+See [docs/development.md](docs/development.md) for the full pipeline,
+including the decommission script and supported services.
 
 ### Run Tests
 
+Tests, typecheck, lint, and format run inside the `workspace` container —
+no native `pnpm install` required on the host:
+
 ```bash
-pnpm test  # 900+ tests across all packages
+bash scripts/dev/test.sh                  # full Vitest suite (900+ tests)
+bash scripts/dev/tools.sh typecheck       # tsc --noEmit across workspaces
+bash scripts/dev/tools.sh check           # Biome
 ```
+
+DB-coupled tests need the stack's `postgres` + `redis` running — start them
+with `node scripts/dev/up.mjs` first if you see "connection refused".
 
 ---
 

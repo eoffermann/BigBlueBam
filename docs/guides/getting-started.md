@@ -446,54 +446,70 @@ All services are accessed through port 80 via a single nginx reverse proxy:
 
 ## Development Mode
 
-For active development with hot module replacement and live reloading:
+For active development, see [docs/development.md](development.md) for the
+full local-Docker dev pipeline. The short version:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+./scripts/dev/configure.sh -y          # generate .env (idempotent, preserves stateful keys)
+node scripts/dev/up.mjs                # build + bring up the stack
+./scripts/dev/fixture-base.sh          # provision admin + seed demo data
+
+# Then opt INTO hot-reload per service:
+./scripts/dev/compose-overrides.sh add api    # api hot-reloads on save
+./scripts/dev/compose-overrides.sh remove api # back to prod image
 ```
 
-Or use the convenience script:
-
-```bash
-pnpm docker:dev
-```
+The dev pipeline is full-Docker — no native `pnpm install` needed. Hot-reload
+opt-in is per-service to keep the rest of the stack on prod images for parity.
 
 ### What Changes in Dev Mode
 
 | Service | Production | Development |
 |---|---|---|
-| **Frontend** | nginx serves built assets at `/b3/` on `:80` | Vite dev server with HMR on `:5173` |
-| **API** | Compiled JS from `dist/`, proxied at `/b3/api/` | `tsx watch` with auto-reload on `:4000` |
-| **Worker** | Compiled JS | `tsx watch` with auto-reload |
-| **MCP Server** | Compiled JS, proxied at `/mcp/` | `tsx watch` with auto-reload |
+| **Frontend** | nginx serves built assets at `/b3/` on `:80` | `vite build --watch` sidecar rebuilds `dist/` on save; same nginx serves it (no HMR; full page reload) |
+| **API** | Compiled JS from `dist/`, proxied at `/b3/api/` | `tsup --watch` + `node --watch dist/server.js` (same internal port, same proxy path) |
+| **Worker** | Compiled JS | `tsup --watch` + `node --watch dist/worker.js` |
+| **MCP Server** | Compiled JS, proxied at `/mcp/` | `tsup --watch` + `node --watch dist/server.js` (same internal port, same proxy path) |
 
 In development mode, source directories are mounted as volumes so changes are reflected immediately.
 
 ### Accessing Dev Services
 
-| Service | URL |
+Dev and prod use the same gateway nginx, so URLs are identical in both modes
+(only the served bytes change). Substitute `${HTTP_PORT}` with whatever you set
+in `.env` (default `80`, e.g. `8080` if 80 is taken on your host).
+
+| Surface | URL |
 |---|---|
-| **Vite Dev Server (BBB)** | [http://localhost:5173](http://localhost:5173) |
-| **API (direct)** | [http://localhost:4000](http://localhost:4000) |
-| **Production URLs (via nginx)** | [http://localhost/b3/](http://localhost/b3/), [http://localhost/helpdesk/](http://localhost/helpdesk/) |
+| **Bam SPA** | `http://localhost:${HTTP_PORT}/b3/` |
+| **Helpdesk SPA** | `http://localhost:${HTTP_PORT}/helpdesk/` |
+| **Other SPAs** | `http://localhost:${HTTP_PORT}/banter/`, `/beacon/`, `/brief/`, `/bolt/`, `/bearing/`, `/board/`, `/bond/`, `/blast/`, `/bench/`, `/book/`, `/blank/`, `/bill/` |
+| **Per-app APIs** | `http://localhost:${HTTP_PORT}/<app>/api/` (proxied by the gateway; not directly exposed on the host) |
+| **MCP server** | `http://localhost:${HTTP_PORT}/mcp/` (proxied; internal :3001 not exposed) |
 
-### Running Specific Packages Locally
+### Running Specific Packages Outside the Docker Pipeline
 
-If you prefer running parts of the stack outside Docker:
+If you want a Vite dev server with HMR (which the Docker Level-1
+sidecar doesn't provide), or just prefer running parts of the stack
+directly, the per-package `pnpm` scripts still work:
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Build shared packages first
 pnpm --filter @bigbluebam/shared build
-
-# Run the API in dev mode
 pnpm --filter @bigbluebam/api dev
-
-# Run the frontend in dev mode
 pnpm --filter @bigbluebam/frontend dev
 ```
+
+Running these on the host means `pnpm install` runs on the host, which
+re-introduces the supply-chain exposure the Docker pipeline avoids. If
+you want this DX without that tradeoff, set up a VS Code dev container
+(`.devcontainer/`) — the repo doesn't ship one, but a dev container
+isolates the install (and these `pnpm` invocations) inside a container
+while still giving your editor the source tree.
+
+This path is not routinely exercised by CI, so it may drift as the
+Docker pipeline evolves — if a script fails here but works in Docker,
+that's the breakage direction to expect.
 
 ---
 
@@ -519,22 +535,22 @@ docker compose run --rm migrate
 docker compose build migrate && docker compose run --rm migrate
 
 # Lint migration files (header, filename, idempotency)
-pnpm lint:migrations
+bash scripts/dev/tools.sh lint:migrations
 
-# Drift guard: Drizzle schemas vs live DB
-pnpm db:check
+# Drift guard: Drizzle schemas vs live DB (needs the stack up — postgres reachable)
+bash scripts/dev/tools.sh db:check
 
 # Run all tests
-pnpm test
+bash scripts/dev/test.sh
 
-# Run linting
-pnpm lint
+# Run linting (Biome via turbo)
+bash scripts/dev/tools.sh lint
 
 # Run type checking
-pnpm typecheck
+bash scripts/dev/tools.sh typecheck
 
-# Format code
-pnpm format
+# Format code (writes back to source via the bind-mounted workspace)
+bash scripts/dev/tools.sh format
 ```
 
 ---

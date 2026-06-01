@@ -294,7 +294,7 @@ async function checkPrerequisites() {
 /**
  * Write the .env file from a key-value config object.
  */
-function writeEnvFile(envConfig) {
+export function writeEnvFile(envConfig) {
   const envPath = path.resolve(process.cwd(), '.env');
   const lines = [
     '# BigBlueBam environment configuration',

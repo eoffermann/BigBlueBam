@@ -61,6 +61,7 @@ EXPOSE 4002
 
 CMD ["npx", "tsx", "watch", "src/server.ts"]
 
+
 # ── Stage: production ────────────────────────────────────────────
 FROM node:22-alpine AS production
 

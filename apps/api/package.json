@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup",
+    "build:watch": "tsup --watch",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
