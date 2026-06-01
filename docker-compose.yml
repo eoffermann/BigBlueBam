@@ -1065,6 +1065,11 @@ services:
       # read-only: `pnpm format` / `pnpm check --write` walk the tree and
       # may rewrite scripts/*.{js,mjs} to fix biome diagnostics.
       - ./scripts:/app/scripts
+      # docs/ holds docs/permissions-action-manifest.json, the source of
+      # truth for the permissions catalog. Read by check:permission-catalog
+      # and several other catalog scripts; written by build:permission-codegen
+      # and generate:permission-manifest. NOT read-only.
+      - ./docs:/app/docs
       # infra/postgres/migrations is needed by `pnpm lint:migrations`.
       # Read-only: lint:migrations only reports, never writes; biome ignores .sql.
       - ./infra/postgres/migrations:/app/infra/postgres/migrations:ro

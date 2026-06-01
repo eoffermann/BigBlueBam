@@ -103,6 +103,10 @@ COPY packages/ ./packages/
 # scripts/ is needed for `pnpm db:check`, `pnpm lint:migrations`, and other
 # root-level pnpm scripts that exec node scripts/*.mjs.
 COPY scripts/ ./scripts/
+# docs/ holds docs/permissions-action-manifest.json — the source of truth
+# for the permissions catalog, read by check:permission-catalog and
+# written by build:permission-codegen / generate:permission-manifest.
+COPY docs/ ./docs/
 # infra/postgres/migrations is read by `pnpm lint:migrations` (and would be
 # read by db:check when it inspects the migration file set). The rest of
 # infra/ is irrelevant to workspace-level tooling.
