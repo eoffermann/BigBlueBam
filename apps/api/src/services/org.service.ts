@@ -164,7 +164,7 @@ export async function inviteMember(
   email: string,
   role: string,
   displayName?: string,
-): Promise<{ user: { id: string; email: string; display_name: string; avatar_url: string | null; role: string; is_active: boolean; created_at: Date }; was_existing: boolean }> {
+): Promise<{ user: { id: string; email: string; display_name: string; avatar_url: string | null; role: string; is_active: boolean; created_at: Date; password_hash: string | null }; was_existing: boolean }> {
   // Look up an existing user by email first — they may already exist from
   // a different org's invite. The users.email UNIQUE constraint makes email
   // the global identity; multi-org belonging is expressed via
@@ -212,6 +212,11 @@ export async function inviteMember(
       role,
       is_active: existingUser.is_active,
       created_at: existingUser.created_at,
+      // Surface password_hash status so the route can decide whether to
+      // mint an onboarding token (only for users who have no password yet,
+      // i.e. brand-new users joining their second org from the invite UI
+      // before they ever set a password).
+      password_hash: existingUser.password_hash,
     };
     return { user: safeExisting, was_existing: true };
   }
@@ -246,6 +251,7 @@ export async function inviteMember(
       role,
       is_active: user!.is_active,
       created_at: user!.created_at,
+      password_hash: user!.password_hash,
     };
     return { user: safeUser, was_existing: false };
   });
@@ -304,7 +310,7 @@ export function checkRankAbove(
 
 /** Fetches a user's membership role for a given org, or null if not a member.
  *  Wave E.F: role is resolved from account_group_memberships → permission_groups. */
-async function getMembershipRole(orgId: string, userId: string): Promise<string | null> {
+export async function getMembershipRole(orgId: string, userId: string): Promise<string | null> {
   // Confirm membership first; users without a membership row return null
   // even if a stale group row still exists.
   const [m] = await db

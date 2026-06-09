@@ -146,11 +146,16 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
     mutationFn: peopleApi.inviteMember,
     onSuccess: (res, vars) => {
       invalidate();
-      setInviteSuccess(
-        res.data.was_existing
-          ? `Added ${vars.email} to this organization.`
-          : `User created for ${vars.email}. Share credentials via reset password.`,
-      );
+      // B3 Frndo Launch: surface email-delivery status so the admin knows
+      // whether the invitee actually got an onboarding email or whether
+      // they need to hand off credentials manually.
+      const base = res.data.was_existing
+        ? `Added ${vars.email} to this organization.`
+        : `User created for ${vars.email}.`;
+      const emailSuffix = res.data.email_sent
+        ? ' Invitation email sent.'
+        : ' SMTP not configured — share access manually (use "Send password reset link" or "Reset password").';
+      setInviteSuccess(base + emailSuffix);
       setInviteEmail('');
       setInviteDisplayName('');
       setInviteRole('member');

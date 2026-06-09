@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PermissionsProvider } from '@bigbluebam/ui/permissions-context';
-import { App } from './app';
+import { App } from './App';
 import { api } from './lib/api';
 import './styles/globals.css';
 

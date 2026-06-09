@@ -20,6 +20,7 @@ import { PeoplePage } from '@/pages/people';
 import { PersonDetailPage } from '@/pages/people/detail';
 import { GuestAcceptPage } from '@/pages/guest-accept';
 import { PasswordChangePage } from '@/pages/password-change';
+import { PasswordResetPage } from '@/pages/password-reset';
 import { TaskRefResolverPage } from '@/pages/task-ref-resolver';
 import { BetaGatePage } from '@/pages/beta-gate';
 import { BetaNotifyPage } from '@/pages/beta-notify';
@@ -33,6 +34,7 @@ type Route =
   | { page: 'login' }
   | { page: 'register' }
   | { page: 'password-change' }
+  | { page: 'password-reset'; token: string | null }
   | { page: 'dashboard' }
   | { page: 'board'; projectId: string }
   | { page: 'project-dashboard'; projectId: string }
@@ -122,6 +124,10 @@ function parseRoute(path: string): Route {
   if (p === '/notify') return { page: 'beta-notify' };
   if (p === '/login') return { page: 'login' };
   if (p === '/password-change') return { page: 'password-change' };
+  if (p === '/password-reset' || p === '/password-reset/') {
+    const params = new URLSearchParams(window.location.search);
+    return { page: 'password-reset', token: params.get('token') };
+  }
   if (p === '/settings') return { page: 'settings' };
   if (p === '/my-work') return { page: 'my-work' };
   if (p === '/superuser') return { page: 'superuser' };
@@ -236,6 +242,13 @@ export function App() {
   // (The page itself will warn an already-signed-in user.)
   if (route.page === 'guest-accept') {
     return <GuestAcceptPage token={route.token} onNavigate={navigate} />;
+  }
+
+  // Password-reset link consumption is public — the user is anonymous when
+  // they click the email link and is signed out (every session is deleted)
+  // on success. The page handles its own redirect to /login afterwards.
+  if (route.page === 'password-reset') {
+    return <PasswordResetPage token={route.token} onNavigate={navigate} />;
   }
 
   // Beta-gate + notify-me are public marketing-ish surfaces reachable from

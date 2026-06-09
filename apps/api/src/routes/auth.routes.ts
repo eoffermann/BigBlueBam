@@ -4,6 +4,8 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import * as authService from '../services/auth.service.js';
 import * as orgService from '../services/org.service.js';
+import * as passwordResetService from '../services/password-reset.service.js';
+import { sendPasswordResetEmail, isSmtpConfigured } from '../lib/email-queue.js';
 import { computePermissionMatrix } from '../services/permissions.service.js';
 import { requireAuth } from '../plugins/auth.js';
 import { env } from '../env.js';
@@ -577,6 +579,170 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({
           error: {
             code: 'INVALID_CREDENTIALS',
+            message: err.message,
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      throw err;
+    }
+  });
+
+  // ─── Public password-reset link flow (B3 Frndo Launch) ─────────────────
+  //
+  // Two endpoints:
+  //   POST /auth/password-reset/request   → email a reset link (self-serve)
+  //   POST /auth/password-reset/consume   → consume the link + set new pw
+  //
+  // The request endpoint is deliberately opaque: it returns 200 in every
+  // case (even for unknown emails) so an attacker can't enumerate accounts.
+  // It rate-limits per IP. The consume endpoint validates the token and
+  // returns a stable error code (INVALID_TOKEN/EXPIRED/ALREADY_USED) so
+  // the UI can show a useful message.
+
+  fastify.post('/auth/password-reset/request', {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: '5 minutes',
+        keyGenerator: (req) => req.ip,
+      },
+    },
+  }, async (request, reply) => {
+    const schema = z.object({ email: z.string().email().max(320) });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request body',
+          details: parsed.error.issues.map((i) => ({
+            field: i.path.join('.'),
+            issue: i.message,
+          })),
+          request_id: request.id,
+        },
+      });
+    }
+
+    const normalized = parsed.data.email.toLowerCase().trim();
+    const [user] = await db
+      .select({ id: users.id, email: users.email, display_name: users.display_name })
+      .from(users)
+      .where(eq(users.email, normalized))
+      .limit(1);
+
+    // Opaque success: don't tell the caller whether the email exists.
+    if (user) {
+      const minted = await passwordResetService.mintToken({
+        userId: user.id,
+        createdBy: null,
+        ipAddress: request.ip,
+        purpose: 'reset',
+      });
+      const ttlMinutes = Math.max(
+        1,
+        Math.round((minted.expiresAt.getTime() - Date.now()) / 60_000),
+      );
+      try {
+        await sendPasswordResetEmail({
+          to: user.email,
+          token: minted.token,
+          userName: user.display_name || user.email,
+          expiresInMinutes: ttlMinutes,
+        });
+      } catch (err) {
+        request.log.error({ err, target_email: user.email }, 'forgot-password email enqueue threw');
+      }
+      request.log.info(
+        { event: 'auth.password_reset_requested', user_id: user.id },
+        'Password-reset link requested',
+      );
+    } else {
+      request.log.info(
+        { event: 'auth.password_reset_requested_unknown', email: normalized },
+        'Password-reset requested for unknown email',
+      );
+    }
+
+    return reply.send({
+      data: {
+        success: true,
+        message:
+          'If an account exists with that email, a password-reset link has been sent.',
+        smtp_configured: isSmtpConfigured(),
+      },
+    });
+  });
+
+  fastify.post('/auth/password-reset/consume', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '5 minutes',
+        keyGenerator: (req) => req.ip,
+      },
+    },
+  }, async (request, reply) => {
+    const schema = z.object({
+      token: z.string().min(20).max(200),
+      new_password: z.string().min(12).max(200),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request body',
+          details: parsed.error.issues.map((i) => ({
+            field: i.path.join('.'),
+            issue: i.message,
+          })),
+          request_id: request.id,
+        },
+      });
+    }
+
+    try {
+      const result = await passwordResetService.consumeToken({
+        token: parsed.data.token,
+        newPassword: parsed.data.new_password,
+      });
+      request.log.info(
+        {
+          event: 'auth.password_reset_consumed',
+          user_id: result.userId,
+          purpose: result.purpose,
+        },
+        'Password reset link consumed',
+      );
+      return reply.send({
+        data: {
+          success: true,
+          purpose: result.purpose,
+          email: result.email,
+          message:
+            result.purpose === 'invite'
+              ? 'Your password is set. You can now log in.'
+              : 'Your password has been reset. You can now log in.',
+        },
+      });
+    } catch (err) {
+      if (err instanceof passwordResetService.PasswordResetTokenInvalidError) {
+        return reply.status(400).send({
+          error: {
+            code: err.code,
+            message: err.message,
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      if (err instanceof passwordResetService.PasswordResetUserMissingError) {
+        return reply.status(410).send({
+          error: {
+            code: 'GONE',
             message: err.message,
             details: [],
             request_id: request.id,

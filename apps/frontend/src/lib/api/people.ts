@@ -162,18 +162,33 @@ export const peopleApi = {
     email: string;
     display_name?: string;
     role: string;
-  }): Promise<{ data: PersonListItem & { was_existing: boolean } }> {
-    return api.post<{ data: PersonListItem & { was_existing: boolean } }>(
-      '/org/members/invite',
-      body,
-    );
+    project_ids?: string[];
+  }): Promise<{
+    data: PersonListItem & {
+      was_existing: boolean;
+      email_sent: boolean;
+    };
+  }> {
+    return api.post<{
+      data: PersonListItem & {
+        was_existing: boolean;
+        email_sent: boolean;
+      };
+    }>('/org/members/invite', body);
   },
 
   bulkInviteMembers(
-    invites: Array<{ email: string; display_name?: string; role: string }>,
+    invites: Array<{
+      email: string;
+      display_name?: string;
+      role: string;
+      project_ids?: string[];
+    }>,
   ): Promise<{
     data: {
-      succeeded: Array<PersonListItem & { was_existing: boolean }>;
+      succeeded: Array<
+        PersonListItem & { was_existing: boolean; email_sent: boolean }
+      >;
       failed: Array<{ email: string; code: string; message: string }>;
       total_requested: number;
       total_succeeded: number;
@@ -181,6 +196,21 @@ export const peopleApi = {
     };
   }> {
     return api.post('/org/members/invite/bulk', { invites });
+  },
+
+  sendPasswordResetLink(
+    userId: string,
+  ): Promise<{
+    data: {
+      user_id: string;
+      email: string;
+      email_sent: boolean;
+      smtp_configured: boolean;
+      expires_in_minutes: number;
+      message: string;
+    };
+  }> {
+    return api.post(`/org/members/${userId}/send-password-reset`);
   },
 
   resetPassword(

@@ -5,10 +5,16 @@ import { db } from '../db/index.js';
 import { projectMemberships } from '../db/schema/project-memberships.js';
 import { users } from '../db/schema/users.js';
 import * as orgService from '../services/org.service.js';
+import * as passwordResetService from '../services/password-reset.service.js';
 import { checkOrgPermission, isOrgPrivileged } from '../services/org-permissions.js';
 import { resolveOrgUserRoles } from '../services/role-resolver.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+import {
+  sendMemberInvitationEmail,
+  sendPasswordResetEmail,
+  isSmtpConfigured,
+} from '../lib/email-queue.js';
 
 export default async function orgRoutes(fastify: FastifyInstance) {
   fastify.get('/org', { preHandler: [requireAuth, shadowOnly('bam.org.list')] }, async (request, reply) => {
@@ -794,10 +800,69 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           data.role,
           data.display_name,
         );
+
+        // Send the invitation email. For brand-new users (no password yet),
+        // mint a password-reset token so they can set their own password
+        // via the standard /password-reset page. For users who already
+        // had an account elsewhere we just announce the new org access.
+        const needsOnboarding = user.password_hash == null;
+        let email_sent = false;
+        try {
+          const org = await orgService.getOrganizationCached(
+            fastify.redis,
+            request.user!.org_id,
+          );
+          const orgName = org?.name ?? 'BigBlueBam';
+          const inviterName =
+            request.user!.display_name || request.user!.email || 'A teammate';
+
+          let onboardingToken: string | undefined;
+          let onboardingTtl: number | undefined;
+          if (needsOnboarding) {
+            // Longer TTL for the very first onboarding link (people may not
+            // check email immediately).
+            const minted = await passwordResetService.mintToken({
+              userId: user.id,
+              createdBy: request.user!.id,
+              ipAddress: request.ip,
+              purpose: 'invite',
+              ttlMinutes: 60 * 24 * 7, // 7 days
+            });
+            onboardingToken = minted.token;
+            onboardingTtl = 60 * 24 * 7;
+          }
+
+          email_sent = await sendMemberInvitationEmail({
+            to: user.email,
+            orgName,
+            inviterName,
+            invitedUserName: user.display_name || user.email,
+            isNewUser: needsOnboarding,
+            onboardingToken,
+            onboardingExpiresInMinutes: onboardingTtl,
+          });
+          if (!email_sent) {
+            request.log.warn(
+              { event: 'invite.email_not_sent', target_email: user.email },
+              isSmtpConfigured()
+                ? 'Invitation email job failed to enqueue'
+                : 'SMTP not configured — invitation email not sent',
+            );
+          }
+        } catch (emailErr) {
+          // Never let a flaky email pipeline roll back a successful invite.
+          request.log.error(
+            { err: emailErr, target_email: user.email },
+            'Invitation email enqueue threw',
+          );
+        }
+
+        // Drop password_hash from the response — clients should never see it.
+        const { password_hash: _omit, ...safe } = user;
         // 201 CREATED for a brand-new user, 200 OK when we added an
         // existing user to this org as an additional membership.
         return reply.status(was_existing ? 200 : 201).send({
-          data: { ...user, was_existing },
+          data: { ...safe, was_existing, email_sent },
         });
       } catch (err: any) {
         if (err instanceof orgService.AlreadyMemberError) {
@@ -872,11 +937,22 @@ export default async function orgRoutes(fastify: FastifyInstance) {
       });
       const data = schema.parse(request.body);
 
-      type Succeeded = Awaited<ReturnType<typeof orgService.inviteMember>>['user'] & {
-        was_existing: boolean;
-      };
+      type SafeUser = Omit<
+        Awaited<ReturnType<typeof orgService.inviteMember>>['user'],
+        'password_hash'
+      >;
+      type Succeeded = SafeUser & { was_existing: boolean; email_sent: boolean };
       const succeeded: Succeeded[] = [];
       const failed: { email: string; code: string; message: string }[] = [];
+
+      // Resolve the inviter's display name and org name once for the batch.
+      const org = await orgService.getOrganizationCached(
+        fastify.redis,
+        request.user!.org_id,
+      );
+      const orgName = org?.name ?? 'BigBlueBam';
+      const inviterName =
+        request.user!.display_name || request.user!.email || 'A teammate';
 
       // De-dup within the batch: if the same email appears twice, the
       // second one fails with DUPLICATE_IN_BATCH so the caller can fix
@@ -903,7 +979,39 @@ export default async function orgRoutes(fastify: FastifyInstance) {
             row.role,
             row.display_name,
           );
-          succeeded.push({ ...user, was_existing });
+          const needsOnboarding = user.password_hash == null;
+          let email_sent = false;
+          try {
+            let onboardingToken: string | undefined;
+            let onboardingTtl: number | undefined;
+            if (needsOnboarding) {
+              const minted = await passwordResetService.mintToken({
+                userId: user.id,
+                createdBy: request.user!.id,
+                ipAddress: request.ip,
+                purpose: 'invite',
+                ttlMinutes: 60 * 24 * 7,
+              });
+              onboardingToken = minted.token;
+              onboardingTtl = 60 * 24 * 7;
+            }
+            email_sent = await sendMemberInvitationEmail({
+              to: user.email,
+              orgName,
+              inviterName,
+              invitedUserName: user.display_name || user.email,
+              isNewUser: needsOnboarding,
+              onboardingToken,
+              onboardingExpiresInMinutes: onboardingTtl,
+            });
+          } catch (emailErr) {
+            request.log.error(
+              { err: emailErr, target_email: user.email },
+              'Bulk invitation email enqueue threw',
+            );
+          }
+          const { password_hash: _omit, ...safe } = user;
+          succeeded.push({ ...safe, was_existing, email_sent });
         } catch (err: any) {
           if (err instanceof orgService.AlreadyMemberError) {
             failed.push({
@@ -1006,6 +1114,147 @@ export default async function orgRoutes(fastify: FastifyInstance) {
         }
         throw err;
       }
+    },
+  );
+
+  fastify.post<{ Params: { userId: string } }>(
+    '/org/members/:userId/send-password-reset',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.org_member_reset_password.create'),
+        requireScope('admin'),
+      ],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      // Same authorization model as direct password reset: a caller can
+      // mint a reset link only for users they could have reset directly.
+      // The rank check lives in resetMemberPassword today; we re-use the
+      // shape but skip the actual password write and instead mint a token.
+      const targetUserId = request.params.userId;
+      if (targetUserId === request.user!.id) {
+        return reply.status(400).send({
+          error: {
+            code: 'CANNOT_RESET_SELF',
+            message:
+              'Use the change-password flow to reset your own password — or trigger forgot-password from /login.',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const [target] = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          display_name: users.display_name,
+        })
+        .from(users)
+        .where(eq(users.id, targetUserId))
+        .limit(1);
+
+      if (!target) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Target user not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      if (!request.user!.is_superuser) {
+        // Reuse the rank logic from the direct-reset endpoint by attempting
+        // it indirectly: read the target's membership role and compare.
+        const targetRole = await orgService.getMembershipRole(
+          request.user!.org_id,
+          targetUserId,
+        );
+        if (!targetRole) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Target user is not a member of this org',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        const rank = orgService.checkRankAbove(
+          request.user!.role,
+          targetRole,
+          request.user!.is_superuser,
+        );
+        if (!rank.allowed) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message:
+                rank.reason ??
+                'You cannot send a password reset for a user at or above your own role',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+      }
+
+      const minted = await passwordResetService.mintToken({
+        userId: target.id,
+        createdBy: request.user!.id,
+        ipAddress: request.ip,
+        purpose: 'reset',
+      });
+
+      const ttlMinutes = Math.max(
+        1,
+        Math.round((minted.expiresAt.getTime() - Date.now()) / 60_000),
+      );
+
+      let email_sent = false;
+      try {
+        email_sent = await sendPasswordResetEmail({
+          to: target.email,
+          token: minted.token,
+          userName: target.display_name || target.email,
+          expiresInMinutes: ttlMinutes,
+        });
+      } catch (emailErr) {
+        request.log.error(
+          { err: emailErr, target_email: target.email },
+          'Send-password-reset email enqueue threw',
+        );
+      }
+
+      request.log.info(
+        {
+          event: 'admin.password_reset_link_sent',
+          caller_id: request.user!.id,
+          target_id: target.id,
+          target_email: target.email,
+          org_id: request.user!.org_id,
+          email_sent,
+          smtp_configured: isSmtpConfigured(),
+          ttl_minutes: ttlMinutes,
+        },
+        'Admin sent a password-reset link',
+      );
+
+      return reply.send({
+        data: {
+          user_id: target.id,
+          email: target.email,
+          email_sent,
+          smtp_configured: isSmtpConfigured(),
+          expires_in_minutes: ttlMinutes,
+          message: email_sent
+            ? 'Password reset link sent.'
+            : 'Password reset token minted, but SMTP is not configured — the email was not delivered.',
+        },
+      });
     },
   );
 

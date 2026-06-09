@@ -41,6 +41,14 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
 
         <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800 p-6">
           <LoginForm onSuccess={() => onNavigate('/')} />
+          <div className="mt-4 text-right">
+            <button
+              onClick={() => onNavigate('/password-reset')}
+              className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            >
+              Forgot password?
+            </button>
+          </div>
         </div>
 
         <p className="text-center text-sm text-zinc-500 mt-6">

@@ -10,6 +10,7 @@ import {
   KeyRound,
   Lock,
   LogOut,
+  Mail,
   Plus,
   Loader2,
   X as XIcon,
@@ -998,6 +999,9 @@ function AccessTab({
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [forceSuccess, setForceSuccess] = useState(false);
   const [revokedCount, setRevokedCount] = useState<number | null>(null);
+  const [resetLinkStatus, setResetLinkStatus] = useState<
+    { email_sent: boolean; smtp_configured: boolean; expires_in_minutes: number } | null
+  >(null);
 
   const forceChange = useMutation({
     mutationFn: () => peopleApi.forcePasswordChange(userId),
@@ -1014,6 +1018,18 @@ function AccessTab({
       setConfirmSignOut(false);
       setRevokedCount(res.data.revoked);
       setTimeout(() => setRevokedCount(null), 5000);
+    },
+  });
+
+  const sendResetLink = useMutation({
+    mutationFn: () => peopleApi.sendPasswordResetLink(userId),
+    onSuccess: (res) => {
+      setResetLinkStatus({
+        email_sent: res.data.email_sent,
+        smtp_configured: res.data.smtp_configured,
+        expires_in_minutes: res.data.expires_in_minutes,
+      });
+      setTimeout(() => setResetLinkStatus(null), 8000);
     },
   });
 
@@ -1050,9 +1066,38 @@ function AccessTab({
               Revoked {revokedCount} session{revokedCount === 1 ? '' : 's'}.
             </div>
           )}
+          {resetLinkStatus && (
+            <div
+              className={
+                resetLinkStatus.email_sent
+                  ? 'mb-3 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800 dark:bg-green-950 dark:border-green-900 dark:text-green-200'
+                  : 'mb-3 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:border-amber-900 dark:text-amber-200'
+              }
+            >
+              {resetLinkStatus.email_sent ? (
+                <>
+                  Password reset link sent. Expires in {resetLinkStatus.expires_in_minutes}{' '}
+                  minute{resetLinkStatus.expires_in_minutes === 1 ? '' : 's'}.
+                </>
+              ) : (
+                <>
+                  Token minted, but SMTP is{' '}
+                  {resetLinkStatus.smtp_configured ? 'misconfigured' : 'not configured'} — the
+                  email was not delivered. Use "Reset password" to set a password directly.
+                </>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={onOpenReset}>
               <KeyRound className="h-4 w-4" /> Reset password
+            </Button>
+            <Button
+              variant="secondary"
+              loading={sendResetLink.isPending}
+              onClick={() => sendResetLink.mutate()}
+            >
+              <Mail className="h-4 w-4" /> Send password reset link
             </Button>
             <Button variant="secondary" onClick={() => setConfirmForceChange(true)}>
               <Lock className="h-4 w-4" /> Force password change
