@@ -121,6 +121,26 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
   const notifications = notificationsRes?.data ?? [];
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  // Banter unread bubble. Fetches /banter/api/v1/me/unread directly
+  // (the b3 api client is bound to /b3/api, so a separate fetch is
+  // simplest). The endpoint returns { total_unread, channels[] }; we
+  // only need the total to decide whether to draw the dot. Poll on
+  // the same cadence as notifications so the two indicators stay in
+  // step. Errors are swallowed silently — a missing Banter shouldn't
+  // make Bam render broken.
+  const { data: banterUnread } = useQuery({
+    queryKey: ['banter-unread-total'],
+    queryFn: async () => {
+      const res = await fetch('/banter/api/v1/me/unread', { credentials: 'include' });
+      if (!res.ok) return { total_unread: 0 };
+      const body = (await res.json()) as { data?: { total_unread?: number } };
+      return { total_unread: body.data?.total_unread ?? 0 };
+    },
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const banterUnreadTotal = banterUnread?.total_unread ?? 0;
+
   const markAllRead = useMutation({
     mutationFn: () => api.post('/me/notifications/mark-read'),
     onSuccess: () => {
@@ -229,11 +249,17 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
             <a
               href="/banter/"
               className="relative rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 transition-colors"
-              title="Banter — unread messages"
-              aria-label="Banter, view unread messages"
+              title={banterUnreadTotal > 0 ? `Banter — ${banterUnreadTotal} unread` : 'Banter'}
+              aria-label={
+                banterUnreadTotal > 0
+                  ? `Banter, ${banterUnreadTotal} unread messages`
+                  : 'Banter'
+              }
             >
               <MessageCircle className="h-4.5 w-4.5" aria-hidden="true" />
-              <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-primary-500 ring-2 ring-white dark:ring-zinc-900" />
+              {banterUnreadTotal > 0 && (
+                <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-primary-500 ring-2 ring-white dark:ring-zinc-900" />
+              )}
             </a>
 
             <div className="relative" ref={notifRef}>
