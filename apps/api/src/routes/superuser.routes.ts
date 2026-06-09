@@ -22,6 +22,7 @@ import { betaSignupNotifications } from '../db/schema/beta-signup-notifications.
 import {
   getPlatformSettings,
   setPublicSignupDisabled,
+  setHelpdeskSignupDisabled,
 } from '../services/platform-settings.service.js';
 import { requireAuth } from '../plugins/auth.js';
 import { logSuperuserAction } from '../services/superuser-audit.service.js';
@@ -1349,6 +1350,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
       return {
         data: {
           public_signup_disabled: settings.public_signup_disabled === true,
+          helpdesk_signup_disabled: settings.helpdesk_signup_disabled === true,
           updated_at: settings.updated_at?.toISOString() ?? null,
           updated_by: settings.updated_by,
         },
@@ -1361,9 +1363,19 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     '/platform-settings',
     { preHandler: [requireAuth, fastify.requireCan('bam.platform_setting.update')] },
     async (request, reply) => {
-      const schema = z.object({
-        public_signup_disabled: z.boolean(),
-      });
+      // Both flags are optional so the SuperUser UI can toggle them
+      // independently without having to re-send the unchanged one.
+      const schema = z
+        .object({
+          public_signup_disabled: z.boolean().optional(),
+          helpdesk_signup_disabled: z.boolean().optional(),
+        })
+        .refine(
+          (v) =>
+            v.public_signup_disabled !== undefined ||
+            v.helpdesk_signup_disabled !== undefined,
+          { message: 'At least one flag must be provided' },
+        );
       const parsed = schema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({
@@ -1379,16 +1391,28 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
         });
       }
       const userId = request.user!.id;
-      await setPublicSignupDisabled(parsed.data.public_signup_disabled, userId);
+      const changedFields: Record<string, boolean> = {};
+      if (parsed.data.public_signup_disabled !== undefined) {
+        await setPublicSignupDisabled(parsed.data.public_signup_disabled, userId);
+        changedFields.public_signup_disabled = parsed.data.public_signup_disabled;
+      }
+      if (parsed.data.helpdesk_signup_disabled !== undefined) {
+        await setHelpdeskSignupDisabled(parsed.data.helpdesk_signup_disabled, userId);
+        changedFields.helpdesk_signup_disabled = parsed.data.helpdesk_signup_disabled;
+      }
       await logSuperuserAction({
         superuserId: userId,
         action: 'update_platform_settings',
-        details: { public_signup_disabled: parsed.data.public_signup_disabled },
+        details: changedFields,
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'] ?? undefined,
       });
+      const after = await getPlatformSettings();
       return reply.send({
-        data: { public_signup_disabled: parsed.data.public_signup_disabled },
+        data: {
+          public_signup_disabled: after.public_signup_disabled === true,
+          helpdesk_signup_disabled: after.helpdesk_signup_disabled === true,
+        },
       });
     },
   );

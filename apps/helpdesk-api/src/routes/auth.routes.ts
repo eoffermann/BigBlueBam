@@ -62,15 +62,39 @@ function getDummyPasswordHash(): Promise<string> {
 }
 
 export default async function authRoutes(fastify: FastifyInstance) {
-  // Expose the shared platform-wide signup flag to the helpdesk login page
-  // so "Create one" can route to the cross-app beta-gate when signup is off.
+  // Expose Helpdesk's own signup flag to the helpdesk login page so the
+  // "Create one" link can route to the beta-gate when signup is off.
+  //
+  // Important: Helpdesk reads `helpdesk_signup_disabled`, NOT
+  // `public_signup_disabled`. Those gates are intentionally decoupled
+  // (migration 0172) — closing BigBlueBam's internal signup during beta
+  // should not also lock end-customers out of filing tickets.
+  // The `public_signup_disabled` field is echoed back too so existing
+  // consumers that may still read it don't get a sudden undefined.
   fastify.get('/helpdesk/public/config', async () => {
     const res = await db.execute(
-      sql`SELECT public_signup_disabled FROM platform_settings WHERE id = 1`,
+      sql`SELECT public_signup_disabled, helpdesk_signup_disabled
+            FROM platform_settings WHERE id = 1`,
     );
-    const row = (res as unknown as { rows: Array<{ public_signup_disabled: boolean }> }).rows?.[0];
+    // postgres-js returns the rows array directly; node-pg returns {rows: [...]}.
+    // The register endpoint below already handled both shapes; this endpoint
+    // used to assume only the node-pg shape and silently returned false for
+    // the disabled flag on postgres-js stacks.
+    type Row = {
+      public_signup_disabled: boolean;
+      helpdesk_signup_disabled: boolean;
+    };
+    const row: Row | undefined = Array.isArray(res)
+      ? (res[0] as Row | undefined)
+      : ((res as unknown as { rows?: Row[] }).rows?.[0]);
     return {
-      data: { public_signup_disabled: row?.public_signup_disabled === true },
+      data: {
+        // Echoed for back-compat; helpdesk clients should NOT use this to
+        // decide whether helpdesk signup is open.
+        public_signup_disabled: row?.public_signup_disabled === true,
+        // The flag helpdesk clients SHOULD read.
+        helpdesk_signup_disabled: row?.helpdesk_signup_disabled === true,
+      },
     };
   });
   const cookieOptions = {
@@ -105,22 +129,22 @@ export default async function authRoutes(fastify: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    // Platform-wide kill switch (shared with Bam): when a SuperUser has
-    // disabled public signup, reject Helpdesk customer self-signup too.
-    // Reads directly from the shared `platform_settings` singleton; no
-    // Drizzle schema needed here since helpdesk-api does not own the table.
+    // Helpdesk's own kill switch (migration 0172). Decoupled from Bam's
+    // `public_signup_disabled` so a SuperUser closing internal signup
+    // during beta doesn't simultaneously block end-customers from filing
+    // tickets. The two systems are distinct identity scopes.
     const flagResult = await db.execute(
-      sql`SELECT public_signup_disabled FROM platform_settings WHERE id = 1`,
+      sql`SELECT helpdesk_signup_disabled FROM platform_settings WHERE id = 1`,
     );
     // postgres-js returns the rows array directly; node-pg returns {rows: [...]}.
     const row = Array.isArray(flagResult)
-      ? (flagResult[0] as { public_signup_disabled: boolean } | undefined)
-      : ((flagResult as unknown as { rows?: Array<{ public_signup_disabled: boolean }> }).rows?.[0]);
-    if (row?.public_signup_disabled === true) {
+      ? (flagResult[0] as { helpdesk_signup_disabled: boolean } | undefined)
+      : ((flagResult as unknown as { rows?: Array<{ helpdesk_signup_disabled: boolean }> }).rows?.[0]);
+    if (row?.helpdesk_signup_disabled === true) {
       return reply.status(403).send({
         error: {
           code: 'SIGNUP_DISABLED',
-          message: 'Public signup is currently closed. Join the notify list to be invited.',
+          message: 'Helpdesk signup is currently closed. Contact your administrator.',
           request_id: request.id,
         },
       });

@@ -16,15 +16,24 @@ export async function getPlatformSettings() {
   return {
     id: SINGLETON_ID,
     public_signup_disabled: false,
+    helpdesk_signup_disabled: false,
     updated_at: new Date(),
     updated_by: null,
   };
 }
 
-/** Convenience accessor — used by the public /auth/register gates. */
+/** Convenience accessor — used by the public Bam /auth/register gate. */
 export async function isPublicSignupDisabled(): Promise<boolean> {
   const row = await getPlatformSettings();
   return row.public_signup_disabled === true;
+}
+
+/** Convenience accessor — used by the public Helpdesk /helpdesk/auth/register
+ *  gate. Distinct from isPublicSignupDisabled so closing Bam signup during
+ *  beta does not also lock end-customers out of filing tickets. */
+export async function isHelpdeskSignupDisabled(): Promise<boolean> {
+  const row = await getPlatformSettings();
+  return row.helpdesk_signup_disabled === true;
 }
 
 /** SuperUser-only: flip the public_signup_disabled flag. */
@@ -43,6 +52,26 @@ export async function setPublicSignupDisabled(disabled: boolean, userId: string)
       target: platformSettings.id,
       set: {
         public_signup_disabled: disabled,
+        updated_by: userId,
+        updated_at: sql`NOW()`,
+      },
+    });
+}
+
+/** SuperUser-only: flip the helpdesk_signup_disabled flag. */
+export async function setHelpdeskSignupDisabled(disabled: boolean, userId: string) {
+  await db
+    .insert(platformSettings)
+    .values({
+      id: SINGLETON_ID,
+      helpdesk_signup_disabled: disabled,
+      updated_by: userId,
+      updated_at: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: platformSettings.id,
+      set: {
+        helpdesk_signup_disabled: disabled,
         updated_by: userId,
         updated_at: sql`NOW()`,
       },

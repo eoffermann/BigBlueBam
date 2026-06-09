@@ -741,6 +741,7 @@ function SortHeader({
 interface PlatformSettingsResponse {
   data: {
     public_signup_disabled: boolean;
+    helpdesk_signup_disabled: boolean;
     updated_at: string | null;
     updated_by: string | null;
   };
@@ -775,10 +776,19 @@ function PlatformTab() {
 
   const toggle = useMutation({
     mutationFn: (next: boolean) =>
-      api.patch<{ data: { public_signup_disabled: boolean } }>(
-        '/superuser/platform-settings',
-        { public_signup_disabled: next },
-      ),
+      api.patch<{
+        data: { public_signup_disabled: boolean; helpdesk_signup_disabled: boolean };
+      }>('/superuser/platform-settings', { public_signup_disabled: next }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['superuser', 'platform-settings'] });
+    },
+  });
+
+  const toggleHelpdesk = useMutation({
+    mutationFn: (next: boolean) =>
+      api.patch<{
+        data: { public_signup_disabled: boolean; helpdesk_signup_disabled: boolean };
+      }>('/superuser/platform-settings', { helpdesk_signup_disabled: next }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['superuser', 'platform-settings'] });
     },
@@ -807,6 +817,7 @@ function PlatformTab() {
   }
 
   const disabled = data.data.public_signup_disabled;
+  const helpdeskDisabled = data.data.helpdesk_signup_disabled;
   const currentRedirect = redirectData?.data?.value as string ?? 'site';
 
   return (
@@ -818,13 +829,14 @@ function PlatformTab() {
           </div>
           <div className="flex-1">
             <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-              Public signup
+              BigBlueBam signup
             </h3>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              When disabled, the "Create one" link on every login page sends
-              prospects to a beta-gate and a notify-me form instead of the
-              signup page. Existing accounts keep working. Applies to
-              BigBlueBam and Helpdesk.
+              When disabled, the "Create one" link on the BigBlueBam login
+              page sends prospects to a beta-gate and a notify-me form
+              instead of the signup page. Existing accounts keep working.
+              Helpdesk has a separate switch below — closing internal signup
+              no longer blocks customers from filing tickets.
             </p>
             <div className="mt-4 flex items-center gap-3">
               <button
@@ -859,6 +871,56 @@ function PlatformTab() {
             {toggle.isError && (
               <p className="mt-3 text-sm text-red-600 dark:text-red-400">
                 Failed to update: {(toggle.error as Error).message}
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/30">
+            <Settings className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+              Helpdesk customer signup
+            </h3>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Independent of BigBlueBam signup above. When disabled, the
+              Helpdesk login page hides "Create one" and the
+              POST /helpdesk/auth/register endpoint rejects new
+              customer self-signup with SIGNUP_DISABLED. Existing
+              customer accounts and ticket flow continue to work.
+            </p>
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={() => toggleHelpdesk.mutate(!helpdeskDisabled)}
+                disabled={toggleHelpdesk.isPending}
+                className={
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ' +
+                  (helpdeskDisabled ? 'bg-primary-600' : 'bg-zinc-300 dark:bg-zinc-700')
+                }
+                role="switch"
+                aria-checked={helpdeskDisabled}
+                aria-label="Disable helpdesk customer signup"
+              >
+                <span
+                  className={
+                    'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ' +
+                    (helpdeskDisabled ? 'translate-x-5' : 'translate-x-0.5')
+                  }
+                />
+              </button>
+              <div className="text-sm">
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {helpdeskDisabled ? 'Helpdesk signup disabled' : 'Helpdesk signup open'}
+                </span>
+              </div>
+            </div>
+            {toggleHelpdesk.isError && (
+              <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+                Failed to update: {(toggleHelpdesk.error as Error).message}
               </p>
             )}
           </div>

@@ -17,10 +17,21 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
 
   useEffect(() => {
     let cancelled = false;
+    // Helpdesk reads its OWN signup flag (helpdesk_signup_disabled), not the
+    // Bam-internal one. The two are decoupled — closing internal signup
+    // during beta should not block customers from filing tickets.
     api
-      .get<{ data: { public_signup_disabled: boolean } }>('/public/config')
+      .get<{
+        data: {
+          public_signup_disabled: boolean;
+          helpdesk_signup_disabled?: boolean;
+        };
+      }>('/public/config')
       .then((res) => {
-        if (!cancelled) setSignupDisabled(res.data.public_signup_disabled === true);
+        if (cancelled) return;
+        // Prefer the helpdesk-specific flag; fall back to false if a stale
+        // helpdesk-api hasn't been redeployed with the new field yet.
+        setSignupDisabled(res.data.helpdesk_signup_disabled === true);
       })
       .catch(() => {
         /* leave default; register endpoint will reject if needed */
