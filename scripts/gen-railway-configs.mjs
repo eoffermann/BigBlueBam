@@ -261,16 +261,47 @@ function generateRailwayNginxConf() {
   );
 
   // 2. The frontend nginx itself runs ON Railway and must bind to PORT=8080
-  //    so Railway's healthcheck and public proxy can reach it. Rewrite every
-  //    `listen N;` directive (typically just `listen 80;` from the source)
-  //    to `listen 8080;`. Source IPs and SSL options are preserved.
-  out = out.replace(
-    /(\blisten\s+)(\d+)([^;]*);/g,
-    (_match, prefix, _port, suffix) => {
+  //    so Railway's healthcheck and public proxy can reach it. The source
+  //    config uses two placeholders that entrypoint.sh substitutes at
+  //    container start for the docker-compose flow:
+  //
+  //      __HTTP_LISTEN__      → "    listen 80;" (or empty for TLS modes)
+  //      __TLS_LISTEN_BLOCK__ → ssl listen + cert + HSTS lines (or empty)
+  //
+  //    Neither substitution is correct for Railway: TLS terminates at
+  //    Railway's edge proxy so no in-container cert, and the port must be
+  //    8080 (not 80) for Railway's healthcheck to land. Materialize the
+  //    final values into the railway profile so entrypoint.sh's
+  //    `grep -q '__HTTP_LISTEN__'` test returns false on Railway and the
+  //    TLS substitution branch is bypassed entirely.
+  out = out.replace(/^\s*__HTTP_LISTEN__\s*$/m, `    listen ${RAILWAY_DYNAMIC_PORT};`);
+  out = out.replace(/^\s*__TLS_LISTEN_BLOCK__\s*$/m, '');
+  rewrittenListen++;
+
+  // 2b. Rewrite any remaining `listen N;` directive (typically none after the
+  //     placeholder substitution above, but kept for any future inline ones)
+  //     to `listen 8080;`. Source IPs and SSL options are preserved.
+  //
+  //     Walk line-by-line so we can skip comment lines. The source has a
+  //     documentation block describing what entrypoint.sh injects (literally
+  //     "listen 80;" inside a `# … "listen 80;" or "" …` comment), and we
+  //     must NOT rewrite those — both because they're not real directives,
+  //     and because step 3's resolver insertion would split the comment in
+  //     half and the orphan trailing fragment would be parsed as a real
+  //     directive at boot, crashing nginx with a healthcheck-loop on Railway.
+  //     A leading `#` (after any indentation) is the only nginx comment form,
+  //     so a simple prefix test is sufficient.
+  const isComment = (line) => /^\s*#/.test(line);
+  const listenRewriteRe = /(\blisten\s+)(\d+)([^;]*);/g;
+  const listenLines = out.split('\n').map((line) => {
+    if (isComment(line)) return line;
+    return line.replace(listenRewriteRe, (_match, prefix, port, suffix) => {
+      if (port === String(RAILWAY_DYNAMIC_PORT)) return _match;
       rewrittenListen++;
       return `${prefix}${RAILWAY_DYNAMIC_PORT}${suffix};`;
-    },
-  );
+    });
+  });
+  out = listenLines.join('\n');
 
   // 3. Inject a `resolver` directive right after the listen. Without it,
   //    nginx resolves upstream hostnames ONCE at config load and caches the
@@ -280,10 +311,20 @@ function generateRailwayNginxConf() {
   //    `__RESOLVER__` placeholder is replaced at container start by
   //    infra/nginx/entrypoint.sh with the nameserver(s) from
   //    /etc/resolv.conf, so the config stays portable.
-  out = out.replace(
-    /(\blisten\s+\d+[^;]*;)/,
-    `$1\n    resolver __RESOLVER__ valid=10s;`,
-  );
+  //
+  //    Same comment-skip applies here: a `listen N;` mention inside a
+  //    `# …` documentation block must not get a resolver line injected
+  //    after it, or the comment splits and the second half becomes a
+  //    real directive.
+  const resolverRe = /(\blisten\s+\d+[^;]*;)/;
+  let resolverInjected = false;
+  const resolverLines = out.split('\n').map((line) => {
+    if (resolverInjected || isComment(line)) return line;
+    const replaced = line.replace(resolverRe, `$1\n    resolver __RESOLVER__ valid=10s;`);
+    if (replaced !== line) resolverInjected = true;
+    return replaced;
+  });
+  out = resolverLines.join('\n');
 
   // 4. Rewrite each `proxy_pass http://<host>.railway.internal:<port>[<uri>]`
   //    to use a variable so nginx uses the resolver (with 10s TTL) to re-
