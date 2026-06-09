@@ -15,6 +15,7 @@ import {
   Headset,
   Bot,
   ArrowRight,
+  GitBranch,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
@@ -63,6 +64,15 @@ const categories: Category[] = [
         color: 'bg-indigo-100 text-indigo-600',
         borderColor: 'border-l-indigo-500',
         anchor: 'board',
+      },
+      {
+        name: 'Blueprint',
+        subtitle: 'Structured Diagrams',
+        description: 'Typed graph diagrams — flowcharts, org charts, ERDs, mindmaps — with ELK auto-layout and agent-buildable structure.',
+        icon: GitBranch,
+        color: 'bg-sky-100 text-sky-600',
+        borderColor: 'border-l-sky-500',
+        anchor: 'blueprint',
       },
       {
         name: 'Bearing',
@@ -202,7 +212,7 @@ const categories: Category[] = [
 
 const mcpServer: Product = {
   name: 'MCP Server',
-  subtitle: '340 AI Tools',
+  subtitle: '360 AI Tools',
   description: 'Unified Model Context Protocol server exposing every product plus cross-cutting platform capabilities (search, composite views, proposals, policies, webhooks) to AI agents.',
   icon: Bot,
   color: 'bg-slate-100 text-slate-600',

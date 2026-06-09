@@ -11,6 +11,7 @@ import { UserManagement } from '@/components/sections/user-management';
 import { PowerFeatures } from '@/components/sections/power-features';
 import { Integrations } from '@/components/sections/integrations';
 import { BoardSection } from '@/components/sections/board-section';
+import { BlueprintSection } from '@/components/sections/blueprint-section';
 import { BearingSection } from '@/components/sections/bearing-section';
 import { Button } from '@/components/ui/button';
 
@@ -39,8 +40,8 @@ export function WorkPage() {
               </h1>
               <p className="mt-4 max-w-2xl text-lg text-blue-100">
                 Plan projects with Bam's Kanban boards and sprints, brainstorm on Board's infinite
-                canvas, and align your team around measurable goals with Bearing. Three products,
-                one seamless workflow.
+                canvas, build structured flowcharts and org charts in Blueprint, and align your team
+                around measurable goals with Bearing. Four products, one seamless workflow.
               </p>
             </motion.div>
           </div>
@@ -55,6 +56,7 @@ export function WorkPage() {
         <PowerFeatures />
         <Integrations />
         <BoardSection />
+        <BlueprintSection />
         <BearingSection />
 
         {/* Bottom CTA */}
@@ -62,7 +64,7 @@ export function WorkPage() {
           <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 text-center sm:px-6 lg:px-8">
             <h2 className="text-2xl font-bold text-zinc-900">Ready to get started?</h2>
             <p className="max-w-lg text-zinc-600">
-              Deploy the entire BigBlueBam suite -- including Bam, Board, and Bearing -- with a
+              Deploy the entire BigBlueBam suite -- including Bam, Board, Blueprint, and Bearing -- with a
               single Docker Compose command.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
