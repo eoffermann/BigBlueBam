@@ -1,10 +1,23 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, and } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '../db/index.js';
 import { boards, boardCollaborators, projectMembers } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import { generateBoardAudioToken } from '../services/livekit.service.js';
+
+// Bureau §9 Strategy B: when a user is summoned into a Bureau room
+// with continuous audio, the summon target URL carries `?lkRoom=`. The
+// frontend reads that and passes it here so Board mints a token for the
+// Bureau room instead of the canonical board-{boardId} room and the
+// call never drops during the cross-app navigation. Format validation
+// + access auditing live in the service layer.
+const audioTokenBody = z
+  .object({
+    lk_room: z.string().min(8).max(96).optional(),
+  })
+  .partial();
 
 const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
 
@@ -138,7 +151,14 @@ export default async function audioRoutes(fastify: FastifyInstance) {
         // 'organization' visibility: all org members have access (already verified above)
       }
 
-      const result = await generateBoardAudioToken(boardId, user.id, user.display_name);
+      const body = audioTokenBody.parse(request.body ?? {});
+
+      const result = await generateBoardAudioToken(
+        boardId,
+        user.id,
+        user.display_name,
+        body.lk_room,
+      );
 
       return reply.status(200).send({
         data: {

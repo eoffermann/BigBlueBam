@@ -8,6 +8,7 @@ import {
   banterCallTranscripts,
   banterChannels,
   banterChannelMemberships,
+  banterSettings,
   users,
 } from '../db/schema/index.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
@@ -78,6 +79,29 @@ export default async function callRoutes(fastify: FastifyInstance) {
           error: {
             code: 'FORBIDDEN',
             message: 'You must be a channel member to start a call',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      // Calling-audit P-1: gate call creation on the org-level
+      // voice_video_enabled flag in banter_settings. The flag defaults
+      // to false in the schema, so an org that hasn't opted in cannot
+      // start calls even if a user reaches this endpoint directly.
+      // If no settings row exists yet, fall back to "disabled" — safer
+      // posture than implicit enable, and matches the column default.
+      const [settings] = await db
+        .select({ voice_video_enabled: banterSettings.voice_video_enabled })
+        .from(banterSettings)
+        .where(eq(banterSettings.org_id, user.org_id))
+        .limit(1);
+      if (!settings?.voice_video_enabled) {
+        return reply.status(403).send({
+          error: {
+            code: 'CALLING_DISABLED',
+            message:
+              'Voice and video calling is disabled for this organization. An admin can enable it in Banter settings.',
             details: [],
             request_id: request.id,
           },

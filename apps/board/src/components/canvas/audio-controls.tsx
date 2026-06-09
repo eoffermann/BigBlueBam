@@ -8,7 +8,7 @@ import {
 } from '@livekit/components-react';
 import { Track } from 'livekit-client';
 import { Mic, MicOff, Headphones, PhoneOff, Volume2, Loader2 } from 'lucide-react';
-import { useBoardAudioToken } from '@/hooks/use-audio';
+import { useBoardAudioToken, readLkRoomFromUrl } from '@/hooks/use-audio';
 // @livekit/components-styles omitted — using custom TailwindCSS styling instead
 
 // ---------------------------------------------------------------------------
@@ -99,7 +99,14 @@ function AudioToolbarContent({ onDisconnect }: { onDisconnect: () => void }) {
 // ---------------------------------------------------------------------------
 
 export function AudioControls({ boardId }: AudioControlsProps) {
-  const { data: tokenData, isLoading: tokenLoading } = useBoardAudioToken(boardId);
+  // Bureau §9 Strategy B: when the user arrives via a Bureau summon,
+  // the URL carries ?lkRoom=bureau-room-<uuid>. We snapshot it once on
+  // mount so a subsequent in-app route change doesn't change the room
+  // mid-call. Validation lives in readLkRoomFromUrl — anything else
+  // (including a missing query) yields undefined and we fall back to
+  // the canonical board-{boardId} room server-side.
+  const [lkRoomOverride] = useState<string | undefined>(() => readLkRoomFromUrl());
+  const { data: tokenData, isLoading: tokenLoading } = useBoardAudioToken(boardId, lkRoomOverride);
   const [isConnected, setIsConnected] = useState(false);
 
   const token = tokenData?.data?.token ?? null;
