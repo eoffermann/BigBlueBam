@@ -1570,14 +1570,23 @@ function ParentTasksSection({ taskId, projectId }: ParentTasksSectionProps) {
             <span
               key={p.id}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+                // The original styling used bg-primary-50 (≈ #eff6ff, almost
+                // white) with text-primary-800 — technically dark blue but it
+                // read as "light blue on white" because the background was
+                // too faint to anchor the eye. Bumped to bg-primary-100 +
+                // text-primary-900 + font-medium to match the existing Badge
+                // variant treatment, and dropped the opacity-70 on human_id
+                // which was further washing the chip out. Also fixed the
+                // dark-mode classes that targeted the nonexistent
+                // primary-950 step.
                 isDone
-                  ? 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-                  : 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-900 dark:bg-primary-950 dark:text-primary-200',
+                  ? 'border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                  : 'border-primary-300 bg-primary-100 text-primary-900 dark:border-primary-700 dark:bg-primary-900/40 dark:text-primary-100',
               )}
             >
               {p.human_id && (
-                <span className="font-mono text-[10px] opacity-70">{p.human_id}</span>
+                <span className="font-mono text-[10px] tracking-tight">{p.human_id}</span>
               )}
               <span className="truncate max-w-[16rem]">{p.title}</span>
               <button
