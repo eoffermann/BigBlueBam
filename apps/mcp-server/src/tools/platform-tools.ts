@@ -38,9 +38,15 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'get_platform_settings',
-    description: 'SuperUser only. Fetch platform-wide settings (public signup toggle, etc).',
+    description:
+      'SuperUser only. Fetch platform-wide settings. As of B3 Frndo Launch the response contains two independent signup kill switches: `public_signup_disabled` gates the BigBlueBam internal /auth/register endpoint; `helpdesk_signup_disabled` gates the Helpdesk customer /helpdesk/auth/register endpoint. The flags are deliberately decoupled — closing internal signup during beta should not also block customers from filing tickets.',
     input: {},
-    returns: z.object({ public_signup_disabled: z.boolean().optional() }).passthrough(),
+    returns: z
+      .object({
+        public_signup_disabled: z.boolean().optional(),
+        helpdesk_signup_disabled: z.boolean().optional(),
+      })
+      .passthrough(),
     handler: async () => {
       const result = await api.get('/superuser/platform-settings');
       if (!result.ok) {
@@ -55,13 +61,44 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'set_public_signup_disabled',
-    description: "SuperUser only. Toggle the platform-wide public signup kill switch. When true, POST /auth/register and POST /helpdesk/auth/register return 403 SIGNUP_DISABLED and the login pages' 'Create one' link routes to the beta-gate page.",
+    description:
+      "SuperUser only. Toggle the BigBlueBam (internal) public signup kill switch. When true, POST /auth/register returns 403 SIGNUP_DISABLED and the /b3/login page's 'Create one' link routes to the beta-gate. Does NOT affect Helpdesk customer signup — use `set_helpdesk_signup_disabled` for that. Both flags are returned in the response so the caller can see the resulting state of the platform settings row.",
     input: {
-      public_signup_disabled: z.boolean().describe('true to freeze new-account creation; false to open signup back up.'),
+      public_signup_disabled: z.boolean().describe('true to freeze BigBlueBam new-account creation; false to open it back up.'),
     },
-    returns: z.object({ public_signup_disabled: z.boolean() }).passthrough(),
+    returns: z
+      .object({
+        public_signup_disabled: z.boolean(),
+        helpdesk_signup_disabled: z.boolean(),
+      })
+      .passthrough(),
     handler: async ({ public_signup_disabled }) => {
       const result = await api.patch('/superuser/platform-settings', { public_signup_disabled });
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error updating platform settings: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
+
+  registerTool(server, {
+    name: 'set_helpdesk_signup_disabled',
+    description:
+      "SuperUser only. Toggle the Helpdesk customer signup kill switch. When true, POST /helpdesk/auth/register returns 403 SIGNUP_DISABLED and the Helpdesk login page hides 'Create one'. Independent of `set_public_signup_disabled` — closing BigBlueBam internal signup during beta should not also block customers from filing tickets. Both flags are returned in the response so the caller can see the resulting state.",
+    input: {
+      helpdesk_signup_disabled: z.boolean().describe('true to freeze Helpdesk customer signup; false to open it back up.'),
+    },
+    returns: z
+      .object({
+        public_signup_disabled: z.boolean(),
+        helpdesk_signup_disabled: z.boolean(),
+      })
+      .passthrough(),
+    handler: async ({ helpdesk_signup_disabled }) => {
+      const result = await api.patch('/superuser/platform-settings', { helpdesk_signup_disabled });
       if (!result.ok) {
         return {
           content: [{ type: 'text' as const, text: `Error updating platform settings: ${JSON.stringify(result.data)}` }],

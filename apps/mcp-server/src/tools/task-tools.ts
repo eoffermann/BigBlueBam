@@ -804,4 +804,105 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
       };
     },
   });
+
+  // ─── Many-to-many parent/subtask linking (B3 Frndo Launch) ──────────────
+  //
+  // The task_parent_links join table lets a single subtask serve multiple
+  // parents (each parent legitimately depends on it). These four tools are
+  // a thin pass-through over /tasks/:id/{parents,subtasks}; the route layer
+  // does cycle detection, self-loop blocking, idempotency, and counter
+  // maintenance. Errors surface as 409/400 with stable codes
+  // (CYCLE, SELF_LOOP, NOT_FOUND, INCOMPLETE_SUBTASKS for downstream moves).
+
+  const parentChildSummaryShape = z.object({
+    id: z.string().uuid(),
+    human_id: z.string().nullable(),
+    title: z.string(),
+    phase_id: z.string().uuid().nullable(),
+    state_id: z.string().uuid().nullable(),
+    completed_at: z.string().nullable(),
+    project_id: z.string().uuid(),
+  });
+
+  registerTool(server, {
+    name: 'bam_add_task_parent',
+    description:
+      "Attach an existing task as a parent of another task. Establishes a many-to-many parent/subtask link in the task_parent_links join table, so a subtask can serve multiple parents (each genuinely dependent on it). Idempotent: re-adding an existing link returns { already_linked: true } without changing state. Refuses self-loops (400 SELF_LOOP) and cycles up to depth 16 (409 CYCLE). Bumps the parent's subtask_count when the link is genuinely new.",
+    input: {
+      task_id: z.string().uuid().describe('The subtask UUID — the task being attached.'),
+      parent_task_id: z.string().uuid().describe('The parent task UUID.'),
+    },
+    returns: z.object({ already_linked: z.boolean() }),
+    handler: async ({ task_id, parent_task_id }) => {
+      const result = await api.post(`/tasks/${task_id}/parents`, {
+        parent_task_id,
+      });
+      if (!result.ok) {
+        const scopeErr = handleScopeError('bam_add_task_parent', 'read_write', result);
+        if (scopeErr) return scopeErr;
+        return err('adding task parent', result.data);
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_remove_task_parent',
+    description:
+      "Remove a parent/child link between two tasks. Drops the row from task_parent_links and, if the legacy tasks.parent_task_id pointer matched this link, nulls it out too. Decrements the parent's subtask_count (and subtask_done_count if the child was already Done). 404 if no such link exists. Neither task is deleted by this operation.",
+    input: {
+      task_id: z.string().uuid().describe('The subtask UUID.'),
+      parent_task_id: z.string().uuid().describe('The parent task UUID to unlink from.'),
+    },
+    returns: z.object({ removed: z.boolean() }),
+    handler: async ({ task_id, parent_task_id }) => {
+      const result = await api.delete(
+        `/tasks/${task_id}/parents/${parent_task_id}`,
+      );
+      if (!result.ok) {
+        const scopeErr = handleScopeError('bam_remove_task_parent', 'read_write', result);
+        if (scopeErr) return scopeErr;
+        return err('removing task parent', result.data);
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_list_task_parents',
+    description:
+      "List every parent task of the given task. Unions the legacy tasks.parent_task_id self-FK with the task_parent_links join table, so a subtask backfilled from before the many-to-many feature still shows its parent.",
+    input: {
+      task_id: z.string().uuid().describe('The task whose parents you want.'),
+    },
+    returns: z.object({ data: z.array(parentChildSummaryShape) }),
+    handler: async ({ task_id }) => {
+      const result = await api.get(`/tasks/${task_id}/parents`);
+      if (!result.ok) return err('listing task parents', result.data);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_list_task_subtasks',
+    description:
+      "List every subtask of the given task. Unions the legacy tasks.parent_task_id self-FK with the task_parent_links join table, so subtasks attached either way show up. Each entry includes completion state so the caller can pre-check the Done-gate before attempting to move the parent into a terminal phase (the API will reject with 409 INCOMPLETE_SUBTASKS if any child is still open).",
+    input: {
+      task_id: z.string().uuid().describe('The parent task whose subtasks you want.'),
+    },
+    returns: z.object({ data: z.array(parentChildSummaryShape) }),
+    handler: async ({ task_id }) => {
+      const result = await api.get(`/tasks/${task_id}/subtasks`);
+      if (!result.ok) return err('listing task subtasks', result.data);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
 }

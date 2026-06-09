@@ -179,4 +179,131 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
       };
     },
   });
+
+  // ─── Org admin: invite + password ops (B3 Frndo Launch) ─────────────────
+  //
+  // Caller must already have org-admin scope on the active org (or be a
+  // platform SuperUser). These mirror the web /b3/people surface so an
+  // agent can onboard or re-credential a user without going through the
+  // web UI. All three wrap routes added/extended during B3 Frndo Launch:
+  //  - POST /org/members/invite (now sends an invitation email + accepts project_ids)
+  //  - POST /org/members/:userId/reset-password (now returns the new password)
+  //  - POST /org/members/:userId/send-password-reset (mints a one-time link)
+
+  registerTool(server, {
+    name: 'bam_invite_member',
+    description:
+      "Invite a user to the caller's active org. Reuses an existing user by email if one already exists (`was_existing=true`); otherwise creates a brand-new user. Optionally adds the user to one or more projects in the same org at the same time (`project_ids`). When SMTP is configured, the user receives an invitation email — for brand-new users the email carries a 7-day password-onboarding link via the password-reset token machinery; for existing users it's just a 'you have new access' notice. The response reports `email_sent` so the caller knows whether the email actually went out. Errors: 409 ALREADY_MEMBER, 400 CROSS_ORG_PROJECT (one or more project_ids belong to another org).",
+    input: {
+      email: z.string().email().max(320).describe("Invitee's email address."),
+      role: z
+        .enum(['member', 'admin'])
+        .optional()
+        .describe("Org role to grant (default 'member'; 'owner' isn't invitable — use transfer-ownership instead)."),
+      display_name: z
+        .string()
+        .max(100)
+        .optional()
+        .describe('Optional display name; defaults to the local-part of the email for new users.'),
+      project_ids: z
+        .array(z.string().uuid())
+        .optional()
+        .describe('Optional project UUIDs in the caller\'s org to add the user to as a project member (role defaults to member).'),
+    },
+    returns: z
+      .object({
+        id: z.string().uuid(),
+        email: z.string(),
+        was_existing: z.boolean(),
+        email_sent: z.boolean(),
+        projects_added: z.array(z.string().uuid()),
+        projects_skipped: z.array(z.string().uuid()),
+      })
+      .passthrough(),
+    handler: async ({ email, role, display_name, project_ids }) => {
+      const body: Record<string, unknown> = { email };
+      if (role !== undefined) body.role = role;
+      if (display_name !== undefined) body.display_name = display_name;
+      if (project_ids !== undefined) body.project_ids = project_ids;
+      const result = await api.post('/org/members/invite', body);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error inviting member: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_admin_reset_password',
+    description:
+      "Org-admin: reset another user's password to a freshly generated 16-character password (or one you supply via `password`). All of that user's active sessions are invalidated in the same transaction. The new password is returned in the response so the operator can hand it off — there is no second chance to retrieve it. The caller must be an org admin/owner or a SuperUser, and must outrank the target. Prefer `bam_send_password_reset_link` when the user can be reached by email; this tool is the right choice when SMTP is unconfigured or the user is locked out without email access.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+      password: z
+        .string()
+        .min(12)
+        .max(200)
+        .optional()
+        .describe('Optional explicit password. Min 12 chars. If omitted, a 16-char strong password is generated.'),
+    },
+    returns: z
+      .object({
+        user_id: z.string().uuid(),
+        email: z.string(),
+        password: z.string().describe('Plaintext new password. Shown exactly once.'),
+        generated: z.boolean(),
+        message: z.string(),
+      })
+      .passthrough(),
+    handler: async ({ user_id, password }) => {
+      const body: Record<string, unknown> = {};
+      if (password !== undefined) body.password = password;
+      const result = await api.post(`/org/members/${user_id}/reset-password`, body);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error resetting password: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_send_password_reset_link',
+    description:
+      "Org-admin: mint a one-time password-reset token for another user and email them a 60-minute reset link. The caller must outrank the target (or be a SuperUser). The response reports `email_sent` and `smtp_configured` so the caller knows whether the email actually went out — if SMTP is not configured the token is still minted, but no email is sent and the caller must hand the link off out-of-band (or call `bam_admin_reset_password` instead). This is the gentler alternative to `bam_admin_reset_password` because the operator never sees the password.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+    },
+    returns: z
+      .object({
+        user_id: z.string().uuid(),
+        email: z.string(),
+        email_sent: z.boolean(),
+        smtp_configured: z.boolean(),
+        expires_in_minutes: z.number().int(),
+        message: z.string(),
+      })
+      .passthrough(),
+    handler: async ({ user_id }) => {
+      const result = await api.post(`/org/members/${user_id}/send-password-reset`, undefined);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error sending password reset link: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
 }

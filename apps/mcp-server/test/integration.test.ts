@@ -1520,12 +1520,17 @@ describe('MCP Integration Tests', () => {
         'search_tasks', 'get_task', 'create_task', 'update_task',
         'move_task', 'delete_task', 'bulk_update_tasks', 'log_time',
         'duplicate_task', 'import_csv', 'bam_get_task_by_human_id',
+        // task parent/subtask many-to-many (B3 Frndo Launch)
+        'bam_add_task_parent', 'bam_remove_task_parent',
+        'bam_list_task_parents', 'bam_list_task_subtasks',
         // sprint
         'list_sprints', 'create_sprint', 'start_sprint', 'complete_sprint', 'get_sprint_report',
         // comment
         'list_comments', 'add_comment',
         // member
         'list_members', 'get_my_tasks', 'bam_find_user', 'bam_find_user_by_email',
+        // org admin (B3 Frndo Launch)
+        'bam_invite_member', 'bam_admin_reset_password', 'bam_send_password_reset_link',
         // report
         'get_velocity_report', 'get_burndown', 'get_cumulative_flow',
         'get_overdue_tasks', 'get_workload', 'get_status_distribution',
@@ -1541,6 +1546,7 @@ describe('MCP Integration Tests', () => {
         'mark_notifications_read', 'mark_all_notifications_read',
         // platform (superuser)
         'get_platform_settings', 'set_public_signup_disabled',
+        'set_helpdesk_signup_disabled',
         'platform_list_orgs', 'platform_create_org', 'platform_get_org',
         'platform_update_org', 'platform_delete_org',
         'get_launchpad_apps', 'set_platform_launchpad_defaults', 'set_org_launchpad_apps',
