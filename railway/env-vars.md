@@ -66,6 +66,7 @@ with **R**, optional with `o`.
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `FRONTEND_URL` | public | `<frontend-public-url>/b3` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
@@ -118,6 +119,7 @@ with **R**, optional with `o`.
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
@@ -142,6 +144,7 @@ with **R**, optional with `o`.
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
@@ -160,6 +163,7 @@ with **R**, optional with `o`.
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
@@ -192,6 +196,7 @@ with **R**, optional with `o`.
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
@@ -207,6 +212,7 @@ with **R**, optional with `o`.
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_URL` | computed | `ws://livekit.railway.internal:7880` |  |
@@ -223,6 +229,7 @@ with **R**, optional with `o`.
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
@@ -240,6 +247,7 @@ with **R**, optional with `o`.
 | **R** | `TRACKING_BASE_URL` | public | `<frontend-public-url>` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `SMTP_HOST` | user | `<smtp-host>` | e.g. smtp.sendgrid.net, smtp.postmark.com, smtp.resend.com |
 | o | `SMTP_PORT` | literal | `587` |  |
 | o | `SMTP_USER` | user | `<smtp-user>` |  |
@@ -276,6 +284,7 @@ with **R**, optional with `o`.
 | **R** | `PUBLIC_URL` | public | `<frontend-public-url>` | e.g. https://your-frontend-service.up.railway.app or your custom domain |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `GOOGLE_CLIENT_ID` | user | `<from-google-cloud>` |  |
 | o | `GOOGLE_CLIENT_SECRET` | user | `<from-google-cloud>` |  |
 | o | `MICROSOFT_CLIENT_ID` | user | `<from-azure-portal>` |  |
@@ -293,6 +302,7 @@ with **R**, optional with `o`.
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `PUBLIC_FORM_RATE_LIMIT` | literal | `10` |  |
 | o | `PUBLIC_FORM_RATE_WINDOW_MS` | literal | `3600000` |  |
 
@@ -309,6 +319,24 @@ with **R**, optional with `o`.
 | **R** | `PUBLIC_URL` | public | `<frontend-public-url>` | e.g. https://your-frontend-service.up.railway.app or your custom domain |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
+
+### blueprint-api
+
+*Blueprint API — structured diagrams (nodes, edges, ELK layout, versions, cross-product entity links)*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
+| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `RATE_LIMIT_MAX` | literal | `100` |  |
+| o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
 ### mcp-server
 
@@ -330,8 +358,10 @@ with **R**, optional with `o`.
 | o | `BENCH_API_URL` | computed | `http://bench-api.railway.internal:8080/v1` |  |
 | o | `BILL_API_URL` | computed | `http://bill-api.railway.internal:8080/v1` |  |
 | o | `BLANK_API_URL` | computed | `http://blank-api.railway.internal:8080/v1` |  |
+| o | `BLUEPRINT_API_URL` | unknown | `<see app docs>` |  |
 | o | `MCP_AUTH_REQUIRED` | literal | `true` | Recommended for production deployments |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 
 ### worker
 
@@ -343,6 +373,7 @@ with **R**, optional with `o`.
 | **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
 | o | `WORKER_CONCURRENCY` | literal | `5` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
@@ -419,8 +450,8 @@ _No environment variables required._
 These are the secrets and references that MUST be identical across
 several services. Set them once, then copy/reference everywhere.
 
-- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api
+- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, book-api, blank-api, bill-api, blueprint-api, mcp-server, worker
 - `LIVEKIT_API_KEY` — banter-api, board-api, livekit
 - `LIVEKIT_API_SECRET` — banter-api, board-api, livekit
-- `INTERNAL_SERVICE_SECRET` — bolt-api

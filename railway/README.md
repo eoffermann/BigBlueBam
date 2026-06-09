@@ -42,6 +42,7 @@ and optional env-var list.
 | `book-api` | app | railway/book-api.json |
 | `blank-api` | app | railway/blank-api.json |
 | `bill-api` | app | railway/bill-api.json |
+| `blueprint-api` | app | railway/blueprint-api.json |
 | `mcp-server` | app | railway/mcp-server.json |
 | `worker` | app | railway/worker.json |
 | `voice-agent` | app | railway/voice-agent.json |
