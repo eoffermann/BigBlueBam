@@ -366,6 +366,113 @@ export async function updateComment(
   return row;
 }
 
+// ─── Promote graph to Bam tasks (cross-product) ────────────────────────
+//
+// Returns the structured plan for converting an entire Blueprint diagram
+// into a set of Bam tasks plus parent/child links matching the graph's
+// edges. Doesn't actually create anything — the caller (SPA or agent)
+// executes the plan via the existing Bam endpoints / MCP tools. This
+// keeps task attribution correct (the caller's session creates each
+// task, not a service account) and lets the SPA show a progress bar
+// without inventing a streaming API.
+//
+// Edge direction convention:
+//   - 'source-parent' (default): edge `A -> B` means A is the parent of
+//     B. Matches mindmaps, decision trees, and most flowcharts where the
+//     arrow points from broader to narrower work.
+//   - 'target-parent': edge `A -> B` means B is the parent of A. Useful
+//     for dependency graphs where the arrow points from downstream
+//     ("blocked by") to upstream ("blocks").
+//   - 'none': skip the parent-link step entirely. Just create the tasks.
+
+export interface PromoteGraphPlanInput {
+  project_id: string;
+  phase_id?: string | null;
+  sprint_id?: string | null;
+  edge_direction?: 'source-parent' | 'target-parent' | 'none';
+  include_archived?: boolean;
+}
+
+export interface PromoteGraphPlanResult {
+  diagram_id: string;
+  project_id: string;
+  edge_direction: 'source-parent' | 'target-parent' | 'none';
+  /** One entry per node — the payload to POST to /projects/:id/tasks. */
+  tasks_to_create: Array<{
+    blueprint_node_id: string;
+    payload: {
+      title: string;
+      description: string | null;
+      phase_id: string | null;
+      sprint_id: string | null;
+      priority: 'medium';
+    };
+    /** If the node already has ref_entity_type='bam.task', the caller
+     *  can skip creating a new task and use this existing id instead. */
+    existing_task_id: string | null;
+  }>;
+  /** One entry per edge that should produce a parent/child link. The
+   *  caller resolves blueprint_node_id → task_id via the tasks_to_create
+   *  mapping (or existing_task_id when already linked) and then calls
+   *  POST /tasks/<child_task_id>/parents { parent_task_id }. */
+  parent_links_to_create: Array<{
+    source_edge_id: string;
+    child_blueprint_node_id: string;
+    parent_blueprint_node_id: string;
+  }>;
+  /** Total count for the UI progress bar. */
+  total_steps: number;
+}
+
+export async function planPromoteGraph(
+  orgId: string,
+  diagramId: string,
+  input: PromoteGraphPlanInput,
+): Promise<PromoteGraphPlanResult> {
+  await getDiagram(orgId, diagramId);
+  const direction = input.edge_direction ?? 'source-parent';
+
+  const [nodes, edges] = await Promise.all([
+    db.select().from(blueprintNodes).where(eq(blueprintNodes.diagram_id, diagramId)),
+    db.select().from(blueprintEdges).where(eq(blueprintEdges.diagram_id, diagramId)),
+  ]);
+
+  const tasks_to_create = nodes.map((n) => ({
+    blueprint_node_id: n.id,
+    payload: {
+      title: n.label || 'Untitled',
+      description: n.description,
+      phase_id: input.phase_id ?? null,
+      sprint_id: input.sprint_id ?? null,
+      priority: 'medium' as const,
+    },
+    existing_task_id:
+      n.ref_entity_type === 'bam.task' && n.ref_entity_id ? n.ref_entity_id : null,
+  }));
+
+  const parent_links_to_create =
+    direction === 'none'
+      ? []
+      : edges.map((e) => {
+          const parent = direction === 'source-parent' ? e.source_node_id : e.target_node_id;
+          const child = direction === 'source-parent' ? e.target_node_id : e.source_node_id;
+          return {
+            source_edge_id: e.id,
+            child_blueprint_node_id: child,
+            parent_blueprint_node_id: parent,
+          };
+        });
+
+  return {
+    diagram_id: diagramId,
+    project_id: input.project_id,
+    edge_direction: direction,
+    tasks_to_create,
+    parent_links_to_create,
+    total_steps: tasks_to_create.length + parent_links_to_create.length,
+  };
+}
+
 // ─── Visibility check used by every per-diagram route ───────────────────
 
 export async function assertCanRead(orgId: string, userId: string, diagramId: string) {

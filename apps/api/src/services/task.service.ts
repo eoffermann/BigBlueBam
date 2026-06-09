@@ -523,6 +523,32 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
       logActivity(task.project_id, actorId, 'task.updated', taskId, { changed_fields: changedFields }, impersonatorId ?? null, viaSuperuserContext).catch(() => {});
     }
 
+    // Blueprint↔Bam two-way sync: if title or description changed, push
+    // the new value into every blueprint_node that references this task.
+    // The blueprint-api endpoint writes raw (no service-layer round-trip)
+    // so it never loops back here. Failures are swallowed because the
+    // source-of-truth write already succeeded.
+    if (data.title !== undefined || data.description !== undefined) {
+      const payload: Record<string, unknown> = { task_id: taskId };
+      if (data.title !== undefined) payload.title = data.title;
+      if (data.description !== undefined) payload.description = data.description;
+      const blueprintUrl =
+        process.env.BLUEPRINT_API_INTERNAL_URL || 'http://blueprint-api:4015/v1';
+      const secret = process.env.INTERNAL_SERVICE_SECRET ?? '';
+      if (secret) {
+        fetch(`${blueprintUrl}/internal/sync-from-task`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Secret': secret,
+          },
+          body: JSON.stringify(payload),
+        }).catch(() => {
+          // Sync is best-effort; the canonical write already landed.
+        });
+      }
+    }
+
     // Bolt workflow event (fire-and-forget)
     getProjectOrgId(task.project_id).then(async (orgId) => {
       if (!orgId) return;

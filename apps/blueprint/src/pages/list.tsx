@@ -15,6 +15,7 @@ import {
   Users,
   Workflow,
   Layers,
+  ChevronDown,
 } from 'lucide-react';
 import {
   useDiagrams,
@@ -27,7 +28,7 @@ import {
   type DiagramTemplate,
 } from '@/hooks/use-diagrams';
 import { useProjects } from '@/hooks/use-projects';
-import { useCreateDiagram } from '@/hooks/use-diagrams';
+import { useCreateDiagram, useGenerateFromBam } from '@/hooks/use-diagrams';
 import { Dialog } from '@/components/common/dialog';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -84,6 +85,7 @@ export function DiagramListPage({
   const archiveMutation = useArchiveDiagram();
 
   const [search, setSearch] = useState('');
+  const [fromBamDialogOpen, setFromBamDialogOpen] = useState(false);
 
   const allDiagrams = query.data?.data ?? [];
   const filteredDiagrams = useMemo(() => {
@@ -114,13 +116,33 @@ export function DiagramListPage({
               Design flowcharts, graphs, and reference diagrams. Promote any node into a Bam task with one click.
             </p>
           </div>
-          <button
-            onClick={() => onNewDialogOpenChange(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            New diagram
-          </button>
+          <div className="inline-flex items-center rounded-lg overflow-hidden shadow-sm">
+            <button
+              onClick={() => onNewDialogOpenChange(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white hover:bg-primary-700 transition-colors text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              New diagram
+            </button>
+            <DropdownMenu
+              trigger={
+                <button
+                  className="px-2 py-2 bg-primary-700 text-white hover:bg-primary-800 border-l border-primary-500/50"
+                  aria-label="More creation options"
+                  title="Other ways to start a diagram"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              }
+            >
+              <DropdownMenuItem onSelect={() => onNewDialogOpenChange(true)}>
+                <Plus className="h-4 w-4" /> Blank diagram or template
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setFromBamDialogOpen(true)}>
+                <Workflow className="h-4 w-4" /> From Bam project tasks…
+              </DropdownMenuItem>
+            </DropdownMenu>
+          </div>
         </div>
 
         {/* Search */}
@@ -163,6 +185,12 @@ export function DiagramListPage({
       <NewDiagramDialog
         open={newDialogOpen}
         onOpenChange={onNewDialogOpenChange}
+        onCreated={(id) => onNavigate(`/d/${id}`)}
+      />
+
+      <FromBamDialog
+        open={fromBamDialogOpen}
+        onOpenChange={setFromBamDialogOpen}
         onCreated={(id) => onNavigate(`/d/${id}`)}
       />
     </>
@@ -549,5 +577,135 @@ function VisibilityRadio({
         className="sr-only"
       />
     </label>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  FromBamDialog                                                     */
+/* ------------------------------------------------------------------ */
+
+interface FromBamDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (diagramId: string) => void;
+}
+
+function FromBamDialog({ open, onOpenChange, onCreated }: FromBamDialogProps) {
+  const projectsQuery = useProjects();
+  const projects = projectsQuery.data?.projects ?? [];
+  const mutation = useGenerateFromBam();
+
+  const [projectId, setProjectId] = useState('');
+  const [includeCompleted, setIncludeCompleted] = useState(false);
+  const [autoLayout, setAutoLayout] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  function reset() {
+    setProjectId('');
+    setIncludeCompleted(false);
+    setAutoLayout(true);
+    setError(null);
+    mutation.reset();
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!projectId) {
+      setError('Pick a Bam project to pull tasks from.');
+      return;
+    }
+    setError(null);
+    try {
+      const res = await mutation.mutateAsync({
+        project_id: projectId,
+        include_completed: includeCompleted,
+        auto_layout: autoLayout,
+      });
+      onCreated(res.data.diagram_id);
+      onOpenChange(false);
+      reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed');
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) reset();
+        onOpenChange(o);
+      }}
+      title="Generate from Bam project"
+      description="Materialize a Blueprint diagram with one node per task and edges drawn from existing parent/child links. Linked nodes stay in sync with their Bam tasks afterwards."
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label
+            htmlFor="bp-frombam-project"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+          >
+            Project
+          </label>
+          <select
+            id="bp-frombam-project"
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className="w-full px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+          >
+            <option value="">Choose a project…</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeCompleted}
+              onChange={(e) => setIncludeCompleted(e.target.checked)}
+              className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
+            />
+            Include completed tasks
+          </label>
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoLayout}
+              onChange={(e) => setAutoLayout(e.target.checked)}
+              className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
+            />
+            Run auto-layout (layered, top-to-bottom)
+          </label>
+        </div>
+
+        {error && (
+          <div className="rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 text-sm px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={mutation.isPending || !projectId}
+            className="px-3 py-1.5 text-sm rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {mutation.isPending ? 'Generating…' : 'Generate'}
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

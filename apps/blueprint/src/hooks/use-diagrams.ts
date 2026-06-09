@@ -159,6 +159,32 @@ export function useCreateDiagram() {
   });
 }
 
+export interface GenerateFromBamInput {
+  project_id: string;
+  name?: string;
+  description?: string | null;
+  include_completed?: boolean;
+  sprint_id?: string | null;
+  visibility?: 'organization' | 'project' | 'private';
+  auto_layout?: boolean;
+}
+
+export interface GenerateFromBamResult {
+  diagram_id: string;
+  node_count: number;
+  edge_count: number;
+  skipped_completed_count: number;
+}
+
+export function useGenerateFromBam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GenerateFromBamInput) =>
+      api.post<{ data: GenerateFromBamResult }>('/diagrams/from-bam', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['blueprint', 'diagrams'] }),
+  });
+}
+
 export function useUpdateDiagram(id: string) {
   const qc = useQueryClient();
   return useMutation({

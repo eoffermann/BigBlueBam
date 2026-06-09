@@ -17,3 +17,6 @@ export { blueprintCollaborators } from './blueprint-collaborators.js';
 export { blueprintTemplates } from './blueprint-templates.js';
 export { blueprintComments } from './blueprint-comments.js';
 export { blueprintStars } from './blueprint-stars.js';
+
+// Cross-app read-only stubs for generate-from-bam.
+export { tasksStub, taskParentLinksStub } from './bam-task-stubs.js';

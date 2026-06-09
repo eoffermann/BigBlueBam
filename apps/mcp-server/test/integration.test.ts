@@ -1753,6 +1753,7 @@ describe('MCP Integration Tests', () => {
         'blueprint_delete_node', 'blueprint_add_edge', 'blueprint_update_edge',
         'blueprint_delete_edge', 'blueprint_apply_layout', 'blueprint_generate',
         'blueprint_promote_node_to_task', 'blueprint_link_entity',
+        'blueprint_promote_graph_to_tasks', 'blueprint_generate_from_bam',
       ];
 
       for (const name of expectedTools) {

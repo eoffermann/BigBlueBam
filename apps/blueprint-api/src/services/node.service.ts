@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { blueprintNodes, blueprintEdges } from '../db/schema/index.js';
 import { NotFoundError } from '../lib/errors.js';
+import { env } from '../env.js';
 
 export type NodeRow = typeof blueprintNodes.$inferSelect;
 
@@ -80,6 +81,34 @@ export async function updateNode(
     .where(and(eq(blueprintNodes.id, nodeId), eq(blueprintNodes.diagram_id, diagramId)))
     .returning();
   if (!row) throw new NotFoundError('Node not found');
+
+  // Blueprint↔Bam two-way sync: if a node references a Bam task and its
+  // label or description changed, push the change into Bam via the api's
+  // internal sync endpoint. The api writes raw (no service-layer round-
+  // trip) so it never loops back here. Failures are swallowed because
+  // the canonical Blueprint write already succeeded.
+  if (
+    row.ref_entity_type === 'bam.task' &&
+    row.ref_entity_id &&
+    (patch.label !== undefined || patch.description !== undefined) &&
+    env.INTERNAL_SERVICE_SECRET
+  ) {
+    const payload: Record<string, unknown> = { task_id: row.ref_entity_id };
+    if (patch.label !== undefined) payload.title = patch.label;
+    if (patch.description !== undefined) payload.description = patch.description;
+    // The api registers /internal/* routes at the root, NOT under /v1.
+    void fetch(`${env.BBB_API_INTERNAL_URL}/internal/sync-from-blueprint`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': env.INTERNAL_SERVICE_SECRET,
+      },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      // best-effort; canonical write already landed
+    });
+  }
+
   return row;
 }
 

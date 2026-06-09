@@ -15,6 +15,7 @@ import diagramRoutes from './routes/diagrams.routes.js';
 import nodeRoutes from './routes/nodes.routes.js';
 import edgeRoutes from './routes/edges.routes.js';
 import templateRoutes from './routes/templates.routes.js';
+import crossProductRoutes from './routes/cross-product.routes.js';
 
 const fastify = Fastify({
   logger: {
@@ -78,6 +79,7 @@ await fastify.register(diagramRoutes, { prefix: '/v1' });
 await fastify.register(nodeRoutes, { prefix: '/v1' });
 await fastify.register(edgeRoutes, { prefix: '/v1' });
 await fastify.register(templateRoutes, { prefix: '/v1' });
+await fastify.register(crossProductRoutes, { prefix: '/v1' });
 
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {

@@ -196,6 +196,50 @@ export function useExport(diagramId: string) {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/*  Cross-product: promote graph → Bam tasks                          */
+/* ------------------------------------------------------------------ */
+
+export interface PromoteGraphInput {
+  project_id: string;
+  phase_id?: string | null;
+  sprint_id?: string | null;
+  edge_direction?: 'source-parent' | 'target-parent' | 'none';
+}
+
+export interface PromoteGraphPlan {
+  diagram_id: string;
+  project_id: string;
+  edge_direction: 'source-parent' | 'target-parent' | 'none';
+  tasks_to_create: Array<{
+    blueprint_node_id: string;
+    payload: {
+      title: string;
+      description: string | null;
+      phase_id: string | null;
+      sprint_id: string | null;
+      priority: 'medium';
+    };
+    existing_task_id: string | null;
+  }>;
+  parent_links_to_create: Array<{
+    source_edge_id: string;
+    child_blueprint_node_id: string;
+    parent_blueprint_node_id: string;
+  }>;
+  total_steps: number;
+}
+
+export function usePromoteGraphPlan(diagramId: string) {
+  return useMutation({
+    mutationFn: (input: PromoteGraphInput) =>
+      api.post<{ data: PromoteGraphPlan }>(
+        `/diagrams/${diagramId}/promote-to-tasks`,
+        input,
+      ),
+  });
+}
+
 export function useImportMermaid(diagramId: string) {
   const qc = useQueryClient();
   return useMutation({

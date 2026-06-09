@@ -541,6 +541,66 @@ export function registerBlueprintTools(
   // ===== CROSS-PRODUCT ACTIONS (2) =====
 
   registerTool(server, {
+    name: 'blueprint_promote_graph_to_tasks',
+    description:
+      "Compile a Blueprint diagram into a Bam-tasks-creation plan. Returns the structured list of tasks to create (one per node) plus parent/child links to set up (one per edge), under the chosen edge-direction convention. The blueprint-api deliberately does NOT create the tasks itself — the caller (SPA or agent) drives the actual `create_task` / `bam_add_task_parent` calls so attribution stays on the caller. After tasks land, the caller should also patch each blueprint_node with ref_entity_type='bam.task' + ref_entity_id=<new task id> via blueprint_link_entity so the two-way sync hook fires. Edge-direction options: 'source-parent' (A->B means A parents B, default for mindmaps/decision trees), 'target-parent' (A->B means B parents A, for dependency graphs), 'none' (skip parent links).",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+      project_id: z.string().uuid().describe('Bam project the new tasks land in'),
+      phase_id: z.string().uuid().nullable().optional().describe('Phase id for new tasks (defaults to project default)'),
+      sprint_id: z.string().uuid().nullable().optional().describe('Sprint id'),
+      edge_direction: z
+        .enum(['source-parent', 'target-parent', 'none'])
+        .optional()
+        .describe("How to map edges to parent/child task links. Defaults to 'source-parent'."),
+    },
+    returns: z.object({
+      data: z.object({
+        diagram_id: z.string().uuid(),
+        project_id: z.string().uuid(),
+        edge_direction: z.string(),
+        tasks_to_create: z.array(z.unknown()),
+        parent_links_to_create: z.array(z.unknown()),
+        total_steps: z.number().int(),
+      }).passthrough(),
+    }),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('POST', `/diagrams/${id}/promote-to-tasks`, body);
+      return result.ok ? ok(result.data) : err('promoting graph to tasks', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_generate_from_bam',
+    description:
+      "Materialize a brand-new Blueprint diagram from a Bam project's tasks. Creates one node per task (with ref_entity_type='bam.task' + ref_entity_id back-link) and one edge per task parent link (using both the legacy tasks.parent_task_id self-FK and the task_parent_links many-to-many join table from B3 Frndo Launch). Auto-runs layered ELK so the diagram opens already laid out. Skips completed tasks unless include_completed=true. Reverse direction of blueprint_promote_graph_to_tasks; the two together give a round-trip Blueprint↔Bam workflow. After creation, any Bam task title/description change propagates into every linked node (and vice-versa) via the two-way sync hook.",
+    input: {
+      project_id: z.string().uuid().describe('Bam project whose tasks become the graph'),
+      name: z.string().min(1).max(200).optional().describe('Diagram name; defaults to "<Project> — tasks"'),
+      description: z.string().max(5000).nullable().optional().describe('Diagram description'),
+      include_completed: z.boolean().optional().describe('Pull tasks whose phase is terminal too. Default false.'),
+      sprint_id: z.string().uuid().nullable().optional().describe('When set, only tasks in this sprint are pulled.'),
+      visibility: z
+        .enum(['organization', 'project', 'private'])
+        .optional()
+        .describe("Defaults to 'project' so the diagram inherits the project's member ACL."),
+      auto_layout: z.boolean().optional().describe('Run layered ELK after materialization (default true).'),
+    },
+    returns: z.object({
+      data: z.object({
+        diagram_id: z.string().uuid(),
+        node_count: z.number().int(),
+        edge_count: z.number().int(),
+        skipped_completed_count: z.number().int(),
+      }),
+    }),
+    handler: async (body) => {
+      const result = await client.request('POST', '/diagrams/from-bam', body);
+      return result.ok ? ok(result.data) : err('generating diagram from bam', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'blueprint_promote_node_to_task',
     description:
       "Generate a Bam-task payload from a Blueprint node and suggest back-linking the node to the new task. Returns a structured payload the caller can POST to /b3/api/projects/:id/tasks (the second hop is not yet executed server-side — wire-up is on the Wave 5 roadmap). Use this when a node represents work to be tracked in Bam (e.g. a swimlane step or a deliverable).",

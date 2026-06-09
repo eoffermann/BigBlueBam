@@ -40,6 +40,8 @@ import {
   RotateCcw,
   Square,
   Trash2,
+  Workflow,
+  X,
 } from 'lucide-react';
 import { SHAPE_OPTIONS } from '@/components/canvas/node-types';
 import { useDiagram, useDiagramGraph, useArchiveDiagram, useSnapshotVersion } from '@/hooks/use-diagrams';
@@ -54,6 +56,8 @@ import {
   useDeleteEdge,
   useApplyLayout,
   useExport,
+  usePromoteGraphPlan,
+  type PromoteGraphPlan,
 } from '@/hooks/use-graph';
 import { nodeTypes } from '@/components/canvas/node-types';
 import { Inspector } from '@/components/canvas/inspector';
@@ -148,6 +152,7 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const moveNode = useMoveNode(diagramId);
   const deleteNode = useDeleteNode(diagramId);
   const duplicateNode = useDuplicateNode(diagramId);
+  const promoteGraphPlan = usePromoteGraphPlan(diagramId);
   const createEdge = useCreateEdge(diagramId);
   const updateEdge = useUpdateEdge(diagramId);
   const deleteEdge = useDeleteEdge(diagramId);
@@ -434,6 +439,169 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
     });
   };
 
+  // Promote-graph state. We keep it in the editor so the progress modal
+  // can stream per-step status while the SPA executes the plan.
+  const [promotionProgress, setPromotionProgress] = useState<{
+    label: string;
+    done: number;
+    total: number;
+    failures: string[];
+    summary?: { tasks_created: number; links_created: number; reused: number };
+  } | null>(null);
+
+  const runPromoteGraph = useCallback(
+    async (projectId: string, edgeDirection: PromoteGraphPlan['edge_direction']) => {
+      const resp = await promoteGraphPlan.mutateAsync({
+        project_id: projectId,
+        edge_direction: edgeDirection,
+      });
+      const plan = resp.data;
+      const total = plan.total_steps;
+      let done = 0;
+      const failures: string[] = [];
+      const taskByNode = new Map<string, string>();
+
+      setPromotionProgress({
+        label: 'Creating Bam tasks…',
+        done: 0,
+        total,
+        failures: [],
+      });
+
+      // Step 1: create one Bam task per blueprint node (or reuse the
+      // existing_task_id when the node was already linked).
+      for (const entry of plan.tasks_to_create) {
+        if (entry.existing_task_id) {
+          taskByNode.set(entry.blueprint_node_id, entry.existing_task_id);
+          done += 1;
+          setPromotionProgress((prev) =>
+            prev ? { ...prev, done, label: `Reusing existing task for ${entry.payload.title}…` } : prev,
+          );
+          continue;
+        }
+        try {
+          const res = await fetch(`/b3/api/projects/${plan.project_id}/tasks`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: entry.payload.title,
+              description: entry.payload.description ?? undefined,
+              phase_id: entry.payload.phase_id ?? undefined,
+              sprint_id: entry.payload.sprint_id ?? undefined,
+              priority: entry.payload.priority,
+            }),
+          });
+          if (!res.ok) {
+            failures.push(`Task "${entry.payload.title}": HTTP ${res.status}`);
+          } else {
+            const json = (await res.json()) as { data?: { id?: string } };
+            if (json.data?.id) {
+              taskByNode.set(entry.blueprint_node_id, json.data.id);
+              // Back-link the blueprint node to the new Bam task so the
+              // two-way sync hook (label/description) fires on future edits.
+              await fetch(
+                `/blueprint/api/v1/diagrams/${plan.diagram_id}/nodes/${entry.blueprint_node_id}/link-entity`,
+                {
+                  method: 'POST',
+                  credentials: 'include',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ref_entity_type: 'bam.task',
+                    ref_entity_id: json.data.id,
+                  }),
+                },
+              ).catch(() => {
+                // back-link best-effort; the task still exists in bam
+              });
+            }
+          }
+        } catch (err) {
+          failures.push(
+            `Task "${entry.payload.title}": ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        done += 1;
+        setPromotionProgress((prev) =>
+          prev ? { ...prev, done, label: `Created ${done}/${total}: ${entry.payload.title}` } : prev,
+        );
+      }
+
+      // Step 2: wire parent/child links between the just-created tasks
+      // using the new B3 Frndo Launch task_parent_links endpoint.
+      setPromotionProgress((prev) =>
+        prev ? { ...prev, label: 'Linking parent/child tasks…' } : prev,
+      );
+      let linksCreated = 0;
+      for (const link of plan.parent_links_to_create) {
+        const childTaskId = taskByNode.get(link.child_blueprint_node_id);
+        const parentTaskId = taskByNode.get(link.parent_blueprint_node_id);
+        if (!childTaskId || !parentTaskId) {
+          failures.push(`Parent link skipped: missing task mapping for edge ${link.source_edge_id}`);
+          done += 1;
+          continue;
+        }
+        try {
+          const res = await fetch(`/b3/api/tasks/${childTaskId}/parents`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parent_task_id: parentTaskId }),
+          });
+          if (!res.ok) {
+            failures.push(`Parent link failed: HTTP ${res.status}`);
+          } else {
+            linksCreated += 1;
+          }
+        } catch (err) {
+          failures.push(`Parent link error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        done += 1;
+        setPromotionProgress((prev) =>
+          prev ? { ...prev, done } : prev,
+        );
+      }
+
+      // Refresh the graph so the new ref_entity_id badges show up.
+      await graphQuery.refetch();
+
+      const reused = plan.tasks_to_create.filter((t) => t.existing_task_id).length;
+      const tasksCreated = plan.tasks_to_create.length - reused - failures.filter((f) => f.startsWith('Task ')).length;
+      setPromotionProgress((prev) =>
+        prev
+          ? {
+              ...prev,
+              done: total,
+              label: failures.length === 0 ? 'Done!' : `Done with ${failures.length} issue(s)`,
+              failures,
+              summary: { tasks_created: tasksCreated, links_created: linksCreated, reused },
+            }
+          : prev,
+      );
+    },
+    [promoteGraphPlan, graphQuery],
+  );
+
+  const onPromoteGraph = () => {
+    const projectId =
+      diagram?.project_id ??
+      window.prompt(
+        'Bam project ID for the new tasks (uuid). Save the diagram with a project to skip this prompt next time.',
+      );
+    if (!projectId) return;
+    const directionInput = window.prompt(
+      "Edge direction:\n  'source-parent' (default): A->B means A is the parent of B\n  'target-parent': A->B means B is the parent of A\n  'none': skip parent links",
+      'source-parent',
+    );
+    const edgeDirection: PromoteGraphPlan['edge_direction'] =
+      directionInput === 'target-parent' || directionInput === 'none'
+        ? directionInput
+        : 'source-parent';
+    runPromoteGraph(projectId, edgeDirection).catch((err) => {
+      window.alert(`Promote failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  };
+
   const onExport = async (format: 'json' | 'mermaid') => {
     try {
       // The export endpoint returns the body directly (JSON or text/plain).
@@ -668,6 +836,15 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
           </DropdownMenu>
 
           <button
+            onClick={onPromoteGraph}
+            disabled={promoteGraphPlan.isPending}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md bg-sky-600 hover:bg-sky-700 text-white shadow-sm disabled:opacity-50"
+            title="Create one Bam task per node and wire parent/child links"
+          >
+            <Workflow className="h-3.5 w-3.5" /> Promote to Bam
+          </button>
+
+          <button
             onClick={onArchive}
             disabled={archiveMutation.isPending}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 disabled:opacity-50"
@@ -677,6 +854,14 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
           </button>
         </div>
       </div>
+
+      {/* Promote-to-Bam progress overlay */}
+      {promotionProgress && (
+        <PromotionProgressOverlay
+          progress={promotionProgress}
+          onClose={() => setPromotionProgress(null)}
+        />
+      )}
 
       {/* Canvas + inspector */}
       <div className="flex flex-1 min-h-0">
@@ -863,6 +1048,90 @@ export function EditorPage(props: EditorPageProps) {
     <ReactFlowProvider>
       <EditorInner {...props} />
     </ReactFlowProvider>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  PromotionProgressOverlay                                          */
+/* ------------------------------------------------------------------ */
+
+interface PromotionProgress {
+  label: string;
+  done: number;
+  total: number;
+  failures: string[];
+  summary?: { tasks_created: number; links_created: number; reused: number };
+}
+
+function PromotionProgressOverlay({
+  progress,
+  onClose,
+}: {
+  progress: PromotionProgress;
+  onClose: () => void;
+}) {
+  const pct =
+    progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 100;
+  const finished = progress.done >= progress.total;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+      <div className="w-[420px] max-w-[92vw] rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {finished ? 'Promotion complete' : 'Promoting graph to Bam tasks'}
+          </div>
+          {finished && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="text-xs text-zinc-600 dark:text-zinc-400 mb-2 break-words min-h-[1.2em]">
+          {progress.label}
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div
+            className="h-full bg-primary-600 transition-all duration-200"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="mt-2 text-[11px] text-zinc-500 text-right">
+          {progress.done}/{progress.total} ({pct}%)
+        </div>
+        {progress.summary && (
+          <div className="mt-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 px-3 py-2 text-xs text-emerald-900 dark:text-emerald-200">
+            <div>
+              Created <strong>{progress.summary.tasks_created}</strong> task
+              {progress.summary.tasks_created === 1 ? '' : 's'}
+              {progress.summary.reused > 0 && (
+                <> · reused {progress.summary.reused} existing</>
+              )}
+              {progress.summary.links_created > 0 && (
+                <> · wired {progress.summary.links_created} parent link
+                {progress.summary.links_created === 1 ? '' : 's'}</>
+              )}
+              .
+            </div>
+          </div>
+        )}
+        {progress.failures.length > 0 && (
+          <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 px-3 py-2 text-xs text-red-900 dark:text-red-200 max-h-[120px] overflow-auto">
+            <div className="font-medium mb-1">{progress.failures.length} issue(s):</div>
+            <ul className="list-disc pl-4 space-y-0.5">
+              {progress.failures.slice(0, 5).map((f, i) => (
+                <li key={i}>{f}</li>
+              ))}
+              {progress.failures.length > 5 && <li>… and {progress.failures.length - 5} more</li>}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
