@@ -125,6 +125,24 @@ export function useDeleteNode(diagramId: string) {
   });
 }
 
+export interface DuplicateNodeArgs {
+  nodeId: string;
+  offset_x?: number;
+  offset_y?: number;
+}
+
+export function useDuplicateNode(diagramId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ nodeId, offset_x, offset_y }: DuplicateNodeArgs) =>
+      api.post<{ data: BlueprintNode }>(`/diagrams/${diagramId}/nodes/${nodeId}/duplicate`, {
+        offset_x,
+        offset_y,
+      }),
+    onSuccess: () => invalidateGraph(qc, diagramId),
+  });
+}
+
 export function useCreateEdge(diagramId: string) {
   const qc = useQueryClient();
   return useMutation({

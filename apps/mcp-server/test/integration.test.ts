@@ -1749,6 +1749,7 @@ describe('MCP Integration Tests', () => {
         'blueprint_read_edges', 'blueprint_search', 'blueprint_export',
         'blueprint_create', 'blueprint_update', 'blueprint_archive',
         'blueprint_add_node', 'blueprint_update_node', 'blueprint_move_node',
+        'blueprint_duplicate_node',
         'blueprint_delete_node', 'blueprint_add_edge', 'blueprint_update_edge',
         'blueprint_delete_edge', 'blueprint_apply_layout', 'blueprint_generate',
         'blueprint_promote_node_to_task', 'blueprint_link_entity',

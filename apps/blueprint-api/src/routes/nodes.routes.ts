@@ -161,6 +161,53 @@ export default async function nodeRoutes(fastify: FastifyInstance) {
     },
   );
 
+  const duplicateSchema = z.object({
+    offset_x: z.number().min(-2000).max(2000).optional(),
+    offset_y: z.number().min(-2000).max(2000).optional(),
+  });
+
+  fastify.post<{ Params: { id: string; nodeId: string } }>(
+    '/diagrams/:id/nodes/:nodeId/duplicate',
+    { preHandler: [requireAuth, requireScope('read_write')] },
+    async (request, reply) => {
+      const body = duplicateSchema.parse(request.body ?? {});
+      const orgId = request.user!.org_id;
+      const userId = request.user!.id;
+      try {
+        await diagramSvc.assertCanEdit(orgId, userId, request.params.id);
+        const row = await svc.duplicateNode(
+          request.params.id,
+          request.params.nodeId,
+          body.offset_x,
+          body.offset_y,
+        );
+        publishBoltEvent(
+          'node.created',
+          'blueprint',
+          {
+            'diagram.id': request.params.id,
+            'node.id': row.id,
+            'node.shape': row.shape,
+            duplicate_of: request.params.nodeId,
+          },
+          orgId,
+          userId,
+          'user',
+        ).catch(() => {});
+        await broadcastToDiagram(fastify.redis, request.params.id, {
+          type: 'blueprint.node.created',
+          diagram_id: request.params.id,
+          node: row,
+        });
+        return reply.status(201).send({ data: row });
+      } catch (err) {
+        const mapped = mapErr(err, request.id);
+        if (mapped) return reply.status(mapped.status).send(mapped.body);
+        throw err;
+      }
+    },
+  );
+
   fastify.delete<{ Params: { id: string; nodeId: string } }>(
     '/diagrams/:id/nodes/:nodeId',
     { preHandler: [requireAuth, requireScope('read_write')] },

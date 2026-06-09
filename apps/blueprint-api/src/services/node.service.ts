@@ -105,6 +105,52 @@ export async function moveNode(
   return row;
 }
 
+/**
+ * Duplicate a node within the same diagram. Copies every visual attribute
+ * (label, shape, size, style, data, cross-product ref) and offsets the
+ * position so the clone doesn't sit exactly on top of the original. The
+ * caller can override the offset; defaults to +32px down-right which
+ * matches the visual nudge most diagram tools use.
+ *
+ * Containment (parent_node_id), pinned state, and z-index ARE preserved.
+ * Edges are NOT duplicated — connecting the clone is the caller's call.
+ */
+export async function duplicateNode(
+  diagramId: string,
+  nodeId: string,
+  offsetX = 32,
+  offsetY = 32,
+): Promise<NodeRow> {
+  const [source] = await db
+    .select()
+    .from(blueprintNodes)
+    .where(and(eq(blueprintNodes.id, nodeId), eq(blueprintNodes.diagram_id, diagramId)))
+    .limit(1);
+  if (!source) throw new NotFoundError('Node not found');
+
+  const [row] = await db
+    .insert(blueprintNodes)
+    .values({
+      diagram_id: diagramId,
+      parent_node_id: source.parent_node_id,
+      shape: source.shape,
+      label: source.label,
+      description: source.description,
+      position_x: source.position_x + offsetX,
+      position_y: source.position_y + offsetY,
+      width: source.width,
+      height: source.height,
+      z_index: source.z_index,
+      pinned: source.pinned,
+      style: source.style as Record<string, unknown>,
+      data: source.data as Record<string, unknown>,
+      ref_entity_type: source.ref_entity_type,
+      ref_entity_id: source.ref_entity_id,
+    })
+    .returning();
+  return row!;
+}
+
 export async function deleteNode(diagramId: string, nodeId: string) {
   // Collect cascaded edges first so we can announce them on the realtime channel.
   const cascaded = await db

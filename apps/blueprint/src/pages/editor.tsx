@@ -26,12 +26,20 @@ import {
   ArrowLeft,
   Archive,
   CameraIcon,
+  Check,
   ChevronDown,
+  CopyPlus,
   Download,
+  Layers,
   Layout,
+  Link2,
   Loader2,
+  Pin,
+  PinOff,
   Plus,
   RotateCcw,
+  Square,
+  Trash2,
 } from 'lucide-react';
 import { SHAPE_OPTIONS } from '@/components/canvas/node-types';
 import { useDiagram, useDiagramGraph, useArchiveDiagram, useSnapshotVersion } from '@/hooks/use-diagrams';
@@ -40,6 +48,7 @@ import {
   useUpdateNode,
   useMoveNode,
   useDeleteNode,
+  useDuplicateNode,
   useCreateEdge,
   useUpdateEdge,
   useDeleteEdge,
@@ -120,12 +129,13 @@ function toRfEdge(e: BlueprintEdge): Edge {
 /*  Editor                                                            */
 /* ------------------------------------------------------------------ */
 
-interface PaneContextMenu {
-  screen_x: number;
-  screen_y: number;
-  flow_x: number;
-  flow_y: number;
-}
+// Three context-menu targets the editor switches between. Only one is
+// active at a time; opening any clears the others.
+type ContextMenuState =
+  | { kind: 'pane'; x: number; y: number; flow_x: number; flow_y: number }
+  | { kind: 'node'; x: number; y: number; node_id: string }
+  | { kind: 'edge'; x: number; y: number; edge_id: string }
+  | null;
 
 function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const diagramQuery = useDiagram(diagramId);
@@ -137,6 +147,7 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const updateNode = useUpdateNode(diagramId);
   const moveNode = useMoveNode(diagramId);
   const deleteNode = useDeleteNode(diagramId);
+  const duplicateNode = useDuplicateNode(diagramId);
   const createEdge = useCreateEdge(diagramId);
   const updateEdge = useUpdateEdge(diagramId);
   const deleteEdge = useDeleteEdge(diagramId);
@@ -153,7 +164,7 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const [rfEdges, setRfEdges] = useState<Edge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [paneMenu, setPaneMenu] = useState<PaneContextMenu | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
 
   // Sidecar maps so we can look up the original blueprint_node/edge row
@@ -340,19 +351,68 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
 
   const onAddNode = useCallback(() => addNodeWithShape(lastShape), [addNodeWithShape, lastShape]);
 
+  // Per-node action helpers reused by both the keyboard shortcuts and the
+  // right-click menu. Returning early when nothing's selected keeps every
+  // call site terse.
+  const doDuplicateNode = useCallback(
+    (nodeId: string | null) => {
+      if (!nodeId) return;
+      duplicateNode.mutate({ nodeId });
+    },
+    [duplicateNode],
+  );
+
+  const doDeleteSelected = useCallback(() => {
+    if (selectedNodeId) {
+      deleteNode.mutate(selectedNodeId);
+      setSelectedNodeId(null);
+    } else if (selectedEdgeId) {
+      deleteEdge.mutate(selectedEdgeId);
+      setSelectedEdgeId(null);
+    }
+  }, [deleteNode, deleteEdge, selectedNodeId, selectedEdgeId]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      const inField = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      const inField =
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (inField) return;
+
+      // Add a new node with the last-used shape.
       if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         onAddNode();
+        return;
+      }
+
+      // Cmd/Ctrl-D — duplicate the selected node.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+        if (!selectedNodeId) return;
+        e.preventDefault();
+        doDuplicateNode(selectedNodeId);
+        return;
+      }
+
+      // Delete/Backspace — delete the selected node or edge. React Flow's
+      // built-in delete key handling fires onNodesChange/onEdgesChange
+      // remove events; we wire our own here too so the keystroke also
+      // triggers a mutation when ReactFlow doesn't have focus.
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (!selectedNodeId && !selectedEdgeId) return;
+        e.preventDefault();
+        doDeleteSelected();
+        return;
+      }
+
+      // Escape — close any open context menu and clear selection.
+      if (e.key === 'Escape') {
+        setContextMenu(null);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onAddNode]);
+  }, [onAddNode, selectedNodeId, selectedEdgeId, doDuplicateNode, doDeleteSelected]);
 
   /* ------------------------------------------------------------------ */
   /*  Top-bar actions                                                   */
@@ -621,48 +681,64 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
       {/* Canvas + inspector */}
       <div className="flex flex-1 min-h-0">
         <div ref={canvasWrapRef} className="flex-1 min-w-0 relative">
-          {paneMenu && (
-            <div
-              role="menu"
-              className="absolute z-20 min-w-[180px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg py-1"
-              style={{ left: paneMenu.screen_x, top: paneMenu.screen_y }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-zinc-400">
-                Add node
-              </div>
-              {SHAPE_OPTIONS.map((s) => (
-                <button
-                  key={s.value}
-                  role="menuitem"
-                  onClick={() => {
-                    createNode.mutate({
-                      label: 'New node',
-                      shape: s.value,
-                      position_x: paneMenu.flow_x,
-                      position_y: paneMenu.flow_y,
-                    });
-                    setLastShape(s.value);
-                    try {
-                      localStorage.setItem('bp.lastShape', s.value);
-                    } catch {
-                      // ignore quota / disabled storage
-                    }
-                    setPaneMenu(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span className="flex-1">{s.label}</span>
-                  {s.value === lastShape && (
-                    <span className="text-[10px] text-primary-600 font-medium uppercase tracking-wide">
-                      Last
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+          <CanvasContextMenu
+            state={contextMenu}
+            onClose={() => setContextMenu(null)}
+            lastShape={lastShape}
+            nodesById={nodesById}
+            edgesById={edgesById}
+            diagramId={diagramId}
+            selectedAlgo={selectedAlgo}
+            layoutDirection={layoutDirection}
+            onAddNodeAt={(shape, x, y) => {
+              createNode.mutate({
+                label: 'New node',
+                shape,
+                position_x: x,
+                position_y: y,
+              });
+              setLastShape(shape);
+              try {
+                localStorage.setItem('bp.lastShape', shape);
+              } catch {
+                /* ignore */
+              }
+            }}
+            onChangeShape={(nodeId, shape) => updateNode.mutate({ nodeId, input: { shape } })}
+            onTogglePin={(nodeId, pinned) => updateNode.mutate({ nodeId, input: { pinned } })}
+            onSetFill={(nodeId, color) => {
+              const cur = nodesById.get(nodeId);
+              const next = { ...(cur?.style ?? {}) } as Record<string, unknown>;
+              if (color === null) delete next.fillColor;
+              else next.fillColor = color;
+              updateNode.mutate({ nodeId, input: { style: next } });
+            }}
+            onDuplicate={(nodeId) => doDuplicateNode(nodeId)}
+            onDeleteNode={(nodeId) => {
+              deleteNode.mutate(nodeId);
+              if (selectedNodeId === nodeId) setSelectedNodeId(null);
+            }}
+            onPromoteToTask={() => onPromoteToTask()}
+            onLinkEntityRequest={() => {
+              const refType = window.prompt('Reference type (e.g. bam.task, beacon.entry):');
+              if (!refType) return;
+              const refId = window.prompt('Reference UUID:');
+              if (!refId) return;
+              onLinkEntity(refType, refId);
+            }}
+            onChangeEdgeKind={(edgeId, kind) => updateEdge.mutate({ edgeId, input: { kind } })}
+            onChangeEdgeMarker={(edgeId, marker_end) =>
+              updateEdge.mutate({ edgeId, input: { marker_end } })
+            }
+            onDeleteEdge={(edgeId) => {
+              deleteEdge.mutate(edgeId);
+              if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
+            }}
+            onApplyLayout={(algorithm, direction) => applyLayout.mutate({ algorithm, direction })}
+            onSnapshot={onSnapshot}
+            onExport={onExport}
+            onArchive={onArchive}
+          />
           {exportMutation.isPending && (
             <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-xs text-zinc-600 dark:text-zinc-300 shadow-sm">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Exporting…
@@ -678,10 +754,15 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
             onNodeClick={onNodeClick}
             onEdgeClick={onEdgeClick}
             onSelectionChange={onSelectionChange}
+            // React Flow's own delete-key handling. Backspace would steal
+            // the keystroke from form fields elsewhere, so we restrict it
+            // to the explicit Delete key; the global Esc/Delete handler
+            // above also covers the case when ReactFlow isn't focused.
+            deleteKeyCode={['Delete']}
             onPaneClick={() => {
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
-              setPaneMenu(null);
+              setContextMenu(null);
             }}
             onPaneContextMenu={(event) => {
               event.preventDefault();
@@ -689,15 +770,43 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
               if (!wrap) return;
               const rect = wrap.getBoundingClientRect();
               const mouse = event as React.MouseEvent;
-              setPaneMenu({
-                screen_x: mouse.clientX - rect.left,
-                screen_y: mouse.clientY - rect.top,
-                // The flow coordinate of the click — used so the new node
-                // appears AT the cursor rather than a random offset.
-                // React Flow's project() API needs the viewport transform;
-                // for the MVP we approximate with relative-to-canvas pixels.
+              setContextMenu({
+                kind: 'pane',
+                x: mouse.clientX - rect.left,
+                y: mouse.clientY - rect.top,
+                // Flow-space coords approximated as canvas-relative pixels.
+                // A future commit can plumb React Flow's project() API for
+                // exact viewport-transformed coordinates.
                 flow_x: mouse.clientX - rect.left,
                 flow_y: mouse.clientY - rect.top,
+              });
+            }}
+            onNodeContextMenu={(event, node) => {
+              event.preventDefault();
+              const wrap = canvasWrapRef.current;
+              if (!wrap) return;
+              const rect = wrap.getBoundingClientRect();
+              setSelectedNodeId(node.id);
+              setSelectedEdgeId(null);
+              setContextMenu({
+                kind: 'node',
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
+                node_id: node.id,
+              });
+            }}
+            onEdgeContextMenu={(event, edge) => {
+              event.preventDefault();
+              const wrap = canvasWrapRef.current;
+              if (!wrap) return;
+              const rect = wrap.getBoundingClientRect();
+              setSelectedEdgeId(edge.id);
+              setSelectedNodeId(null);
+              setContextMenu({
+                kind: 'edge',
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
+                edge_id: edge.id,
               });
             }}
             fitView
@@ -754,5 +863,452 @@ export function EditorPage(props: EditorPageProps) {
     <ReactFlowProvider>
       <EditorInner {...props} />
     </ReactFlowProvider>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  CanvasContextMenu                                                 */
+/* ------------------------------------------------------------------ */
+
+interface CanvasContextMenuProps {
+  state: ContextMenuState;
+  onClose: () => void;
+  lastShape: string;
+  nodesById: Map<string, BlueprintNode>;
+  edgesById: Map<string, BlueprintEdge>;
+  diagramId: string;
+  selectedAlgo: string;
+  layoutDirection: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
+  onAddNodeAt: (shape: string, x: number, y: number) => void;
+  onChangeShape: (nodeId: string, shape: string) => void;
+  onTogglePin: (nodeId: string, pinned: boolean) => void;
+  onSetFill: (nodeId: string, color: string | null) => void;
+  onDuplicate: (nodeId: string) => void;
+  onDeleteNode: (nodeId: string) => void;
+  onPromoteToTask: () => void;
+  onLinkEntityRequest: () => void;
+  onChangeEdgeKind: (edgeId: string, kind: string) => void;
+  onChangeEdgeMarker: (edgeId: string, marker: string) => void;
+  onDeleteEdge: (edgeId: string) => void;
+  onApplyLayout: (algorithm: string, direction: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT') => void;
+  onSnapshot: () => void;
+  onExport: (format: 'json' | 'mermaid') => void;
+  onArchive: () => void;
+}
+
+const CONTEXT_COLOR_OPTIONS: { value: string | null; label: string; swatch: string }[] = [
+  { value: '#ffffff', label: 'White', swatch: '#ffffff' },
+  { value: '#fee2e2', label: 'Red', swatch: '#fee2e2' },
+  { value: '#fef3c7', label: 'Amber', swatch: '#fef3c7' },
+  { value: '#dcfce7', label: 'Green', swatch: '#dcfce7' },
+  { value: '#dbeafe', label: 'Blue', swatch: '#dbeafe' },
+  { value: '#ede9fe', label: 'Violet', swatch: '#ede9fe' },
+  { value: '#fce7f3', label: 'Pink', swatch: '#fce7f3' },
+  { value: '#f4f4f5', label: 'Zinc', swatch: '#f4f4f5' },
+  { value: null, label: 'Clear', swatch: 'transparent' },
+];
+
+function CanvasContextMenu({
+  state,
+  onClose,
+  lastShape,
+  nodesById,
+  edgesById,
+  selectedAlgo,
+  layoutDirection,
+  onAddNodeAt,
+  onChangeShape,
+  onTogglePin,
+  onSetFill,
+  onDuplicate,
+  onDeleteNode,
+  onPromoteToTask,
+  onLinkEntityRequest,
+  onChangeEdgeKind,
+  onChangeEdgeMarker,
+  onDeleteEdge,
+  onApplyLayout,
+  onSnapshot,
+  onExport,
+  onArchive,
+}: CanvasContextMenuProps) {
+  if (!state) return null;
+
+  // Convenience runner: every menu item closes the menu after firing.
+  const run = (fn: () => void) => () => {
+    fn();
+    onClose();
+  };
+
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+  const modKey = isMac ? '⌘' : 'Ctrl';
+
+  return (
+    <>
+      {/* Click-away veil. Sits beneath the menu and absorbs the next
+          click so the user dismisses by clicking anywhere else. */}
+      <div className="fixed inset-0 z-10" onClick={onClose} onContextMenu={(e) => e.preventDefault()} />
+      <div
+        role="menu"
+        className="absolute z-20 min-w-[220px] max-w-[260px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl py-1 text-sm"
+        style={{ left: state.x, top: state.y }}
+        onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {state.kind === 'pane' && (
+          <PaneMenuContent
+            lastShape={lastShape}
+            selectedAlgo={selectedAlgo}
+            layoutDirection={layoutDirection}
+            run={run}
+            onAddNodeAt={(shape) => onAddNodeAt(shape, state.flow_x, state.flow_y)}
+            onApplyLayout={onApplyLayout}
+            onSnapshot={onSnapshot}
+            onExport={onExport}
+            onArchive={onArchive}
+          />
+        )}
+        {state.kind === 'node' &&
+          (() => {
+            const node = nodesById.get(state.node_id);
+            if (!node) return <NoTargetMissing label="Node" />;
+            return (
+              <NodeMenuContent
+                node={node}
+                modKey={modKey}
+                run={run}
+                onChangeShape={(shape) => onChangeShape(node.id, shape)}
+                onTogglePin={() => onTogglePin(node.id, !node.pinned)}
+                onSetFill={(c) => onSetFill(node.id, c)}
+                onDuplicate={() => onDuplicate(node.id)}
+                onDelete={() => onDeleteNode(node.id)}
+                onPromoteToTask={onPromoteToTask}
+                onLinkEntityRequest={onLinkEntityRequest}
+              />
+            );
+          })()}
+        {state.kind === 'edge' &&
+          (() => {
+            const edge = edgesById.get(state.edge_id);
+            if (!edge) return <NoTargetMissing label="Edge" />;
+            return (
+              <EdgeMenuContent
+                edge={edge}
+                run={run}
+                onChangeKind={(kind) => onChangeEdgeKind(edge.id, kind)}
+                onChangeMarker={(marker) => onChangeEdgeMarker(edge.id, marker)}
+                onDelete={() => onDeleteEdge(edge.id)}
+              />
+            );
+          })()}
+      </div>
+    </>
+  );
+}
+
+function NoTargetMissing({ label }: { label: string }) {
+  return (
+    <div className="px-3 py-3 text-xs text-zinc-500">
+      {label} no longer exists. Close this menu and try again.
+    </div>
+  );
+}
+
+function MenuLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-3 pt-1.5 pb-0.5 text-[10px] uppercase tracking-wider text-zinc-400 select-none">
+      {children}
+    </div>
+  );
+}
+
+function MenuItem({
+  onClick,
+  icon,
+  children,
+  shortcut,
+  destructive,
+  trailing,
+}: {
+  onClick: () => void;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  shortcut?: string;
+  destructive?: boolean;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      className={
+        'w-full flex items-center gap-2 px-3 py-1.5 text-left ' +
+        (destructive
+          ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:text-red-400'
+          : 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800')
+      }
+    >
+      {icon && <span className="shrink-0 w-4 inline-flex items-center justify-center">{icon}</span>}
+      <span className="flex-1 truncate">{children}</span>
+      {trailing && <span className="shrink-0">{trailing}</span>}
+      {shortcut && (
+        <span className="shrink-0 font-mono text-[10px] text-zinc-400">{shortcut}</span>
+      )}
+    </button>
+  );
+}
+
+function MenuSeparator() {
+  return <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" />;
+}
+
+/* ------ Pane menu ------ */
+
+function PaneMenuContent({
+  lastShape,
+  selectedAlgo,
+  layoutDirection,
+  run,
+  onAddNodeAt,
+  onApplyLayout,
+  onSnapshot,
+  onExport,
+  onArchive,
+}: {
+  lastShape: string;
+  selectedAlgo: string;
+  layoutDirection: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
+  run: (fn: () => void) => () => void;
+  onAddNodeAt: (shape: string) => void;
+  onApplyLayout: (algorithm: string, direction: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT') => void;
+  onSnapshot: () => void;
+  onExport: (format: 'json' | 'mermaid') => void;
+  onArchive: () => void;
+}) {
+  return (
+    <>
+      <MenuLabel>Add node</MenuLabel>
+      {SHAPE_OPTIONS.map((s) => (
+        <MenuItem
+          key={s.value}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          onClick={run(() => onAddNodeAt(s.value))}
+          trailing={
+            s.value === lastShape ? (
+              <span className="text-[9px] text-primary-600 font-medium uppercase tracking-wide">
+                Last
+              </span>
+            ) : null
+          }
+        >
+          {s.label}
+        </MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuLabel>Reorganize</MenuLabel>
+      {LAYOUT_ALGORITHMS.map((algo) => (
+        <MenuItem
+          key={algo.value}
+          icon={<Layout className="h-3.5 w-3.5" />}
+          onClick={run(() => onApplyLayout(algo.value, layoutDirection))}
+          trailing={
+            algo.value === selectedAlgo ? (
+              <span className="text-[9px] text-zinc-400 uppercase tracking-wide">Current</span>
+            ) : null
+          }
+        >
+          {algo.label}
+        </MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuItem icon={<CameraIcon className="h-3.5 w-3.5" />} onClick={run(onSnapshot)}>
+        Save snapshot
+      </MenuItem>
+      <MenuItem
+        icon={<Download className="h-3.5 w-3.5" />}
+        onClick={run(() => onExport('mermaid'))}
+      >
+        Export as Mermaid
+      </MenuItem>
+      <MenuItem icon={<Download className="h-3.5 w-3.5" />} onClick={run(() => onExport('json'))}>
+        Export as JSON
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem icon={<Archive className="h-3.5 w-3.5" />} onClick={run(onArchive)} destructive>
+        Archive diagram
+      </MenuItem>
+    </>
+  );
+}
+
+/* ------ Node menu ------ */
+
+function NodeMenuContent({
+  node,
+  modKey,
+  run,
+  onChangeShape,
+  onTogglePin,
+  onSetFill,
+  onDuplicate,
+  onDelete,
+  onPromoteToTask,
+  onLinkEntityRequest,
+}: {
+  node: BlueprintNode;
+  modKey: string;
+  run: (fn: () => void) => () => void;
+  onChangeShape: (shape: string) => void;
+  onTogglePin: () => void;
+  onSetFill: (color: string | null) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onPromoteToTask: () => void;
+  onLinkEntityRequest: () => void;
+}) {
+  const currentFill = (node.style?.fillColor as string | undefined) ?? null;
+  return (
+    <>
+      <MenuItem
+        icon={<CopyPlus className="h-3.5 w-3.5" />}
+        onClick={run(onDuplicate)}
+        shortcut={`${modKey}+D`}
+      >
+        Duplicate
+      </MenuItem>
+      <MenuItem
+        icon={node.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+        onClick={run(onTogglePin)}
+      >
+        {node.pinned ? 'Unpin (allow auto-layout)' : 'Pin position'}
+      </MenuItem>
+      <MenuSeparator />
+      <MenuLabel>Change shape</MenuLabel>
+      {SHAPE_OPTIONS.map((s) => (
+        <MenuItem
+          key={s.value}
+          icon={<Square className="h-3.5 w-3.5" />}
+          onClick={run(() => onChangeShape(s.value))}
+          trailing={
+            s.value === node.shape ? (
+              <Check className="h-3.5 w-3.5 text-primary-600" />
+            ) : null
+          }
+        >
+          {s.label}
+        </MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuLabel>Fill color</MenuLabel>
+      <div className="px-3 py-1.5 flex flex-wrap gap-1.5">
+        {CONTEXT_COLOR_OPTIONS.map((c) => (
+          <button
+            key={c.label}
+            onClick={run(() => onSetFill(c.value))}
+            title={c.label}
+            className={
+              'h-5 w-5 rounded-md border ' +
+              (currentFill === c.value
+                ? 'border-primary-500 ring-2 ring-primary-300'
+                : 'border-zinc-200 dark:border-zinc-700')
+            }
+            style={{ background: c.swatch === 'transparent' ? undefined : c.swatch }}
+          >
+            {c.value === null && (
+              <span className="block text-[9px] leading-5 text-zinc-500">×</span>
+            )}
+          </button>
+        ))}
+      </div>
+      <MenuSeparator />
+      <MenuItem icon={<Link2 className="h-3.5 w-3.5" />} onClick={run(onLinkEntityRequest)}>
+        Link to entity…
+      </MenuItem>
+      <MenuItem icon={<Layers className="h-3.5 w-3.5" />} onClick={run(onPromoteToTask)}>
+        Promote to Bam task
+      </MenuItem>
+      <MenuSeparator />
+      <MenuItem
+        icon={<Trash2 className="h-3.5 w-3.5" />}
+        onClick={run(onDelete)}
+        shortcut="Del"
+        destructive
+      >
+        Delete node
+      </MenuItem>
+    </>
+  );
+}
+
+/* ------ Edge menu ------ */
+
+const EDGE_KINDS_MENU: { value: string; label: string }[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'dependency', label: 'Dependency' },
+  { value: 'flow', label: 'Flow' },
+  { value: 'reference', label: 'Reference' },
+  { value: 'inherits', label: 'Inherits' },
+];
+
+const EDGE_MARKERS_MENU: { value: string; label: string }[] = [
+  { value: 'arrowclosed', label: 'Filled arrow' },
+  { value: 'arrow', label: 'Open arrow' },
+  { value: 'none', label: 'No arrow' },
+];
+
+function EdgeMenuContent({
+  edge,
+  run,
+  onChangeKind,
+  onChangeMarker,
+  onDelete,
+}: {
+  edge: BlueprintEdge;
+  run: (fn: () => void) => () => void;
+  onChangeKind: (kind: string) => void;
+  onChangeMarker: (marker: string) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <>
+      <MenuLabel>Edge kind</MenuLabel>
+      {EDGE_KINDS_MENU.map((k) => (
+        <MenuItem
+          key={k.value}
+          onClick={run(() => onChangeKind(k.value))}
+          trailing={
+            k.value === edge.kind ? (
+              <Check className="h-3.5 w-3.5 text-primary-600" />
+            ) : null
+          }
+        >
+          {k.label}
+        </MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuLabel>End marker</MenuLabel>
+      {EDGE_MARKERS_MENU.map((m) => (
+        <MenuItem
+          key={m.value}
+          onClick={run(() => onChangeMarker(m.value))}
+          trailing={
+            m.value === edge.marker_end ? (
+              <Check className="h-3.5 w-3.5 text-primary-600" />
+            ) : null
+          }
+        >
+          {m.label}
+        </MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuItem
+        icon={<Trash2 className="h-3.5 w-3.5" />}
+        onClick={run(onDelete)}
+        shortcut="Del"
+        destructive
+      >
+        Delete edge
+      </MenuItem>
+    </>
   );
 }

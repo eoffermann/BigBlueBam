@@ -374,6 +374,23 @@ export function registerBlueprintTools(
   });
 
   registerTool(server, {
+    name: 'blueprint_duplicate_node',
+    description:
+      "Duplicate a Blueprint node in the same diagram. The clone copies every visual attribute (label, shape, dimensions, style, data, cross-product entity ref) and is offset from the original so it doesn't sit on top of it — defaults to +32px down-right. Containment (parent_node_id), pinned state, and z-index are preserved. Edges to/from the source are NOT duplicated; connect the clone yourself if you need it wired in. Broadcasts a blueprint.node.created event.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+      node_id: z.string().uuid().describe('Node to duplicate'),
+      offset_x: z.number().min(-2000).max(2000).optional().describe('Horizontal offset for the clone (default 32px)'),
+      offset_y: z.number().min(-2000).max(2000).optional().describe('Vertical offset for the clone (default 32px)'),
+    },
+    returns: z.object({ data: nodeShape }),
+    handler: async ({ id, node_id, ...body }) => {
+      const result = await client.request('POST', `/diagrams/${id}/nodes/${node_id}/duplicate`, body);
+      return result.ok ? ok(result.data) : err('duplicating blueprint node', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'blueprint_delete_node',
     description:
       "Delete a node from a Blueprint diagram. CASCADE-deletes every edge that references the node as source or target. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
