@@ -957,7 +957,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
       const data = schema.parse(request.body ?? {});
 
       try {
-        const { user, password: _password } = await orgService.resetMemberPassword({
+        const { user, password } = await orgService.resetMemberPassword({
           orgId: request.user!.org_id,
           targetUserId: request.params.userId,
           callerUserId: request.user!.id,
@@ -980,10 +980,14 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           'Admin reset another user password',
         );
 
+        // Surface the new password to the admin once so they can share it
+        // with the user out-of-band. The frontend renders it in a reveal-once
+        // dialog with a clipboard copy and warns it won't be shown again.
         return reply.send({
           data: {
             user_id: user.id,
             email: user.email,
+            password,
             generated: data.password === undefined,
             message: 'Password has been reset. The user will need to change it on next login.',
           },

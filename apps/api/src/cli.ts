@@ -10,7 +10,21 @@ import { organizationMemberships } from './db/schema/organization-memberships.js
 import { apiKeys } from './db/schema/api-keys.js';
 import { agentPolicies } from './db/schema/agent-policies.js';
 import { accountGroupMemberships } from './db/schema/permissions.js';
+import { sessions } from './db/schema/sessions.js';
 import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
+
+// Generator for admin-issued passwords. Same 56-char confusable-safe alphabet
+// as services/org.service.ts::generateStrongPassword so CLI- and API-minted
+// passwords look indistinguishable to end users. ~95 bits of entropy at len=16.
+const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+function generateStrongPassword(length = 16): string {
+  const bytes = randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += PASSWORD_ALPHABET[bytes[i]! % PASSWORD_ALPHABET.length];
+  }
+  return out;
+}
 
 // Wave E.F: fixed UUIDs of the five built-in permission groups (seeded by
 // migration 0146). Used by cli.ts to upsert account_group_memberships
@@ -75,6 +89,7 @@ Commands:
   revoke-api-key     Revoke a Bam API key by its key_prefix (hard delete)
   revoke-helpdesk-agent-key  Revoke a helpdesk agent API key by its key_prefix (soft by default)
   list-orgs          List all organizations (id, slug, name) — helper for other commands
+  reset-password     Reset a user's password by email (generates one if --password omitted)
 
 Common user roles:       owner, admin, member, viewer, guest
 Common API key scopes:   read, read_write, admin
@@ -123,6 +138,12 @@ Examples:
 
   # Hard-delete (emergencies)
   cli revoke-helpdesk-agent-key --prefix hdag_xyz --hard
+
+  # Reset a user's password (generated 16-char strong password printed once)
+  cli reset-password --email user@example.com
+
+  # Reset a user's password to one you supply (min 12 chars)
+  cli reset-password --email user@example.com --password 'My$tr0ngPw!'
 `);
 }
 
@@ -764,6 +785,74 @@ async function listOrgs() {
   }
 }
 
+/**
+ * Reset a user's password by email. Generates a strong password (or uses
+ * --password if provided), writes the Argon2id hash in a transaction, and
+ * deletes every session for the user so any stolen cookie becomes useless
+ * after the reset. Prints the new password ONCE — the operator is expected
+ * to hand it off to the user out-of-band.
+ *
+ * Unlike the org-scoped /org/members/:userId/reset-password endpoint this
+ * makes NO rank check: an operator running the CLI is assumed to be
+ * acting under server credentials and to have already verified the request.
+ */
+async function resetPasswordCli(flags: Record<string, string>) {
+  requireFlags(flags, ['email']);
+  const { email } = flags;
+  const providedPassword = flags.password;
+
+  if (providedPassword !== undefined && providedPassword.length < 12) {
+    console.error('Error: --password must be at least 12 characters');
+    process.exit(1);
+  }
+
+  const { db, client } = getDb();
+  try {
+    const [user] = await db
+      .select({ id: users.id, email: users.email, display_name: users.display_name })
+      .from(users)
+      .where(eq(users.email, email!))
+      .limit(1);
+
+    if (!user) {
+      console.error(`Error: no user found with email ${email}`);
+      process.exit(1);
+    }
+
+    const rawPassword = providedPassword ?? generateStrongPassword();
+    const passwordHash = await argon2.hash(rawPassword);
+    let sessionsRevoked = 0;
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({ password_hash: passwordHash, updated_at: new Date() })
+        .where(eq(users.id, user.id));
+      // Same semantics as the admin reset-password endpoint: any active
+      // cookie for this user must die at the same moment the password does.
+      const revoked = await tx
+        .delete(sessions)
+        .where(eq(sessions.user_id, user.id))
+        .returning({ id: sessions.id });
+      sessionsRevoked = revoked.length;
+    });
+
+    console.log('Password reset successfully:');
+    console.log(`  User ID:           ${user.id}`);
+    console.log(`  Email:             ${user.email}`);
+    if (user.display_name) {
+      console.log(`  Name:              ${user.display_name}`);
+    }
+    console.log(`  New password:      ${rawPassword}`);
+    console.log(`  Generated:         ${providedPassword === undefined ? 'yes' : 'no'}`);
+    console.log(`  Sessions revoked:  ${sessionsRevoked}`);
+    console.log('');
+    console.log('Share this password with the user out-of-band. It will not be shown again.');
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -806,6 +895,9 @@ async function main() {
         break;
       case 'list-orgs':
         await listOrgs();
+        break;
+      case 'reset-password':
+        await resetPasswordCli(flags);
         break;
       default:
         console.error(`Unknown command: ${command}`);
