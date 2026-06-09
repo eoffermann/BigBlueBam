@@ -154,6 +154,8 @@ services:
         condition: service_healthy
       blank-api:
         condition: service_healthy
+      blueprint-api:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       MCP_PORT: ${MCP_PORT:-3001}
@@ -168,6 +170,7 @@ services:
       BOARD_API_URL: http://board-api:4008/v1
       BOND_API_URL: http://bond-api:4009/v1
       BLAST_API_URL: http://blast-api:4010/v1
+      BLUEPRINT_API_URL: http://blueprint-api:4015/v1
       BOOK_API_URL: http://book-api:4012/v1
       BENCH_API_URL: http://bench-api:4011/v1
       BILL_API_URL: http://bill-api:4014/v1
@@ -260,6 +263,8 @@ services:
       bench-api:
         condition: service_healthy
       blank-api:
+        condition: service_healthy
+      blueprint-api:
         condition: service_healthy
       site:
         condition: service_healthy
@@ -857,6 +862,47 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4013/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  blueprint-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/blueprint-api/Dockerfile
+      target: production
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - NODE_ENV=production
+      - PORT=4015
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4015/health"]
       interval: 10s
       timeout: 5s
       retries: 3

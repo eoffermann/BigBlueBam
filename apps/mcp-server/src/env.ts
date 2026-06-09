@@ -25,6 +25,7 @@ const envSchema = z.object({
   BENCH_API_URL: z.string().url().default('http://bench-api:4011/v1'),
   BILL_API_URL: z.string().url().default('http://bill-api:4014/v1'),
   BLANK_API_URL: z.string().url().default('http://blank-api:4013/v1'),
+  BLUEPRINT_API_URL: z.string().url().default('http://blueprint-api:4015/v1'),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   MCP_AUTH_REQUIRED: z.coerce.boolean().default(true),
   MCP_RATE_LIMIT_RPM: z.coerce.number().int().positive().default(120),

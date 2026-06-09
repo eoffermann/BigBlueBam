@@ -2283,6 +2283,145 @@ const wave1bEvents: EventDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Blueprint events (structured-diagram product). Every mutation on a diagram
+// surfaces here so Bolt rules can react ("when a new diagram is generated,
+// post a banter announcement", "when a node is linked to a Bam task, file
+// it in beacon", etc). Producers live in apps/blueprint-api/src/routes/.
+// ---------------------------------------------------------------------------
+
+const blueprintCommonDiagramFields: PayloadField[] = [
+  { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
+  { name: 'diagram.name', type: 'string', description: 'Diagram name' },
+  { name: 'diagram.diagram_type', type: 'string', description: 'Diagram type (flowchart/sequence/state/...)' },
+];
+
+const blueprintEvents: EventDefinition[] = [
+  {
+    source: 'blueprint',
+    event_type: 'diagram.created',
+    description: 'Fired when a new diagram is created.',
+    payload_schema: [...blueprintCommonDiagramFields],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'diagram.updated',
+    description: 'Fired when diagram metadata is updated (name, description, visibility, etc.). Individual node/edge changes fire node.* / edge.* events instead.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
+      { name: 'changed_fields', type: 'string[]', description: 'List of metadata field names that were updated' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'diagram.archived',
+    description: 'Fired when a diagram is archived (soft-delete).',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'diagram.generated',
+    description: 'Fired when a diagram is bulk-built from a structured (nodes, edges) spec via POST /v1/diagrams/:id/generate. Agents use this path to author or rewrite an entire diagram in one call.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
+      { name: 'node_count', type: 'number', description: 'Number of nodes materialized by the generate call' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'diagram.imported',
+    description: 'Fired when a diagram is imported from an external source (Mermaid today; more formats planned).',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
+      { name: 'nodes_created', type: 'number?', description: 'Number of nodes inserted by the import' },
+      { name: 'edges_created', type: 'number?', description: 'Number of edges inserted by the import' },
+      { name: 'replace', type: 'boolean?', description: 'True if the import replaced the prior graph; false for additive imports' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'node.created',
+    description: 'Fired when a node is added to a diagram.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
+      { name: 'node.id', type: 'uuid', format: 'uuid', description: 'Node ID' },
+      { name: 'node.shape', type: 'string', description: 'Shape token (rounded/rect/diamond/...)' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'node.updated',
+    description: 'Fired when a node is updated (label, shape, style, etc.). Position-only changes fire node.moved instead.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
+      { name: 'node.id', type: 'uuid', format: 'uuid', description: 'Node ID' },
+      { name: 'changed_fields', type: 'string[]', description: 'List of field names that were updated' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'node.moved',
+    description: 'Fired when a node position changes (drag, snap, auto-layout-applied-to-single-node).',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
+      { name: 'node.id', type: 'uuid', format: 'uuid', description: 'Node ID' },
+      { name: 'position_x', type: 'number', description: 'New x coordinate' },
+      { name: 'position_y', type: 'number', description: 'New y coordinate' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'node.deleted',
+    description: 'Fired when a node is deleted. Edges that referenced the node cascade-delete and surface via edge.deleted events; the cascaded_edge_ids field is included here as a convenience.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
+      { name: 'node.id', type: 'uuid', format: 'uuid', description: 'Deleted node ID' },
+      { name: 'cascaded_edge_ids', type: 'uuid[]', description: 'Edges that were cascade-deleted with the node' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'edge.created',
+    description: 'Fired when an edge connecting two nodes is created.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
+      { name: 'edge.id', type: 'uuid', format: 'uuid', description: 'Edge ID' },
+      { name: 'edge.kind', type: 'string', description: 'Edge kind (default/dependency/data/...)' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'edge.updated',
+    description: 'Fired when an edge is updated (label, kind, style, waypoints, etc.).',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
+      { name: 'edge.id', type: 'uuid', format: 'uuid', description: 'Edge ID' },
+      { name: 'changed_fields', type: 'string[]', description: 'List of field names that were updated' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'edge.deleted',
+    description: 'Fired when an edge is deleted (directly or via node cascade).',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Parent diagram ID' },
+      { name: 'edge.id', type: 'uuid', format: 'uuid', description: 'Deleted edge ID' },
+    ],
+  },
+  {
+    source: 'blueprint',
+    event_type: 'layout.applied',
+    description: 'Fired after the ELK auto-layout engine has computed and persisted positions for the diagram. Large graphs run via the worker and emit this event from there instead of the request thread.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
+      { name: 'layout_algorithm', type: 'string', description: 'Algorithm used (layered/force/mrtree/...)' },
+      { name: 'node_count', type: 'number', description: 'Number of nodes laid out' },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -2301,6 +2440,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...bookEvents,
   ...blankEvents,
   ...benchEvents,
+  ...blueprintEvents,
   ...wave1bEvents,
 ];
 

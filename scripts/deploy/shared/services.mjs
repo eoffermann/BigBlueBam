@@ -272,6 +272,21 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'blueprint-api',
+    description: 'Blueprint API — structured diagrams (nodes, edges, ELK layout, versions, cross-product entity links)',
+    dockerfile: 'apps/blueprint-api/Dockerfile',
+    port: 4015,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    needs: ['postgres', 'redis', 'api', 'bolt-api'],
+    public_paths: ['/blueprint/api/', '/blueprint/ws'],
+    env: {
+      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'BOLT_API_INTERNAL_URL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS'],
+    },
+  },
+  {
     name: 'mcp-server',
     description: 'MCP Protocol Server — tool orchestration for AI agents',
     dockerfile: 'apps/mcp-server/Dockerfile',
@@ -282,7 +297,7 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'book-api', 'blank-api', 'bill-api', 'redis',
+      'bench-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api', 'redis',
     ],
     public_paths: ['/mcp/'],
     env: {
@@ -290,7 +305,7 @@ export const APP_SERVICES = [
       optional: [
         'HELPDESK_API_URL', 'BEACON_API_URL', 'BOLT_API_URL', 'BEARING_API_URL',
         'BOARD_API_URL', 'BOND_API_URL', 'BLAST_API_URL', 'BOOK_API_URL',
-        'BENCH_API_URL', 'BILL_API_URL', 'BLANK_API_URL',
+        'BENCH_API_URL', 'BILL_API_URL', 'BLANK_API_URL', 'BLUEPRINT_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
       ],
     },
@@ -360,10 +375,10 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'book-api', 'blank-api', 'bill-api',
+      'bench-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/book/', '/blank/', '/bill/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/book/', '/blank/', '/bill/', '/blueprint/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];
@@ -520,6 +535,7 @@ export const APP_URLS = {
   'book': { label: 'Book (Calendar)', path: '/book/' },
   'blank': { label: 'Blank (Forms)', path: '/blank/' },
   'bill': { label: 'Bill (Invoicing)', path: '/bill/' },
+  'blueprint': { label: 'Blueprint (Diagrams)', path: '/blueprint/' },
   'mcp': { label: 'MCP Server', path: '/mcp/' },
 };
 

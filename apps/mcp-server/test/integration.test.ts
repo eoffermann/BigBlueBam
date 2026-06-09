@@ -113,6 +113,7 @@ import { registerBookTools } from '../src/tools/book-tools.js';
 import { registerBenchTools } from '../src/tools/bench-tools.js';
 import { registerBillTools } from '../src/tools/bill-tools.js';
 import { registerBlankTools } from '../src/tools/blank-tools.js';
+import { registerBlueprintTools } from '../src/tools/blueprint-tools.js';
 
 describe('MCP Integration Tests', () => {
   let api: ApiClient;
@@ -220,6 +221,7 @@ describe('MCP Integration Tests', () => {
     registerBenchTools(mock.server, api, 'http://localhost:4011');
     registerBillTools(mock.server, api, 'http://localhost:4014');
     registerBlankTools(mock.server, api, 'http://localhost:4013');
+    registerBlueprintTools(mock.server, api, 'http://localhost:4015');
   });
 
   function getTool(name: string): RegisteredTool {
@@ -1742,6 +1744,14 @@ describe('MCP Integration Tests', () => {
         'blank_get_submission', 'blank_list_forms', 'blank_list_submissions',
         'blank_publish_form', 'blank_summarize_responses',
         'blank_update_form',
+        // blueprint
+        'blueprint_list', 'blueprint_get', 'blueprint_read_nodes',
+        'blueprint_read_edges', 'blueprint_search', 'blueprint_export',
+        'blueprint_create', 'blueprint_update', 'blueprint_archive',
+        'blueprint_add_node', 'blueprint_update_node', 'blueprint_move_node',
+        'blueprint_delete_node', 'blueprint_add_edge', 'blueprint_update_edge',
+        'blueprint_delete_edge', 'blueprint_apply_layout', 'blueprint_generate',
+        'blueprint_promote_node_to_task', 'blueprint_link_entity',
       ];
 
       for (const name of expectedTools) {

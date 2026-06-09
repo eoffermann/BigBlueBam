@@ -14,6 +14,8 @@ import {
   briefDocumentsStub,
   briefCollaboratorsStub,
   beaconEntriesStub,
+  blueprintDiagramsStub,
+  blueprintNodesStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -50,7 +52,9 @@ export type VisibilityEntityType =
   | 'bond.contact'
   | 'bond.company'
   | 'brief.document'
-  | 'beacon.entry';
+  | 'beacon.entry'
+  | 'blueprint.diagram'
+  | 'blueprint.node';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -62,6 +66,8 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bond.company',
   'brief.document',
   'beacon.entry',
+  'blueprint.diagram',
+  'blueprint.node',
 ] as const;
 
 export type PreflightReason =
@@ -589,6 +595,70 @@ async function preflightBeaconEntry(
 }
 
 // ---------------------------------------------------------------------------
+// blueprint.diagram / blueprint.node
+// ---------------------------------------------------------------------------
+//
+// MVP scope (intentional): blueprint diagrams enforce org match only at the
+// cross-app preflight layer. The full per-diagram rule set
+// (visibility=private + collaborators, visibility=project + project membership,
+// visibility=organization for any org member) is enforced authoritatively by
+// blueprint-api's diagram.service::assertCanRead at the request boundary.
+// We mirror only the org-id gate here so an agent surfacing a diagram link
+// from a different org is silently filtered out (returns not_found), while
+// within-org references stay visible. The richer rules will be backfilled
+// when the stub expands to track per-collaborator rows.
+//
+// blueprint.node is a thin wrapper around blueprint.diagram: a node is
+// reachable iff its parent diagram is.
+
+async function preflightBlueprintDiagram(
+  asker: AskerContext,
+  diagramId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: blueprintDiagramsStub.id,
+      org_id: blueprintDiagramsStub.org_id,
+    })
+    .from(blueprintDiagramsStub)
+    .where(eq(blueprintDiagramsStub.id, diagramId))
+    .limit(1);
+
+  const diagram = rows[0];
+  if (!diagram) return { allowed: false, reason: 'not_found' };
+  if (diagram.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: diagram.org_id };
+}
+
+async function preflightBlueprintNode(
+  asker: AskerContext,
+  nodeId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: blueprintNodesStub.id,
+      diagram_id: blueprintNodesStub.diagram_id,
+      org_id: blueprintDiagramsStub.org_id,
+    })
+    .from(blueprintNodesStub)
+    .innerJoin(
+      blueprintDiagramsStub,
+      eq(blueprintDiagramsStub.id, blueprintNodesStub.diagram_id),
+    )
+    .where(eq(blueprintNodesStub.id, nodeId))
+    .limit(1);
+
+  const node = rows[0];
+  if (!node) return { allowed: false, reason: 'not_found' };
+  if (node.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: node.org_id };
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -635,6 +705,10 @@ export async function preflightAccess(
       return preflightBriefDocument(asker, entityId);
     case 'beacon.entry':
       return preflightBeaconEntry(asker, entityId);
+    case 'blueprint.diagram':
+      return preflightBlueprintDiagram(asker, entityId);
+    case 'blueprint.node':
+      return preflightBlueprintNode(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -660,4 +734,6 @@ export const __test__ = {
   preflightBondCompany,
   preflightBriefDocument,
   preflightBeaconEntry,
+  preflightBlueprintDiagram,
+  preflightBlueprintNode,
 };

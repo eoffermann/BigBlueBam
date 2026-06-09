@@ -169,3 +169,31 @@ export const beaconAttachmentsStub = pgTable(
     index('pas_beacon_attachments_beacon_idx').on(table.beacon_id),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// blueprint - diagrams, nodes
+// ---------------------------------------------------------------------------
+// Real schemas:
+//   - apps/blueprint-api/src/db/schema/blueprint-diagrams.ts
+//   - apps/blueprint-api/src/db/schema/blueprint-nodes.ts
+//
+// MVP scope: visibility preflight only enforces org match. Per-diagram
+// rules (project/private + collab) live in blueprint-api's diagram.service
+// (assertCanRead) and will be backfilled here when the per-app stub
+// expands beyond the columns needed for cross-app surfacing. Until then
+// the visibility predicate is intentionally permissive within an org so
+// agents authoring cross-product references do not silently drop links
+// to legitimate diagrams.
+
+export const blueprintDiagramsStub = pgTable('blueprint_diagrams', {
+  id: uuid('id').primaryKey(),
+  org_id: uuid('org_id').notNull(),
+  project_id: uuid('project_id'),
+  created_by: uuid('created_by'),
+  visibility: varchar('visibility', { length: 16 }).notNull(),
+});
+
+export const blueprintNodesStub = pgTable('blueprint_nodes', {
+  id: uuid('id').primaryKey(),
+  diagram_id: uuid('diagram_id').notNull(),
+});

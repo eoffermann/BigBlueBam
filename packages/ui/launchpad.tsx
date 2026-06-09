@@ -25,6 +25,7 @@ import {
   Calendar,
   ClipboardList,
   DollarSign,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -51,6 +52,7 @@ const APPS: AppDef[] = [
   { id: 'bolt', name: 'Bolt', description: 'Automations', icon: Zap, color: '#dc2626', path: '/bolt/' },
   { id: 'bearing', name: 'Bearing', description: 'Goals & OKRs', icon: Target, color: '#0d9488', path: '/bearing/' },
   { id: 'board', name: 'Board', description: 'Whiteboards', icon: PenTool, color: '#6366f1', path: '/board/' },
+  { id: 'blueprint', name: 'Blueprint', description: 'Diagrams & Flows', icon: Sparkles, color: '#0ea5e9', path: '/blueprint/' },
   { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon: Headset, color: '#be123c', path: '/helpdesk/' },
 ];
 

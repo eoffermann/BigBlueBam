@@ -21,6 +21,7 @@ COPY apps/book/package.json ./apps/book/
 COPY apps/bench/package.json ./apps/bench/
 COPY apps/bill/package.json ./apps/bill/
 COPY apps/blank/package.json ./apps/blank/
+COPY apps/blueprint/package.json ./apps/blueprint/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
 
@@ -120,6 +121,12 @@ COPY apps/blank/public ./apps/blank/public
 COPY apps/blank/index.html ./apps/blank/
 COPY apps/blank/tsconfig.json apps/blank/tsconfig.node.json apps/blank/vite.config.ts ./apps/blank/
 
+# Blueprint frontend
+COPY apps/blueprint/src ./apps/blueprint/src
+COPY apps/blueprint/public ./apps/blueprint/public
+COPY apps/blueprint/index.html ./apps/blueprint/
+COPY apps/blueprint/tsconfig.json apps/blueprint/tsconfig.node.json apps/blueprint/vite.config.ts ./apps/blueprint/
+
 RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/frontend build \
  && pnpm --filter @bigbluebam/helpdesk build \
@@ -134,7 +141,8 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/book build \
  && pnpm --filter @bigbluebam/bench build \
  && pnpm --filter @bigbluebam/bill build \
- && pnpm --filter @bigbluebam/blank build
+ && pnpm --filter @bigbluebam/blank build \
+ && pnpm --filter @bigbluebam/blueprint build
 
 # ── Stage: production ────────────────────────────────────────────
 FROM nginx:alpine AS production
@@ -153,6 +161,7 @@ COPY --from=build /app/apps/book/dist /usr/share/nginx/html/book
 COPY --from=build /app/apps/bench/dist /usr/share/nginx/html/bench
 COPY --from=build /app/apps/bill/dist /usr/share/nginx/html/bill
 COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
+COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint
 
 # Documentation files for the in-app Help viewer (served at /docs/)
 # These are the hand-authored and pipeline-generated markdown files.
