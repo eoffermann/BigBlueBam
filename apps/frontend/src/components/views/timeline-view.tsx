@@ -12,6 +12,7 @@ import {
 } from 'date-fns';
 import type { Phase, Task } from '@bigbluebam/shared';
 import { cn } from '@/lib/utils';
+import { TimelineExportMenu } from './timeline-export-menu';
 
 type ZoomLevel = 'day' | 'week' | 'month';
 type GroupBy = 'assignee' | 'phase';
@@ -19,6 +20,7 @@ type GroupBy = 'assignee' | 'phase';
 interface TimelineViewProps {
   phases: (Phase & { tasks: Task[] })[];
   onTaskClick: (taskId: string) => void;
+  projectName?: string;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -63,7 +65,7 @@ function getTaskDot(task: Task): Date {
   return parseISO(task.created_at);
 }
 
-export function TimelineView({ phases, onTaskClick }: TimelineViewProps) {
+export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewProps) {
   const [zoom, setZoom] = useState<ZoomLevel>('week');
   const [groupBy, setGroupBy] = useState<GroupBy>('phase');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -196,6 +198,14 @@ export function TimelineView({ phases, onTaskClick }: TimelineViewProps) {
               {z}
             </button>
           ))}
+        </div>
+
+        <div className="ml-auto">
+          <TimelineExportMenu
+            phases={phases}
+            projectName={projectName ?? 'Project'}
+            groupBy={groupBy}
+          />
         </div>
       </div>
 

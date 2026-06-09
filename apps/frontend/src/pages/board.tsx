@@ -432,6 +432,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
           <TimelineView
             phases={filteredPhases}
             onTaskClick={handleTaskClick}
+            projectName={project?.name}
           />
         );
 
@@ -440,6 +441,8 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
           <CalendarView
             phases={filteredPhases}
             onTaskClick={handleTaskClick}
+            projectId={projectId}
+            projectName={project?.name}
           />
         );
 

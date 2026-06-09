@@ -17,10 +17,13 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Phase, Task, Priority } from '@bigbluebam/shared';
 import { cn, truncate } from '@/lib/utils';
+import { CalendarExportMenu } from './calendar-export-menu';
 
 interface CalendarViewProps {
   phases: (Phase & { tasks: Task[] })[];
   onTaskClick: (taskId: string) => void;
+  projectId?: string;
+  projectName?: string;
 }
 
 const PRIORITY_DOT_COLORS: Record<Priority, string> = {
@@ -41,7 +44,7 @@ const PRIORITY_TEXT_COLORS: Record<Priority, string> = {
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export function CalendarView({ phases, onTaskClick }: CalendarViewProps) {
+export function CalendarView({ phases, onTaskClick, projectId, projectName }: CalendarViewProps) {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
@@ -98,12 +101,17 @@ export function CalendarView({ phases, onTaskClick }: CalendarViewProps) {
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
-        <button
-          onClick={() => setCurrentMonth(startOfMonth(new Date()))}
-          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-        >
-          Today
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setCurrentMonth(startOfMonth(new Date()))}
+            className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+          >
+            Today
+          </button>
+          {projectId && (
+            <CalendarExportMenu projectId={projectId} projectName={projectName ?? 'Project'} />
+          )}
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
