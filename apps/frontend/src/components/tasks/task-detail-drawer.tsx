@@ -47,6 +47,7 @@ import { DatePicker } from '@/components/common/date-picker';
 import { HelpdeskPanel } from '@/components/tasks/helpdesk-panel';
 import {
   useTaskParents,
+  useTaskSubtasks,
   useAddTaskParent,
   useRemoveTaskParent,
   type ParentTaskSummary,
@@ -232,6 +233,7 @@ export function TaskDetailDrawer({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', task?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'subtasks', task?.id] });
       queryClient.invalidateQueries({ queryKey: ['board'] });
       setNewSubtaskTitle('');
     },
@@ -470,12 +472,21 @@ export function TaskDetailDrawer({
     ...members.map((m) => ({ value: m.id, label: m.display_name })),
   ];
 
+  // Subtasks come from the dedicated /tasks/:id/subtasks endpoint, which
+  // unions the legacy parent_task_id self-FK with the many-to-many
+  // task_parent_links join table. The previously-embedded task.subtasks
+  // field on the Task type was never actually populated by the API, which
+  // is why this section silently showed nothing until B3 Frndo Launch.
+  // NOTE: this hook MUST live above the `if (!task) return null` early-exit
+  // below so the hook order stays consistent across renders.
+  const subtasksQuery = useTaskSubtasks(task?.id);
+
   if (!task) return null;
 
   const humanId = task.human_id ?? `#${(task as Task & { task_number?: number }).task_number ?? ''}`;
   const overdue = isOverdue(task.due_date);
 
-  const subtasks = task.subtasks ?? [];
+  const subtasks = subtasksQuery.data?.data ?? [];
   const doneSubtasks = subtasks.filter((s) => s.completed_at != null);
   const subtaskProgress = subtasks.length > 0 ? Math.round((doneSubtasks.length / subtasks.length) * 100) : 0;
 

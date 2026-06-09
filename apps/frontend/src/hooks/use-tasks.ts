@@ -61,6 +61,14 @@ export function useCreateTask() {
       addTaskToPhase(task.phase_id, task);
       queryClient.invalidateQueries({ queryKey: ['board', variables.projectId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', variables.projectId] });
+      // If the new task was created as a subtask of another, the parent's
+      // subtasks query needs to refresh so the new child appears in the
+      // drawer's Subtasks section without the user reopening it.
+      if (variables.data.parent_task_id) {
+        queryClient.invalidateQueries({
+          queryKey: ['tasks', 'subtasks', variables.data.parent_task_id],
+        });
+      }
     },
   });
 }
@@ -78,6 +86,10 @@ export function useUpdateTask() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', variables.taskId] });
       queryClient.invalidateQueries({ queryKey: ['board'] });
+      // A task's state/phase change can flip whether it counts as "done"
+      // under any of its parents; refresh every open parent's subtask list.
+      // (Cheap — the drawer is typically open on at most one task at a time.)
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'subtasks'] });
     },
   });
 }
@@ -119,6 +131,23 @@ export function useTaskParents(taskId: string | undefined) {
   });
 }
 
+/**
+ * Subtasks of a task, unioning the legacy parent_task_id self-FK with the
+ * task_parent_links many-to-many join table. Replaces the previously-unused
+ * `task.subtasks` field embedded in the Task type — which was never
+ * populated by the API, so the drawer's Subtasks block had silently been
+ * empty for every task. Now it reads from the dedicated /tasks/:id/subtasks
+ * endpoint and reflects both the primary-parent path and any additional
+ * parents added via the Parent Tasks UI.
+ */
+export function useTaskSubtasks(taskId: string | undefined) {
+  return useQuery({
+    queryKey: ['tasks', 'subtasks', taskId],
+    queryFn: () => api.get<ApiResponse<ParentTaskSummary[]>>(`/tasks/${taskId}/subtasks`),
+    enabled: !!taskId,
+  });
+}
+
 export function useAddTaskParent() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -128,8 +157,11 @@ export function useAddTaskParent() {
       }),
     onSuccess: (_res, { taskId, parentTaskId }) => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'parents', taskId] });
-      // The parent now has one more subtask — invalidate its detail too.
+      // The parent now has one more subtask — invalidate its detail AND its
+      // subtasks query so the drawer's Subtasks section picks up the new
+      // child immediately.
       queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', parentTaskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'subtasks', parentTaskId] });
       queryClient.invalidateQueries({ queryKey: ['board'] });
     },
   });
@@ -145,6 +177,7 @@ export function useRemoveTaskParent() {
     onSuccess: (_res, { taskId, parentTaskId }) => {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'parents', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', parentTaskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'subtasks', parentTaskId] });
       queryClient.invalidateQueries({ queryKey: ['board'] });
     },
   });
