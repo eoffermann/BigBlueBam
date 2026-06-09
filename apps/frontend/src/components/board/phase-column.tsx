@@ -11,6 +11,7 @@ import { InlineTaskInput } from './inline-task-input';
 interface PhaseColumnProps {
   phase: Phase & { tasks: Task[] };
   onTaskClick: (taskId: string) => void;
+  onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
   onAddTask: (phaseId: string) => void;
   onInlineCreate?: (phaseId: string, title: string) => Promise<void>;
 }
@@ -24,7 +25,7 @@ const VIRTUALIZE_THRESHOLD = 50;
 const ESTIMATED_CARD_HEIGHT = 104;
 const CARD_GAP = 8;
 
-export function PhaseColumn({ phase, onTaskClick, onAddTask, onInlineCreate }: PhaseColumnProps) {
+export function PhaseColumn({ phase, onTaskClick, onTaskContextMenu, onAddTask, onInlineCreate }: PhaseColumnProps) {
   const [isCreating, setIsCreating] = useState(false);
   const { setNodeRef, isOver } = useDroppable({
     id: `phase-${phase.id}`,
@@ -84,6 +85,7 @@ export function PhaseColumn({ phase, onTaskClick, onAddTask, onInlineCreate }: P
           taskIds={taskIds}
           setNodeRef={setNodeRef}
           onTaskClick={onTaskClick}
+          onTaskContextMenu={onTaskContextMenu}
           isCreating={isCreating}
           onInlineCreate={onInlineCreate}
           onCancelCreate={() => setIsCreating(false)}
@@ -99,6 +101,7 @@ export function PhaseColumn({ phase, onTaskClick, onAddTask, onInlineCreate }: P
                 key={task.id}
                 task={task}
                 onClick={() => onTaskClick(task.id)}
+                onContextMenu={onTaskContextMenu}
               />
             ))}
           </SortableContext>
@@ -128,6 +131,7 @@ interface VirtualTaskListProps {
   taskIds: string[];
   setNodeRef: (el: HTMLElement | null) => void;
   onTaskClick: (taskId: string) => void;
+  onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
   isCreating: boolean;
   onInlineCreate?: (phaseId: string, title: string) => Promise<void>;
   onCancelCreate: () => void;
@@ -145,6 +149,7 @@ function VirtualTaskList({
   taskIds,
   setNodeRef,
   onTaskClick,
+  onTaskContextMenu,
   isCreating,
   onInlineCreate,
   onCancelCreate,
@@ -207,7 +212,11 @@ function VirtualTaskList({
                   paddingBottom: `${CARD_GAP}px`,
                 }}
               >
-                <TaskCard task={task} onClick={() => onTaskClick(task.id)} />
+                <TaskCard
+                  task={task}
+                  onClick={() => onTaskClick(task.id)}
+                  onContextMenu={onTaskContextMenu}
+                />
               </div>
             );
           })}

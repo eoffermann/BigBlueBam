@@ -19,6 +19,7 @@ import { useReducedMotion } from '@/hooks/use-reduced-motion';
 interface TaskCardProps {
   task: Task;
   onClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent, task: Task) => void;
   isDragOverlay?: boolean;
 }
 
@@ -37,7 +38,7 @@ function PriorityIcon({ priority }: { priority: Priority }) {
   }
 }
 
-export function TaskCard({ task, onClick, isDragOverlay = false }: TaskCardProps) {
+export function TaskCard({ task, onClick, onContextMenu, isDragOverlay = false }: TaskCardProps) {
   const prefersReducedMotion = useReducedMotion();
 
   const sortable = useSortable({
@@ -82,6 +83,15 @@ export function TaskCard({ task, onClick, isDragOverlay = false }: TaskCardProps
         sortable.isDragging && !isDragOverlay && 'opacity-30',
       )}
       onClick={!isDragOverlay ? onClick : undefined}
+      onContextMenu={
+        !isDragOverlay && onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onContextMenu(e, task);
+            }
+          : undefined
+      }
     >
       {/* Row 1: State dot, Human ID, Priority, Carry-forward */}
       <div className="flex items-center gap-1.5 mb-1.5">

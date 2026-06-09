@@ -22,11 +22,12 @@ import { TaskCard } from './task-card';
 interface BoardViewProps {
   phases: (Phase & { tasks: Task[] })[];
   onTaskClick: (taskId: string) => void;
+  onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
   onAddTask: (phaseId: string) => void;
   onInlineCreate?: (phaseId: string, title: string) => Promise<void>;
 }
 
-export function BoardView({ phases, onTaskClick, onAddTask, onInlineCreate }: BoardViewProps) {
+export function BoardView({ phases, onTaskClick, onTaskContextMenu, onAddTask, onInlineCreate }: BoardViewProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const moveTaskInStore = useBoardStore((s) => s.moveTask);
   const moveTaskMutation = useMoveTask();
@@ -161,6 +162,7 @@ export function BoardView({ phases, onTaskClick, onAddTask, onInlineCreate }: Bo
             key={phase.id}
             phase={phase}
             onTaskClick={onTaskClick}
+            onTaskContextMenu={onTaskContextMenu}
             onAddTask={onAddTask}
             onInlineCreate={onInlineCreate}
           />

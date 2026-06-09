@@ -36,6 +36,7 @@ interface SwimlaneBoardProps {
   phases: (Phase & { tasks: Task[] })[];
   groupBy: SwimlanGroupBy;
   onTaskClick: (taskId: string) => void;
+  onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
   onAddTask: (phaseId: string) => void;
   members?: Map<string, string>; // userId -> displayName
 }
@@ -155,7 +156,7 @@ function filterPhasesForGroup(
   }));
 }
 
-export function SwimlaneBoard({ phases, groupBy, onTaskClick, onAddTask, members }: SwimlaneBoardProps) {
+export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu, onAddTask, members }: SwimlaneBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const moveTaskInStore = useBoardStore((s) => s.moveTask);
@@ -284,7 +285,13 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onAddTask, members
       >
         <div className="flex gap-4 p-6 overflow-x-auto h-full">
           {phases.map((phase) => (
-            <PhaseColumn key={phase.id} phase={phase} onTaskClick={onTaskClick} onAddTask={onAddTask} />
+            <PhaseColumn
+              key={phase.id}
+              phase={phase}
+              onTaskClick={onTaskClick}
+              onTaskContextMenu={onTaskContextMenu}
+              onAddTask={onAddTask}
+            />
           ))}
         </div>
         <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)' }}>
@@ -352,6 +359,7 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onAddTask, members
                           key={`${group.key}-${phase.id}`}
                           phase={phase}
                           onTaskClick={onTaskClick}
+                          onTaskContextMenu={onTaskContextMenu}
                           onAddTask={onAddTask}
                         />
                       ))}

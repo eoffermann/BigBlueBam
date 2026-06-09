@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, Upload, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Task, PaginatedResponse } from '@bigbluebam/shared';
 import { AppLayout } from '@/components/layout/app-layout';
 import { BoardView } from '@/components/board/board-view';
@@ -31,6 +31,8 @@ import { useProject, useProjects, useDeleteProject } from '@/hooks/use-projects'
 import { useBoardStore } from '@/stores/board.store';
 import { useRealtime } from '@/hooks/use-realtime';
 import { api, ApiError } from '@/lib/api';
+import type { ApiResponse } from '@bigbluebam/shared';
+import { TaskContextMenu } from '@/components/board/task-context-menu';
 
 interface Member {
   id: string;
@@ -97,6 +99,53 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const deleteProject = useDeleteProject();
+  const queryClient = useQueryClient();
+
+  // Right-click context menu state. Anchored at the click viewport
+  // coords; the menu itself re-anchors if it would overflow.
+  const [taskContextMenu, setTaskContextMenu] = useState<
+    { task: Task; x: number; y: number } | null
+  >(null);
+
+  const duplicateTaskMutation = useMutation({
+    mutationFn: (taskId: string) =>
+      api.post<ApiResponse<Task>>(`/tasks/${taskId}/duplicate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+
+  // Replace the task's parent via the m2m endpoint. Passing null clears
+  // every existing parent link first; passing a uuid sets exactly one
+  // parent and removes any others. Keeps the rest of the parent-link
+  // surface (multi-parent in the detail drawer) untouched.
+  const setParentMutation = useMutation({
+    mutationFn: async ({
+      taskId,
+      parentTaskId,
+    }: {
+      taskId: string;
+      parentTaskId: string | null;
+    }) => {
+      const links = await api.get<ApiResponse<{ id: string }[]>>(
+        `/tasks/${taskId}/parents`,
+      );
+      const current = (links.data ?? []).map((l) => l.id);
+      for (const pid of current) {
+        if (pid !== parentTaskId) {
+          await api.delete(`/tasks/${taskId}/parents/${pid}`).catch(() => {});
+        }
+      }
+      if (parentTaskId && !current.includes(parentTaskId)) {
+        await api.post(`/tasks/${taskId}/parents`, { parent_task_id: parentTaskId });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
 
   // Subscribe to realtime events for this project
   useRealtime(projectId);
@@ -197,6 +246,18 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
     setCreateDialogPhaseId(phaseId);
     setShowCreateDialog(true);
   }, []);
+
+  const handleTaskContextMenu = useCallback((e: React.MouseEvent, task: Task) => {
+    setTaskContextMenu({ task, x: e.clientX, y: e.clientY });
+  }, []);
+
+  // All tasks in this project, used by the context menu's parent picker.
+  // Pulled from boardPhases (already loaded) so the menu opens instantly
+  // without a separate fetch.
+  const allProjectTasks = useMemo(
+    () => boardPhases.flatMap((p) => p.tasks),
+    [boardPhases],
+  );
 
   const handleCreateTask = async (data: {
     title: string;
@@ -341,6 +402,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
               phases={filteredPhases}
               groupBy={swimlaneGroupBy}
               onTaskClick={handleTaskClick}
+              onTaskContextMenu={handleTaskContextMenu}
               onAddTask={handleAddTask}
               members={membersMap}
             />
@@ -350,6 +412,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
           <BoardView
             phases={filteredPhases}
             onTaskClick={handleTaskClick}
+            onTaskContextMenu={handleTaskContextMenu}
             onAddTask={handleAddTask}
             onInlineCreate={handleInlineCreate}
           />
@@ -685,6 +748,43 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
             </div>
           </div>
         </>
+      )}
+
+      {taskContextMenu && (
+        <TaskContextMenu
+          task={taskContextMenu.task}
+          x={taskContextMenu.x}
+          y={taskContextMenu.y}
+          onClose={() => setTaskContextMenu(null)}
+          members={members.map((m) => ({
+            id: m.id,
+            display_name: m.display_name,
+            avatar_url: m.avatar_url,
+          }))}
+          phases={boardPhases.map((p) => ({ id: p.id, name: p.name }))}
+          states={projectStates}
+          allTasks={allProjectTasks}
+          onOpenDetail={(taskId) => setSelectedTaskId(taskId)}
+          onAddSubtask={async (parentTaskId, title) => {
+            const parent = allProjectTasks.find((t) => t.id === parentTaskId);
+            await createTask.mutateAsync({
+              projectId,
+              data: {
+                title,
+                phase_id: parent?.phase_id ?? boardPhases[0]?.id ?? '',
+                priority: 'medium',
+                parent_task_id: parentTaskId,
+                sprint_id: selectedSprintId,
+              },
+            });
+          }}
+          onDuplicate={(taskId) => duplicateTaskMutation.mutate(taskId)}
+          onUpdate={handleUpdateTask}
+          onSetParent={(taskId, parentTaskId) =>
+            setParentMutation.mutate({ taskId, parentTaskId })
+          }
+          onDelete={(taskId) => handleDeleteTask(taskId)}
+        />
       )}
     </AppLayout>
   );
