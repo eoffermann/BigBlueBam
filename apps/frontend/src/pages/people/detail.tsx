@@ -196,6 +196,16 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
     resetPassword.reset();
   };
 
+  // Wave E.D: the Transfer-ownership endpoint
+  // (POST /org/members/:userId/transfer-ownership →
+  // bam.org_member_transfer_ownership.create). The matrix already
+  // reflects SuperUser bypass, so the explicit is_superuser disjunct
+  // is no longer needed. Must be called BEFORE the early returns
+  // below — otherwise the hook count changes between the loading
+  // render and the resolved render, violating Rules of Hooks and
+  // crashing the whole tree to a black screen.
+  const callerIsOwner = useCan('bam.org_member_transfer_ownership.create');
+
   // --- Render guards ---
   if (isLoading) {
     return (
@@ -230,12 +240,6 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
 
   const canAct = canActOn(currentUser, member);
   const isSelf = member.id === currentUser?.id;
-  // Wave E.D: replace inline `role === 'owner' || is_superuser` check with
-  // the per-action permission for the Transfer-ownership endpoint
-  // (POST /org/members/:userId/transfer-ownership → bam.org_member_transfer_ownership.create).
-  // The matrix already reflects SuperUser bypass, so the explicit
-  // is_superuser disjunct is no longer needed.
-  const callerIsOwner = useCan('bam.org_member_transfer_ownership.create');
 
   return (
     <AppLayout
