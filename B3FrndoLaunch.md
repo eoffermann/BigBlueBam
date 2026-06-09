@@ -25,3 +25,29 @@ Rebuild local Docker images as needed to test in simulated production. Run unit 
   * No BAM task can be marked Done unless all of its subtasks are marked Done
 
 Continue iterating through the list, looping over the list again at the end to make sure everything is complete. If it has not completed successfully, it has not been deferred \- do not assume we’ll run it through the next command.
+
+---
+
+## Completion status (2026-06-08)
+
+All requirements landed on branch `b3-frndo-launch`. See `B3FrndoLaunchProgress.md` for the per-item file map, decisions, and full smoke-test transcript; `B3FrndoLaunchPlan.md` for the discovery findings that shaped the approach.
+
+| Requirement | Status | Commit |
+|---|---|---|
+| Git: branch + per-feature commits + push | ✅ | `94450a2`, `7a50de6`, `2ae169a`, `2c30186`, `84a4477` |
+| CLI documentation | ✅ | `7a50de6` — `docs/reference/cli.md` |
+| CLI `reset-password` | ✅ | `7a50de6` — `apps/api/src/cli.ts` |
+| Invitation emails actually send | ✅ | `2ae169a` — `inviteMember()` now enqueues `member-invitation` jobs; new users get an onboarding "set your password" link |
+| "Send password reset" emails a link | ✅ | `2ae169a` — admin button + `/auth/password-reset/{request,consume}` + `/b3/password-reset` page; opaque-by-design for unknown emails; one-time + 60-minute TTL with strict double-use guard |
+| Reset Password displays new password | ✅ | `7a50de6` — the route handler now forwards the password the service already generated; the reveal-once dialog on the frontend was already wired |
+| Create user can add to projects | ✅ | `2c30186` — project multi-select on the invite dialog; service inserts `project_memberships` rows in the same transaction; cross-org rejection is structured |
+| Subtasks bidirectional + many-to-many | ✅ | `84a4477` — `task_parent_links` join table + Parent Tasks section on the task drawer + endpoints + idempotent add with cycle detection |
+| Done-gate blocks parent until subtasks done | ✅ | `84a4477` — enforced in `moveTask` AND `updateTask`; surfaces as `409 INCOMPLETE_SUBTASKS` with the open child IDs in the details; the board UI surfaces the rejection so the user knows why |
+
+**Tests:** 488 api + 94 shared + 119 frontend = 701 passing, 0 failures. Both api and frontend typecheck clean.
+
+**CI guards:** `lint:migrations` 0 violations (21 warnings, all on pre-existing migrations), `check-bolt-catalog` OK, schema introspection confirms both new tables (`password_reset_tokens`, `task_parent_links`) match their Drizzle declarations exactly.
+
+**Bugs found and fixed inline:**
+- The pre-existing TypeScript import-casing error in `apps/frontend/src/main.tsx` (`'./app'` vs `'./App'`) that surfaced during the typecheck of this work.
+- The admin reset-password endpoint dropping the generated password before returning it — this was one of the launch requirements, but had been suspected to be a UI issue; the actual bug was on the server side.
