@@ -55,7 +55,7 @@ export function BlastSidebar({ onNavigate, activePage }: BlastSidebarProps) {
         })}
 
         <div className="pt-4 pb-1 px-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Settings</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Blast Settings</span>
         </div>
 
         {settingsItems.map((item) => {

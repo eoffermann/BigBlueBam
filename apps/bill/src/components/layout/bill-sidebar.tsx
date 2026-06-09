@@ -27,7 +27,7 @@ const navItems = [
 ];
 
 const settingsItems = [
-  { label: 'Billing Settings', icon: Settings, path: '/settings', page: 'settings' },
+  { label: 'Bill Settings', icon: Settings, path: '/settings', page: 'settings' },
 ];
 
 export function BillSidebar({ onNavigate, activePage }: BillSidebarProps) {
@@ -76,7 +76,7 @@ export function BillSidebar({ onNavigate, activePage }: BillSidebarProps) {
         })}
 
         <div className="pt-4 pb-1 px-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Settings</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Bill Settings</span>
         </div>
 
         {settingsItems.map((item) => {

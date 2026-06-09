@@ -17,7 +17,7 @@ const navItems = [
   { label: 'Search', icon: Search, path: '/search' },
   { label: 'Graph', icon: GitBranch, path: '/graph' },
   { label: 'Dashboard', icon: BarChart3, path: '/dashboard' },
-  { label: 'Settings', icon: Settings, path: '/settings' },
+  { label: 'Beacon Settings', icon: Settings, path: '/settings' },
 ];
 
 function ProjectScopeSelector() {

@@ -20,7 +20,7 @@ const navItems = [
   { label: 'Explorer', icon: Compass, path: '/explorer', page: 'explorer' },
   { label: 'Reports', icon: FileBarChart, path: '/reports', page: 'reports' },
   { label: 'Saved Queries', icon: Database, path: '/saved-queries', page: 'saved-queries' },
-  { label: 'Settings', icon: Settings, path: '/settings', page: 'settings' },
+  { label: 'Bench Settings', icon: Settings, path: '/settings', page: 'settings' },
 ];
 
 export function BenchSidebar({ onNavigate, activePage }: BenchSidebarProps) {

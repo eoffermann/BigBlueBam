@@ -10,7 +10,7 @@ interface BlankSidebarProps {
 
 const navItems = [
   { label: 'Forms', icon: LayoutList, path: '/', page: 'forms' },
-  { label: 'Settings', icon: Settings, path: '/settings', page: 'settings' },
+  { label: 'Blank Settings', icon: Settings, path: '/settings', page: 'settings' },
 ];
 
 export function BlankSidebar({ onNavigate, activePage }: BlankSidebarProps) {

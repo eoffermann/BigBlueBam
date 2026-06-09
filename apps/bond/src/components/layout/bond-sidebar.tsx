@@ -25,7 +25,7 @@ const navItems = [
   { label: 'Contacts', icon: Users, path: '/contacts', page: 'contacts' },
   { label: 'Companies', icon: Building2, path: '/companies', page: 'companies' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics', page: 'analytics' },
-  { label: 'Settings', icon: Settings, path: '/settings/pipelines', page: 'settings' },
+  { label: 'Bond Settings', icon: Settings, path: '/settings/pipelines', page: 'settings' },
 ];
 
 function PipelineScopeSelector() {
