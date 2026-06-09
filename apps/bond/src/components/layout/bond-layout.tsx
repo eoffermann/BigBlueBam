@@ -1,10 +1,9 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, Bell, LogOut } from 'lucide-react';
+import { ChevronRight, Bell } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
+import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BondSidebar } from '@/components/layout/bond-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
-import { Avatar } from '@/components/common/avatar';
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { useAuthStore } from '@/stores/auth.store';
 
 type ActiveRoute = { page: string; id?: string };
@@ -59,15 +58,6 @@ export function BondLayout({ children, onNavigate, activeRoute }: BondLayoutProp
   const crumbs = breadcrumbsFor(activeRoute);
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/b3/api/auth/logout', { method: 'POST', credentials: 'include' });
-    } catch {
-      // ignore
-    }
-    window.location.href = '/b3/';
-  };
-
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       <div className="flex flex-1 overflow-hidden">
@@ -116,26 +106,7 @@ export function BondLayout({ children, onNavigate, activeRoute }: BondLayoutProp
                 <Bell className="h-4.5 w-4.5" />
               </button>
 
-              <DropdownMenu
-                trigger={
-                  <button
-                    className="flex items-center gap-2 rounded-lg p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                    aria-label="User menu"
-                  >
-                    <Avatar src={user?.avatar_url} name={user?.display_name} size="sm" />
-                  </button>
-                }
-              >
-                <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{user?.display_name}</p>
-                  <p className="text-xs text-zinc-500">{user?.email}</p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={handleLogout} destructive>
-                  <LogOut className="h-4 w-4" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenu>
+              <UserMenu user={user} />
             </div>
           </header>
 

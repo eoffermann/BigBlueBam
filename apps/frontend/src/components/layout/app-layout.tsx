@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { Search, LogOut, ChevronRight, Bell, CheckCheck, MessageCircle, AlertTriangle, X, RefreshCw } from 'lucide-react';
+import { Search, ChevronRight, Bell, CheckCheck, MessageCircle, AlertTriangle, X, RefreshCw } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
+import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from './sidebar';
-import { Avatar } from '@/components/common/avatar';
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { CommandPalette } from '@/components/common/command-palette';
 import { SuperuserContextBanner } from '@/components/superuser-context-banner';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -62,7 +61,7 @@ function UpdateBanner() {
 }
 
 export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavigate, onCreateProject }: AppLayoutProps) {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -139,11 +138,6 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
     if (showNotifications) document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showNotifications]);
-
-  const handleLogout = async () => {
-    await logout();
-    onNavigate('/login');
-  };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
@@ -301,33 +295,7 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
               )}
             </div>
 
-            <DropdownMenu
-              trigger={
-                <button
-                  className="flex items-center gap-2 rounded-lg p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                  aria-label="User menu"
-                >
-                  <Avatar src={user?.avatar_url} name={user?.display_name} size="sm" />
-                </button>
-              }
-            >
-              <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{user?.display_name}</p>
-                <p className="text-xs text-zinc-500">{user?.email}</p>
-              </div>
-              <DropdownMenuItem onSelect={() => onNavigate('/settings')}>Settings</DropdownMenuItem>
-              {canManageOwners && (
-                <DropdownMenuItem onSelect={() => onNavigate('/people')}>People</DropdownMenuItem>
-              )}
-              {user?.is_superuser === true && (
-                <DropdownMenuItem onSelect={() => onNavigate('/superuser')}>SuperUser Console</DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={handleLogout} destructive>
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenu>
+            <UserMenu user={user} />
           </div>
         </header>
 

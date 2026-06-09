@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronRight, Search } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
+import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BanterSidebar } from '@/components/sidebar/banter-sidebar';
 import { ThreadPanel } from '@/components/threads/thread-panel';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
 import { NotificationsBell } from '@/components/layout/notifications-bell';
-import { UserMenu } from '@/components/layout/user-menu';
+import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
 import { usePresence } from '@/hooks/use-presence';
 import { useUnreadCounts } from '@/hooks/use-unread';
@@ -61,6 +62,7 @@ export function BanterLayout({
   const activeThreadMessageId = useChannelStore((s) => s.activeThreadMessageId);
   const sidebarCollapsed = useChannelStore((s) => s.sidebarCollapsed);
   const activeChannelId = useChannelStore((s) => s.activeChannelId);
+  const user = useAuthStore((s) => s.user);
   const [searchQuery, setSearchQuery] = useState('');
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
 
@@ -148,7 +150,7 @@ export function BanterLayout({
                 />
               </div>
               <NotificationsBell onNavigate={onNavigate} />
-              <UserMenu onNavigate={onNavigate} hasLocalSettings={false} />
+              <UserMenu user={user} />
             </div>
           </header>
 
