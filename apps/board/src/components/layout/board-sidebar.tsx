@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/project.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { useProjects } from '@/hooks/use-projects';
 import { useState, useRef, useEffect } from 'react';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BoardSidebarProps {
   onNavigate: (path: string) => void;
@@ -106,6 +107,7 @@ function ProjectScopeSelector() {
 }
 
 export function BoardSidebar({ onNavigate, activePage }: BoardSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -144,6 +146,8 @@ export function BoardSidebar({ onNavigate, activePage }: BoardSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

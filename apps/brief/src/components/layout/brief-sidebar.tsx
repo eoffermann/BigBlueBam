@@ -1,9 +1,11 @@
 import { Home, FileText, Search, Star, LayoutTemplate, FolderOpen, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { useProjects } from '@/hooks/use-projects';
 import { useState, useRef, useEffect } from 'react';
 import { FolderTree } from '@/components/layout/folder-tree';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BriefSidebarProps {
   onNavigate: (path: string) => void;
@@ -104,6 +106,7 @@ function ProjectScopeSelector() {
 }
 
 export function BriefSidebar({ onNavigate, activePage, activeFolderId }: BriefSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -147,6 +150,8 @@ export function BriefSidebar({ onNavigate, activePage, activeFolderId }: BriefSi
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <FolderTree onNavigate={onNavigate} activeFolderId={activeFolderId} />
       </div>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

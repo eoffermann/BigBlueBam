@@ -1,8 +1,10 @@
 import { Zap, Activity, LayoutTemplate, FolderOpen, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { useProjects } from '@/hooks/use-projects';
 import { useState, useRef, useEffect } from 'react';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BoltSidebarProps {
   onNavigate: (path: string) => void;
@@ -100,6 +102,7 @@ function ProjectScopeSelector() {
 }
 
 export function BoltSidebar({ onNavigate, activePage }: BoltSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -138,6 +141,8 @@ export function BoltSidebar({ onNavigate, activePage }: BoltSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

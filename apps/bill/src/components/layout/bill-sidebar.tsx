@@ -9,6 +9,8 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth.store';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BillSidebarProps {
   onNavigate: (path: string) => void;
@@ -29,6 +31,7 @@ const settingsItems = [
 ];
 
 export function BillSidebar({ onNavigate, activePage }: BillSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -96,6 +99,8 @@ export function BillSidebar({ onNavigate, activePage }: BillSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import { Home, List, Search, GitBranch, BarChart3, Settings, FolderOpen, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { useProjects } from '@/hooks/use-projects';
 import { useState, useRef, useEffect } from 'react';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BeaconSidebarProps {
   onNavigate: (path: string) => void;
@@ -103,6 +105,7 @@ function ProjectScopeSelector() {
 }
 
 export function BeaconSidebar({ onNavigate, activePage }: BeaconSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -142,6 +145,8 @@ export function BeaconSidebar({ onNavigate, activePage }: BeaconSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

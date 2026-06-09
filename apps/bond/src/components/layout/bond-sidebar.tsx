@@ -10,8 +10,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePipelineStore } from '@/stores/pipeline.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { usePipelines } from '@/hooks/use-pipelines';
 import { useState, useRef, useEffect } from 'react';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BondSidebarProps {
   onNavigate: (path: string) => void;
@@ -89,6 +91,7 @@ function PipelineScopeSelector() {
 }
 
 export function BondSidebar({ onNavigate, activePage }: BondSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -124,6 +127,8 @@ export function BondSidebar({ onNavigate, activePage }: BondSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

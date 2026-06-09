@@ -1,8 +1,10 @@
 import { Target, AlertTriangle, Calendar, User, LayoutDashboard, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePeriodStore } from '@/stores/period.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { usePeriods } from '@/hooks/usePeriods';
 import { useState, useRef, useEffect } from 'react';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BearingSidebarProps {
   onNavigate: (path: string) => void;
@@ -97,6 +99,7 @@ function PeriodScopeSelector() {
 }
 
 export function BearingSidebar({ onNavigate, activePage }: BearingSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -135,6 +138,8 @@ export function BearingSidebar({ onNavigate, activePage }: BearingSidebarProps) 
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

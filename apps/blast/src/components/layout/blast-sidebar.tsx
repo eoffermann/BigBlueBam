@@ -1,5 +1,7 @@
 import { Mail, LayoutDashboard, FileText, Users, BarChart3, Globe, Server } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth.store';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BlastSidebarProps {
   onNavigate: (path: string) => void;
@@ -19,6 +21,7 @@ const settingsItems = [
 ];
 
 export function BlastSidebar({ onNavigate, activePage }: BlastSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -75,6 +78,8 @@ export function BlastSidebar({ onNavigate, activePage }: BlastSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

@@ -8,6 +8,8 @@ import {
   GanttChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth.store';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BookSidebarProps {
   onNavigate: (path: string) => void;
@@ -29,6 +31,7 @@ const settingsItems = [
 ];
 
 export function BookSidebar({ onNavigate, activePage }: BookSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -85,6 +88,8 @@ export function BookSidebar({ onNavigate, activePage }: BookSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

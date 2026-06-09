@@ -1,8 +1,8 @@
-import { LayoutDashboard, Settings, User, Plus, Shield, Users, UsersRound } from 'lucide-react';
+import { LayoutDashboard, User, Plus } from 'lucide-react';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/hooks/use-projects';
 import { useAuthStore } from '@/stores/auth.store';
-import { useCan } from '@bigbluebam/ui/use-can';
 
 interface SidebarProps {
   currentProjectId?: string;
@@ -14,9 +14,6 @@ export function Sidebar({ currentProjectId, onNavigate, onCreateProject }: Sideb
   const { data: projectsResponse } = useProjects();
   const projects = projectsResponse?.data ?? [];
   const user = useAuthStore((s) => s.user);
-  // Wave E.D: gate the People sidebar entry on the per-action permission
-  // for listing org members (GET /org/members → bam.org_member.list).
-  const canListOrgMembers = useCan('bam.org_member.list');
 
   return (
     <aside className="flex flex-col h-full w-60 bg-sidebar text-zinc-300 border-r border-zinc-800">
@@ -80,42 +77,7 @@ export function Sidebar({ currentProjectId, onNavigate, onCreateProject }: Sideb
         </div>
       </nav>
 
-      <div className="border-t border-zinc-800 px-3 py-2">
-        {user?.is_superuser === true && (
-          <button
-            onClick={() => onNavigate('/superuser')}
-            className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm text-red-300 hover:bg-sidebar-hover transition-colors"
-          >
-            <Shield className="h-4 w-4" />
-            SuperUser
-          </button>
-        )}
-        {user?.is_superuser === true && (
-          <button
-            onClick={() => onNavigate('/superuser/people')}
-            className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm text-red-300 hover:bg-sidebar-hover transition-colors"
-          >
-            <UsersRound className="h-4 w-4" />
-            All users
-          </button>
-        )}
-        {canListOrgMembers && (
-          <button
-            onClick={() => onNavigate('/people')}
-            className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-sidebar-hover transition-colors"
-          >
-            <Users className="h-4 w-4" />
-            People
-          </button>
-        )}
-        <button
-          onClick={() => onNavigate('/settings')}
-          className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-sidebar-hover transition-colors"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </button>
-      </div>
+      <SidebarPlatformFooter user={user} />
     </aside>
   );
 }

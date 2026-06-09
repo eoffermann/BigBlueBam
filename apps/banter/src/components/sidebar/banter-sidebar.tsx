@@ -13,12 +13,9 @@ import {
   Pencil,
   LogOut,
   Trash2,
-  Shield,
-  Users,
-  UsersRound,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { useCan } from '@bigbluebam/ui/use-can';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 import { useChannels, useCreateChannel, channelDisplayName, type Channel } from '@/hooks/use-channels';
 import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
@@ -94,11 +91,6 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
     if (type === 'channel') return activeRoute.page === 'channel' && activeRoute.slug === slug;
     return activeRoute.page === 'dm' && activeRoute.id === slug;
   };
-
-  // Wave E.D: gate the People sidebar entry on the per-action permission
-  // for listing org members (GET /org/members → bam.org_member.list).
-  // SuperUser bypass is already baked into the matrix server-side.
-  const canManagePeople = useCan('bam.org_member.list');
 
   return (
     <div className="flex flex-col h-full text-zinc-300">
@@ -256,48 +248,7 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
         </div>
       </div>
 
-      {/* Bottom: admin/settings links (Bam-style) */}
-      <div className="border-t border-zinc-800 px-3 py-2 flex-shrink-0">
-        {user?.is_superuser === true && (
-          <button
-            onClick={() => { window.location.href = '/b3/superuser'; }}
-            className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm text-red-300 hover:bg-sidebar-hover transition-colors"
-          >
-            <Shield className="h-4 w-4" />
-            SuperUser
-          </button>
-        )}
-        {user?.is_superuser === true && (
-          <button
-            onClick={() => { window.location.href = '/b3/superuser/people'; }}
-            className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm text-red-300 hover:bg-sidebar-hover transition-colors"
-          >
-            <UsersRound className="h-4 w-4" />
-            All users
-          </button>
-        )}
-        {canManagePeople && (
-          <button
-            onClick={() => { window.location.href = '/b3/people'; }}
-            className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm hover:bg-sidebar-hover transition-colors"
-          >
-            <Users className="h-4 w-4" />
-            People
-          </button>
-        )}
-        <button
-          onClick={() => onNavigate('/settings')}
-          className={cn(
-            'flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm transition-colors',
-            activeRoute.page === 'settings'
-              ? 'bg-sidebar-active text-white'
-              : 'hover:bg-sidebar-hover',
-          )}
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </button>
-      </div>
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

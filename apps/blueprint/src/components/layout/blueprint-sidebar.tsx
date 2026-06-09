@@ -11,6 +11,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth.store';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 export type DiagramFilterKey = 'all' | 'starred' | 'archived' | string;
 
@@ -84,6 +86,7 @@ export function BlueprintSidebar({
   archivedCount,
   onNewDiagram,
 }: BlueprintSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   const sortedTypes = useMemo(() => {
     // Always show the canonical core types, but if the org has data
     // for a custom type the API surfaces we'll render that too.
@@ -159,6 +162,8 @@ export function BlueprintSidebar({
           />
         ))}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }

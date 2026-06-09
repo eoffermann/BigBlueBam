@@ -20,6 +20,10 @@
       "types": "./org-switcher.tsx",
       "default": "./org-switcher.tsx"
     },
+    "./sidebar-footer": {
+      "types": "./sidebar-footer.tsx",
+      "default": "./sidebar-footer.tsx"
+    },
     "./user-menu": {
       "types": "./user-menu.tsx",
       "default": "./user-menu.tsx"

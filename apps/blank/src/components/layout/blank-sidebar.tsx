@@ -1,5 +1,7 @@
 import { FileText, LayoutList, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth.store';
+import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 
 interface BlankSidebarProps {
   onNavigate: (path: string) => void;
@@ -12,6 +14,7 @@ const navItems = [
 ];
 
 export function BlankSidebar({ onNavigate, activePage }: BlankSidebarProps) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="flex flex-col h-full">
       {/* Logo area */}
@@ -44,6 +47,8 @@ export function BlankSidebar({ onNavigate, activePage }: BlankSidebarProps) {
           );
         })}
       </nav>
+
+      <SidebarPlatformFooter user={user} />
     </div>
   );
 }
