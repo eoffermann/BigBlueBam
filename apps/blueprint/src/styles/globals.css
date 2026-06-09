@@ -164,3 +164,72 @@ body {
 .react-flow__node.selected .react-flow__handle {
   opacity: 1;
 }
+
+/* Rich text rendered content (Markdown editor preview)
+ * Mirrors the suite-wide styles from apps/frontend/src/styles/globals.css —
+ * keep them in sync if Bam ever updates its palette. */
+.rich-text-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  border: 1px solid #e4e4e7;
+  margin: 0.5rem 0;
+}
+
+.dark .rich-text-content img {
+  border-color: #3f3f46;
+}
+
+.rich-text-content a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text-content a:hover {
+  color: #1d4ed8;
+}
+
+.rich-text-content .rich-text-heading {
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.rich-text-content h2 {
+  font-size: 1.125rem;
+}
+
+.rich-text-content h3 {
+  font-size: 1rem;
+}
+
+.rich-text-content .rich-text-list {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.25rem 0;
+}
+
+.rich-text-content .rich-text-code-block {
+  background: #f4f4f5;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  margin: 0.5rem 0;
+}
+
+.dark .rich-text-content .rich-text-code-block {
+  background: #27272a;
+}
+
+.rich-text-content .rich-text-inline-code {
+  background: #f4f4f5;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.dark .rich-text-content .rich-text-inline-code {
+  background: #27272a;
+}

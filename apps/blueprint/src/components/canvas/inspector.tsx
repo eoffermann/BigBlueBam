@@ -3,6 +3,7 @@ import { Link2, Lock, Trash2, Pin, PinOff, Palette } from 'lucide-react';
 import type { BlueprintEdge, BlueprintNode } from '@/hooks/use-diagrams';
 import type { UpdateEdgeInput, UpdateNodeInput } from '@/hooks/use-graph';
 import { SHAPE_OPTIONS } from '@/components/canvas/node-types';
+import { RichTextEditor } from '@/components/common/rich-text-editor';
 import { cn } from '@/lib/utils';
 
 interface InspectorProps {
@@ -82,18 +83,6 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
       {...props}
       className={cn(
         'w-full px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-primary-500 outline-none',
-        props.className,
-      )}
-    />
-  );
-}
-
-function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      className={cn(
-        'w-full px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-y',
         props.className,
       )}
     />
@@ -198,13 +187,22 @@ function NodePanel({ node, onUpdate, onDelete, onLinkEntity, onPromoteToTask }: 
         />
       </Field>
 
-      <Field label="Description" htmlFor="bp-node-desc">
-        <TextArea
-          id="bp-node-desc"
-          rows={3}
+      <Field label="Description">
+        {/* Markdown editor shared with Bam task descriptions. The editor
+            commits on every change so the user can preview before saving;
+            we still debounce writes via the same commit-on-different
+            pattern the other inputs use. */}
+        <RichTextEditor
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          onBlur={() => description !== (node.description ?? '') && onUpdate({ description: description || null })}
+          onChange={(next) => {
+            setDescription(next);
+            if (next !== (node.description ?? '')) {
+              onUpdate({ description: next || null });
+            }
+          }}
+          placeholder="Describe this node… **bold**, *italic*, `code`, [links](url) all work."
+          minRows={3}
+          compact
         />
       </Field>
 

@@ -32,7 +32,8 @@
     "date-fns": "^4.1.0",
     "motion": "^12.9.3",
     "@xyflow/react": "^12.10.4",
-    "mermaid": "^11.4.0"
+    "mermaid": "^11.4.0",
+    "dompurify": "^3.3.3"
   },
   "devDependencies": {
     "vite": "^6.3.2",
@@ -40,6 +41,7 @@
     "typescript": "^5.8.3",
     "tailwindcss": "^4.1.4",
     "@tailwindcss/vite": "^4.1.4",
+    "@types/dompurify": "^3.2.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "vitest": "^3.1.2",
