@@ -27,7 +27,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/common/dropdown-menu';
 import { useAuthStore } from '@/stores/auth.store';
-import { ApiError } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import type { PaginatedResponse, Project } from '@bigbluebam/shared';
 import {
   peopleApi,
   canActOn,
@@ -105,7 +106,29 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteDisplayName, setInviteDisplayName] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
+  const [inviteProjectIds, setInviteProjectIds] = useState<Set<string>>(new Set());
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+
+  // Projects in this org — used by the invite dialog so the admin can
+  // assign the new member to one or more projects at create time, instead
+  // of having to navigate into the user editor afterwards (B3 Frndo Launch).
+  // Only fetched once the invite modal opens so we don't pay the cost on
+  // every page load.
+  const { data: projectsRes } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.get<PaginatedResponse<Project>>('/projects'),
+    enabled: showInvite,
+  });
+  const orgProjects = projectsRes?.data ?? [];
+
+  const toggleInviteProject = (projectId: string) => {
+    setInviteProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  };
 
   // Confirm-remove state
   const [confirmRemove, setConfirmRemove] = useState<PersonListItem | null>(null);
@@ -155,10 +178,16 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
       const emailSuffix = res.data.email_sent
         ? ' Invitation email sent.'
         : ' SMTP not configured — share access manually (use "Send password reset link" or "Reset password").';
-      setInviteSuccess(base + emailSuffix);
+      const projectCount = vars.project_ids?.length ?? 0;
+      const projectSuffix =
+        projectCount > 0
+          ? ` Added to ${projectCount} project${projectCount === 1 ? '' : 's'}.`
+          : '';
+      setInviteSuccess(base + projectSuffix + emailSuffix);
       setInviteEmail('');
       setInviteDisplayName('');
       setInviteRole('member');
+      setInviteProjectIds(new Set());
     },
   });
 
@@ -236,6 +265,7 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
       email: inviteEmail.trim(),
       display_name: inviteDisplayName.trim() || undefined,
       role: inviteRole,
+      project_ids: inviteProjectIds.size > 0 ? Array.from(inviteProjectIds) : undefined,
     });
   };
 
@@ -885,6 +915,57 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
               value={inviteRole}
               onValueChange={setInviteRole}
             />
+
+            {/* Project assignments (B3 Frndo Launch). Optional — if none
+                are selected the user is just added to the org with no
+                project access. They start as 'member' on every selected
+                project; admins can tune per-project roles afterwards from
+                the user-detail Projects tab. */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Add to projects (optional)
+              </label>
+              {orgProjects.length === 0 ? (
+                <p className="text-xs text-zinc-500">
+                  No projects yet — you can add this user to projects later.
+                </p>
+              ) : (
+                <>
+                  <div className="max-h-44 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {orgProjects.map((p) => {
+                      const checked = inviteProjectIds.has(p.id);
+                      return (
+                        <label
+                          key={p.id}
+                          className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleInviteProject(p.id)}
+                            className="rounded text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-zinc-900 dark:text-zinc-100 truncate">{p.name}</span>
+                          {p.task_id_prefix && (
+                            <span className="text-xs font-mono text-zinc-400">
+                              {p.task_id_prefix}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {inviteProjectIds.size === 0
+                      ? 'No projects selected — user will be added to the org only.'
+                      : `Will be added as 'member' on ${inviteProjectIds.size} project${
+                          inviteProjectIds.size === 1 ? '' : 's'
+                        }.`}
+                  </p>
+                </>
+              )}
+            </div>
+
             {invite.isError && (
               <p className="text-sm text-red-600">
                 {(invite.error as Error)?.message ?? 'Failed to invite member.'}

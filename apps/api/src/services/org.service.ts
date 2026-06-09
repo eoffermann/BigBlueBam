@@ -164,12 +164,22 @@ export async function inviteMember(
   email: string,
   role: string,
   displayName?: string,
-): Promise<{ user: { id: string; email: string; display_name: string; avatar_url: string | null; role: string; is_active: boolean; created_at: Date; password_hash: string | null }; was_existing: boolean }> {
+  projectIds?: string[],
+): Promise<{ user: { id: string; email: string; display_name: string; avatar_url: string | null; role: string; is_active: boolean; created_at: Date; password_hash: string | null }; was_existing: boolean; projects_added: string[]; projects_skipped: string[] }> {
   // Look up an existing user by email first — they may already exist from
   // a different org's invite. The users.email UNIQUE constraint makes email
   // the global identity; multi-org belonging is expressed via
   // organization_memberships rows.
   const normalizedEmail = email.toLowerCase().trim();
+
+  // Project assignments (B3 Frndo Launch). Filter out duplicates, validate
+  // every project belongs to the org we're inviting into. Cross-org IDs
+  // surface a CrossOrgProjectError to the route, which maps to a 400.
+  const uniqueProjectIds = projectIds ? Array.from(new Set(projectIds)) : [];
+  if (uniqueProjectIds.length > 0) {
+    const bad = await findCrossOrgProjects(orgId, uniqueProjectIds);
+    if (bad.length > 0) throw new CrossOrgProjectError(bad);
+  }
   const [existingUser] = await db
     .select()
     .from(users)
@@ -194,7 +204,7 @@ export async function inviteMember(
     // Add them as a member of this org. is_default stays false — their
     // existing default org is preserved so their next login lands where
     // they expect.
-    await db.transaction(async (tx) => {
+    const existingProjectResult = await db.transaction(async (tx) => {
       await tx.insert(organizationMemberships).values({
         user_id: existingUser.id,
         org_id: orgId,
@@ -203,6 +213,7 @@ export async function inviteMember(
       // Wave E.F: role is stored in account_group_memberships, not on the
       // membership row.
       await setUserOrgRole(existingUser.id, orgId, role, {}, tx);
+      return await insertProjectMemberships(tx, existingUser.id, uniqueProjectIds);
     });
     const safeExisting = {
       id: existingUser.id,
@@ -218,7 +229,12 @@ export async function inviteMember(
       // before they ever set a password).
       password_hash: existingUser.password_hash,
     };
-    return { user: safeExisting, was_existing: true };
+    return {
+      user: safeExisting,
+      was_existing: true,
+      projects_added: existingProjectResult.added,
+      projects_skipped: existingProjectResult.skipped,
+    };
   }
 
   // Brand-new user — create the user row + their first membership. This
@@ -243,6 +259,8 @@ export async function inviteMember(
     // Wave E.F: role lives in account_group_memberships now.
     await setUserOrgRole(user!.id, orgId, role, {}, tx);
 
+    const projectResult = await insertProjectMemberships(tx, user!.id, uniqueProjectIds);
+
     const safeUser = {
       id: user!.id,
       email: user!.email,
@@ -253,8 +271,60 @@ export async function inviteMember(
       created_at: user!.created_at,
       password_hash: user!.password_hash,
     };
-    return { user: safeUser, was_existing: false };
+    return {
+      user: safeUser,
+      was_existing: false,
+      projects_added: projectResult.added,
+      projects_skipped: projectResult.skipped,
+    };
   });
+}
+
+/**
+ * Idempotent project-membership insert used by inviteMember. Cross-org
+ * validation is performed by the caller (it needs to happen before we
+ * start the txn so a bad input doesn't leave a half-created user behind).
+ * Returns the per-project added/skipped split so the route can echo it
+ * in the invite response.
+ */
+async function insertProjectMemberships(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  userId: string,
+  projectIds: string[],
+  defaultRole: 'admin' | 'member' | 'viewer' = 'member',
+): Promise<{ added: string[]; skipped: string[] }> {
+  if (projectIds.length === 0) return { added: [], skipped: [] };
+
+  const existing = await tx
+    .select({ project_id: projectMemberships.project_id })
+    .from(projectMemberships)
+    .where(
+      and(
+        eq(projectMemberships.user_id, userId),
+        inArray(projectMemberships.project_id, projectIds),
+      ),
+    );
+  const existingSet = new Set(existing.map((r) => r.project_id));
+
+  const toInsert = projectIds.filter((id) => !existingSet.has(id));
+  if (toInsert.length > 0) {
+    await tx
+      .insert(projectMemberships)
+      .values(
+        toInsert.map((project_id) => ({
+          project_id,
+          user_id: userId,
+          role: defaultRole,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [projectMemberships.project_id, projectMemberships.user_id],
+      });
+  }
+  return {
+    added: toInsert,
+    skipped: projectIds.filter((id) => existingSet.has(id)),
+  };
 }
 
 const ROLE_HIERARCHY = ['guest', 'viewer', 'member', 'admin', 'owner'] as const;

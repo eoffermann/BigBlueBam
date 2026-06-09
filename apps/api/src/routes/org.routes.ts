@@ -794,12 +794,14 @@ export default async function orgRoutes(fastify: FastifyInstance) {
       const data = schema.parse(request.body);
 
       try {
-        const { user, was_existing } = await orgService.inviteMember(
-          request.user!.org_id,
-          data.email,
-          data.role,
-          data.display_name,
-        );
+        const { user, was_existing, projects_added, projects_skipped } =
+          await orgService.inviteMember(
+            request.user!.org_id,
+            data.email,
+            data.role,
+            data.display_name,
+            data.project_ids,
+          );
 
         // Send the invitation email. For brand-new users (no password yet),
         // mint a password-reset token so they can set their own password
@@ -862,9 +864,25 @@ export default async function orgRoutes(fastify: FastifyInstance) {
         // 201 CREATED for a brand-new user, 200 OK when we added an
         // existing user to this org as an additional membership.
         return reply.status(was_existing ? 200 : 201).send({
-          data: { ...safe, was_existing, email_sent },
+          data: {
+            ...safe,
+            was_existing,
+            email_sent,
+            projects_added,
+            projects_skipped,
+          },
         });
       } catch (err: any) {
+        if (err instanceof orgService.CrossOrgProjectError) {
+          return reply.status(400).send({
+            error: {
+              code: 'CROSS_ORG_PROJECT',
+              message: 'One or more project_ids do not belong to this organization',
+              details: err.projectIds.map((id) => ({ field: 'project_ids', issue: id })),
+              request_id: request.id,
+            },
+          });
+        }
         if (err instanceof orgService.AlreadyMemberError) {
           return reply.status(409).send({
             error: {
@@ -930,10 +948,15 @@ export default async function orgRoutes(fastify: FastifyInstance) {
               email: z.string().email().max(320),
               role: z.enum(['member', 'admin']).default('member'),
               display_name: z.string().max(100).optional(),
+              project_ids: z.array(z.string().uuid()).optional(),
             }),
           )
           .min(1)
           .max(100),
+        // Convenience: project_ids applied to every row that didn't
+        // specify its own. Saves a UI from having to thread the same
+        // assignment list through 50 rows.
+        default_project_ids: z.array(z.string().uuid()).optional(),
       });
       const data = schema.parse(request.body);
 
@@ -941,7 +964,12 @@ export default async function orgRoutes(fastify: FastifyInstance) {
         Awaited<ReturnType<typeof orgService.inviteMember>>['user'],
         'password_hash'
       >;
-      type Succeeded = SafeUser & { was_existing: boolean; email_sent: boolean };
+      type Succeeded = SafeUser & {
+        was_existing: boolean;
+        email_sent: boolean;
+        projects_added: string[];
+        projects_skipped: string[];
+      };
       const succeeded: Succeeded[] = [];
       const failed: { email: string; code: string; message: string }[] = [];
 
@@ -973,12 +1001,15 @@ export default async function orgRoutes(fastify: FastifyInstance) {
         seen.add(normalized);
 
         try {
-          const { user, was_existing } = await orgService.inviteMember(
-            request.user!.org_id,
-            row.email,
-            row.role,
-            row.display_name,
-          );
+          const projectIds = row.project_ids ?? data.default_project_ids ?? [];
+          const { user, was_existing, projects_added, projects_skipped } =
+            await orgService.inviteMember(
+              request.user!.org_id,
+              row.email,
+              row.role,
+              row.display_name,
+              projectIds,
+            );
           const needsOnboarding = user.password_hash == null;
           let email_sent = false;
           try {
@@ -1011,8 +1042,22 @@ export default async function orgRoutes(fastify: FastifyInstance) {
             );
           }
           const { password_hash: _omit, ...safe } = user;
-          succeeded.push({ ...safe, was_existing, email_sent });
+          succeeded.push({
+            ...safe,
+            was_existing,
+            email_sent,
+            projects_added,
+            projects_skipped,
+          });
         } catch (err: any) {
+          if (err instanceof orgService.CrossOrgProjectError) {
+            failed.push({
+              email: row.email,
+              code: 'CROSS_ORG_PROJECT',
+              message: `Project(s) not in current org: ${err.projectIds.join(', ')}`,
+            });
+            continue;
+          }
           if (err instanceof orgService.AlreadyMemberError) {
             failed.push({
               email: row.email,
