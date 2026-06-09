@@ -366,7 +366,18 @@ describe('Task Service', () => {
     });
 
     it('sets completed_at when moving to terminal phase', async () => {
-      // select phase -> terminal
+      // Select order inside moveTask:
+      //   1. getTask(taskId) → uses .limit() → returns the existing task row
+      //   2. phases lookup    → uses .limit() → returns the target phase row
+      //   3. tasks WHERE parent_task_id = …  → awaits .where() directly
+      //   4. task_parent_links WHERE …       → awaits .where() directly
+      // Calls 3 and 4 are the B3 Frndo Launch done-gate's collectChildTaskIds.
+      // No children exist here so both return [], which lets the gate pass.
+
+      const getTaskLimit = vi.fn().mockResolvedValue([fakeTask]);
+      const getTaskWhere = vi.fn().mockReturnValue({ limit: getTaskLimit });
+      const getTaskFrom = vi.fn().mockReturnValue({ where: getTaskWhere });
+
       const phaseLimit = vi.fn().mockResolvedValue([{
         id: 'phase-done',
         auto_state_on_enter: 'state-done',
@@ -374,7 +385,15 @@ describe('Task Service', () => {
       }]);
       const phaseWhere = vi.fn().mockReturnValue({ limit: phaseLimit });
       const phaseFrom = vi.fn().mockReturnValue({ where: phaseWhere });
-      mockDb.select.mockReturnValue({ from: phaseFrom });
+
+      const childrenWhere = vi.fn().mockResolvedValue([]);
+      const childrenFrom = vi.fn().mockReturnValue({ where: childrenWhere });
+
+      mockDb.select
+        .mockReturnValueOnce({ from: getTaskFrom })
+        .mockReturnValueOnce({ from: phaseFrom })
+        .mockReturnValueOnce({ from: childrenFrom })
+        .mockReturnValueOnce({ from: childrenFrom });
 
       // update task
       const updateReturning = vi.fn().mockResolvedValue([{

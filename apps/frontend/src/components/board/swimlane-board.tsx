@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Phase, Task } from '@bigbluebam/shared';
 import { useBoardStore } from '@/stores/board.store';
 import { useMoveTask } from '@/hooks/use-tasks';
+import { ApiError } from '@/lib/api';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { PhaseColumn } from './phase-column';
 import { TaskCard } from './task-card';
@@ -243,10 +244,19 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onAddTask, members
     if (!targetPhaseId) return;
 
     moveTaskInStore(taskId, targetPhaseId, targetPosition);
-    moveTaskMutation.mutate({
-      taskId,
-      data: { phase_id: targetPhaseId, position: targetPosition },
-    });
+    moveTaskMutation.mutate(
+      {
+        taskId,
+        data: { phase_id: targetPhaseId, position: targetPosition },
+      },
+      {
+        onError: (err: unknown) => {
+          if (err instanceof ApiError && err.code === 'INCOMPLETE_SUBTASKS') {
+            alert(err.message);
+          }
+        },
+      },
+    );
   };
 
   const toggleGroup = (key: string) => {

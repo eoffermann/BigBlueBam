@@ -1,10 +1,11 @@
-import { eq, and, sql, ilike, asc, gt, desc } from 'drizzle-orm';
+import { eq, and, or, sql, ilike, asc, gt, desc, inArray, isNull } from 'drizzle-orm';
 import Redis from 'ioredis';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
 import { phases } from '../db/schema/phases.js';
 import { tickets, ticketMessages } from '../db/schema/tickets.js';
+import { taskParentLinks } from '../db/schema/task-parent-links.js';
 import type { CreateTaskInput, UpdateTaskInput, MoveTaskInput, BulkUpdateInput } from '@bigbluebam/shared';
 import { broadcastToProject } from './realtime.service.js';
 import { logActivity } from './activity.service.js';
@@ -34,6 +35,290 @@ function getTicketEventPublisher(): Redis {
     ticketEventPublisher = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 3 });
   }
   return ticketEventPublisher;
+}
+
+// ─── Subtask many-to-many + done-gate (B3 Frndo Launch) ────────────────────
+
+/**
+ * Raised when a task transition into a terminal phase is blocked because one
+ * or more of its subtasks is still open. The route layer maps this to a 409.
+ */
+export class IncompleteSubtasksError extends Error {
+  public readonly code = 'INCOMPLETE_SUBTASKS' as const;
+  constructor(
+    public readonly openSubtasks: { id: string; human_id: string | null; title: string }[],
+  ) {
+    super(
+      `Cannot mark Done — ${openSubtasks.length} subtask${
+        openSubtasks.length === 1 ? '' : 's'
+      } still open`,
+    );
+    this.name = 'IncompleteSubtasksError';
+  }
+}
+
+export class TaskRelationCycleError extends Error {
+  public readonly code = 'CYCLE' as const;
+  constructor(message = 'This would create a cycle between tasks') {
+    super(message);
+    this.name = 'TaskRelationCycleError';
+  }
+}
+
+export class TaskRelationSelfLoopError extends Error {
+  public readonly code = 'SELF_LOOP' as const;
+  constructor() {
+    super('A task cannot be its own parent');
+    this.name = 'TaskRelationSelfLoopError';
+  }
+}
+
+/**
+ * Collect every child task of `parentTaskId` by unioning the legacy
+ * tasks.parent_task_id self-FK with the new task_parent_links join table.
+ * The two paths overlap (every existing parent_task_id was backfilled into
+ * task_parent_links by migration 0171), but we union defensively so a
+ * partially-applied state still returns the correct set.
+ */
+async function collectChildTaskIds(parentTaskId: string): Promise<string[]> {
+  const fromLegacy = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.parent_task_id, parentTaskId));
+  const fromLinks = await db
+    .select({ id: taskParentLinks.task_id })
+    .from(taskParentLinks)
+    .where(eq(taskParentLinks.parent_task_id, parentTaskId));
+  return Array.from(new Set([...fromLegacy.map((r) => r.id), ...fromLinks.map((r) => r.id)]));
+}
+
+/**
+ * Throws IncompleteSubtasksError if the task identified by `taskId` is about
+ * to move to a phase with is_terminal=true while any of its subtasks still
+ * has completed_at IS NULL.
+ *
+ * Pass the target phase or its id. We accept both forms because moveTask
+ * has already loaded the phase row and shouldn't re-query.
+ */
+async function assertSubtasksDoneBeforeTerminal(
+  taskId: string,
+  target: { is_terminal: boolean | null } | string | null,
+): Promise<void> {
+  let isTerminal = false;
+  if (target && typeof target === 'object') {
+    isTerminal = target.is_terminal === true;
+  } else if (typeof target === 'string') {
+    const [row] = await db
+      .select({ is_terminal: phases.is_terminal })
+      .from(phases)
+      .where(eq(phases.id, target))
+      .limit(1);
+    isTerminal = row?.is_terminal === true;
+  }
+  if (!isTerminal) return;
+
+  const childIds = await collectChildTaskIds(taskId);
+  if (childIds.length === 0) return;
+
+  // A child is "open" when its current phase is not terminal. We join
+  // through phases rather than reading the denormalized completed_at column
+  // so the gate stays correct even if a write path forgets to update
+  // completed_at when transitioning into a terminal phase (the legacy
+  // updateTask path is one example).
+  const openChildren = await db
+    .select({ id: tasks.id, human_id: tasks.human_id, title: tasks.title })
+    .from(tasks)
+    .leftJoin(phases, eq(phases.id, tasks.phase_id))
+    .where(
+      and(
+        inArray(tasks.id, childIds),
+        or(sql`${phases.is_terminal} IS NOT TRUE`, isNull(tasks.phase_id)),
+      ),
+    );
+  if (openChildren.length > 0) {
+    throw new IncompleteSubtasksError(openChildren);
+  }
+}
+
+/**
+ * Add `parentTaskId` as a parent of `taskId`. Idempotent (ON CONFLICT DO
+ * NOTHING). Cycle detection walks up to depth 16 from the proposed parent
+ * — if it ever reaches `taskId`, the addition would create a cycle and
+ * is rejected.
+ */
+export async function addTaskParent(
+  taskId: string,
+  parentTaskId: string,
+  createdBy: string | null,
+): Promise<{ already_linked: boolean }> {
+  if (taskId === parentTaskId) throw new TaskRelationSelfLoopError();
+
+  // Walk upward from parentTaskId; if we hit taskId, that's a cycle.
+  const visited = new Set<string>();
+  let frontier = [parentTaskId];
+  for (let depth = 0; depth < 16 && frontier.length > 0; depth++) {
+    if (frontier.includes(taskId)) throw new TaskRelationCycleError();
+    for (const id of frontier) visited.add(id);
+    const next = await db
+      .select({ id: taskParentLinks.parent_task_id })
+      .from(taskParentLinks)
+      .where(inArray(taskParentLinks.task_id, frontier));
+    // Also include the legacy single-FK parents above each frontier task.
+    const legacy = await db
+      .select({ id: tasks.parent_task_id })
+      .from(tasks)
+      .where(and(inArray(tasks.id, frontier), sql`${tasks.parent_task_id} IS NOT NULL`));
+    const merged = new Set<string>();
+    for (const r of next) if (r.id && !visited.has(r.id)) merged.add(r.id);
+    for (const r of legacy) if (r.id && !visited.has(r.id)) merged.add(r.id);
+    frontier = Array.from(merged);
+  }
+
+  // Skip insert if the link already exists.
+  const [existing] = await db
+    .select({ task_id: taskParentLinks.task_id })
+    .from(taskParentLinks)
+    .where(
+      and(
+        eq(taskParentLinks.task_id, taskId),
+        eq(taskParentLinks.parent_task_id, parentTaskId),
+      ),
+    )
+    .limit(1);
+  if (existing) return { already_linked: true };
+
+  await db
+    .insert(taskParentLinks)
+    .values({ task_id: taskId, parent_task_id: parentTaskId, created_by: createdBy })
+    .onConflictDoNothing({
+      target: [taskParentLinks.task_id, taskParentLinks.parent_task_id],
+    });
+
+  // Keep the parent's subtask_count counter coherent with reality. We only
+  // bump if this is a brand-new link AND the link wasn't already accounted
+  // for by the legacy parent_task_id pointer (so we don't double-count when
+  // a task already had this parent via the self-FK).
+  const [primaryParent] = await db
+    .select({ parent_task_id: tasks.parent_task_id })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  if (primaryParent?.parent_task_id !== parentTaskId) {
+    const [childRow] = await db
+      .select({ completed_at: tasks.completed_at })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1);
+    await db
+      .update(tasks)
+      .set({
+        subtask_count: sql`${tasks.subtask_count} + 1`,
+        subtask_done_count:
+          childRow?.completed_at != null
+            ? sql`${tasks.subtask_done_count} + 1`
+            : tasks.subtask_done_count,
+      })
+      .where(eq(tasks.id, parentTaskId));
+  }
+  return { already_linked: false };
+}
+
+export async function removeTaskParent(
+  taskId: string,
+  parentTaskId: string,
+): Promise<{ removed: boolean }> {
+  // Check primary-parent first; if this is the canonical parent_task_id,
+  // null it out to keep the legacy column in sync.
+  const [child] = await db
+    .select({ parent_task_id: tasks.parent_task_id, completed_at: tasks.completed_at })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+
+  let counterShouldDrop = false;
+  if (child?.parent_task_id === parentTaskId) {
+    await db.update(tasks).set({ parent_task_id: null }).where(eq(tasks.id, taskId));
+    counterShouldDrop = true;
+  }
+
+  const deleted = await db
+    .delete(taskParentLinks)
+    .where(
+      and(
+        eq(taskParentLinks.task_id, taskId),
+        eq(taskParentLinks.parent_task_id, parentTaskId),
+      ),
+    )
+    .returning({ task_id: taskParentLinks.task_id });
+
+  if (deleted.length === 0 && !counterShouldDrop) return { removed: false };
+  // If we removed an actual link (either via legacy column or via join table)
+  // decrement the parent's counters by the right amount.
+  counterShouldDrop = counterShouldDrop || deleted.length > 0;
+  if (counterShouldDrop) {
+    await db
+      .update(tasks)
+      .set({
+        subtask_count: sql`greatest(${tasks.subtask_count} - 1, 0)`,
+        subtask_done_count:
+          child?.completed_at != null
+            ? sql`greatest(${tasks.subtask_done_count} - 1, 0)`
+            : tasks.subtask_done_count,
+      })
+      .where(eq(tasks.id, parentTaskId));
+  }
+  return { removed: true };
+}
+
+/** Returns every parent task of taskId via both legacy and join-table paths. */
+export async function listTaskParents(taskId: string) {
+  const fromLegacy = await db
+    .select({ id: tasks.parent_task_id })
+    .from(tasks)
+    .where(eq(tasks.id, taskId));
+  const fromLinks = await db
+    .select({ id: taskParentLinks.parent_task_id })
+    .from(taskParentLinks)
+    .where(eq(taskParentLinks.task_id, taskId));
+  const parentIds = Array.from(
+    new Set([
+      ...fromLegacy.map((r) => r.id).filter((id): id is string => id != null),
+      ...fromLinks.map((r) => r.id),
+    ]),
+  );
+  if (parentIds.length === 0) return [];
+  const rows = await db
+    .select({
+      id: tasks.id,
+      human_id: tasks.human_id,
+      title: tasks.title,
+      phase_id: tasks.phase_id,
+      state_id: tasks.state_id,
+      completed_at: tasks.completed_at,
+      project_id: tasks.project_id,
+    })
+    .from(tasks)
+    .where(inArray(tasks.id, parentIds));
+  return rows;
+}
+
+/** Returns every child (subtask) of taskId via both legacy and join-table paths. */
+export async function listTaskSubtasks(taskId: string) {
+  const ids = await collectChildTaskIds(taskId);
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({
+      id: tasks.id,
+      human_id: tasks.human_id,
+      title: tasks.title,
+      phase_id: tasks.phase_id,
+      state_id: tasks.state_id,
+      completed_at: tasks.completed_at,
+      project_id: tasks.project_id,
+    })
+    .from(tasks)
+    .where(inArray(tasks.id, ids));
+  return rows;
 }
 
 export async function createTask(
@@ -212,6 +497,13 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
   if (data.parent_task_id !== undefined) { updateValues.parent_task_id = data.parent_task_id; changedFields.push('parent_task_id'); }
   if (data.custom_fields !== undefined) { updateValues.custom_fields = data.custom_fields; changedFields.push('custom_fields'); }
 
+  // B3 Frndo Launch — Done-gate on direct phase updates. If the caller is
+  // moving the task into a terminal phase via updateTask (not moveTask),
+  // apply the same "all subtasks must be done" guard.
+  if (data.phase_id !== undefined) {
+    await assertSubtasksDoneBeforeTerminal(taskId, data.phase_id);
+  }
+
   const [task] = await db
     .update(tasks)
     .set(updateValues)
@@ -388,6 +680,15 @@ export async function moveTask(taskId: string, data: MoveTaskInput, actorId?: st
 
   if (phase?.auto_state_on_enter) {
     updateValues.state_id = phase.auto_state_on_enter;
+  }
+
+  // B3 Frndo Launch — Done-gate. Refuse to move a task to a terminal phase
+  // while any of its subtasks (legacy parent_task_id OR many-to-many
+  // task_parent_links) are still open. The check is a no-op for non-
+  // terminal phases and for tasks that already happen to be in a terminal
+  // phase (re-entering Done from Done is fine).
+  if (phase?.is_terminal && existingTask?.phase_id !== data.phase_id) {
+    await assertSubtasksDoneBeforeTerminal(taskId, phase);
   }
 
   // If moving to terminal phase, set completed_at

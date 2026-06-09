@@ -30,7 +30,7 @@ import { useSprints } from '@/hooks/use-sprints';
 import { useProject, useProjects, useDeleteProject } from '@/hooks/use-projects';
 import { useBoardStore } from '@/stores/board.store';
 import { useRealtime } from '@/hooks/use-realtime';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 
 interface Member {
   id: string;
@@ -241,7 +241,20 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
     // overlaps but is not identical to Partial<Task>. Cast through the
     // mutation's own parameter type so any drift stays scoped to this
     // call instead of widening the handler signature.
-    updateTask.mutate({ taskId, data: updates as Parameters<typeof updateTask.mutate>[0]['data'] });
+    updateTask.mutate(
+      { taskId, data: updates as Parameters<typeof updateTask.mutate>[0]['data'] },
+      {
+        onError: (err: unknown) => {
+          // B3 Frndo Launch: surface the done-gate rejection so the user
+          // knows WHY their move was reverted. The optimistic update in
+          // useUpdateTask still rolls back via the standard
+          // queryClient.invalidateQueries path; we just add a heads-up.
+          if (err instanceof ApiError && err.code === 'INCOMPLETE_SUBTASKS') {
+            alert(err.message);
+          }
+        },
+      },
+    );
   };
 
   const handleDeleteTask = (taskId: string) => {

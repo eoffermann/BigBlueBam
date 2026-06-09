@@ -15,6 +15,7 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Phase, Task } from '@bigbluebam/shared';
 import { useBoardStore } from '@/stores/board.store';
 import { useMoveTask } from '@/hooks/use-tasks';
+import { ApiError } from '@/lib/api';
 import { PhaseColumn } from './phase-column';
 import { TaskCard } from './task-card';
 
@@ -127,10 +128,22 @@ export function BoardView({ phases, onTaskClick, onAddTask, onInlineCreate }: Bo
 
     moveTaskInStore(taskId, targetPhaseId, targetPosition);
 
-    moveTaskMutation.mutate({
-      taskId,
-      data: { phase_id: targetPhaseId, position: targetPosition },
-    });
+    moveTaskMutation.mutate(
+      {
+        taskId,
+        data: { phase_id: targetPhaseId, position: targetPosition },
+      },
+      {
+        onError: (err: unknown) => {
+          // B3 Frndo Launch: surface the done-gate rejection. The board
+          // will refetch on settle, so the card snaps back to its original
+          // phase; the alert tells the user why.
+          if (err instanceof ApiError && err.code === 'INCOMPLETE_SUBTASKS') {
+            alert(err.message);
+          }
+        },
+      },
+    );
   };
 
   return (

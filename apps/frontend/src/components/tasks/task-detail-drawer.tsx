@@ -45,6 +45,12 @@ import { RichTextEditor } from '@/components/common/rich-text-editor';
 import { api } from '@/lib/api';
 import { DatePicker } from '@/components/common/date-picker';
 import { HelpdeskPanel } from '@/components/tasks/helpdesk-panel';
+import {
+  useTaskParents,
+  useAddTaskParent,
+  useRemoveTaskParent,
+  type ParentTaskSummary,
+} from '@/hooks/use-tasks';
 
 interface Member {
   id: string;
@@ -727,6 +733,17 @@ export function TaskDetailDrawer({
                               </button>
                             )}
                           </div>
+
+                          {/* Parent tasks (B3 Frndo Launch). Many-to-many:
+                              a task can have multiple parents because more
+                              than one parent might depend on the same shared
+                              work. Listed read-only here as chips with a
+                              remove button; an inline picker below lets the
+                              user attach an additional parent by ID. */}
+                          <ParentTasksSection
+                            taskId={task.id}
+                            projectId={projectId}
+                          />
 
                           {/* Subtasks */}
                           <div>
@@ -1450,5 +1467,176 @@ export function TaskDetailDrawer({
         )}
       </AnimatePresence>
     </RadixDialog.Root>
+  );
+}
+
+// ─── Parent tasks section (B3 Frndo Launch) ────────────────────────────────
+//
+// Many-to-many: a task can have multiple parent tasks because more than one
+// parent task might legitimately depend on the same shared piece of work.
+// The legacy single-parent self-FK (tasks.parent_task_id) still drives the
+// existing denormalized subtask counters; this many-to-many view sits on
+// top of the new task_parent_links join table (+ a defensive union with the
+// legacy column so a single-parent subtask backfilled from before this
+// feature still shows its parent).
+
+interface ParentTasksSectionProps {
+  taskId: string;
+  projectId: string | undefined;
+}
+
+interface TaskSearchResult {
+  id: string;
+  human_id: string | null;
+  title: string;
+  completed_at: string | null;
+}
+
+function ParentTasksSection({ taskId, projectId }: ParentTasksSectionProps) {
+  const { data: parentsRes } = useTaskParents(taskId);
+  const parents = (parentsRes?.data ?? []) as ParentTaskSummary[];
+  const addParent = useAddTaskParent();
+  const removeParent = useRemoveTaskParent();
+
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerError, setPickerError] = useState<string | null>(null);
+
+  // Project task list for the picker — only fetched when the picker is open.
+  const { data: tasksRes } = useQuery({
+    queryKey: ['project-tasks-flat', projectId, pickerSearch],
+    queryFn: () =>
+      api.get<PaginatedResponse<TaskSearchResult>>(`/projects/${projectId}/tasks`, {
+        search: pickerSearch || undefined,
+        limit: '20',
+      }),
+    enabled: !!projectId && showPicker,
+  });
+  const candidateTasks = (tasksRes?.data ?? []).filter(
+    (t) => t.id !== taskId && !parents.some((p) => p.id === t.id),
+  );
+
+  async function handleAdd(parentTaskId: string) {
+    setPickerError(null);
+    try {
+      await addParent.mutateAsync({ taskId, parentTaskId });
+      setShowPicker(false);
+      setPickerSearch('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add parent';
+      setPickerError(message);
+    }
+  }
+
+  if (parents.length === 0 && !showPicker) {
+    return (
+      <div>
+        <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2 flex items-center gap-1.5">
+          <Link2 className="h-4 w-4" />
+          Parent tasks
+        </h3>
+        <button
+          onClick={() => setShowPicker(true)}
+          className="text-xs text-zinc-500 hover:text-primary-600"
+        >
+          + Add a parent task
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2 flex items-center gap-1.5">
+        <Link2 className="h-4 w-4" />
+        Parent tasks
+        {parents.length > 0 && <span className="text-zinc-400">({parents.length})</span>}
+      </h3>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {parents.map((p) => {
+          const isDone = p.completed_at != null;
+          return (
+            <span
+              key={p.id}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs',
+                isDone
+                  ? 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+                  : 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-900 dark:bg-primary-950 dark:text-primary-200',
+              )}
+            >
+              {p.human_id && (
+                <span className="font-mono text-[10px] opacity-70">{p.human_id}</span>
+              )}
+              <span className="truncate max-w-[16rem]">{p.title}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  removeParent.mutate({ taskId, parentTaskId: p.id })
+                }
+                className="ml-0.5 -mr-1 rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
+                title="Remove parent"
+                aria-label="Remove parent"
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </span>
+          );
+        })}
+      </div>
+
+      {!showPicker ? (
+        <button
+          onClick={() => setShowPicker(true)}
+          className="text-xs text-zinc-500 hover:text-primary-600"
+        >
+          + Add another parent
+        </button>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-700 p-2 bg-zinc-50 dark:bg-zinc-800/40">
+          <input
+            type="text"
+            autoFocus
+            placeholder="Search tasks by title or ID..."
+            value={pickerSearch}
+            onChange={(e) => setPickerSearch(e.target.value)}
+            className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+          {pickerError && (
+            <p className="text-xs text-red-600 dark:text-red-400">{pickerError}</p>
+          )}
+          <div className="max-h-40 overflow-y-auto">
+            {candidateTasks.length === 0 ? (
+              <p className="text-xs text-zinc-400 py-2 text-center">No matches</p>
+            ) : (
+              candidateTasks.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleAdd(t.id)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-white dark:hover:bg-zinc-900"
+                >
+                  {t.human_id && (
+                    <span className="font-mono text-[10px] text-zinc-400">{t.human_id}</span>
+                  )}
+                  <span className="truncate">{t.title}</span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setShowPicker(false);
+                setPickerSearch('');
+                setPickerError(null);
+              }}
+              className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

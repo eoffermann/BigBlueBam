@@ -317,20 +317,37 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('bam.task.update'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const data = updateTaskSchema.parse(request.body);
-      const task = await taskService.updateTask(request.params.id, data, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
+      try {
+        const task = await taskService.updateTask(request.params.id, data, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
 
-      if (!task) {
-        return reply.status(404).send({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Task not found',
-            details: [],
-            request_id: request.id,
-          },
-        });
+        if (!task) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Task not found',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+
+        return reply.send({ data: task });
+      } catch (err) {
+        if (err instanceof taskService.IncompleteSubtasksError) {
+          return reply.status(409).send({
+            error: {
+              code: err.code,
+              message: err.message,
+              details: err.openSubtasks.map((s) => ({
+                field: 'subtasks',
+                issue: `${s.human_id ?? s.id}: ${s.title}`,
+              })),
+              request_id: request.id,
+            },
+          });
+        }
+        throw err;
       }
-
-      return reply.send({ data: task });
     },
   );
 
@@ -339,20 +356,144 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('bam.task.move'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const data = moveTaskSchema.parse(request.body);
-      const task = await taskService.moveTask(request.params.id, data, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
+      try {
+        const task = await taskService.moveTask(request.params.id, data, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
 
-      if (!task) {
+        if (!task) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Task not found',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+
+        return reply.send({ data: task });
+      } catch (err) {
+        if (err instanceof taskService.IncompleteSubtasksError) {
+          return reply.status(409).send({
+            error: {
+              code: err.code,
+              message: err.message,
+              details: err.openSubtasks.map((s) => ({
+                field: 'subtasks',
+                issue: `${s.human_id ?? s.id}: ${s.title}`,
+              })),
+              request_id: request.id,
+            },
+          });
+        }
+        throw err;
+      }
+    },
+  );
+
+  // ─── Subtask many-to-many endpoints (B3 Frndo Launch) ──────────────────
+
+  fastify.get<{ Params: { id: string } }>(
+    '/tasks/:id/parents',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.task.get'),
+        requireProjectAccessForEntity('task'),
+      ],
+    },
+    async (request, reply) => {
+      const parents = await taskService.listTaskParents(request.params.id);
+      return reply.send({ data: parents });
+    },
+  );
+
+  fastify.get<{ Params: { id: string } }>(
+    '/tasks/:id/subtasks',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.task.get'),
+        requireProjectAccessForEntity('task'),
+      ],
+    },
+    async (request, reply) => {
+      const subtasks = await taskService.listTaskSubtasks(request.params.id);
+      return reply.send({ data: subtasks });
+    },
+  );
+
+  fastify.post<{ Params: { id: string } }>(
+    '/tasks/:id/parents',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.task.update'),
+        requireScope('read_write'),
+        requireProjectAccessForEntity('task'),
+      ],
+    },
+    async (request, reply) => {
+      const schema = z.object({ parent_task_id: z.string().uuid() });
+      const data = schema.parse(request.body);
+      try {
+        const result = await taskService.addTaskParent(
+          request.params.id,
+          data.parent_task_id,
+          request.user!.id,
+        );
+        return reply.send({ data: result });
+      } catch (err) {
+        if (err instanceof taskService.TaskRelationSelfLoopError) {
+          return reply.status(400).send({
+            error: {
+              code: err.code,
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        if (err instanceof taskService.TaskRelationCycleError) {
+          return reply.status(409).send({
+            error: {
+              code: err.code,
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        throw err;
+      }
+    },
+  );
+
+  fastify.delete<{ Params: { id: string; parentId: string } }>(
+    '/tasks/:id/parents/:parentId',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.task.update'),
+        requireScope('read_write'),
+        requireProjectAccessForEntity('task'),
+      ],
+    },
+    async (request, reply) => {
+      const result = await taskService.removeTaskParent(
+        request.params.id,
+        request.params.parentId,
+      );
+      if (!result.removed) {
         return reply.status(404).send({
           error: {
             code: 'NOT_FOUND',
-            message: 'Task not found',
+            message: 'Parent link not found',
             details: [],
             request_id: request.id,
           },
         });
       }
-
-      return reply.send({ data: task });
+      return reply.send({ data: { removed: true } });
     },
   );
 

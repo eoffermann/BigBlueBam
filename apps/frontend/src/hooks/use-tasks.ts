@@ -99,6 +99,57 @@ export function useDeleteTask() {
   });
 }
 
+// ─── Subtask many-to-many hooks (B3 Frndo Launch) ────────────────────────
+
+export interface ParentTaskSummary {
+  id: string;
+  human_id: string | null;
+  title: string;
+  phase_id: string | null;
+  state_id: string | null;
+  completed_at: string | null;
+  project_id: string;
+}
+
+export function useTaskParents(taskId: string | undefined) {
+  return useQuery({
+    queryKey: ['tasks', 'parents', taskId],
+    queryFn: () => api.get<ApiResponse<ParentTaskSummary[]>>(`/tasks/${taskId}/parents`),
+    enabled: !!taskId,
+  });
+}
+
+export function useAddTaskParent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, parentTaskId }: { taskId: string; parentTaskId: string }) =>
+      api.post<ApiResponse<{ already_linked: boolean }>>(`/tasks/${taskId}/parents`, {
+        parent_task_id: parentTaskId,
+      }),
+    onSuccess: (_res, { taskId, parentTaskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'parents', taskId] });
+      // The parent now has one more subtask — invalidate its detail too.
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', parentTaskId] });
+      queryClient.invalidateQueries({ queryKey: ['board'] });
+    },
+  });
+}
+
+export function useRemoveTaskParent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, parentTaskId }: { taskId: string; parentTaskId: string }) =>
+      api.delete<ApiResponse<{ removed: boolean }>>(
+        `/tasks/${taskId}/parents/${parentTaskId}`,
+      ),
+    onSuccess: (_res, { taskId, parentTaskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'parents', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', parentTaskId] });
+      queryClient.invalidateQueries({ queryKey: ['board'] });
+    },
+  });
+}
+
 export function useMoveTask() {
   const queryClient = useQueryClient();
   const moveTask = useBoardStore((s) => s.moveTask);
