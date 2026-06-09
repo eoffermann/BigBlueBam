@@ -18,6 +18,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { env } from '../env.js';
+import { broadcastToProject } from '../services/realtime.service.js';
 
 function timingSafeStringEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a, 'utf8');
@@ -114,7 +115,19 @@ export default async function internalBlueprintSyncRoutes(fastify: FastifyInstan
       .update(tasks)
       .set(update)
       .where(eq(tasks.id, parsed.data.task_id))
-      .returning({ id: tasks.id });
+      .returning({ id: tasks.id, project_id: tasks.project_id });
+
+    // Live broadcast on the project channel so any open Bam board picks
+    // up the synced change without manual refetch. Loop-safe: this raw
+    // write bypassed the updateTask service that fires the outbound
+    // sync, so the broadcast won't bounce the change back to Blueprint.
+    if (result[0]?.project_id) {
+      const payload: Record<string, unknown> = { id: result[0].id };
+      if (parsed.data.title !== undefined) payload.title = parsed.data.title;
+      if (parsed.data.description !== undefined) payload.description = parsed.data.description;
+      payload.sync_source = 'blueprint';
+      broadcastToProject(result[0].project_id, 'task.updated', payload);
+    }
 
     return reply.send({ data: { updated: result.length } });
   });

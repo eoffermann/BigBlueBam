@@ -14,7 +14,9 @@ import {
   blueprintCollaborators,
   blueprintComments,
   blueprintStars,
+  tasksStub,
 } from '../db/schema/index.js';
+import { inArray } from 'drizzle-orm';
 import { ForbiddenError, NotFoundError } from '../lib/errors.js';
 import { slugify } from '../lib/slug.js';
 
@@ -437,6 +439,22 @@ export async function planPromoteGraph(
     db.select().from(blueprintEdges).where(eq(blueprintEdges.diagram_id, diagramId)),
   ]);
 
+  // Verify which already-linked tasks actually still exist in Bam. A
+  // node can carry a stale ref_entity_id if its companion task was
+  // deleted from Bam after the link was set up. We treat those as
+  // "needs re-creation" so the user isn't left with dangling pointers.
+  const candidateTaskIds = nodes
+    .filter((n) => n.ref_entity_type === 'bam.task' && n.ref_entity_id)
+    .map((n) => n.ref_entity_id as string);
+  const liveTaskIds = new Set<string>();
+  if (candidateTaskIds.length > 0) {
+    const rows = await db
+      .select({ id: tasksStub.id })
+      .from(tasksStub)
+      .where(inArray(tasksStub.id, candidateTaskIds));
+    for (const r of rows) liveTaskIds.add(r.id);
+  }
+
   const tasks_to_create = nodes.map((n) => ({
     blueprint_node_id: n.id,
     payload: {
@@ -447,7 +465,9 @@ export async function planPromoteGraph(
       priority: 'medium' as const,
     },
     existing_task_id:
-      n.ref_entity_type === 'bam.task' && n.ref_entity_id ? n.ref_entity_id : null,
+      n.ref_entity_type === 'bam.task' && n.ref_entity_id && liveTaskIds.has(n.ref_entity_id)
+        ? n.ref_entity_id
+        : null,
   }));
 
   const parent_links_to_create =

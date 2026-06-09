@@ -268,27 +268,51 @@ export async function findNodesLinkedToTask(taskId: string): Promise<
   return rows;
 }
 
+export interface ApplyTaskSyncOpts {
+  /** Optional broadcaster — if supplied, each updated node fires a
+   *  blueprint.node.updated event on its diagram's Redis channel so
+   *  open SPAs pick up the change live. Safe to omit (skips broadcast). */
+  broadcast?: (
+    diagramId: string,
+    event: { node_id: string; changes: Record<string, unknown> },
+  ) => Promise<void> | void;
+}
+
 /**
  * Persist a sync-from-bam patch on every linked node. Only writes fields
  * the caller actually supplied — undefined fields stay untouched. Skips
  * nodes whose existing value already matches the incoming value so we
  * don't kick off a redundant blueprint.node.updated broadcast.
+ *
+ * Loop-safe: this writes RAW via Drizzle, bypassing updateNode (which
+ * would re-fire the outbound sync back to Bam). The optional broadcast
+ * callback is pure read-side fanout — listeners receive the event but
+ * never call back into the service layer.
  */
 export async function applyTaskSyncToNodes(
   taskId: string,
   patch: { title?: string | null; description?: string | null },
-): Promise<{ updated: number }> {
+  opts: ApplyTaskSyncOpts = {},
+): Promise<{ updated: number; affected_diagrams: string[] }> {
   const nodes = await findNodesLinkedToTask(taskId);
   let updated = 0;
+  const affectedDiagrams = new Set<string>();
   for (const n of nodes) {
     const update: Record<string, unknown> = {};
+    const changes: Record<string, unknown> = {};
     if (patch.title !== undefined) {
       const next = patch.title ?? '';
-      if (next !== n.label) update.label = next;
+      if (next !== n.label) {
+        update.label = next;
+        changes.label = next;
+      }
     }
     if (patch.description !== undefined) {
       const next = patch.description ?? null;
-      if (next !== n.description) update.description = next;
+      if (next !== n.description) {
+        update.description = next;
+        changes.description = next;
+      }
     }
     if (Object.keys(update).length === 0) continue;
     update.updated_at = new Date();
@@ -297,8 +321,22 @@ export async function applyTaskSyncToNodes(
       .set(update)
       .where(eq(blueprintNodes.id, n.id));
     updated += 1;
+    affectedDiagrams.add(n.diagram_id);
+    // Tag the broadcast with sync_source so any client-side dedup logic
+    // can recognize this as an external change and skip its own
+    // optimistic-update reconciliation if it wants to.
+    if (opts.broadcast) {
+      try {
+        await opts.broadcast(n.diagram_id, {
+          node_id: n.id,
+          changes: { ...changes, sync_source: 'bam' },
+        });
+      } catch {
+        // best-effort; the canonical write already landed
+      }
+    }
   }
-  return { updated };
+  return { updated, affected_diagrams: Array.from(affectedDiagrams) };
 }
 
 // Suppress sql import-only error if no SQL fragments are used.

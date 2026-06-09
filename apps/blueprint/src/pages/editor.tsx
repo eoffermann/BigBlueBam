@@ -238,6 +238,64 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   }, [diagram?.layout_algorithm]);
 
   /* ------------------------------------------------------------------ */
+  /*  Delete-confirmation chokepoint (declared before onNodesChange so   */
+  /*  the React Flow remove path can also route through it).             */
+  /* ------------------------------------------------------------------ */
+
+  // Three-way confirmation modal state. When the user removes a node
+  // that has a linked Bam task, we surface a dialog instead of the bare
+  // window.confirm so they can opt-in to also deleting the linked task.
+  const [nodeDeletePrompt, setNodeDeletePrompt] = useState<{
+    nodeId: string;
+    label: string;
+    taskId: string;
+  } | null>(null);
+
+  const doDeleteNodeRaw = useCallback(
+    (nodeId: string, alsoDeleteTaskId?: string) => {
+      deleteNode.mutate(nodeId, {
+        onSuccess: () => {
+          if (alsoDeleteTaskId) {
+            fetch(`/b3/api/tasks/${alsoDeleteTaskId}`, {
+              method: 'DELETE',
+              credentials: 'include',
+            }).catch((err) => {
+              window.alert(
+                `Blueprint node deleted, but the linked Bam task removal failed: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+            });
+          }
+        },
+      });
+      if (selectedNodeId === nodeId) setSelectedNodeId(null);
+    },
+    [deleteNode, selectedNodeId],
+  );
+
+  const confirmAndDeleteNode = useCallback(
+    (nodeId: string) => {
+      const node = nodesById.get(nodeId);
+      const linkedTaskId =
+        node?.ref_entity_type === 'bam.task' && node.ref_entity_id
+          ? node.ref_entity_id
+          : null;
+      if (linkedTaskId) {
+        setNodeDeletePrompt({
+          nodeId,
+          label: node?.label || 'this node',
+          taskId: linkedTaskId,
+        });
+        return;
+      }
+      if (!window.confirm('Delete this node and its connected edges?')) return;
+      doDeleteNodeRaw(nodeId);
+    },
+    [nodesById, doDeleteNodeRaw],
+  );
+
+  /* ------------------------------------------------------------------ */
   /*  React Flow change handlers                                        */
   /* ------------------------------------------------------------------ */
 
@@ -270,12 +328,24 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
           });
         }
         if (change.type === 'remove') {
-          deleteNode.mutate(change.id);
-          if (selectedNodeId === change.id) setSelectedNodeId(null);
+          // Roll back the React Flow local-state remove and re-route
+          // through the dialog so a linked Bam-task gets the prompt.
+          // The graph will refetch on settle and resync; in the meantime
+          // we re-insert the node so the canvas doesn't flash. The
+          // window.confirm path (no link) commits the delete promptly.
+          const node = nodesById.get(change.id);
+          if (node) {
+            setRfNodes((nds) => {
+              const stillThere = nds.some((n) => n.id === change.id);
+              if (stillThere) return nds;
+              return [...nds, toRfNode(node)];
+            });
+          }
+          confirmAndDeleteNode(change.id);
         }
       }
     },
-    [moveNode, updateNode, deleteNode, selectedNodeId],
+    [moveNode, updateNode, confirmAndDeleteNode, nodesById, selectedNodeId],
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
@@ -369,13 +439,12 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
 
   const doDeleteSelected = useCallback(() => {
     if (selectedNodeId) {
-      deleteNode.mutate(selectedNodeId);
-      setSelectedNodeId(null);
+      confirmAndDeleteNode(selectedNodeId);
     } else if (selectedEdgeId) {
       deleteEdge.mutate(selectedEdgeId);
       setSelectedEdgeId(null);
     }
-  }, [deleteNode, deleteEdge, selectedNodeId, selectedEdgeId]);
+  }, [confirmAndDeleteNode, deleteEdge, selectedNodeId, selectedEdgeId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -863,6 +932,22 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
         />
       )}
 
+      {/* Delete-node prompt that surfaces linked Bam-task removal */}
+      {nodeDeletePrompt && (
+        <NodeDeletePromptDialog
+          prompt={nodeDeletePrompt}
+          onCancel={() => setNodeDeletePrompt(null)}
+          onDeleteNodeOnly={() => {
+            doDeleteNodeRaw(nodeDeletePrompt.nodeId);
+            setNodeDeletePrompt(null);
+          }}
+          onDeleteBoth={() => {
+            doDeleteNodeRaw(nodeDeletePrompt.nodeId, nodeDeletePrompt.taskId);
+            setNodeDeletePrompt(null);
+          }}
+        />
+      )}
+
       {/* Canvas + inspector */}
       <div className="flex flex-1 min-h-0">
         <div ref={canvasWrapRef} className="flex-1 min-w-0 relative">
@@ -899,10 +984,7 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
               updateNode.mutate({ nodeId, input: { style: next } });
             }}
             onDuplicate={(nodeId) => doDuplicateNode(nodeId)}
-            onDeleteNode={(nodeId) => {
-              deleteNode.mutate(nodeId);
-              if (selectedNodeId === nodeId) setSelectedNodeId(null);
-            }}
+            onDeleteNode={(nodeId) => confirmAndDeleteNode(nodeId)}
             onPromoteToTask={() => onPromoteToTask()}
             onLinkEntityRequest={() => {
               const refType = window.prompt('Reference type (e.g. bam.task, beacon.entry):');
@@ -1026,9 +1108,7 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
           }
           onDeleteNode={() => {
             if (!selectedNodeId) return;
-            if (!window.confirm('Delete this node and its connected edges?')) return;
-            deleteNode.mutate(selectedNodeId);
-            setSelectedNodeId(null);
+            confirmAndDeleteNode(selectedNodeId);
           }}
           onDeleteEdge={() => {
             if (!selectedEdgeId) return;
@@ -1048,6 +1128,79 @@ export function EditorPage(props: EditorPageProps) {
     <ReactFlowProvider>
       <EditorInner {...props} />
     </ReactFlowProvider>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  NodeDeletePromptDialog                                            */
+/* ------------------------------------------------------------------ */
+
+interface NodeDeletePrompt {
+  nodeId: string;
+  label: string;
+  taskId: string;
+}
+
+function NodeDeletePromptDialog({
+  prompt,
+  onCancel,
+  onDeleteNodeOnly,
+  onDeleteBoth,
+}: {
+  prompt: NodeDeletePrompt;
+  onCancel: () => void;
+  onDeleteNodeOnly: () => void;
+  onDeleteBoth: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-[460px] max-w-full rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl">
+        <div className="p-5 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Delete "{prompt.label}"?
+              </h3>
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                This node is linked to a Bam task (
+                <code className="font-mono text-[11px] bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                  {prompt.taskId.slice(0, 8)}…
+                </code>
+                ). Removing the node removes its place on this diagram. Do you also want to
+                delete the linked Bam task itself? Any subtasks, comments, time entries, and
+                activity on the task will go with it.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-3 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onDeleteNodeOnly}
+            className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Delete node only
+          </button>
+          <button
+            type="button"
+            onClick={onDeleteBoth}
+            className="px-3 py-1.5 text-sm rounded-md bg-red-600 text-white hover:bg-red-700"
+          >
+            Delete node + task
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

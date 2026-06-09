@@ -19,6 +19,7 @@ import { publishBoltEvent } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as diagramSvc from '../services/diagram.service.js';
 import * as crossSvc from '../services/cross-product.service.js';
+import { broadcastToDiagram } from '../lib/broadcast.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors.js';
 import { env } from '../env.js';
 
@@ -166,10 +167,24 @@ export default async function crossProductRoutes(fastify: FastifyInstance) {
         });
       }
       const body = syncFromTaskSchema.parse(request.body);
-      const result = await crossSvc.applyTaskSyncToNodes(body.task_id, {
-        title: body.title,
-        description: body.description,
-      });
+      const result = await crossSvc.applyTaskSyncToNodes(
+        body.task_id,
+        { title: body.title, description: body.description },
+        {
+          // Live broadcast each affected diagram so any open Blueprint
+          // SPA picks up the synced change without manual refetch. The
+          // raw write bypassed the updateNode service that fires the
+          // outbound sync, so the broadcast can't bounce back to Bam.
+          broadcast: async (diagramId, evt) => {
+            await broadcastToDiagram(fastify.redis, diagramId, {
+              type: 'blueprint.node.updated',
+              diagram_id: diagramId,
+              node_id: evt.node_id,
+              changes: evt.changes,
+            });
+          },
+        },
+      );
       return reply.send({ data: result });
     },
   );
