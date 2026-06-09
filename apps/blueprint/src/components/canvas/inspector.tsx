@@ -117,6 +117,14 @@ function NodePanel({ node, onUpdate, onDelete, onLinkEntity, onPromoteToTask }: 
   const [description, setDescription] = useState(node.description ?? '');
   const [refType, setRefType] = useState(node.ref_entity_type ?? '');
   const [refId, setRefId] = useState(node.ref_entity_id ?? '');
+  // Local state for the numeric size inputs so the user can finish typing
+  // a multi-digit number before we round-trip. The previous version bound
+  // the inputs straight to node.width/node.height which both (a) caused
+  // a query-refetch race that snapped the input back mid-type and (b)
+  // meant the input commit only landed when the stamp comparison
+  // happened to invalidate — i.e. when shape changed too.
+  const [width, setWidth] = useState(String(node.width));
+  const [height, setHeight] = useState(String(node.height));
   const fillColor = (node.style?.fillColor as string | undefined) ?? '';
 
   // Reset local state when the selected node changes.
@@ -125,7 +133,26 @@ function NodePanel({ node, onUpdate, onDelete, onLinkEntity, onPromoteToTask }: 
     setDescription(node.description ?? '');
     setRefType(node.ref_entity_type ?? '');
     setRefId(node.ref_entity_id ?? '');
-  }, [node.id, node.label, node.description, node.ref_entity_type, node.ref_entity_id]);
+    setWidth(String(node.width));
+    setHeight(String(node.height));
+  }, [node.id, node.label, node.description, node.ref_entity_type, node.ref_entity_id, node.width, node.height]);
+
+  function commitWidth() {
+    const next = Number.parseInt(width, 10);
+    if (!Number.isFinite(next) || next < 40 || next > 2000) {
+      setWidth(String(node.width));
+      return;
+    }
+    if (next !== node.width) onUpdate({ width: next });
+  }
+  function commitHeight() {
+    const next = Number.parseInt(height, 10);
+    if (!Number.isFinite(next) || next < 30 || next > 2000) {
+      setHeight(String(node.height));
+      return;
+    }
+    if (next !== node.height) onUpdate({ height: next });
+  }
 
   return (
     <div className="space-y-4">
@@ -196,22 +223,38 @@ function NodePanel({ node, onUpdate, onDelete, onLinkEntity, onPromoteToTask }: 
       </Field>
 
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Width">
+        <Field label="Width" htmlFor="bp-node-width">
           <TextInput
+            id="bp-node-width"
             type="number"
             min={40}
             max={2000}
-            value={node.width}
-            onChange={(e) => onUpdate({ width: Number(e.target.value) })}
+            value={width}
+            onChange={(e) => setWidth(e.target.value)}
+            onBlur={commitWidth}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
           />
         </Field>
-        <Field label="Height">
+        <Field label="Height" htmlFor="bp-node-height">
           <TextInput
+            id="bp-node-height"
             type="number"
             min={30}
             max={2000}
-            value={node.height}
-            onChange={(e) => onUpdate({ height: Number(e.target.value) })}
+            value={height}
+            onChange={(e) => setHeight(e.target.value)}
+            onBlur={commitHeight}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
           />
         </Field>
       </div>

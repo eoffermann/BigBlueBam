@@ -4,7 +4,13 @@
  * Every frontend app imports this file via a Vite alias:
  *   '@bigbluebam/ui/launchpad' → '<root>/packages/ui/launchpad.tsx'
  *
- * To update the Launchpad, edit THIS file — all apps pick it up on rebuild.
+ * As of 2026-06-09 the apps list is fetched at runtime from
+ * `/b3/api/launchpad/apps` (catalog_detail field). Each SPA only needs to
+ * carry the icon-name → component map below. Adding a new app to the
+ * suite no longer requires rebuilding every SPA — the next page load
+ * picks it up automatically as long as the icon name is one we already
+ * import here. If the new app needs a brand-new icon, add it to ICONS
+ * below and rebuild the SPAs once.
  */
 
 import { useEffect, useRef, useCallback, useState, type FC } from 'react';
@@ -26,34 +32,54 @@ import {
   ClipboardList,
   DollarSign,
   Sparkles,
+  Box,
   type LucideIcon,
 } from 'lucide-react';
 
-interface AppDef {
+interface AppEntry {
   id: string;
   name: string;
   description: string;
-  icon: LucideIcon;
+  icon_name: string;
   color: string;
   path: string;
 }
 
-const APPS: AppDef[] = [
-  { id: 'b3', name: 'Bam', description: 'Project Management', icon: LayoutDashboard, color: '#2563eb', path: '/b3/' },
-  { id: 'banter', name: 'Banter', description: 'Team Messaging', icon: MessageCircle, color: '#7c3aed', path: '/banter/' },
-  { id: 'beacon', name: 'Beacon', description: 'Knowledge Base', icon: BookOpen, color: '#059669', path: '/beacon/' },
-  { id: 'bond', name: 'Bond', description: 'CRM', icon: Handshake, color: '#0891b2', path: '/bond/' },
-  { id: 'blast', name: 'Blast', description: 'Email Campaigns', icon: Mail, color: '#dc2626', path: '/blast/' },
-  { id: 'bill', name: 'Bill', description: 'Invoicing & Billing', icon: DollarSign, color: '#16a34a', path: '/bill/' },
-  { id: 'blank', name: 'Blank', description: 'Forms & Surveys', icon: ClipboardList, color: '#7c3aed', path: '/blank/' },
-  { id: 'book', name: 'Book', description: 'Scheduling & Calendar', icon: Calendar, color: '#2563eb', path: '/book/' },
-  { id: 'bench', name: 'Bench', description: 'Analytics', icon: BarChart3, color: '#2563eb', path: '/bench/' },
-  { id: 'brief', name: 'Brief', description: 'Documents', icon: FileText, color: '#d97706', path: '/brief/' },
-  { id: 'bolt', name: 'Bolt', description: 'Automations', icon: Zap, color: '#dc2626', path: '/bolt/' },
-  { id: 'bearing', name: 'Bearing', description: 'Goals & OKRs', icon: Target, color: '#0d9488', path: '/bearing/' },
-  { id: 'board', name: 'Board', description: 'Whiteboards', icon: PenTool, color: '#6366f1', path: '/board/' },
-  { id: 'blueprint', name: 'Blueprint', description: 'Diagrams & Flows', icon: Sparkles, color: '#0ea5e9', path: '/blueprint/' },
-  { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon: Headset, color: '#be123c', path: '/helpdesk/' },
+interface LaunchpadResponse {
+  data?: {
+    catalog?: string[];
+    catalog_detail?: AppEntry[];
+    enabled?: string[];
+  };
+}
+
+// Icon-name → lucide component map. The server emits icon names in
+// kebab-case to keep the catalog string-friendly; this map resolves them
+// to the actual React component. Unknown names fall back to <Box />.
+const ICONS: Record<string, LucideIcon> = {
+  'layout-dashboard': LayoutDashboard,
+  'message-circle': MessageCircle,
+  'book-open': BookOpen,
+  'file-text': FileText,
+  zap: Zap,
+  target: Target,
+  'pen-tool': PenTool,
+  headset: Headset,
+  handshake: Handshake,
+  mail: Mail,
+  'bar-chart-3': BarChart3,
+  calendar: Calendar,
+  'clipboard-list': ClipboardList,
+  'dollar-sign': DollarSign,
+  sparkles: Sparkles,
+};
+
+// Hard-coded fallback used ONLY when the API is unreachable on the very
+// first load. Kept minimal so the suite still renders a usable Launchpad
+// in degraded mode; the runtime API is the source of truth.
+const FALLBACK_APPS: AppEntry[] = [
+  { id: 'b3', name: 'Bam', description: 'Project Management', icon_name: 'layout-dashboard', color: '#2563eb', path: '/b3/' },
+  { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon_name: 'headset', color: '#be123c', path: '/helpdesk/' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -87,28 +113,39 @@ interface LaunchpadProps {
   currentApp: string;
 }
 
-// `null` while we haven't fetched yet (fall back to all apps), then either an
-// allowed-id Set or `null` if the resolver fails. We cache across opens so the
-// dialog feels instant on second use.
-let cachedEnabledIds: Set<string> | null = null;
-let cacheFetchedAt = 0;
+interface LaunchpadCache {
+  catalog: AppEntry[];
+  enabledIds: Set<string> | null;
+  fetchedAt: number;
+}
+
+let cache: LaunchpadCache | null = null;
 const CACHE_TTL_MS = 60_000;
 
-async function fetchEnabledAppIds(): Promise<Set<string> | null> {
-  // The endpoint is registered on the Bam api at /b3/api/launchpad/apps.
-  // Every app served by the same nginx host can reach it; cookies/auth are
-  // shared on the same origin. We fail open (return null → render all apps)
-  // so a transient API error never makes the launcher look empty.
+async function fetchCatalog(): Promise<LaunchpadCache | null> {
   try {
     const res = await fetch('/b3/api/launchpad/apps', {
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) return null;
-    const json = (await res.json()) as { data?: { enabled?: unknown } };
-    const enabled = json.data?.enabled;
-    if (!Array.isArray(enabled)) return null;
-    return new Set(enabled.filter((x): x is string => typeof x === 'string'));
+    const json = (await res.json()) as LaunchpadResponse;
+    const catalog = Array.isArray(json.data?.catalog_detail)
+      ? (json.data!.catalog_detail!.filter(
+          (e): e is AppEntry =>
+            !!e &&
+            typeof e.id === 'string' &&
+            typeof e.name === 'string' &&
+            typeof e.icon_name === 'string' &&
+            typeof e.color === 'string' &&
+            typeof e.path === 'string',
+        ))
+      : [];
+    if (catalog.length === 0) return null;
+    const enabled = Array.isArray(json.data?.enabled)
+      ? new Set(json.data!.enabled!.filter((x): x is string => typeof x === 'string'))
+      : null;
+    return { catalog, enabledIds: enabled, fetchedAt: Date.now() };
   } catch {
     return null;
   }
@@ -116,23 +153,23 @@ async function fetchEnabledAppIds(): Promise<Set<string> | null> {
 
 export function Launchpad({ isOpen, onClose, currentApp }: LaunchpadProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [enabledIds, setEnabledIds] = useState<Set<string> | null>(cachedEnabledIds);
+  const [state, setState] = useState<LaunchpadCache | null>(cache);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
-  }, [onClose]);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    },
+    [onClose],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
     document.addEventListener('keydown', handleKeyDown);
-    // Refetch on open if cache is stale; otherwise use the cached value
-    // (already pushed into local state above).
     const now = Date.now();
-    if (!cachedEnabledIds || now - cacheFetchedAt > CACHE_TTL_MS) {
-      fetchEnabledAppIds().then((ids) => {
-        cachedEnabledIds = ids;
-        cacheFetchedAt = Date.now();
-        setEnabledIds(ids);
+    if (!cache || now - cache.fetchedAt > CACHE_TTL_MS) {
+      fetchCatalog().then((next) => {
+        cache = next;
+        setState(next);
       });
     }
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -140,12 +177,13 @@ export function Launchpad({ isOpen, onClose, currentApp }: LaunchpadProps) {
 
   if (!isOpen) return null;
 
-  // Filter the catalog to enabled ids; if we don't have a list yet (initial
-  // load or fetch error), show every app. Always include the currentApp so
-  // the user can still see "you are here" even if it was just disabled.
-  const visibleApps = enabledIds
-    ? APPS.filter((app) => enabledIds.has(app.id) || app.id === currentApp)
-    : APPS;
+  // Resolve the apps list. Prefer the live catalog; fall back to the
+  // minimal hard-coded list if the API is unreachable on first open. The
+  // currentApp id is always shown so the user can see "you are here".
+  const catalog = state?.catalog ?? FALLBACK_APPS;
+  const visibleApps = state?.enabledIds
+    ? catalog.filter((app) => state.enabledIds!.has(app.id) || app.id === currentApp)
+    : catalog;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -156,13 +194,16 @@ export function Launchpad({ isOpen, onClose, currentApp }: LaunchpadProps) {
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          aria-label="Close launchpad"
         >
           <X className="h-5 w-5" />
         </button>
-        <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">BigBlueBam Suite</h2>
+        <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
+          BigBlueBam Suite
+        </h2>
         <div className="grid grid-cols-4 gap-3">
           {visibleApps.map((app) => {
-            const Icon = app.icon;
+            const Icon = ICONS[app.icon_name] ?? Box;
             const isCurrent = app.id === currentApp;
             return (
               <a
@@ -181,7 +222,9 @@ export function Launchpad({ isOpen, onClose, currentApp }: LaunchpadProps) {
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="text-center">
-                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{app.name}</div>
+                  <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    {app.name}
+                  </div>
                   <div className="text-[10px] text-zinc-500">{app.description}</div>
                 </div>
               </a>

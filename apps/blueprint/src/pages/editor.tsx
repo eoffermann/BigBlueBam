@@ -26,12 +26,14 @@ import {
   ArrowLeft,
   Archive,
   CameraIcon,
+  ChevronDown,
   Download,
   Layout,
   Loader2,
   Plus,
   RotateCcw,
 } from 'lucide-react';
+import { SHAPE_OPTIONS } from '@/components/canvas/node-types';
 import { useDiagram, useDiagramGraph, useArchiveDiagram, useSnapshotVersion } from '@/hooks/use-diagrams';
 import {
   useCreateNode,
@@ -118,6 +120,13 @@ function toRfEdge(e: BlueprintEdge): Edge {
 /*  Editor                                                            */
 /* ------------------------------------------------------------------ */
 
+interface PaneContextMenu {
+  screen_x: number;
+  screen_y: number;
+  flow_x: number;
+  flow_y: number;
+}
+
 function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const diagramQuery = useDiagram(diagramId);
   const graphQuery = useDiagramGraph(diagramId);
@@ -144,6 +153,8 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const [rfEdges, setRfEdges] = useState<Edge[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [paneMenu, setPaneMenu] = useState<PaneContextMenu | null>(null);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
 
   // Sidecar maps so we can look up the original blueprint_node/edge row
   // for the inspector without re-fetching. Updated by an effect below.
@@ -163,19 +174,47 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const [selectedAlgo, setSelectedAlgo] = useState<string>(layoutAlgorithm);
 
   // Sync server graph -> local React Flow state whenever the query
-  // refreshes. We don't blow away local in-flight drag state: instead
-  // we replace nodes/edges atomically so positions snap to the new
-  // server-authoritative values.
+  // refreshes. The stamp captures every server-controlled field that
+  // should propagate to the canvas: position, label, shape, AND
+  // width/height/style — otherwise inspector edits to those fields
+  // never reach the rendered node and only "stick" the next time
+  // a stamped-in field happens to change too.
+  //
+  // On refresh, we preserve the user's current React Flow selection
+  // by re-applying the `selected` flag to nodes/edges whose ids match
+  // what was previously selected. Without this, changing shape (or any
+  // other server-controlled field) would silently deselect the node
+  // because React Flow doesn't know the rebuilt array corresponds to
+  // the old one.
   const lastGraphRef = useRef<string>('');
   useEffect(() => {
     if (!graph) return;
     const stamp = `${graph.nodes.length}:${graph.edges.length}:${graph.nodes
-      .map((n) => `${n.id}@${n.position_x},${n.position_y}|${n.label}|${n.shape}`)
+      .map(
+        (n) =>
+          `${n.id}@${n.position_x},${n.position_y}|${n.label}|${n.shape}|${n.width}x${n.height}|${JSON.stringify(n.style ?? {})}`,
+      )
+      .join(',')}|${graph.edges
+      .map((e) => `${e.id}:${e.label ?? ''}:${e.kind}:${e.marker_end}`)
       .join(',')}`;
     if (stamp === lastGraphRef.current) return;
     lastGraphRef.current = stamp;
-    setRfNodes(graph.nodes.map(toRfNode));
-    setRfEdges(graph.edges.map(toRfEdge));
+    setRfNodes((prev) => {
+      const prevSelected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
+      return graph.nodes.map((n) => {
+        const next = toRfNode(n);
+        if (prevSelected.has(n.id)) next.selected = true;
+        return next;
+      });
+    });
+    setRfEdges((prev) => {
+      const prevSelected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
+      return graph.edges.map((e) => {
+        const next = toRfEdge(e);
+        if (prevSelected.has(e.id)) next.selected = true;
+        return next;
+      });
+    });
   }, [graph]);
 
   useEffect(() => {
@@ -189,8 +228,10 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const onNodesChange: OnNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setRfNodes((nds) => applyNodeChanges(changes, nds));
-      // Persist drag-settle to the server. We only fire on drag END
-      // (`dragging === false`) so we don't slam the API on every tick.
+      // Persist drag-settle and resize-settle to the server. Both
+      // 'position' and 'dimensions' events arrive with a dragging/resizing
+      // flag that we only persist on the FALSE transition so the API isn't
+      // hit on every tick.
       for (const change of changes) {
         if (change.type === 'position' && change.dragging === false && change.position) {
           moveNode.mutate({
@@ -199,13 +240,26 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
             position_y: change.position.y,
           });
         }
+        if (
+          change.type === 'dimensions' &&
+          change.resizing === false &&
+          change.dimensions
+        ) {
+          updateNode.mutate({
+            nodeId: change.id,
+            input: {
+              width: Math.round(change.dimensions.width),
+              height: Math.round(change.dimensions.height),
+            },
+          });
+        }
         if (change.type === 'remove') {
           deleteNode.mutate(change.id);
           if (selectedNodeId === change.id) setSelectedNodeId(null);
         }
       }
     },
-    [moveNode, deleteNode, selectedNodeId],
+    [moveNode, updateNode, deleteNode, selectedNodeId],
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
@@ -256,16 +310,35 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   /*  Keyboard shortcuts                                                */
   /* ------------------------------------------------------------------ */
 
-  const onAddNode = useCallback(() => {
-    // Center-ish of the visible viewport; React Flow will reposition
-    // anyway once a layout pass runs.
-    createNode.mutate({
-      label: 'New node',
-      shape: 'rounded',
-      position_x: 80 + Math.random() * 200,
-      position_y: 80 + Math.random() * 200,
-    });
-  }, [createNode]);
+  // Remember the last shape the user added so the plain "Add node" button
+  // repeats that choice. Persisted across reloads via localStorage so the
+  // diagram-type vocabulary the user is working in survives a refresh.
+  const [lastShape, setLastShape] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'rounded';
+    return localStorage.getItem('bp.lastShape') ?? 'rounded';
+  });
+
+  const addNodeWithShape = useCallback(
+    (shape: string) => {
+      createNode.mutate({
+        label: 'New node',
+        shape,
+        position_x: 80 + Math.random() * 200,
+        position_y: 80 + Math.random() * 200,
+      });
+      setLastShape(shape);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('bp.lastShape', shape);
+        } catch {
+          // ignore quota / disabled storage
+        }
+      }
+    },
+    [createNode],
+  );
+
+  const onAddNode = useCallback(() => addNodeWithShape(lastShape), [addNodeWithShape, lastShape]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -416,13 +489,48 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
           </div>
         </div>
 
-        <button
-          onClick={onAddNode}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add node
-          <kbd className="ml-1 font-mono text-[10px] bg-zinc-100 dark:bg-zinc-800 px-1 rounded">N</kbd>
-        </button>
+        {/* Split-button "Add node": clicking the body uses the last shape;
+            the chevron opens a menu for picking a different shape. The
+            most-recently-used shape is highlighted in the menu. */}
+        <div className="inline-flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+          <button
+            onClick={onAddNode}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            title={`Add ${SHAPE_OPTIONS.find((s) => s.value === lastShape)?.label ?? 'node'}`}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Add {SHAPE_OPTIONS.find((s) => s.value === lastShape)?.label.toLowerCase() ?? 'node'}</span>
+            <kbd className="ml-1 font-mono text-[10px] bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+              N
+            </kbd>
+          </button>
+          <DropdownMenu
+            trigger={
+              <button
+                className="px-1.5 py-1.5 text-xs text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 border-l border-zinc-200 dark:border-zinc-700"
+                title="Pick a shape"
+                aria-label="Pick node shape"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            }
+          >
+            {SHAPE_OPTIONS.map((s) => (
+              <DropdownMenuItem
+                key={s.value}
+                onSelect={() => addNodeWithShape(s.value)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span className="flex-1">{s.label}</span>
+                {s.value === lastShape && (
+                  <span className="text-[10px] text-primary-600 font-medium uppercase tracking-wide">
+                    Last
+                  </span>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenu>
+        </div>
 
         {/* Layout controls */}
         <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-200 dark:border-zinc-700">
@@ -512,7 +620,49 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
 
       {/* Canvas + inspector */}
       <div className="flex flex-1 min-h-0">
-        <div className="flex-1 min-w-0 relative">
+        <div ref={canvasWrapRef} className="flex-1 min-w-0 relative">
+          {paneMenu && (
+            <div
+              role="menu"
+              className="absolute z-20 min-w-[180px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg py-1"
+              style={{ left: paneMenu.screen_x, top: paneMenu.screen_y }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-zinc-400">
+                Add node
+              </div>
+              {SHAPE_OPTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  role="menuitem"
+                  onClick={() => {
+                    createNode.mutate({
+                      label: 'New node',
+                      shape: s.value,
+                      position_x: paneMenu.flow_x,
+                      position_y: paneMenu.flow_y,
+                    });
+                    setLastShape(s.value);
+                    try {
+                      localStorage.setItem('bp.lastShape', s.value);
+                    } catch {
+                      // ignore quota / disabled storage
+                    }
+                    setPaneMenu(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="flex-1">{s.label}</span>
+                  {s.value === lastShape && (
+                    <span className="text-[10px] text-primary-600 font-medium uppercase tracking-wide">
+                      Last
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
           {exportMutation.isPending && (
             <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-xs text-zinc-600 dark:text-zinc-300 shadow-sm">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Exporting…
@@ -531,6 +681,24 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
             onPaneClick={() => {
               setSelectedNodeId(null);
               setSelectedEdgeId(null);
+              setPaneMenu(null);
+            }}
+            onPaneContextMenu={(event) => {
+              event.preventDefault();
+              const wrap = canvasWrapRef.current;
+              if (!wrap) return;
+              const rect = wrap.getBoundingClientRect();
+              const mouse = event as React.MouseEvent;
+              setPaneMenu({
+                screen_x: mouse.clientX - rect.left,
+                screen_y: mouse.clientY - rect.top,
+                // The flow coordinate of the click — used so the new node
+                // appears AT the cursor rather than a random offset.
+                // React Flow's project() API needs the viewport transform;
+                // for the MVP we approximate with relative-to-canvas pixels.
+                flow_x: mouse.clientX - rect.left,
+                flow_y: mouse.clientY - rect.top,
+              });
             }}
             fitView
             proOptions={{ hideAttribution: true }}

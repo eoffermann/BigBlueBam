@@ -8,10 +8,22 @@ import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 
-// Canonical Launchpad app catalog. Mirrors the APPS array in
-// packages/ui/launchpad.tsx — keep them in sync. The launchpad_default_apps
-// system_setting and the per-org organizations.settings.launchpad_apps are
-// arrays of these ids; null/missing means "all apps enabled".
+// Canonical Launchpad app catalog. THIS is the single source of truth for
+// every app the suite exposes — `LAUNCHPAD_CATALOG` carries the rendering
+// metadata (name, description, icon, color, path) and the API ships it to
+// every SPA at runtime so adding a new app no longer requires rebuilding
+// every frontend container.
+//
+// Adding a new app:
+//   1. Append its id to LAUNCHPAD_APP_IDS below (kept as a literal-tuple so
+//      zod's z.enum can derive the union type for stored override columns).
+//   2. Append the matching metadata row to LAUNCHPAD_CATALOG.
+//   3. If a brand-new icon name is needed, add it to the icon map in
+//      packages/ui/launchpad.tsx::ICONS so client renderers can resolve it.
+//
+// Once those three edits land in apps/api and packages/ui rebuilds, every
+// other SPA picks up the new app at runtime without a container rebuild.
+
 export const LAUNCHPAD_APP_IDS = [
   'b3',
   'banter',
@@ -26,10 +38,40 @@ export const LAUNCHPAD_APP_IDS = [
   'bolt',
   'bearing',
   'board',
+  'blueprint',
   'helpdesk',
 ] as const;
 
 export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
+
+export interface LaunchpadAppEntry {
+  id: LaunchpadAppId;
+  name: string;
+  description: string;
+  /** Lucide icon name in kebab-case (e.g. `layout-dashboard`). The client
+   *  maps this to a React component via the `ICONS` table in launchpad.tsx. */
+  icon_name: string;
+  color: string;
+  path: string;
+}
+
+export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
+  { id: 'b3', name: 'Bam', description: 'Project Management', icon_name: 'layout-dashboard', color: '#2563eb', path: '/b3/' },
+  { id: 'banter', name: 'Banter', description: 'Team Messaging', icon_name: 'message-circle', color: '#7c3aed', path: '/banter/' },
+  { id: 'beacon', name: 'Beacon', description: 'Knowledge Base', icon_name: 'book-open', color: '#059669', path: '/beacon/' },
+  { id: 'bond', name: 'Bond', description: 'CRM', icon_name: 'handshake', color: '#0891b2', path: '/bond/' },
+  { id: 'blast', name: 'Blast', description: 'Email Campaigns', icon_name: 'mail', color: '#dc2626', path: '/blast/' },
+  { id: 'bill', name: 'Bill', description: 'Invoicing & Billing', icon_name: 'dollar-sign', color: '#16a34a', path: '/bill/' },
+  { id: 'blank', name: 'Blank', description: 'Forms & Surveys', icon_name: 'clipboard-list', color: '#7c3aed', path: '/blank/' },
+  { id: 'book', name: 'Book', description: 'Scheduling & Calendar', icon_name: 'calendar', color: '#2563eb', path: '/book/' },
+  { id: 'bench', name: 'Bench', description: 'Analytics', icon_name: 'bar-chart-3', color: '#2563eb', path: '/bench/' },
+  { id: 'brief', name: 'Brief', description: 'Documents', icon_name: 'file-text', color: '#d97706', path: '/brief/' },
+  { id: 'bolt', name: 'Bolt', description: 'Automations', icon_name: 'zap', color: '#dc2626', path: '/bolt/' },
+  { id: 'bearing', name: 'Bearing', description: 'Goals & OKRs', icon_name: 'target', color: '#0d9488', path: '/bearing/' },
+  { id: 'board', name: 'Board', description: 'Whiteboards', icon_name: 'pen-tool', color: '#6366f1', path: '/board/' },
+  { id: 'blueprint', name: 'Blueprint', description: 'Diagrams & Flows', icon_name: 'sparkles', color: '#0ea5e9', path: '/blueprint/' },
+  { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon_name: 'headset', color: '#be123c', path: '/helpdesk/' },
+];
 
 // Valid values for the root_redirect setting
 const ROOT_REDIRECT_VALUES = [

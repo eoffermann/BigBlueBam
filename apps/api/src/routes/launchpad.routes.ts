@@ -6,7 +6,11 @@ import { organizations } from '../db/schema/organizations.js';
 import { systemSettings } from '../db/schema/system-settings.js';
 import { requireAuth } from '../plugins/auth.js';
 import * as orgService from '../services/org.service.js';
-import { LAUNCHPAD_APP_IDS, type LaunchpadAppId } from './system-settings.routes.js';
+import {
+  LAUNCHPAD_APP_IDS,
+  LAUNCHPAD_CATALOG,
+  type LaunchpadAppId,
+} from './system-settings.routes.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 
 /**
@@ -75,7 +79,13 @@ export default async function launchpadRoutes(fastify: FastifyInstance) {
 
     return {
       data: {
+        // Plain id list — kept for the existing admin UI that just wants
+        // "which ids exist" without rendering metadata.
         catalog: LAUNCHPAD_APP_IDS,
+        // Full rendering metadata — the runtime source of truth every SPA's
+        // Launchpad reads. Adding a new app here propagates to every SPA on
+        // the next page load with no SPA rebuild required.
+        catalog_detail: LAUNCHPAD_CATALOG,
         enabled,
         source,
         org_override: orgOverride,

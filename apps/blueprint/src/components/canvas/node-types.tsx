@@ -15,7 +15,13 @@
  * it in the exported `nodeTypes` map. The shape strings here must match
  * what `apps/blueprint-api` writes into `blueprint_nodes.shape`.
  */
-import { Handle, Position, type NodeProps, type NodeTypes } from '@xyflow/react';
+import {
+  Handle,
+  NodeResizer,
+  Position,
+  type NodeProps,
+  type NodeTypes,
+} from '@xyflow/react';
 import { Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -38,6 +44,27 @@ function NodeHandles() {
       <Handle type="source" position={Position.Right} id="r" />
       <Handle type="source" position={Position.Bottom} id="b" />
     </>
+  );
+}
+
+/**
+ * Resizer for the selected node. Rendered only when `selected` is true so
+ * the eight corner/edge handles don't crowd the diagram when nothing is
+ * picked. Minimum size matches the inspector's numeric bounds; the
+ * resize-end handler in editor.tsx persists the new width/height.
+ */
+function SelectedResizer({ selected }: { selected: boolean | undefined }) {
+  if (!selected) return null;
+  return (
+    <NodeResizer
+      isVisible={true}
+      minWidth={40}
+      minHeight={30}
+      maxWidth={2000}
+      maxHeight={2000}
+      lineClassName="!border-primary-500"
+      handleClassName="!bg-primary-500 !border-white"
+    />
   );
 }
 
@@ -90,10 +117,11 @@ function styleFromData(data: BlueprintNodeData) {
   } as React.CSSProperties;
 }
 
-function RoundedNode({ data }: NodeProps) {
+function RoundedNode({ data, selected }: NodeProps) {
   const d = data as BlueprintNodeData;
   return (
     <div className="relative" style={{ width: '100%', height: '100%' }}>
+      <SelectedResizer selected={selected} />
       <NodeHandles />
       <NodeBody
         data={d}
@@ -104,10 +132,11 @@ function RoundedNode({ data }: NodeProps) {
   );
 }
 
-function RectangleNode({ data }: NodeProps) {
+function RectangleNode({ data, selected }: NodeProps) {
   const d = data as BlueprintNodeData;
   return (
     <div className="relative" style={{ width: '100%', height: '100%' }}>
+      <SelectedResizer selected={selected} />
       <NodeHandles />
       <NodeBody
         data={d}
@@ -118,11 +147,12 @@ function RectangleNode({ data }: NodeProps) {
   );
 }
 
-function DiamondNode({ data }: NodeProps) {
+function DiamondNode({ data, selected }: NodeProps) {
   const d = data as BlueprintNodeData;
   const style = styleFromData(d);
   return (
     <div className="relative" style={{ width: '100%', height: '100%' }}>
+      <SelectedResizer selected={selected} />
       <NodeHandles />
       <svg
         viewBox="0 0 100 100"
@@ -144,10 +174,11 @@ function DiamondNode({ data }: NodeProps) {
   );
 }
 
-function EllipseNode({ data }: NodeProps) {
+function EllipseNode({ data, selected }: NodeProps) {
   const d = data as BlueprintNodeData;
   return (
     <div className="relative" style={{ width: '100%', height: '100%' }}>
+      <SelectedResizer selected={selected} />
       <NodeHandles />
       <NodeBody
         data={d}
@@ -158,11 +189,12 @@ function EllipseNode({ data }: NodeProps) {
   );
 }
 
-function HexagonNode({ data }: NodeProps) {
+function HexagonNode({ data, selected }: NodeProps) {
   const d = data as BlueprintNodeData;
   const style = styleFromData(d);
   return (
     <div className="relative" style={{ width: '100%', height: '100%' }}>
+      <SelectedResizer selected={selected} />
       <NodeHandles />
       <svg
         viewBox="0 0 100 100"
