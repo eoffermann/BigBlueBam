@@ -2422,6 +2422,137 @@ const blueprintEvents: EventDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Bureau (virtual office presence, rooms, knocks, summons) — design doc §14.
+// All event names are bare per the Wave 0.4 convention; source is 'bureau'.
+// ---------------------------------------------------------------------------
+const bureauEvents: EventDefinition[] = [
+  {
+    source: 'bureau',
+    event_type: 'user.entered_room',
+    description: 'Fired when a user enters a Bureau room (joins presence + LiveKit room).',
+    payload_schema: [
+      { name: 'room.id', type: 'uuid', format: 'uuid', description: 'Bureau room ID' },
+      { name: 'room.name', type: 'string', description: 'Room name' },
+      { name: 'room.type', type: 'string', description: 'Room type (office/huddle/conference/meeting/open/lounge/focus/lobby)' },
+      { name: 'room.floor_id', type: 'uuid', format: 'uuid', description: 'Floor the room belongs to' },
+      { name: 'livekit_room', type: 'string', description: 'LiveKit room name (bureau-room-{id})' },
+      { name: 'user.id', type: 'uuid', format: 'uuid', description: 'User entering the room' },
+      { name: 'user.name', type: 'string?', description: 'User display name' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'User who entered (same as user.id)' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bureau',
+    event_type: 'user.left_room',
+    description: 'Fired when a user leaves a Bureau room (presence ends or moves elsewhere).',
+    payload_schema: [
+      { name: 'room.id', type: 'uuid', format: 'uuid', description: 'Bureau room ID the user left' },
+      { name: 'room.name', type: 'string?', description: 'Room name' },
+      { name: 'room.floor_id', type: 'uuid?', format: 'uuid', description: 'Floor the room belongs to' },
+      { name: 'user.id', type: 'uuid', format: 'uuid', description: 'User leaving the room' },
+      { name: 'user.name', type: 'string?', description: 'User display name' },
+      { name: 'session_duration_ms', type: 'number?', description: 'How long the user was present in the room (milliseconds)' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'User who left (same as user.id)' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bureau',
+    event_type: 'status.changed',
+    description: 'Fired when a user changes their Bureau presence status (available/busy/dnd/away/etc.).',
+    payload_schema: [
+      { name: 'user.id', type: 'uuid', format: 'uuid', description: 'User whose status changed' },
+      { name: 'status.previous', type: 'string?', description: 'Previous status' },
+      { name: 'status.current', type: 'string', description: 'New status' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'User who changed the status' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bureau',
+    event_type: 'knock.requested',
+    description: 'Fired when a visitor knocks on a closed office door.',
+    payload_schema: [
+      { name: 'knock.id', type: 'uuid', format: 'uuid', description: 'Knock request ID' },
+      { name: 'room.id', type: 'uuid', format: 'uuid', description: 'Bureau room (office) being knocked on' },
+      { name: 'room.name', type: 'string?', description: 'Room name' },
+      { name: 'visitor.id', type: 'uuid', format: 'uuid', description: 'User who knocked' },
+      { name: 'visitor.name', type: 'string?', description: 'Visitor display name' },
+      { name: 'owner.id', type: 'uuid', format: 'uuid', description: 'Office owner (recipient of the knock)' },
+      { name: 'message', type: 'string?', description: 'Optional message attached to the knock' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'Visitor (same as visitor.id)' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bureau',
+    event_type: 'knock.resolved',
+    description: 'Fired when a knock request is resolved (admitted/declined/deferred/timed_out/dnd_blocked).',
+    payload_schema: [
+      { name: 'knock.id', type: 'uuid', format: 'uuid', description: 'Knock request ID' },
+      { name: 'knock.status', type: 'enum', enum: ['admitted', 'declined', 'deferred', 'timed_out', 'dnd_blocked'], description: 'Outcome of the knock' },
+      { name: 'room.id', type: 'uuid', format: 'uuid', description: 'Bureau room the knock targeted' },
+      { name: 'visitor.id', type: 'uuid', format: 'uuid', description: 'User who knocked' },
+      { name: 'owner.id', type: 'uuid', format: 'uuid', description: 'Office owner who resolved the knock' },
+      { name: 'resolved_at', type: 'datetime', format: 'iso8601', description: 'When the knock was resolved (UTC ISO-8601)' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'User who resolved the knock' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bureau',
+    event_type: 'room.booked',
+    description: 'Fired when a bookable Bureau room is reserved for a window.',
+    payload_schema: [
+      { name: 'booking.id', type: 'uuid', format: 'uuid', description: 'Bureau booking ID' },
+      { name: 'booking.title', type: 'string', description: 'Booking title (mirrors the Book event title)' },
+      { name: 'booking.starts_at', type: 'datetime', format: 'iso8601', description: 'Start of the window' },
+      { name: 'booking.ends_at', type: 'datetime', format: 'iso8601', description: 'End of the window' },
+      { name: 'booking.access', type: 'enum', enum: ['open', 'locked'], description: 'Whether non-attendees may knock' },
+      { name: 'room.id', type: 'uuid', format: 'uuid', description: 'Bureau room ID' },
+      { name: 'room.name', type: 'string?', description: 'Room name' },
+      { name: 'book_event_id', type: 'uuid', format: 'uuid', description: 'Source Book event ID' },
+      { name: 'organizer.id', type: 'uuid', format: 'uuid', description: 'Booking organizer' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'User who booked the room' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bureau',
+    event_type: 'room.locked',
+    description: 'Fired when a room privacy override flips a room to locked / private (live override or booking with access=locked).',
+    payload_schema: [
+      { name: 'room.id', type: 'uuid', format: 'uuid', description: 'Bureau room ID' },
+      { name: 'room.name', type: 'string?', description: 'Room name' },
+      { name: 'privacy.previous', type: 'string?', description: 'Previous privacy level (open/knock/private)' },
+      { name: 'privacy.current', type: 'string', description: 'New privacy level (typically private/locked)' },
+      { name: 'reason', type: 'string?', description: 'Why the room was locked (manual/booking/dnd)' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'User who locked the room' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bureau',
+    event_type: 'summon.issued',
+    description: 'Fired when a summoner issues a "bring everyone here" teleport to a set of recipients.',
+    payload_schema: [
+      { name: 'summon.id', type: 'uuid', format: 'uuid', description: 'Bureau summon ID' },
+      { name: 'summoner.id', type: 'uuid', format: 'uuid', description: 'User who issued the summon' },
+      { name: 'from_room_id', type: 'uuid?', format: 'uuid', description: 'Room the summon originated from' },
+      { name: 'target_url', type: 'string', description: 'Deep-link the summon directs recipients to (carries ?lkRoom for continuous audio)' },
+      { name: 'target_app', type: 'string', description: 'App the target URL belongs to (bureau/board/brief/...)' },
+      { name: 'target_label', type: 'string?', description: 'Human-friendly label for the target' },
+      { name: 'livekit_room_hint', type: 'string?', description: 'LiveKit room hint passed alongside target_url' },
+      { name: 'recipient_count', type: 'number', description: 'Number of recipients addressed by the summon' },
+      { name: 'actor.id', type: 'uuid', format: 'uuid', description: 'Summoner (same as summoner.id)' },
+      { name: 'org.id', type: 'uuid', format: 'uuid', description: 'Organization ID' },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -2441,6 +2572,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...blankEvents,
   ...benchEvents,
   ...blueprintEvents,
+  ...bureauEvents,
   ...wave1bEvents,
 ];
 

@@ -10,6 +10,14 @@ import { healthCheckPlugin } from '@bigbluebam/service-health';
 import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
+import floorsRoutes from './routes/floors.routes.js';
+import roomsRoutes from './routes/rooms.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
+import internalRoutes from './routes/internal.routes.js';
+import officesRoutes from './routes/offices.routes.js';
+import bookingsRoutes from './routes/bookings.routes.js';
+import knocksRoutes from './routes/knocks.routes.js';
+import livekitRoutes from './routes/livekit.routes.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -95,6 +103,24 @@ await fastify.register(healthCheckPlugin, {
 // Workstream 2 will also wire a websocket handler (presence + knock fan-out)
 // and the per-action permissions plugin once the bureau permission_keys land.
 // ─────────────────────────────────────────────────────────────────────
+
+// Agent A (workstream 2): admin surfaces — floors, rooms, ACL, door, settings.
+await fastify.register(floorsRoutes, { prefix: '/v1' });
+await fastify.register(roomsRoutes, { prefix: '/v1' });
+await fastify.register(settingsRoutes, { prefix: '/v1' });
+
+// Agent C (workstream 2): internal cross-app routes (X-Internal-Service-Secret).
+// Hosts the can-join-room preflight that board-api / brief-api call before
+// minting a LiveKit token for a `?lkRoom=bureau-room-X` summon link.
+await fastify.register(internalRoutes, { prefix: '/v1' });
+
+// Agent B (workstream 2): member surfaces — office assignment,
+// bookings, knocks, and the LiveKit access-token mint for joining
+// `bureau-room-{id}` rooms.
+await fastify.register(officesRoutes, { prefix: '/v1' });
+await fastify.register(bookingsRoutes, { prefix: '/v1' });
+await fastify.register(knocksRoutes, { prefix: '/v1' });
+await fastify.register(livekitRoutes, { prefix: '/v1' });
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
