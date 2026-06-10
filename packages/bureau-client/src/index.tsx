@@ -54,9 +54,27 @@ import type {
 } from './types.js';
 import { SummonHandler } from './summon-handler.js';
 import { KnockHandler } from './knock-handler.js';
+import { PipPortal, PopoutBureauButton, usePipMode } from './pip-host.js';
 
-export type { BureauWsClient } from './ws-client.js';
+// BureauWsClient is exported as a value (not just a type) so consumers
+// like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
+export { BureauWsClient } from './ws-client.js';
 export * from './types.js';
+export {
+  PopoutBureauButton,
+  openPipWindow,
+  closePipWindow,
+  isDocumentPipSupported,
+  usePipMode,
+  usePipMount,
+  PipPortal,
+  subscribeToPipMode,
+  getPipMode,
+} from './pip-host.js';
+export type {
+  OpenPipWindowOptions,
+  PopoutBureauButtonProps,
+} from './pip-host.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // MountOptions — the §11 contract.
@@ -560,12 +578,35 @@ const statusDotStyle = (status: BureauConnectionStatus): CSSProperties => ({
         : '#ef4444',
 });
 
+// Style for the "Bureau is popped out" placeholder shown in the host page
+// while the real box lives in the PiP window.
+const placeholderContainerStyle: CSSProperties = {
+  ...boxContainerStyle,
+  paddingTop: 8,
+  paddingBottom: 8,
+  minWidth: 200,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
+
+const placeholderRestoreBtnStyle: CSSProperties = {
+  marginLeft: 'auto',
+  background: 'rgba(255,255,255,0.08)',
+  color: '#fafafa',
+  border: '1px solid rgba(255,255,255,0.16)',
+  borderRadius: 6,
+  padding: '3px 8px',
+  cursor: 'pointer',
+  fontSize: 11,
+};
+
 /**
- * The docked floating box. Rendered by mountBureauClient() into the portal
- * root. Hosts may also render it inline by wrapping themselves in
- * <BureauProvider> first.
+ * Internal: the actual floating-box markup. Always renders the same UI
+ * regardless of whether it lives in the host page or in the PiP window;
+ * the only difference is the parent DOM, which createPortal handles.
  */
-export function BureauDockedBox(): React.ReactElement | null {
+function BureauDockedBoxInner(): React.ReactElement | null {
   const ctx = useContext(BureauContext);
   const [micOn, setMicOn] = useState(false);
   const [camOn, setCamOn] = useState(false);
@@ -583,8 +624,11 @@ export function BureauDockedBox(): React.ReactElement | null {
           <span style={statusDotStyle(state.status)} />
           Bureau
         </span>
-        <span style={{ opacity: 0.6 }}>
-          {state.status === 'connected' ? '' : state.status}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ opacity: 0.6 }}>
+            {state.status === 'connected' ? '' : state.status}
+          </span>
+          <PopoutBureauButton />
         </span>
       </div>
 
@@ -680,6 +724,58 @@ export function BureauDockedBox(): React.ReactElement | null {
       </div>
     </div>
   );
+}
+
+/**
+ * Placeholder shown in the host page while the real docked box lives in the
+ * Document PiP window. Clicking "Return" closes the PiP window and brings
+ * the box back inline.
+ */
+function BureauPipPlaceholder(): React.ReactElement {
+  return (
+    <div
+      style={placeholderContainerStyle}
+      data-bureau-pip-placeholder
+      role="status"
+      aria-live="polite"
+    >
+      <span style={{ opacity: 0.85 }}>Bureau is open in a separate window</span>
+      <PopoutBureauButton style={placeholderRestoreBtnStyle} title="Return Bureau to the page" />
+    </div>
+  );
+}
+
+/**
+ * The docked floating box. Rendered by mountBureauClient() into the portal
+ * root. Hosts may also render it inline by wrapping themselves in
+ * <BureauProvider> first.
+ *
+ * §5.1 render-target switch:
+ *   - mode === 'inline': render <BureauDockedBoxInner/> here in the host page.
+ *   - mode === 'pip':    render <BureauPipPlaceholder/> here AND mirror the
+ *                        real box into the Document PiP window via PipPortal.
+ *                        Because createPortal preserves React context, the
+ *                        mirrored tree reads from the same BureauContext as
+ *                        the inline tree — there's only one WS client.
+ *   - mode === 'tauri':  reserved; falls through to inline for now.
+ */
+export function BureauDockedBox(): React.ReactElement | null {
+  const ctx = useContext(BureauContext);
+  const mode = usePipMode();
+  if (!ctx) return null;
+
+  if (mode === 'pip') {
+    return (
+      <>
+        <BureauPipPlaceholder />
+        <PipPortal>
+          <BureauDockedBoxInner />
+        </PipPortal>
+      </>
+    );
+  }
+
+  return <BureauDockedBoxInner />;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

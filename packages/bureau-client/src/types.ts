@@ -334,3 +334,43 @@ export type BureauConnectionStatus =
   | 'connected'
   | 'reconnecting'
   | 'disconnected';
+
+// ─────────────────────────────────────────────────────────────────────────
+// Floating-box render targets (§5.1).
+//
+//   'inline' — rendered into the host SPA's portal root, the default path
+//              and the only path on non-Chromium browsers.
+//   'pip'    — rendered into a Document Picture-in-Picture window via the
+//              Chromium-only window.documentPictureInPicture API. The host
+//              SPA keeps the React tree alive; the PiP window receives the
+//              same docked box through a portal and inherits all contexts.
+//   'tauri'  — reserved for a future native window host (workstream N).
+//
+// State transitions are driven by openPipWindow() / closePipWindow() in
+// pip-host.tsx and exposed to the SDK via useBureauPipMode().
+// ─────────────────────────────────────────────────────────────────────────
+
+export type BureauPipMode = 'inline' | 'pip' | 'tauri';
+
+/**
+ * Augmentation for the Chromium Document Picture-in-Picture API. Only the
+ * surface we touch is declared; everything else lives on a `Window` lookalike
+ * that we treat as opaque.
+ */
+export interface DocumentPictureInPictureOptions {
+  width?: number;
+  height?: number;
+  disallowReturnToOpener?: boolean;
+  preferInitialWindowPlacement?: boolean;
+}
+
+export interface DocumentPictureInPicture {
+  requestWindow(options?: DocumentPictureInPictureOptions): Promise<Window>;
+  readonly window: Window | null;
+}
+
+declare global {
+  interface Window {
+    documentPictureInPicture?: DocumentPictureInPicture;
+  }
+}
