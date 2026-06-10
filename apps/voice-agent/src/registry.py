@@ -15,7 +15,10 @@ the source of truth for "which agents exist"; the in-memory side is the
 source of truth for "what live resources we currently hold".
 
 Key layout:
-    voice-agents:active  → HASH<agent_id, json(agent_state)>
+    voice-agents:active           → HASH<agent_id, json(agent_state)>
+    voice-agents:provider-config  → HASH<org_key, json(provider_config)>
+                                    (org_key = org UUID, or "_global" for
+                                    the legacy org-less push; D-5)
 
 Operations:
     register(agent_id, agent_state)  → HSET
@@ -23,6 +26,8 @@ Operations:
     list_all()                       → HGETALL → list[agent_state]
     snapshot_for_health()            → cheap COUNT for /health endpoint
     reconcile_orphans(livekit_room_service) → drain prior-pod entries
+    save_provider_config(org_key, cfg)      → HSET (survives pod restart)
+    load_provider_config(org_key)           → HGET or None
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ from typing import Any, Optional
 logger = logging.getLogger("voice-agent.registry")
 
 REDIS_KEY_ACTIVE = "voice-agents:active"
+REDIS_KEY_PROVIDER_CONFIG = "voice-agents:provider-config"
 
 
 class AgentRegistry:
@@ -136,6 +142,33 @@ class AgentRegistry:
             return int(await self._redis.hlen(REDIS_KEY_ACTIVE))
         except Exception:  # noqa: BLE001
             return 0
+
+    async def save_provider_config(self, org_key: str, config: dict) -> None:
+        """Persist a per-org provider config so it survives pod restarts (D-5).
+
+        Best-effort like every other registry op: when Redis is down the
+        in-memory cache in api.py still works for this pod's lifetime.
+        """
+        if not self._connected or not self._redis:
+            return
+        try:
+            await self._redis.hset(
+                REDIS_KEY_PROVIDER_CONFIG, org_key, json.dumps(config, default=str)
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Registry save_provider_config(%s) failed: %s", org_key, exc)
+
+    async def load_provider_config(self, org_key: str) -> Optional[dict]:
+        """Read a persisted per-org provider config, or None when absent."""
+        if not self._connected or not self._redis:
+            return None
+        try:
+            raw = await self._redis.hget(REDIS_KEY_PROVIDER_CONFIG, org_key)
+            if raw:
+                return json.loads(raw)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Registry load_provider_config(%s) failed: %s", org_key, exc)
+        return None
 
     async def reconcile_orphans(self) -> list[dict]:
         """On service startup: read every entry in the registry, return

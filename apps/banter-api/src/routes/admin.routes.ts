@@ -277,6 +277,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            // D-5: org-scoped so multi-tenant deploys don't share one config.
+            org_id: user.org_id,
             stt_provider: settings.stt_provider ?? null,
             stt_config: settings.stt_provider_config ?? {},
             tts_provider: settings.tts_provider ?? null,
@@ -563,6 +565,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
       try {
         const payload = {
+          // D-5: org-scoped so multi-tenant deploys don't share one config.
+          org_id: user.org_id,
           stt_provider: settings.stt_provider ?? null,
           stt_config: settings.stt_provider_config ?? {},
           tts_provider: settings.tts_provider ?? null,

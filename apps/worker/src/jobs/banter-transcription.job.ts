@@ -36,6 +36,8 @@ export async function processBanterTranscriptionJob(
       call_id,
       recording_url,
       callback_url: callbackUrl,
+      // D-5: selects the org's STT provider config on the voice agent.
+      org_id,
     }),
   });
 

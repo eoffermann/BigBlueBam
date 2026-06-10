@@ -37,6 +37,8 @@ export interface SpawnAgentOptions {
    */
   room_name?: string;
   config?: Record<string, unknown>;
+  /** Org the call belongs to — selects the per-org provider config (D-5). */
+  org_id?: string;
 }
 
 export interface AgentInfo {
@@ -81,6 +83,7 @@ export async function spawnAgent(opts: SpawnAgentOptions): Promise<AgentInfo> {
       mode: opts.mode,
       room_name: opts.room_name,
       config: opts.config,
+      org_id: opts.org_id,
     }),
   });
 }

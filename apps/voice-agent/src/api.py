@@ -42,8 +42,14 @@ agents: dict[str, dict] = {}
 _active_pipelines: dict[str, AgentPipeline] = {}
 registry = AgentRegistry()
 
-# Provider configuration (pushed from banter-api admin settings)
-_provider_config: dict = {
+# Provider configuration (pushed from banter-api admin settings), keyed by
+# org id — "_global" holds the legacy org-less push (D-5). The in-memory
+# dict is a read-through cache over the Redis hash the registry persists
+# to, so a pod restart no longer loses per-org customization until the
+# next admin save.
+GLOBAL_CONFIG_KEY = "_global"
+
+_EMPTY_PROVIDER_CONFIG: dict = {
     "stt_provider": None,
     "stt_config": {},
     "tts_provider": None,
@@ -51,6 +57,26 @@ _provider_config: dict = {
     "llm_provider": None,
     "llm_config": {},
 }
+
+_provider_configs: dict[str, dict] = {}
+
+
+async def _resolve_provider_config(org_id: Optional[str]) -> dict:
+    """Resolve the effective provider config for an org.
+
+    Lookup order: in-memory cache → Redis (cached on hit) for the org key,
+    then the same two steps for the global key, then empty (env vars still
+    apply downstream in _build_pipeline_config).
+    """
+    keys = [org_id, GLOBAL_CONFIG_KEY] if org_id else [GLOBAL_CONFIG_KEY]
+    for key in keys:
+        if key in _provider_configs:
+            return _provider_configs[key]
+        stored = await registry.load_provider_config(key)
+        if stored is not None:
+            _provider_configs[key] = stored
+            return stored
+    return dict(_EMPTY_PROVIDER_CONFIG)
 
 # ── Request / Response models ────────────────────────────────────
 
@@ -60,6 +86,9 @@ class SpawnRequest(BaseModel):
     mode: str = Field(default="text", pattern="^(voice|text)$")
     room_name: Optional[str] = None
     config: Optional[dict] = None
+    # Org the call belongs to — selects the per-org provider config (D-5).
+    # Optional for legacy callers; falls back to the global config.
+    org_id: Optional[str] = None
 
 
 class SpawnResponse(BaseModel):
@@ -68,6 +97,9 @@ class SpawnResponse(BaseModel):
 
 
 class ProviderConfigRequest(BaseModel):
+    # Org the settings belong to. Pushes without org_id land on the global
+    # key (legacy banter-api behavior, single-tenant deploys).
+    org_id: Optional[str] = None
     stt_provider: Optional[str] = None
     stt_config: Optional[dict] = None
     tts_provider: Optional[str] = None
@@ -95,6 +127,8 @@ class TranscribeRequest(BaseModel):
     call_id: str
     recording_url: str
     callback_url: Optional[str] = None
+    # Selects the per-org STT config (D-5); optional for legacy callers.
+    org_id: Optional[str] = None
 
 
 # ── Lifecycle hooks ─────────────────────────────────────────────
@@ -187,7 +221,7 @@ async def _on_shutdown() -> None:
 
 @app.get("/health")
 async def health():
-    pipeline_cfg = _build_pipeline_config()
+    pipeline_cfg = _build_pipeline_config(await _resolve_provider_config(None))
     return {
         "status": "ok",
         "agents": len(agents),
@@ -225,7 +259,9 @@ async def spawn_agent(data: SpawnRequest):
         agent_state["config_overrides"] = data.config
 
     if data.mode == "voice" and data.room_name:
-        pipeline_cfg = _build_pipeline_config(overrides=data.config)
+        pipeline_cfg = _build_pipeline_config(
+            await _resolve_provider_config(data.org_id), overrides=data.config
+        )
         pipeline = AgentPipeline(pipeline_cfg)
 
         if pipeline.can_connect():
@@ -344,7 +380,7 @@ async def transcribe(data: TranscribeRequest):
     post-call STT transcription. The actual transcription runs async
     and results are posted back via callback_url or stored directly.
     """
-    pipeline_cfg = _build_pipeline_config()
+    pipeline_cfg = _build_pipeline_config(await _resolve_provider_config(data.org_id))
 
     if not pipeline_cfg.stt_ready:
         return {
@@ -426,28 +462,34 @@ def _has_api_key(config: dict) -> bool:
     return isinstance(key, str) and len(key) > 0
 
 
-def _build_pipeline_config(overrides: Optional[dict] = None) -> PipelineConfig:
-    """Build a PipelineConfig from current provider settings + env vars."""
+def _build_pipeline_config(
+    provider_config: dict, overrides: Optional[dict] = None
+) -> PipelineConfig:
+    """Build a PipelineConfig from a resolved provider config + env vars.
+
+    `provider_config` comes from _resolve_provider_config(org_id) so the
+    same builder serves per-org and global/legacy callers.
+    """
     cfg = PipelineConfig(
         livekit_url=os.environ.get("LIVEKIT_URL", ""),
         livekit_api_key=os.environ.get("LIVEKIT_API_KEY", ""),
         livekit_api_secret=os.environ.get("LIVEKIT_API_SECRET", ""),
-        stt_provider=_provider_config.get("stt_provider"),
-        stt_api_key=(_provider_config.get("stt_config") or {}).get("api_key")
+        stt_provider=provider_config.get("stt_provider"),
+        stt_api_key=(provider_config.get("stt_config") or {}).get("api_key")
         or os.environ.get("STT_API_KEY", "")
         or os.environ.get("DEEPGRAM_API_KEY", ""),
-        llm_provider=_provider_config.get("llm_provider")
+        llm_provider=provider_config.get("llm_provider")
         or os.environ.get("LLM_PROVIDER"),
-        llm_api_key=(_provider_config.get("llm_config") or {}).get("api_key")
+        llm_api_key=(provider_config.get("llm_config") or {}).get("api_key")
         or os.environ.get("LLM_API_KEY", "")
         or os.environ.get("OPENAI_API_KEY", "")
         or os.environ.get("ANTHROPIC_API_KEY", ""),
-        llm_model=(_provider_config.get("llm_config") or {}).get("model"),
-        tts_provider=_provider_config.get("tts_provider"),
-        tts_api_key=(_provider_config.get("tts_config") or {}).get("api_key")
+        llm_model=(provider_config.get("llm_config") or {}).get("model"),
+        tts_provider=provider_config.get("tts_provider"),
+        tts_api_key=(provider_config.get("tts_config") or {}).get("api_key")
         or os.environ.get("TTS_API_KEY", "")
         or os.environ.get("OPENAI_API_KEY", ""),
-        tts_voice=(_provider_config.get("tts_config") or {}).get("voice"),
+        tts_voice=(provider_config.get("tts_config") or {}).get("voice"),
         system_prompt=os.environ.get(
             "AGENT_SYSTEM_PROMPT",
             "You are a helpful AI assistant participating in a voice call. "
@@ -465,9 +507,13 @@ def _build_pipeline_config(overrides: Optional[dict] = None) -> PipelineConfig:
 
 
 @app.get("/config", response_model=ProviderConfigStatus)
-def get_config():
-    """Return current provider configuration status (no secrets leaked)."""
-    pipeline_cfg = _build_pipeline_config()
+async def get_config(org_id: Optional[str] = None):
+    """Return provider configuration status (no secrets leaked).
+
+    Pass ?org_id=<uuid> for the org-scoped view; omitting it reports the
+    global/legacy configuration.
+    """
+    pipeline_cfg = _build_pipeline_config(await _resolve_provider_config(org_id))
     return ProviderConfigStatus(
         stt=ProviderStatusEntry(
             provider=pipeline_cfg.stt_provider,
@@ -489,31 +535,48 @@ def get_config():
 
 
 @app.post("/config")
-def update_config(data: ProviderConfigRequest):
-    """Accept provider configuration pushed from banter-api admin settings."""
+async def update_config(data: ProviderConfigRequest):
+    """Accept provider configuration pushed from banter-api admin settings.
+
+    Org-scoped when org_id is present (D-5); the legacy org-less push
+    lands on the global key. The merged config is persisted to Redis so
+    a pod restart no longer loses it.
+    """
+    org_key = data.org_id or GLOBAL_CONFIG_KEY
+    current = dict(
+        _provider_configs.get(org_key)
+        or await registry.load_provider_config(org_key)
+        or _EMPTY_PROVIDER_CONFIG
+    )
+
     if data.stt_provider is not None:
-        _provider_config["stt_provider"] = data.stt_provider
+        current["stt_provider"] = data.stt_provider
     if data.stt_config is not None:
-        _provider_config["stt_config"] = data.stt_config
+        current["stt_config"] = data.stt_config
     if data.tts_provider is not None:
-        _provider_config["tts_provider"] = data.tts_provider
+        current["tts_provider"] = data.tts_provider
     if data.tts_config is not None:
-        _provider_config["tts_config"] = data.tts_config
+        current["tts_config"] = data.tts_config
     if data.llm_provider is not None:
-        _provider_config["llm_provider"] = data.llm_provider
+        current["llm_provider"] = data.llm_provider
     if data.llm_config is not None:
-        _provider_config["llm_config"] = data.llm_config
+        current["llm_config"] = data.llm_config
+
+    _provider_configs[org_key] = current
+    await registry.save_provider_config(org_key, current)
 
     logger.info(
-        "Provider config updated: STT=%s, TTS=%s, LLM=%s",
-        _provider_config.get("stt_provider"),
-        _provider_config.get("tts_provider"),
-        _provider_config.get("llm_provider"),
+        "Provider config updated for %s: STT=%s, TTS=%s, LLM=%s",
+        org_key,
+        current.get("stt_provider"),
+        current.get("tts_provider"),
+        current.get("llm_provider"),
     )
 
     return {
         "status": "updated",
-        "stt_provider": _provider_config.get("stt_provider"),
-        "tts_provider": _provider_config.get("tts_provider"),
-        "llm_provider": _provider_config.get("llm_provider"),
+        "org_id": data.org_id,
+        "stt_provider": current.get("stt_provider"),
+        "tts_provider": current.get("tts_provider"),
+        "llm_provider": current.get("llm_provider"),
     }
