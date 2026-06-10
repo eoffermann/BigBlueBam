@@ -4,6 +4,15 @@
  * imported by apps/bureau-api/src/routes/livekit.routes.ts in the POST
  * /v1/surface-huddle/token handler.
  *
+ * Semantic note (v2 unified-call model — Phase 3): "on the surface" is
+ * exactly equivalent to "in the canonical LiveKit room for the surface,"
+ * which is `huddle-{surface_app}-{surface_id}`. The bureau-client SDK joins
+ * that room automatically the moment describeLocation() reports a matching
+ * `surface_id`, so the presence row maintained by ws.routes.ts is the
+ * source of truth for both "is this user on the surface" and "is this user
+ * already in the surface's call." A token mint for someone NOT on the
+ * surface would be minting access to a room they aren't supposed to be in.
+ *
  * Symmetric authorization for surface huddle tokens: when a recipient
  * accepts a ring on, say, a Brief doc and asks bureau-api to mint a
  * LiveKit token for the huddle room scoped to that surface, we want to

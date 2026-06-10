@@ -7,6 +7,22 @@
  * Body: { to_user_id, surface_app, surface_id, surface_label? }
  * Returns: { data: { ring_token, expires_at, delivered } }
  *
+ * SEMANTIC SHIFT (v2 unified-call model — Phase 3).
+ *
+ *   Ring is a notification that draws the recipient's attention to a surface
+ *   they already (or could) be on. The LiveKit room for the surface ALWAYS
+ *   exists; it is the canonical room `huddle-{surface_app}-{surface_id}`,
+ *   and the recipient's bureau-client SDK joins it the moment they navigate
+ *   to the surface URL. There is no separate "let's start a call" step on
+ *   accept — the SDK's ActiveCallManager (packages/bureau-client/src/active-room.ts)
+ *   handles the LiveKit token mint + room join driven entirely by URL changes.
+ *
+ *   In v1 the recipient's accept handler ALSO POSTed /v1/surface-huddle/token
+ *   to seed the call before navigating. That call is no longer necessary —
+ *   navigation alone is sufficient. The endpoint stays valid for the rare
+ *   host that wants to short-circuit the SDK, but the canonical path is
+ *   ring → navigate → SDK auto-joins.
+ *
  * Flow:
  *   1. Sender posts the surface they're on plus the recipient.
  *   2. DND check via dnd-check.service.ts. If the recipient has ANY live
@@ -15,9 +31,10 @@
  *   3. Publish a 'ring' frame on user:{to_user_id} via ring.service.ts.
  *      The recipient's bureau-client picks it up over WS and shows the
  *      incoming-call overlay.
- *   4. Both sides then mint a surface-huddle token via
- *      POST /v1/surface-huddle/token and meet in LiveKit room
- *      `huddle-{surface_app}-{surface_id}`.
+ *   4. On accept, the recipient's bureau-client navigates to the surface
+ *      URL; the SDK's ActiveCallManager observes the location change and
+ *      joins LiveKit room `huddle-{surface_app}-{surface_id}` — which the
+ *      sender's SDK is already in by the same rule.
  *
  * Sender authorization: we do NOT cross-app-access-check the surface here
  * for the same reason as POST /v1/surface-huddle/token — the sender knows

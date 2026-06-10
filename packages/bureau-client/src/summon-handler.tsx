@@ -10,6 +10,25 @@
  *
  * If `summon_incoming.autoFollow` is true, the toast renders the 3-second
  * cancelable auto-navigate per §10 step 5.
+ *
+ * SEMANTIC SHIFT (v2 unified-call model — Phase 3).
+ *
+ *   v1 used to append `?lkRoom={summon.lkRoomHint}` to the destination URL
+ *   so the destination SPA's per-app audio controls could join a specific
+ *   LiveKit room (typically the summoner's bureau-room) for continuous-audio
+ *   handoff. That mechanism is dead:
+ *
+ *     - The bureau-client SDK on the destination owns audio now. It joins
+ *       whichever room the unified call manager resolves on URL change
+ *       (either a spatial bureau-room — if the user is still in one — or
+ *       the canonical surface huddle).
+ *     - The per-app audio routes that used to read `?lkRoom=` were deleted
+ *       in Phase 2 (board-api/audio.routes.ts, brief-api/audio.routes.ts).
+ *
+ *   We therefore navigate to the bare `targetUrl` and let the SDK pick the
+ *   right room. The summon's `lkRoomHint` field stays on the wire for now
+ *   because the audit row (`bureau_summons.livekit_room_hint`) still records
+ *   it for traceability, but the client no longer encodes it into the URL.
  */
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -44,12 +63,6 @@ function stripOrigin(url: string): string {
   } catch {
     return url;
   }
-}
-
-function appendLkRoom(url: string, lkRoom: string | null | undefined): string {
-  if (!lkRoom) return url;
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}lkRoom=${encodeURIComponent(lkRoom)}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -190,9 +203,13 @@ export function SummonHandler({
         // ignore — disconnects swallow this; the server will GC the offer.
       }
       if (decision === 'join') {
-        const target = appendLkRoom(summon.targetUrl, summon.lkRoomHint);
+        // v2 unified-call model: navigate to the bare URL. The bureau-client
+        // SDK on the destination resolves the right LiveKit room from
+        // describeLocation() on its own; we no longer encode `?lkRoom=` into
+        // the URL because the per-app audio routes that consumed it are
+        // gone after Phase 2.
         try {
-          navigate(stripOrigin(target));
+          navigate(stripOrigin(summon.targetUrl));
         } catch {
           // host adapter rejected the navigation; nothing we can do here
         }

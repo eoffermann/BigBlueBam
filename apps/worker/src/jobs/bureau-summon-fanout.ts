@@ -21,6 +21,13 @@
  *      discovered no_access entries from `pending` → `no_access`.
  *   6. Emits the §14 Bolt `bureau.summon.issued` event exactly once.
  *
+ * NOTE on `lkRoomHint` (v2 unified-call model — Phase 3).
+ *   We still ship `lkRoomHint` in the summon_incoming frame for audit
+ *   parity with the audit row, but the recipient's bureau-client SDK no
+ *   longer threads it into the destination URL — the SDK joins whichever
+ *   LiveKit room the unified call manager resolves on URL change. The
+ *   `?lkRoom=` query param is dead end-to-end.
+ *
  * ──────────────────────────────────────────────────────────────────────
  * DUPLICATED CODE WARNING.
  *

@@ -2,44 +2,19 @@
 
 Items that came out of the calling prerequisite phase (P-1 through P-6) but were intentionally not landed in the prereq commits. They are documented here so they're not forgotten and so the next agent picking up the work has the full picture.
 
-## D-1: Wire consumers to read `calling.*` from `system_settings`
+## D-1: Wire consumers to read `calling.*` from `system_settings` ✅ MOSTLY CLOSED (v2 unified-call model)
 
-**Status:** Not started.
-**Blocks:** Real-world utility of the SuperUser Platform Calling Settings page. Today the page accepts edits, persists them to `system_settings`, and audits the change — but no service reads from there yet.
+**Status:** Mostly closed by the v2 unified-call model (Phase 3). Only `bureau-api` (the docked-box's LiveKit token endpoint) and `voice-agent` remain as consumers; the per-app consumer list this item originally targeted is gone.
 
-The P-2 SuperUser settings page introduced these keys:
+The Phase 2 deletions removed every per-app LiveKit stack that this item was meant to wire up:
 
-- `calling.global_enabled` (boolean kill switch)
-- `calling.livekit_host`
-- `calling.livekit_api_key`
-- `calling.livekit_api_secret`
-- `calling.voice_agent_url`
+- `apps/board-api/src/services/livekit.service.ts` — deleted.
+- `apps/brief-api/src/services/livekit.service.ts` — deleted.
+- `apps/banter-api/src/services/livekit-token.ts` — `call.routes.ts` follows; the docked box now handles 1:1, huddle, and surface calling uniformly.
 
-`banter-api`, `board-api`, `brief-api`, and `voice-agent` currently read LiveKit credentials directly from env vars and have no awareness of `system_settings`. They need a small shared resolver:
+The remaining consumers — `bureau-api` token mints (spatial + surface huddle) and `voice-agent` — are a much smaller surface. The shared resolver can either ship as a 2-call utility in `@bigbluebam/livekit-tokens` or live inline in bureau-api's env layer with a `voice-agent` bridge endpoint on `apps/api`. The `calling.global_enabled = false` kill switch still needs implementing on those two paths, but the original 4-app fan-out described in the v1 item is moot.
 
-```
-get-calling-config.ts (proposed @bigbluebam/shared or app-local):
-  resolveLiveKitCreds(orgId): {
-    host, apiKey, apiSecret, source: 'project' | 'org' | 'platform' | 'env'
-  }
-```
-
-Resolution order, mirroring the project-calling-settings.service.ts cascade in apps/api:
-
-1. (future) project-level override — n/a for credentials.
-2. Org-level override from `banter_settings.livekit_host`/`livekit_api_key`/`livekit_api_secret` (these already exist).
-3. Platform-level from `system_settings` rows under the `calling.*` prefix.
-4. Env-var fallback (today's behavior).
-
-`calling.global_enabled = false` must short-circuit the entire stack — every token mint route returns a 503 / CALLING_DISABLED error before any LiveKit call is attempted.
-
-**Where this lives:**
-- `apps/banter-api/src/services/livekit-token.ts` — wrap the existing token mint.
-- `apps/board-api/src/services/livekit.service.ts` — wrap `generateBoardAudioToken`.
-- `apps/brief-api/src/services/livekit.service.ts` — wrap `generateBriefAudioToken`.
-- `apps/voice-agent/src/api.py` — read from a small bridge endpoint on `apps/api` (since voice-agent is Python and doesn't have a Drizzle client).
-
-Effort: ~1-2 days.
+Effort: 4-6 hours (down from 1-2 days).
 
 ## D-2: Merge or link `CallingCredentialsCard` (env-status) with the new Platform Calling Settings page
 
@@ -55,22 +30,13 @@ Two options:
 
 Effort: ~2 hours.
 
-## D-3: Brief native call panel + auto-join `brief-{docId}`
+## D-3: Brief native call panel + auto-join `brief-{docId}` ✅ CLOSED (v2 unified-call model)
 
-**Status:** Stub-only (P-6 ships a `?lkRoom=` listener; full Brief calling not implemented).
-**Tracking:** Mentioned in `docs/plans/bureau-design-document.md` §9 as Brief's contribution to Strategy B.
+**Status:** Closed by the v2 unified-call model (Phase 3). A "Brief native call panel" is no longer a concept — the docked box is the universal call UI for every surface in the suite.
 
-P-6 made Brief honor a Bureau-issued `?lkRoom=bureau-room-<uuid>` so summons stay continuous. But Brief still has no native call panel of its own — a user opening a Brief doc directly doesn't auto-join `brief-{docId}` the way Board does for `board-{boardId}`.
+A user opening a Brief doc now auto-joins `huddle-brief-{docId}` via the bureau-client SDK's `ActiveCallManager` the moment `describeLocation()` reports `app: 'brief'` plus the document id as `surface_id` (already wired in `apps/brief/src/main.tsx`). The `brief-{docId}` room name from v1 has been retired in favor of the canonical `huddle-brief-{docId}` per the §19 naming contract.
 
-For Bureau v1 this is acceptable: continuous-audio teleport into Brief works because Bureau owns the LiveKit room. The native call panel becomes a follow-up workstream.
-
-Scope (when scheduled):
-- Mirror Board's audio-controls.tsx (mute, participant count, speaking indicator, disconnect).
-- Auto-join `brief-{docId}` on document open when `?lkRoom=` is absent.
-- Token mint on doc open; falls back through D-1's resolver for credentials.
-- `brief_settings` table parallel to `banter_settings` for org-level Brief calling toggles, OR reuse the existing P-3 banter settings if the design wants unified org-level calling controls (probably the latter).
-
-Effort: 2-3 days.
+Phase 2 deleted `apps/brief-api/src/routes/audio.routes.ts`, `apps/brief-api/src/services/livekit.service.ts`, `apps/brief/src/components/continuous-audio-widget.tsx`, and `apps/brief/src/hooks/use-continuous-audio.ts` — Brief's contribution to this item is gone.
 
 ## D-4: Book auto-creates LiveKit rooms on event booking
 
@@ -97,27 +63,28 @@ Required: voice-agent persists per-org config in Redis (e.g., `voice_agent:org:{
 
 Effort: 1 day.
 
-## D-6: Banter incoming-call signaling
+## D-6: Banter incoming-call signaling ✅ CLOSED (v2 unified-call model)
 
-**Status:** UI-only.
-**Tracking:** Calling audit doc §1 Banter B-3.
+**Status:** Closed by the v2 unified-call model (Phase 3). The work has shifted — and largely is already done — in bureau-client rather than banter.
 
-`apps/banter/src/components/calls/incoming-call-overlay.tsx` exists as a UI component but no signaling layer ever shows it. A user starting a 1:1 or huddle call doesn't ring the callee.
+What changed:
 
-Required:
-- When a `POST /channels/:id/calls` succeeds for a type that should ring (1:1 voice, huddle invite), banter-api publishes to a per-user Redis channel.
-- The Banter SPA subscribes via its existing WS hub and mounts `IncomingCallOverlay` when a relevant event arrives.
+- `apps/banter/src/components/calls/incoming-call-overlay.tsx` was deleted in Phase 2; the shared `IncomingCallOverlay` lives in `@bigbluebam/ui` and is the surface for ALL incoming-call rings in the suite.
+- Ring signaling lives in `apps/bureau-api/src/routes/ring.routes.ts` and `apps/bureau-api/src/services/ring.service.ts`. Any caller (Banter UI, presence chip strip, MCP tool) POSTs `/bureau/api/v1/ring` and the recipient's bureau-client SDK renders the overlay via `packages/bureau-client/src/ring-handler.tsx`.
+- A Banter "start a 1:1 call" affordance is implemented as: pick the user → POST `/bureau/api/v1/ring` with the Banter DM channel's surface_id. Both ends land in `huddle-banter-{channelId}` automatically.
 
-Effort: 1-2 days.
+What still needs doing (small, but it's not the same item):
 
-## D-7: Banter agent-text-sidebar backend
+- Wire Banter's UI for "call this person" to the bureau-api ring endpoint (vs. the historical `/channels/:id/calls` flow).
+- Decide whether 1:1 Banter calls use a `huddle-banter-{channelId}` room or a synthetic `dm-{userA}-{userB}` room name — the v2 naming contract assumes a surface_id, and 1:1 DMs do have one.
 
-**Status:** UI-only.
-**Tracking:** Calling audit doc §1 Banter B-4.
+Effort: 2-3 hours follow-up.
 
-`apps/banter/src/components/calls/agent-text-sidebar.tsx` lets a user type a message during a call. `onSendMessage` is wired but nothing receives it. Required: a `POST /v1/calls/:id/agent-message` route in banter-api that forwards the text to the voice-agent as a steering message.
+## D-7: Banter agent-text-sidebar backend ✅ CLOSED (v2 unified-call model)
 
-Effort: 0.5 day.
+**Status:** Closed by Phase 2 deletions in the v2 unified-call model.
+
+`apps/banter/src/components/calls/agent-text-sidebar.tsx` was deleted along with the rest of the Banter calls subtree. The "type a steering message during a call" affordance, if we want to bring it back, belongs on the docked box (so it works in every surface, not just Banter calls) and routes through bureau-api → voice-agent. Not currently scheduled.
 
 ---
 
@@ -202,4 +169,4 @@ Expected delta: `ws.routes.ts` drops from ~1324 to ~500 lines. Effort: 2 hours i
 
 ---
 
-**Total deferred effort (D-1 through D-10): ~9-12 days.** None of these block subsequent Bureau workstreams; D-1 (consumer wiring), D-4 (Book auto-room), and D-10 (ws.routes.ts dedup) become relevant during workstreams 4-7 and 11.
+**Total deferred effort (open items only): ~5-7 days.** The Phase 3 unified-call-model consolidation closed D-1 (mostly), D-3, D-6, and D-7 outright by deleting the per-app LiveKit stacks those items targeted; what's left is consumer wiring on a smaller surface (bureau-api + voice-agent), Book auto-room creation (D-4), voice-agent per-org persistence (D-5), the ws.routes.ts presence-layer dedup (D-10), the banter `/v1/internal/dm` endpoint (D-11), the cross-app `can-read` preflights (D-12), and the listener-binding race (D-13). None block subsequent Bureau workstreams.

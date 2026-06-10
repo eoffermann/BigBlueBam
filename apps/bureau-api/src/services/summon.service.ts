@@ -25,6 +25,18 @@
  * Bolt: bureau.summon.issued is emitted from this module (not from the
  * route layer) so the inline path and the fanout-job path both get
  * exactly one event per summon.
+ *
+ * NOTE on `lkRoomHint` (v2 unified-call model — Phase 3).
+ *   `lkRoomHint` / `livekit_room_hint` is retained on the wire and in the
+ *   `bureau_summons` audit row but is now AUDIT-ONLY. The bureau-client
+ *   SDK on the recipient no longer encodes it into the destination URL
+ *   (the `?lkRoom=` query param is gone — see
+ *   packages/bureau-client/src/summon-handler.tsx). The SDK joins whichever
+ *   LiveKit room the unified call manager resolves on URL change:
+ *   `bureau-room-{spatial}` while still in a spatial room, otherwise
+ *   `huddle-{app}-{surface_id}` for the destination surface. The audit
+ *   row's hint records what the summoner was IN at summon time; it does
+ *   not steer the destination's call.
  */
 
 import type { FastifyBaseLogger } from 'fastify';

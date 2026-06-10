@@ -9,10 +9,22 @@
  * a new 'ring' message type joins the existing knock_incoming / summon
  * envelope set.
  *
+ * SEMANTIC SHIFT (v2 unified-call model — Phase 3).
+ *
+ *   Ring is a NOTIFICATION, not a call-creation primitive. The LiveKit room
+ *   for the surface (`huddle-{surface_app}-{surface_id}`) always exists and
+ *   the recipient's bureau-client SDK joins it automatically on navigation
+ *   to the surface URL via the ActiveCallManager (see
+ *   packages/bureau-client/src/active-room.ts). Ringing is the polite "hey,
+ *   come look at this with me" that draws the recipient to a room they
+ *   could already be in — not a request to create a call.
+ *
  * The ring is a one-shot push:
  *   - The recipient sees the overlay and chooses accept / decline / mute.
- *   - On accept, the SDK mints a surface-huddle token via
- *     POST /v1/surface-huddle/token and joins the same room name.
+ *   - On accept, the SDK navigates to the surface URL; the unified-call
+ *     manager joins LiveKit room `huddle-{app}-{id}` automatically. The
+ *     explicit token POST on accept is now redundant — navigation is
+ *     sufficient.
  *   - Nothing is persisted server-side except the audit row recorded by
  *     the calling route. There is no `bureau_rings` table; if the recipient
  *     misses the ring (offline, browser closed) the in-flight signal is

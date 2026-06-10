@@ -772,3 +772,67 @@ Three real product calls remain open where you might still disagree. Each is che
 3. **Document PiP first, Tauri in v2.** Web-first ships the always-on-top overlay with no install. If you want the desktop companion as the flagship from day one (true cross-tab, works outside the suite), we promote agent 10 and add a Tauri workstream to v1.
 
 If those three sit right with you, the next artifact is the implementation plan for whichever workstream you want to start with. The natural first cut is agents 1 + 3 (schema and the presence/WS core), because everything else hangs off a working server-side session.
+
+---
+
+## 19. v2 simplification: the unified call model
+
+Sections 1-18 above remain a record of the original v1 design and the choices that shaped it. This section captures the consolidation Bureau went through after the v1 surface stabilized — kept in-doc so the v1 reasoning is still legible alongside the new model rather than overwritten.
+
+### What changed
+
+In v1 each app owned its own LiveKit stack:
+
+- Board mounted its own audio-controls panel, minted tokens via `board-api`, and joined `board-{boardId}` rooms.
+- Brief did the same with `brief-api` and `brief-{docId}` rooms (and a continuous-audio widget on top of it).
+- Banter had a separate calling pipeline (`banter-api/src/routes/call.routes.ts`) for 1:1 and huddle calls.
+- Bureau's docked box maintained its OWN LiveKit connection for the spatial room.
+
+Summons reconciled this jungle by carrying an `lkRoom` query param into the destination URL. The destination SPA's audio code would read `?lkRoom=...` and join that specific room instead of its default, which is how the "continuous audio across teleport" property of §9 actually worked.
+
+The v2 model collapses all of that into one rule:
+
+> **Every user has exactly ONE LiveKit endpoint — the docked box. The room it's connected to is derived from the user's current URL or their current Bureau spatial room.**
+
+The bureau-client SDK ships with `packages/bureau-client/src/active-room.ts` ↦ `ActiveCallManager`, which owns a single `Room` instance per page. It picks its target by priority:
+
+1. **Spatial Bureau room** — if the user has explicitly entered one via the floor view, target `bureau-room-{uuid}` regardless of where they navigate.
+2. **Surface huddle** — otherwise, if `describeLocation()` reports `app + surface_id`, target `huddle-{app}-{surface_id}`.
+3. **Idle** — otherwise no call. Mic/cam/screen buttons are disabled.
+
+Mic/cam/screen buttons in the docked box flip tracks on the active Room's `localParticipant`; toggling them is a one-liner against `livekit-client` rather than a coordination protocol with whichever app currently "owns" the call.
+
+### What this lets us delete
+
+The per-app LiveKit machinery becomes redundant and is removed across Phase 2:
+
+- `apps/board-api/src/routes/audio.routes.ts` + `apps/board-api/src/services/livekit.service.ts` — gone.
+- `apps/brief-api/src/routes/audio.routes.ts` + `apps/brief-api/src/services/livekit.service.ts` — gone.
+- `apps/board/src/components/canvas/audio-controls.tsx` + the matching `use-audio.ts` hook — gone.
+- `apps/brief/src/components/continuous-audio-widget.tsx` + `use-continuous-audio.ts` — gone.
+- Banter's call panel, video grid, transcript view, device dialog, incoming-call overlay, and `useCall` / `useLivekit` / `useDevices` hooks — gone (the docked box's overlay handler does this work universally).
+
+The §9 "continuous-audio handoff" no longer needs a special mode either: in v2 the audio doesn't drop at navigation, because navigation never tore down a per-app LiveKit Room to begin with. The docked box just rebinds its target on the URL change. If the user navigates between two surfaces, the manager mints a new token, disconnects the old Room, and connects to the new one — but that's the same sub-second operation we needed for spatial-vs-spatial switching anyway.
+
+### What ring and summon mean now
+
+The semantics of both immediate-interaction primitives shift:
+
+- **Ring** is no longer "let's start a new huddle call in this surface's room." The huddle room ALREADY exists; the recipient's SDK is either in it (if they're on the surface) or will be the moment they navigate. Ring is now a notification: "pay attention to this surface I'm on." Accept = navigate; navigate triggers the LiveKit join. The explicit `POST /v1/surface-huddle/token` on accept is dropped from the recipient flow — see `packages/bureau-client/src/ring-handler.tsx`.
+- **Summon** stops carrying `?lkRoom=` in the destination URL. The SDK on the recipient picks the right room when their location changes (spatial bureau room if they're in one, surface huddle if they aren't). The `livekit_room_hint` field stays on the wire and in `bureau_summons.livekit_room_hint` for audit, but it no longer steers anything client-side.
+
+### The naming contract
+
+`huddle-{surface_app}-{surface_id}` IS the canonical LiveKit room for a content surface in v2. There is no other room name. Two implementations must agree on the derivation:
+
+1. `packages/bureau-client/src/active-room.ts` ↦ `mintToken` (`surface` branch).
+2. `apps/bureau-api/src/routes/livekit.routes.ts` ↦ `buildSurfaceHuddleRoomName`.
+
+Any change in one must land in the same commit as the matching change in the other. Symmetric authorization (recipient is actually on the surface) lives in `apps/bureau-api/src/services/surface-presence.service.ts` and stays available as defense-in-depth for future hardening.
+
+### Why this is in §19 instead of overwriting §9 and §11
+
+Two reasons:
+
+1. The v1 model was working and shipped; the v1 sections explain why the staged version exists at all (the cross-app continuous-audio puzzle, the §11 SDK contract, the §9 handoff). Future readers will be better served by reading the original design AND this consolidation than by reading only a flattened version.
+2. The deletions in Phase 2 — the audio routes, the Banter call surfaces, the per-app widgets — are reversible in principle if we ever decide we need a per-app LiveKit stack again (say, for a specialized recording or transcription path that the docked box can't host). The original sections describe what that surface looked like the last time we tried it.

@@ -147,12 +147,26 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
    * deterministic from (surface_app, surface_id), so any two callers on the
    * same surface end up in the same LiveKit room without prior coordination.
    *
+   * In the v2 unified-call model (Phase 3), `huddle-{surface_app}-{surface_id}`
+   * IS the canonical LiveKit room for that surface — there is no separate
+   * "private call" room concept. The bureau-client SDK's ActiveCallManager
+   * (packages/bureau-client/src/active-room.ts) calls this endpoint
+   * automatically whenever the user navigates to a surface URL whose
+   * describeLocation() returns a `surface_id`. Ring/accept and direct
+   * navigation funnel into the same room because they target the same name.
+   *
    * We DO NOT access-check the destination resource here: any caller who
    * reaches this endpoint already has a session, and the surface-huddle
-   * primitive is opt-in — the bureau-client only rings/joins via this room
-   * when the user is actually mounted on the surface. The surface itself
-   * (Board, Brief, etc.) already enforces resource access at its REST layer
-   * before the bureau-client mount tells us about the location.
+   * primitive is opt-in — the bureau-client only joins via this room when
+   * the user is actually mounted on the surface. The surface itself (Board,
+   * Brief, etc.) already enforces resource access at its REST layer before
+   * the bureau-client mount tells us about the location. The
+   * surface-presence service (`isUserOnSurface` in surface-presence.service.ts)
+   * is the symmetric-auth check used by callers who want stricter guarantees;
+   * it stays available as a defense-in-depth layer for future hardening.
+   *
+   * Note: the error reason code `NOT_ON_SURFACE` is preserved as-is to keep
+   * the wire contract stable for any existing client that branches on it.
    */
   fastify.post(
     '/surface-huddle/token',

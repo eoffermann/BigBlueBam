@@ -10,12 +10,28 @@
  *   1. Renders the shared <IncomingCallOverlay/> from @bigbluebam/ui
  *      (extracted from apps/banter into packages/ui by Agent B in this
  *      same workstream).
- *   2. On Accept: POSTs /bureau/api/v1/surface-huddle/token to mint a
- *      LiveKit token for `huddle-{surface_app}-{surface_id}`, then calls
- *      the host adapter's `navigate(...)` callback with the surface URL +
- *      `?huddle=1` so the destination SPA knows to mount its huddle UI.
+ *   2. On Accept: calls the host adapter's `navigate(...)` callback with the
+ *      surface URL. The SDK's ActiveCallManager observes the location change
+ *      and auto-joins `huddle-{surface_app}-{surface_id}` — there is no
+ *      separate token POST here anymore.
  *   3. On Decline / AutoDecline: posts `ring_respond` back through the WS
  *      so the caller's UI can close the outgoing-ring toast.
+ *
+ * SEMANTIC SHIFT (v2 unified-call model — Phase 3).
+ *
+ *   The original v1 handler POSTed `/bureau/api/v1/surface-huddle/token` on
+ *   accept and appended `?huddle=1` so the destination SPA knew to mount its
+ *   own huddle UI. Both are obsolete in the unified-call model:
+ *
+ *     - The LiveKit room ALREADY exists; the SDK's ActiveCallManager joins
+ *       it automatically when describeLocation() returns a surface_id (or a
+ *       livekitRoom hint). Acceptors just navigate to the surface URL.
+ *     - The destination SPA no longer mounts its own huddle UI — the docked
+ *       box is the universal LiveKit endpoint. `?huddle=1` is a no-op.
+ *
+ *   The handler therefore reduces to: notify the caller of accept/decline
+ *   via WS, then navigate. We retain the IncomingCallOverlay UX and the
+ *   auto-decline timer; we drop the network round-trip and the query param.
  *
  * The IncomingCallOverlay owns its own auto-decline timer (driven by
  * `autoDeclineMs`). We feed it the smaller of (server-provided expires_at
@@ -36,16 +52,11 @@ import type { RingIncomingEvent } from './types.js';
 export interface RingHandlerProps {
   client: BureauWsClient;
   /**
-   * Host-app navigation callback. Receives a path-only URL with `?huddle=1`
-   * already appended; hosts typically thread this straight into router.push.
+   * Host-app navigation callback. Receives a path-only URL; hosts typically
+   * thread this straight into router.push. The destination SPA's bureau-client
+   * SDK is responsible for joining the LiveKit room once it mounts.
    */
   navigate: (url: string) => void;
-  /**
-   * Surface-huddle token endpoint. Defaults to the canonical nginx-proxied
-   * path. Override for testing or for hosts that proxy bureau through a
-   * non-default base.
-   */
-  tokenEndpoint?: string;
   /**
    * Safety net: hard cap on the auto-decline timer regardless of what the
    * server's `expires_at` says. Defaults to 60s — a stale ring with a
@@ -66,18 +77,7 @@ interface QueuedRing extends RingIncomingEvent {
   receivedAt: number;
 }
 
-interface SurfaceHuddleTokenResponse {
-  /** LiveKit room name the caller already minted, e.g. `huddle-brief-abc123`. */
-  room: string;
-  /** LiveKit access token. */
-  token: string;
-  /** LiveKit SFU URL. */
-  url: string;
-}
-
 const DEFAULT_MAX_AUTO_DECLINE_MS = 60_000;
-
-const DEFAULT_TOKEN_ENDPOINT = '/bureau/api/v1/surface-huddle/token';
 
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -88,16 +88,6 @@ function stripOrigin(url: string): string {
   } catch {
     return url;
   }
-}
-
-/**
- * Append `huddle=1` to a path-style URL, preserving any existing query.
- * Used to signal to the destination SPA that it should mount its huddle UI
- * on mount instead of waiting for a user click.
- */
-function withHuddleParam(url: string): string {
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}huddle=1`;
 }
 
 /**
@@ -152,7 +142,6 @@ function clampExpiresMs(
 export function RingHandler({
   client,
   navigate,
-  tokenEndpoint = DEFAULT_TOKEN_ENDPOINT,
   maxAutoDeclineMs = DEFAULT_MAX_AUTO_DECLINE_MS,
   ringtoneUrl,
   onAcceptError,
@@ -196,10 +185,13 @@ export function RingHandler({
     }
   }
 
-  async function accept(ring: QueuedRing): Promise<void> {
+  function accept(ring: QueuedRing): void {
     // Tell the WS hub we accepted so the caller's outgoing-ring toast closes.
-    // We send this before the token POST so the caller's UI updates promptly
-    // even if the token endpoint is slow / down.
+    // In the unified-call model (Phase 3) we DO NOT POST surface-huddle/token
+    // here — the SDK's ActiveCallManager joins the canonical LiveKit room
+    // `huddle-{surface_app}-{surface_id}` automatically when the destination
+    // describeLocation() reports a matching surface_id. Navigation alone is
+    // sufficient; the token mint happens inside the manager on URL change.
     try {
       client.send({
         type: 'ring_respond',
@@ -207,48 +199,14 @@ export function RingHandler({
         decision: 'accept',
       });
     } catch {
-      // ignore — the surface-huddle/token endpoint also validates the ring
-      // token server-side, so the accept event is best-effort signaling.
+      // ignore — best-effort signaling; the server's TTL on the ring record
+      // will GC it if we never report back.
     }
 
-    let response: Response;
-    try {
-      response = await fetch(tokenEndpoint, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ring_token: ring.ring_token,
-          surface_app: ring.surface_app,
-          surface_id: ring.surface_id,
-        }),
-      });
-    } catch (err) {
-      const wrapped = err instanceof Error ? err : new Error(String(err));
-      onAcceptError?.(wrapped, ring);
-      return;
-    }
-
-    if (!response.ok) {
-      const wrapped = new Error(
-        `surface-huddle/token returned ${response.status}`,
-      );
-      onAcceptError?.(wrapped, ring);
-      return;
-    }
-
-    // Parse the token payload but don't store it here — the destination SPA
-    // will fetch its own fresh token (the surface huddle UI on the other
-    // side reads from /bureau/api/v1/surface-huddle/token too). We just need
-    // to know the POST succeeded before navigating.
-    try {
-      (await response.json()) as SurfaceHuddleTokenResponse;
-    } catch {
-      // The endpoint returned 2xx with a non-JSON body — proceed anyway;
-      // navigating to the surface is still the right move.
-    }
-
-    const target = withHuddleParam(stripOrigin(surfaceUrlFor(ring.surface_app, ring.surface_id)));
+    // Plain surface URL — no ?huddle=1 query param. The destination SPA no
+    // longer mounts its own huddle UI; the docked box is the single LiveKit
+    // endpoint and it joins on its own once describeLocation() updates.
+    const target = stripOrigin(surfaceUrlFor(ring.surface_app, ring.surface_id));
     try {
       navigate(target);
     } catch (err) {
@@ -279,7 +237,7 @@ export function RingHandler({
       surfaceApp={active.surface_app}
       surfaceLabel={active.surface_label ?? active.surface_app}
       onAccept={() => {
-        void accept(active);
+        accept(active);
       }}
       onDecline={() => sendDecline(active)}
       onDismiss={() => removeFromQueue(active.localId)}
