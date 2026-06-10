@@ -54,6 +54,7 @@ import type {
 } from './types.js';
 import { SummonHandler } from './summon-handler.js';
 import { KnockHandler } from './knock-handler.js';
+import { RingHandler } from './ring-handler.js';
 import { PipPortal, PopoutBureauButton, usePipMode } from './pip-host.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
@@ -811,6 +812,7 @@ function MountedApp({
           {renderDockedBox ? <BureauDockedBox /> : null}
           <SummonHandler client={client} navigate={navigate} />
           <KnockHandler client={client} />
+          <RingHandler client={client} navigate={navigate} />
         </>,
         portalContainer,
       )}
@@ -943,4 +945,5 @@ function teardown(m: PageMount): void {
 export { BureauProvider };
 export { SummonHandler } from './summon-handler.js';
 export { KnockHandler } from './knock-handler.js';
+export { RingHandler } from './ring-handler.js';
 export type { BureauRoomSnapshot, BureauOccupant };

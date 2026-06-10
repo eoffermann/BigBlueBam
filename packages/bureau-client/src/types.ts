@@ -144,7 +144,8 @@ export type ClientMessage =
   | LocationUpdateMessage
   | SummonMessage
   | SummonRespondMessage
-  | SummonGrantAccessMessage;
+  | SummonGrantAccessMessage
+  | RingRespondMessage;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Server → client messages (§8, "Server to client" table) plus the
@@ -250,6 +251,55 @@ export interface SummonAccessReportEvent {
   canShare: boolean;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Surface-scoped huddle ring (docs/plans/presence-and-immediate-interaction.md).
+//
+// When one user clicks "Ring for huddle" from a surface presence chip strip
+// (a Brief doc, Board canvas, Bond deal, Bam task, Beacon article, Blueprint
+// diagram, or Helpdesk ticket), bureau-api fans the ring out on the target's
+// user:{userId} Redis channel as `ring_incoming`. The receiver's SDK renders
+// the shared <IncomingCallOverlay/> from @bigbluebam/ui; on Accept, the SDK
+// mints a LiveKit token for `huddle-{surface_app}-{surface_id}` and navigates
+// the host to the surface URL with `?huddle=1` appended so the destination
+// knows to mount its huddle UI.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface RingIncomingEvent {
+  type: 'ring_incoming';
+  /** Caller user id. */
+  from_user_id: string;
+  /** Caller display name (already resolved server-side). */
+  from_user_name: string;
+  /** App owning the surface — 'brief', 'board', 'blueprint', 'bond', 'b3', 'beacon', 'helpdesk'. */
+  surface_app: string;
+  /** Entity id within the surface app (e.g. docId, boardId, dealId, taskId). */
+  surface_id: string;
+  /** Human-readable surface label ("Q3 Roadmap", "ACME deal", …); may be null. */
+  surface_label?: string | null;
+  /**
+   * One-shot acceptance token. Echoed back to bureau-api when the receiver
+   * accepts; bureau-api uses it to gate LiveKit token minting against the
+   * server-side ring record (prevents stale-ring acceptance).
+   */
+  ring_token: string;
+  /** ISO 8601 timestamp when the ring auto-declines if unanswered. */
+  expires_at: string;
+}
+
+export type RingDecision = 'accept' | 'decline' | 'auto_decline';
+
+/**
+ * Client → server frame the SDK posts back through the WS when the receiver
+ * decides. Mirrors the bureau-api ring handler contract; not part of the
+ * bureau-design-document.md §8 catalog (added with the presence-and-
+ * immediate-interaction.md surface-huddle work).
+ */
+export interface RingRespondMessage {
+  type: 'ring_respond';
+  ring_token: string;
+  decision: RingDecision;
+}
+
 export interface SummonProgressEvent {
   type: 'summon_progress';
   summonId: string;
@@ -297,6 +347,7 @@ export type ServerMessage =
   | SummonProgressEvent
   | SummonAckEvent
   | StatusChangedEvent
+  | RingIncomingEvent
   | ErrorEvent;
 
 export type ServerMessageType = ServerMessage['type'];
