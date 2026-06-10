@@ -132,6 +132,31 @@ Fix is one-liner: add `{ source: 'blueprint', event_type: 'diagram.promoted_to_t
 
 Per CLAUDE.md "pre-existing is not a dismissal" — recording it here. Will be picked up when someone touches Bolt next.
 
+## D-9: Pre-existing beacon-expiry-sweep cron crash
+
+**Status:** Not started (pre-existing, surfaced during Bureau workstream 3 verification).
+**Severity:** Medium — the cron runs daily and silently fails today.
+
+The `beacon-expiry-sweep` daily worker cron throws `PostgresError 42809 "op ANY/ALL (array) requires array on right side"` every time it fires. The query is malformed: it's passing a scalar where an array is expected on the right side of an `= ANY(...)` or `IN (...)` clause.
+
+Recorded per CLAUDE.md "pre-existing is not a dismissal." Locate the failing query in `apps/worker/src/jobs/beacon-expiry-sweep.ts` (or wherever the job's processor lives) and either wrap the scalar in `[...]` or rewrite as `=` rather than `= ANY`. Effort: 30 minutes once found.
+
+## D-10: Consolidate `ws.routes.ts`'s inline presence layer
+
+**Status:** Not started (introduced by Bureau workstream 3).
+**Severity:** Low — works correctly today, but the duplication will drift.
+
+`apps/bureau-api/src/routes/ws.routes.ts` is 1324 lines because the parallel workflow agent that built the WS hub was scoped to "don't modify outside your assigned files." That blocked it from importing the `presence.service.ts` + `presence-publisher.service.ts` that a sibling agent was building in parallel. It inlined a near-duplicate of both.
+
+Both copies currently behave identically (typecheck clean, smoke verified), but any change to the canonical service in `apps/bureau-api/src/services/presence.service.ts` will silently fail to propagate into the WS hub. This is the classic two-codebase-one-feature footgun.
+
+The consolidation is mechanical:
+1. Replace the inlined `presenceService` object in `ws.routes.ts` with imports from `../services/presence.service.js`.
+2. Replace the inlined publishers with imports from `../services/presence-publisher.service.js`.
+3. Remove the dead lines.
+
+Expected delta: `ws.routes.ts` drops from ~1324 to ~500 lines. Effort: 2 hours including verification (rebuild bureau-api, smoke-test WS upgrade, smoke-test enter_room → presence_delta).
+
 ---
 
-**Total deferred effort (D-1 through D-8): ~8-10 days.** None of these block Bureau §17 workstream 1; some (D-1, D-4) become relevant once Bureau is using LiveKit through its own bureau-api.
+**Total deferred effort (D-1 through D-10): ~9-12 days.** None of these block subsequent Bureau workstreams; D-1 (consumer wiring), D-4 (Book auto-room), and D-10 (ws.routes.ts dedup) become relevant during workstreams 4-7 and 11.
