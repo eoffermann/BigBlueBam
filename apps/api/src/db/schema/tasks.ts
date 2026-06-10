@@ -64,6 +64,11 @@ export const tasks = pgTable(
       .default(sql`'{}'::uuid[]`)
       .notNull(),
     custom_fields: jsonb('custom_fields').default({}).notNull(),
+    // CSV-import plan Phase 0 (§4.1, migration 0179): ordered list of
+    // TaskLink objects ({ id, url, title, title_source, added_at, added_by }).
+    // JSONB-on-task like custom_fields — display/navigation data owned by one
+    // task, never queried independently. Cap of 50 enforced in the service.
+    links: jsonb('links').default([]).notNull(),
     attachment_count: integer('attachment_count').default(0).notNull(),
     comment_count: integer('comment_count').default(0).notNull(),
     subtask_count: integer('subtask_count').default(0).notNull(),

@@ -1,11 +1,24 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import type { TaskLink } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { requireAuth } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+
+/**
+ * Format tasks.links for the CSV export: "title <url>" per entry (just the
+ * url when untitled), joined by "; " so round-trips don't lose links
+ * (CSV-import plan §4.2).
+ */
+function formatLinksForCsv(raw: unknown): string {
+  if (!Array.isArray(raw)) return '';
+  return (raw as TaskLink[])
+    .map((link) => (link.title ? `${link.title} <${link.url}>` : link.url))
+    .join('; ');
+}
 
 export default async function exportRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
@@ -63,6 +76,7 @@ export default async function exportRoutes(fastify: FastifyInstance) {
         'reporter_id',
         'created_at',
         'completed_at',
+        'links',
       ];
 
       const csvRows = [headers.join(',')];
@@ -80,6 +94,7 @@ export default async function exportRoutes(fastify: FastifyInstance) {
           task.reporter_id ?? '',
           task.created_at.toISOString(),
           task.completed_at?.toISOString() ?? '',
+          `"${formatLinksForCsv(task.links).replace(/"/g, '""')}"`,
         ];
         csvRows.push(row.join(','));
       }

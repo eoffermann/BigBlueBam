@@ -102,6 +102,12 @@ import {
   processSlackImportJob,
   type SlackImportJobData,
 } from './jobs/slack-import.job.js';
+// Phase 0 task Links field — external-URL title fetch, enqueued by the Bam
+// api when a link is added without a title (docs/plans/bam-csv-import-plan.md §4.3).
+import {
+  processTaskLinkTitleFetchJob,
+  type TaskLinkTitleFetchJobData,
+} from './jobs/task-link-title-fetch.job.js';
 // §13 Bureau presence reaper — sweep sessions whose Redis TTL has lapsed,
 // emit room_leave + presence_delta, close the durable session row.
 import {
@@ -931,6 +937,22 @@ slackImportWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'slack-import', err }, 'Job failed');
 });
 
+// Phase 0 task Links — external-URL title fetch. Enqueue-driven only (no
+// cron): the api enqueues one job per link saved without a user title.
+const taskLinkTitleFetchWorker = new Worker<TaskLinkTitleFetchJobData>(
+  'task-link-title-fetch',
+  async (job: Job<TaskLinkTitleFetchJobData>) => {
+    await processTaskLinkTitleFetchJob(job, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+taskLinkTitleFetchWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'task-link-title-fetch' }, 'Job completed');
+});
+taskLinkTitleFetchWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'task-link-title-fetch', err }, 'Job failed');
+});
+
 // §13 Bureau presence reaper — every 15s, sweep `bureau:sess:*` for keys
 // whose TTL has lapsed and close the durable session row + broadcast
 // room_leave / presence_delta. Concurrency 1: one reaper, one Redis SCAN.
@@ -1150,6 +1172,8 @@ const workers = [
   agentWebhookDispatchWorker,
   agentWebhookDlqWorker,
   slackImportWorker,
+  // Phase 0 task Links title fetch
+  taskLinkTitleFetchWorker,
   // §13 Bureau presence reaper
   bureauPresenceReapWorker,
   // §10 Bureau summon fan-out
@@ -1206,6 +1230,8 @@ logger.info(
       'agent-webhook-dispatch',
       'agent-webhook-dlq',
       'slack-import',
+      // Phase 0 task Links title fetch
+      'task-link-title-fetch',
       // §13 Bureau presence reaper
       'bureau-presence-reap',
       // §10 Bureau summon fan-out

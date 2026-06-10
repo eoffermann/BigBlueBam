@@ -26,10 +26,14 @@ const ALWAYS_BLOCKED_IPV4_RANGES = [
   { start: [192, 168, 0, 0], mask: 16 },
   // 127.0.0.0/8 loopback
   { start: [127, 0, 0, 0], mask: 8 },
-  // 169.254.0.0/16 link-local
+  // 169.254.0.0/16 link-local (incl. cloud metadata 169.254.169.254)
   { start: [169, 254, 0, 0], mask: 16 },
   // 0.0.0.0/8
   { start: [0, 0, 0, 0], mask: 8 },
+  // 100.64.0.0/10 CGNAT (Alibaba Cloud metadata lives at 100.100.100.200)
+  { start: [100, 64, 0, 0], mask: 10 },
+  // 198.18.0.0/15 benchmarking
+  { start: [198, 18, 0, 0], mask: 15 },
 ] as const;
 
 const BLOCKED_HOSTNAMES = new Set([

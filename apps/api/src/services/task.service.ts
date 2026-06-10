@@ -6,7 +6,14 @@ import { projects } from '../db/schema/projects.js';
 import { phases } from '../db/schema/phases.js';
 import { tickets, ticketMessages } from '../db/schema/tickets.js';
 import { taskParentLinks } from '../db/schema/task-parent-links.js';
-import type { CreateTaskInput, UpdateTaskInput, MoveTaskInput, BulkUpdateInput } from '@bigbluebam/shared';
+import type { CreateTaskInput, UpdateTaskInput, MoveTaskInput, BulkUpdateInput, TaskLink } from '@bigbluebam/shared';
+import {
+  normalizeTaskLinks,
+  resolveInternalLinkTitles,
+  mirrorTaskEntityLinks,
+  type TaskLinkMirror,
+} from './task-links.service.js';
+import { enqueueTaskLinkTitleFetch } from './task-links-queue.service.js';
 import { broadcastToProject } from './realtime.service.js';
 import { logActivity } from './activity.service.js';
 import { postToSlack, taskDeepLink } from './slack-notify.service.js';
@@ -15,6 +22,21 @@ import { escapeLike } from '../lib/escape-like.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichTask, loadActor, loadOrg, loadPhase } from './bolt-event-enricher.service.js';
 import { fanoutNotification, enqueueNotification } from './notification-fanout.service.js';
+
+/**
+ * Enqueue async title-fetch jobs for links the synchronous path left
+ * untitled — i.e. external URLs (internal ones already resolved inline).
+ * Fire-and-forget: the queue helper swallows its own errors and the worker
+ * is SSRF-guarded. An untitled link just renders as its hostname until the
+ * fetch lands.
+ */
+function enqueueUntitledLinkFetches(taskId: string, links: TaskLink[]): void {
+  for (const link of links) {
+    if (link.title === null && link.title_source === 'none') {
+      void enqueueTaskLinkTitleFetch(taskId, link.id, link.url);
+    }
+  }
+}
 
 /** Look up org_id for a project (used for Bolt event publishing). */
 async function getProjectOrgId(projectId: string): Promise<string | null> {
@@ -360,6 +382,30 @@ export async function createTask(
     }
   }
 
+  // Links field (CSV-import plan Phase 0): normalize, then resolve internal
+  // suite URLs synchronously (org-scoped) so the inserted row already carries
+  // fetched titles. The entity_links mirror happens after insert (needs the
+  // task id). orgId is resolved up-front because internal title lookups MUST
+  // be scoped to the caller's org.
+  let links: TaskLink[] = [];
+  let linkMirrors: TaskLinkMirror[] = [];
+  let createOrgId: string | null = null;
+  if (data.links && data.links.length > 0) {
+    const normalized = normalizeTaskLinks(data.links, reporterId);
+    if (normalized.truncated) {
+      console.warn('[task.service] task links truncated to cap:', { projectId });
+    }
+    createOrgId = await getProjectOrgId(projectId);
+    if (createOrgId) {
+      const resolved = await resolveInternalLinkTitles(normalized.links, createOrgId);
+      links = resolved.links;
+      linkMirrors = resolved.mirrors;
+    } else {
+      // No org (shouldn't happen) — store links without internal resolution.
+      links = normalized.links;
+    }
+  }
+
   const [task] = await db
     .insert(tasks)
     .values({
@@ -381,9 +427,23 @@ export async function createTask(
       due_date: data.due_date ?? null,
       labels: data.label_ids ?? [],
       custom_fields: data.custom_fields ?? {},
+      links,
       position: await getNextPosition(data.phase_id),
     })
     .returning();
+
+  // Mirror resolved internal links into entity_links. Best-effort: the
+  // canonical write (tasks.links) already landed.
+  if (linkMirrors.length > 0 && createOrgId) {
+    try {
+      await mirrorTaskEntityLinks(task!.id, createOrgId, reporterId, linkMirrors);
+    } catch (err) {
+      console.error('[task.service] entity_links mirror failed:', { taskId: task!.id, err });
+    }
+  }
+  // Queue async title fetch for links still untitled (external URLs that
+  // didn't resolve internally). Fire-and-forget; SSRF-guarded in the worker.
+  enqueueUntitledLinkFetches(task!.id, links);
 
   // Update subtask_count on parent if this is a subtask
   if (data.parent_task_id) {
@@ -497,6 +557,37 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
   if (data.parent_task_id !== undefined) { updateValues.parent_task_id = data.parent_task_id; changedFields.push('parent_task_id'); }
   if (data.custom_fields !== undefined) { updateValues.custom_fields = data.custom_fields; changedFields.push('custom_fields'); }
 
+  // Links field (CSV-import plan Phase 0): the incoming array replaces the
+  // stored one wholesale (same semantics as custom_fields). Normalize against
+  // the EXISTING stored links (so provenance — added_by/added_at/fetched —
+  // is only preserved for entries whose id was already present, never trusted
+  // from the wire), then resolve internal suite titles org-scoped.
+  let linkMirrors: TaskLinkMirror[] = [];
+  let updateOrgId: string | null = null;
+  let normalizedLinks: TaskLink[] = [];
+  if (data.links !== undefined) {
+    const [existingRow] = await db
+      .select({ links: tasks.links, project_id: tasks.project_id })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1);
+    const existingLinks = (existingRow?.links as TaskLink[] | undefined) ?? [];
+    const normalized = normalizeTaskLinks(data.links, actorId ?? null, existingLinks);
+    if (normalized.truncated) {
+      console.warn('[task.service] task links truncated to cap:', { taskId });
+    }
+    updateOrgId = existingRow ? await getProjectOrgId(existingRow.project_id) : null;
+    if (updateOrgId) {
+      const resolved = await resolveInternalLinkTitles(normalized.links, updateOrgId);
+      normalizedLinks = resolved.links;
+      linkMirrors = resolved.mirrors;
+    } else {
+      normalizedLinks = normalized.links;
+    }
+    updateValues.links = normalizedLinks;
+    changedFields.push('links');
+  }
+
   // B3 Frndo Launch — Done-gate on direct phase updates. If the caller is
   // moving the task into a terminal phase via updateTask (not moveTask),
   // apply the same "all subtasks must be done" guard.
@@ -512,6 +603,21 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
 
   // Broadcast realtime event
   if (task) {
+    // Mirror resolved internal links into entity_links. Best-effort: the
+    // canonical write (tasks.links) already landed.
+    if (linkMirrors.length > 0 && updateOrgId) {
+      try {
+        await mirrorTaskEntityLinks(taskId, updateOrgId, actorId ?? null, linkMirrors);
+      } catch (err) {
+        console.error('[task.service] entity_links mirror failed:', { taskId, err });
+      }
+    }
+    // Queue async title fetch for links still untitled after internal
+    // resolution (external URLs). Fire-and-forget; SSRF-guarded in worker.
+    if (data.links !== undefined) {
+      enqueueUntitledLinkFetches(taskId, normalizedLinks);
+    }
+
     broadcastToProject(task.project_id, 'task.updated', {
       id: taskId,
       changes: data,
