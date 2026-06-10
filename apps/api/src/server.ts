@@ -31,6 +31,8 @@ import labelRoutes from './routes/label.routes.js';
 import taskStateRoutes from './routes/task-state.routes.js';
 import epicRoutes from './routes/epic.routes.js';
 import customFieldRoutes from './routes/custom-field.routes.js';
+// Bureau prerequisite P-4: per-project calling settings
+import projectCallingSettingsRoutes from './routes/project-calling-settings.routes.js';
 import attachmentRoutes from './routes/attachment.routes.js';
 // §17 Wave 4 attachments
 import attachmentMetaRoutes from './routes/attachment-meta.routes.js';
@@ -239,6 +241,8 @@ await fastify.register(labelRoutes);
 await fastify.register(taskStateRoutes);
 await fastify.register(epicRoutes);
 await fastify.register(customFieldRoutes);
+// Bureau prerequisite P-4: per-project calling settings
+await fastify.register(projectCallingSettingsRoutes);
 await fastify.register(attachmentRoutes);
 // §17 Wave 4 attachments: federated attachment metadata dispatcher
 await fastify.register(attachmentMetaRoutes);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, Upload, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download } from 'lucide-react';
+import { Loader2, Upload, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download, Phone } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Task, PaginatedResponse } from '@bigbluebam/shared';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -20,6 +20,7 @@ import { TemplateManager } from '@/components/tasks/template-manager';
 import { EpicManager } from '@/components/board/epic-manager';
 import { PhaseManager } from '@/components/board/phase-manager';
 import { CustomFieldManager } from '@/components/board/custom-field-manager';
+import { CallingSettingsManager } from '@/components/board/calling-settings-manager';
 import { KeyboardShortcutsOverlay } from '@/components/common/keyboard-shortcuts-overlay';
 import { CommandPalette } from '@/components/common/command-palette';
 import { Select } from '@/components/common/select';
@@ -86,6 +87,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showPhaseManager, setShowPhaseManager] = useState(false);
   const [showCustomFieldManager, setShowCustomFieldManager] = useState(false);
+  const [showCallingSettings, setShowCallingSettings] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
   const [exportSprintId, setExportSprintId] = useState<string>('');
@@ -590,6 +592,16 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                         <button
                           onClick={() => {
                             setShowProjectMenu(false);
+                            setShowCallingSettings(true);
+                          }}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                          <Phone className="h-4 w-4" />
+                          Calling Settings
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowProjectMenu(false);
                             setShowExportDialog(true);
                           }}
                           className="flex items-center gap-2 w-full px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
@@ -701,6 +713,12 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
       <CustomFieldManager
         open={showCustomFieldManager}
         onOpenChange={setShowCustomFieldManager}
+        projectId={projectId}
+      />
+
+      <CallingSettingsManager
+        open={showCallingSettings}
+        onOpenChange={setShowCallingSettings}
         projectId={projectId}
       />
 

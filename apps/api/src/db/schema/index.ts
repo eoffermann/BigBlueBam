@@ -30,6 +30,7 @@ export { loginHistory } from './login-history.js';
 export { slackIntegrations } from './slack-integrations.js';
 export { githubIntegrations, taskGithubRefs } from './github-integrations.js';
 export { platformSettings } from './platform-settings.js';
+export { projectCallingSettings } from './project-calling-settings.js';
 export { betaSignupNotifications } from './beta-signup-notifications.js';
 export { llmProviders } from './llm-providers.js';
 export { systemSettings } from './system-settings.js';
