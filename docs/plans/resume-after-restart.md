@@ -41,7 +41,30 @@ Bureau appears in the Launchpad as "Virtual Office" with the `Building` icon, sl
 
 ---
 
-## Pending work — the docked-box UX bundle
+## Pending work — the docked-box UX bundle ✅ SHIPPED 2026-06-09 post-reboot
+
+> **Resolved.** All three tasks landed in one commit (`ce75743`,
+> "feat(bureau): docked-box UX bundle") after the reboot, implemented
+> sequentially in one pass rather than as parallel agents since they all
+> touch `BureauDockedBoxInner`. Notes vs. the plan below:
+>
+> - #17: fixed via the describeLocation route (option 1). `LocationDescriptor`
+>   gained `spatialRoomId/spatialRoomName/spatialOccupantIds`; the header now
+>   shows the room *name*. The mirror also fixes ActiveCallManager spatial
+>   targeting in the Bureau SPA.
+> - #19: done as specced; PiP kept as a dimmed secondary button, and the
+>   `openPipWindow` width/height options were removed (no callers).
+> - #21: the Invite popover lives in `packages/bureau-client/src/invite-popover.tsx`
+>   (inline-styled) instead of extending apps/bureau's PeoplePicker — the
+>   docked box renders in every host SPA, where app-local Tailwind components
+>   can't be relied on. Banter surfaces get no Invite button until the ring
+>   API accepts `surface_app: 'banter'` — tracked as **D-14**.
+>
+> Also fixed in the same session: commit `e9bb1ac` staged the four file
+> deletions that Phase 2's commit message claimed but never included
+> (board-api/brief-api audio.routes + livekit.service).
+
+(Original plan kept below for context.)
 
 Three tasks are queued and intentionally bundled. They all touch `packages/bureau-client/src/index.tsx` (the docked box rendering) and were held back to avoid merge conflicts with the unified-call workflow that was running concurrently. **Now that the workflow's committed (`cf3cbde`), these can ship as one cohesive PR.**
 

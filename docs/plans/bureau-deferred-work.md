@@ -99,6 +99,50 @@ Effort: 2-3 hours follow-up.
 **Status:** Not started (pre-existing, surfaced during Bureau workstream 3 verification).
 **Severity:** Medium — the cron runs daily and silently fails today.
 
+The worker's `beacon-expiry-sweep` job dies with `PostgresError 42809` (wrong object type). Reproduce by triggering the job manually and reading `docker compose logs worker`. Likely an aggregate/function applied to a relation of the wrong kind in the sweep query.
+
+Effort: ~30 minutes.
+
+## D-10: Consolidate ws.routes.ts inline presence layer
+
+**Status:** Not started. (Section reconstructed from the resume-after-restart notes — the original write-up was lost to the 2026-06-09 reboot before this file was updated.)
+
+`apps/bureau-api/src/routes/ws.routes.ts` carries an inline presence layer that duplicates state the hub/service layer also tracks. Consolidate to one owner.
+
+Effort: ~2 hours.
+
+## D-11: Banter internal DM endpoint for "leave a note"
+
+**Status:** Not started. (Reconstructed, see D-10 note.)
+
+The ring flow's 423 RECIPIENT_DND path offers "leave a note", which today deep-links to `/banter/dm/...`. A Banter-internal endpoint to post the note directly (without navigating away) would close the loop.
+
+Effort: 2-3 hours.
+
+## D-12: Cross-app can-read preflights for board-api / brief-api / apps/api
+
+**Status:** Not started. (Reconstructed, see D-10 note.)
+
+Per the agent-visibility conventions, surfaces that accept cross-app references should preflight `can_access` for the asking user. board-api, brief-api, and apps/api each have at least one ingestion path missing the check.
+
+Effort: ~1 day total.
+
+## D-13: ws.routes.ts subscribe-vs-listener race
+
+**Status:** Not started. (Reconstructed, see D-10 note.)
+
+Two-line server fix in `apps/bureau-api/src/routes/ws.routes.ts`: the floor subscribe path can attach its Redis listener after the snapshot is sent, dropping deltas that land in between.
+
+Effort: ~5 minutes.
+
+## D-14: Ring API rejects Banter surfaces, so the docked-box Invite button hides on Banter
+
+**Status:** Not started (introduced as a known gap with the docked-box UX bundle, Bureau todo #7).
+
+`SURFACE_APPS` in `apps/bureau-api/src/routes/ring.routes.ts` does not include `'banter'`, so the docked box's `RING_SURFACE_APP_BY_LOCATION_APP` map (packages/bureau-client/src/index.tsx) deliberately omits it and Banter channels/DMs get no Invite button — even though Banter advertises `surface_id` and the canonical `huddle-banter-{channelId}` room would work fine. To close: add `'banter'` to the server enum, add a `banter` case to `surfaceUrlFor()` in `packages/bureau-client/src/ring-handler.tsx` (note: `surface_id` is the channel *id*, while Banter routes by slug — needs a resolvable URL), then add `banter: 'banter'` to the client map. Related: D-11 and the Banter 1:1-call wiring noted under D-6.
+
+Effort: 2-3 hours (mostly the URL-by-id resolution on the Banter side).
+
 The `beacon-expiry-sweep` daily worker cron throws `PostgresError 42809 "op ANY/ALL (array) requires array on right side"` every time it fires. The query is malformed: it's passing a scalar where an array is expected on the right side of an `= ANY(...)` or `IN (...)` clause.
 
 Recorded per CLAUDE.md "pre-existing is not a dismissal." Locate the failing query in `apps/worker/src/jobs/beacon-expiry-sweep.ts` (or wherever the job's processor lives) and either wrap the scalar in `[...]` or rewrite as `=` rather than `= ANY`. Effort: 30 minutes once found.
