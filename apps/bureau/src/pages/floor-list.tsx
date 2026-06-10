@@ -36,7 +36,7 @@ export function FloorListPage({ onNavigate }: FloorListPageProps) {
           Floors
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Pick a floor to drop in. Live occupancy counts update over WebSocket.
+          Pick a floor to drop in. Live occupancy shows who's around right now.
         </p>
       </div>
 
