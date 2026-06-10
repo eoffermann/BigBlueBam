@@ -110,18 +110,24 @@ export interface RoomAccessDecision {
  *   (d) org admin/owner.
  *
  * Open and knock rooms both allow the actual join; the difference is
- * UX (knock rooms surface a knock prompt in the client). Locking the
- * door is a Redis-side override and not enforced here.
+ * UX (knock rooms surface a knock prompt in the client).
+ *
+ * `livePrivacy` is the Redis door-state override (see
+ * presence.service.ts::getDoorState). Pass it when available so a locked
+ * room (`lock_room` / `set_door` flipped to 'private') actually keeps
+ * non-ACL members out — without it the lock is display-only. Owners, org
+ * admins, and superusers bypass the lock by design (emergency entry).
  */
 export async function evaluateRoomAccess(
   room: RoomAccessRecord,
   user: { id: string; role: string; is_superuser: boolean },
+  livePrivacy?: string | null,
 ): Promise<RoomAccessDecision> {
   if (user.is_superuser) return { allowed: true };
   if (isOrgAdminOrOwner(user.role)) return { allowed: true };
   if (room.owner_id && room.owner_id === user.id) return { allowed: true };
 
-  const privacy = room.privacy_default;
+  const privacy = livePrivacy ?? room.privacy_default;
   if (privacy === 'open' || privacy === 'knock') {
     return { allowed: true };
   }

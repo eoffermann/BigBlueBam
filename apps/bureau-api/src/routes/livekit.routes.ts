@@ -36,6 +36,7 @@ import {
   roomNotFound,
 } from '../middleware/room-access.js';
 import { getCallingConfig } from '../services/calling-settings.service.js';
+import { getDoorState } from '../services/presence.service.js';
 
 /** D-1: 503 sent by every mint path while the platform kill switch is OFF. */
 function callingDisabled(request: FastifyRequest, reply: FastifyReply) {
@@ -108,7 +109,14 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
       const room = await loadRoom(roomId, user.org_id);
       if (!room) return roomNotFound(request, reply);
 
-      const decision = await evaluateRoomAccess(room, user);
+      // Overlay the live Redis door state (lock_room / set_door) so a
+      // locked room also refuses LiveKit tokens, not just WS entry.
+      const doorState = await getDoorState(fastify.redis, room.id);
+      const decision = await evaluateRoomAccess(
+        room,
+        user,
+        doorState?.privacy ?? null,
+      );
       if (!decision.allowed) {
         return forbidden(
           request,

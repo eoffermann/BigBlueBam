@@ -185,6 +185,67 @@ describe('evaluateRoomAccess — private', () => {
   });
 });
 
+describe('evaluateRoomAccess — live door-state override (lock_room / set_door)', () => {
+  it("a locked 'open' room (live privacy 'private') rejects non-ACL members", async () => {
+    limitMock.mockResolvedValue([]); // no ACL row
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('member', { id: 'stranger' }),
+      'private',
+    );
+    expect(decision.allowed).toBe(false);
+  });
+
+  it("a locked room still admits ACL holders", async () => {
+    limitMock.mockResolvedValue([{ id: 'acl-row' }]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('member', { id: 'acl-user' }),
+      'private',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('a locked room still admits the room owner (emergency entry)', async () => {
+    limitMock.mockResolvedValue([]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'user-owner' }),
+      user('member', { id: 'user-owner' }),
+      'private',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('a locked room still admits org admins (emergency entry)', async () => {
+    limitMock.mockResolvedValue([]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('admin'),
+      'private',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it("an unlocked door override back to 'open' admits members of a private-default room", async () => {
+    limitMock.mockResolvedValue([]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'private', owner_id: 'someone-else' }),
+      user('member'),
+      'open',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('null / undefined override falls back to privacy_default', async () => {
+    const open = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('member'),
+      null,
+    );
+    expect(open.allowed).toBe(true);
+  });
+});
+
 describe('hasRoomAclEntry', () => {
   it('returns true when a row is present', async () => {
     limitMock.mockResolvedValue([{ id: 'acl-1' }]);
