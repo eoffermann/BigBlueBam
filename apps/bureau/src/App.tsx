@@ -4,10 +4,8 @@
  * Routes:
  *   '/'                   → floor list (user-facing landing)
  *   '/floors/:id'         → live floor view (canvas + WS presence)
- *   '/admin/floors'       → admin floor list (placeholder; Agent B's editor lives here)
- *   '/admin/floors/:id'   → admin floor editor (placeholder; Agent B owns the real editor at
- *                           @/pages/admin/floor-editor — when that file lands it can replace
- *                           the placeholder import below.)
+ *   '/admin/floors'       → admin floor list (create / edit / archive / restore)
+ *   '/admin/floors/:id'   → admin floor editor (canvas room placement)
  *
  * The router is intentionally simple (no react-router): the suite uses
  * matching hand-rolled routers across every SPA. Pattern mirrors
@@ -20,7 +18,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { BureauLayout } from '@/components/layout/bureau-layout';
 import { FloorListPage } from '@/pages/floor-list';
 import { FloorViewPage } from '@/pages/floor-view';
-import { AdminFloorListPlaceholder } from '@/pages/admin-floor-placeholder';
+import { AdminFloorListPage } from '@/pages/admin/floor-list';
 import { FloorEditorPage } from '@/pages/admin/floor-editor';
 
 export type Route =
@@ -146,11 +144,8 @@ export function App({ onRouteChange }: AppProps = {}) {
           />
         );
       case 'admin-floor-list':
-        return <AdminFloorListPlaceholder />;
+        return <AdminFloorListPage onNavigate={navigate} />;
       case 'admin-floor':
-        // Workstream 9 floor editor — owned by Agent B at
-        // @/pages/admin/floor-editor. Wired here per Agent A's "swap when
-        // that file exists" note above.
         return <FloorEditorPage floorId={route.id} onNavigate={navigate} />;
       default:
         return null;

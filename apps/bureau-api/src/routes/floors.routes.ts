@@ -32,6 +32,21 @@ const updateFloorBody = z.object({
   background_url: z.string().max(2048).nullable().optional(),
   position: z.number().int().min(0).optional(),
   is_default: z.boolean().optional(),
+  // Setting to null unarchives the floor. Admin-only on the route's
+  // auth gate, and the field is intentionally narrow: it's the ONLY
+  // way to restore an archived floor (DELETE soft-deletes; this is
+  // the symmetric undo). Anything other than null is rejected because
+  // archiving is supposed to flow through DELETE so the audit trail
+  // (and any future archive-side-effect we add) stays consistent.
+  archived_at: z.null().optional(),
+});
+
+const listFloorsQuery = z.object({
+  /** When '1', also returns archived floors. Admin-only at the
+   *  server gate. Used by /admin/floors so the UI can show + restore
+   *  archived rows; members hitting the same route without the flag
+   *  see only the live ones. */
+  include_archived: z.union([z.literal('1'), z.literal('0')]).optional(),
 });
 
 const backgroundBody = z.object({
@@ -89,17 +104,27 @@ async function readRoomOccupancyMap(
 }
 
 export default async function floorsRoutes(fastify: FastifyInstance) {
-  // GET /v1/floors — list org's floors with live occupancy count
+  // GET /v1/floors — list org's floors with live occupancy count.
+  // include_archived=1 (admin-only) additionally returns archived rows
+  // so the /admin/floors UI can show + restore them.
   fastify.get(
     '/floors',
     { preHandler: [requireAuth] },
     async (request, reply) => {
       const user = request.user!;
+      const query = listFloorsQuery.parse(request.query);
+      const includeArchived =
+        query.include_archived === '1' &&
+        (user.is_superuser || isOrgAdminOrOwner(user.role));
+
+      const whereClause = includeArchived
+        ? eq(bureauFloors.org_id, user.org_id)
+        : and(eq(bureauFloors.org_id, user.org_id), isNull(bureauFloors.archived_at));
 
       const floors = await db
         .select()
         .from(bureauFloors)
-        .where(and(eq(bureauFloors.org_id, user.org_id), isNull(bureauFloors.archived_at)))
+        .where(whereClause)
         .orderBy(asc(bureauFloors.position), asc(bureauFloors.name));
 
       // Read occupancy for each floor in parallel
@@ -277,16 +302,23 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
 
       const body = updateFloorBody.parse(request.body);
 
-      const [existing] = await db
-        .select({ id: bureauFloors.id })
-        .from(bureauFloors)
-        .where(
-          and(
+      // archive_at being explicitly null means 'unarchive', and that's
+      // the only PATCH that should be able to find an archived row.
+      // Every other field-only PATCH requires the floor to be live.
+      const includingArchived = 'archived_at' in body && body.archived_at === null;
+
+      const lookupClause = includingArchived
+        ? and(eq(bureauFloors.id, id), eq(bureauFloors.org_id, user.org_id))
+        : and(
             eq(bureauFloors.id, id),
             eq(bureauFloors.org_id, user.org_id),
             isNull(bureauFloors.archived_at),
-          ),
-        )
+          );
+
+      const [existing] = await db
+        .select({ id: bureauFloors.id })
+        .from(bureauFloors)
+        .where(lookupClause)
         .limit(1);
 
       if (!existing) {
@@ -306,6 +338,7 @@ export default async function floorsRoutes(fastify: FastifyInstance) {
       if (body.background_url !== undefined) updates.background_url = body.background_url;
       if (body.position !== undefined) updates.position = body.position;
       if (body.is_default !== undefined) updates.is_default = body.is_default;
+      if ('archived_at' in body) updates.archived_at = body.archived_at;
 
       const [updated] = await db
         .update(bureauFloors)
