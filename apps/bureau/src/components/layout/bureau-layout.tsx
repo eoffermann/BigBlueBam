@@ -42,6 +42,8 @@ function breadcrumbsFor(
       ];
     case 'admin-floor-list':
       return [{ label: 'Admin' }, { label: 'Floors' }];
+    case 'admin-offices':
+      return [{ label: 'Admin' }, { label: 'Offices' }];
     default:
       return [];
   }
@@ -62,7 +64,15 @@ export function BureauLayout({
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
 
   const isOnAdmin =
-    activeRoute.page === 'admin-floor' || activeRoute.page === 'admin-floor-list';
+    activeRoute.page === 'admin-floor' ||
+    activeRoute.page === 'admin-floor-list' ||
+    activeRoute.page === 'admin-offices';
+  const adminSection: 'floors' | 'offices' | null =
+    activeRoute.page === 'admin-offices'
+      ? 'offices'
+      : activeRoute.page === 'admin-floor' || activeRoute.page === 'admin-floor-list'
+      ? 'floors'
+      : null;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
@@ -73,6 +83,7 @@ export function BureauLayout({
               onNavigate={onNavigate}
               activeFloorId={activeFloorId}
               isOnAdmin={isOnAdmin}
+              adminSection={adminSection}
             />
           </aside>
         )}

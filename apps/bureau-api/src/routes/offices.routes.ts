@@ -1,6 +1,11 @@
 /**
  * Bureau offices routes (workstream 2 — Agent B).
  *
+ *   GET  /v1/offices         — admin/owner: all type='office' rooms across
+ *                              every live floor in the caller's org with
+ *                              owner display data joined in. Used by the
+ *                              /admin/offices admin page so the assignment
+ *                              UI doesn't have to fan out per-floor.
  *   POST /v1/offices/assign  — admin/owner assigns a room (office) to a user
  *   GET  /v1/offices/mine    — caller's owned room (if any)
  *
@@ -12,10 +17,10 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { bureauRooms } from '../db/schema/bureau.js';
+import { bureauFloors, bureauRooms } from '../db/schema/bureau.js';
 import { users } from '../db/schema/bbb-refs.js';
 import { requireAuth } from '../plugins/auth.js';
 import {
@@ -33,6 +38,84 @@ const assignBody = z.object({
 });
 
 export default async function officesRoutes(fastify: FastifyInstance) {
+  // GET /v1/offices — admin/owner only. Returns every type='office' room
+  // across every non-archived floor in the caller's org, joined with the
+  // floor name and the current owner's display data. The admin offices
+  // page renders one row per result; reassigning an owner is a
+  // POST /offices/assign call away.
+  //
+  // We restrict to type='office' deliberately. Bureau allows assigning
+  // any room (huddle, conference, etc.) to a user, but the admin
+  // offices page is about "who has a personal office", and surfacing
+  // every owned huddle would just be noise. If we ever need a broader
+  // owners report, that's a separate endpoint.
+  fastify.get(
+    '/offices',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+      if (!user.is_superuser && !isOrgAdminOrOwner(user.role)) {
+        return forbidden(
+          request,
+          reply,
+          'Only org admins or owners can list offices',
+        );
+      }
+
+      // Self-join trick to LEFT JOIN the owner in one round-trip; the
+      // owner_id FK is `onDelete: 'set null'` so dangling refs are
+      // impossible, but the LEFT JOIN keeps unassigned offices in the
+      // result set.
+      const rows = await db
+        .select({
+          id: bureauRooms.id,
+          floor_id: bureauRooms.floor_id,
+          floor_name: bureauFloors.name,
+          name: bureauRooms.name,
+          type: bureauRooms.type,
+          privacy_default: bureauRooms.privacy_default,
+          owner_id: bureauRooms.owner_id,
+          owner_display_name: users.display_name,
+          owner_email: users.email,
+          owner_avatar_url: users.avatar_url,
+          updated_at: bureauRooms.updated_at,
+        })
+        .from(bureauRooms)
+        .innerJoin(bureauFloors, eq(bureauRooms.floor_id, bureauFloors.id))
+        .leftJoin(users, eq(bureauRooms.owner_id, users.id))
+        .where(
+          and(
+            eq(bureauRooms.org_id, user.org_id),
+            eq(bureauRooms.type, 'office'),
+            isNull(bureauRooms.archived_at),
+            isNull(bureauFloors.archived_at),
+          ),
+        )
+        .orderBy(asc(bureauFloors.name), asc(bureauRooms.name));
+
+      const data = rows.map((r) => ({
+        id: r.id,
+        floor_id: r.floor_id,
+        floor_name: r.floor_name,
+        name: r.name,
+        type: r.type,
+        privacy_default: r.privacy_default,
+        owner:
+          r.owner_id && r.owner_display_name
+            ? {
+                id: r.owner_id,
+                display_name: r.owner_display_name,
+                email: r.owner_email,
+                avatar_url: r.owner_avatar_url,
+              }
+            : null,
+        updated_at: r.updated_at,
+      }));
+
+      return reply.status(200).send({ data });
+    },
+  );
+
   // POST /v1/offices/assign — admin/owner only
   fastify.post(
     '/offices/assign',

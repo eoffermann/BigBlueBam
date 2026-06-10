@@ -9,6 +9,8 @@ interface BureauSidebarProps {
   activeFloorId: string | null;
   /** True when the user is on /admin/* — used to highlight the admin section. */
   isOnAdmin: boolean;
+  /** Which admin sub-page is active (if any). Drives the Admin row highlight. */
+  adminSection?: 'floors' | 'offices' | null;
 }
 
 function NavItem({
@@ -50,7 +52,12 @@ function NavItem({
   );
 }
 
-export function BureauSidebar({ onNavigate, activeFloorId, isOnAdmin }: BureauSidebarProps) {
+export function BureauSidebar({
+  onNavigate,
+  activeFloorId,
+  isOnAdmin,
+  adminSection = null,
+}: BureauSidebarProps) {
   const user = useAuthStore((s) => s.user);
   const floorsQuery = useFloorsList();
   const floors = floorsQuery.data ?? [];
@@ -102,13 +109,13 @@ export function BureauSidebar({ onNavigate, activeFloorId, isOnAdmin }: BureauSi
               Admin
             </div>
             <NavItem
-              active={isOnAdmin}
+              active={isOnAdmin && adminSection !== 'offices'}
               onClick={() => onNavigate('/admin/floors')}
               icon={Settings}
               label="Edit floors"
             />
             <NavItem
-              active={false}
+              active={adminSection === 'offices'}
               onClick={() => onNavigate('/admin/offices')}
               icon={Users}
               label="Offices"

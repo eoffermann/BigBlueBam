@@ -112,7 +112,7 @@ export function AdminFloorListPage({ onNavigate }: AdminFloorListPageProps) {
     mutationFn: async (body: CreateFloorBody) => {
       const res = await api<{ data: AdminFloorRow }>('/floors', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body,
       });
       return res.data;
     },
@@ -148,7 +148,7 @@ export function AdminFloorListPage({ onNavigate }: AdminFloorListPageProps) {
     mutationFn: async (floorId: string) => {
       await api(`/floors/${floorId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ archived_at: null }),
+        body: { archived_at: null },
       });
       return floorId;
     },

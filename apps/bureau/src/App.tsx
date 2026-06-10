@@ -20,12 +20,14 @@ import { FloorListPage } from '@/pages/floor-list';
 import { FloorViewPage } from '@/pages/floor-view';
 import { AdminFloorListPage } from '@/pages/admin/floor-list';
 import { FloorEditorPage } from '@/pages/admin/floor-editor';
+import { AdminOfficesPage } from '@/pages/admin/offices';
 
 export type Route =
   | { page: 'floor-list' }
   | { page: 'floor'; id: string }
   | { page: 'admin-floor-list' }
-  | { page: 'admin-floor'; id: string };
+  | { page: 'admin-floor'; id: string }
+  | { page: 'admin-offices' };
 
 const BASE_PATH = '/bureau';
 
@@ -46,6 +48,9 @@ export function parseRoute(path: string): Route {
   }
   const adminFloorMatch = p.match(/^\/admin\/floors\/([^/]+)$/);
   if (adminFloorMatch) return { page: 'admin-floor', id: adminFloorMatch[1]! };
+  if (p === '/admin/offices' || p === '/admin/offices/') {
+    return { page: 'admin-offices' };
+  }
   return { page: 'floor-list' };
 }
 
@@ -147,6 +152,8 @@ export function App({ onRouteChange }: AppProps = {}) {
         return <AdminFloorListPage onNavigate={navigate} />;
       case 'admin-floor':
         return <FloorEditorPage floorId={route.id} onNavigate={navigate} />;
+      case 'admin-offices':
+        return <AdminOfficesPage />;
       default:
         return null;
     }
