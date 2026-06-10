@@ -328,12 +328,24 @@ export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
  *  Wave E.E note: dualReadGate has been removed — Waves E.A/E.B replaced
  *  every call site with bare `fastify.requireCan(...)`. */
 export function shadowOnly(permission: string): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
-  return async function shadowHandler(request: FastifyRequest, reply: FastifyReply) {
+  return async function shadowHandler(request: FastifyRequest, _reply: FastifyReply) {
     request.legacyPermissionDecision = 'allow';
     const fi = request.server as FastifyInstance;
-    if (typeof fi.requireCan !== 'function') return;
+    // Telemetry only — must NEVER block the request. The previous
+    // implementation delegated to requireCan(), whose deny path SENDS a
+    // 403 reply (it does not throw), so every "shadow" gate silently
+    // became enforcing for any permission the matrix resolves to deny
+    // (e.g. bam.org_member.list for plain members → empty DM rosters).
+    // canResolve is the pure decision probe: it never touches the reply.
+    if (typeof fi.canResolve !== 'function') return;
     try {
-      await fi.requireCan(permission)(request, reply);
+      const allowed = await fi.canResolve(request, permission);
+      if (!allowed) {
+        request.log.warn(
+          { permission },
+          'shadowOnly: resolver would deny (telemetry only, not enforced)',
+        );
+      }
     } catch (err) {
       request.log.warn({ err, permission }, 'shadowOnly: resolver threw');
     }
