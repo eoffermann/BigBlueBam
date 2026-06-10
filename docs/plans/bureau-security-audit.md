@@ -201,12 +201,13 @@ This is the live gap list, ordered most-to-least urgent for production.
   fallback (a peer outage degrades to the historical permissive behavior
   rather than breaking summons) — flip to fail-closed if the threat model
   hardens.
-- **Voice-agent per-org config persistence** — the LiveKit voice agent
-  does not yet persist per-org config (STT/TTS provider, language,
-  voice). Currently it reads a global config and would leak settings
-  across orgs if multi-tenant deploy enabled it. Voice agent is
-  feature-flagged off in production by default; do not flip the flag
-  until per-org config lands.
+- **Voice-agent per-org config persistence — ✅ CLOSED 2026-06-09
+  (commit ae13fe0, D-5).** Provider config is org-scoped (org-less legacy
+  pushes land on a `_global` key) and persists in the
+  `voice-agents:provider-config` Redis hash; resolution is memory → Redis
+  org key → global key → env. Verified: org config survives a pod restart
+  and does not leak into the global view. The agent also honors the D-1
+  `calling.global_enabled` kill switch via its Redis mirror at spawn.
 - **D-9 WS door-permission unit tests** — `canSetDoor` / `canLockRoom`
   are exercised manually but lack dedicated tests. Adding them is
   Workstream 15 follow-up; the underlying authorization helpers in
