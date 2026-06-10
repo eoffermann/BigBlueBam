@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Hash,
   ChevronDown,
@@ -41,36 +42,31 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
   const [dmsOpen, setDmsOpen] = useState(true);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
-  const [orgMembers, setOrgMembers] = useState<{ id: string; display_name: string; avatar_url: string | null }[]>([]);
-  const [membersLoaded, setMembersLoaded] = useState(false);
   const createChannel = useCreateChannel();
 
   const regularChannels = channels?.filter((c) => c.type === 'public' || c.type === 'private') ?? [];
   const dmChannels = channels?.filter((c) => c.type === 'dm' || c.type === 'group_dm') ?? [];
 
-  // Load org members for DM list when the DMs section opens. This used to
-  // run setState + fetch directly in the render body — a side effect during
-  // render that React 19 + iPad Safari handled inconsistently and could
-  // contribute to the black-screen-on-mount symptom. Move into an effect.
-  useEffect(() => {
-    if (!dmsOpen || membersLoaded) return;
-    let cancelled = false;
-    setMembersLoaded(true);
-    (async () => {
-      try {
-        const res = await fetch('/b3/api/org/members', { credentials: 'include' });
-        if (!res.ok || cancelled) return;
-        const j = await res.json();
-        if (cancelled || !j?.data) return;
-        setOrgMembers(j.data.filter((m: { id: string }) => m.id !== user?.id));
-      } catch {
-        // swallow — sidebar still renders without the DM-people roster
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [dmsOpen, membersLoaded, user?.id]);
+  // Load org members for the start-a-DM roster. This was previously a
+  // one-shot fetch latched by a `membersLoaded` flag that swallowed every
+  // error — a single transient failure (an api restart mid-deploy, a
+  // network blip) left the roster permanently empty with no retry and no
+  // error surfaced until a full page reload. useQuery gives us retries,
+  // periodic refresh, and an inspectable error state for the same cost.
+  const membersQuery = useQuery({
+    queryKey: ['org-members', 'dm-roster'],
+    queryFn: async () => {
+      const res = await fetch('/b3/api/org/members', { credentials: 'include' });
+      if (!res.ok) throw new Error(`org/members failed: HTTP ${res.status}`);
+      const j = await res.json();
+      return (j?.data ?? []) as { id: string; display_name: string; avatar_url: string | null }[];
+    },
+    enabled: dmsOpen,
+    retry: 2,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: true,
+  });
+  const orgMembers = (membersQuery.data ?? []).filter((m) => m.id !== user?.id);
 
   const handleCreateChannel = () => {
     const name = newChannelName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -253,8 +249,18 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
                   <span className="truncate">{member.display_name}</span>
                 </button>
               ))}
-              {orgMembers.length === 0 && dmChannels.length === 0 && (
-                <p className="px-2 py-1 text-xs text-zinc-600 italic">No team members found</p>
+              {membersQuery.isError && (
+                <button
+                  onClick={() => membersQuery.refetch()}
+                  className="px-2 py-1 text-xs text-red-400/80 hover:text-red-300 italic text-left w-full"
+                >
+                  Couldn't load people — tap to retry
+                </button>
+              )}
+              {!membersQuery.isError && orgMembers.length === 0 && dmChannels.length === 0 && (
+                <p className="px-2 py-1 text-xs text-zinc-600 italic">
+                  {membersQuery.isLoading ? 'Loading people…' : 'No team members found'}
+                </p>
               )}
             </div>
           )}
