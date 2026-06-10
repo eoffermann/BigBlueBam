@@ -416,7 +416,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
 
     // Resolve the caller's org role once — used by the door / lock / knock
     // permission checks below. Cheap: single join, scoped to (user, org).
-    let userRole: string = 'member';
+    let userRole = 'member';
     try {
       const { accountGroupMemberships, permissionGroups } = await import(
         '../db/schema/index.js'
@@ -483,16 +483,20 @@ export default async function wsRoutes(fastify: FastifyInstance) {
     // Open the durable presence session and subscribe to the user's
     // own targeted channel so summons/knocks reach them out of the box.
     await presenceService.openSession(ctx, client);
-    const personalChannel = userChannel(userId);
-    await subscriber.subscribe(personalChannel);
-    client.channels.add(personalChannel);
 
     // Forward every PubSub message verbatim to the socket. The publisher
     // is responsible for framing (we use the same {type,data,timestamp}
-    // envelope on every channel).
+    // envelope on every channel). MUST be attached BEFORE the first
+    // subscribe (D-13): ioredis delivers messages the moment a channel is
+    // subscribed, so a ring/knock/summon published in the gap between
+    // subscribe-completion and listener attachment was silently dropped.
     subscriber.on('message', (_channel: string, message: string) => {
       safeSend(socket, message);
     });
+
+    const personalChannel = userChannel(userId);
+    await subscriber.subscribe(personalChannel);
+    client.channels.add(personalChannel);
 
     safeSend(
       socket,
@@ -1047,7 +1051,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
                   knockId: null,
                   roomId,
                   decision: 'dnd_blocked',
-                  leave_a_note_endpoint: `/v1/knocks/leave-note`,
+                  leave_a_note_endpoint: '/v1/knocks/leave-note',
                 }),
               );
               break;
