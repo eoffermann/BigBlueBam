@@ -229,6 +229,29 @@ const DATA_SOURCES: BenchDataSource[] = [
     ],
   },
 
+  // ── Bureau (Spatial presence) ─────────────────────────────────
+  {
+    product: 'bureau',
+    entity: 'floor_analytics',
+    label: 'Bureau Floor Analytics (Daily)',
+    description: 'Daily per-floor utilization rollup: peak occupancy, summons, knocks, bookings. Written nightly by the bureau.analytics.rollup worker.',
+    baseTable: 'bureau_floor_analytics',
+    measures: [
+      { field: 'peak_occupancy', label: 'Peak Occupancy', aggregations: ['max', 'avg', 'sum'], type: 'integer' },
+      { field: 'summon_count', label: 'Summons', aggregations: ['sum', 'avg', 'max'], type: 'integer' },
+      { field: 'knock_count', label: 'Knocks', aggregations: ['sum', 'avg', 'max'], type: 'integer' },
+      { field: 'booking_count', label: 'Bookings', aggregations: ['sum', 'avg', 'max'], type: 'integer' },
+    ],
+    dimensions: [
+      { field: 'floor_id', label: 'Floor', type: 'categorical' },
+      { field: 'day', label: 'Day', type: 'temporal' },
+    ],
+    filters: [
+      { field: 'floor_id', label: 'Floor', operators: ['eq', 'in'], type: 'string' },
+      { field: 'day', label: 'Day', operators: ['gte', 'lte', 'between'], type: 'date' },
+    ],
+  },
+
   // ── Materialized views (cross-product) ────────────────────────
   {
     product: 'bench',

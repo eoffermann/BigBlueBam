@@ -127,6 +127,12 @@ import {
   type BureauBookingActivateJobData,
   type BureauBookingReleaseJobData,
 } from './jobs/bureau-booking-lifecycle.js';
+// Workstream 14: Bureau daily analytics rollup. Cron `0 0 * * *` writes one
+// row per floor per day into bureau_floor_analytics for Bench dashboards.
+import {
+  processBureauAnalyticsRollupJob,
+  type BureauAnalyticsRollupJobData,
+} from './jobs/bureau-analytics-rollup.js';
 
 const env = loadEnv();
 
@@ -1020,6 +1026,32 @@ bureauBookingReleaseWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'bureau-booking-release', err }, 'Job failed');
 });
 
+// Workstream 14 Bureau analytics rollup — daily cron at midnight UTC writes
+// one row per floor per day to bureau_floor_analytics. Concurrency 1: this
+// is a single per-org sweep, no benefit from parallelism, and it shares the
+// midnight slot with bearing-snapshot (different tables, no contention).
+const bureauAnalyticsRollupWorker = new Worker<BureauAnalyticsRollupJobData>(
+  'bureau-analytics-rollup',
+  async (job: Job<BureauAnalyticsRollupJobData>) => {
+    await processBureauAnalyticsRollupJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bureauAnalyticsRollupWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bureau-analytics-rollup' }, 'Job completed');
+});
+bureauAnalyticsRollupWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bureau-analytics-rollup', err }, 'Job failed');
+});
+const bureauAnalyticsRollupQueue = new Queue('bureau-analytics-rollup', { connection: redis });
+bureauAnalyticsRollupQueue
+  .upsertJobScheduler(
+    'bureau-analytics-rollup-daily',
+    { pattern: '0 0 * * *' }, // midnight UTC — rolls up the day that just ended
+    { name: 'daily', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bureau-analytics-rollup scheduler'));
+
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(
   'analytics',
@@ -1127,6 +1159,8 @@ const workers = [
   // Workstream 4 Bureau booking lifecycle (activate at starts_at, release at ends_at)
   bureauBookingActivateWorker,
   bureauBookingReleaseWorker,
+  // Workstream 14 Bureau analytics rollup
+  bureauAnalyticsRollupWorker,
   analyticsWorker,
 ];
 
@@ -1181,6 +1215,8 @@ logger.info(
       // Workstream 4 Bureau booking lifecycle
       'bureau-booking-activate',
       'bureau-booking-release',
+      // Workstream 14 Bureau analytics rollup
+      'bureau-analytics-rollup',
       'analytics',
     ],
   },
