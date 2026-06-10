@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { requireAuth } from '../plugins/auth.js';
 import { requireDocumentAccess } from '../middleware/authorize.js';
 import { shadowOnly } from '../middleware/dual-read.js';
-import { generateBriefAudioToken, isValidBureauRoomName } from '../services/livekit.service.js';
+import {
+  BureauRoomAccessDeniedError,
+  generateBriefAudioToken,
+  isValidBureauRoomName,
+} from '../services/livekit.service.js';
 
 // Bureau §9 Strategy B (continuous-audio teleport).
 //
@@ -84,6 +88,24 @@ export default async function audioRoutes(fastify: FastifyInstance) {
           },
         });
       } catch (err) {
+        if (err instanceof BureauRoomAccessDeniedError) {
+          // Bureau ACL rejected this user for the supplied lk_room. Surface as
+          // a 403 so the client can render a meaningful message — falling
+          // through to 500 would suggest a server bug rather than a
+          // permissions decision.
+          request.log.info(
+            { document_id: doc.id, user_id: user.id, lk_room },
+            'Brief audio token denied: bureau ACL refused user for lk_room',
+          );
+          return reply.status(403).send({
+            error: {
+              code: 'BUREAU_ROOM_ACCESS_DENIED',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
         request.log.error({ err, document_id: doc.id }, 'Failed to mint Brief audio token');
         return reply.status(500).send({
           error: {

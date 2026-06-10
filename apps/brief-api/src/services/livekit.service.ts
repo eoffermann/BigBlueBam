@@ -18,9 +18,60 @@ import { env } from '../env.js';
 // shape that makes sense for a Brief doc.
 
 const ROOM_NAME_RE = /^bureau-room-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const BUREAU_ROOM_PREFIX = 'bureau-room-';
 
 export function isValidBureauRoomName(name: string): boolean {
   return ROOM_NAME_RE.test(name);
+}
+
+/**
+ * Sentinel error thrown when bureau-api denies the caller's join request
+ * for the supplied lk_room. The route handler maps this to a 403 so the
+ * frontend can surface a meaningful message rather than a generic 500.
+ */
+export class BureauRoomAccessDeniedError extends Error {
+  constructor(message = 'Bureau room access denied') {
+    super(message);
+    this.name = 'BureauRoomAccessDeniedError';
+  }
+}
+
+/**
+ * Ask bureau-api whether `userId` is allowed to join `bureauRoomId`.
+ *
+ * Brief has no canonical call surface, so a denial here is a HARD failure
+ * (unlike Board, which can fall back to its own room). We throw
+ * BureauRoomAccessDeniedError; the route translates that to a 403.
+ *
+ * Fail-closed: any condition that prevents an affirmative `allowed: true`
+ * (missing secret, network error, non-2xx response, malformed body) is
+ * treated as a denial. We never mint a token for a bureau room without
+ * positive confirmation from bureau-api.
+ */
+async function canJoinBureauRoom(
+  bureauRoomId: string,
+  userId: string,
+): Promise<boolean> {
+  if (!env.INTERNAL_SERVICE_SECRET) return false;
+  const base = env.BUREAU_API_INTERNAL_URL.replace(/\/$/, '');
+  const url = `${base}/v1/internal/can-join-room/${encodeURIComponent(
+    bureauRoomId,
+  )}/${encodeURIComponent(userId)}`;
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Internal-Service-Secret': env.INTERNAL_SERVICE_SECRET,
+      },
+    });
+    if (!response.ok) return false;
+    const raw = (await response.json()) as {
+      data?: { allowed?: unknown; reason?: unknown };
+    };
+    return raw?.data?.allowed === true;
+  } catch {
+    return false;
+  }
 }
 
 export async function generateBriefAudioToken(
@@ -34,6 +85,16 @@ export async function generateBriefAudioToken(
   }
   if (!env.LIVEKIT_API_KEY || !env.LIVEKIT_API_SECRET) {
     throw new Error('LiveKit API key and secret are not configured');
+  }
+
+  // Bureau ACL check. roomName is `bureau-room-<uuid>`; the bureau-api
+  // endpoint takes the UUID directly.
+  const bureauRoomId = roomName.slice(BUREAU_ROOM_PREFIX.length);
+  const allowed = await canJoinBureauRoom(bureauRoomId, userId);
+  if (!allowed) {
+    throw new BureauRoomAccessDeniedError(
+      'You are not authorized to join this Bureau room',
+    );
   }
 
   const token = await mintRoomToken(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET, {

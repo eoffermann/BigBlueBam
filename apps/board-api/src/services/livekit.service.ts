@@ -110,9 +110,64 @@ export async function generateLiveKitToken(opts: GenerateTokenOptions): Promise<
  * authorizes them.
  */
 const ROOM_NAME_RE = /^(?:board-|bureau-room-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const BUREAU_ROOM_PREFIX = 'bureau-room-';
 
 export function isValidAudioRoomName(name: string): boolean {
   return ROOM_NAME_RE.test(name);
+}
+
+/**
+ * Extract the room UUID from a `bureau-room-<uuid>` LiveKit room name.
+ * Returns null if the name is not a bureau-room. Caller MUST have already
+ * validated the shape with `isValidAudioRoomName`.
+ */
+function bureauRoomIdFromName(name: string): string | null {
+  if (!name.startsWith(BUREAU_ROOM_PREFIX)) return null;
+  return name.slice(BUREAU_ROOM_PREFIX.length);
+}
+
+/**
+ * Ask bureau-api whether `userId` is allowed to join `bureauRoomId`.
+ *
+ * Bureau §9 Strategy B: the lkRoom override carries the *bureau* room name,
+ * not the canonical board room. Without this check, any caller with board
+ * read access could coerce Board into minting a LiveKit token for an
+ * arbitrary Bureau room they happen to know the UUID of (which they
+ * shouldn't — UUIDs are non-enumerable — but defense in depth).
+ *
+ * Returns:
+ *   - `true`  : bureau-api confirms the user is on the room ACL / owner /
+ *               open-privacy org member.
+ *   - `false` : bureau-api denied, OR the call could not be made (missing
+ *               INTERNAL_SERVICE_SECRET, network error, non-2xx response,
+ *               malformed body). We fail closed — a bureau-room override
+ *               that we cannot affirmatively authorize is treated as denied
+ *               so the route falls back to the canonical board room.
+ */
+async function canJoinBureauRoom(
+  bureauRoomId: string,
+  userId: string,
+): Promise<boolean> {
+  if (!env.INTERNAL_SERVICE_SECRET) return false;
+  const base = env.BUREAU_API_INTERNAL_URL.replace(/\/$/, '');
+  const url = `${base}/v1/internal/can-join-room/${encodeURIComponent(
+    bureauRoomId,
+  )}/${encodeURIComponent(userId)}`;
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Internal-Service-Secret': env.INTERNAL_SERVICE_SECRET,
+      },
+    });
+    if (!response.ok) return false;
+    const raw = (await response.json()) as {
+      data?: { allowed?: unknown; reason?: unknown };
+    };
+    return raw?.data?.allowed === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -134,8 +189,28 @@ export async function generateBoardAudioToken(
   roomOverride?: string,
 ): Promise<{ token: string; roomName: string; wsUrl: string }> {
   const defaultRoom = buildBoardRoomName(boardId);
-  const roomName =
-    roomOverride && isValidAudioRoomName(roomOverride) ? roomOverride : defaultRoom;
+  let roomName = defaultRoom;
+
+  if (roomOverride && isValidAudioRoomName(roomOverride)) {
+    // Format-validated. If the override is a bureau-room, verify the caller
+    // actually belongs in that bureau room before honoring it; otherwise
+    // a board-read-authorized caller could mint a token for an arbitrary
+    // bureau room. board-* overrides are fine to pass through (the route
+    // already authorized read access to *this* board).
+    const bureauRoomId = bureauRoomIdFromName(roomOverride);
+    if (bureauRoomId === null) {
+      roomName = roomOverride;
+    } else {
+      const allowed = await canJoinBureauRoom(bureauRoomId, userId);
+      if (allowed) {
+        roomName = roomOverride;
+      }
+      // else: silently fall back to the canonical board room. The call
+      // will not be the same LiveKit room as the Bureau summon (so
+      // continuous audio drops), but the user can still join the board's
+      // own audio. That is the correct posture for a denied bureau ACL.
+    }
+  }
 
   const token = await generateLiveKitToken({
     participantIdentity: userId,

@@ -28,6 +28,7 @@ const envSchema = z.object({
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
   BEACON_API_INTERNAL_URL: z.string().default('http://beacon-api:4004'),
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
+  BUREAU_API_INTERNAL_URL: z.string().default('http://bureau-api:4015'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   COOKIE_DOMAIN: z.string().optional(),
