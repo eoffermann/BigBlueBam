@@ -1482,6 +1482,16 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
           using_devkey: usingDevkey,
           livekit_url: process.env.LIVEKIT_WS_URL || null,
           providers: { stt, llm, tts },
+          // Per-knob env presence as seen by THIS (Bam api) container —
+          // drives the "Configured at: env / settings / both" chips on the
+          // Platform Calling Settings page. The system_settings half of
+          // each chip comes from the per-key GET the page already does.
+          env_presence: {
+            'calling.livekit_host': !!process.env.LIVEKIT_WS_URL,
+            'calling.livekit_api_key': !!process.env.LIVEKIT_API_KEY,
+            'calling.livekit_api_secret': !!process.env.LIVEKIT_API_SECRET,
+            'calling.voice_agent_url': !!process.env.VOICE_AGENT_URL,
+          },
         },
       };
     },

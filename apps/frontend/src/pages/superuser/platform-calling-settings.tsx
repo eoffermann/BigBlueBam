@@ -54,10 +54,27 @@ interface SystemSettingResponse {
   data: SystemSettingRow | null;
 }
 
+// GET /superuser/calling-credentials — env-derived visibility layer (D-2:
+// formerly the read-only CallingCredentialsCard on the SuperUser console).
+interface CallingCredentialsResponse {
+  data: {
+    using_devkey: boolean;
+    livekit_url: string | null;
+    providers: { stt: string | null; llm: string | null; tts: string | null };
+    env_presence?: Partial<Record<CallingKey, boolean>>;
+  };
+}
+
 export function PlatformCallingSettingsPage({
   onNavigate,
 }: PlatformCallingSettingsPageProps) {
   const { user } = useAuthStore();
+
+  const { data: creds } = useQuery<CallingCredentialsResponse>({
+    queryKey: ['superuser', 'calling-credentials'],
+    queryFn: () => api.get('/superuser/calling-credentials'),
+    enabled: !!user && user.is_superuser === true,
+  });
 
   useEffect(() => {
     if (user && user.is_superuser !== true) {
@@ -99,11 +116,133 @@ export function PlatformCallingSettingsPage({
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-6 flex flex-col gap-4">
+        <EnvStatusBanner creds={creds?.data ?? null} />
         {KEYS.map((key) => (
-          <SettingCard key={key} settingKey={key} />
+          <SettingCard
+            key={key}
+            settingKey={key}
+            envPresent={creds?.data?.env_presence?.[key]}
+          />
         ))}
       </main>
     </div>
+  );
+}
+
+// ── Env status banner ───────────────────────────────────────────────────
+// Ported from the SuperUser console's old read-only CallingCredentialsCard
+// (D-2): the env-derived state lives here now, next to the knobs that
+// override it, instead of on a second card two screens away.
+
+function EnvStatusBanner({
+  creds,
+}: {
+  creds: CallingCredentialsResponse['data'] | null;
+}) {
+  if (!creds) {
+    return (
+      <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="flex items-center gap-2 text-sm text-zinc-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading environment status…
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+          Environment:
+        </span>
+        {creds.using_devkey ? (
+          <span className="inline-flex items-center rounded-md bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-200">
+            Dev credentials in use
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-md bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:text-emerald-200">
+            Generated credentials in use
+          </span>
+        )}
+        {creds.livekit_url && (
+          <span className="text-xs text-zinc-500">
+            LiveKit URL: <code>{creds.livekit_url}</code>
+          </span>
+        )}
+      </div>
+      {creds.using_devkey && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          ⚠ Dev mode uses the published <code>devkey:secret</code> pair from the
+          LiveKit yaml template — fine for local testing, never for production.
+          Re-run <code>node scripts/deploy/main.mjs</code> to generate proper
+          credentials, or set the key + secret below to override via system
+          settings.
+        </p>
+      )}
+      <div className="mt-3 rounded-md border border-zinc-200 dark:border-zinc-800 p-3">
+        <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+          Voice agent providers (env-derived)
+        </div>
+        <ProviderRow label="STT" value={creds.providers?.stt} />
+        <ProviderRow label="LLM" value={creds.providers?.llm} />
+        <ProviderRow label="TTS" value={creds.providers?.tts} />
+        <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+          STT, LLM, and TTS providers are read by the voice-agent service. Set
+          them via env vars on first deploy or per-org via the AI Providers
+          settings page (<code>/b3/settings → AI Providers</code>). Without
+          them, the voice agent runs in degraded "log-only" mode and human-only
+          voice/video calls still work.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function ProviderRow({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex items-center justify-between text-xs py-0.5">
+      <span className="text-zinc-500">{label}</span>
+      {value ? (
+        <span className="font-mono text-zinc-700 dark:text-zinc-300">{value}</span>
+      ) : (
+        <span className="text-zinc-400 italic">not configured</span>
+      )}
+    </div>
+  );
+}
+
+// "Configured at" chip — answers "which layer is feeding this knob right
+// now?" envPresent comes from /superuser/calling-credentials (as seen by
+// the Bam api container); hasSetting from the per-key system-settings GET.
+// When both exist, the system_settings value wins at runtime.
+function ConfiguredAtChip({
+  envPresent,
+  hasSetting,
+}: {
+  envPresent: boolean | undefined;
+  hasSetting: boolean;
+}) {
+  if (envPresent === undefined) return null;
+  let label: string;
+  let cls: string;
+  if (hasSetting && envPresent) {
+    label = 'Configured at: settings (overrides env)';
+    cls = 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200';
+  } else if (hasSetting) {
+    label = 'Configured at: system settings';
+    cls = 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200';
+  } else if (envPresent) {
+    label = 'Configured at: env var';
+    cls = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300';
+  } else {
+    label = 'Not configured';
+    cls = 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200';
+  }
+  return (
+    <span
+      className={`mt-2 inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${cls}`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -174,7 +313,13 @@ const META: Record<CallingKey, CardMeta> = {
   },
 };
 
-function SettingCard({ settingKey }: { settingKey: CallingKey }) {
+function SettingCard({
+  settingKey,
+  envPresent,
+}: {
+  settingKey: CallingKey;
+  envPresent?: boolean;
+}) {
   const meta = META[settingKey];
   const queryClient = useQueryClient();
 
@@ -243,6 +388,9 @@ function SettingCard({ settingKey }: { settingKey: CallingKey }) {
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {meta.description}
           </p>
+          {!isLoading && (
+            <ConfiguredAtChip envPresent={envPresent} hasSetting={row !== null} />
+          )}
 
           {isLoading ? (
             <div className="mt-4 flex items-center gap-2 text-sm text-zinc-500">
