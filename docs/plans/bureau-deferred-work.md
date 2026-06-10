@@ -121,16 +121,11 @@ Effort: 0.5 day.
 
 ---
 
-## D-8: Pre-existing Bolt catalog drift in blueprint
+## D-8: Pre-existing Bolt catalog drift in blueprint ✅ CLOSED
 
-**Status:** Not started (pre-existing, surfaced by Bureau workstream 2's `scripts/check-bolt-catalog.mjs` run).
-**Severity:** Low — drift guard flags one entry but the event is being emitted from a real call site so production is fine.
+**Status:** Closed in-pass during the presence-and-immediate-interaction verify pass (commit 71fe0e3).
 
-`apps/blueprint-api/src/routes/cross-product.routes.ts` calls `publishBoltEvent` with `(source='blueprint', event_type='diagram.promoted_to_tasks')` but the `(source, event_type)` pair is missing from `apps/bolt-api/src/services/event-catalog.ts`. The drift guard rejects this on CI — though it has apparently been merging anyway, so either CI doesn't currently run the drift guard, or the violation has been ignored.
-
-Fix is one-liner: add `{ source: 'blueprint', event_type: 'diagram.promoted_to_tasks', ... }` to the `blueprintEvents` array in event-catalog.ts. Effort: 5 minutes.
-
-Per CLAUDE.md "pre-existing is not a dismissal" — recording it here. Will be picked up when someone touches Bolt next.
+`apps/blueprint-api/src/routes/cross-product.routes.ts` was emitting `blueprint.diagram.promoted_to_tasks` without a catalog entry; added the definition (with `id`, `project_id`, `task_count`, `link_count` payload schema) to `apps/bolt-api/src/services/event-catalog.ts`. The drift guard now reports 0 violations across 131 (source, event_type) pairs.
 
 ## D-9: Pre-existing beacon-expiry-sweep cron crash
 
