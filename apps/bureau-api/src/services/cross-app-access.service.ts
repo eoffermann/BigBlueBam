@@ -12,19 +12,14 @@
  * destination service's internal can-read endpoint over the BigBlueBam
  * internal network using the shared INTERNAL_SERVICE_SECRET pattern.
  *
- * ─── Current status (TODO markers) ────────────────────────────────────
- * Board, Brief, and Bam do not yet expose an internal can-read preflight.
- * Until they do, the per-app handlers in this file:
- *   1. Try the internal endpoint if BBB_BUREAU_CROSS_APP_LIVE is set; on a
- *      non-200 response, fall back to the safe default below.
- *   2. Default to { allowed: true, canShare: false } so the summon flow is
- *      end-to-end testable. canShare stays false so the §4.4 "Grant access
- *      & bring them" dialog is never offered before the share path lands.
- *
- * When the destination services grow real preflights, swap the body of each
- * handler for the live HTTP call and delete the TODO. The contract this
- * module exposes (one async resolveAccess(...) function returning
- * { allowed, canShare }) does not need to change.
+ * ─── Current status (D-12 closed) ─────────────────────────────────────
+ * Board (POST /v1/internal/can-read), Brief (POST /v1/internal/can-read),
+ * and Bam (POST /internal/can-read) all ship live preflights as of D-12.
+ * The { allowed: true, canShare: false, reason: 'stub_allow' } fallback
+ * remains ONLY for transport failures (peer down, secret unset, non-200)
+ * so a peer outage degrades to the historical permissive behavior instead
+ * of breaking summons; the fallback is logged via the reason field on the
+ * audit row.
  *
  * canShare semantics: only set true when the calling SUMMONER (not the
  * recipient) has rights to share/invite collaborators on the target. Bureau
@@ -135,16 +130,9 @@ async function tryLivePreflight(
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Board access check.
- *
- * TODO(workstream 6 follow-up): board-api needs an internal can-read
- * preflight (e.g. `POST /v1/internal/can-read` with body
- * { user_id, org_id, target_url }). The visibility logic in
- * apps/board-api/src/routes/audio.routes.ts is the canonical source —
- * lift the visibility branch (private/organization + collaborators)
- * into a service so both audio.routes.ts and the new internal route
- * call it. Until then we return { allowed: true, canShare: false } and
- * log the fallback so it's easy to find in production.
+ * Board access check — live preflight against board-api's
+ * POST /v1/internal/can-read (apps/board-api/src/routes/internal.routes.ts),
+ * which mirrors requireBoardAccess. stub_allow only on transport failure.
  */
 async function checkBoardAccess(
   args: ResolveAccessArgs,
@@ -156,18 +144,13 @@ async function checkBoardAccess(
   );
   if (live) return live;
 
-  // TODO: replace with real check once board-api ships the internal route.
   return { allowed: true, canShare: false, reason: 'stub_allow' };
 }
 
 /**
- * Brief access check.
- *
- * TODO(workstream 6 follow-up): brief-api needs an internal can-read
- * preflight. The visibility model is similar to Board (private with
- * collaborators / project / organization), see
- * apps/api/src/services/visibility.service.ts for the canonical Brief
- * rules. Until then we return { allowed: true, canShare: false }.
+ * Brief access check — live preflight against brief-api's
+ * POST /v1/internal/can-read (apps/brief-api/src/routes/internal.routes.ts),
+ * which mirrors requireDocumentAccess. stub_allow only on transport failure.
  */
 async function checkBriefAccess(
   args: ResolveAccessArgs,
@@ -183,13 +166,11 @@ async function checkBriefAccess(
 }
 
 /**
- * Bam access check (projects, tasks, sprints, ...).
- *
- * TODO(workstream 6 follow-up): apps/api needs an internal can-read
- * preflight. The §11 visibility.service.ts in apps/api already centralises
- * the canonical access rules per-entity-type; expose it via a thin
- * /internal/can-read POST route. Until then we return
- * { allowed: true, canShare: false }.
+ * Bam access check (projects, tasks, sprints, ...) — live preflight against
+ * apps/api's POST /internal/can-read, which dispatches through the §11
+ * visibility.service.ts preflightAccess(). can_share is always false for
+ * Bam targets (no one-click grant concept). stub_allow only on transport
+ * failure.
  */
 async function checkBamAccess(
   args: ResolveAccessArgs,

@@ -103,15 +103,18 @@ function surfaceUrlFor(app: string, id: string): string {
     case 'bam':
       return `/b3/tasks/${id}`;
     case 'brief':
-      return `/brief/d/${id}`;
+      // Brief routes documents at /documents/:id (see apps/brief/src/main.tsx).
+      return `/brief/documents/${id}`;
     case 'board':
-      return `/board/b/${id}`;
+      // Board routes canvases at the root: /board/:id (apps/board/src/main.tsx).
+      return `/board/${id}`;
     case 'blueprint':
       return `/blueprint/d/${id}`;
     case 'bond':
       return `/bond/deals/${id}`;
     case 'beacon':
-      return `/beacon/a/${id}`;
+      // Beacon's detail route is /:idOrSlug at the app root (apps/beacon/src/app.tsx).
+      return `/beacon/${id}`;
     case 'helpdesk':
       return `/helpdesk/tickets/${id}`;
     case 'banter':

@@ -94,6 +94,7 @@ import templateRoutes from './routes/template.routes.js';
 import collaboratorRoutes from './routes/collaborator.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import sceneRoutes from './routes/scene.routes.js';
+import internalRoutes from './routes/internal.routes.js';
 import websocketHandler from './ws/handler.js';
 
 await fastify.register(boardRoutes, { prefix: '/v1' });
@@ -104,6 +105,8 @@ await fastify.register(templateRoutes, { prefix: '/v1' });
 await fastify.register(collaboratorRoutes, { prefix: '/v1' });
 await fastify.register(chatRoutes, { prefix: '/v1' });
 await fastify.register(sceneRoutes, { prefix: '/v1' });
+// D-12: cross-app can-read preflight for the Bureau summon system.
+await fastify.register(internalRoutes, { prefix: '/v1' });
 await fastify.register(websocketHandler);
 
 // Graceful shutdown

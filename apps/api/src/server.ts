@@ -84,6 +84,7 @@ import userRoutes from './routes/user.routes.js';
 import permissionsDivergencesRoutes from './routes/permissions-divergences.routes.js';
 import permissionsAdminRoutes from './routes/permissions-admin.routes.js';
 import internalPermissionsRoutes from './routes/internal-permissions.routes.js';
+import internalCanReadRoutes from './routes/internal-can-read.routes.js';
 import deploySettingsRoutes from './routes/deploy-settings.routes.js';
 import { sql } from 'drizzle-orm';
 import websocketHandlerPlugin from './plugins/websocket.js';
@@ -294,6 +295,8 @@ await fastify.register(userRoutes);
 await fastify.register(permissionsDivergencesRoutes);
 await fastify.register(permissionsAdminRoutes);
 await fastify.register(internalPermissionsRoutes);
+// D-12: cross-app can-read preflight for the Bureau summon system.
+await fastify.register(internalCanReadRoutes);
 await fastify.register(deploySettingsRoutes);
 
 // BAM-029: TODO — Add a periodic session cleanup job to the worker service.
