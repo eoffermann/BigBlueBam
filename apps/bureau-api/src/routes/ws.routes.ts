@@ -62,6 +62,7 @@ import {
   type KnockResolution,
 } from '../lib/bureau-events.js';
 import { isUserInDnd } from '../services/dnd-check.service.js';
+import { getCallingConfig } from '../services/calling-settings.service.js';
 import * as presence from '../services/presence.service.js';
 import {
   channels as presenceChannels,
@@ -513,45 +514,60 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             client.roomEnteredAt = Date.now();
 
             // Mint a LiveKit token so the connecting socket can join
-            // audio without a follow-up REST call.
+            // audio without a follow-up REST call. Credentials resolve
+            // through the calling-settings service (system_settings over
+            // env, D-1); when the platform kill switch is OFF the user
+            // still enters the room but gets no audio token.
             const roomName = buildBureauRoomName(roomId);
-            try {
-              const token = await mintRoomToken(
-                env.LIVEKIT_API_KEY,
-                env.LIVEKIT_API_SECRET,
-                {
-                  identity: userId,
-                  roomName,
-                  name: displayName,
-                  metadata: {
-                    user_id: userId,
-                    display_name: displayName,
-                    org_id: orgId,
-                    bureau_room_id: roomId,
-                  },
-                  ttlSeconds: 3600,
-                },
-              );
-              safeSend(
-                socket,
-                frame('livekit_token', {
-                  roomName,
-                  token,
-                  url: env.LIVEKIT_URL,
-                }),
-              );
-            } catch (err) {
-              fastify.log.error(
-                { err, roomId, userId },
-                'Bureau WS failed to mint LiveKit token',
-              );
+            const calling = await getCallingConfig(fastify.redis);
+            if (!calling.enabled) {
               safeSend(
                 socket,
                 frame('error', {
-                  code: 'LIVEKIT_MINT_FAILED',
-                  message: 'Audio token unavailable; room joined without audio',
+                  code: 'CALLING_DISABLED',
+                  message:
+                    'Calling is disabled platform-wide; room joined without audio',
                 }),
               );
+            } else {
+              try {
+                const token = await mintRoomToken(
+                  calling.livekitApiKey,
+                  calling.livekitApiSecret,
+                  {
+                    identity: userId,
+                    roomName,
+                    name: displayName,
+                    metadata: {
+                      user_id: userId,
+                      display_name: displayName,
+                      org_id: orgId,
+                      bureau_room_id: roomId,
+                    },
+                    ttlSeconds: 3600,
+                  },
+                );
+                safeSend(
+                  socket,
+                  frame('livekit_token', {
+                    roomName,
+                    token,
+                    url: calling.livekitUrl,
+                  }),
+                );
+              } catch (err) {
+                fastify.log.error(
+                  { err, roomId, userId },
+                  'Bureau WS failed to mint LiveKit token',
+                );
+                safeSend(
+                  socket,
+                  frame('error', {
+                    code: 'LIVEKIT_MINT_FAILED',
+                    message: 'Audio token unavailable; room joined without audio',
+                  }),
+                );
+              }
             }
 
             const enterPayload = frame('room_enter', { roomId, userId });

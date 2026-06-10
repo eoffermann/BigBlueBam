@@ -24,10 +24,9 @@
  * Token TTL is 3600s, matching board-api.
  */
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { mintRoomToken } from '@bigbluebam/livekit-tokens';
-import { env } from '../env.js';
 import { requireAuth } from '../plugins/auth.js';
 import {
   badRequest,
@@ -36,6 +35,19 @@ import {
   loadRoom,
   roomNotFound,
 } from '../middleware/room-access.js';
+import { getCallingConfig } from '../services/calling-settings.service.js';
+
+/** D-1: 503 sent by every mint path while the platform kill switch is OFF. */
+function callingDisabled(request: FastifyRequest, reply: FastifyReply) {
+  return reply.status(503).send({
+    error: {
+      code: 'CALLING_DISABLED',
+      message: 'Calling is disabled platform-wide by the administrator',
+      details: [],
+      request_id: request.id,
+    },
+  });
+}
 
 const TOKEN_TTL_SECONDS = 3600;
 
@@ -58,6 +70,9 @@ const SURFACE_APPS = [
   'bam',
   'beacon',
   'helpdesk',
+  // D-14 follow-up: ring.routes.ts accepts banter surfaces, so the huddle
+  // token mint must too (the SDK joins huddle-banter-{channelId} on accept).
+  'banter',
 ] as const;
 
 /** uuid or 1-64 char lowercase-alphanumeric-and-dash slug. */
@@ -82,6 +97,9 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id: roomId } = request.params as { id: string };
       const user = request.user!;
+
+      const calling = await getCallingConfig(fastify.redis);
+      if (!calling.enabled) return callingDisabled(request, reply);
 
       const room = await loadRoom(roomId, user.org_id);
       if (!room) return roomNotFound(request, reply);
@@ -114,8 +132,8 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
 
       const roomName = buildBureauRoomName(room.id);
       const token = await mintRoomToken(
-        env.LIVEKIT_API_KEY,
-        env.LIVEKIT_API_SECRET,
+        calling.livekitApiKey,
+        calling.livekitApiSecret,
         {
           identity: user.id,
           roomName,
@@ -134,7 +152,7 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
         data: {
           token,
           room_name: roomName,
-          ws_url: env.LIVEKIT_URL,
+          ws_url: calling.livekitUrl,
         },
       });
     },
@@ -174,6 +192,9 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const user = request.user!;
 
+      const calling = await getCallingConfig(fastify.redis);
+      if (!calling.enabled) return callingDisabled(request, reply);
+
       const parsed = surfaceHuddleBody.safeParse(request.body);
       if (!parsed.success) {
         return badRequest(
@@ -190,8 +211,8 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
 
       const roomName = buildSurfaceHuddleRoomName(surface_app, surface_id);
       const token = await mintRoomToken(
-        env.LIVEKIT_API_KEY,
-        env.LIVEKIT_API_SECRET,
+        calling.livekitApiKey,
+        calling.livekitApiSecret,
         {
           identity: user.id,
           roomName,
@@ -211,7 +232,7 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
         data: {
           token,
           room_name: roomName,
-          ws_url: env.LIVEKIT_URL,
+          ws_url: calling.livekitUrl,
         },
       });
     },

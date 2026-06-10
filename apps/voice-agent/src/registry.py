@@ -143,6 +143,18 @@ class AgentRegistry:
         except Exception:  # noqa: BLE001
             return 0
 
+    async def get_raw(self, key: str) -> Optional[str]:
+        """Read an arbitrary string key (e.g. the calling kill-switch
+        mirror bureau-api maintains at calling:global_enabled). Returns
+        None when Redis is unavailable or the key is absent."""
+        if not self._connected or not self._redis:
+            return None
+        try:
+            return await self._redis.get(key)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Registry get_raw(%s) failed: %s", key, exc)
+            return None
+
     async def save_provider_config(self, org_key: str, config: dict) -> None:
         """Persist a per-org provider config so it survives pod restarts (D-5).
 

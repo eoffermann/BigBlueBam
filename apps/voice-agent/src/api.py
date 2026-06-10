@@ -60,6 +60,17 @@ _EMPTY_PROVIDER_CONFIG: dict = {
 
 _provider_configs: dict[str, dict] = {}
 
+# D-1: platform calling kill switch. bureau-api mirrors the SuperUser's
+# calling.global_enabled system setting into this Redis key ('1'/'0') on
+# every settings refresh; a missing key (fresh deploy, Redis flush) means
+# enabled — the switch must be explicitly thrown.
+CALLING_ENABLED_REDIS_KEY = "calling:global_enabled"
+
+
+async def _is_calling_enabled() -> bool:
+    raw = await registry.get_raw(CALLING_ENABLED_REDIS_KEY)
+    return raw != "0"
+
 
 async def _resolve_provider_config(org_id: Optional[str]) -> dict:
     """Resolve the effective provider config for an org.
@@ -257,6 +268,22 @@ async def spawn_agent(data: SpawnRequest):
     # Apply any per-spawn config overrides
     if data.config:
         agent_state["config_overrides"] = data.config
+
+    if data.mode == "voice" and not await _is_calling_enabled():
+        # D-1: platform kill switch — don't join LiveKit. The agent record
+        # still exists in degraded mode so callers see a coherent answer.
+        logger.info(
+            "Voice agent %s: calling disabled platform-wide; log-only mode.",
+            agent_id,
+        )
+        agent_state["status"] = "degraded"
+        agent_state["detail"] = (
+            "Calling is disabled platform-wide (calling.global_enabled=false). "
+            "Agent running in log-only mode."
+        )
+        agents[agent_id] = agent_state
+        await registry.register(agent_id, agent_state)
+        return SpawnResponse(agent_id=agent_id, status=agent_state["status"])
 
     if data.mode == "voice" and data.room_name:
         pipeline_cfg = _build_pipeline_config(
