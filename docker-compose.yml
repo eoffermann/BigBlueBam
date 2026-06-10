@@ -936,6 +936,10 @@ services:
       - LIVEKIT_HOST=http://livekit:7880
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-secret}
+      # Browser-facing LiveKit URL returned in token mints (ws_url). A
+      # relative path (default /livekit-ws) is resolved by the call widget
+      # against the page origin — see the infra/nginx livekit-ws proxy.
+      - LIVEKIT_URL=${LIVEKIT_WS_URL:-/livekit-ws}
       - BOOK_INTERNAL_URL=http://book-api:4012
       - BOARD_INTERNAL_URL=http://board-api:4008
       - BRIEF_INTERNAL_URL=http://brief-api:4005

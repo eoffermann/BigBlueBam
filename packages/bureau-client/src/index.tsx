@@ -545,6 +545,8 @@ function BureauProvider({
         kind: 'spatial',
         roomName: `bureau-room-${spatialRoomId}`,
         spatialRoomId,
+        // Human name for the call strip — never show the raw LiveKit id.
+        label: loc?.spatialRoomName ?? undefined,
       };
     } else if (loc?.surface_id && loc.app) {
       target = {
@@ -1044,7 +1046,10 @@ function BureauDockedBoxInner({
   if (callIdle) {
     callStripContent = <span>Not in a call</span>;
   } else if (call.target.kind === 'spatial') {
-    const roomName = call.target.roomName ?? 'Bureau room';
+    // Prefer the human room name — the raw LiveKit id (bureau-room-<uuid>)
+    // is an implementation detail and reads as a bug in the strip.
+    const roomName =
+      call.target.label ?? state.location?.spatialRoomName ?? 'Bureau room';
     callStripContent = (
       <>
         <span style={callStripIconStyle} aria-hidden>

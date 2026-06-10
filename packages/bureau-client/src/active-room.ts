@@ -130,6 +130,23 @@ function targetsEqual(a: ActiveRoomTarget, b: ActiveRoomTarget): boolean {
   return a.surfaceApp === b.surfaceApp && a.surfaceId === b.surfaceId;
 }
 
+/**
+ * Resolve the ws_url from a token mint against the current page origin.
+ * bureau-api passes through whatever LIVEKIT_URL it was configured with;
+ * a RELATIVE path (e.g. `/livekit-ws`, via LIVEKIT_WS_URL) means "the
+ * nginx LiveKit proxy on this same host" — resolved here so one config
+ * value works for localhost, LAN-IP, and prod hostnames alike, and so
+ * https pages automatically get wss (a hardcoded ws:// URL on an https
+ * page is blocked as mixed content, which presented as the docked box
+ * flipping straight to a red "error" on room entry).
+ */
+export function resolveWsUrl(raw: string): string {
+  if (!raw.startsWith('/')) return raw;
+  if (typeof window === 'undefined') return raw;
+  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${scheme}://${window.location.host}${raw}`;
+}
+
 function parseTokenEnvelope(payload: unknown): MintedToken {
   // bureau-api wraps the body as `{ data: { token, room_name, ws_url } }`.
   // We also tolerate the legacy bare-body shape, in case a future tweak
@@ -265,7 +282,7 @@ export class ActiveCallManager {
     this.attachRoomListeners(room, generation);
 
     try {
-      await room.connect(minted.ws_url, minted.token);
+      await room.connect(resolveWsUrl(minted.ws_url), minted.token);
     } catch (err) {
       if (generation !== this.connectGeneration) {
         // Superseded — quietly hang up.
