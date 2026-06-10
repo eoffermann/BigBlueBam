@@ -536,7 +536,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         const bulkTasks = await db
           .select({ id: tasks.id, project_id: tasks.project_id })
           .from(tasks)
-          .where(sql`${tasks.id} = ANY(${data.task_ids})`);
+          .where(sql`${tasks.id} = ANY(${data.task_ids}::uuid[])`);
 
         const uniqueProjectIds = [...new Set(bulkTasks.map((t) => t.project_id))];
         for (const pid of uniqueProjectIds) {

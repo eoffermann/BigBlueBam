@@ -174,7 +174,7 @@ function buildConditionSql(condition: {
     case 'in': {
       const values = condition.value as string[];
       if (!values || values.length === 0) return undefined;
-      return sql`${col} = ANY(${values})`;
+      return sql`${col} = ANY(${values}::text[])`;
     }
 
     case 'contains': {

@@ -10,6 +10,7 @@
 
 import type { Job } from 'bullmq';
 import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
 import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
@@ -30,6 +31,37 @@ export interface BeaconExpirySweepJobData {
 export async function processBeaconExpirySweepJob(
   job: Job<BeaconExpirySweepJobData>,
   logger: Logger,
+): Promise<void> {
+  // Shared connection for the sweep's fan-out queues. Built from the full
+  // REDIS_URL (the previous per-queue host/port-only parse dropped the
+  // password and would have failed against an auth-required Redis the
+  // first time a sweep actually had rows to notify about). Same idiom as
+  // slack-import.job.ts::getEmailQueue. Lazy so a sweep with nothing to
+  // enqueue never opens it; the finally guarantees no leak on failure.
+  const connRef: { conn: IORedis | null } = { conn: null };
+  const getQueueConn = (): IORedis => {
+    connRef.conn ??= new IORedis(
+      process.env.REDIS_URL ?? 'redis://localhost:6379',
+      { maxRetriesPerRequest: null },
+    );
+    return connRef.conn;
+  };
+
+  try {
+    await runSweep(job, logger, getQueueConn);
+  } finally {
+    if (connRef.conn) {
+      await connRef.conn.quit().catch(() => {
+        /* connection teardown is best-effort */
+      });
+    }
+  }
+}
+
+async function runSweep(
+  job: Job<BeaconExpirySweepJobData>,
+  logger: Logger,
+  getQueueConn: () => IORedis,
 ): Promise<void> {
   logger.info({ jobId: job.id }, 'Starting beacon expiry sweep');
 
@@ -56,10 +88,7 @@ export async function processBeaconExpirySweepJob(
   // Enqueue notifications for newly pending beacons
   if (step1Rows.length > 0) {
     const notifQueue = new Queue('notifications', {
-      connection: {
-        host: new URL(process.env.REDIS_URL ?? 'redis://localhost:6379').hostname,
-        port: Number(new URL(process.env.REDIS_URL ?? 'redis://localhost:6379').port) || 6379,
-      },
+      connection: getQueueConn(),
     });
 
     for (const row of step1Rows) {
@@ -103,10 +132,7 @@ export async function processBeaconExpirySweepJob(
   // Enqueue archive notifications
   if (step2Rows.length > 0) {
     const notifQueue = new Queue('notifications', {
-      connection: {
-        host: new URL(process.env.REDIS_URL ?? 'redis://localhost:6379').hostname,
-        port: Number(new URL(process.env.REDIS_URL ?? 'redis://localhost:6379').port) || 6379,
-      },
+      connection: getQueueConn(),
     });
 
     for (const row of step2Rows) {
@@ -127,25 +153,23 @@ export async function processBeaconExpirySweepJob(
   // Step 3: Stale drafts — notify at 30 days, delete at 60 days
   // -------------------------------------------------------------------------
 
-  // 3a: Notify creators of 30-day-old drafts (that haven't been notified yet)
+  // 3a: Notify creators of 30-day-old drafts (that haven't been notified yet).
+  // Single UPDATE..RETURNING instead of SELECT-then-UPDATE: atomic, and it
+  // avoids the raw `id = ANY(${jsArray})` template that crashed the sweep
+  // with PostgresError 42809 (drizzle binds the JS array as one untyped
+  // param, which `ANY` rejects — see the same bug class in bond-api's
+  // pipeline.service noted by the e2e suite).
   const drafts30d: any[] = await db.execute(sql`
-    SELECT id, owned_by, project_id, organization_id
-    FROM beacon_entries
+    UPDATE beacon_entries
+    SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"draft_expiry_notified": true}'::jsonb
     WHERE status = 'Draft'
       AND created_at < NOW() - INTERVAL '30 days'
       AND created_at >= NOW() - INTERVAL '60 days'
       AND NOT COALESCE((metadata->>'draft_expiry_notified')::boolean, false)
+    RETURNING id, owned_by, project_id, organization_id
   `);
 
   if (drafts30d.length > 0) {
-    // Mark as notified
-    const draftIds30 = drafts30d.map((r: any) => r.id);
-    await db.execute(sql`
-      UPDATE beacon_entries
-      SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"draft_expiry_notified": true}'::jsonb
-      WHERE id = ANY(${draftIds30})
-    `);
-
     logger.info(
       { count: drafts30d.length, step: '3a' },
       'Notified owners of 30-day stale drafts',
@@ -177,10 +201,7 @@ export async function processBeaconExpirySweepJob(
 
   if (pendingBeacons.length > 0) {
     const agentQueue = new Queue('beacon-agent-verify', {
-      connection: {
-        host: new URL(process.env.REDIS_URL ?? 'redis://localhost:6379').hostname,
-        port: Number(new URL(process.env.REDIS_URL ?? 'redis://localhost:6379').port) || 6379,
-      },
+      connection: getQueueConn(),
     });
 
     for (const row of pendingBeacons) {

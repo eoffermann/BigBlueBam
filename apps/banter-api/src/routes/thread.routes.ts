@@ -324,7 +324,7 @@ export default async function threadRoutes(fastify: FastifyInstance) {
               .where(
                 and(
                   eq(users.org_id, ch.org_id),
-                  sql`lower(${users.display_name}) = ANY(${mentionedNames.map((n) => n.toLowerCase())})`,
+                  sql`lower(${users.display_name}) = ANY(${mentionedNames.map((n) => n.toLowerCase())}::text[])`,
                 ),
               );
             for (const mu of mentionedUsers) {
@@ -446,7 +446,7 @@ export default async function threadRoutes(fastify: FastifyInstance) {
               .where(
                 and(
                   eq(users.org_id, user.org_id),
-                  sql`lower(${users.display_name}) = ANY(${mentions.map((n) => n.toLowerCase())})`,
+                  sql`lower(${users.display_name}) = ANY(${mentions.map((n) => n.toLowerCase())}::text[])`,
                 ),
               );
             for (const mu of mentionedUsers) {
