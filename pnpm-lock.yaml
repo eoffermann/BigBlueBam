@@ -126,6 +126,9 @@ importers:
 
   apps/banter:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -323,6 +326,9 @@ importers:
 
   apps/beacon:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -505,6 +511,9 @@ importers:
 
   apps/bearing:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -681,6 +690,9 @@ importers:
 
   apps/bench:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -857,6 +869,9 @@ importers:
 
   apps/bill:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -1039,6 +1054,9 @@ importers:
 
   apps/blank:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -1221,6 +1239,9 @@ importers:
 
   apps/blast:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -1403,6 +1424,9 @@ importers:
 
   apps/blueprint:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -1588,6 +1612,9 @@ importers:
 
   apps/board:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -1776,6 +1803,9 @@ importers:
 
   apps/bolt:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -1952,6 +1982,9 @@ importers:
 
   apps/bond:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -2134,6 +2167,9 @@ importers:
 
   apps/book:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -2307,6 +2343,9 @@ importers:
 
   apps/brief:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -2770,6 +2809,9 @@ importers:
 
   apps/frontend:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -2891,6 +2933,9 @@ importers:
 
   apps/helpdesk:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../../packages/ui

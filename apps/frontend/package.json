@@ -12,6 +12,7 @@
     "lint": "biome check ./src"
   },
   "dependencies": {
+    "@bigbluebam/bureau-client": "workspace:*",
     "@bigbluebam/ui": "workspace:*",
     "@bigbluebam/shared": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
