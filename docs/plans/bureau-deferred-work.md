@@ -176,6 +176,19 @@ The HTTP code path is already in `apps/bureau-api/src/services/cross-app-access.
 
 Effort: ~1 day total (each endpoint is ~3 hours).
 
+## D-13: Subscribe-vs-listener race in `apps/bureau-api/src/routes/ws.routes.ts`
+
+**Status:** Mitigated client-side, server-side fix recommended.
+**Severity:** Low — symptom is a ~100ms window after WS upgrade in which client messages get dropped.
+
+Discovered by the workstream 15 smoke script while writing E2E coverage. In `apps/bureau-api/src/routes/ws.routes.ts`, the server emits the `connected` frame at line ~499 BEFORE binding `socket.on('message', ...)` at line ~561. A client that sends `subscribe_floor` immediately on receiving `connected` can race the listener; the message arrives at the socket before the handler is bound and is silently dropped.
+
+The bureau-client SDK and the smoke script both wait for the `connected` frame before sending, so this is invisible in practice. But a future client implementation that assumes any post-upgrade send is safe will hit it.
+
+Fix is 2 lines: move the `socket.on('message', ...)` binding BEFORE the `socket.send(JSON.stringify({ type: 'connected', ... }))` line. The listener will be bound when the first user message arrives, and the `connected` frame still goes out in the right order.
+
+Effort: 5 minutes.
+
 ## D-10: Consolidate `ws.routes.ts`'s inline presence layer
 
 **Status:** Not started (introduced by Bureau workstream 3).
