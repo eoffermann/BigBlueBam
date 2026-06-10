@@ -114,6 +114,11 @@ function surfaceUrlFor(app: string, id: string): string {
       return `/beacon/a/${id}`;
     case 'helpdesk':
       return `/helpdesk/tickets/${id}`;
+    case 'banter':
+      // surface_id is the channel id; Banter routes channels by slug, so we
+      // go through its /go/:channelId resolver, which bounces to
+      // /channels/:slug or /dm/:id once the channel record loads (D-14).
+      return `/banter/go/${id}`;
     default:
       // Unknown app: send to the app root with the id as a query param so the
       // host can resolve it itself. This is intentionally lossy; a real

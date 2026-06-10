@@ -57,6 +57,9 @@ const SURFACE_APPS = [
   'bam',
   'beacon',
   'helpdesk',
+  // D-14: Banter channels/DMs are ring-capable surfaces — surface_id is the
+  // channel id, and the receiver resolves it via /banter/go/:channelId.
+  'banter',
 ] as const;
 
 const SURFACE_ID_REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{0,63})$/;

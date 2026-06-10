@@ -961,9 +961,9 @@ const inviteBtnStyle: CSSProperties = {
 };
 
 // location.app → ring-API surface_app. Mirrors SURFACE_APPS in
-// apps/bureau-api/src/routes/ring.routes.ts; apps absent here (banter,
-// bureau, bolt, …) don't get an Invite button because the ring endpoint
-// would reject them.
+// apps/bureau-api/src/routes/ring.routes.ts; apps absent here (bureau,
+// bolt, …) don't get an Invite button because the ring endpoint would
+// reject them.
 const RING_SURFACE_APP_BY_LOCATION_APP: Record<string, string> = {
   brief: 'brief',
   blueprint: 'blueprint',
@@ -973,6 +973,7 @@ const RING_SURFACE_APP_BY_LOCATION_APP: Record<string, string> = {
   bam: 'bam',
   beacon: 'beacon',
   helpdesk: 'helpdesk',
+  banter: 'banter',
 };
 
 /**

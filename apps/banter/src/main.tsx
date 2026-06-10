@@ -6,7 +6,7 @@ import {
   mountBureauClient,
   type LocationDescriptor,
 } from '@bigbluebam/bureau-client';
-import { App } from './app';
+import { App } from './App';
 import { ErrorBoundary } from './components/error-boundary';
 import './styles/globals.css';
 
