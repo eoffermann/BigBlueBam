@@ -4,6 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { env } from '../env.js';
 import { postActivityFeedMessage } from '../services/activity-feed.js';
 import { writeTranscriptSegment } from '../services/transcription.js';
+import { InternalDmError, sendInternalDm } from '../services/internal-dm.js';
 
 const feedMessageSchema = z.object({
   org_id: z.string().uuid(),
@@ -71,6 +72,44 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       });
 
       return reply.send({ data: { success: true } });
+    },
+  );
+
+  // POST /v1/internal/dm — send a DM between two real users (D-11).
+  // Built for bureau-api's leave-a-note flow (knock/ring blocked by DND);
+  // the caller has already authenticated `from_user_id` on its side.
+  fastify.post(
+    '/v1/internal/dm',
+    { preHandler: [requireInternalSecret] },
+    async (request, reply) => {
+      const body = z
+        .object({
+          org_id: z.string().uuid(),
+          from_user_id: z.string().uuid(),
+          to_user_id: z.string().uuid(),
+          content: z.string().min(1).max(4000),
+          source: z.string().max(100).optional(),
+        })
+        .parse(request.body);
+
+      try {
+        const result = await sendInternalDm(body);
+        return reply.status(201).send({
+          data: { ...result, delivered: true },
+        });
+      } catch (err) {
+        if (err instanceof InternalDmError) {
+          return reply.status(400).send({
+            error: {
+              code: err.code,
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        throw err;
+      }
     },
   );
 

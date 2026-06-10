@@ -225,20 +225,10 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
 
       const prefixedMessage = `${KNOCK_NOTE_PREFIX}${message}`;
 
-      // Attempt to deliver via banter-api's internal DM channel. Banter does
-      // not currently expose a "send-DM-as-user" internal endpoint (the
-      // existing /v1/internal/feed posts as a system bot to a channel, not a
-      // DM between two real users) — see apps/banter-api/src/routes/internal
-      // .routes.ts. Until a dedicated internal-DM endpoint lands we attempt
-      // a best-effort POST to /v1/internal/dm; on any failure (including
-      // 404 because the endpoint doesn't exist yet) we fall through to a
-      // logged 202 so the visitor sees a useful response.
-      //
-      // TODO(banter-api): expose POST /v1/internal/dm
-      //   { org_id, from_user_id, to_user_id, content } -> 201 / 200 with
-      //   the created banter_messages row, gated by X-Internal-Secret. Once
-      //   that lands flip the catch below to surface real delivery errors
-      //   to the visitor and bubble `delivered: true` from the body.
+      // Deliver via banter-api's POST /v1/internal/dm (D-11): finds or
+      // creates the 1:1 DM channel, posts the note as the visitor, and
+      // notifies the owner. On any transport failure we still fall back to
+      // a logged 202 so the visitor isn't stuck waiting on Banter.
       const internalSecret = env.INTERNAL_SERVICE_SECRET;
       // Banter API internal base — bureau-api does not yet have a dedicated
       // env var for it, so derive from the docker-compose service name and
