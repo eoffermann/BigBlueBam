@@ -311,6 +311,48 @@ export async function resolveInternalLinkTitles(
  * board.board is intentionally outside the preflight allowlist (reads
  * tolerate such rows, matching the migration-0132 backfill posture).
  */
+/**
+ * Reconcile entity_links mirrors after a task's links change: delete the
+ * `references` rows for internal links that were REMOVED and whose dst is no
+ * longer pointed at by any remaining link. `previousLinks` is the pre-update
+ * stored array; `desiredMirrors` is the mirror set for the new links (what
+ * mirrorTaskEntityLinks just (re)inserted). Best-effort, org-scoped.
+ *
+ * Caveat (accepted): if some OTHER feature also created a bam.task→X
+ * `references` row for the same dst that a now-removed task link pointed at,
+ * this prunes that shared row too. That collision is rare and the row is
+ * re-creatable; full provenance tracking on entity_links is out of scope.
+ */
+export async function pruneRemovedTaskLinkMirrors(
+  taskId: string,
+  orgId: string,
+  previousLinks: TaskLink[],
+  desiredMirrors: TaskLinkMirror[],
+): Promise<void> {
+  const { mirrors: prevMirrors } = await resolveInternalLinkTitles(previousLinks, orgId);
+  const keyOf = (m: TaskLinkMirror) => `${m.dst_type} ${m.dst_id}`;
+  const desired = new Set(desiredMirrors.map(keyOf));
+  const removed = prevMirrors.filter((m) => !desired.has(keyOf(m)));
+  // De-dupe so we don't issue the same delete twice.
+  const seen = new Set<string>();
+  for (const m of removed) {
+    const k = keyOf(m);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    await db
+      .delete(entityLinks)
+      .where(
+        and(
+          eq(entityLinks.src_type, 'bam.task'),
+          eq(entityLinks.src_id, taskId),
+          eq(entityLinks.dst_type, m.dst_type),
+          eq(entityLinks.dst_id, m.dst_id),
+          eq(entityLinks.link_kind, 'references'),
+        ),
+      );
+  }
+}
+
 export async function mirrorTaskEntityLinks(
   taskId: string,
   orgId: string,

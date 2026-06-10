@@ -30,19 +30,20 @@
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import { lookup } from 'node:dns/promises';
+import { lookup as dnsLookupCb } from 'node:dns';
 import { isIP } from 'node:net';
+import { Agent } from 'undici';
 import { sql } from 'drizzle-orm';
+import {
+  TASK_LINK_TITLE_FETCH_QUEUE,
+  type TaskLinkTitleFetchJobData,
+} from '@bigbluebam/shared';
 import { getDb } from '../utils/db.js';
 
 // ── Job types ─────────────────────────────────────────────────────
-
-export const TASK_LINK_TITLE_FETCH_QUEUE = 'task-link-title-fetch';
-
-export interface TaskLinkTitleFetchJobData {
-  task_id: string;
-  link_id: string;
-  url: string;
-}
+// Queue name + payload are the shared cross-service contract (one source
+// of truth in @bigbluebam/shared so the producer can't drift from us).
+export { TASK_LINK_TITLE_FETCH_QUEUE, type TaskLinkTitleFetchJobData };
 
 // ── Constants ─────────────────────────────────────────────────────
 
@@ -142,8 +143,43 @@ function checkUrlSync(rawUrl: string): UrlCheckResult {
 }
 
 /**
+ * Validating dispatcher (closes the DNS-rebind TOCTOU). The pre-fetch
+ * resolveAndCheckHost below validates the hostname, but plain fetch then
+ * re-resolves independently at connect time — a hostile resolver could
+ * answer "public" for the check and a private IP for the actual connect.
+ * This undici Agent validates INSIDE the lookup undici uses to connect, so
+ * the address that is actually dialed is the one that was vetted; a blocked
+ * address fails the connection instead of being reached. Module-level so the
+ * connection pool is reused across jobs.
+ */
+const pinnedSafeDispatcher = new Agent({
+  connect: {
+    // net.connect-style lookup: resolve all, reject if ANY address is
+    // private, then pin to a single vetted address.
+    lookup(hostname, _options, callback: (err: Error | null, address: string, family: number) => void) {
+      dnsLookupCb(hostname, { all: true, verbatim: true }, (err, addresses) => {
+        if (err) return callback(err, '', 0);
+        if (!Array.isArray(addresses) || addresses.length === 0) {
+          return callback(new Error('DNS resolution returned no addresses'), '', 0);
+        }
+        for (const a of addresses) {
+          const blocked = a.family === 4 ? isBlockedIPv4(a.address) : isBlockedIPv6(a.address);
+          if (blocked) {
+            return callback(new Error('Hostname resolves to a private/internal address'), '', 0);
+          }
+        }
+        const chosen = addresses[0]!;
+        callback(null, chosen.address, chosen.family);
+      });
+    },
+  },
+});
+
+/**
  * Resolve a hostname and reject if ANY resolved address is private.
- * Literal IPs skip the lookup (already vetted by checkUrlSync).
+ * Literal IPs skip the lookup (already vetted by checkUrlSync). This is a
+ * fast-fail pre-check; the authoritative rebind close is the pinned
+ * dispatcher above (used at actual connect time).
  */
 async function resolveAndCheckHost(hostname: string): Promise<UrlCheckResult> {
   const clean = hostname.replace(/^\[|\]$/g, '');
@@ -279,7 +315,11 @@ async function fetchPageTitle(
           accept: 'text/html,application/xhtml+xml',
           'user-agent': USER_AGENT,
         },
-      });
+        // Non-standard undici init field (closes DNS-rebind, see dispatcher
+        // above). Cast because lib.dom's RequestInit doesn't declare it; the
+        // injected fetchImpl in tests simply ignores the extra key.
+        dispatcher: pinnedSafeDispatcher,
+      } as unknown as RequestInit);
 
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location');
@@ -366,8 +406,9 @@ export async function processTaskLinkTitleFetchJob(
           THEN elem || jsonb_build_object('title', ${title}::text, 'title_source', 'fetched')
           ELSE elem
         END
+        ORDER BY ord
       )
-      FROM jsonb_array_elements(tasks.links) AS elem
+      FROM jsonb_array_elements(tasks.links) WITH ORDINALITY AS t(elem, ord)
     ),
     updated_at = NOW()
     WHERE id = ${task_id}

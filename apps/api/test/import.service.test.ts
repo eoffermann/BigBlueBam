@@ -575,6 +575,35 @@ describe('runImport — update strategy', () => {
     expect(updateTaskMock).toHaveBeenCalledTimes(1);
     expect(createTaskMock).toHaveBeenCalledTimes(1);
   });
+
+  it('applies a mapped custom field on update, merged over existing values', async () => {
+    // selects: #1 getDefaultPhase, #2 loadUpdateMatchIndex,
+    //          #3 resolveCustomFieldDefs (existing 'Notes' text def),
+    //          #4 loadTaskCustomFields (existing custom_fields on the task).
+    queueSelect(
+      [{ id: PHASE_ID, is_start: true }],
+      [{ id: EXISTING_TASK_ID, human_id: 'FRND-7', title: 'T' }],
+      [{ id: 'def-notes', name: 'Notes', field_type: 'text', options: null, position: 1 }],
+      [{ custom_fields: { Notes: 'old', Keep: 'untouched' } }],
+    );
+
+    const body: ImportBody = {
+      rows: [{ Feature: 'T', N: 'new' }],
+      mapping: { title: 'Feature', human_id: 'Ref' },
+      custom_field_mapping: [
+        { column: 'N', field_name: 'Notes', field_type: 'text', create_if_missing: false },
+      ],
+      options: { duplicate_strategy: 'update' },
+    };
+
+    const result = await runImport(PROJECT_ID, body, REPORTER_ID);
+
+    expect(result.updated).toBe(1);
+    const patch = updateTaskMock.mock.calls[0]![1];
+    // Mapped field overwritten; a pre-existing custom field NOT in the import
+    // is preserved (merge, not replace).
+    expect(patch.custom_fields).toEqual({ Notes: 'new', Keep: 'untouched' });
+  });
 });
 
 // ===========================================================================

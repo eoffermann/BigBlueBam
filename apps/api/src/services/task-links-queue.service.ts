@@ -14,15 +14,15 @@
 
 import IORedis from 'ioredis';
 import { Queue } from 'bullmq';
+import {
+  TASK_LINK_TITLE_FETCH_QUEUE,
+  type TaskLinkTitleFetchJobData,
+} from '@bigbluebam/shared';
 import { env } from '../env.js';
 
-export const TASK_LINK_TITLE_FETCH_QUEUE = 'task-link-title-fetch';
-
-export interface TaskLinkTitleFetchJobData {
-  task_id: string;
-  link_id: string;
-  url: string;
-}
+// Re-export the shared contract so existing importers of this module keep
+// working (single source of truth now lives in @bigbluebam/shared/queues).
+export { TASK_LINK_TITLE_FETCH_QUEUE, type TaskLinkTitleFetchJobData };
 
 let _queue: Queue<TaskLinkTitleFetchJobData> | null = null;
 

@@ -17,7 +17,14 @@ import { shadowOnly } from '../middleware/dual-read.js';
 function formatLinksForCsv(raw: unknown): string {
   if (!Array.isArray(raw)) return '';
   return (raw as TaskLink[])
-    .map((link) => (link.title ? `${link.title} <${link.url}>` : link.url))
+    .map((link) => {
+      if (!link.title) return link.url;
+      // The re-import parser pulls URLs out of <...>; angle brackets inside a
+      // title would create phantom tokens, so strip them from the rendered
+      // title only (the stored title is untouched).
+      const safeTitle = link.title.replace(/[<>]/g, '').trim();
+      return safeTitle ? `${safeTitle} <${link.url}>` : link.url;
+    })
     .join('; ');
 }
 

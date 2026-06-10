@@ -7,10 +7,12 @@ import { phases } from '../db/schema/phases.js';
 import { tickets, ticketMessages } from '../db/schema/tickets.js';
 import { taskParentLinks } from '../db/schema/task-parent-links.js';
 import type { CreateTaskInput, UpdateTaskInput, MoveTaskInput, BulkUpdateInput, TaskLink } from '@bigbluebam/shared';
+import { updateTaskSchema, moveTaskSchema } from '@bigbluebam/shared';
 import {
   normalizeTaskLinks,
   resolveInternalLinkTitles,
   mirrorTaskEntityLinks,
+  pruneRemovedTaskLinkMirrors,
   type TaskLinkMirror,
 } from './task-links.service.js';
 import { enqueueTaskLinkTitleFetch } from './task-links-queue.service.js';
@@ -565,6 +567,9 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
   let linkMirrors: TaskLinkMirror[] = [];
   let updateOrgId: string | null = null;
   let normalizedLinks: TaskLink[] = [];
+  // Previous links (hoisted) so the post-write reconcile can prune
+  // entity_links mirrors for internal links that this update removed.
+  let previousLinks: TaskLink[] = [];
   if (data.links !== undefined) {
     const [existingRow] = await db
       .select({ links: tasks.links, project_id: tasks.project_id })
@@ -572,6 +577,7 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
       .where(eq(tasks.id, taskId))
       .limit(1);
     const existingLinks = (existingRow?.links as TaskLink[] | undefined) ?? [];
+    previousLinks = existingLinks;
     const normalized = normalizeTaskLinks(data.links, actorId ?? null, existingLinks);
     if (normalized.truncated) {
       console.warn('[task.service] task links truncated to cap:', { taskId });
@@ -612,15 +618,31 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
         console.error('[task.service] entity_links mirror failed:', { taskId, err });
       }
     }
+    // Reconcile: when links changed, prune entity_links mirrors for internal
+    // links this update removed (and that no remaining link still references),
+    // so the cross-app graph doesn't accumulate stale edges. Best-effort.
+    if (data.links !== undefined && updateOrgId) {
+      try {
+        await pruneRemovedTaskLinkMirrors(taskId, updateOrgId, previousLinks, linkMirrors);
+      } catch (err) {
+        console.error('[task.service] entity_links prune failed:', { taskId, err });
+      }
+    }
     // Queue async title fetch for links still untitled after internal
     // resolution (external URLs). Fire-and-forget; SSRF-guarded in worker.
     if (data.links !== undefined) {
       enqueueUntitledLinkFetches(taskId, normalizedLinks);
     }
 
+    // Broadcast the CHANGES with links in their stored (normalized) shape —
+    // raw `data.links` lacks the stamped id/added_at/title_source, so a
+    // realtime client applying `changes` would otherwise see a different
+    // shape than a refetch returns.
+    const changes: Record<string, unknown> = { ...data };
+    if (data.links !== undefined) changes.links = normalizedLinks;
     broadcastToProject(task.project_id, 'task.updated', {
       id: taskId,
-      changes: data,
+      changes,
       task,
     });
 
@@ -1099,13 +1121,16 @@ export async function bulkOperations(data: BulkUpdateInput, _userId: string) {
   for (const taskId of data.task_ids) {
     try {
       if (data.operation === 'update' && data.fields) {
-        await updateTask(taskId, data.fields as UpdateTaskInput);
+        // Zod-validate the raw fields bag before it reaches updateTask — a
+        // malformed link object (e.g. non-string url) would otherwise throw a
+        // confusing "raw.url.trim is not a function" deep in normalization.
+        await updateTask(taskId, updateTaskSchema.parse(data.fields));
         results.push({ task_id: taskId, success: true });
       } else if (data.operation === 'delete') {
         await deleteTask(taskId);
         results.push({ task_id: taskId, success: true });
       } else if (data.operation === 'move' && data.fields) {
-        await moveTask(taskId, data.fields as MoveTaskInput);
+        await moveTask(taskId, moveTaskSchema.parse(data.fields));
         results.push({ task_id: taskId, success: true });
       }
     } catch (err) {

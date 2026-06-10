@@ -3188,6 +3188,9 @@ importers:
       postgres:
         specifier: ^3.4.0
         version: 3.4.8
+      undici:
+        specifier: ^8.4.1
+        version: 8.4.1
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -9003,6 +9006,10 @@ packages:
   undici@7.24.7:
     resolution: {integrity: sha512-H/nlJ/h0ggGC+uRL3ovD+G0i4bqhvsDOpbDv7At5eFLlj2b41L8QliGbnl2H7SnDiYhENphh1tQFJZf+MyfLsQ==}
     engines: {node: '>=20.18.1'}
+
+  undici@8.4.1:
+    resolution: {integrity: sha512-RNHlB4fxZK0IrkhBsxhlbx7s8kFWwr7rzzOqj5nvZugw3ig3RsB7KW3zVlV0eu8POl+rx5d1hmL7rRg0z1owow==}
+    engines: {node: '>=22.19.0'}
 
   unist-util-stringify-position@3.0.3:
     resolution: {integrity: sha512-k5GzIBZ/QatR8N5X2y+drfpWG8IDBzdnVj6OInRNWm1oXrzydiaAT2OQiA8DPRRZyAKb9b6I2a6PxYklZD0gKg==}
@@ -14827,6 +14834,8 @@ snapshots:
   undici@6.24.1: {}
 
   undici@7.24.7: {}
+
+  undici@8.4.1: {}
 
   unist-util-stringify-position@3.0.3:
     dependencies:
