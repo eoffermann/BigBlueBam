@@ -5,15 +5,15 @@
  * (name, type, capacity, privacy_default, bookable, zone_id, owner_id) plus
  * the geometry rectangle from the zone.
  *
- * Owner-picker is intentionally tiny: a free-text user-id input plus a
- * link to the b3 People page. Wiring it to a typeahead is a follow-up
- * (org-people search lives at /b3/api/orgs/:id/members — we can hook it
- * up once Agent A's people-picker component lands, since it's the same
- * lookup used by the room ACL UI).
+ * Owner selection uses the shared PeoplePicker (see
+ * ../common/people-picker.tsx) which fetches /b3/api/org/members and
+ * filters client-side. The "view in /b3/people" link stays as an escape
+ * hatch for editing the user record itself.
  */
 
 import { useEffect, useState } from 'react';
 import { ExternalLink, Trash2 } from 'lucide-react';
+import { PeoplePicker } from '../common/people-picker';
 import type { Zone, ZoneKind } from './zone-types';
 
 const ROOM_TYPES = [
@@ -76,12 +76,6 @@ export function RoomInspector({
     setCapacityInput(room?.capacity != null ? String(room.capacity) : '');
   }, [zone.id, room?.capacity]);
 
-  // Owner id local mirror.
-  const [ownerInput, setOwnerInput] = useState<string>(room?.owner_id ?? '');
-  useEffect(() => {
-    setOwnerInput(room?.owner_id ?? '');
-  }, [zone.id, room?.owner_id]);
-
   const commitName = () => {
     const v = nameInput.trim();
     if (v === (zone.label || '')) return;
@@ -102,13 +96,6 @@ export function RoomInspector({
       return;
     }
     onRoomChange({ capacity: Math.floor(n) });
-  };
-
-  const commitOwner = () => {
-    const trimmed = ownerInput.trim();
-    const next = trimmed === '' ? null : trimmed;
-    if (next === (room?.owner_id ?? null)) return;
-    onRoomChange({ owner_id: next });
   };
 
   const isOffice = (room?.type ?? (zone.kind === 'office' ? 'office' : 'open')) === 'office';
@@ -211,28 +198,28 @@ export function RoomInspector({
 
         {/* Owner (offices only) ----------------------------------- */}
         {isOffice && (
-          <Field label="Owner (user UUID)">
-            <input
-              className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-zinc-900 dark:text-zinc-100 font-mono text-[11px]"
-              value={ownerInput}
-              onChange={(e) => setOwnerInput(e.target.value)}
-              onBlur={commitOwner}
-              placeholder="00000000-0000-0000-0000-000000000000"
+          <Field label="Owner">
+            <PeoplePicker
+              value={room?.owner_id ?? null}
+              onChange={(userId) => {
+                if (userId === (room?.owner_id ?? null)) return;
+                onRoomChange({ owner_id: userId });
+              }}
+              placeholder="Choose owner…"
             />
             <a
-              href="/b3/people"
+              href={
+                room?.owner_id
+                  ? `/b3/people/${room.owner_id}`
+                  : '/b3/people'
+              }
               target="_blank"
               rel="noreferrer"
               className="mt-1 inline-flex items-center gap-1 text-[11px] text-blue-600 hover:underline"
             >
-              <ExternalLink className="h-3 w-3" /> Find a user id in People
+              <ExternalLink className="h-3 w-3" />
+              {room?.owner_id ? 'View owner in People' : 'Open People directory'}
             </a>
-            <p className="mt-1 text-[11px] text-zinc-500">
-              {/* See feedback_broken_feature_is_bug.md: a typeahead picker
-                  is the right answer here but until Agent A's people-picker
-                  lands the raw UUID input keeps the editor usable. */}
-              Typeahead picker coming in a follow-up.
-            </p>
           </Field>
         )}
 
