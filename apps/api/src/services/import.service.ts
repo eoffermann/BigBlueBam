@@ -853,8 +853,18 @@ export async function runImport(
           projectId,
           updateMatch.id,
           row,
-          { mapping, value_maps, link_mappings },
+          i + 1,
+          {
+            mapping,
+            value_maps,
+            link_mappings,
+            custom_field_mapping,
+            customFieldDefs,
+            dateLocale,
+          },
           reporterId,
+          cellWarnings,
+          pendingOptions,
         );
         updated++;
         continue;
@@ -1015,14 +1025,21 @@ async function applyUpdateToTask(
   projectId: string,
   taskId: string,
   row: Record<string, string>,
+  rowNumber: number,
   cfg: {
     mapping: Record<string, string>;
     value_maps: ImportBody['value_maps'];
     link_mappings: LinkMapping[] | undefined;
+    custom_field_mapping: CustomFieldMapping[] | undefined;
+    customFieldDefs: Map<string, CustomFieldDef>;
+    dateLocale: DateLocale;
   },
   actorId: string,
+  cellWarnings: CellWarning[],
+  pendingOptions: Map<string, Set<string>>,
 ): Promise<void> {
-  const { mapping, value_maps, link_mappings } = cfg;
+  const { mapping, value_maps, link_mappings, custom_field_mapping, customFieldDefs, dateLocale } =
+    cfg;
   const patch: UpdateTaskInput = {};
 
   // Title — overwrite only when non-empty (the match may have been by human_id
@@ -1113,11 +1130,40 @@ async function applyUpdateToTask(
     if (merged) patch.links = merged;
   }
 
+  // Custom fields — coerce the mapped cells, then OVERLAY them onto the task's
+  // existing custom_fields (updateTask replaces the column wholesale, so we
+  // must merge here to preserve fields not in this import). Empty mapped cells
+  // are omitted by buildRowCustomFields, so they leave the existing value
+  // untouched — the same skip-empty rule as every other field on update.
+  const incomingCustomFields = buildRowCustomFields(
+    row,
+    rowNumber,
+    custom_field_mapping,
+    customFieldDefs,
+    dateLocale,
+    cellWarnings,
+    pendingOptions,
+  );
+  if (Object.keys(incomingCustomFields).length > 0) {
+    const existingCf = await loadTaskCustomFields(taskId);
+    patch.custom_fields = { ...existingCf, ...incomingCustomFields };
+  }
+
   // Nothing to write (all mapped cells were empty) → no-op, still counts as an
   // update match for reporting parity with preview.
   if (Object.keys(patch).length === 0) return;
 
   await updateTask(taskId, patch, actorId);
+}
+
+/** Load a task's stored custom_fields JSONB (for merge-on-update). */
+async function loadTaskCustomFields(taskId: string): Promise<Record<string, unknown>> {
+  const [row] = await db
+    .select({ custom_fields: tasks.custom_fields })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  return (row?.custom_fields as Record<string, unknown> | undefined) ?? {};
 }
 
 // ── preview (previewImport) — writes NOTHING ───────────────────────────────
