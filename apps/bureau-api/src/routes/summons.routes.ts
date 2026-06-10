@@ -209,7 +209,13 @@ export default async function summonsRoutes(fastify: FastifyInstance) {
         )
         .limit(1);
       if (!row) return notFound(request, reply, 'Summon not found');
-      if (row.summoner_id !== user.id && !user.is_superuser) {
+      // Only the summoner may grant access on their own summon. (No
+      // superuser carve-out here: grantAccessAndSummon enforces
+      // summon.summoner_id === args.summonerId internally and would return
+      // granted:0 for anyone else, so a superuser who slipped past this gate
+      // got a misleading 200 with zero effect. Reject at the route to match
+      // the service and avoid the contradictory response.)
+      if (row.summoner_id !== user.id) {
         return forbidden(
           request,
           reply,

@@ -522,15 +522,27 @@ export async function setDoor(
   roomId: string,
   privacy: RoomPrivacy,
   lockedBy?: string | null,
+  opts?: {
+    /**
+     * The privacy the room should revert to on unlock. Used by lock_room to
+     * remember the pre-lock door override so unlock restores it instead of
+     * collapsing to the DB default. Tri-state:
+     *   - undefined → leave any existing prevPrivacy field untouched,
+     *   - null      → clear the prevPrivacy memory (HDEL),
+     *   - a value   → store it.
+     */
+    prevPrivacy?: RoomPrivacy | null;
+  },
 ): Promise<void> {
   const stateKey = keys.roomState(roomId);
-  await redis.hset(
-    stateKey,
-    'privacy',
-    privacy,
-    'lockedBy',
-    lockedBy ?? '',
-  );
+  await redis.hset(stateKey, 'privacy', privacy, 'lockedBy', lockedBy ?? '');
+  if (opts && 'prevPrivacy' in opts) {
+    if (opts.prevPrivacy == null) {
+      await redis.hdel(stateKey, 'prevPrivacy');
+    } else {
+      await redis.hset(stateKey, 'prevPrivacy', opts.prevPrivacy);
+    }
+  }
 }
 
 /**
@@ -549,6 +561,12 @@ export async function lockRoom(
 export interface DoorState {
   privacy: RoomPrivacy;
   lockedBy: string | null;
+  /**
+   * The door privacy to restore when the room is unlocked. Present only
+   * while a lock_room override is active; null when no lock-restore memory
+   * is held. See setDoor's `opts.prevPrivacy`.
+   */
+  prevPrivacy: RoomPrivacy | null;
 }
 
 /**
@@ -569,9 +587,13 @@ export async function getDoorState(
   if (privacy !== 'open' && privacy !== 'knock' && privacy !== 'private') {
     return null;
   }
+  const prev = state.prevPrivacy;
+  const prevPrivacy =
+    prev === 'open' || prev === 'knock' || prev === 'private' ? prev : null;
   return {
     privacy,
     lockedBy: state.lockedBy && state.lockedBy.length > 0 ? state.lockedBy : null,
+    prevPrivacy,
   };
 }
 

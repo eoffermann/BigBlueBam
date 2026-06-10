@@ -219,6 +219,20 @@ export interface RoomLeaveEvent {
   userId: string;
 }
 
+/**
+ * Full occupant roster for a room, pushed by the server to a socket the
+ * moment it enters that room (the `enter_room` handler). Without it a user
+ * who joins an already-occupied room via `actions.enterRoom()` sees an empty
+ * docked-box occupant list ("Just you") until someone else moves and emits a
+ * `room_enter` delta. `userIds` includes everyone currently in the room,
+ * including the entering user themselves; the SDK filters self out.
+ */
+export interface RoomOccupantsEvent {
+  type: 'room_occupants';
+  roomId: string;
+  userIds: string[];
+}
+
 export interface DoorChangedEvent {
   type: 'door_changed';
   roomId: string;
@@ -378,6 +392,7 @@ export type ServerMessage =
   | PresenceDeltaEvent
   | RoomEnterEvent
   | RoomLeaveEvent
+  | RoomOccupantsEvent
   | DoorChangedEvent
   | RoomLockedEvent
   | LivekitTokenEvent

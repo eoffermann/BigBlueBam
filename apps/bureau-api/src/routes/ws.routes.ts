@@ -520,6 +520,27 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               }
             }
 
+            // Cross-floor entry: when the room lives on a floor the socket
+            // is not currently subscribed to (e.g. the SDK's enterRoom()
+            // jumps straight into a room on another floor without a prior
+            // subscribe_floor), move the floor subscription so the socket
+            // receives the NEW floor's presence deltas and stops getting the
+            // old floor's. Mirrors the subscribe_floor dance.
+            if (room.floor_id !== client.floorId) {
+              if (client.floorId) {
+                const oldFloorChan = floorChannel(client.floorId);
+                if (client.channels.has(oldFloorChan)) {
+                  await subscriber.unsubscribe(oldFloorChan);
+                  client.channels.delete(oldFloorChan);
+                }
+              }
+              const newFloorChan = floorChannel(room.floor_id);
+              if (!client.channels.has(newFloorChan)) {
+                await subscriber.subscribe(newFloorChan);
+                client.channels.add(newFloorChan);
+              }
+            }
+
             // Auto-subscribe to the new room channel so the entering
             // socket receives subsequent room events without an explicit
             // subscribe message.
@@ -538,6 +559,20 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             client.roomId = roomId;
             client.floorId = room.floor_id;
             client.roomEnteredAt = Date.now();
+
+            // Snapshot the room's current occupants to the entering socket so
+            // the docked box shows everyone already here instead of "Just
+            // you" until the next mover. The roster includes the entering
+            // user; the SDK filters self out. Sent before the broadcast
+            // room_enter below so the joiner's own list is complete first.
+            const roomOccupants = await presence.getRoomOccupants(
+              fastify.redis,
+              roomId,
+            );
+            safeSend(
+              socket,
+              frame('room_occupants', { roomId, userIds: roomOccupants }),
+            );
 
             // Mint a LiveKit token so the connecting socket can join
             // audio without a follow-up REST call. Credentials resolve
@@ -774,11 +809,15 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               );
               break;
             }
+            // An explicit door set is a fresh baseline — clear any
+            // lock-restore memory so a later lock/unlock round-trips back to
+            // THIS privacy, not whatever predated it.
             await presence.setDoor(
               fastify.redis,
               roomId,
               privacy as presence.RoomPrivacy,
               userId,
+              { prevPrivacy: null },
             );
             const payload = frame('door_changed', {
               roomId,
@@ -822,14 +861,40 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               );
               break;
             }
-            // Treat "locked" as a door override flipped to private.
-            const nextPrivacy = locked ? 'private' : room.privacy_default;
-            await presence.setDoor(
-              fastify.redis,
-              roomId,
-              nextPrivacy as presence.RoomPrivacy,
-              userId,
-            );
+            // Treat "locked" as a door override flipped to private. On
+            // UNLOCK, restore the door to whatever it was before the lock
+            // (a prior set_door override, e.g. 'knock'), not the DB default —
+            // so locking then unlocking an office that was on 'knock' lands
+            // back on 'knock'. The pre-lock privacy is remembered in the
+            // door-state hash's prevPrivacy field while the lock is active.
+            const priorDoor = await presence.getDoorState(fastify.redis, roomId);
+            const effectiveBefore =
+              priorDoor?.privacy ?? room.privacy_default;
+            let nextPrivacy: presence.RoomPrivacy;
+            if (locked) {
+              // Preserve an already-stored restore target across a re-lock;
+              // otherwise capture the current effective privacy.
+              const restoreTarget = priorDoor?.prevPrivacy ?? effectiveBefore;
+              nextPrivacy = 'private';
+              await presence.setDoor(
+                fastify.redis,
+                roomId,
+                nextPrivacy,
+                userId,
+                { prevPrivacy: restoreTarget as presence.RoomPrivacy },
+              );
+            } else {
+              nextPrivacy = (priorDoor?.prevPrivacy ??
+                room.privacy_default) as presence.RoomPrivacy;
+              // Clear the lock-restore memory now that we've consumed it.
+              await presence.setDoor(
+                fastify.redis,
+                roomId,
+                nextPrivacy,
+                userId,
+                { prevPrivacy: null },
+              );
+            }
 
             const payload = frame('room_locked', {
               roomId,
@@ -843,7 +908,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               emitRoomLocked(orgId, userId, {
                 room: { id: roomId, name: null },
                 privacy: {
-                  previous: room.privacy_default,
+                  previous: effectiveBefore,
                   current: nextPrivacy,
                 },
                 reason: 'ws_lock',

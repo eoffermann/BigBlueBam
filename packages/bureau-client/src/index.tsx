@@ -358,6 +358,28 @@ function BureauProvider({
     return off;
   }, [client]);
 
+  // ── Room occupant snapshot — the server pushes the full roster to us
+  //    the moment we enter a room, so an already-occupied room shows its
+  //    people immediately instead of "Just you" until someone else moves. ──
+  useEffect(() => {
+    const off = client.on('room_occupants', (msg) => {
+      setState((s) => {
+        // Only adopt the snapshot for the room we are actually in. (A late
+        // snapshot for a room we already left is ignored.)
+        if (s.roomId !== msg.roomId) return s;
+        const others = msg.userIds.filter((uid) => uid !== s.selfUserId);
+        // Merge: keep any status/name we already have for a user, add the
+        // rest as bare entries. Preserves data from in-flight status frames.
+        const merged = others.map(
+          (userId) =>
+            s.occupants.find((o) => o.userId === userId) ?? { userId },
+        );
+        return { ...s, occupants: merged };
+      });
+    });
+    return off;
+  }, [client]);
+
   useEffect(() => {
     const off = client.on('room_leave', (msg) => {
       setState((s) => {

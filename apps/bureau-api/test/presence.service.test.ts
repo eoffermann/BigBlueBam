@@ -394,11 +394,37 @@ describe('presence.service — setStatus / setDoor / lockRoom', () => {
     expect(await getDoorState(redis as any, 'room-Z')).toEqual({
       privacy: 'private',
       lockedBy: 'u-owner',
+      prevPrivacy: null,
     });
     await setDoor(redis as any, 'room-Z', 'open', null);
     expect(await getDoorState(redis as any, 'room-Z')).toEqual({
       privacy: 'open',
       lockedBy: null,
+      prevPrivacy: null,
+    });
+  });
+
+  it('setDoor stores and clears prevPrivacy (lock-restore memory)', async () => {
+    // Store a restore target alongside the lock.
+    await setDoor(redis as any, 'room-L', 'private', 'u-locker', {
+      prevPrivacy: 'knock',
+    });
+    expect(await getDoorState(redis as any, 'room-L')).toEqual({
+      privacy: 'private',
+      lockedBy: 'u-locker',
+      prevPrivacy: 'knock',
+    });
+    // Re-lock without specifying prevPrivacy leaves the memory intact.
+    await setDoor(redis as any, 'room-L', 'private', 'u-locker');
+    expect((await getDoorState(redis as any, 'room-L'))?.prevPrivacy).toBe('knock');
+    // Unlock clears the memory (prevPrivacy: null → HDEL).
+    await setDoor(redis as any, 'room-L', 'knock', 'u-locker', {
+      prevPrivacy: null,
+    });
+    expect(await getDoorState(redis as any, 'room-L')).toEqual({
+      privacy: 'knock',
+      lockedBy: 'u-locker',
+      prevPrivacy: null,
     });
   });
 });

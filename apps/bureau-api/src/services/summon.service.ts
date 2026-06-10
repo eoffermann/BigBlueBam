@@ -140,6 +140,14 @@ export interface FanOutSummonArgs {
   recipients: SummonRecipientRecord[];
   /** When true, force inline fan-out regardless of recipient count (used by tests / worker). */
   forceInline?: boolean;
+  /**
+   * When true, skip the `bureau.summon.issued` Bolt emit. Set by the
+   * grant-access re-fire (grantAccessAndSummon) so a single summon never
+   * emits the event twice — the original fanOutSummon already counted it,
+   * and the module header's "exactly one event per summon" contract must
+   * hold even when §4.4 grant-access re-pushes summon_incoming.
+   */
+  suppressBoltEvent?: boolean;
   logger?: Pick<FastifyBaseLogger, 'info' | 'warn' | 'error'>;
 }
 
@@ -464,7 +472,10 @@ export async function fanOutSummon(args: FanOutSummonArgs): Promise<void> {
   }
 
   // Bolt event: one per inline summon. The worker offload path emits its
-  // own copy from apps/worker/src/jobs/bureau-summon-fanout.ts.
+  // own copy from apps/worker/src/jobs/bureau-summon-fanout.ts. The
+  // grant-access re-fire suppresses it so the same summon is never counted
+  // twice.
+  if (args.suppressBoltEvent) return;
   emitSummonIssued(args.orgId, args.summonerId, {
     summon: { id: args.summonId },
     summoner: { id: args.summonerId },
@@ -518,6 +529,16 @@ export async function reportDenials(args: ReportDenialsArgs): Promise<void> {
  * share never happens, so a recipient who lacked access before will still
  * get a 403 on navigation; this is documented as a known follow-up and
  * surfaces in the next session as a denial they can knock through.
+ *
+ * FOLLOW-UP (still open): the real share requires internal service-to-
+ * service grant endpoints on the destination apps (board-api /
+ * brief-api / apps/api), which do not exist yet — only their
+ * `/internal/can-read` preflights do. Wiring the actual grant is a
+ * cross-service change tracked in docs/plans/bureau-troubleshooting-notes.md.
+ *
+ * The re-fire below sets `suppressBoltEvent: true` so this same summon does
+ * NOT emit a second `bureau.summon.issued` (the original fanOutSummon
+ * already emitted exactly one).
  */
 export async function grantAccessAndSummon(
   args: GrantAccessAndSummonArgs,
@@ -632,6 +653,10 @@ export async function grantAccessAndSummon(
           outcome: r.outcome,
         })),
       forceInline: true,
+      // The original summon already emitted bureau.summon.issued; this is the
+      // same summon, re-pushed to the now-granted recipients. Suppress the
+      // duplicate so the "exactly once" contract holds.
+      suppressBoltEvent: true,
       logger: args.logger,
     });
   }
