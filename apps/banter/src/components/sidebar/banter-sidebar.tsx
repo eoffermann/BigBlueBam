@@ -13,9 +13,11 @@ import {
   Pencil,
   LogOut,
   Trash2,
+  Phone,
 } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
+import { useCan } from '@bigbluebam/ui/use-can';
 import { useChannels, useCreateChannel, channelDisplayName, type Channel } from '@/hooks/use-channels';
 import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
@@ -31,6 +33,9 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
   const user = useAuthStore((s) => s.user);
   const unreadCounts = useChannelStore((s) => s.unreadCounts);
   const { data: channels } = useChannels();
+  // Org admins (or anyone with the explicit permission) see the calling
+  // settings entry. Permission matches the API gate on PATCH /v1/admin/settings.
+  const canEditCallingSettings = useCan('banter.admin_setting.update');
 
   const [channelsOpen, setChannelsOpen] = useState(true);
   const [dmsOpen, setDmsOpen] = useState(true);
@@ -122,6 +127,14 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
           active={activeRoute.page === 'browse'}
           onClick={() => onNavigate('/browse')}
         />
+        {canEditCallingSettings && (
+          <SidebarButton
+            icon={<Phone className="h-4 w-4" />}
+            label="Calling settings"
+            active={activeRoute.page === 'admin-calling'}
+            onClick={() => onNavigate('/admin/calling')}
+          />
+        )}
       </div>
 
       {/* Scrollable channel/DM list */}

@@ -7,6 +7,7 @@ import { BookmarksPage } from '@/pages/bookmarks';
 import { SearchPage } from '@/pages/search';
 import { PreferencesPage } from '@/pages/preferences';
 import { AdminPage } from '@/pages/admin';
+import { AdminCallingSettingsPage } from '@/pages/admin-calling-settings';
 import { CallPlaybackPage } from '@/pages/call-playback';
 import { ws } from '@/lib/websocket';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
@@ -21,6 +22,7 @@ type Route =
   | { page: 'search' }
   | { page: 'settings' }
   | { page: 'admin' }
+  | { page: 'admin-calling' }
   | { page: 'call'; id: string }
   | { page: 'redirect' }
   | { page: 'help' };
@@ -56,6 +58,7 @@ function parseRoute(path: string): Route {
   if (p === '/bookmarks') return { page: 'bookmarks' };
   if (p === '/search') return { page: 'search' };
   if (p === '/settings') return { page: 'settings' };
+  if (p === '/admin/calling') return { page: 'admin-calling' };
   if (p === '/admin') return { page: 'admin' };
   if (p === '/help') return { page: 'help' };
 
@@ -193,6 +196,8 @@ export function App() {
         return <PreferencesPage onNavigate={navigate} />;
       case 'admin':
         return <AdminPage onNavigate={navigate} />;
+      case 'admin-calling':
+        return <AdminCallingSettingsPage onNavigate={navigate} />;
       case 'call':
         return <CallPlaybackPage callId={route.id} onNavigate={navigate} />;
       default:
