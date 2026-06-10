@@ -24,16 +24,26 @@ export interface FloorLayoutRect {
   h: number;
 }
 
+export interface FloorLayoutZone extends FloorLayoutRect {
+  /** Stable id that bureau_rooms.zone_id references. */
+  id: string;
+  /** v1 always 'rect'; future shapes (polygon) reserved. */
+  shape?: 'rect';
+  /** Editor-only label echo; the room name is authoritative on the row. */
+  label?: string;
+}
+
 export interface FloorLayout {
   /**
-   * roomId → { x, y, w, h } in floor-coordinate units. The editor (Agent B)
-   * writes this shape; the canvas reads it. Free-form because v1 doesn't pin
-   * the units — the canvas treats whatever values are here as logical pixels
-   * inside its 1200×800 viewport and centers/scales as needed.
+   * Canonical layout shape, matching the seed migration (0177) and the
+   * floor editor's serializer (apps/bureau/src/components/floor-editor/
+   * zone-types.ts::serializeLayout). Each zone carries the geometry; a
+   * room joins to its zone via bureau_rooms.zone_id.
    */
-  rooms?: Record<string, FloorLayoutRect>;
-  /** Optional viewport hint from the editor; the canvas falls back to 1200x800. */
-  viewport?: { w: number; h: number };
+  zones?: FloorLayoutZone[];
+  walls?: unknown[];
+  width?: number;
+  height?: number;
   [k: string]: unknown;
 }
 

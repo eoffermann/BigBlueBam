@@ -94,17 +94,56 @@ export function FloorViewPage({ floorId, onFloorLoaded }: FloorViewPageProps) {
     return () => ro.disconnect();
   }, []);
 
+  // Resolve the per-room geometry. The canonical layout shape (written by
+  // both the seed migration 0177 and the floor editor's serializeLayout())
+  // carries a zones[] array, each entry keyed by a stable zone_id that
+  // bureau_rooms.zone_id references. So we walk zones[] into a lookup, then
+  // for each room look up its zone_id. Rooms without a matching zone
+  // (newly-created via the API without a layout edit, etc.) fall through
+  // into the deterministic auto-grid so the floor still navigates.
   const layout = useMemo(() => {
-    if (!floor) return {};
-    const fromServer = floor.layout?.rooms;
-    if (fromServer && Object.keys(fromServer).length > 0) return fromServer;
-    return autoLayout(floor.rooms ?? []);
+    if (!floor) return {} as Record<string, FloorLayoutRect>;
+    const zones = floor.layout?.zones;
+    const zoneById: Record<string, FloorLayoutRect> = {};
+    if (Array.isArray(zones)) {
+      for (const z of zones) {
+        if (!z || typeof z.id !== 'string') continue;
+        if (typeof z.x !== 'number' || typeof z.y !== 'number') continue;
+        if (typeof z.w !== 'number' || typeof z.h !== 'number') continue;
+        if (z.w <= 0 || z.h <= 0) continue;
+        zoneById[z.id] = { x: z.x, y: z.y, w: z.w, h: z.h };
+      }
+    }
+    const out: Record<string, FloorLayoutRect> = {};
+    const fallbackRooms: FloorRoomSummary[] = [];
+    for (const room of floor.rooms ?? []) {
+      const rect = zoneById[room.zone_id];
+      if (rect) {
+        out[room.id] = rect;
+      } else {
+        fallbackRooms.push(room);
+      }
+    }
+    if (fallbackRooms.length > 0) {
+      const auto = autoLayout(fallbackRooms);
+      for (const id of Object.keys(auto)) out[id] = auto[id]!;
+    }
+    return out;
   }, [floor]);
 
-  // The "logical" viewport the layout was authored against. Falls back to a
-  // bounding box around all rooms so auto-layout floors still fit.
+  // The "logical" viewport the layout was authored against. Prefer the
+  // explicit width/height the editor + seed write; fall back to a bounding
+  // box around the rendered rooms (covers auto-layout-only floors).
   const logicalViewport = useMemo(() => {
-    if (floor?.layout?.viewport) return floor.layout.viewport;
+    const width =
+      typeof floor?.layout?.width === 'number' && floor.layout.width > 0
+        ? floor.layout.width
+        : null;
+    const height =
+      typeof floor?.layout?.height === 'number' && floor.layout.height > 0
+        ? floor.layout.height
+        : null;
+    if (width && height) return { w: width, h: height };
     let maxX = 0;
     let maxY = 0;
     for (const rect of Object.values(layout)) {
