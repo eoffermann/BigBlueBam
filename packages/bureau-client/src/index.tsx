@@ -56,6 +56,14 @@ import { SummonHandler } from './summon-handler.js';
 import { KnockHandler } from './knock-handler.js';
 import { RingHandler } from './ring-handler.js';
 import { PipPortal, PopoutBureauButton, usePipMode } from './pip-host.js';
+import {
+  ActiveCallManager,
+  IDLE_TARGET,
+  getActiveCallManager,
+  setActiveCallManager,
+  type ActiveRoomTarget,
+} from './active-room.js';
+import { useActiveCall } from './use-active-call.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -76,6 +84,25 @@ export type {
   OpenPipWindowOptions,
   PopoutBureauButtonProps,
 } from './pip-host.js';
+
+// Unified call manager + hook — Phase 1 of the unified-LiveKit migration.
+// Hosts rarely need the raw manager; useActiveCall() is the recommended
+// surface. Exporting both for power callers and tests.
+export {
+  ActiveCallManager,
+  getActiveCallManager,
+  setActiveCallManager,
+  IDLE_TARGET,
+} from './active-room.js';
+export type {
+  ActiveRoomTarget,
+  ActiveCallStatus,
+  ActiveCallSnapshot,
+  ActiveCallTrackState,
+  ActiveCallListener,
+} from './active-room.js';
+export { useActiveCall } from './use-active-call.js';
+export type { UseActiveCall } from './use-active-call.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // MountOptions — the §11 contract.
@@ -424,7 +451,8 @@ function BureauProvider({
       prev.url === descriptor.url &&
       prev.app === descriptor.app &&
       prev.label === descriptor.label &&
-      prev.livekitRoom === descriptor.livekitRoom
+      prev.livekitRoom === descriptor.livekitRoom &&
+      prev.surface_id === descriptor.surface_id
     ) {
       return;
     }
@@ -437,6 +465,38 @@ function BureauProvider({
       label: descriptor.label,
     });
   }, [client, describeLocation, route]);
+
+  // ── Active-call routing — keep the ActiveCallManager's target in sync
+  //    with (spatial room, surface location). Spatial rooms take priority:
+  //    when state.roomId is set we target the spatial room, otherwise we
+  //    fall back to the surface (if describeLocation supplied a surface_id),
+  //    otherwise we go idle. The location effect above keeps state.location
+  //    fresh so this effect can read it as a dependency.
+  useEffect(() => {
+    const mgr = getActiveCallManager();
+    if (!mgr) return;
+    const loc = state.location;
+    const spatialRoomId = state.roomId;
+    let target: ActiveRoomTarget;
+    if (spatialRoomId) {
+      target = {
+        kind: 'spatial',
+        roomName: `bureau-room-${spatialRoomId}`,
+        spatialRoomId,
+      };
+    } else if (loc && loc.surface_id && loc.app) {
+      target = {
+        kind: 'surface',
+        roomName: `huddle-${loc.app}-${loc.surface_id}`,
+        surfaceApp: loc.app,
+        surfaceId: loc.surface_id,
+        label: loc.label,
+      };
+    } else {
+      target = IDLE_TARGET;
+    }
+    void mgr.setTarget(target);
+  }, [state.roomId, state.location]);
 
   // ── Imperative actions (also surfaced via useBureauPresence().actions). ──
   const actions = useMemo<BureauContextValue['actions']>(
@@ -565,6 +625,40 @@ const controlBtnStyle: CSSProperties = {
   fontSize: 11,
 };
 
+const controlBtnActiveStyle: CSSProperties = {
+  ...controlBtnStyle,
+  background: 'rgba(37, 99, 235, 0.4)',
+  borderColor: 'rgba(37, 99, 235, 0.6)',
+};
+
+const controlBtnDisabledStyle: CSSProperties = {
+  ...controlBtnStyle,
+  opacity: 0.45,
+  cursor: 'not-allowed',
+};
+
+const callStripStyle: CSSProperties = {
+  marginTop: 6,
+  padding: '4px 8px',
+  borderRadius: 6,
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  fontSize: 11,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+};
+
+const callStripIdleStyle: CSSProperties = {
+  ...callStripStyle,
+  opacity: 0.6,
+};
+
+const callStripIconStyle: CSSProperties = {
+  fontSize: 10,
+  opacity: 0.8,
+};
+
 const statusDotStyle = (status: BureauConnectionStatus): CSSProperties => ({
   display: 'inline-block',
   width: 6,
@@ -609,14 +703,105 @@ const placeholderRestoreBtnStyle: CSSProperties = {
  */
 function BureauDockedBoxInner(): React.ReactElement | null {
   const ctx = useContext(BureauContext);
-  const [micOn, setMicOn] = useState(false);
-  const [camOn, setCamOn] = useState(false);
-  const [screenOn, setScreenOn] = useState(false);
+  const call = useActiveCall();
   if (!ctx) return null;
   const { state, actions } = ctx;
 
   const inRoom = !!state.roomId;
   const canSummon = inRoom && !!state.location;
+  const callConnected = call.status === 'connected';
+  const callIdle = call.status === 'idle' || call.target.kind === 'none';
+  const callConnecting = call.status === 'connecting';
+  const callErrored = call.status === 'error';
+
+  // Resolve a human-readable "what call am I in" label for the strip.
+  let callStripContent: React.ReactNode;
+  if (callIdle) {
+    callStripContent = <span>Not in a call</span>;
+  } else if (call.target.kind === 'spatial') {
+    const roomName = call.target.roomName ?? 'Bureau room';
+    callStripContent = (
+      <>
+        <span style={callStripIconStyle} aria-hidden>
+          [R]
+        </span>
+        <span>
+          <span style={{ opacity: 0.7 }}>In:</span> <strong>{roomName}</strong>
+        </span>
+      </>
+    );
+  } else if (call.target.kind === 'surface') {
+    const label =
+      call.target.label ??
+      state.location?.label ??
+      call.target.surfaceApp ??
+      'surface';
+    callStripContent = (
+      <>
+        <span style={callStripIconStyle} aria-hidden title="Surface huddle">
+          [H]
+        </span>
+        <span>
+          <span style={{ opacity: 0.7 }}>In:</span> <strong>{label}</strong>
+        </span>
+      </>
+    );
+  } else {
+    callStripContent = <span>Not in a call</span>;
+  }
+  if (callConnecting) {
+    callStripContent = (
+      <>
+        {callStripContent}
+        <span style={{ marginLeft: 'auto', opacity: 0.6 }}>connecting…</span>
+      </>
+    );
+  } else if (callErrored) {
+    callStripContent = (
+      <>
+        {callStripContent}
+        <span
+          style={{ marginLeft: 'auto', color: '#fca5a5' }}
+          title={call.errorMessage ?? 'Call error'}
+        >
+          error
+        </span>
+      </>
+    );
+  }
+
+  // Button tooltips reflect the unified-call status.
+  const micTitle = callConnected
+    ? call.micOn
+      ? 'Microphone — on'
+      : 'Microphone — muted'
+    : 'No active call';
+  const camTitle = callConnected
+    ? call.camOn
+      ? 'Camera — on'
+      : 'Camera — off'
+    : 'No active call';
+  const screenTitle = callConnected
+    ? call.screenOn
+      ? 'Screen-share — on'
+      : 'Screen-share — off'
+    : 'No active call';
+
+  const micStyle = !callConnected
+    ? controlBtnDisabledStyle
+    : call.micOn
+      ? controlBtnActiveStyle
+      : controlBtnStyle;
+  const camStyle = !callConnected
+    ? controlBtnDisabledStyle
+    : call.camOn
+      ? controlBtnActiveStyle
+      : controlBtnStyle;
+  const screenStyle = !callConnected
+    ? controlBtnDisabledStyle
+    : call.screenOn
+      ? controlBtnActiveStyle
+      : controlBtnStyle;
 
   return (
     <div style={boxContainerStyle} data-bureau-docked-box role="region">
@@ -682,31 +867,46 @@ function BureauDockedBoxInner(): React.ReactElement | null {
         Bring everyone here
       </button>
 
+      {/* Active-call strip — what LiveKit room the docked box is in. */}
+      <div
+        style={callIdle ? callStripIdleStyle : callStripStyle}
+        data-bureau-active-call
+        aria-live="polite"
+      >
+        {callStripContent}
+      </div>
+
       {/* Controls row */}
       <div style={controlsRowStyle}>
         <button
           type="button"
-          style={controlBtnStyle}
-          onClick={() => setMicOn((v) => !v)}
-          title="Microphone (control is local to the docked box; LiveKit track wire-up lands with the unified call model)"
+          style={micStyle}
+          disabled={!callConnected}
+          aria-pressed={call.micOn}
+          onClick={() => call.setMic(!call.micOn)}
+          title={micTitle}
         >
-          {micOn ? 'mic on' : 'mic'}
+          {call.micOn ? 'mic on' : 'mic'}
         </button>
         <button
           type="button"
-          style={controlBtnStyle}
-          onClick={() => setCamOn((v) => !v)}
-          title="Camera (control is local to the docked box; LiveKit track wire-up lands with the unified call model)"
+          style={camStyle}
+          disabled={!callConnected}
+          aria-pressed={call.camOn}
+          onClick={() => call.setCam(!call.camOn)}
+          title={camTitle}
         >
-          {camOn ? 'cam on' : 'cam'}
+          {call.camOn ? 'cam on' : 'cam'}
         </button>
         <button
           type="button"
-          style={controlBtnStyle}
-          onClick={() => setScreenOn((v) => !v)}
-          title="Screen-share (control is local to the docked box; LiveKit track wire-up lands with the unified call model)"
+          style={screenStyle}
+          disabled={!callConnected}
+          aria-pressed={call.screenOn}
+          onClick={() => call.setScreen(!call.screenOn)}
+          title={screenTitle}
         >
-          {screenOn ? 'share' : 'screen'}
+          {call.screenOn ? 'share' : 'screen'}
         </button>
         <button
           type="button"
@@ -831,6 +1031,7 @@ interface PageMount {
   containerOwned: boolean;
   statusUnsub: (() => void) | null;
   setRoute: (route: unknown) => void;
+  activeCall: ActiveCallManager;
 }
 
 let activeMount: PageMount | null = null;
@@ -853,6 +1054,11 @@ export function mountBureauClient(opts: MountOptions): UnmountFn {
   }
 
   const client = new BureauWsClient({ url: opts.wsUrl });
+  // Boot the unified-call manager and register it as the singleton the
+  // useActiveCall() hook reads from. Teardown happens in teardown(mount).
+  const activeCall = new ActiveCallManager();
+  setActiveCallManager(activeCall);
+
   let containerOwned = false;
   let container = opts.portalContainer;
   if (!container) {
@@ -901,6 +1107,7 @@ export function mountBureauClient(opts: MountOptions): UnmountFn {
       currentRoute = route;
       render();
     },
+    activeCall,
   };
   activeMount = mount;
 
@@ -916,6 +1123,18 @@ export function mountBureauClient(opts: MountOptions): UnmountFn {
 function teardown(m: PageMount): void {
   try {
     m.statusUnsub?.();
+  } catch {
+    /* ignore */
+  }
+  // Disconnect the LiveKit room before tearing down React so listeners get
+  // a coherent 'idle' snapshot during unmount. dispose() is async but we
+  // don't await — teardown is invoked from synchronous unmount paths and
+  // livekit-client's disconnect() is safe to fire-and-forget.
+  try {
+    if (getActiveCallManager() === m.activeCall) {
+      setActiveCallManager(null);
+    }
+    void m.activeCall.dispose();
   } catch {
     /* ignore */
   }

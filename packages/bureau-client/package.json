@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bigbluebam/ui": "workspace:*"
+    "@bigbluebam/ui": "workspace:*",
+    "livekit-client": "^2.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.2",
@@ -34,15 +35,11 @@
   },
   "peerDependencies": {
     "@livekit/components-react": "^2.0.0",
-    "livekit-client": "^2.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "peerDependenciesMeta": {
     "@livekit/components-react": {
-      "optional": true
-    },
-    "livekit-client": {
       "optional": true
     }
   }

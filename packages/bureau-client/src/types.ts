@@ -49,6 +49,17 @@ export interface LocationDescriptor {
    * The value is the LiveKit room hint the destination should join on summon.
    */
   livekitRoom?: string;
+  /**
+   * The room-identifying portion of the host URL (a docId, boardId, dealId,
+   * taskId, …) for surface-scoped huddles. When set AND the user is not
+   * currently in a Bureau spatial room, the ActiveCallManager treats it as
+   * the implicit target — joining `huddle-{app}-{surface_id}` so any two
+   * users on the same surface land in the same LiveKit room.
+   *
+   * Hosts can advertise this without us re-parsing their URL. Apps that
+   * haven't been threaded yet simply omit it and stay in `{ kind: 'none' }`.
+   */
+  surface_id?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
