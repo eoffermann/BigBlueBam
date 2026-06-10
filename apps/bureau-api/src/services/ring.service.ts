@@ -6,7 +6,7 @@
  * full-screen incoming-call overlay on the recipient's screen. The SDK on
  * the recipient end already subscribes to the `user:{userId}` Redis PubSub
  * channel (see apps/bureau-api/src/routes/ws.routes.ts ↦ personalChannel);
- * a new 'ring' message type joins the existing knock_incoming / summon
+ * a 'ring_incoming' message type joins the existing knock_incoming / summon
  * envelope set.
  *
  * SEMANTIC SHIFT (v2 unified-call model — Phase 3).
@@ -25,15 +25,24 @@
  *     manager joins LiveKit room `huddle-{app}-{id}` automatically. The
  *     explicit token POST on accept is now redundant — navigation is
  *     sufficient.
- *   - Nothing is persisted server-side except the audit row recorded by
- *     the calling route. There is no `bureau_rings` table; if the recipient
- *     misses the ring (offline, browser closed) the in-flight signal is
- *     dropped, just like a phone ringing into a dead line. A follow-up
- *     "leave a note" path can use Banter DMs (same pattern as knocks §4.3).
+ *   - There is no `bureau_rings` table; if the recipient misses the ring
+ *     (offline, browser closed) the in-flight signal is dropped, just like
+ *     a phone ringing into a dead line. A follow-up "leave a note" path can
+ *     use Banter DMs (same pattern as knocks §4.3). The only server-side
+ *     state is a short-lived Redis record keyed by ring_token (see
+ *     `takeRingRecord`) so the WS hub can validate + route the recipient's
+ *     `ring_respond` back to the caller as `ring_responded`.
  *
  * `ring_token` is a short opaque id so the recipient's UI can correlate the
  * incoming ring with its eventual accept/decline reply. `expires_at` lets
  * the recipient SDK auto-dismiss the overlay after ~30s.
+ *
+ * Wire note: the outbound frame type is `ring_incoming` — this MUST match
+ * the bureau-client SDK's subscription in
+ * packages/bureau-client/src/ring-handler.tsx (`client.on('ring_incoming')`)
+ * and the RingIncomingEvent type in packages/bureau-client/src/types.ts.
+ * (It originally shipped as `'ring'`, which the SDK never listened for —
+ * rings silently vanished. Bureau troubleshooting pass, 2026-06-10.)
  */
 
 import type Redis from 'ioredis';
@@ -42,8 +51,16 @@ import { nanoid } from 'nanoid';
 /** Default time the incoming-call overlay should stay live before auto-dismiss. */
 const RING_TTL_MS = 30_000;
 
+/**
+ * How long the server-side ring record survives in Redis. Slightly longer
+ * than the overlay TTL so a respond that races the expiry still resolves.
+ */
+const RING_RECORD_TTL_SECONDS = 90;
+
+const ringRecordKey = (ringToken: string) => `bureau:ring:${ringToken}`;
+
 export interface RingPayload {
-  type: 'ring';
+  type: 'ring_incoming';
   from_user_id: string;
   from_user_name: string;
   surface_app: string;
@@ -51,6 +68,15 @@ export interface RingPayload {
   surface_label: string | null;
   ring_token: string;
   expires_at: string;
+}
+
+/** Server-side record for an in-flight ring, keyed by ring_token. */
+export interface RingRecord {
+  fromUserId: string;
+  toUserId: string;
+  orgId: string;
+  surfaceApp: string;
+  surfaceId: string;
 }
 
 export interface RingResult {
@@ -76,6 +102,7 @@ export async function ringUser(
   fromUserId: string,
   fromUserName: string,
   toUserId: string,
+  orgId: string,
   surfaceApp: string,
   surfaceId: string,
   surfaceLabel: string | null,
@@ -84,7 +111,7 @@ export async function ringUser(
   const expiresAt = new Date(Date.now() + RING_TTL_MS).toISOString();
 
   const payload: RingPayload = {
-    type: 'ring',
+    type: 'ring_incoming',
     from_user_id: fromUserId,
     from_user_name: fromUserName,
     surface_app: surfaceApp,
@@ -94,12 +121,33 @@ export async function ringUser(
     expires_at: expiresAt,
   };
 
+  // Persist the short-lived record FIRST so a fast respond can't race the
+  // write. Best-effort: a Redis hiccup here only disables ring_responded
+  // routing for this ring, not the ring itself.
+  const record: RingRecord = {
+    fromUserId,
+    toUserId,
+    orgId,
+    surfaceApp,
+    surfaceId,
+  };
+  try {
+    await redis.set(
+      ringRecordKey(ringToken),
+      JSON.stringify(record),
+      'EX',
+      RING_RECORD_TTL_SECONDS,
+    );
+  } catch {
+    /* best-effort — see comment above */
+  }
+
   // Wrap in the standard {type,data,timestamp} envelope so it threads
   // through the existing ws.routes.ts subscriber.on('message', ...) path
-  // unchanged. The bureau-client SDK is responsible for branching on
-  // type === 'ring' and rendering the incoming-call overlay.
+  // unchanged. The bureau-client SDK branches on type === 'ring_incoming'
+  // and renders the incoming-call overlay.
   const envelope = JSON.stringify({
-    type: 'ring',
+    type: 'ring_incoming',
     data: payload,
     timestamp: new Date().toISOString(),
   });
@@ -107,4 +155,41 @@ export async function ringUser(
   const delivered = await redis.publish(`user:${toUserId}`, envelope);
 
   return { ring_token: ringToken, expires_at: expiresAt, delivered };
+}
+
+/**
+ * Atomically read-and-delete the ring record for a token. Returns null when
+ * the token is unknown or already consumed (expired, double-respond from a
+ * second device, or a forged token). The delete makes respond one-shot: the
+ * first device to answer wins, later responds are silently ignored.
+ */
+export async function takeRingRecord(
+  redis: Redis,
+  ringToken: string,
+): Promise<RingRecord | null> {
+  if (!ringToken) return null;
+  const key = ringRecordKey(ringToken);
+  const raw = await redis.get(key);
+  if (!raw) return null;
+  // Delete before parse — even a corrupt record is consumed exactly once.
+  await redis.del(key);
+  try {
+    const parsed = JSON.parse(raw) as Partial<RingRecord>;
+    if (
+      typeof parsed.fromUserId !== 'string' ||
+      typeof parsed.toUserId !== 'string' ||
+      typeof parsed.orgId !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      fromUserId: parsed.fromUserId,
+      toUserId: parsed.toUserId,
+      orgId: parsed.orgId,
+      surfaceApp: typeof parsed.surfaceApp === 'string' ? parsed.surfaceApp : '',
+      surfaceId: typeof parsed.surfaceId === 'string' ? parsed.surfaceId : '',
+    };
+  } catch {
+    return null;
+  }
 }

@@ -316,6 +316,21 @@ export interface RingIncomingEvent {
 export type RingDecision = 'accept' | 'decline' | 'auto_decline';
 
 /**
+ * Server → caller frame: the recipient answered (or auto-declined) a ring
+ * the caller sent. Delivered on the caller's `user:{id}` channel by the WS
+ * hub's `ring_respond` handler. Lets an outgoing-ring UI ("ringing…") close
+ * itself with the outcome.
+ */
+export interface RingRespondedEvent {
+  type: 'ring_responded';
+  ring_token: string;
+  decision: RingDecision;
+  by: { id: string; name?: string | null };
+  surface_app?: string;
+  surface_id?: string;
+}
+
+/**
  * Client → server frame the SDK posts back through the WS when the receiver
  * decides. Mirrors the bureau-api ring handler contract; not part of the
  * bureau-design-document.md §8 catalog (added with the presence-and-
@@ -375,6 +390,7 @@ export type ServerMessage =
   | SummonAckEvent
   | StatusChangedEvent
   | RingIncomingEvent
+  | RingRespondedEvent
   | ErrorEvent;
 
 export type ServerMessageType = ServerMessage['type'];
