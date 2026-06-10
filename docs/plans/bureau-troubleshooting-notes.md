@@ -72,6 +72,66 @@ From `bureau-security-audit.md` §6/§7, still outstanding:
 
 ---
 
+## Verified / Closed (runtime pass, 2026-06-10, stack rebuilt from this branch)
+
+Stack rebuilt from `bureau-troubleshooting` and force-recreated:
+`docker compose -p bigbluebam ... build bureau-api worker frontend` then
+`up -d --force-recreate --no-deps bureau-api worker frontend` (+ `restart
+frontend`). Automated harness `scripts/bureau-runtime-verify.mjs` (protocol-
+level WS/HTTP, two/three concurrent seeded users) + `scripts/bureau-smoke-
+test.mjs`. Test fixtures: `bureau-test-{a,b,c,dnd}@example.com` (big-blue-
+ceiling) and `bureau-test-x@example.com` (mage-inc, cross-org), password
+`BureauTest-2026!`; rooms `Test Lock Room` / `Test Knock Room (knock)` /
+`Test DND Office (office, owner=dnd)` in zone `test-zone` on Main Floor.
+
+**20/20 harness checks + smoke test + ghost-reap all PASS:**
+
+1. **Ring end-to-end** — `POST /v1/ring` 200 (delivered=1); recipient B got
+   the `ring_incoming` frame (was dropped pre-fix: published as `ring`, SDK
+   listens for `ring_incoming`); `ring_respond` accepted with NO `UNKNOWN_TYPE`;
+   caller A received `ring_responded`. Visual overlay render needs human eyes;
+   protocol path fully verified.
+2. **Cross-org ring** — sender in mage-inc ringing a big-blue-ceiling user →
+   404 `Recipient not found in your organization`.
+3. **Ghost-presence reap** — seeded a crashed session (presence-index entry +
+   room-occupant + floor-index, NO live `bureau:sess` hash = the evicted case
+   the fix targets); worker log `bureau.presence.reap: candidates:1 reaped:1`;
+   `bureau:room:*:occupants`, `bureau:presence:index`, `bureau:floor:*:index`,
+   and `bureau:user:*:sessions` all cleared within one ~15s tick.
+4. **Locked-door enforcement** — B locks `Test Lock Room`; C (plain member)
+   gets `FORBIDDEN` on WS `enter_room`, NO `livekit_token`, **403** on
+   `POST /v1/rooms/:id/token`, and the internal `can-join-room` preflight
+   returns `allowed:false reason=private_room`. After unlock, C enters and
+   mints a token.
+5. **Knock-privacy continuous audio** — `can-join-room` for a `knock`-privacy
+   room returns `allowed:true` for an org member (pre-fix it hard-denied,
+   dropping the cross-app audio handoff).
+6. **WS pre-init frame buffering** — a `location_update` sent on socket OPEN
+   (before the `connected` frame) registers; a second user's
+   `GET /v1/presence/here?url=...` sees the reporter.
+7. **Concurrent summon responses** — 2 recipients accept near-simultaneously;
+   the `bureau_summons.recipients` JSONB shows BOTH `joined` (pre-fix one was
+   clobbered back); summoner saw `summon_progress joined=2`.
+8. **DND knock leave-note** — knock on a DND office → 423 advertising
+   `/v1/knocks/leave-note`; POSTing there delivered the Banter DM
+   (`delivered:true`).
+9. **Smoke script** — `scripts/bureau-smoke-test.mjs` ALL CHECKS PASSED.
+
+### New bug found + fixed during this pass
+
+- **Empty-JSON-body crash (platform-wide DoS), commit `a4596ba`.** Any
+  `POST`/`PATCH` carrying `Content-Type: application/json` with a zero-length
+  body trips Fastify's `FST_ERR_CTP_EMPTY_JSON_BODY`; the shared
+  `@bigbluebam/logging` error handler then double-sent the reply (called
+  `reply.send()` then `return;`, so Fastify auto-sent the resolved
+  `undefined`), re-running the per-service security-headers `onSend` hook on
+  an already-flushed reply → uncaught `ERR_HTTP_HEADERS_SENT` → process exit.
+  Reproduced on bureau-api AND apps/api (restart count climbed on every hit).
+  Pre-existing and platform-wide, not from the bureau commits. Fixed by
+  returning the reply from every branch (+ an `if (reply.sent) return reply`
+  guard). Landed in bureau-api + worker images this pass; **needs a full
+  rebuild to propagate to the other ~17 Fastify services.**
+
 ## Runtime verification checklist (for the operator, once the stack is free)
 
 Rebuild + restart `bureau-api` and `worker`; rebuild any SPA that vendors `@bigbluebam/bureau-client` (all of them embed it — at minimum rebuild the ones you'll test through). Migrations: **none** — no schema changes in this pass.
