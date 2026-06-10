@@ -7,6 +7,24 @@
 
 const API_BASE = '/bureau/api/v1';
 
+/**
+ * HB-52 CSRF helper: reads the `csrf_token` cookie that the Bam API sets
+ * on login / auth/me. State-changing requests against /b3/api/* must
+ * echo it in the `X-CSRF-Token` header (double-submit pattern in
+ * apps/api/src/plugins/csrf.ts). Bureau's own /bureau/api/v1 routes do
+ * not yet enforce CSRF, but this is exported so cross-app calls (e.g.
+ * the image underlay upload to /b3/api/upload) can stay consistent
+ * with apps/frontend/src/lib/api.ts.
+ *
+ * Returns null when running outside a browser (SSR / tests) or when the
+ * cookie has not been issued yet.
+ */
+export function readCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]!) : null;
+}
+
 export interface ApiErrorEnvelope {
   error: {
     code: string;

@@ -26,6 +26,7 @@
 
 import { useRef, useState } from 'react';
 import { ImageIcon, Loader2, Upload, X } from 'lucide-react';
+import { readCsrfToken } from '../../lib/api';
 
 export interface ImageUnderlayUploadProps {
   /** Current underlay URL, if any (e.g. '/files/uploads/abc-bg.png'). */
@@ -49,9 +50,16 @@ export function ImageUnderlayUpload({ value, onChange }: ImageUnderlayUploadProp
     try {
       const form = new FormData();
       form.append('file', file);
+      // /b3/api/upload requires CSRF double-submit (apps/api/src/plugins/csrf.ts):
+      // echo the csrf_token cookie value in the X-CSRF-Token header. Don't set
+      // Content-Type — the browser supplies multipart boundaries.
+      const csrfHeaders: Record<string, string> = {};
+      const csrfToken = readCsrfToken();
+      if (csrfToken) csrfHeaders['X-CSRF-Token'] = csrfToken;
       const res = await fetch('/b3/api/upload', {
         method: 'POST',
         credentials: 'include',
+        headers: csrfHeaders,
         body: form,
       });
       if (!res.ok) {
