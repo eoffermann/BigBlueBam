@@ -44,7 +44,7 @@ import { mintRoomToken } from '@bigbluebam/livekit-tokens';
 import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { sessions, users } from '../db/schema/index.js';
-import { bureauKnocks } from '../db/schema/bureau.js';
+import { bureauKnocks, bureauSummons } from '../db/schema/bureau.js';
 import { env } from '../env.js';
 import {
   evaluateRoomAccess,
@@ -61,6 +61,15 @@ import {
   emitUserLeftRoom,
   type KnockResolution,
 } from '../lib/bureau-events.js';
+import { isUserInDnd } from '../services/dnd-check.service.js';
+import {
+  fanOutSummon,
+  grantAccessAndSummon,
+  planSummon,
+  recordSummon,
+  reportDenials,
+} from '../services/summon.service.js';
+import { scheduleKnockTimeout } from '../services/knock-queue.service.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Per-socket connection record
@@ -1025,6 +1034,25 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               break;
             }
 
+            // §4.3 DND check — same semantics as the REST route, just
+            // shaped as a WS event. No row is persisted, no Bolt event
+            // fires; the visitor receives knock_resolved with
+            // decision: 'dnd_blocked' and can follow up via the
+            // /v1/knocks/leave-note REST endpoint if they want.
+            const ownerDndForKnock = await isUserInDnd(fastify.redis, room.owner_id);
+            if (ownerDndForKnock) {
+              safeSend(
+                socket,
+                frame('knock_resolved', {
+                  knockId: null,
+                  roomId,
+                  decision: 'dnd_blocked',
+                  leave_a_note_endpoint: `/v1/knocks/leave-note`,
+                }),
+              );
+              break;
+            }
+
             const [created] = await db
               .insert(bureauKnocks)
               .values({
@@ -1042,6 +1070,9 @@ export default async function wsRoutes(fastify: FastifyInstance) {
                 visitor_id: bureauKnocks.visitor_id,
               });
             if (!created) break;
+
+            // §4.3 schedule the 30s timeout. Fire-and-forget.
+            void scheduleKnockTimeout(created.id);
 
             const ownerId = created.owner_id;
             await publishUser(
@@ -1191,21 +1222,239 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }
 
           // ──────────────────────────────────────────────
-          // Summon flow is workstream 6 — ack but no-op for now so a
-          // client mid-summon doesn't see a hard error.
-          case 'summon':
-          case 'summon_respond':
-          case 'summon_grant_access': {
-            fastify.log.info(
-              { type: msg.type, userId, orgId },
-              'Bureau WS received summon-family message (workstream 6, not implemented)',
+          // Summon flow (§10 of the design doc, workstream 6).
+          // The §8 trio: summon (start), summon_respond (recipient's
+          // join/stay decision), summon_grant_access (§4.4 follow-up
+          // after the access report).
+          case 'summon': {
+            const targetUrl =
+              typeof msg.targetUrl === 'string' ? msg.targetUrl : null;
+            const targetApp = typeof msg.app === 'string' ? msg.app : null;
+            const targetLabel =
+              typeof msg.label === 'string' ? msg.label : undefined;
+            const lkRoomHint =
+              typeof msg.lkRoomHint === 'string' ? msg.lkRoomHint : undefined;
+            if (!targetUrl || !targetApp) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'summon requires targetUrl and app',
+                }),
+              );
+              break;
+            }
+
+            const plan = await planSummon(fastify.redis, {
+              orgId,
+              summonerId: userId,
+              targetUrl,
+              targetApp,
+              targetLabel,
+              lkRoomHint,
+            });
+            if (!plan) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_REQUEST',
+                  message:
+                    'You are not currently in a Bureau room (summon disabled)',
+                }),
+              );
+              break;
+            }
+
+            const summonId = await recordSummon({
+              orgId,
+              summonerId: userId,
+              fromRoomId: plan.fromRoomId,
+              targetUrl,
+              targetApp,
+              targetLabel,
+              lkRoomHint,
+              eligible: plan.eligibleRecipients,
+              denied: plan.deniedRecipients,
+            });
+
+            await fanOutSummon({
+              redis: fastify.redis,
+              summonId,
+              orgId,
+              summonerId: userId,
+              summonerName: displayName,
+              targetUrl,
+              targetApp,
+              targetLabel,
+              lkRoomHint,
+              recipients: plan.eligibleRecipients,
+              logger: fastify.log,
+            });
+
+            if (plan.deniedRecipients.length > 0) {
+              await reportDenials({
+                redis: fastify.redis,
+                summonId,
+                summonerId: userId,
+                denied: plan.deniedRecipients,
+                canShare: plan.canShare,
+              });
+            }
+
+            safeSend(
+              socket,
+              frame('summon_ack', {
+                summonId,
+                accepted: true,
+                eligibleCount: plan.eligibleRecipients.length,
+                deniedCount: plan.deniedRecipients.length,
+                canShare: plan.canShare,
+              }),
+            );
+            break;
+          }
+
+          case 'summon_respond': {
+            // The §8 contract has the recipient send { summonId, decision }
+            // with decision = 'join' | 'stay'. The actual navigation is
+            // performed client-side by the bureau-client SDK; the server
+            // only needs to record the outcome on the audit row so the
+            // §10 step 7 "summon_progress to the summoner" loop closes.
+            const summonId =
+              typeof msg.summonId === 'string' ? msg.summonId : null;
+            const decision =
+              msg.decision === 'join' || msg.decision === 'stay'
+                ? msg.decision
+                : null;
+            if (!summonId || !decision) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'summonId and decision required',
+                }),
+              );
+              break;
+            }
+
+            const [existing] = await db
+              .select({
+                id: bureauSummons.id,
+                summoner_id: bureauSummons.summoner_id,
+                recipients: bureauSummons.recipients,
+              })
+              .from(bureauSummons)
+              .where(
+                and(
+                  eq(bureauSummons.id, summonId),
+                  eq(bureauSummons.org_id, orgId),
+                ),
+              )
+              .limit(1);
+            if (!existing) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'NOT_FOUND',
+                  message: 'Summon not found',
+                }),
+              );
+              break;
+            }
+
+            type RecipientRow = {
+              userId: string;
+              name?: string | null;
+              outcome:
+                | 'pending'
+                | 'joined'
+                | 'declined'
+                | 'no_access'
+                | 'granted'
+                | 'timed_out';
+              reason?: string | null;
+            };
+            const recipients: RecipientRow[] = Array.isArray(existing.recipients)
+              ? (existing.recipients as RecipientRow[])
+              : [];
+            const me = recipients.find((r) => r.userId === userId);
+            if (!me) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'FORBIDDEN',
+                  message: 'You are not a recipient of this summon',
+                }),
+              );
+              break;
+            }
+            // Only progress out of `pending` — terminal states stick.
+            if (me.outcome === 'pending') {
+              me.outcome = decision === 'join' ? 'joined' : 'declined';
+              await db
+                .update(bureauSummons)
+                .set({ recipients })
+                .where(eq(bureauSummons.id, summonId));
+            }
+
+            // Send a fresh summon_progress to the summoner so the UI can
+            // tick its "joined / total" counter.
+            const joined = recipients.filter(
+              (r) => r.outcome === 'joined' || r.outcome === 'granted',
+            ).length;
+            const total = recipients.length;
+            await publishUser(
+              existing.summoner_id,
+              frame('summon_progress', {
+                summonId,
+                joined,
+                total,
+              }),
             );
             safeSend(
               socket,
               frame('summon_ack', {
-                type: msg.type,
-                accepted: false,
-                reason: 'summon flow not yet implemented',
+                summonId,
+                accepted: true,
+                decision: me.outcome,
+              }),
+            );
+            break;
+          }
+
+          case 'summon_grant_access': {
+            const summonId =
+              typeof msg.summonId === 'string' ? msg.summonId : null;
+            const userIds = Array.isArray(msg.userIds)
+              ? (msg.userIds as unknown[]).filter(
+                  (u): u is string => typeof u === 'string',
+                )
+              : [];
+            if (!summonId || userIds.length === 0) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'summonId and userIds required',
+                }),
+              );
+              break;
+            }
+            const result = await grantAccessAndSummon({
+              redis: fastify.redis,
+              summonId,
+              summonerId: userId,
+              summonerName: displayName,
+              userIds,
+              logger: fastify.log,
+            });
+            safeSend(
+              socket,
+              frame('summon_ack', {
+                summonId,
+                accepted: true,
+                granted: result.granted,
+                missing: result.missing,
               }),
             );
             break;

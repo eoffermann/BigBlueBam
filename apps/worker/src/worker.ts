@@ -108,6 +108,25 @@ import {
   processBureauPresenceReapJob,
   type BureauPresenceReapJobData,
 } from './jobs/bureau-presence-reap.js';
+// §10 Bureau summon fan-out — large-room recipient delivery off the WS hot path.
+import {
+  processBureauSummonFanoutJob,
+  type BureauSummonFanoutJobData,
+} from './jobs/bureau-summon-fanout.js';
+// §4.3 Bureau knock timeout — fires 30s after a knock is created and auto-
+// resolves any still-pending knock as `timed_out`.
+import {
+  processBureauKnockTimeoutJob,
+  type BureauKnockTimeoutJobData,
+} from './jobs/bureau-knock-timeout.js';
+// Workstream 4: Bureau booking lifecycle — delayed jobs that apply the
+// door privacy override at starts_at and clear it at ends_at.
+import {
+  processBureauBookingActivateJob,
+  processBureauBookingReleaseJob,
+  type BureauBookingActivateJobData,
+  type BureauBookingReleaseJobData,
+} from './jobs/bureau-booking-lifecycle.js';
 
 const env = loadEnv();
 
@@ -933,6 +952,74 @@ bureauPresenceReapQueue
   )
   .catch((err) => logger.error({ err }, 'Failed to register bureau-presence-reap scheduler'));
 
+// §10 Bureau summon fan-out — drains jobs enqueued by bureau-api when a
+// summon has more than FANOUT_INLINE_LIMIT eligible recipients. Each job
+// re-runs the access check, publishes summon_incoming + summon_progress
+// frames, and emits the §14 Bolt event.
+const bureauSummonFanoutWorker = new Worker<BureauSummonFanoutJobData>(
+  'bureau-summon-fanout',
+  async (job: Job<BureauSummonFanoutJobData>) => {
+    await processBureauSummonFanoutJob(job, redis, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bureauSummonFanoutWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bureau-summon-fanout' }, 'Job completed');
+});
+bureauSummonFanoutWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bureau-summon-fanout', err }, 'Job failed');
+});
+
+// §4.3 Bureau knock-timeout worker — drains delayed knock_id jobs enqueued
+// from bureau-api when a visitor creates a knock. Concurrency matches the
+// shared default; a single timed-out knock is a one-shot UPDATE + publish.
+const bureauKnockTimeoutWorker = new Worker<BureauKnockTimeoutJobData>(
+  'bureau-knock-timeout',
+  async (job: Job<BureauKnockTimeoutJobData>) => {
+    await processBureauKnockTimeoutJob(job, redis, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bureauKnockTimeoutWorker.on('completed', (job) => {
+  logger.debug({ jobId: job.id, queue: 'bureau-knock-timeout' }, 'Job completed');
+});
+bureauKnockTimeoutWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bureau-knock-timeout', err }, 'Job failed');
+});
+
+// Workstream 4 Bureau booking-activate worker — drains delayed jobs
+// scheduled by bureau-api at booking-create time. Concurrency matches
+// the shared default; each job is a single HSET + Bolt emit + publish.
+const bureauBookingActivateWorker = new Worker<BureauBookingActivateJobData>(
+  'bureau-booking-activate',
+  async (job: Job<BureauBookingActivateJobData>) => {
+    await processBureauBookingActivateJob(job, redis, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bureauBookingActivateWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bureau-booking-activate' }, 'Job completed');
+});
+bureauBookingActivateWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bureau-booking-activate', err }, 'Job failed');
+});
+
+// Workstream 4 Bureau booking-release worker — runs at the booking's
+// ends_at to clear the privacy override (if it is still ours).
+const bureauBookingReleaseWorker = new Worker<BureauBookingReleaseJobData>(
+  'bureau-booking-release',
+  async (job: Job<BureauBookingReleaseJobData>) => {
+    await processBureauBookingReleaseJob(job, redis, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bureauBookingReleaseWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bureau-booking-release' }, 'Job completed');
+});
+bureauBookingReleaseWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bureau-booking-release', err }, 'Job failed');
+});
+
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(
   'analytics',
@@ -1033,6 +1120,13 @@ const workers = [
   slackImportWorker,
   // §13 Bureau presence reaper
   bureauPresenceReapWorker,
+  // §10 Bureau summon fan-out
+  bureauSummonFanoutWorker,
+  // §4.3 Bureau knock timeout
+  bureauKnockTimeoutWorker,
+  // Workstream 4 Bureau booking lifecycle (activate at starts_at, release at ends_at)
+  bureauBookingActivateWorker,
+  bureauBookingReleaseWorker,
   analyticsWorker,
 ];
 
@@ -1080,6 +1174,13 @@ logger.info(
       'slack-import',
       // §13 Bureau presence reaper
       'bureau-presence-reap',
+      // §10 Bureau summon fan-out
+      'bureau-summon-fanout',
+      // §4.3 Bureau knock timeout
+      'bureau-knock-timeout',
+      // Workstream 4 Bureau booking lifecycle
+      'bureau-booking-activate',
+      'bureau-booking-release',
       'analytics',
     ],
   },
