@@ -57,6 +57,21 @@ function nonEmptyString(v: unknown): string | null {
  * Resolve the effective calling config (settings over env). `redis` is
  * optional — when provided, the kill-switch state is mirrored on refresh.
  */
+/**
+ * Parse the `calling.global_enabled` kill-switch value. Mirrors apps/api's
+ * project-calling-settings readBool so the two services interpret a JSONB
+ * string the same way:
+ *   true  / 'true'  → true   (enabled)
+ *   false / 'false' → false  (disabled — switch thrown)
+ *   anything else (null/undefined/garbage) → null (caller treats as enabled)
+ */
+export function parseKillSwitch(v: unknown): boolean | null {
+  if (v === true || v === false) return v;
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return null;
+}
+
 export async function getCallingConfig(redis?: Redis): Promise<CallingConfig> {
   const now = Date.now();
   if (cache && cache.expiresAt > now) return cache.value;
@@ -81,8 +96,15 @@ export async function getCallingConfig(redis?: Redis): Promise<CallingConfig> {
   const byKey = new Map(rows.map((r) => [r.key, r.value]));
   const enabledRaw = byKey.get('calling.global_enabled');
   const config: CallingConfig = {
-    // Unset means enabled — the kill switch must be explicitly thrown.
-    enabled: enabledRaw === undefined || enabledRaw === null || enabledRaw === true,
+    // Unset means enabled — the kill switch must be explicitly thrown. We
+    // accept BOTH a JSONB boolean AND the string 'true'/'false' for parity
+    // with apps/api's project-calling-settings readBool: the settings route
+    // stores a real boolean today, but a hand-edited or migrated row could
+    // hold a string, and the two services must agree on what "disabled"
+    // means. Only an explicit false / 'false' throws the switch; everything
+    // else (true, 'true', null, undefined, or any unrecognized value)
+    // leaves calling enabled.
+    enabled: parseKillSwitch(enabledRaw) !== false,
     livekitUrl: nonEmptyString(byKey.get('calling.livekit_host')) ?? env.LIVEKIT_URL,
     livekitApiKey:
       nonEmptyString(byKey.get('calling.livekit_api_key')) ?? env.LIVEKIT_API_KEY,

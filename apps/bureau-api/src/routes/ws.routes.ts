@@ -47,9 +47,10 @@ import { sessions, users } from '../db/schema/index.js';
 import { bureauKnocks, bureauSummons } from '../db/schema/bureau.js';
 import { env } from '../env.js';
 import {
+  canLockRoomDecision,
+  canSetDoorDecision,
   evaluateRoomAccess,
   hasRoomAclEntry,
-  isOrgAdminOrOwner,
   loadRoom,
 } from '../middleware/room-access.js';
 import {
@@ -334,25 +335,32 @@ export default async function wsRoutes(fastify: FastifyInstance) {
     async function canSetDoor(
       room: { id: string; type: string; owner_id: string | null },
     ): Promise<boolean> {
-      if (isSuperuser) return true;
-      if (isOrgAdminOrOwner(userRole)) return true;
-      if (room.type === 'office') {
-        return !!room.owner_id && room.owner_id === userId;
+      // Resolve the only DB-bound fact (shared-room ACL manager role) only
+      // when the pure decision actually needs it — superuser / admin / office
+      // owner short-circuit without a query. We re-query here because
+      // hasRoomAclEntry only checks presence, not role.
+      let hasAclManagerRole = false;
+      if (!isSuperuser && room.type !== 'office') {
+        const { bureauRoomAcl } = await import('../db/schema/bureau.js');
+        const [aclRow] = await db
+          .select({ role: bureauRoomAcl.role })
+          .from(bureauRoomAcl)
+          .where(
+            and(
+              eq(bureauRoomAcl.room_id, room.id),
+              eq(bureauRoomAcl.user_id, userId),
+            ),
+          )
+          .limit(1);
+        hasAclManagerRole = aclRow?.role === 'manager';
       }
-      // Shared room: ACL `manager` role grants door rights. We re-query
-      // here because hasRoomAclEntry only checks presence, not role.
-      const { bureauRoomAcl } = await import('../db/schema/bureau.js');
-      const [aclRow] = await db
-        .select({ role: bureauRoomAcl.role })
-        .from(bureauRoomAcl)
-        .where(
-          and(
-            eq(bureauRoomAcl.room_id, room.id),
-            eq(bureauRoomAcl.user_id, userId),
-          ),
-        )
-        .limit(1);
-      return aclRow?.role === 'manager';
+      return canSetDoorDecision({
+        isSuperuser,
+        role: userRole,
+        room,
+        userId,
+        hasAclManagerRole,
+      });
     }
 
     /** Lock-room permission: "anyone in a shared room can lock/unlock"
@@ -363,15 +371,25 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       type: string;
       owner_id: string | null;
     }): Promise<boolean> {
-      if (isSuperuser) return true;
-      if (isOrgAdminOrOwner(userRole)) return true;
-      if (room.type === 'office') {
-        return !!room.owner_id && room.owner_id === userId;
+      const isInRoom = client.roomId === room.id;
+      // Only hit the ACL table when the pure decision would actually need it
+      // (non-privileged, non-office, not currently in the room).
+      let hasAclEntry = false;
+      if (
+        !isSuperuser &&
+        room.type !== 'office' &&
+        !isInRoom
+      ) {
+        hasAclEntry = await hasRoomAclEntry(room.id, userId);
       }
-      // Shared room: must be inside it right now.
-      if (client.roomId === room.id) return true;
-      // Or have a private-room ACL row.
-      return await hasRoomAclEntry(room.id, userId);
+      return canLockRoomDecision({
+        isSuperuser,
+        role: userRole,
+        room,
+        userId,
+        isInRoom,
+        hasAclEntry,
+      });
     }
 
     const handleMessage = async (raw: Buffer | string) => {

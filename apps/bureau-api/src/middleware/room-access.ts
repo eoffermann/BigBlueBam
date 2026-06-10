@@ -102,6 +102,57 @@ export interface RoomAccessDecision {
 }
 
 /**
+ * Pure decision for "may this caller change a room's door privacy?"
+ * Extracted from the closure that used to live inside ws.routes.ts so it can
+ * be unit-tested directly (the DB-bound facts — org role and the shared-room
+ * ACL manager role — are resolved by the caller and passed in).
+ *
+ *   - superuser or org admin/owner → always,
+ *   - office room → only the office owner,
+ *   - shared room → only an ACL `manager`.
+ */
+export function canSetDoorDecision(args: {
+  isSuperuser: boolean;
+  role: string;
+  room: { type: string; owner_id: string | null };
+  userId: string;
+  /** Pre-resolved: does the caller hold the ACL `manager` role on a shared room? */
+  hasAclManagerRole: boolean;
+}): boolean {
+  if (args.isSuperuser) return true;
+  if (isOrgAdminOrOwner(args.role)) return true;
+  if (args.room.type === 'office') {
+    return !!args.room.owner_id && args.room.owner_id === args.userId;
+  }
+  return args.hasAclManagerRole;
+}
+
+/**
+ * Pure decision for "may this caller lock/unlock a room?"
+ * Mirrors §8 ("anyone in a shared room can lock/unlock") plus the office and
+ * privileged short-circuits. DB-bound facts (being currently in the room, and
+ * holding any ACL row) are resolved by the caller.
+ */
+export function canLockRoomDecision(args: {
+  isSuperuser: boolean;
+  role: string;
+  room: { type: string; owner_id: string | null };
+  userId: string;
+  /** Is the caller currently inside the room? */
+  isInRoom: boolean;
+  /** Does the caller have any ACL row for the room? */
+  hasAclEntry: boolean;
+}): boolean {
+  if (args.isSuperuser) return true;
+  if (isOrgAdminOrOwner(args.role)) return true;
+  if (args.room.type === 'office') {
+    return !!args.room.owner_id && args.room.owner_id === args.userId;
+  }
+  if (args.isInRoom) return true;
+  return args.hasAclEntry;
+}
+
+/**
  * Decide whether the caller may join a Bureau room. Encapsulates the
  * static-auth portion of the rule from the assignment spec:
  *   (a) room owner, OR
