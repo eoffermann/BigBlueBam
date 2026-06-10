@@ -141,6 +141,41 @@ The `beacon-expiry-sweep` daily worker cron throws `PostgresError 42809 "op ANY/
 
 Recorded per CLAUDE.md "pre-existing is not a dismissal." Locate the failing query in `apps/worker/src/jobs/beacon-expiry-sweep.ts` (or wherever the job's processor lives) and either wrap the scalar in `[...]` or rewrite as `=` rather than `= ANY`. Effort: 30 minutes once found.
 
+## D-11: Banter internal DM endpoint for Bureau "leave a note"
+
+**Status:** Not started (introduced by Bureau workstream 5).
+**Severity:** Low — leave-a-note returns 202 with a logged TODO when the endpoint is missing, so visitors get a reasonable message.
+
+When a Bureau visitor knocks on a DND'd office, they're offered the "leave a note" path which calls `POST http://banter-api:4002/v1/internal/dm` with `X-Internal-Secret` and a body like `{ org_id, from_user_id, to_user_id, content: '[Bureau knock note] {message}', source: 'bureau-knock' }`. That endpoint does NOT currently exist in banter-api — only `/v1/internal/feed`, `/v1/internal/share`, `/v1/internal/transcript`.
+
+Required:
+- New file `apps/banter-api/src/routes/internal-dm.routes.ts` exposing `POST /v1/internal/dm` gated on `X-Internal-Secret` (timing-safe compare against `env.INTERNAL_SERVICE_SECRET`).
+- Resolves/creates the DM channel between `from_user_id` and `to_user_id` in `org_id`.
+- Inserts a banter_messages row with the content.
+- Returns `{ delivered: true, channel_id, message_id }`.
+
+Effort: 2-3 hours.
+
+## D-12: Cross-app `can-read` preflight endpoints for Bureau summons
+
+**Status:** Not started (introduced by Bureau workstream 6).
+**Severity:** Medium — without these, summon access checks return `stub_allow` for everyone and the §4.4 "denied list" is always empty. Functionally Bureau still summons everyone in the room; navigating to a target you can't see surfaces a 403 from the destination app's own UI, so this is graceful but not the experience the design doc describes.
+
+Bureau's `cross-app-access.service.ts` calls these endpoints when planning a summon:
+
+- `POST http://board-api:4008/v1/internal/can-read` body `{ user_id, board_id }` → `{ allowed, canShare }`.
+- `POST http://brief-api:4005/v1/internal/can-read` body `{ user_id, document_id }` → `{ allowed, canShare }`.
+- `POST http://api:4000/internal/can-read` body `{ user_id, project_id }` → `{ allowed, canShare }`.
+
+All three should:
+- Authenticate via `X-Internal-Service-Secret` (timing-safe).
+- Look up the resource and check the caller's existing visibility rules (board collaborators / brief permissions / project members).
+- Return `canShare: true` when the caller can add other users to the resource.
+
+The HTTP code path is already in `apps/bureau-api/src/services/cross-app-access.service.ts` — it activates automatically when each peer ships its endpoint.
+
+Effort: ~1 day total (each endpoint is ~3 hours).
+
 ## D-10: Consolidate `ws.routes.ts`'s inline presence layer
 
 **Status:** Not started (introduced by Bureau workstream 3).
