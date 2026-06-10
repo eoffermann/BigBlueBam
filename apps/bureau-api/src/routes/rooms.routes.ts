@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
@@ -9,6 +9,7 @@ import {
   bureauSettings,
 } from '../db/schema/bureau.js';
 import { requireAuth } from '../plugins/auth.js';
+import { layoutZoneIds } from '../services/floor-layout.service.js';
 
 const ROLE_HIERARCHY = ['viewer', 'member', 'admin', 'owner'] as const;
 
@@ -66,6 +67,29 @@ const aclUpsertBody = z.object({
 const doorBody = z.object({
   privacy: z.enum(PRIVACY_VALUES),
 });
+
+// Rejection helper for room create/update with a zone_id that is not in
+// the floor layout (see layoutZoneIds for the full rationale).
+function unknownZoneReply(
+  reply: FastifyReply,
+  requestId: string,
+  zoneId: string,
+  valid: Set<string>,
+) {
+  return reply.status(400).send({
+    error: {
+      code: 'VALIDATION_ERROR',
+      message: `zone_id "${zoneId}" is not a zone in this floor's layout`,
+      details: [
+        {
+          field: 'zone_id',
+          issue: `must be one of the floor's layout zones: ${[...valid].slice(0, 20).join(', ')}`,
+        },
+      ],
+      request_id: requestId,
+    },
+  });
+}
 
 /**
  * Read live occupants set for a room from Redis.
@@ -186,7 +210,7 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
 
       // Verify the floor exists and belongs to this org
       const [floor] = await db
-        .select({ id: bureauFloors.id })
+        .select({ id: bureauFloors.id, layout: bureauFloors.layout })
         .from(bureauFloors)
         .where(
           and(
@@ -206,6 +230,11 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
             request_id: request.id,
           },
         });
+      }
+
+      const zoneIds = layoutZoneIds(floor.layout);
+      if (zoneIds && !zoneIds.has(body.zone_id)) {
+        return unknownZoneReply(reply, request.id, body.zone_id, zoneIds);
       }
 
       const [room] = await db
@@ -268,6 +297,18 @@ export default async function roomsRoutes(fastify: FastifyInstance) {
             request_id: request.id,
           },
         });
+      }
+
+      if (body.zone_id !== undefined && body.zone_id !== room.zone_id) {
+        const [floorRow] = await db
+          .select({ layout: bureauFloors.layout })
+          .from(bureauFloors)
+          .where(eq(bureauFloors.id, room.floor_id))
+          .limit(1);
+        const zoneIds = layoutZoneIds(floorRow?.layout);
+        if (zoneIds && !zoneIds.has(body.zone_id)) {
+          return unknownZoneReply(reply, request.id, body.zone_id, zoneIds);
+        }
       }
 
       const updates: Record<string, unknown> = { updated_at: new Date() };

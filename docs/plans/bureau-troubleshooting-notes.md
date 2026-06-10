@@ -135,6 +135,14 @@ ceiling) and `bureau-test-x@example.com` (mage-inc, cross-org), password
 `BureauTest-2026!`; rooms `Test Lock Room` / `Test Knock Room (knock)` /
 `Test DND Office (office, owner=dnd)` in zone `test-zone` on Main Floor.
 
+> **2026-06-10 (later):** the three test rooms were deleted from the dev DB —
+> `test-zone` is not a layout zone, so they were visible on the member floor
+> but invisible (unselectable, unarchivable) in the floor editor. The rooms
+> API now rejects room create/update with a zone_id missing from the floor
+> layout (`layoutZoneIds`, floor-layout.service.ts), so re-seed these
+> fixtures via direct SQL (ids `b0000000-0000-4000-8000-bbb00000000{1,2,3}`)
+> before re-running the verify harness, not via the API.
+
 **20/20 harness checks + smoke test + ghost-reap all PASS:**
 
 1. **Ring end-to-end** — `POST /v1/ring` 200 (delivered=1); recipient B got
