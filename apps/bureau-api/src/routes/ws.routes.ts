@@ -39,7 +39,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import Redis from 'ioredis';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { mintRoomToken } from '@bigbluebam/livekit-tokens';
 import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
@@ -62,6 +62,7 @@ import {
   type KnockResolution,
 } from '../lib/bureau-events.js';
 import { isUserInDnd } from '../services/dnd-check.service.js';
+import { takeRingRecord } from '../services/ring.service.js';
 import { getCallingConfig } from '../services/calling-settings.service.js';
 import * as presence from '../services/presence.service.js';
 import {
@@ -172,6 +173,23 @@ function safeSend(ws: WebSocket, payload: string): void {
 
 export default async function wsRoutes(fastify: FastifyInstance) {
   fastify.get('/bureau/ws', { websocket: true }, async (socket, request) => {
+    // ── D-13: buffer frames that arrive during async setup. ──
+    // Everything between here and the real message handler binding at the
+    // bottom of this function awaits DB lookups + Redis connects. A client
+    // that sends immediately after the upgrade (the bureau-client SDK
+    // flushes its outbound queue on 'open', BEFORE the `connected` frame)
+    // would otherwise have those frames silently dropped — `ws` discards
+    // messages emitted while no 'message' listener is attached. Buffer
+    // them now and replay them, in order, once the handler is bound.
+    const preInitFrames: Array<Buffer | string> = [];
+    const earlyMessageListener = (raw: Buffer | string) => {
+      // Cap the buffer so a flooding client can't balloon memory while we
+      // are still authenticating it. 100 frames is far beyond anything a
+      // legitimate client sends pre-`connected`.
+      if (preInitFrames.length < 100) preInitFrames.push(raw);
+    };
+    socket.on('message', earlyMessageListener);
+
     // ── Authenticate via shared session cookie at handshake time ──
     const sessionId = request.cookies?.session;
     if (!sessionId) {
@@ -356,7 +374,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       return await hasRoomAclEntry(room.id, userId);
     }
 
-    socket.on('message', async (raw: Buffer | string) => {
+    const handleMessage = async (raw: Buffer | string) => {
       // ── Per-socket rate limit ──
       const now = Date.now();
       if (now - client.msgWindowStart > WS_RATE_LIMIT_WINDOW_MS) {
@@ -438,11 +456,19 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               break;
             }
 
-            const decision = await evaluateRoomAccess(room, {
-              id: userId,
-              role: userRole,
-              is_superuser: isSuperuser,
-            });
+            // Live door-state overlay: a lock_room / set_door override in
+            // Redis takes precedence over the DB privacy_default, so locked
+            // rooms actually keep non-ACL members out.
+            const doorState = await presence.getDoorState(fastify.redis, roomId);
+            const decision = await evaluateRoomAccess(
+              room,
+              {
+                id: userId,
+                role: userRole,
+                is_superuser: isSuperuser,
+              },
+              doorState?.privacy ?? null,
+            );
             if (!decision.allowed) {
               safeSend(
                 socket,
@@ -1066,6 +1092,52 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }
 
           // ──────────────────────────────────────────────
+          // Surface-huddle ring response (presence-and-immediate-interaction).
+          // The recipient's RingHandler sends { ring_token, decision } after
+          // accept / decline / auto-decline. We validate the token against
+          // the short-lived Redis record written by ring.service.ts (one-shot:
+          // the first respond consumes it) and forward `ring_responded` to
+          // the original caller so their UI can close the outgoing-ring state.
+          case 'ring_respond': {
+            const ringToken =
+              typeof msg.ring_token === 'string' ? msg.ring_token : null;
+            const decision =
+              msg.decision === 'accept' ||
+              msg.decision === 'decline' ||
+              msg.decision === 'auto_decline'
+                ? msg.decision
+                : null;
+            if (!ringToken || !decision) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'ring_token and decision required',
+                }),
+              );
+              break;
+            }
+            const record = await takeRingRecord(fastify.redis, ringToken);
+            // Unknown/expired token, or a token addressed to someone else:
+            // ignore silently. The ring overlay auto-dismisses client-side,
+            // and we must not leak whether a guessed token was real.
+            if (!record || record.toUserId !== userId || record.orgId !== orgId) {
+              break;
+            }
+            await publishUser(
+              record.fromUserId,
+              frame('ring_responded', {
+                ring_token: ringToken,
+                decision,
+                by: { id: userId, name: displayName },
+                surface_app: record.surfaceApp,
+                surface_id: record.surfaceId,
+              }),
+            );
+            break;
+          }
+
+          // ──────────────────────────────────────────────
           // Summon flow (§10 of the design doc, workstream 6).
           // The §8 trio: summon (start), summon_respond (recipient's
           // join/stay decision), summon_grant_access (§4.4 follow-up
@@ -1233,20 +1305,49 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               break;
             }
             // Only progress out of `pending` — terminal states stick.
+            // The update is a single atomic SQL statement that rewrites ONLY
+            // this user's entry inside the recipients JSONB array. The old
+            // read-modify-write (select → mutate in JS → write whole array)
+            // lost updates when two recipients responded concurrently: the
+            // second write clobbered the first one's outcome.
+            let latestRecipients: RecipientRow[] = recipients;
             if (me.outcome === 'pending') {
-              me.outcome = decision === 'join' ? 'joined' : 'declined';
-              await db
-                .update(bureauSummons)
-                .set({ recipients })
-                .where(eq(bureauSummons.id, summonId));
+              const nextOutcome = decision === 'join' ? 'joined' : 'declined';
+              const result = (await db.execute(sql`
+                UPDATE bureau_summons
+                SET recipients = (
+                  SELECT COALESCE(
+                    jsonb_agg(
+                      CASE
+                        WHEN elem->>'userId' = ${userId}
+                         AND elem->>'outcome' = 'pending'
+                        THEN jsonb_set(elem, '{outcome}', to_jsonb(${nextOutcome}::text))
+                        ELSE elem
+                      END
+                      ORDER BY idx
+                    ),
+                    '[]'::jsonb
+                  )
+                  FROM jsonb_array_elements(recipients) WITH ORDINALITY AS t(elem, idx)
+                )
+                WHERE id = ${summonId} AND org_id = ${orgId}
+                RETURNING recipients
+              `)) as unknown;
+              const rows = Array.isArray(result)
+                ? (result as Array<{ recipients: unknown }>)
+                : ((result as { rows?: Array<{ recipients: unknown }> }).rows ?? []);
+              const returned = rows[0]?.recipients;
+              if (Array.isArray(returned)) {
+                latestRecipients = returned as RecipientRow[];
+              }
             }
 
             // Send a fresh summon_progress to the summoner so the UI can
             // tick its "joined / total" counter.
-            const joined = recipients.filter(
+            const joined = latestRecipients.filter(
               (r) => r.outcome === 'joined' || r.outcome === 'granted',
             ).length;
-            const total = recipients.length;
+            const total = latestRecipients.length;
             await publishUser(
               existing.summoner_id,
               frame('summon_progress', {
@@ -1260,7 +1361,9 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               frame('summon_ack', {
                 summonId,
                 accepted: true,
-                decision: me.outcome,
+                decision:
+                  latestRecipients.find((r) => r.userId === userId)?.outcome ??
+                  me.outcome,
               }),
             );
             break;
@@ -1329,7 +1432,23 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }),
         );
       }
+    };
+
+    // Swap the early buffering listener for the real handler, then replay
+    // anything that arrived during setup — in arrival order, sequentially,
+    // so e.g. subscribe_floor → enter_room keeps its semantics. (D-13.)
+    socket.off('message', earlyMessageListener);
+    socket.on('message', (raw: Buffer | string) => {
+      void handleMessage(raw);
     });
+    if (preInitFrames.length > 0) {
+      const buffered = preInitFrames.splice(0);
+      void (async () => {
+        for (const raw of buffered) {
+          await handleMessage(raw);
+        }
+      })();
+    }
 
     // ── Connection close (graceful or not): tear down presence state,
     //    publish leave events, unsubscribe the per-socket subscriber.

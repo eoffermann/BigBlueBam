@@ -41,7 +41,7 @@
 
 import type { FastifyBaseLogger } from 'fastify';
 import type Redis from 'ioredis';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { Queue } from 'bullmq';
 import { db } from '../db/index.js';
 import { bureauSummons, bureauSettings } from '../db/schema/bureau.js';
@@ -543,8 +543,11 @@ export async function grantAccessAndSummon(
     return { granted: 0, missing: args.userIds };
   }
 
-  // Mutate the recipients array — flip no_access → granted for any
-  // userId in args.userIds that is present, leave others untouched.
+  // Flip no_access → granted for any userId in args.userIds that is
+  // present, leave others untouched. The write is a single atomic SQL
+  // statement rewriting only the matching entries inside the recipients
+  // JSONB array — a JS read-modify-write here would race the recipients'
+  // own concurrent `summon_respond` updates and lose one side.
   type RecipientRow = {
     userId: string;
     name?: string | null;
@@ -565,19 +568,37 @@ export async function grantAccessAndSummon(
       continue;
     }
     if (existing.outcome === 'no_access') {
-      existing.outcome = 'granted';
-      delete existing.reason;
-      granted.push(existing);
+      granted.push({ ...existing, outcome: 'granted', reason: undefined });
     } else {
-      // Already eligible or already granted — skip.
+      // Already eligible or already granted — skip the flip, still re-fire.
       granted.push(existing);
     }
   }
 
-  await db
-    .update(bureauSummons)
-    .set({ recipients })
-    .where(eq(bureauSummons.id, args.summonId));
+  if (granted.length > 0) {
+    // Explicit ::text[] cast — drizzle binds a bare JS array interpolated
+    // into sql`` as one untyped param, which Postgres rejects (the D-9
+    // 42809 bug class).
+    await db.execute(sql`
+      UPDATE bureau_summons
+      SET recipients = (
+        SELECT COALESCE(
+          jsonb_agg(
+            CASE
+              WHEN elem->>'userId' = ANY(${args.userIds}::text[])
+               AND elem->>'outcome' = 'no_access'
+              THEN jsonb_set(elem - 'reason', '{outcome}', '"granted"'::jsonb)
+              ELSE elem
+            END
+            ORDER BY idx
+          ),
+          '[]'::jsonb
+        )
+        FROM jsonb_array_elements(recipients) WITH ORDINALITY AS t(elem, idx)
+      )
+      WHERE id = ${args.summonId} AND summoner_id = ${args.summonerId}
+    `);
+  }
 
   // TODO: call destination app share APIs here.
   args.logger?.info?.(
