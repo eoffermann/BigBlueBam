@@ -23,6 +23,8 @@ import {
   type UnmountFn,
 } from '@bigbluebam/bureau-client';
 import { App, type Route } from './App';
+import { useBureauStore } from './stores/bureau-store';
+import { useAuthStore } from './stores/auth.store';
 import './styles/globals.css';
 
 const queryClient = new QueryClient({
@@ -52,14 +54,28 @@ if (!rootElement) throw new Error('Root element not found');
 // floor); the floor list itself has no canonical "thing being viewed"
 // from a teleport's perspective.
 
+// The floor view drives room membership over its own WS (useBureauWs), so
+// the SDK's socket never sees our room_enter. We mirror "what spatial room
+// am I in, what's it called, who's with me" through the route object so
+// describeLocation can hand it to the SDK (LocationDescriptor.spatialRoomId)
+// and the docked box header tracks the floor view.
+type RouteWithSpatial = Route & {
+  spatialRoomId?: string | null;
+  spatialRoomName?: string | null;
+  spatialOccupantIds?: string[];
+};
+
 function describeBureauLocation(route: unknown): LocationDescriptor | undefined {
   if (!route || typeof route !== 'object') return undefined;
-  const r = route as Route;
+  const r = route as RouteWithSpatial;
   if (r.page === 'floor') {
     return {
       url: `${window.location.origin}/bureau/floors/${r.id}`,
       app: 'bureau',
       label: 'Floor',
+      spatialRoomId: r.spatialRoomId ?? null,
+      spatialRoomName: r.spatialRoomName ?? null,
+      spatialOccupantIds: r.spatialOccupantIds ?? [],
     };
   }
   if (r.page === 'admin-floor') {
@@ -67,6 +83,10 @@ function describeBureauLocation(route: unknown): LocationDescriptor | undefined 
       url: `${window.location.origin}/bureau/admin/floors/${r.id}`,
       app: 'bureau',
       label: 'Floor editor',
+      // Leaving the floor view closes its WS (presence drops server-side),
+      // so explicitly report "not in a room" — an undefined field would
+      // leave the SDK's mirrored roomId stale.
+      spatialRoomId: null,
     };
   }
   return undefined;
@@ -98,10 +118,41 @@ try {
 }
 
 // Keep the SDK's route mirror in sync with our in-app router so describeLocation
-// gets the live value on every navigation.
-function onRouteChange(route: Route) {
-  bureauMount?.setRoute(route);
+// gets the live value on every navigation. On floor pages we also merge in the
+// spatial-room mirror (see RouteWithSpatial above) and re-push whenever the
+// bureau store's occupancy or the auth store's user changes, since neither of
+// those is a route navigation.
+let currentRoute: Route | null = null;
+
+function pushRouteToSdk() {
+  if (!bureauMount || !currentRoute) return;
+  if (currentRoute.page !== 'floor') {
+    bureauMount.setRoute(currentRoute);
+    return;
+  }
+  const selfId = useAuthStore.getState().user?.id ?? null;
+  const s = useBureauStore.getState();
+  const roomId = selfId ? (s.userToRoom[selfId] ?? null) : null;
+  const room = roomId
+    ? (s.activeFloor?.rooms.find((rm) => rm.id === roomId) ?? null)
+    : null;
+  const merged: RouteWithSpatial = {
+    ...currentRoute,
+    spatialRoomId: roomId,
+    spatialRoomName: room?.name ?? null,
+    // Sorted so the SDK's change-detection sees a stable string per roster.
+    spatialOccupantIds: roomId ? Array.from(s.occupants[roomId] ?? []).sort() : [],
+  };
+  bureauMount.setRoute(merged);
 }
+
+function onRouteChange(route: Route) {
+  currentRoute = route;
+  pushRouteToSdk();
+}
+
+useBureauStore.subscribe(pushRouteToSdk);
+useAuthStore.subscribe(pushRouteToSdk);
 
 createRoot(rootElement).render(
   <StrictMode>

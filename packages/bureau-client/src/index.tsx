@@ -33,6 +33,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -64,6 +65,7 @@ import {
   type ActiveRoomTarget,
 } from './active-room.js';
 import { useActiveCall } from './use-active-call.js';
+import { InvitePopover } from './invite-popover.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -80,10 +82,7 @@ export {
   subscribeToPipMode,
   getPipMode,
 } from './pip-host.js';
-export type {
-  OpenPipWindowOptions,
-  PopoutBureauButtonProps,
-} from './pip-host.js';
+export type { PopoutBureauButtonProps } from './pip-host.js';
 
 // Unified call manager + hook — Phase 1 of the unified-LiveKit migration.
 // Hosts rarely need the raw manager; useActiveCall() is the recommended
@@ -443,27 +442,68 @@ function BureauProvider({
       return;
     }
     if (!descriptor || !descriptor.url || !descriptor.app) {
+      // Host left every located page. If the previous location carried a
+      // spatial-room mirror (Bureau floor view), drop the mirrored room —
+      // unmounting the floor view closed the floor WS, which removed our
+      // occupancy server-side.
+      if (lastLocationRef.current?.spatialRoomId != null) {
+        lastLocationRef.current = null;
+        setState((s) => ({
+          ...s,
+          roomId: null,
+          occupants: [],
+          livekit: null,
+          location: null,
+        }));
+      }
       return;
     }
     const prev = lastLocationRef.current;
-    if (
-      prev &&
+    const sameWire =
+      !!prev &&
       prev.url === descriptor.url &&
       prev.app === descriptor.app &&
       prev.label === descriptor.label &&
       prev.livekitRoom === descriptor.livekitRoom &&
-      prev.surface_id === descriptor.surface_id
-    ) {
+      prev.surface_id === descriptor.surface_id;
+    const sameSpatial =
+      !!prev &&
+      prev.spatialRoomId === descriptor.spatialRoomId &&
+      prev.spatialRoomName === descriptor.spatialRoomName &&
+      (prev.spatialOccupantIds ?? []).join(',') ===
+        (descriptor.spatialOccupantIds ?? []).join(',');
+    if (sameWire && sameSpatial) {
       return;
     }
     lastLocationRef.current = descriptor;
-    setState((s) => ({ ...s, location: descriptor ?? null }));
-    client.send({
-      type: 'location_update',
-      url: descriptor.url,
-      app: descriptor.app,
-      label: descriptor.label,
+    setState((s) => {
+      const next: PresenceState = { ...s, location: descriptor ?? null };
+      // Spatial mirror (see LocationDescriptor.spatialRoomId): only hosts
+      // that track spatial rooms set the field at all; for them the mirror
+      // is authoritative because the SDK's own WS never gets the room_enter.
+      if (descriptor.spatialRoomId !== undefined) {
+        next.roomId = descriptor.spatialRoomId;
+        const others = (descriptor.spatialOccupantIds ?? []).filter(
+          (id) => id !== s.selfUserId,
+        );
+        next.occupants = others.map(
+          (userId) =>
+            s.occupants.find((o) => o.userId === userId) ?? { userId },
+        );
+        if (!descriptor.spatialRoomId) next.livekit = null;
+      }
+      return next;
     });
+    // Occupancy/room changes are local mirrors — only re-send the wire
+    // frame when the location itself changed.
+    if (!sameWire) {
+      client.send({
+        type: 'location_update',
+        url: descriptor.url,
+        app: descriptor.app,
+        label: descriptor.label,
+      });
+    }
   }, [client, describeLocation, route]);
 
   // ── Active-call routing — keep the ActiveCallManager's target in sync
@@ -484,7 +524,7 @@ function BureauProvider({
         roomName: `bureau-room-${spatialRoomId}`,
         spatialRoomId,
       };
-    } else if (loc && loc.surface_id && loc.app) {
+    } else if (loc?.surface_id && loc.app) {
       target = {
         kind: 'surface',
         roomName: `huddle-${loc.app}-${loc.surface_id}`,
@@ -602,12 +642,6 @@ const summonBtnStyle: CSSProperties = {
   fontWeight: 600,
 };
 
-const summonBtnDisabledStyle: CSSProperties = {
-  ...summonBtnStyle,
-  background: 'rgba(37, 99, 235, 0.35)',
-  cursor: 'not-allowed',
-};
-
 const controlsRowStyle: CSSProperties = {
   display: 'flex',
   gap: 6,
@@ -696,19 +730,286 @@ const placeholderRestoreBtnStyle: CSSProperties = {
   fontSize: 11,
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// Dock position + collapse persistence (Bureau todo #5).
+//
+// The box is draggable by its header anywhere on screen and collapsible to
+// a one-line status bar. `{ x, y, collapsed }` persists per-browser in
+// localStorage so the choice survives reloads and applies across every SPA
+// on the same origin. x/y === null means "never dragged" — keep the default
+// bottom-right anchoring from boxContainerStyle.
+// ─────────────────────────────────────────────────────────────────────────
+
+const DOCK_POS_STORAGE_KEY = 'bureau.dock-pos';
+
+interface DockPos {
+  x: number | null;
+  y: number | null;
+  collapsed: boolean;
+}
+
+const defaultDockPos: DockPos = { x: null, y: null, collapsed: false };
+
+function loadDockPos(): DockPos {
+  if (typeof window === 'undefined') return defaultDockPos;
+  try {
+    const raw = window.localStorage.getItem(DOCK_POS_STORAGE_KEY);
+    if (!raw) return defaultDockPos;
+    const parsed = JSON.parse(raw) as Partial<DockPos>;
+    return {
+      x: typeof parsed.x === 'number' && Number.isFinite(parsed.x) ? parsed.x : null,
+      y: typeof parsed.y === 'number' && Number.isFinite(parsed.y) ? parsed.y : null,
+      collapsed: parsed.collapsed === true,
+    };
+  } catch {
+    return defaultDockPos;
+  }
+}
+
+function saveDockPos(pos: DockPos): void {
+  try {
+    window.localStorage.setItem(DOCK_POS_STORAGE_KEY, JSON.stringify(pos));
+  } catch {
+    /* storage full / privacy mode — non-fatal */
+  }
+}
+
+function clampCoord(v: number, max: number): number {
+  return Math.min(Math.max(0, v), Math.max(0, max));
+}
+
+interface UseDockDrag {
+  pos: DockPos;
+  dragging: boolean;
+  boxRef: React.RefObject<HTMLDivElement | null>;
+  /** Style fragment applied to the container when the user has dragged. */
+  positionStyle: CSSProperties;
+  toggleCollapsed: () => void;
+  headerHandleProps: {
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => void;
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => void;
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => void;
+    onPointerCancel: (e: React.PointerEvent<HTMLElement>) => void;
+    style: CSSProperties;
+  };
+}
+
+function useDockDrag(enabled: boolean): UseDockDrag {
+  const [pos, setPos] = useState<DockPos>(loadDockPos);
+  const [dragging, setDragging] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  // Grab offset of the pointer within the box, captured on pointerdown.
+  const dragStateRef = useRef<{ pointerId: number; dx: number; dy: number } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (enabled) saveDockPos(pos);
+  }, [pos, enabled]);
+
+  const clampIntoViewport = useCallback(() => {
+    setPos((p) => {
+      if (p.x === null || p.y === null) return p;
+      const el = boxRef.current;
+      const w = el?.offsetWidth ?? 260;
+      const h = el?.offsetHeight ?? 120;
+      const cx = clampCoord(p.x, window.innerWidth - w);
+      const cy = clampCoord(p.y, window.innerHeight - h);
+      if (cx === p.x && cy === p.y) return p;
+      return { ...p, x: cx, y: cy };
+    });
+  }, []);
+
+  // Viewport resize can strand a dragged box off-screen — clamp it back.
+  useEffect(() => {
+    if (!enabled) return;
+    window.addEventListener('resize', clampIntoViewport);
+    return () => window.removeEventListener('resize', clampIntoViewport);
+  }, [enabled, clampIntoViewport]);
+
+  // Expanding near the bottom/right edge can also push the box off-screen;
+  // re-clamp after the size change lands in layout.
+  // biome-ignore lint/correctness/useExhaustiveDependencies(pos.collapsed): collapsed toggles change the box size, which is exactly when we need to re-clamp.
+  useEffect(() => {
+    if (!enabled) return;
+    const id = window.requestAnimationFrame(clampIntoViewport);
+    return () => window.cancelAnimationFrame(id);
+  }, [enabled, pos.collapsed, clampIntoViewport]);
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    // Buttons inside the header keep their click semantics — no drag.
+    if ((e.target as HTMLElement).closest('button')) return;
+    const el = boxRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      dx: e.clientX - rect.left,
+      dy: e.clientY - rect.top,
+    };
+    setDragging(true);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture is best-effort */
+    }
+    e.preventDefault();
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const d = dragStateRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const el = boxRef.current;
+    const w = el?.offsetWidth ?? 260;
+    const h = el?.offsetHeight ?? 120;
+    const x = clampCoord(e.clientX - d.dx, window.innerWidth - w);
+    const y = clampCoord(e.clientY - d.dy, window.innerHeight - h);
+    setPos((p) => (p.x === x && p.y === y ? p : { ...p, x, y }));
+  }, []);
+
+  const endDrag = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const d = dragStateRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    dragStateRef.current = null;
+    setDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setPos((p) => ({ ...p, collapsed: !p.collapsed }));
+  }, []);
+
+  const positionStyle: CSSProperties =
+    enabled && pos.x !== null && pos.y !== null
+      ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }
+      : {};
+
+  return {
+    pos,
+    dragging,
+    boxRef,
+    positionStyle,
+    toggleCollapsed,
+    headerHandleProps: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: endDrag,
+      onPointerCancel: endDrag,
+      style: {
+        cursor: dragging ? 'grabbing' : 'grab',
+        touchAction: 'none',
+        userSelect: 'none',
+      },
+    },
+  };
+}
+
+/** Chevron glyph for the collapse/expand toggle; matches PopoutIcon sizing. */
+function ChevronIcon({ up }: { up: boolean }): React.ReactElement {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      style={{ transform: up ? 'rotate(180deg)' : undefined }}
+    >
+      <path d="M4 6l4 4 4-4" />
+    </svg>
+  );
+}
+
+const chevronBtnStyle: CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'rgba(250, 250, 250, 0.65)',
+  cursor: 'pointer',
+  padding: 2,
+  borderRadius: 4,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  lineHeight: 0,
+};
+
+const collapsedBarStyle: CSSProperties = {
+  ...boxContainerStyle,
+  minWidth: 0,
+  maxWidth: 280,
+  padding: '6px 10px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
+
+const inviteBtnStyle: CSSProperties = {
+  ...summonBtnStyle,
+  background: 'rgba(255,255,255,0.08)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  fontWeight: 500,
+};
+
+// location.app → ring-API surface_app. Mirrors SURFACE_APPS in
+// apps/bureau-api/src/routes/ring.routes.ts; apps absent here (banter,
+// bureau, bolt, …) don't get an Invite button because the ring endpoint
+// would reject them.
+const RING_SURFACE_APP_BY_LOCATION_APP: Record<string, string> = {
+  brief: 'brief',
+  blueprint: 'blueprint',
+  board: 'board',
+  bond: 'bond',
+  b3: 'bam',
+  bam: 'bam',
+  beacon: 'beacon',
+  helpdesk: 'helpdesk',
+};
+
 /**
  * Internal: the actual floating-box markup. Always renders the same UI
  * regardless of whether it lives in the host page or in the PiP window;
  * the only difference is the parent DOM, which createPortal handles.
  */
-function BureauDockedBoxInner(): React.ReactElement | null {
+function BureauDockedBoxInner({
+  floating = true,
+}: {
+  /**
+   * True when the box floats over the host page (drag + collapse enabled).
+   * The PiP-window copy passes false — the OS window IS the position.
+   */
+  floating?: boolean;
+}): React.ReactElement | null {
   const ctx = useContext(BureauContext);
   const call = useActiveCall();
+  const dock = useDockDrag(floating);
+  const [inviteOpen, setInviteOpen] = useState(false);
   if (!ctx) return null;
   const { state, actions } = ctx;
 
   const inRoom = !!state.roomId;
-  const canSummon = inRoom && !!state.location;
+  // Spatial rooms have their display name mirrored through the location
+  // descriptor (Bureau todo #3); fall back to the raw id for rooms entered
+  // through the SDK's own WS, which has no name source.
+  const roomDisplayName = state.location?.spatialRoomName ?? state.roomId;
+  const hasOthers = state.occupants.some((o) => o.userId !== state.selfUserId);
+  // Bureau todo #7: summoning needs someone to bring (another occupant) and
+  // somewhere to bring them (a reported location) — otherwise hide the button.
+  const canSummon = inRoom && hasOthers && !!state.location?.url;
+  const ringSurfaceApp = state.location?.app
+    ? RING_SURFACE_APP_BY_LOCATION_APP[state.location.app]
+    : undefined;
+  const inviteSurfaceId = state.location?.surface_id;
+  const canInvite = !!ringSurfaceApp && !!inviteSurfaceId;
   const callConnected = call.status === 'connected';
   const callIdle = call.status === 'idle' || call.target.kind === 'none';
   const callConnecting = call.status === 'connecting';
@@ -803,9 +1104,84 @@ function BureauDockedBoxInner(): React.ReactElement | null {
       ? controlBtnActiveStyle
       : controlBtnStyle;
 
+  // Collapsed: a one-line draggable status bar (Bureau todo #5). Only the
+  // floating inline box collapses — the PiP copy always shows the full UI.
+  if (floating && dock.pos.collapsed) {
+    const collapsedSummary = inRoom
+      ? `In: ${roomDisplayName}`
+      : callConnected && call.target.kind === 'surface'
+        ? `In: ${call.target.label ?? call.target.surfaceApp ?? 'huddle'}`
+        : 'Not in a call';
+    return (
+      <div
+        ref={dock.boxRef}
+        style={{
+          ...collapsedBarStyle,
+          ...dock.positionStyle,
+          ...dock.headerHandleProps.style,
+        }}
+        data-bureau-docked-box
+        data-bureau-collapsed
+        role="region"
+        onPointerDown={dock.headerHandleProps.onPointerDown}
+        onPointerMove={dock.headerHandleProps.onPointerMove}
+        onPointerUp={dock.headerHandleProps.onPointerUp}
+        onPointerCancel={dock.headerHandleProps.onPointerCancel}
+      >
+        <span style={statusDotStyle(state.status)} />
+        <span
+          style={{
+            fontSize: 11,
+            textTransform: 'uppercase',
+            letterSpacing: 0.7,
+            opacity: 0.6,
+          }}
+        >
+          Bureau
+        </span>
+        <span
+          style={{
+            opacity: 0.8,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 150,
+          }}
+        >
+          {collapsedSummary}
+        </span>
+        <button
+          type="button"
+          style={{ ...chevronBtnStyle, marginLeft: 'auto' }}
+          onClick={dock.toggleCollapsed}
+          title="Expand Bureau"
+          aria-label="Expand Bureau"
+          aria-expanded={false}
+        >
+          <ChevronIcon up />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div style={boxContainerStyle} data-bureau-docked-box role="region">
-      <div style={boxHeaderStyle}>
+    <div
+      ref={floating ? dock.boxRef : undefined}
+      style={floating ? { ...boxContainerStyle, ...dock.positionStyle } : boxContainerStyle}
+      data-bureau-docked-box
+      role="region"
+    >
+      <div
+        style={
+          floating
+            ? { ...boxHeaderStyle, ...dock.headerHandleProps.style }
+            : boxHeaderStyle
+        }
+        onPointerDown={floating ? dock.headerHandleProps.onPointerDown : undefined}
+        onPointerMove={floating ? dock.headerHandleProps.onPointerMove : undefined}
+        onPointerUp={floating ? dock.headerHandleProps.onPointerUp : undefined}
+        onPointerCancel={floating ? dock.headerHandleProps.onPointerCancel : undefined}
+      >
         <span>
           <span style={statusDotStyle(state.status)} />
           Bureau
@@ -814,14 +1190,28 @@ function BureauDockedBoxInner(): React.ReactElement | null {
           <span style={{ opacity: 0.6 }}>
             {state.status === 'connected' ? '' : state.status}
           </span>
-          <PopoutBureauButton />
+          {/* PiP stays available but de-emphasized — the docked box itself is
+              now repositionable, so popping out is the secondary path. */}
+          <PopoutBureauButton style={{ opacity: 0.5 }} />
+          {floating ? (
+            <button
+              type="button"
+              style={chevronBtnStyle}
+              onClick={dock.toggleCollapsed}
+              title="Collapse Bureau to a bar"
+              aria-label="Collapse Bureau to a bar"
+              aria-expanded
+            >
+              <ChevronIcon up={false} />
+            </button>
+          ) : null}
         </span>
       </div>
 
       {/* "In:" row */}
       <div>
         <span style={{ opacity: 0.7 }}>In:</span>{' '}
-        <strong>{inRoom ? state.roomId : 'No room'}</strong>
+        <strong>{inRoom ? roomDisplayName : 'No room'}</strong>
       </div>
 
       {/* Occupants */}
@@ -840,7 +1230,7 @@ function BureauDockedBoxInner(): React.ReactElement | null {
         </div>
       ) : null}
 
-      {/* Viewing + summon */}
+      {/* Viewing + actions */}
       <div style={sectionStyle}>
         <span style={{ opacity: 0.7 }}>Viewing:</span>{' '}
         {state.location ? (
@@ -851,21 +1241,37 @@ function BureauDockedBoxInner(): React.ReactElement | null {
           <span style={{ opacity: 0.55 }}>—</span>
         )}
       </div>
-      <button
-        type="button"
-        disabled={!canSummon}
-        style={canSummon ? summonBtnStyle : summonBtnDisabledStyle}
-        onClick={() => actions.summonHere()}
-        title={
-          canSummon
-            ? 'Pull everyone in this room to the resource you are viewing'
-            : inRoom
-              ? 'Nothing to summon — pick a teleportable resource first'
-              : 'Enter a room to summon people'
-        }
-      >
-        Bring everyone here
-      </button>
+      {canSummon ? (
+        <button
+          type="button"
+          style={summonBtnStyle}
+          onClick={() => actions.summonHere()}
+          title="Pull everyone in this room to the resource you are viewing"
+        >
+          Bring everyone here
+        </button>
+      ) : null}
+      {canInvite ? (
+        <button
+          type="button"
+          style={inviteBtnStyle}
+          data-bureau-invite-button
+          onClick={() => setInviteOpen((v) => !v)}
+          title="Ring people to join you on this surface"
+          aria-expanded={inviteOpen}
+        >
+          Invite…
+        </button>
+      ) : null}
+      {inviteOpen && canInvite && ringSurfaceApp && inviteSurfaceId ? (
+        <InvitePopover
+          surfaceApp={ringSurfaceApp}
+          surfaceId={inviteSurfaceId}
+          surfaceLabel={state.location?.label ?? null}
+          selfUserId={state.selfUserId}
+          onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
 
       {/* Active-call strip — what LiveKit room the docked box is in. */}
       <div
@@ -970,7 +1376,7 @@ export function BureauDockedBox(): React.ReactElement | null {
       <>
         <BureauPipPlaceholder />
         <PipPortal>
-          <BureauDockedBoxInner />
+          <BureauDockedBoxInner floating={false} />
         </PipPortal>
       </>
     );

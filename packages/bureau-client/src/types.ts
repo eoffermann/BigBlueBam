@@ -60,6 +60,22 @@ export interface LocationDescriptor {
    * haven't been threaded yet simply omit it and stay in `{ kind: 'none' }`.
    */
   surface_id?: string;
+  /**
+   * Bureau-SPA only: the spatial room the local user currently occupies on
+   * the floor being viewed. The floor view drives room membership over its
+   * OWN WebSocket (useBureauWs), so the SDK's socket never sees the
+   * room_enter — the host mirrors it here instead and the SDK adopts it as
+   * `state.roomId`.
+   *
+   * Semantics: `undefined` = host doesn't track spatial rooms (every
+   * non-Bureau SPA) — the SDK leaves its own WS-driven roomId alone.
+   * `null` = host tracks spatial rooms and the user is NOT in one.
+   */
+  spatialRoomId?: string | null;
+  /** Display name for spatialRoomId (the docked box header shows this). */
+  spatialRoomName?: string | null;
+  /** Occupant user ids of spatialRoomId, including self. */
+  spatialOccupantIds?: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────

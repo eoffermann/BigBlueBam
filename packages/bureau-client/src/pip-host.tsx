@@ -196,13 +196,6 @@ function cloneStylesheets(source: Document, target: Document): void {
 // openPipWindow / closePipWindow — the imperative API.
 // ─────────────────────────────────────────────────────────────────────────
 
-export interface OpenPipWindowOptions {
-  /** Width hint passed to requestWindow. Default 280 (matches docked box). */
-  width?: number;
-  /** Height hint passed to requestWindow. Default 360. */
-  height?: number;
-}
-
 /**
  * Opens a Document Picture-in-Picture window and switches the SDK into
  * 'pip' mode. Returns the opened Window (or null on no-op / unsupported).
@@ -210,13 +203,16 @@ export interface OpenPipWindowOptions {
  * Idempotent: a second call while already in pip mode is a no-op and
  * returns the existing window.
  *
+ * The window opens at a fixed size matching the docked box; the per-call
+ * width/height hints were removed with the draggable/collapsible docked
+ * box (Bureau todo #5) — PiP is now the secondary surface and hosts don't
+ * size it.
+ *
  * The caller is NOT required to clean up — the PiP window emits 'pagehide'
  * when closed, and we restore inline mode automatically. closePipWindow()
  * is exposed for hosts that want to force the window shut (e.g. on logout).
  */
-export async function openPipWindow(
-  options: OpenPipWindowOptions = {},
-): Promise<Window | null> {
+export async function openPipWindow(): Promise<Window | null> {
   if (!isDocumentPipSupported()) return null;
   if (state.mode === 'pip' && state.win) return state.win;
 
@@ -225,10 +221,7 @@ export async function openPipWindow(
 
   let pipWindow: Window;
   try {
-    pipWindow = await api.requestWindow({
-      width: options.width ?? 280,
-      height: options.height ?? 360,
-    });
+    pipWindow = await api.requestWindow({ width: 280, height: 360 });
   } catch (err) {
     // User dismissed the prompt, or the browser refused (e.g. no user
     // activation). Stay inline.
