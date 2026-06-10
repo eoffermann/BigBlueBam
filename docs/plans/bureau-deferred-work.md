@@ -121,4 +121,17 @@ Effort: 0.5 day.
 
 ---
 
-**Total deferred effort (D-1 through D-7): ~8-10 days.** None of these block Bureau §17 workstream 1; some (D-1, D-4) become relevant once Bureau is using LiveKit through its own bureau-api.
+## D-8: Pre-existing Bolt catalog drift in blueprint
+
+**Status:** Not started (pre-existing, surfaced by Bureau workstream 2's `scripts/check-bolt-catalog.mjs` run).
+**Severity:** Low — drift guard flags one entry but the event is being emitted from a real call site so production is fine.
+
+`apps/blueprint-api/src/routes/cross-product.routes.ts` calls `publishBoltEvent` with `(source='blueprint', event_type='diagram.promoted_to_tasks')` but the `(source, event_type)` pair is missing from `apps/bolt-api/src/services/event-catalog.ts`. The drift guard rejects this on CI — though it has apparently been merging anyway, so either CI doesn't currently run the drift guard, or the violation has been ignored.
+
+Fix is one-liner: add `{ source: 'blueprint', event_type: 'diagram.promoted_to_tasks', ... }` to the `blueprintEvents` array in event-catalog.ts. Effort: 5 minutes.
+
+Per CLAUDE.md "pre-existing is not a dismissal" — recording it here. Will be picked up when someone touches Bolt next.
+
+---
+
+**Total deferred effort (D-1 through D-8): ~8-10 days.** None of these block Bureau §17 workstream 1; some (D-1, D-4) become relevant once Bureau is using LiveKit through its own bureau-api.
