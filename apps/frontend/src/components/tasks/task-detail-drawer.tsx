@@ -33,7 +33,7 @@ import {
   GitPullRequest,
   ExternalLink,
 } from 'lucide-react';
-import type { Task, Priority, ApiResponse, PaginatedResponse } from '@bigbluebam/shared';
+import type { Task, Priority, ApiResponse, PaginatedResponse, TaskLink, TaskLinkInput } from '@bigbluebam/shared';
 import { PRIORITIES } from '@bigbluebam/shared';
 import { cn, formatDate, formatRelativeTime, isOverdue } from '@/lib/utils';
 import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
@@ -45,6 +45,7 @@ import { RichTextEditor } from '@/components/common/rich-text-editor';
 import { api } from '@/lib/api';
 import { DatePicker } from '@/components/common/date-picker';
 import { HelpdeskPanel } from '@/components/tasks/helpdesk-panel';
+import { TaskLinksSection } from '@/components/tasks/task-links-section';
 import {
   useTaskParents,
   useTaskSubtasks,
@@ -914,6 +915,18 @@ export function TaskDetailDrawer({
                               </div>
                             )}
                           </div>
+
+                          {/* Links (CSV-import plan §4.2). Persists via the
+                              existing task update mutation — onChange sends the
+                              full links array (TaskLinkInput[]), mirroring how
+                              labels/custom-fields PATCH the task. links is
+                              already accepted by updateTask. */}
+                          <TaskLinksSection
+                            links={((task as Task & { links?: TaskLink[] }).links ?? []) as TaskLink[]}
+                            onChange={(links: TaskLinkInput[]) =>
+                              onUpdate?.(task.id, { links } as Partial<Task>)
+                            }
+                          />
 
                           {/* GitHub refs */}
                           {githubRefs.length > 0 && (

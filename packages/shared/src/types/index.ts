@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { TaskLink } from '../schemas/task.js';
 import type {
   registerSchema,
   bootstrapSchema,
@@ -191,6 +192,7 @@ export interface Task {
   blocking_task_ids: string[];
   blocked_by_task_ids: string[];
   custom_fields: Record<string, unknown>;
+  links: TaskLink[];
   attachment_count: number;
   comment_count: number;
   subtask_count: number;

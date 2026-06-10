@@ -1,74 +1,26 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, sql, asc } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
-import { phases } from '../db/schema/phases.js';
-import { labels } from '../db/schema/labels.js';
-import { users } from '../db/schema/users.js';
 import { sprints } from '../db/schema/sprints.js';
 import { projects } from '../db/schema/projects.js';
 import { comments } from '../db/schema/comments.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
+import { requireProjectAccess } from '../middleware/authorize.js';
+import {
+  findOrCreatePhase,
+  findOrCreateLabel,
+  findUserByEmail,
+  getDefaultPhase,
+  normalizePriority,
+  runImport,
+  previewImport,
+  ImportError,
+  type ImportBody,
+} from '../services/import.service.js';
 
-// ── helpers ─────────────────────────────────────────────────────────────
-
-async function findOrCreatePhase(projectId: string, name: string) {
-  const [existing] = await db
-    .select()
-    .from(phases)
-    .where(and(eq(phases.project_id, projectId), eq(phases.name, name)))
-    .limit(1);
-
-  if (existing) return existing;
-
-  const maxPos = await db
-    .select({ max: sql<number>`coalesce(max(${phases.position}), 0)` })
-    .from(phases)
-    .where(eq(phases.project_id, projectId));
-
-  const [created] = await db
-    .insert(phases)
-    .values({
-      project_id: projectId,
-      name,
-      position: (maxPos[0]?.max ?? 0) + 1,
-    })
-    .returning();
-
-  return created!;
-}
-
-async function findOrCreateLabel(projectId: string, name: string, color?: string) {
-  const [existing] = await db
-    .select()
-    .from(labels)
-    .where(and(eq(labels.project_id, projectId), eq(labels.name, name)))
-    .limit(1);
-
-  if (existing) return existing;
-
-  const [created] = await db
-    .insert(labels)
-    .values({
-      project_id: projectId,
-      name,
-      color: color ?? null,
-    })
-    .returning();
-
-  return created!;
-}
-
-async function findUserByEmail(email: string) {
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email.toLowerCase().trim()))
-    .limit(1);
-
-  return user ?? null;
-}
+// ── helpers (Trello/Jira/GitHub-only; the CSV path lives in import.service) ─
 
 async function findOrCreateSprint(projectId: string, name: string) {
   const [existing] = await db
@@ -88,26 +40,6 @@ async function findOrCreateSprint(projectId: string, name: string) {
     .returning();
 
   return created!;
-}
-
-async function getDefaultPhase(projectId: string) {
-  const [phase] = await db
-    .select()
-    .from(phases)
-    .where(and(eq(phases.project_id, projectId), eq(phases.is_start, true)))
-    .limit(1);
-
-  if (phase) return phase;
-
-  // Fallback: first phase by position
-  const [first] = await db
-    .select()
-    .from(phases)
-    .where(eq(phases.project_id, projectId))
-    .orderBy(asc(phases.position))
-    .limit(1);
-
-  return first ?? null;
 }
 
 async function generateHumanId(projectId: string): Promise<string> {
@@ -135,133 +67,100 @@ async function getNextPosition(phaseId: string): Promise<number> {
   return (result[0]?.maxPos ?? 0) + 1024;
 }
 
-// ── priority mapping ────────────────────────────────────────────────────
-
-const JIRA_PRIORITY_MAP: Record<string, string> = {
-  'Highest': 'critical',
-  'High': 'high',
-  'Medium': 'medium',
-  'Low': 'low',
-  'Lowest': 'low',
-};
-
-const VALID_PRIORITIES = ['critical', 'high', 'medium', 'low'];
-
-function normalizePriority(value: string | undefined | null): string {
-  if (!value) return 'medium';
-  const lower = value.toLowerCase().trim();
-  if (VALID_PRIORITIES.includes(lower)) return lower;
-  return JIRA_PRIORITY_MAP[value] ?? 'medium';
-}
-
 // ── routes ──────────────────────────────────────────────────────────────
+
+// ── CSV import body schema (extended, backward-compatible) ────────────────
+// rows + mapping are the original contract; value_maps, link_mappings, and
+// options are the Phase-1 additions (csv-import plan §5.2). Same schema drives
+// both the commit and preview endpoints.
+const csvImportBodySchema = z.object({
+  rows: z.array(z.record(z.string())).max(5000),
+  mapping: z.record(z.string()),
+  value_maps: z.record(z.record(z.string().nullable())).optional(),
+  link_mappings: z
+    .array(
+      z.object({
+        column: z.string(),
+        label: z.string().nullable().optional(),
+        fetch_title: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  options: z
+    .object({
+      duplicate_strategy: z.enum(['create', 'skip']).optional(),
+    })
+    .optional(),
+});
 
 export default async function importRoutes(fastify: FastifyInstance) {
   // ── POST /projects/:id/import/csv ─────────────────────────────────────
   fastify.post<{ Params: { id: string } }>(
     '/projects/:id/import/csv',
-    { preHandler: [requireAuth, fastify.requireCan('bam.project_import_csv.create'), requireScope('read_write')] },
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.project_import_csv.create'),
+        requireScope('read_write'),
+        requireProjectAccess(),
+      ],
+    },
     async (request, reply) => {
-      const bodySchema = z.object({
-        rows: z.array(z.record(z.string())).max(5000),
-        mapping: z.record(z.string()),
-      });
-
-      const { rows, mapping } = bodySchema.parse(request.body);
+      const body = csvImportBodySchema.parse(request.body) as ImportBody;
       const projectId = request.params.id;
       const userId = request.user!.id;
 
-      if (!mapping.title) {
-        return reply.status(400).send({
-          error: {
-            code: 'BAD_REQUEST',
-            message: 'mapping.title is required',
-            details: [],
-            request_id: request.id,
-          },
-        });
-      }
-
-      const defaultPhase = await getDefaultPhase(projectId);
-      if (!defaultPhase) {
-        return reply.status(400).send({
-          error: {
-            code: 'BAD_REQUEST',
-            message: 'Project has no phases configured',
-            details: [],
-            request_id: request.id,
-          },
-        });
-      }
-
-      let imported = 0;
-      let skipped = 0;
-      const errors: string[] = [];
-
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i]!;
-        try {
-          const title = row[mapping.title!]?.trim();
-          if (!title) {
-            skipped++;
-            errors.push(`Row ${i + 1}: missing title`);
-            continue;
-          }
-
-          // Resolve phase
-          let phaseId = defaultPhase.id;
-          if (mapping.phase_name && row[mapping.phase_name]) {
-            const phase = await findOrCreatePhase(projectId, row[mapping.phase_name]!.trim());
-            phaseId = phase.id;
-          }
-
-          // Resolve assignee
-          let assigneeId: string | null = null;
-          if (mapping.assignee_email && row[mapping.assignee_email]) {
-            const user = await findUserByEmail(row[mapping.assignee_email]!);
-            if (user) assigneeId = user.id;
-          }
-
-          // Resolve labels
-          let labelIds: string[] = [];
-          if (mapping.labels && row[mapping.labels]) {
-            const labelNames = row[mapping.labels]!.split(',').map((l) => l.trim()).filter(Boolean);
-            for (const name of labelNames) {
-              const label = await findOrCreateLabel(projectId, name);
-              labelIds.push(label.id);
-            }
-          }
-
-          const humanId = await generateHumanId(projectId);
-          const position = await getNextPosition(phaseId);
-
-          await db.insert(tasks).values({
-            project_id: projectId,
-            human_id: humanId,
-            title,
-            description: mapping.description ? (row[mapping.description] ?? null) : null,
-            phase_id: phaseId,
-            assignee_id: assigneeId,
-            reporter_id: userId,
-            priority: normalizePriority(mapping.priority ? row[mapping.priority] : undefined),
-            story_points: mapping.story_points && row[mapping.story_points]
-              ? parseInt(row[mapping.story_points]!, 10) || null
-              : null,
-            due_date: mapping.due_date && row[mapping.due_date]
-              ? row[mapping.due_date]!
-              : null,
-            labels: labelIds,
-            position,
+      try {
+        const result = await runImport(projectId, body, userId);
+        return reply.send({ data: result });
+      } catch (err) {
+        if (err instanceof ImportError) {
+          return reply.status(400).send({
+            error: {
+              code: 'BAD_REQUEST',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
           });
-
-          imported++;
-        } catch (err) {
-          skipped++;
-          errors.push(`Row ${i + 1}: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
+        throw err;
       }
+    },
+  );
 
-      return reply.send({ data: { imported, skipped, errors } });
+  // ── POST /projects/:id/import/csv/preview (dry-run, writes nothing) ────
+  fastify.post<{ Params: { id: string } }>(
+    '/projects/:id/import/csv/preview',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.project_import_csv.create'),
+        requireScope('read_write'),
+        requireProjectAccess(),
+      ],
+    },
+    async (request, reply) => {
+      const body = csvImportBodySchema.parse(request.body) as ImportBody;
+      const projectId = request.params.id;
+      const userId = request.user!.id;
+
+      try {
+        const result = await previewImport(projectId, body, userId);
+        return reply.send({ data: result });
+      } catch (err) {
+        if (err instanceof ImportError) {
+          return reply.status(400).send({
+            error: {
+              code: 'BAD_REQUEST',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        throw err;
+      }
     },
   );
 
