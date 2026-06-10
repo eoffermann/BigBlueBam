@@ -67,7 +67,7 @@ packages/
   db-stubs/         Shared Drizzle stubs and helpers for tests and isolated DB bootstraps (@bigbluebam/db-stubs, added Wave 1.A).
   livekit-tokens/   LiveKit access-token minting shared by board-api and voice-agent callers (@bigbluebam/livekit-tokens, added Wave 1.A).
 infra/
-  postgres/         migrations/ (numbered, idempotent SQL migrations). 140 files as of tip 0140_agent_runner_webhooks.sql (Wave 5 §20 outbound webhooks).
+  postgres/         migrations/ (numbered, idempotent SQL migrations). 141 files as of tip 0141_book_event_livekit_room.sql (D-4 Book event LiveKit rooms).
   nginx/            nginx.conf, certs.
   livekit/          LiveKit SFU configuration (livekit.yaml).
 scripts/            Utility scripts: deploy adapters, seed-all.mjs master orchestrator, per-app seeders, check-bolt-catalog.mjs drift guard, db-check.mjs, lint-migrations.mjs, and screenshot generators.
@@ -145,7 +145,7 @@ The cost of tracking an existing error is a one-line TaskCreate call. The cost o
 
 ## Database Schema and Migrations
 
-**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 140 migration files with tip `0140_agent_runner_webhooks.sql` (Wave 5 §20 outbound agent-runner webhooks).
+**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 141 migration files with tip `0141_book_event_livekit_room.sql` (D-4 Book event LiveKit rooms).
 
 The `migrate` service (reuses the api image, runs `node dist/migrate.js`) is a `service_completed_successfully` dependency of every DB-using service: api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, worker. It runs automatically on every `docker compose up`, tracks applied migrations in the `schema_migrations` table with SHA-256 checksums, and is a no-op once the DB is current.
 

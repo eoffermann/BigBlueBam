@@ -281,6 +281,8 @@ export default async function internalRoutes(fastify: FastifyInstance) {
           title,
           location: `Bureau room ${room_id}`,
           meeting_url: meetingUrl,
+          // D-4: Bureau reservations join the spatial room, not a huddle.
+          livekit_room_name: `bureau-room-${room_id}`,
           start_at: startsAt,
           end_at: endsAt,
           all_day: false,

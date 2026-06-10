@@ -73,6 +73,10 @@ const SURFACE_APPS = [
   // D-14 follow-up: ring.routes.ts accepts banter surfaces, so the huddle
   // token mint must too (the SDK joins huddle-banter-{channelId} on accept).
   'banter',
+  // D-4: Book event pages advertise the event id as surface_id; the
+  // event's meeting_url deep-links there and the docked box joins
+  // huddle-book-{eventId}.
+  'book',
 ] as const;
 
 /** uuid or 1-64 char lowercase-alphanumeric-and-dash slug. */

@@ -25,6 +25,14 @@ export const bookEvents = pgTable(
     description: text('description'),
     location: text('location'),
     meeting_url: text('meeting_url'),
+    /**
+     * Canonical LiveKit room for this event (D-4). Book-native events get
+     * `huddle-book-{eventId}` (joined by the Bureau docked box when anyone
+     * opens /book/events/{id}); Bureau room reservations carry
+     * `bureau-room-{roomId}`. Null when the organizer supplied an external
+     * meeting_url (Zoom et al.) — we don't double-book a room for those.
+     */
+    livekit_room_name: text('livekit_room_name'),
     start_at: timestamp('start_at', { withTimezone: true }).notNull(),
     end_at: timestamp('end_at', { withTimezone: true }).notNull(),
     all_day: boolean('all_day').notNull().default(false),

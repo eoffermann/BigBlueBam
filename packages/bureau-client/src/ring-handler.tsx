@@ -117,6 +117,9 @@ function surfaceUrlFor(app: string, id: string): string {
       return `/beacon/${id}`;
     case 'helpdesk':
       return `/helpdesk/tickets/${id}`;
+    case 'book':
+      // Book event-detail page (D-4); the docked box joins huddle-book-{id}.
+      return `/book/events/${id}`;
     case 'banter':
       // surface_id is the channel id; Banter routes channels by slug, so we
       // go through its /go/:channelId resolver, which bounces to

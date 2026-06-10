@@ -193,16 +193,14 @@ summon / status-change frequency from a malicious or buggy client.
 
 This is the live gap list, ordered most-to-least urgent for production.
 
-- **D-12 (cross-app preflight is `stub_allow`)** — the per-app
-  `resolveAccess` handlers for board, brief, and Bam return
-  `{ allowed: true, canShare: false, reason: 'stub_allow' }` until the
-  destination apps ship a `POST /v1/internal/can-read` route. **Impact:
-  summons cannot leak resource existence today because the eligibility
-  split simply degenerates to "everyone is allowed"** — but `canShare` is
-  always false, so the §4.4 "Grant access & bring them" dialog never
-  fires. Once the preflights ship, the access-leak protection becomes
-  real and `canShare` starts driving the grant-access path. Tracked in
-  the cross-app-access.service.ts TODO blocks.
+- **D-12 (cross-app preflight) — ✅ CLOSED 2026-06-09 (commit fddda02).**
+  board-api and brief-api ship `POST /v1/internal/can-read`, apps/api
+  ships `POST /internal/can-read` (via the §11 visibility preflight). The
+  eligibility filter is real and `canShare` drives the §4.4 grant dialog
+  for Board/Brief. Residual: `stub_allow` remains as the transport-failure
+  fallback (a peer outage degrades to the historical permissive behavior
+  rather than breaking summons) — flip to fail-closed if the threat model
+  hardens.
 - **Voice-agent per-org config persistence** — the LiveKit voice agent
   does not yet persist per-org config (STT/TTS provider, language,
   voice). Currently it reads a global config and would leak settings

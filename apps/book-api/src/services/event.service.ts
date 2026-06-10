@@ -1,7 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bookEvents, bookEventAttendees } from '../db/schema/index.js';
 import { notFound, badRequest } from '../lib/utils.js';
+import { eventUrl } from '../lib/urls.js';
+
+/**
+ * Canonical LiveKit room for a Book-native event (D-4). Matches the v2
+ * unified-call naming contract: the Bureau docked box auto-joins this room
+ * for anyone viewing /book/events/{id} because the Book SPA advertises the
+ * event id as its surface_id.
+ */
+export function buildBookHuddleRoomName(eventId: string): string {
+  return `huddle-book-${eventId}`;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -139,15 +151,25 @@ export async function createEvent(
     throw badRequest('End time must be after start time');
   }
 
+  // D-4: every Book-native event without an explicit external meeting URL
+  // gets the canonical huddle room + a deep link to the event page as its
+  // join URL. Pre-generate the id so the URL/room land in the same insert.
+  const eventId = randomUUID();
+  const hasExternalMeetingUrl = !!input.meeting_url;
+
   const [event] = await db
     .insert(bookEvents)
     .values({
+      id: eventId,
       calendar_id: input.calendar_id,
       organization_id: orgId,
       title: input.title,
       description: input.description,
       location: input.location,
-      meeting_url: input.meeting_url,
+      meeting_url: hasExternalMeetingUrl ? input.meeting_url : eventUrl(eventId),
+      livekit_room_name: hasExternalMeetingUrl
+        ? null
+        : buildBookHuddleRoomName(eventId),
       start_at: startAt,
       end_at: endAt,
       all_day: input.all_day ?? false,

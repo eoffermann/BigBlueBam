@@ -60,6 +60,8 @@ const SURFACE_APPS = [
   // D-14: Banter channels/DMs are ring-capable surfaces — surface_id is the
   // channel id, and the receiver resolves it via /banter/go/:channelId.
   'banter',
+  // D-4: Book event pages (surface_id = event id, URL /book/events/:id).
+  'book',
 ] as const;
 
 const SURFACE_ID_REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{0,63})$/;

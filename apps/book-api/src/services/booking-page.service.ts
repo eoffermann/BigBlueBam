@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bookBookingPages, bookEvents, bookCalendars, users } from '../db/schema/index.js';
 import { notFound, badRequest, conflict } from '../lib/utils.js';
+import { eventUrl } from '../lib/urls.js';
 import * as availabilityService from './availability.service.js';
+import { buildBookHuddleRoomName } from './event.service.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -283,14 +286,21 @@ export async function bookSlot(
       throw conflict('This time slot is no longer available');
     }
 
-    // Create the event inside the transaction
+    // Create the event inside the transaction. D-4: a confirmed public
+    // booking gets the canonical huddle room + the event deep link as its
+    // meeting URL, so the organizer's calendar row carries a working
+    // "join" target the docked box honors.
+    const eventId = randomUUID();
     const [created] = await tx
       .insert(bookEvents)
       .values({
+        id: eventId,
         calendar_id: calendar.id,
         organization_id: page.organization_id,
         title: `${page.title} with ${name}`,
         description: notes ?? '',
+        meeting_url: eventUrl(eventId),
+        livekit_room_name: buildBookHuddleRoomName(eventId),
         start_at: start,
         end_at: end,
         timezone: 'UTC',

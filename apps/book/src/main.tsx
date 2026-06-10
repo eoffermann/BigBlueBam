@@ -40,14 +40,23 @@ createRoot(rootElement).render(
   </StrictMode>,
 );
 
-// ─── Bureau-client mount (workstream 13) ─────────────────────────────────
+// ─── Bureau-client mount (workstream 13 + D-4) ───────────────────────────
+// Event-detail pages advertise the event id as surface_id so the docked
+// box auto-joins the event's canonical room (huddle-book-{eventId}) —
+// that's what makes a book_events.meeting_url deep link a working call.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/book')) return undefined;
+  const eventMatch = path.match(/^\/book\/events\/([^/]+)$/);
+  const surface_id =
+    eventMatch && UUID_RE.test(eventMatch[1]!) ? eventMatch[1]! : undefined;
   return {
     url: window.location.origin + path,
     app: 'book',
     label: path,
+    surface_id,
   };
 }
 

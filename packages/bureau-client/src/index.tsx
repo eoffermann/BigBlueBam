@@ -974,6 +974,7 @@ const RING_SURFACE_APP_BY_LOCATION_APP: Record<string, string> = {
   beacon: 'beacon',
   helpdesk: 'helpdesk',
   banter: 'banter',
+  book: 'book',
 };
 
 /**

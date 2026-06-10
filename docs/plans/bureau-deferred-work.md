@@ -12,9 +12,7 @@ The Phase 2 deletions removed every per-app LiveKit stack that this item was mea
 - `apps/brief-api/src/services/livekit.service.ts` — deleted.
 - `apps/banter-api/src/services/livekit-token.ts` — `call.routes.ts` follows; the docked box now handles 1:1, huddle, and surface calling uniformly.
 
-The remaining consumers — `bureau-api` token mints (spatial + surface huddle) and `voice-agent` — are a much smaller surface. The shared resolver can either ship as a 2-call utility in `@bigbluebam/livekit-tokens` or live inline in bureau-api's env layer with a `voice-agent` bridge endpoint on `apps/api`. The `calling.global_enabled = false` kill switch still needs implementing on those two paths, but the original 4-app fan-out described in the v1 item is moot.
-
-Effort: 4-6 hours (down from 1-2 days).
+**Remainder ✅ CLOSED** (commit 77e9662, 2026-06-09): `apps/bureau-api/src/services/calling-settings.service.ts` resolves `calling.*` from system_settings over env (15s cache, stale-cache-then-env failure posture). All three Bureau mint paths honor `calling.global_enabled` (REST 503 CALLING_DISABLED; WS joins the room without audio) and mint with the resolved credentials, so LiveKit key/host rotation via the settings page takes effect without redeploy. The switch mirrors to Redis (`calling:global_enabled`) and the voice agent checks the mirror at spawn, coming up log-only when disabled. Verified live: 503 when off, 200 when on.
 
 ## D-2: Merge or link `CallingCredentialsCard` (env-status) with the new Platform Calling Settings page ✅ CLOSED
 
@@ -38,26 +36,20 @@ A user opening a Brief doc now auto-joins `huddle-brief-{docId}` via the bureau-
 
 Phase 2 deleted `apps/brief-api/src/routes/audio.routes.ts`, `apps/brief-api/src/services/livekit.service.ts`, `apps/brief/src/components/continuous-audio-widget.tsx`, and `apps/brief/src/hooks/use-continuous-audio.ts` — Brief's contribution to this item is gone.
 
-## D-4: Book auto-creates LiveKit rooms on event booking
+## D-4: Book auto-creates LiveKit rooms on event booking ✅ CLOSED
 
-**Status:** Not started.
+**Status:** Closed (2026-06-09), realized in v2 unified-call terms rather than the v1 sketch above: instead of a bespoke `book-{eventId}` room + token path, Book events ride the canonical surface-huddle rail.
+
+- Migration 0141 adds `book_events.livekit_room_name`.
+- Book-native events (authed create + public booking confirmation) get `livekit_room_name = huddle-book-{eventId}` and, when no external meeting URL was supplied, `meeting_url = {PUBLIC_URL}/book/events/{eventId}` — the deep link IS the join link. Bureau room reservations record `bureau-room-{roomId}`.
+- The Book SPA advertises the event id as `surface_id` on `/book/events/:id`, so the docked box auto-joins `huddle-book-{eventId}` for anyone opening the meeting URL; tokens mint through bureau-api's surface-huddle endpoint (which honors the D-1 kill switch + credential resolver). `'book'` added to both bureau-api SURFACE_APPS lists and the SDK's ring/Invite maps.
+- Known limitation: external attendees from public booking pages (no BBB account) see the URL but can't join — the surface-huddle mint requires a session. Guest access is a separate feature.
 **Tracking:** Calling audit doc §1 Book.
 
-`book_events.meeting_url` exists today as a freeform string. Bureau §16 envisions bureau-api delegating booking to Book, but Book has no LiveKit awareness. Required:
+## D-5: voice-agent per-org STT/LLM/TTS persistence ✅ CLOSED
 
-- A `livekit_room_name` column on `book_events`.
-- On booking confirmation (or activation), book-api mints a room name `book-{eventId}` (or accepts a Bureau-supplied `bureau-room-<uuid>` when the booking came via Bureau).
-- The booking's meeting URL becomes a deep link to the LiveKit room (or to Bureau's room).
-- Attendees joining the link get a token minted via the same D-1 resolver.
-
-Effort: 2 days.
-
-## D-5: voice-agent per-org STT/LLM/TTS persistence
-
-**Status:** Not started.
+**Status:** Closed (commit ae13fe0, 2026-06-09). POST /config is org-scoped (org-less legacy pushes land on a `_global` key) and the merged config persists to the `voice-agents:provider-config` Redis hash via the existing AgentRegistry connection; resolution is a read-through cache (memory → Redis org key → global key → env). `/agents/spawn`, `/transcribe`, and `GET /config` accept org_id; banter-api sends org_id on both push sites; the worker transcription job forwards it. Verified live: org-scoped config survived a pod restart while the global view stayed isolated.
 **Tracking:** Calling audit doc §1 voice-agent.
-
-Today voice-agent's STT/LLM/TTS provider config is platform-wide env-only with in-memory overrides pushed by banter-api at admin settings change. A pod restart loses any per-org customization until the next banter-api push.
 
 Required: voice-agent persists per-org config in Redis (e.g., `voice_agent:org:{orgId}:config`) so a restart re-hydrates. Banter-api continues to push on admin-settings change; voice-agent reads the appropriate row when spawning into a call's room.
 
@@ -98,29 +90,19 @@ Effort: 2-3 hours follow-up.
 
 **Status:** Closed (commit d1ef222, 2026-06-09). Root cause: drizzle binds a JS array interpolated into a raw `` sql`...ANY(${arr})` `` template as one untyped param, which Postgres rejects with 42809. Step 3a became a single `UPDATE..RETURNING`; the same bug class was fixed in banter-api @mention resolution (4 sites), blast-api segment 'in' conditions, and the Bam bulk-task access check via explicit `::text[]`/`::uuid[]` casts. Also fixed in-pass: the sweep's fan-out queues dropped the Redis password (host/port-only URL parse). Verified by manual enqueue — sweep completes through all 4 steps.
 
-## D-10: Consolidate ws.routes.ts inline presence layer
+## D-10: Consolidate ws.routes.ts inline presence layer ✅ CLOSED
 
-**Status:** Not started. (Section reconstructed from the resume-after-restart notes — the original write-up was lost to the 2026-06-09 reboot before this file was updated.)
+**Status:** Closed (commit fe70506, 2026-06-09). The WS hub now consumes `services/presence.service.ts` + `services/presence-publisher.service.ts`; the inline duplicate (~230 lines) is gone. The services gained `setFloor`, `snapshotFloor`, an explicit-floorId `enterRoom` param, and orgId/roomId extras + `'offline'` on `mirrorPresenceToShared` to cover the hub's needs.
 
-`apps/bureau-api/src/routes/ws.routes.ts` carries an inline presence layer that duplicates state the hub/service layer also tracks. Consolidate to one owner.
+## D-11: Banter internal DM endpoint for "leave a note" ✅ CLOSED
 
-Effort: ~2 hours.
+**Status:** Closed (commit a38ac3d, 2026-06-09). banter-api ships `POST /v1/internal/dm` (X-Internal-Secret gated, `services/internal-dm.ts`): validates both users, finds-or-creates the 1:1 DM channel with the same slug convention as `POST /v1/dm`, posts as the sender, broadcasts `message.created`, and emits the standard `dm` notification. bureau-api's `POST /v1/knocks/leave-note` (which already speculatively called it) now actually delivers and returns `200 { delivered: true }`. Verified live: 201 with channel + message ids between two seeded users. The ring 423 path's chip-strip UI still deep-links to the DM (works); converting it to an inline composer can ride on this endpoint later.
 
-## D-11: Banter internal DM endpoint for "leave a note"
+## D-12: Cross-app can-read preflights for board-api / brief-api / apps/api ✅ CLOSED
 
-**Status:** Not started. (Reconstructed, see D-10 note.)
+**Status:** Closed (commit fddda02, 2026-06-09). The summon eligibility filter is live: board-api and brief-api ship `POST /v1/internal/can-read` (mirroring their `authorize.ts` read guards, with real `can_share` for creator/org-admin), apps/api ships `POST /internal/can-read` (dispatching through the §11 `visibility.service` preflight). bureau-api's `stub_allow` fallback now fires only on transport failure. Drive-by: `surfaceUrlFor()` built dead URLs for board/brief/beacon — fixed (ring accept previously 404'd on those apps).
 
-The ring flow's 423 RECIPIENT_DND path offers "leave a note", which today deep-links to `/banter/dm/...`. A Banter-internal endpoint to post the note directly (without navigating away) would close the loop.
-
-Effort: 2-3 hours.
-
-## D-12: Cross-app can-read preflights for board-api / brief-api / apps/api
-
-**Status:** Not started. (Reconstructed, see D-10 note.)
-
-Per the agent-visibility conventions, surfaces that accept cross-app references should preflight `can_access` for the asking user. board-api, brief-api, and apps/api each have at least one ingestion path missing the check.
-
-Effort: ~1 day total.
+Note for future visibility-model changes: the board/brief internal routes restate their middleware's visibility branch as pure functions — keep them in sync with `requireBoardAccess` / `requireDocumentAccess`.
 
 ## D-13: ws.routes.ts subscribe-vs-listener race
 
