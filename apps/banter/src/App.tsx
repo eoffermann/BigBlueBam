@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/stores/auth.store';
+import { useChannel } from '@/hooks/use-channels';
 import { BanterLayout } from '@/pages/banter-layout';
 import { ChannelView } from '@/pages/channel-view';
 import { ChannelBrowser } from '@/pages/channel-browser';
@@ -17,6 +18,7 @@ import { Loader2 } from 'lucide-react';
 type Route =
   | { page: 'channel'; slug: string }
   | { page: 'dm'; id: string }
+  | { page: 'go'; id: string }
   | { page: 'browse' }
   | { page: 'bookmarks' }
   | { page: 'search' }
@@ -49,6 +51,15 @@ function parseRoute(path: string): Route {
     return { page: 'dm', id: dmMatch[1]! };
   }
 
+  // /go/:channelId — channel-id resolver used by cross-app deep links that
+  // only know the canonical channel id (e.g. the Bureau ring handler's
+  // surfaceUrlFor for surface_app 'banter'). Redirects to /channels/:slug
+  // or /dm/:id once the channel record loads.
+  const goMatch = p.match(/^\/go\/([^/]+)$/);
+  if (goMatch) {
+    return { page: 'go', id: goMatch[1]! };
+  }
+
   const callMatch = p.match(/^\/calls\/([^/]+)$/);
   if (callMatch) {
     return { page: 'call', id: callMatch[1]! };
@@ -63,6 +74,40 @@ function parseRoute(path: string): Route {
   if (p === '/help') return { page: 'help' };
 
   return { page: 'redirect' };
+}
+
+/**
+ * Resolver for /banter/go/:channelId. Cross-app callers (Bureau ring
+ * accept, entity links) know the channel ID but not its slug/type; this
+ * looks the channel up and bounces to the canonical route. Unknown or
+ * inaccessible ids fall back to #general.
+ */
+function GoToChannelRedirect({
+  id,
+  onNavigate,
+}: {
+  id: string;
+  onNavigate: (path: string) => void;
+}) {
+  const { data: channel, isError } = useChannel(id);
+
+  useEffect(() => {
+    if (channel) {
+      onNavigate(
+        channel.type === 'dm' || channel.type === 'group_dm'
+          ? `/dm/${channel.id}`
+          : `/channels/${channel.slug}`,
+      );
+    } else if (isError) {
+      onNavigate('/channels/general');
+    }
+  }, [channel, isError, onNavigate]);
+
+  return (
+    <div className="flex items-center justify-center h-screen bg-zinc-50 dark:bg-zinc-950">
+      <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+    </div>
+  );
 }
 
 export function App() {
@@ -168,6 +213,11 @@ export function App() {
   // Help page renders outside the layout
   if (route.page === 'help') {
     return <HelpViewer appSlug="banter" onBack={() => navigate('/channels/general')} />;
+  }
+
+  // Channel-id resolver — show a loader while we look the channel up.
+  if (route.page === 'go') {
+    return <GoToChannelRedirect id={route.id} onNavigate={navigate} />;
   }
 
   // Default route: redirect handled by the useEffect above. Show the loader

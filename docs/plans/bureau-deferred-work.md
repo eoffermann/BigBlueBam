@@ -16,9 +16,9 @@ The remaining consumers — `bureau-api` token mints (spatial + surface huddle) 
 
 Effort: 4-6 hours (down from 1-2 days).
 
-## D-2: Merge or link `CallingCredentialsCard` (env-status) with the new Platform Calling Settings page
+## D-2: Merge or link `CallingCredentialsCard` (env-status) with the new Platform Calling Settings page ✅ CLOSED
 
-**Status:** Not started.
+**Status:** Closed (Option A, 2026-06-09). Env status renders as a banner at the top of `platform-calling-settings.tsx`; every knob shows a "Configured at: env / settings / both / not configured" chip driven by the new `env_presence` field on GET `/superuser/calling-credentials`. The console card was removed (the AdminToolCard nav entry remains).
 **Severity:** Cosmetic / UX.
 
 `apps/frontend/src/pages/superuser/index.tsx` has a read-only `CallingCredentialsCard` that shows env-var presence. The new P-2 page (`platform-calling-settings.tsx`) is now the writable surface. Two adjacent surfaces showing similar information will confuse operators.
@@ -94,14 +94,9 @@ Effort: 2-3 hours follow-up.
 
 `apps/blueprint-api/src/routes/cross-product.routes.ts` was emitting `blueprint.diagram.promoted_to_tasks` without a catalog entry; added the definition (with `id`, `project_id`, `task_count`, `link_count` payload schema) to `apps/bolt-api/src/services/event-catalog.ts`. The drift guard now reports 0 violations across 131 (source, event_type) pairs.
 
-## D-9: Pre-existing beacon-expiry-sweep cron crash
+## D-9: Pre-existing beacon-expiry-sweep cron crash ✅ CLOSED
 
-**Status:** Not started (pre-existing, surfaced during Bureau workstream 3 verification).
-**Severity:** Medium — the cron runs daily and silently fails today.
-
-The worker's `beacon-expiry-sweep` job dies with `PostgresError 42809` (wrong object type). Reproduce by triggering the job manually and reading `docker compose logs worker`. Likely an aggregate/function applied to a relation of the wrong kind in the sweep query.
-
-Effort: ~30 minutes.
+**Status:** Closed (commit d1ef222, 2026-06-09). Root cause: drizzle binds a JS array interpolated into a raw `` sql`...ANY(${arr})` `` template as one untyped param, which Postgres rejects with 42809. Step 3a became a single `UPDATE..RETURNING`; the same bug class was fixed in banter-api @mention resolution (4 sites), blast-api segment 'in' conditions, and the Bam bulk-task access check via explicit `::text[]`/`::uuid[]` casts. Also fixed in-pass: the sweep's fan-out queues dropped the Redis password (host/port-only URL parse). Verified by manual enqueue — sweep completes through all 4 steps.
 
 ## D-10: Consolidate ws.routes.ts inline presence layer
 
@@ -135,9 +130,9 @@ Two-line server fix in `apps/bureau-api/src/routes/ws.routes.ts`: the floor subs
 
 Effort: ~5 minutes.
 
-## D-14: Ring API rejects Banter surfaces, so the docked-box Invite button hides on Banter
+## D-14: Ring API rejects Banter surfaces, so the docked-box Invite button hides on Banter ✅ CLOSED
 
-**Status:** Not started (introduced as a known gap with the docked-box UX bundle, Bureau todo #7).
+**Status:** Closed (2026-06-09). `'banter'` added to `SURFACE_APPS`; the receiver-side URL problem (surface_id is the channel id, Banter routes by slug) is solved by a new `/banter/go/:channelId` resolver route in the Banter SPA that bounces to `/channels/:slug` or `/dm/:id` via the existing `GET /channels/:slugOrId`. `surfaceUrlFor()` and the Invite app map both route through it.
 
 `SURFACE_APPS` in `apps/bureau-api/src/routes/ring.routes.ts` does not include `'banter'`, so the docked box's `RING_SURFACE_APP_BY_LOCATION_APP` map (packages/bureau-client/src/index.tsx) deliberately omits it and Banter channels/DMs get no Invite button — even though Banter advertises `surface_id` and the canonical `huddle-banter-{channelId}` room would work fine. To close: add `'banter'` to the server enum, add a `banter` case to `surfaceUrlFor()` in `packages/bureau-client/src/ring-handler.tsx` (note: `surface_id` is the channel *id*, while Banter routes by slug — needs a resolvable URL), then add `banter: 'banter'` to the client map. Related: D-11 and the Banter 1:1-call wiring noted under D-6.
 
