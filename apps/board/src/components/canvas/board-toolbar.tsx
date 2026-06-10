@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/compone
 import { IconPicker } from '@/components/common/icon-picker';
 import { cn } from '@/lib/utils';
 import { AudioControls } from './audio-controls';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface BoardToolbarProps {
   boardId: string;
@@ -102,6 +103,14 @@ export function BoardToolbar({ boardId, onNavigate, onToggleChat, chatOpen }: Bo
 
       {/* Right group */}
       <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="rounded-lg bg-white/90 dark:bg-zinc-800/90 backdrop-blur shadow-sm border border-zinc-200 dark:border-zinc-700 px-2 py-1">
+          <PresenceChipStrip
+            url={`${window.location.origin}${window.location.pathname}`}
+            surfaceApp="board"
+            surfaceId={boardId}
+            surfaceLabel={board?.name ?? 'Untitled Board'}
+          />
+        </div>
         <AudioControls boardId={boardId} />
 
         <button

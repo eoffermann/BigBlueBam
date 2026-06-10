@@ -10,6 +10,7 @@ import { Button } from '@/components/common/button';
 import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
 import { formatDate, formatRelativeTime } from '@/lib/utils';
 import { useProjectName } from '@/hooks/use-projects';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface BeaconDetailPageProps {
   idOrSlug: string;
@@ -57,14 +58,22 @@ export function BeaconDetailPage({ idOrSlug, onNavigate }: BeaconDetailPageProps
             </div>
             <LifecycleActions beaconId={beacon.id} status={beacon.status} onSuccess={() => refetch()} />
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigate(`/${idOrSlug}/edit`)}
-          >
-            <Edit2 className="h-4 w-4" />
-            Edit
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <PresenceChipStrip
+              url={`${window.location.origin}${window.location.pathname}`}
+              surfaceApp="beacon"
+              surfaceId={beacon.slug ?? beacon.id}
+              surfaceLabel={beacon.title}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onNavigate(`/${idOrSlug}/edit`)}
+            >
+              <Edit2 className="h-4 w-4" />
+              Edit
+            </Button>
+          </div>
         </div>
 
         {/* Summary */}

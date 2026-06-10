@@ -18,6 +18,7 @@ import { ExportMenu } from '@/components/document/export-menu';
 import { markdownToHtml, htmlToMarkdown } from '@/lib/markdown';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import { ContinuousAudioWidget } from '@/components/continuous-audio-widget';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface DocumentEditorPageProps {
   idOrSlug?: string;
@@ -277,6 +278,14 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {isEditMode && existing && (
+            <PresenceChipStrip
+              url={`${window.location.origin}${window.location.pathname}`}
+              surfaceApp="brief"
+              surfaceId={existing.id}
+              surfaceLabel={existing.title}
+            />
+          )}
           {isEditMode && existing && (
             <ExportMenu documentId={existing.id} slug={existing.slug} />
           )}

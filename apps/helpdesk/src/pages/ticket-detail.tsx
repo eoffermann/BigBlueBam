@@ -15,6 +15,7 @@ import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
 import { api } from '@/lib/api';
 import { ArrowLeft, Send, RotateCcw, CheckCircle, ChevronDown, MessageSquareShare, Copy, X, Paperclip } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface TicketDetailPageProps {
   ticketId: string;
@@ -285,6 +286,14 @@ export function TicketDetailPage({ ticketId, onNavigate }: TicketDetailPageProps
             {' — '}
             {ticket.subject}
           </h1>
+          <div className="ml-auto">
+            <PresenceChipStrip
+              url={`${window.location.origin}${window.location.pathname}`}
+              surfaceApp="helpdesk"
+              surfaceId={ticket.id}
+              surfaceLabel={`#${ticket.ticket_number} — ${ticket.subject}`}
+            />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={ticket.status} />

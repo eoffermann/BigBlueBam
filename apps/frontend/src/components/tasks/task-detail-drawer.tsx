@@ -52,6 +52,7 @@ import {
   useRemoveTaskParent,
   type ParentTaskSummary,
 } from '@/hooks/use-tasks';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface Member {
   id: string;
@@ -547,6 +548,12 @@ export function TaskDetailDrawer({
                     />
                   </div>
                   <div className="flex items-center gap-1">
+                    <PresenceChipStrip
+                      url={`${window.location.origin}${window.location.pathname}`}
+                      surfaceApp="bam"
+                      surfaceId={task.id}
+                      surfaceLabel={task.title}
+                    />
                     <div className="relative">
                       <button
                         onClick={() => setShowShareBanter((v) => !v)}

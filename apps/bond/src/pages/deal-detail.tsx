@@ -10,6 +10,7 @@ import { useDeal, useDealStageHistory, useCloseDealWon, useCloseDealLost, useDel
 import { useDealActivities } from '@/hooks/use-activities';
 import { formatCurrency, formatDate, daysInStage, formatRelativeTime } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface DealDetailPageProps {
   dealId: string;
@@ -76,6 +77,14 @@ export function DealDetailPage({ dealId, onNavigate }: DealDetailPageProps) {
           ) : (
             <Badge variant="primary">Open</Badge>
           )}
+          <div className="ml-auto">
+            <PresenceChipStrip
+              url={`${window.location.origin}${window.location.pathname}`}
+              surfaceApp="bond"
+              surfaceId={deal.id}
+              surfaceLabel={deal.name}
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-6 text-sm text-zinc-500">

@@ -65,6 +65,7 @@ import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/compone
 import { api } from '@/lib/api';
 import { downloadBlob } from '@/lib/utils';
 import type { BlueprintEdge, BlueprintNode } from '@/hooks/use-diagrams';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface EditorPageProps {
   diagramId: string;
@@ -871,6 +872,12 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
 
         {/* Snapshot + export + archive */}
         <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-200 dark:border-zinc-700">
+          <PresenceChipStrip
+            url={`${window.location.origin}${window.location.pathname}`}
+            surfaceApp="blueprint"
+            surfaceId={diagramId}
+            surfaceLabel={diagram.name}
+          />
           <button
             onClick={onSnapshot}
             disabled={snapshotMutation.isPending}
