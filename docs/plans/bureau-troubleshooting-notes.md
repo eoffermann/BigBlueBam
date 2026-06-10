@@ -72,6 +72,57 @@ From `bureau-security-audit.md` §6/§7, still outstanding:
 
 ---
 
+## Phase 2 — Closed (runtime pass, 2026-06-10)
+
+The deferred findings 1-6 below were implemented and (where runtime-observable)
+verified against the rebuilt stack via `scripts/bureau-runtime-verify.mjs`
+(24/24 checks) + the new unit tests (85 bureau-api tests pass).
+
+1. **Surface-huddle mint gating (cross-org eavesdropping)** — `POST
+   /v1/surface-huddle/token` now requires the caller to be present on the
+   surface (org-scoped `isUserOnSurfaceWithGrace`); 403 `NOT_ON_SURFACE`
+   otherwise. Grace-polled server-side + client retry-on-403 so the
+   REST-mint-vs-WS-location_update race doesn't 403 legit auto-joins.
+   Runtime: on-surface user mints OK; same-org-not-on-surface AND cross-org
+   users both get 403. Commit `715db03`. 9 unit tests.
+2. **enter_room occupant snapshot ("Just you")** — server pushes
+   `room_occupants { roomId, userIds }` to the entering socket; SDK adopts
+   it. Runtime: C entering an occupied room receives the roster listing B.
+   Commit `bfe0b1c`.
+3. **Cross-floor enter_room subscription** — enter_room now swaps the floor
+   channel when the room is on a different floor. Commit `bfe0b1c`.
+4. **grantAccessAndSummon double Bolt emit + route/service superuser
+   disagreement** — `suppressBoltEvent` flag stops the second
+   `bureau.summon.issued`; the grant-access route dropped its superuser
+   carve-out to match the service (summoner-only). The genuine share
+   (calling peer apps' grant APIs) stays OPEN — see below. Commit `bfe0b1c`.
+5. **Unlock reverts to prior door override** — lock_room remembers the
+   pre-lock privacy (`prevPrivacy` in the door-state hash) and restores it
+   on unlock; set_door clears the memory. Runtime: set_door(knock) → lock →
+   unlock left the door at `knock`, not the `open` DB default (verified via
+   `HGETALL bureau:room:<id>:state`). Commit `bfe0b1c`. Unit-tested.
+6. **calling-settings bool parity + testable door/lock predicates** —
+   `parseKillSwitch` accepts 'true'/'false' strings (parity with apps/api);
+   `canSetDoorDecision`/`canLockRoomDecision` extracted from ws.routes.ts
+   closures and unit-tested (11 tests). Commit `f7394bd`.
+
+### Still OPEN after this pass (recorded, not done — out of bureau scope)
+
+- **grantAccessAndSummon actual share.** Flipping the audit outcome to
+  `granted` and re-firing summon_incoming is done, but the recipient still
+  lacks real access on the destination — that needs NEW internal
+  service-to-service grant endpoints on board-api / brief-api / apps/api
+  (only their `/internal/can-read` preflights exist today). Cross-service
+  change; deliberately deferred.
+- **Security-audit §6/§7 hardening** (item 6 tail): per-(user,floor)
+  `subscribe_floor` cooldown, audit-logging on `evaluateRoomAccess` denials,
+  full helmet-style `SECURITY_HEADERS` on bureau-api, and
+  `INTERNAL_SERVICE_SECRET` rotation cadence. Each is its own change.
+- **Platform-wide empty-JSON-body crash propagation.** The
+  `@bigbluebam/logging` fix (commit `a4596ba`) landed in the bureau-api +
+  worker images this pass; the other ~17 Fastify services still carry the
+  crashing handler until a full rebuild propagates the shared package.
+
 ## Verified / Closed (runtime pass, 2026-06-10, stack rebuilt from this branch)
 
 Stack rebuilt from `bureau-troubleshooting` and force-recreated:

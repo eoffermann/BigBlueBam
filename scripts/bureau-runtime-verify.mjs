@@ -45,6 +45,7 @@ const USERS = {
   c: 'bureau-test-c@example.com',
   dnd: 'bureau-test-dnd@example.com',
   x: 'bureau-test-x@example.com', // other org
+  su: 'bureau-test-su@example.com', // superuser (can set_door / lock any room)
 };
 
 const FLOOR_ID = 'a0000000-0000-4000-8000-bbb00000f100';
@@ -518,6 +519,121 @@ async function testDndKnock(sessDnd, sessB) {
   }
 }
 
+async function testSurfaceHuddleGate(sessA, sessB, sessX) {
+  console.log('\n[8] Surface-huddle mint gating (cross-org eavesdropping)');
+  const surfaceId = `aaaaaaaa-aaaa-4aaa-8aaa-${Date.now().toString().slice(-12).padStart(12, '0')}`;
+  // A opens a WS and reports being on a brief surface (location_update).
+  const wsA = await openWs(sessA, 'A-surface', {});
+  try {
+    wsA.send({
+      type: 'location_update',
+      url: `/brief/d/${surfaceId}`,
+      app: 'brief',
+      label: 'huddle gate test',
+    });
+    await sleep(700); // let presence register
+
+    // A is on the surface → mint should succeed.
+    const mintA = await api('POST', '/v1/surface-huddle/token', sessA, {
+      surface_app: 'brief',
+      surface_id: surfaceId,
+    });
+    if (mintA.status === 200 && mintA.json?.data?.token) {
+      pass('on-surface user mints surface-huddle token', `room=${mintA.json.data.room_name}`);
+    } else if (mintA.status === 503 && mintA.json?.error?.code === 'CALLING_DISABLED') {
+      failTest('on-surface user mints surface-huddle token', 'calling disabled platform-wide; cannot verify');
+    } else {
+      failTest('on-surface user mints surface-huddle token', `status=${mintA.status} ${JSON.stringify(mintA.json)}`);
+    }
+
+    // B (same org) NOT on the surface → 403 NOT_ON_SURFACE (grace-polled, ~0.6s).
+    const mintB = await api('POST', '/v1/surface-huddle/token', sessB, {
+      surface_app: 'brief',
+      surface_id: surfaceId,
+    });
+    if (mintB.status === 403 && mintB.json?.error?.code === 'NOT_ON_SURFACE') {
+      pass('same-org user NOT on surface -> 403 NOT_ON_SURFACE');
+    } else {
+      failTest('same-org user NOT on surface -> 403 NOT_ON_SURFACE', `status=${mintB.status} ${JSON.stringify(mintB.json)}`);
+    }
+
+    // X (other org) NOT on the surface → 403 (the eavesdropping case).
+    const mintX = await api('POST', '/v1/surface-huddle/token', sessX, {
+      surface_app: 'brief',
+      surface_id: surfaceId,
+    });
+    if (mintX.status === 403 && mintX.json?.error?.code === 'NOT_ON_SURFACE') {
+      pass('cross-org user -> 403 NOT_ON_SURFACE (eavesdropping blocked)');
+    } else {
+      failTest('cross-org user -> 403 NOT_ON_SURFACE (eavesdropping blocked)', `status=${mintX.status} ${JSON.stringify(mintX.json)}`);
+    }
+  } finally {
+    wsA.close();
+  }
+}
+
+async function testOccupantSnapshot(sessB, sessC) {
+  console.log('\n[9] enter_room occupant snapshot (no more "Just you")');
+  const wsB = await openWs(sessB, 'B-occ');
+  const wsC = await openWs(sessC, 'C-occ');
+  try {
+    // B enters ROOM_KNOCK first (knock privacy admits org members).
+    wsB.send({ type: 'subscribe_floor', floorId: FLOOR_ID });
+    await wsB.waitFor((f) => f.type === 'presence_snapshot', 8000, 'snap B');
+    wsB.send({ type: 'enter_room', roomId: ROOM_KNOCK });
+    await wsB.waitFor((f) => f.type === 'room_enter' && f.data?.userId === sessB.userId, 8000, 'B enter');
+    await sleep(300);
+
+    // C enters the SAME (now-occupied) room and must receive a room_occupants
+    // snapshot listing B (and itself).
+    wsC.send({ type: 'subscribe_floor', floorId: FLOOR_ID });
+    await wsC.waitFor((f) => f.type === 'presence_snapshot', 8000, 'snap C');
+    wsC.send({ type: 'enter_room', roomId: ROOM_KNOCK });
+    const snap = await wsC.waitFor(
+      (f) => f.type === 'room_occupants' && f.data?.roomId === ROOM_KNOCK,
+      8000,
+      'room_occupants on C',
+    );
+    const ids = snap.data.userIds ?? [];
+    if (ids.includes(sessB.userId)) {
+      pass('entering socket gets room_occupants listing prior occupant', `userIds=[${ids.join(',')}]`);
+    } else {
+      failTest('entering socket gets room_occupants listing prior occupant', `userIds=[${ids.join(',')}] missing B=${sessB.userId}`);
+    }
+    for (const ws of [wsB, wsC]) ws.send({ type: 'leave_room' });
+    await sleep(300);
+  } finally {
+    wsB.close();
+    wsC.close();
+  }
+}
+
+// Drives a set_door('knock') → lock → unlock sequence as a privileged user
+// so an external Redis check can confirm the door restored to 'knock', not
+// the 'open' DB default. Returns once the sequence has been acknowledged.
+async function driveUnlockRestore(sessSu) {
+  console.log('\n[10] Unlock-restore: driving set_door(knock) -> lock -> unlock on ROOM_LOCK');
+  const wsSu = await openWs(sessSu, 'SU');
+  try {
+    wsSu.send({ type: 'subscribe_floor', floorId: FLOOR_ID });
+    await wsSu.waitFor((f) => f.type === 'presence_snapshot', 8000, 'snap SU');
+    wsSu.send({ type: 'enter_room', roomId: ROOM_LOCK });
+    await wsSu.waitFor((f) => f.type === 'room_enter' && f.data?.userId === sessSu.userId, 8000, 'SU enter');
+    wsSu.send({ type: 'set_door', roomId: ROOM_LOCK, privacy: 'knock' });
+    await wsSu.waitFor((f) => f.type === 'door_changed' && f.data?.privacy === 'knock', 8000, 'door->knock');
+    wsSu.send({ type: 'lock_room', roomId: ROOM_LOCK, locked: true });
+    await wsSu.waitFor((f) => f.type === 'room_locked' && f.data?.locked === true, 8000, 'locked');
+    wsSu.send({ type: 'lock_room', roomId: ROOM_LOCK, locked: false });
+    await wsSu.waitFor((f) => f.type === 'room_locked' && f.data?.locked === false, 8000, 'unlocked');
+    await sleep(400);
+    wsSu.send({ type: 'leave_room' });
+    await sleep(200);
+    console.log('  driven; check bureau:room:' + ROOM_LOCK + ':state in Redis — privacy must be "knock"');
+  } finally {
+    wsSu.close();
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────
 
 (async () => {
@@ -545,6 +661,17 @@ async function testDndKnock(sessDnd, sessB) {
   await testPreInitFrames(sessA, sessB);
   await testConcurrentSummon(sessA, sessB, sessC);
   await testDndKnock(sessDnd, sessB);
+  await testSurfaceHuddleGate(sessA, sessB, sessX);
+  await testOccupantSnapshot(sessB, sessC);
+  if (process.env.RUN_UNLOCK_RESTORE === '1') {
+    const sessSu = await login(USERS.su);
+    if (!sessSu.userId) {
+      const me = await fetch(`${HOST}/b3/api/users/me`, { headers: { Cookie: sessSu.cookie } });
+      const j = await me.json().catch(() => null);
+      sessSu.userId = j?.data?.id ?? j?.id ?? null;
+    }
+    await driveUnlockRestore(sessSu);
+  }
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
