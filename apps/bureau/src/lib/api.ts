@@ -76,7 +76,11 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   if (!res.ok) {
     const envelope = (parsed as ApiErrorEnvelope | null) ?? null;
     const code = envelope?.error?.code ?? `HTTP_${res.status}`;
-    const message = envelope?.error?.message ?? res.statusText ?? 'Request failed';
+    // `||` not `??`: res.statusText is '' over HTTP/2, and a proxy-level
+    // failure (nginx 502/504 HTML) has no envelope — never surface an
+    // empty message, always at least the status code.
+    const message =
+      envelope?.error?.message || res.statusText || `HTTP ${res.status} (${code})`;
     throw new BureauApiError(res.status, code, message, envelope);
   }
   return parsed as T;
