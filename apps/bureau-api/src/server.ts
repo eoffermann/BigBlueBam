@@ -18,6 +18,7 @@ import officesRoutes from './routes/offices.routes.js';
 import bookingsRoutes from './routes/bookings.routes.js';
 import knocksRoutes from './routes/knocks.routes.js';
 import livekitRoutes from './routes/livekit.routes.js';
+import wsRoutes from './routes/ws.routes.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -121,6 +122,12 @@ await fastify.register(officesRoutes, { prefix: '/v1' });
 await fastify.register(bookingsRoutes, { prefix: '/v1' });
 await fastify.register(knocksRoutes, { prefix: '/v1' });
 await fastify.register(livekitRoutes, { prefix: '/v1' });
+
+// Bureau WebSocket hub — Agent B. Mounted at `/bureau/ws` (no /v1 prefix
+// because nginx proxies `/bureau/ws` straight through to this endpoint).
+// Handles presence, room enter/leave, door + lock, knocks, and the
+// LiveKit-token handoff for spatial audio.
+await fastify.register(wsRoutes);
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

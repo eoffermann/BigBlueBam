@@ -1,0 +1,1324 @@
+/**
+ * Bureau WebSocket hub (workstream 2 — Agent B).
+ *
+ *   GET /bureau/ws  — raw WebSocket upgrade, authenticated by the shared
+ *                     session cookie at handshake time.
+ *
+ * Implements §8 of the bureau design doc: an 11-message client→server and
+ * 11-message server→client protocol over JSON frames, with Redis PubSub
+ * as the cross-instance fan-out and Redis hashes/sets as the live presence
+ * substrate (§7).
+ *
+ * Topology:
+ *   - One Redis subscriber per socket (sub-mode can't multiplex normal cmds).
+ *     Channels: bureau:floor:{floorId}, bureau:room:{roomId}, user:{userId}.
+ *   - Writes go through fastify.redis (the shared connection from
+ *     plugins/redis.ts).
+ *   - presence-mutation helpers (presenceService.*) live inline in this
+ *     file because workstream 2 is a sprint-shape and the broader
+ *     service module hasn't been carved out yet. They follow the exact
+ *     Redis key layout from §7 of the design doc so a future refactor
+ *     can lift them verbatim into a dedicated services/presence.service.ts.
+ *
+ * Authentication: copies the session-cookie pattern from
+ * apps/board-api/src/ws/handler.ts. A missing or invalid session is
+ * closed with 4401 (per the assignment's "no session, close 4401").
+ *
+ * LiveKit handoff: on enter_room, we mint a token via
+ * @bigbluebam/livekit-tokens for `bureau-room-{roomId}` with a 3600s TTL
+ * and push a livekit_token frame to the connecting socket. Matches the
+ * REST handler in livekit.routes.ts.
+ *
+ * Bolt events: user.entered_room / user.left_room / status.changed /
+ * room.locked / knock.requested / knock.resolved are fired through the
+ * typed wrappers in apps/bureau-api/src/lib/bureau-events.ts so the
+ * Wave 0.4 catalog drift guard stays clean (bare event names + explicit
+ * `source: 'bureau'`).
+ */
+
+import type { FastifyInstance } from 'fastify';
+import type { WebSocket } from '@fastify/websocket';
+import Redis from 'ioredis';
+import { and, eq } from 'drizzle-orm';
+import { mintRoomToken } from '@bigbluebam/livekit-tokens';
+import { nanoid } from 'nanoid';
+import { db } from '../db/index.js';
+import { sessions, users } from '../db/schema/index.js';
+import { bureauKnocks } from '../db/schema/bureau.js';
+import { env } from '../env.js';
+import {
+  evaluateRoomAccess,
+  hasRoomAclEntry,
+  isOrgAdminOrOwner,
+  loadRoom,
+} from '../middleware/room-access.js';
+import {
+  emitKnockRequested,
+  emitKnockResolved,
+  emitRoomLocked,
+  emitStatusChanged,
+  emitUserEnteredRoom,
+  emitUserLeftRoom,
+  type KnockResolution,
+} from '../lib/bureau-events.js';
+
+// ─────────────────────────────────────────────────────────────────────
+// Per-socket connection record
+// ─────────────────────────────────────────────────────────────────────
+
+interface ConnectedClient {
+  ws: WebSocket;
+  /** Per-socket Redis subscriber (separate connection: sub-mode can't multiplex). */
+  subscriber: Redis;
+  /** Stable id for this socket, used as the presence sessionId in Redis. */
+  sessionId: string;
+  userId: string;
+  orgId: string;
+  displayName: string;
+  isSuperuser: boolean;
+  /** Active floor (subscribed via subscribe_floor); null until the client picks one. */
+  floorId: string | null;
+  /** Active room (set after enter_room, cleared on leave_room). */
+  roomId: string | null;
+  /** Last status reported by set_status — defaults to 'available'. */
+  status: string;
+  /** Last reported location triple (for presence_delta repaints). */
+  locationUrl: string | null;
+  locationApp: string | null;
+  locationLabel: string | null;
+  /** When this socket entered its current room — used to compute session_duration_ms. */
+  roomEnteredAt: number | null;
+  /** Rate-limit window state. */
+  msgCount: number;
+  msgWindowStart: number;
+  /** Set of pubsub channels this socket has subscribed to, for cleanup. */
+  channels: Set<string>;
+}
+
+/** Per-socket WS message rate-limit window (matches board-api defaults). */
+const WS_RATE_LIMIT_MAX = 120;
+const WS_RATE_LIMIT_WINDOW_MS = 10_000;
+
+/** Presence session TTL (35s, refreshed every 15s heartbeat — §7). */
+const PRESENCE_TTL_SECONDS = 35;
+
+/** Bureau room name format used for the LiveKit room — matches livekit.routes.ts. */
+function buildBureauRoomName(roomId: string): string {
+  return `bureau-room-${roomId}`;
+}
+
+/** Allowed presence-status enum (mirrors the spec). */
+const ALLOWED_STATUS = new Set([
+  'available',
+  'busy',
+  'dnd',
+  'focus',
+  'away',
+  'in_meeting',
+]);
+
+/** Allowed door-privacy enum (mirrors the bureau_rooms.privacy_default values). */
+const ALLOWED_PRIVACY = new Set(['open', 'knock', 'private']);
+
+// ─────────────────────────────────────────────────────────────────────
+// Inline presence service. Implements the Redis layout from §7.
+// Future-proof: same shape can be lifted into services/presence.service.ts
+// without renaming any keys.
+// ─────────────────────────────────────────────────────────────────────
+
+function presenceSessionKey(sessionId: string) {
+  return `bureau:sess:${sessionId}`;
+}
+function presenceUserSessionsKey(userId: string) {
+  return `bureau:user:${userId}:sessions`;
+}
+function presenceRoomOccupantsKey(roomId: string) {
+  return `bureau:room:${roomId}:occupants`;
+}
+function presenceRoomStateKey(roomId: string) {
+  return `bureau:room:${roomId}:state`;
+}
+function presenceFloorIndexKey(floorId: string) {
+  return `bureau:floor:${floorId}:index`;
+}
+
+function floorChannel(floorId: string) {
+  return `bureau:floor:${floorId}`;
+}
+function roomChannel(roomId: string) {
+  return `bureau:room:${roomId}`;
+}
+function userChannel(userId: string) {
+  return `user:${userId}`;
+}
+
+interface PresenceContext {
+  redis: Redis;
+}
+
+const presenceService = {
+  /** Create or refresh the per-session HASH and the per-user fan-in SET. */
+  async openSession(
+    ctx: PresenceContext,
+    client: ConnectedClient,
+    extras: { device?: string } = {},
+  ): Promise<void> {
+    const sessionKey = presenceSessionKey(client.sessionId);
+    const userKey = presenceUserSessionsKey(client.userId);
+    const tx = ctx.redis.multi();
+    tx.hset(sessionKey, {
+      userId: client.userId,
+      isAgent: '0',
+      orgId: client.orgId,
+      floorId: client.floorId ?? '',
+      roomId: client.roomId ?? '',
+      status: client.status,
+      statusText: '',
+      emoji: '',
+      locationUrl: client.locationUrl ?? '',
+      locationApp: client.locationApp ?? '',
+      locationLabel: client.locationLabel ?? '',
+      device: extras.device ?? 'web',
+      lastBeat: String(Date.now()),
+    });
+    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
+    tx.sadd(userKey, client.sessionId);
+    await tx.exec();
+  },
+
+  /** Refresh the session TTL — called on heartbeat. */
+  async heartbeat(ctx: PresenceContext, client: ConnectedClient): Promise<void> {
+    const sessionKey = presenceSessionKey(client.sessionId);
+    const tx = ctx.redis.multi();
+    tx.hset(sessionKey, { lastBeat: String(Date.now()) });
+    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
+    await tx.exec();
+  },
+
+  /** Set the presence status field. Returns the previous status. */
+  async setStatus(
+    ctx: PresenceContext,
+    client: ConnectedClient,
+    next: { status: string; statusText?: string; emoji?: string },
+  ): Promise<string | null> {
+    const sessionKey = presenceSessionKey(client.sessionId);
+    const prev = await ctx.redis.hget(sessionKey, 'status');
+    await ctx.redis.hset(sessionKey, {
+      status: next.status,
+      statusText: next.statusText ?? '',
+      emoji: next.emoji ?? '',
+    });
+    await ctx.redis.expire(sessionKey, PRESENCE_TTL_SECONDS);
+    return prev;
+  },
+
+  /** Move the session into a room: update HASH, occupants SET, floor index. */
+  async enterRoom(
+    ctx: PresenceContext,
+    client: ConnectedClient,
+    roomId: string,
+    floorId: string,
+  ): Promise<void> {
+    const sessionKey = presenceSessionKey(client.sessionId);
+    const tx = ctx.redis.multi();
+    tx.hset(sessionKey, { roomId, floorId });
+    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
+    tx.sadd(presenceRoomOccupantsKey(roomId), client.userId);
+    tx.hset(presenceFloorIndexKey(floorId), client.userId, roomId);
+    await tx.exec();
+  },
+
+  /** Remove the session from its current room. Returns the room it left, if any. */
+  async leaveRoom(
+    ctx: PresenceContext,
+    client: ConnectedClient,
+  ): Promise<{ roomId: string | null; floorId: string | null }> {
+    const roomId = client.roomId;
+    const floorId = client.floorId;
+    if (!roomId) return { roomId: null, floorId };
+    const sessionKey = presenceSessionKey(client.sessionId);
+    const tx = ctx.redis.multi();
+    tx.hset(sessionKey, { roomId: '' });
+    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
+    tx.srem(presenceRoomOccupantsKey(roomId), client.userId);
+    if (floorId) {
+      tx.hdel(presenceFloorIndexKey(floorId), client.userId);
+    }
+    await tx.exec();
+    return { roomId, floorId };
+  },
+
+  /** Update only the door-privacy override on a room. */
+  async setDoor(
+    ctx: PresenceContext,
+    roomId: string,
+    privacy: string,
+    actorId: string,
+  ): Promise<void> {
+    await ctx.redis.hset(presenceRoomStateKey(roomId), {
+      privacy,
+      lockedBy: actorId,
+    });
+  },
+
+  /** Update the location triple on the session. */
+  async updateLocation(
+    ctx: PresenceContext,
+    client: ConnectedClient,
+    location: { url: string; app: string; label?: string },
+  ): Promise<void> {
+    const sessionKey = presenceSessionKey(client.sessionId);
+    await ctx.redis.hset(sessionKey, {
+      locationUrl: location.url,
+      locationApp: location.app,
+      locationLabel: location.label ?? '',
+    });
+    await ctx.redis.expire(sessionKey, PRESENCE_TTL_SECONDS);
+  },
+
+  /** Tear down session: remove HASH + drop user fan-in entry + drop occupant. */
+  async endSession(
+    ctx: PresenceContext,
+    client: ConnectedClient,
+  ): Promise<{ roomId: string | null; floorId: string | null }> {
+    const roomId = client.roomId;
+    const floorId = client.floorId;
+    const sessionKey = presenceSessionKey(client.sessionId);
+    const tx = ctx.redis.multi();
+    tx.del(sessionKey);
+    tx.srem(presenceUserSessionsKey(client.userId), client.sessionId);
+    if (roomId) {
+      tx.srem(presenceRoomOccupantsKey(roomId), client.userId);
+    }
+    if (floorId) {
+      tx.hdel(presenceFloorIndexKey(floorId), client.userId);
+    }
+    await tx.exec();
+    return { roomId, floorId };
+  },
+
+  /**
+   * Build a presence snapshot for a floor: the userId→roomId map plus
+   * the per-room door-state overrides for every represented room.
+   */
+  async snapshotFloor(
+    ctx: PresenceContext,
+    floorId: string,
+  ): Promise<{
+    occupancy: Record<string, string>;
+    roomState: Record<string, Record<string, string>>;
+  }> {
+    const occupancy = await ctx.redis.hgetall(presenceFloorIndexKey(floorId));
+    const roomState: Record<string, Record<string, string>> = {};
+    const uniqueRooms = new Set(Object.values(occupancy));
+    for (const roomId of uniqueRooms) {
+      if (!roomId) continue;
+      const state = await ctx.redis.hgetall(presenceRoomStateKey(roomId));
+      if (state && Object.keys(state).length > 0) {
+        roomState[roomId] = state;
+      }
+    }
+    return { occupancy, roomState };
+  },
+};
+
+/**
+ * Mirror a presence change to the shared bigbluebam:events channel so
+ * Banter / Bam stay in sync (§7). Fire-and-forget — we never want a
+ * downstream sub-stalled pub to break Bureau. Currently sends a minimal
+ * `user.presence` envelope; downstream consumers can ignore unknown
+ * fields and expand it later.
+ */
+async function mirrorPresenceToShared(
+  redis: Redis,
+  payload: { userId: string; orgId: string; status?: string; roomId?: string | null },
+): Promise<void> {
+  try {
+    await redis.publish(
+      'bigbluebam:events',
+      JSON.stringify({
+        event: 'user.presence',
+        source: 'bureau',
+        data: payload,
+        ts: new Date().toISOString(),
+      }),
+    );
+  } catch {
+    // Swallow — mirror channel is a fan-out optimization, not authoritative.
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Outbound frame helpers
+// ─────────────────────────────────────────────────────────────────────
+
+function frame(type: string, data: Record<string, unknown> = {}): string {
+  return JSON.stringify({ type, data, timestamp: new Date().toISOString() });
+}
+
+function safeSend(ws: WebSocket, payload: string): void {
+  if (ws.readyState === 1) {
+    try {
+      ws.send(payload);
+    } catch {
+      // Socket may have torn down between the readyState check and send.
+      // No remediation: the close handler will run shortly.
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Route registration
+// ─────────────────────────────────────────────────────────────────────
+
+export default async function wsRoutes(fastify: FastifyInstance) {
+  fastify.get('/bureau/ws', { websocket: true }, async (socket, request) => {
+    // ── Authenticate via shared session cookie at handshake time ──
+    const sessionId = request.cookies?.session;
+    if (!sessionId) {
+      socket.close(4401, 'Authentication required');
+      return;
+    }
+    const [row] = await db
+      .select({
+        session: sessions,
+        user: {
+          id: users.id,
+          org_id: users.org_id,
+          display_name: users.display_name,
+          is_active: users.is_active,
+          is_superuser: users.is_superuser,
+        },
+      })
+      .from(sessions)
+      .innerJoin(users, eq(sessions.user_id, users.id))
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
+
+    if (!row || new Date(row.session.expires_at) <= new Date() || !row.user.is_active) {
+      socket.close(4401, 'Invalid or expired session');
+      return;
+    }
+
+    const userId = row.user.id;
+    const orgId = row.user.org_id;
+    const displayName = row.user.display_name;
+    const isSuperuser = row.user.is_superuser;
+
+    // Resolve the caller's org role once — used by the door / lock / knock
+    // permission checks below. Cheap: single join, scoped to (user, org).
+    let userRole: string = 'member';
+    try {
+      const { accountGroupMemberships, permissionGroups } = await import(
+        '../db/schema/index.js'
+      );
+      const [roleRow] = await db
+        .select({ legacy_role: permissionGroups.legacy_role })
+        .from(accountGroupMemberships)
+        .innerJoin(
+          permissionGroups,
+          eq(permissionGroups.id, accountGroupMemberships.group_id),
+        )
+        .where(
+          and(
+            eq(accountGroupMemberships.user_id, userId),
+            eq(accountGroupMemberships.scope_type, 'org'),
+            eq(accountGroupMemberships.scope_id, orgId),
+          ),
+        )
+        .limit(1);
+      if (roleRow?.legacy_role) userRole = roleRow.legacy_role;
+    } catch {
+      // Fall back to 'member' — the role lookup is a defense-in-depth gate;
+      // the per-room ACL check still applies regardless.
+    }
+
+    // ── Per-socket Redis subscriber. We pub from fastify.redis (the
+    //    shared connection) and sub from THIS connection only, because
+    //    Redis sub-mode can't multiplex normal commands. The connection
+    //    closes on socket close.
+    const subscriber = new Redis(env.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      lazyConnect: true,
+    });
+    try {
+      await subscriber.connect();
+    } catch (err) {
+      fastify.log.error({ err }, 'Bureau WS subscriber connect failed');
+      socket.close(1011, 'Redis unavailable');
+      return;
+    }
+
+    const client: ConnectedClient = {
+      ws: socket,
+      subscriber,
+      sessionId: nanoid(16),
+      userId,
+      orgId,
+      displayName,
+      isSuperuser,
+      floorId: null,
+      roomId: null,
+      status: 'available',
+      locationUrl: null,
+      locationApp: null,
+      locationLabel: null,
+      roomEnteredAt: null,
+      msgCount: 0,
+      msgWindowStart: Date.now(),
+      channels: new Set<string>(),
+    };
+
+    const ctx: PresenceContext = { redis: fastify.redis };
+
+    // Open the durable presence session and subscribe to the user's
+    // own targeted channel so summons/knocks reach them out of the box.
+    await presenceService.openSession(ctx, client);
+    const personalChannel = userChannel(userId);
+    await subscriber.subscribe(personalChannel);
+    client.channels.add(personalChannel);
+
+    // Forward every PubSub message verbatim to the socket. The publisher
+    // is responsible for framing (we use the same {type,data,timestamp}
+    // envelope on every channel).
+    subscriber.on('message', (_channel: string, message: string) => {
+      safeSend(socket, message);
+    });
+
+    safeSend(
+      socket,
+      frame('connected', { user_id: userId, session_id: client.sessionId }),
+    );
+
+    // ── Helpers that are closures over `client` / `ctx` ──
+
+    async function publishFloor(floorId: string, payload: string) {
+      await fastify.redis.publish(floorChannel(floorId), payload);
+    }
+    async function publishRoom(roomId: string, payload: string) {
+      await fastify.redis.publish(roomChannel(roomId), payload);
+    }
+    async function publishUser(targetUserId: string, payload: string) {
+      await fastify.redis.publish(userChannel(targetUserId), payload);
+    }
+
+    /** Door-state permission check. Owners of offices may set their own;
+     *  shared-room privacy requires either the ACL `manager` role or org
+     *  admin/owner. We borrow the room-access middleware for the ACL probe
+     *  and inline the role check. */
+    async function canSetDoor(
+      room: { id: string; type: string; owner_id: string | null },
+    ): Promise<boolean> {
+      if (isSuperuser) return true;
+      if (isOrgAdminOrOwner(userRole)) return true;
+      if (room.type === 'office') {
+        return !!room.owner_id && room.owner_id === userId;
+      }
+      // Shared room: ACL `manager` role grants door rights. We re-query
+      // here because hasRoomAclEntry only checks presence, not role.
+      const { bureauRoomAcl } = await import('../db/schema/bureau.js');
+      const [aclRow] = await db
+        .select({ role: bureauRoomAcl.role })
+        .from(bureauRoomAcl)
+        .where(
+          and(
+            eq(bureauRoomAcl.room_id, room.id),
+            eq(bureauRoomAcl.user_id, userId),
+          ),
+        )
+        .limit(1);
+      return aclRow?.role === 'manager';
+    }
+
+    /** Lock-room permission: "anyone in a shared room can lock/unlock"
+     *  per §8. We additionally require the caller to currently be inside
+     *  said room. Office rooms require the owner. */
+    async function canLockRoom(room: {
+      id: string;
+      type: string;
+      owner_id: string | null;
+    }): Promise<boolean> {
+      if (isSuperuser) return true;
+      if (isOrgAdminOrOwner(userRole)) return true;
+      if (room.type === 'office') {
+        return !!room.owner_id && room.owner_id === userId;
+      }
+      // Shared room: must be inside it right now.
+      if (client.roomId === room.id) return true;
+      // Or have a private-room ACL row.
+      return await hasRoomAclEntry(room.id, userId);
+    }
+
+    socket.on('message', async (raw: Buffer | string) => {
+      // ── Per-socket rate limit ──
+      const now = Date.now();
+      if (now - client.msgWindowStart > WS_RATE_LIMIT_WINDOW_MS) {
+        client.msgCount = 0;
+        client.msgWindowStart = now;
+      }
+      client.msgCount++;
+      if (client.msgCount > WS_RATE_LIMIT_MAX) {
+        socket.close(4429, 'Rate limit exceeded');
+        return;
+      }
+
+      let msg: { type?: string; [k: string]: unknown };
+      try {
+        msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString());
+      } catch {
+        safeSend(
+          socket,
+          frame('error', { code: 'BAD_FRAME', message: 'Invalid JSON' }),
+        );
+        return;
+      }
+      if (!msg || typeof msg.type !== 'string') {
+        safeSend(
+          socket,
+          frame('error', { code: 'BAD_FRAME', message: 'Missing type' }),
+        );
+        return;
+      }
+
+      try {
+        switch (msg.type) {
+          // ──────────────────────────────────────────────
+          case 'subscribe_floor': {
+            const floorId = typeof msg.floorId === 'string' ? msg.floorId : null;
+            if (!floorId) break;
+
+            // Unsubscribe any previously subscribed floor so the socket
+            // doesn't bleed events from multiple floors at once.
+            if (client.floorId && client.floorId !== floorId) {
+              const oldChan = floorChannel(client.floorId);
+              if (client.channels.has(oldChan)) {
+                await subscriber.unsubscribe(oldChan);
+                client.channels.delete(oldChan);
+              }
+            }
+            const chan = floorChannel(floorId);
+            await subscriber.subscribe(chan);
+            client.channels.add(chan);
+            client.floorId = floorId;
+
+            // Mirror floor onto the session hash so the floor reaper /
+            // presence aggregator sees the join.
+            await fastify.redis.hset(presenceSessionKey(client.sessionId), {
+              floorId,
+            });
+            await fastify.redis.expire(
+              presenceSessionKey(client.sessionId),
+              PRESENCE_TTL_SECONDS,
+            );
+
+            const snapshot = await presenceService.snapshotFloor(ctx, floorId);
+            safeSend(
+              socket,
+              frame('presence_snapshot', {
+                floorId,
+                occupancy: snapshot.occupancy,
+                roomState: snapshot.roomState,
+              }),
+            );
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'enter_room': {
+            const roomId = typeof msg.roomId === 'string' ? msg.roomId : null;
+            if (!roomId) break;
+
+            const room = await loadRoom(roomId, orgId);
+            if (!room) {
+              safeSend(
+                socket,
+                frame('error', { code: 'NOT_FOUND', message: 'Room not found' }),
+              );
+              break;
+            }
+
+            const decision = await evaluateRoomAccess(room, {
+              id: userId,
+              role: userRole,
+              is_superuser: isSuperuser,
+            });
+            if (!decision.allowed) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'FORBIDDEN',
+                  message:
+                    decision.reason ?? 'You do not have access to this room',
+                }),
+              );
+              break;
+            }
+
+            // Leave the prior room first so room counts stay accurate and
+            // both rooms see the transition. Bolt user.left_room fires for
+            // the prior room before user.entered_room for the new one.
+            if (client.roomId && client.roomId !== roomId) {
+              const left = await presenceService.leaveRoom(ctx, client);
+              if (left.roomId) {
+                const leftPayload = frame('room_leave', {
+                  roomId: left.roomId,
+                  userId,
+                });
+                await publishRoom(left.roomId, leftPayload);
+                if (left.floorId) {
+                  await publishFloor(
+                    left.floorId,
+                    frame('presence_delta', { userId, roomId: null }),
+                  );
+                }
+                emitUserLeftRoom(orgId, userId, {
+                  room: { id: left.roomId, floor_id: left.floorId ?? null },
+                  user: { id: userId, name: displayName },
+                  session_duration_ms: client.roomEnteredAt
+                    ? Date.now() - client.roomEnteredAt
+                    : undefined,
+                  actor: { id: userId },
+                  org: { id: orgId },
+                }).catch(() => {
+                  /* fire-and-forget */
+                });
+              }
+            }
+
+            // Auto-subscribe to the new room channel so the entering
+            // socket receives subsequent room events without an explicit
+            // subscribe message.
+            const newRoomChan = roomChannel(roomId);
+            if (!client.channels.has(newRoomChan)) {
+              await subscriber.subscribe(newRoomChan);
+              client.channels.add(newRoomChan);
+            }
+
+            await presenceService.enterRoom(ctx, client, roomId, room.floor_id);
+            client.roomId = roomId;
+            client.floorId = room.floor_id;
+            client.roomEnteredAt = Date.now();
+
+            // Mint a LiveKit token so the connecting socket can join
+            // audio without a follow-up REST call.
+            const roomName = buildBureauRoomName(roomId);
+            try {
+              const token = await mintRoomToken(
+                env.LIVEKIT_API_KEY,
+                env.LIVEKIT_API_SECRET,
+                {
+                  identity: userId,
+                  roomName,
+                  name: displayName,
+                  metadata: {
+                    user_id: userId,
+                    display_name: displayName,
+                    org_id: orgId,
+                    bureau_room_id: roomId,
+                  },
+                  ttlSeconds: 3600,
+                },
+              );
+              safeSend(
+                socket,
+                frame('livekit_token', {
+                  roomName,
+                  token,
+                  url: env.LIVEKIT_URL,
+                }),
+              );
+            } catch (err) {
+              fastify.log.error(
+                { err, roomId, userId },
+                'Bureau WS failed to mint LiveKit token',
+              );
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'LIVEKIT_MINT_FAILED',
+                  message: 'Audio token unavailable; room joined without audio',
+                }),
+              );
+            }
+
+            const enterPayload = frame('room_enter', { roomId, userId });
+            await publishRoom(roomId, enterPayload);
+            await publishFloor(
+              room.floor_id,
+              frame('presence_delta', { userId, roomId }),
+            );
+
+            emitUserEnteredRoom(orgId, userId, {
+              room: {
+                id: roomId,
+                name: room.type, // room.name not exposed by loadRoom; use type as a stand-in label
+                type: room.type,
+                floor_id: room.floor_id,
+              },
+              livekit_room: roomName,
+              user: { id: userId, name: displayName },
+              actor: { id: userId, name: displayName },
+              org: { id: orgId },
+            }).catch(() => {
+              /* fire-and-forget */
+            });
+            await mirrorPresenceToShared(fastify.redis, {
+              userId,
+              orgId,
+              status: client.status,
+              roomId,
+            });
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'leave_room': {
+            const left = await presenceService.leaveRoom(ctx, client);
+            client.roomId = null;
+            client.roomEnteredAt = null;
+            if (left.roomId) {
+              const leavePayload = frame('room_leave', {
+                roomId: left.roomId,
+                userId,
+              });
+              await publishRoom(left.roomId, leavePayload);
+              if (left.floorId) {
+                await publishFloor(
+                  left.floorId,
+                  frame('presence_delta', { userId, roomId: null }),
+                );
+              }
+              // Also unsubscribe the per-socket subscriber from the room
+              // channel so we don't receive our own leave echo from
+              // mid-flight publishes.
+              const chan = roomChannel(left.roomId);
+              if (client.channels.has(chan)) {
+                await subscriber.unsubscribe(chan);
+                client.channels.delete(chan);
+              }
+              emitUserLeftRoom(orgId, userId, {
+                room: { id: left.roomId, floor_id: left.floorId ?? null },
+                user: { id: userId, name: displayName },
+                actor: { id: userId },
+                org: { id: orgId },
+              }).catch(() => {
+                /* fire-and-forget */
+              });
+            }
+            await mirrorPresenceToShared(fastify.redis, {
+              userId,
+              orgId,
+              status: client.status,
+              roomId: null,
+            });
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'heartbeat': {
+            await presenceService.heartbeat(ctx, client);
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'set_status': {
+            const status =
+              typeof msg.status === 'string' && ALLOWED_STATUS.has(msg.status)
+                ? msg.status
+                : null;
+            if (!status) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'Invalid status value',
+                }),
+              );
+              break;
+            }
+            const statusText =
+              typeof msg.statusText === 'string' ? msg.statusText : undefined;
+            const emoji = typeof msg.emoji === 'string' ? msg.emoji : undefined;
+            const prev = await presenceService.setStatus(ctx, client, {
+              status,
+              statusText,
+              emoji,
+            });
+            client.status = status;
+
+            const payload = frame('status_changed', {
+              userId,
+              status,
+              statusText: statusText ?? null,
+              emoji: emoji ?? null,
+            });
+            if (client.floorId) await publishFloor(client.floorId, payload);
+            if (client.roomId) await publishRoom(client.roomId, payload);
+
+            emitStatusChanged(orgId, userId, {
+              user: { id: userId },
+              status: { previous: prev, current: status },
+              actor: { id: userId },
+              org: { id: orgId },
+            }).catch(() => {
+              /* fire-and-forget */
+            });
+            await mirrorPresenceToShared(fastify.redis, {
+              userId,
+              orgId,
+              status,
+              roomId: client.roomId,
+            });
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'set_door': {
+            const roomId = typeof msg.roomId === 'string' ? msg.roomId : null;
+            const privacy =
+              typeof msg.privacy === 'string' && ALLOWED_PRIVACY.has(msg.privacy)
+                ? msg.privacy
+                : null;
+            if (!roomId || !privacy) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'roomId and privacy required',
+                }),
+              );
+              break;
+            }
+            const room = await loadRoom(roomId, orgId);
+            if (!room) {
+              safeSend(
+                socket,
+                frame('error', { code: 'NOT_FOUND', message: 'Room not found' }),
+              );
+              break;
+            }
+            if (!(await canSetDoor(room))) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'FORBIDDEN',
+                  message: 'You do not have permission to set this door',
+                }),
+              );
+              break;
+            }
+            await presenceService.setDoor(ctx, roomId, privacy, userId);
+            const payload = frame('door_changed', {
+              roomId,
+              privacy,
+              by: userId,
+            });
+            await publishRoom(roomId, payload);
+            if (room.floor_id) await publishFloor(room.floor_id, payload);
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'lock_room': {
+            const roomId = typeof msg.roomId === 'string' ? msg.roomId : null;
+            const locked = typeof msg.locked === 'boolean' ? msg.locked : null;
+            if (!roomId || locked === null) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'roomId and locked required',
+                }),
+              );
+              break;
+            }
+            const room = await loadRoom(roomId, orgId);
+            if (!room) {
+              safeSend(
+                socket,
+                frame('error', { code: 'NOT_FOUND', message: 'Room not found' }),
+              );
+              break;
+            }
+            if (!(await canLockRoom(room))) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'FORBIDDEN',
+                  message: 'You do not have permission to lock this room',
+                }),
+              );
+              break;
+            }
+            // Treat "locked" as a door override flipped to private.
+            const nextPrivacy = locked ? 'private' : room.privacy_default;
+            await presenceService.setDoor(ctx, roomId, nextPrivacy, userId);
+
+            const payload = frame('room_locked', {
+              roomId,
+              locked,
+              by: userId,
+            });
+            await publishRoom(roomId, payload);
+            if (room.floor_id) await publishFloor(room.floor_id, payload);
+
+            if (locked) {
+              emitRoomLocked(orgId, userId, {
+                room: { id: roomId, name: null },
+                privacy: {
+                  previous: room.privacy_default,
+                  current: nextPrivacy,
+                },
+                reason: 'ws_lock',
+                actor: { id: userId },
+                org: { id: orgId },
+              }).catch(() => {
+                /* fire-and-forget */
+              });
+            }
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'knock': {
+            const roomId = typeof msg.roomId === 'string' ? msg.roomId : null;
+            const message =
+              typeof msg.message === 'string' ? msg.message.slice(0, 1000) : null;
+            if (!roomId) break;
+
+            const room = await loadRoom(roomId, orgId);
+            if (!room) {
+              safeSend(
+                socket,
+                frame('error', { code: 'NOT_FOUND', message: 'Room not found' }),
+              );
+              break;
+            }
+            if (room.type !== 'office') {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_REQUEST',
+                  message: 'Only office rooms can be knocked on',
+                }),
+              );
+              break;
+            }
+            if (!room.owner_id) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_REQUEST',
+                  message: 'This office has no occupant to receive a knock',
+                }),
+              );
+              break;
+            }
+            if (room.owner_id === userId) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_REQUEST',
+                  message: 'You cannot knock on your own office',
+                }),
+              );
+              break;
+            }
+
+            const [created] = await db
+              .insert(bureauKnocks)
+              .values({
+                org_id: orgId,
+                room_id: roomId,
+                visitor_id: userId,
+                owner_id: room.owner_id,
+                status: 'pending',
+                message,
+              })
+              .returning({
+                id: bureauKnocks.id,
+                owner_id: bureauKnocks.owner_id,
+                room_id: bureauKnocks.room_id,
+                visitor_id: bureauKnocks.visitor_id,
+              });
+            if (!created) break;
+
+            const ownerId = created.owner_id;
+            await publishUser(
+              ownerId,
+              frame('knock_incoming', {
+                knockId: created.id,
+                visitor: { id: userId, name: displayName },
+                roomId,
+                message,
+              }),
+            );
+            emitKnockRequested(orgId, userId, {
+              knock: { id: created.id },
+              room: { id: roomId, name: null },
+              visitor: { id: userId, name: displayName },
+              owner: { id: ownerId },
+              message,
+              actor: { id: userId },
+              org: { id: orgId },
+            }).catch(() => {
+              /* fire-and-forget */
+            });
+
+            safeSend(
+              socket,
+              frame('knock_sent', { knockId: created.id, roomId }),
+            );
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'knock_respond': {
+            const knockId = typeof msg.knockId === 'string' ? msg.knockId : null;
+            const decision =
+              typeof msg.decision === 'string' &&
+              (msg.decision === 'admit' ||
+                msg.decision === 'defer' ||
+                msg.decision === 'decline')
+                ? msg.decision
+                : null;
+            if (!knockId || !decision) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'knockId and decision required',
+                }),
+              );
+              break;
+            }
+            const [existing] = await db
+              .select({
+                id: bureauKnocks.id,
+                owner_id: bureauKnocks.owner_id,
+                visitor_id: bureauKnocks.visitor_id,
+                room_id: bureauKnocks.room_id,
+                status: bureauKnocks.status,
+              })
+              .from(bureauKnocks)
+              .where(
+                and(eq(bureauKnocks.id, knockId), eq(bureauKnocks.org_id, orgId)),
+              )
+              .limit(1);
+            if (!existing) {
+              safeSend(
+                socket,
+                frame('error', { code: 'NOT_FOUND', message: 'Knock not found' }),
+              );
+              break;
+            }
+            if (existing.owner_id !== userId) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'FORBIDDEN',
+                  message: 'Only the room owner can resolve this knock',
+                }),
+              );
+              break;
+            }
+            if (existing.status !== 'pending') {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_REQUEST',
+                  message: `Knock is already resolved (status=${existing.status})`,
+                }),
+              );
+              break;
+            }
+            const decisionMap: Record<typeof decision, KnockResolution> = {
+              admit: 'admitted',
+              defer: 'deferred',
+              decline: 'declined',
+            };
+            const nextStatus = decisionMap[decision];
+            const resolvedAt = new Date();
+            await db
+              .update(bureauKnocks)
+              .set({ status: nextStatus, resolved_at: resolvedAt })
+              .where(
+                and(eq(bureauKnocks.id, knockId), eq(bureauKnocks.org_id, orgId)),
+              );
+
+            await publishUser(
+              existing.visitor_id,
+              frame('knock_resolved', { knockId, decision: nextStatus }),
+            );
+            emitKnockResolved(orgId, userId, {
+              knock: { id: knockId, status: nextStatus },
+              room: { id: existing.room_id },
+              visitor: { id: existing.visitor_id },
+              owner: { id: existing.owner_id },
+              resolved_at: resolvedAt.toISOString(),
+              actor: { id: userId },
+              org: { id: orgId },
+            }).catch(() => {
+              /* fire-and-forget */
+            });
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          case 'location_update': {
+            const url = typeof msg.url === 'string' ? msg.url : null;
+            const app = typeof msg.app === 'string' ? msg.app : null;
+            const label = typeof msg.label === 'string' ? msg.label : undefined;
+            if (!url || !app) break;
+            client.locationUrl = url;
+            client.locationApp = app;
+            client.locationLabel = label ?? null;
+            await presenceService.updateLocation(ctx, client, {
+              url,
+              app,
+              label,
+            });
+            if (client.floorId) {
+              await publishFloor(
+                client.floorId,
+                frame('presence_delta', {
+                  userId,
+                  location: { url, app, label: label ?? null },
+                }),
+              );
+            }
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          // Summon flow is workstream 6 — ack but no-op for now so a
+          // client mid-summon doesn't see a hard error.
+          case 'summon':
+          case 'summon_respond':
+          case 'summon_grant_access': {
+            fastify.log.info(
+              { type: msg.type, userId, orgId },
+              'Bureau WS received summon-family message (workstream 6, not implemented)',
+            );
+            safeSend(
+              socket,
+              frame('summon_ack', {
+                type: msg.type,
+                accepted: false,
+                reason: 'summon flow not yet implemented',
+              }),
+            );
+            break;
+          }
+
+          // ──────────────────────────────────────────────
+          default: {
+            safeSend(
+              socket,
+              frame('error', {
+                code: 'UNKNOWN_TYPE',
+                message: `Unknown message type: ${msg.type}`,
+              }),
+            );
+            break;
+          }
+        }
+      } catch (err) {
+        fastify.log.error(
+          { err, type: msg.type, userId, orgId },
+          'Bureau WS handler error',
+        );
+        safeSend(
+          socket,
+          frame('error', {
+            code: 'INTERNAL',
+            message: 'Failed to process message',
+          }),
+        );
+      }
+    });
+
+    // ── Connection close (graceful or not): tear down presence state,
+    //    publish leave events, unsubscribe the per-socket subscriber.
+    const cleanup = async () => {
+      try {
+        const finalRoomId = client.roomId;
+        const finalFloorId = client.floorId;
+        const final = await presenceService.endSession(ctx, client);
+        if (final.roomId) {
+          const leavePayload = frame('room_leave', {
+            roomId: final.roomId,
+            userId,
+          });
+          await publishRoom(final.roomId, leavePayload).catch(() => {
+            /* best effort */
+          });
+          if (final.floorId) {
+            await publishFloor(
+              final.floorId,
+              frame('presence_delta', { userId, roomId: null }),
+            ).catch(() => {
+              /* best effort */
+            });
+          }
+          emitUserLeftRoom(orgId, userId, {
+            room: { id: final.roomId, floor_id: final.floorId ?? null },
+            user: { id: userId, name: displayName },
+            session_duration_ms: client.roomEnteredAt
+              ? Date.now() - client.roomEnteredAt
+              : undefined,
+            actor: { id: userId },
+            org: { id: orgId },
+          }).catch(() => {
+            /* fire-and-forget */
+          });
+        }
+        if (finalFloorId && !final.floorId) {
+          // Edge: endSession returns the room's floor; if the socket only
+          // ever did subscribe_floor without enter_room we still need to
+          // signal departure on the floor channel.
+          await publishFloor(
+            finalFloorId,
+            frame('presence_delta', { userId, roomId: null }),
+          ).catch(() => {
+            /* best effort */
+          });
+        }
+        if (finalRoomId && !final.roomId) {
+          // Same edge for the room channel — should not happen because
+          // endSession also pulls roomId, but defensive.
+        }
+        await mirrorPresenceToShared(fastify.redis, {
+          userId,
+          orgId,
+          status: 'offline',
+          roomId: null,
+        });
+      } catch (err) {
+        fastify.log.warn({ err, userId }, 'Bureau WS cleanup partial failure');
+      } finally {
+        // Drain subscriptions and close the per-socket Redis connection.
+        try {
+          if (client.channels.size > 0) {
+            await subscriber.unsubscribe(...client.channels);
+          }
+        } catch {
+          /* ignore */
+        }
+        try {
+          await subscriber.quit();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    socket.on('close', () => {
+      void cleanup();
+    });
+    socket.on('error', (err: Error) => {
+      fastify.log.warn({ err, userId }, 'Bureau WS socket error');
+      void cleanup();
+    });
+  });
+}

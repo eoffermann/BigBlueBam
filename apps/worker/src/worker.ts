@@ -102,6 +102,12 @@ import {
   processSlackImportJob,
   type SlackImportJobData,
 } from './jobs/slack-import.job.js';
+// §13 Bureau presence reaper — sweep sessions whose Redis TTL has lapsed,
+// emit room_leave + presence_delta, close the durable session row.
+import {
+  processBureauPresenceReapJob,
+  type BureauPresenceReapJobData,
+} from './jobs/bureau-presence-reap.js';
 
 const env = loadEnv();
 
@@ -900,6 +906,33 @@ slackImportWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'slack-import', err }, 'Job failed');
 });
 
+// §13 Bureau presence reaper — every 15s, sweep `bureau:sess:*` for keys
+// whose TTL has lapsed and close the durable session row + broadcast
+// room_leave / presence_delta. Concurrency 1: one reaper, one Redis SCAN.
+const bureauPresenceReapWorker = new Worker<BureauPresenceReapJobData>(
+  'bureau-presence-reap',
+  async (job: Job<BureauPresenceReapJobData>) => {
+    await processBureauPresenceReapJob(job, redis, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bureauPresenceReapWorker.on('completed', (job) => {
+  logger.debug({ jobId: job.id, queue: 'bureau-presence-reap' }, 'Job completed');
+});
+bureauPresenceReapWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bureau-presence-reap', err }, 'Job failed');
+});
+// BullMQ's repeat scheduler does not accept a sub-minute cron pattern, so use
+// `every` (milliseconds) for the 15s cadence per design doc §13.
+const bureauPresenceReapQueue = new Queue('bureau-presence-reap', { connection: redis });
+bureauPresenceReapQueue
+  .upsertJobScheduler(
+    'bureau-presence-reap-tick',
+    { every: 15_000 },
+    { name: 'tick', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bureau-presence-reap scheduler'));
+
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(
   'analytics',
@@ -998,6 +1031,8 @@ const workers = [
   agentWebhookDispatchWorker,
   agentWebhookDlqWorker,
   slackImportWorker,
+  // §13 Bureau presence reaper
+  bureauPresenceReapWorker,
   analyticsWorker,
 ];
 
@@ -1043,6 +1078,8 @@ logger.info(
       'agent-webhook-dispatch',
       'agent-webhook-dlq',
       'slack-import',
+      // §13 Bureau presence reaper
+      'bureau-presence-reap',
       'analytics',
     ],
   },
