@@ -503,20 +503,40 @@ export class ActiveCallManager {
         throw new Error('surface target missing surfaceApp/surfaceId');
       }
       const url = `${this.apiBase}/surface-huddle/token`;
-      const res = await fetch(url, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          surface_app: target.surfaceApp,
-          surface_id: target.surfaceId,
-        }),
+      const payload = JSON.stringify({
+        surface_app: target.surfaceApp,
+        surface_id: target.surfaceId,
       });
-      if (!res.ok) {
+
+      // The mint is now symmetric-auth gated server-side: bureau-api refuses
+      // (403 NOT_ON_SURFACE) until it can see our `location_update` presence
+      // session for this surface. That update travels over the WS connection,
+      // which can still be (re)connecting when this REST mint fires on a
+      // fresh navigation. The server already grace-polls for ~0.6s; we retry
+      // a couple more times here so a slow WS handshake beyond that window
+      // still recovers instead of dead-ending the call in 'error'. Only 403
+      // is retried — every other status is a real failure surfaced at once.
+      const SURFACE_MINT_RETRIES = 2;
+      const SURFACE_MINT_BACKOFF_MS = 500;
+      for (let attempt = 0; ; attempt++) {
+        const res = await fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+        });
+        if (res.ok) {
+          const body = (await res.json()) as unknown;
+          return parseTokenEnvelope(body);
+        }
+        if (res.status === 403 && attempt < SURFACE_MINT_RETRIES) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, SURFACE_MINT_BACKOFF_MS),
+          );
+          continue;
+        }
         throw new Error(`surface-huddle/token returned ${res.status}`);
       }
-      const body = (await res.json()) as unknown;
-      return parseTokenEnvelope(body);
     }
     throw new Error(`Cannot mint token for target kind=${target.kind}`);
   }

@@ -97,3 +97,41 @@ export async function isUserOnSurface(
 
   return false;
 }
+
+/**
+ * `isUserOnSurface` with a short bounded grace window.
+ *
+ * Why the grace exists: the bureau-client SDK fires the surface-huddle
+ * token mint (a REST POST) the instant the location changes, while the
+ * `location_update` that establishes the presence session travels over a
+ * SEPARATE WebSocket connection — which may still be (re)connecting when
+ * the mint lands. A strict single-shot check would therefore intermittently
+ * 403 a legitimate auto-join purely on timing. We re-check a few times over
+ * ~0.6s so the WS path can win the race; a genuine cross-org probe (no live
+ * session on the surface at all) still fails after every attempt.
+ *
+ * The window is deliberately small: it only delays the (rare) racing legit
+ * mint, never a happy-path one (the first check returns immediately when the
+ * session is already present), and the client retries once more on a 403 so
+ * a slow WS handshake beyond this window still recovers.
+ */
+export async function isUserOnSurfaceWithGrace(
+  redis: Redis,
+  userId: string,
+  orgId: string,
+  surfaceApp: string,
+  surfaceId: string,
+  opts: { attempts?: number; delayMs?: number } = {},
+): Promise<boolean> {
+  const attempts = Math.max(1, opts.attempts ?? 4);
+  const delayMs = Math.max(0, opts.delayMs ?? 200);
+  for (let i = 0; i < attempts; i++) {
+    if (await isUserOnSurface(redis, userId, orgId, surfaceApp, surfaceId)) {
+      return true;
+    }
+    if (i < attempts - 1 && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return false;
+}

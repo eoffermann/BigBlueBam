@@ -37,6 +37,7 @@ import {
 } from '../middleware/room-access.js';
 import { getCallingConfig } from '../services/calling-settings.service.js';
 import { getDoorState } from '../services/presence.service.js';
+import { isUserOnSurfaceWithGrace } from '../services/surface-presence.service.js';
 
 /** D-1: 503 sent by every mint path while the platform kill switch is OFF. */
 function callingDisabled(request: FastifyRequest, reply: FastifyReply) {
@@ -185,18 +186,26 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
    * describeLocation() returns a `surface_id`. Ring/accept and direct
    * navigation funnel into the same room because they target the same name.
    *
-   * We DO NOT access-check the destination resource here: any caller who
-   * reaches this endpoint already has a session, and the surface-huddle
-   * primitive is opt-in — the bureau-client only joins via this room when
-   * the user is actually mounted on the surface. The surface itself (Board,
-   * Brief, etc.) already enforces resource access at its REST layer before
-   * the bureau-client mount tells us about the location. The
-   * surface-presence service (`isUserOnSurface` in surface-presence.service.ts)
-   * is the symmetric-auth check used by callers who want stricter guarantees;
-   * it stays available as a defense-in-depth layer for future hardening.
+   * Symmetric-auth gate (cross-org eavesdropping fix, bureau troubleshooting
+   * 2026-06-10). The huddle room name `huddle-{app}-{id}` is fully derivable
+   * from a guessed/leaked (surface_app, surface_id) pair, and those ids are
+   * NOT org-namespaced. Without a check, any authenticated user in ANY org
+   * could mint a token for the room and listen in. We therefore require the
+   * caller to actually be present on the surface they claim — at least one of
+   * their live, ORG-SCOPED Bureau presence sessions must report the matching
+   * `locationApp` + a `locationUrl` containing the `surface_id`. Because the
+   * SDK derives BOTH the huddle target's `surface_app` and the WS
+   * `location_update`'s `app` from the same `describeLocation().app`, the
+   * symmetric match holds by construction for legitimate callers; a cross-org
+   * probe has no such session and is refused with 403 `NOT_ON_SURFACE`.
    *
-   * Note: the error reason code `NOT_ON_SURFACE` is preserved as-is to keep
-   * the wire contract stable for any existing client that branches on it.
+   * The check is grace-polled (see isUserOnSurfaceWithGrace) so the REST mint
+   * racing the separate-WS `location_update` does not 403 a real auto-join;
+   * the client also retries once on a 403 to cover a slow WS handshake.
+   *
+   * The surface itself (Board, Brief, etc.) still enforces resource access at
+   * its own REST layer; this gate is the Bureau-side floor that stops the
+   * cross-tenant audio leak the unified-call refactor opened.
    */
   fastify.post(
     '/surface-huddle/token',
@@ -220,6 +229,28 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
         );
       }
       const { surface_app, surface_id } = parsed.data;
+
+      // Symmetric-auth gate: the caller must be present on this surface.
+      // Org-scoped + grace-polled so cross-org probes fail while a racing
+      // legitimate auto-join still resolves.
+      const onSurface = await isUserOnSurfaceWithGrace(
+        fastify.redis,
+        user.id,
+        user.org_id,
+        surface_app,
+        surface_id,
+      );
+      if (!onSurface) {
+        return reply.status(403).send({
+          error: {
+            code: 'NOT_ON_SURFACE',
+            message:
+              'You must be on this surface to join its huddle',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
 
       const roomName = buildSurfaceHuddleRoomName(surface_app, surface_id);
       const token = await mintRoomToken(
