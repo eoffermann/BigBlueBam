@@ -32,6 +32,7 @@ import {
   ClipboardList,
   DollarSign,
   Sparkles,
+  Building,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -72,6 +73,7 @@ const ICONS: Record<string, LucideIcon> = {
   'clipboard-list': ClipboardList,
   'dollar-sign': DollarSign,
   sparkles: Sparkles,
+  building: Building,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very

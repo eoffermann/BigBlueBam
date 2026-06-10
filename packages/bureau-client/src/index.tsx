@@ -688,7 +688,7 @@ function BureauDockedBoxInner(): React.ReactElement | null {
           type="button"
           style={controlBtnStyle}
           onClick={() => setMicOn((v) => !v)}
-          title="Toggle microphone (LiveKit wire-up in workstream 13)"
+          title="Microphone (control is local to the docked box; LiveKit track wire-up lands with the unified call model)"
         >
           {micOn ? 'mic on' : 'mic'}
         </button>
@@ -696,7 +696,7 @@ function BureauDockedBoxInner(): React.ReactElement | null {
           type="button"
           style={controlBtnStyle}
           onClick={() => setCamOn((v) => !v)}
-          title="Toggle camera (LiveKit wire-up in workstream 13)"
+          title="Camera (control is local to the docked box; LiveKit track wire-up lands with the unified call model)"
         >
           {camOn ? 'cam on' : 'cam'}
         </button>
@@ -704,7 +704,7 @@ function BureauDockedBoxInner(): React.ReactElement | null {
           type="button"
           style={controlBtnStyle}
           onClick={() => setScreenOn((v) => !v)}
-          title="Toggle screen-share (LiveKit wire-up in workstream 13)"
+          title="Screen-share (control is local to the docked box; LiveKit track wire-up lands with the unified call model)"
         >
           {screenOn ? 'share' : 'screen'}
         </button>
