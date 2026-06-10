@@ -1,0 +1,336 @@
+/**
+ * Bureau WebSocket protocol types — mirrors §8 of the bureau design doc.
+ *
+ * Frame envelope on the wire (client → server messages omit `timestamp`;
+ * server → client messages include it):
+ *
+ *   { type: string, data?: Record<string, unknown>, timestamp?: string }
+ *
+ * The server flattens `data` into the message body on outbound frames in
+ * apps/bureau-api/src/routes/ws.routes.ts — see the `frame()` helper there.
+ * On the client we parse both shapes (flat or nested under `data`) so future
+ * refactors on either side don't desync.
+ */
+
+// ─────────────────────────────────────────────────────────────────────────
+// Presence status / privacy enums (mirror the server's ALLOWED_STATUS /
+// ALLOWED_PRIVACY sets in ws.routes.ts).
+// ─────────────────────────────────────────────────────────────────────────
+
+export type PresenceStatus =
+  | 'available'
+  | 'busy'
+  | 'dnd'
+  | 'focus'
+  | 'away'
+  | 'in_meeting';
+
+export type RoomPrivacy = 'open' | 'knock' | 'private';
+
+export type KnockDecision = 'admit' | 'defer' | 'decline';
+export type KnockResolution = 'admitted' | 'deferred' | 'declined';
+
+export type SummonDecision = 'join' | 'stay';
+
+// ─────────────────────────────────────────────────────────────────────────
+// describeLocation contract — the host SPA returns one of these whenever
+// its route changes; the SDK relays it as `location_update`.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface LocationDescriptor {
+  /** Canonical URL for the focused resource (used by summon). */
+  url: string;
+  /** App identifier — 'board', 'brief', 'bond', 'b3' (Bam), etc. */
+  app: string;
+  /** Human-readable label (board title, doc title, …). */
+  label?: string;
+  /**
+   * Set when the destination supports continuous-audio handoff (§9 Strategy B).
+   * The value is the LiveKit room hint the destination should join on summon.
+   */
+  livekitRoom?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Client → server messages (§8, "Client to server" table).
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface SubscribeFloorMessage {
+  type: 'subscribe_floor';
+  floorId: string;
+}
+
+export interface EnterRoomMessage {
+  type: 'enter_room';
+  roomId: string;
+}
+
+export interface LeaveRoomMessage {
+  type: 'leave_room';
+}
+
+export interface HeartbeatMessage {
+  type: 'heartbeat';
+}
+
+export interface SetStatusMessage {
+  type: 'set_status';
+  status: PresenceStatus;
+  statusText?: string;
+  emoji?: string;
+}
+
+export interface SetDoorMessage {
+  type: 'set_door';
+  roomId: string;
+  privacy: RoomPrivacy;
+}
+
+export interface LockRoomMessage {
+  type: 'lock_room';
+  roomId: string;
+  locked: boolean;
+}
+
+export interface KnockMessage {
+  type: 'knock';
+  roomId: string;
+  message?: string;
+}
+
+export interface KnockRespondMessage {
+  type: 'knock_respond';
+  knockId: string;
+  decision: KnockDecision;
+}
+
+export interface LocationUpdateMessage {
+  type: 'location_update';
+  url: string;
+  app: string;
+  label?: string;
+}
+
+export interface SummonMessage {
+  type: 'summon';
+  targetUrl: string;
+  app: string;
+  label?: string;
+  lkRoomHint?: string;
+}
+
+export interface SummonRespondMessage {
+  type: 'summon_respond';
+  summonId: string;
+  decision: SummonDecision;
+}
+
+export interface SummonGrantAccessMessage {
+  type: 'summon_grant_access';
+  summonId: string;
+  userIds: string[];
+}
+
+export type ClientMessage =
+  | SubscribeFloorMessage
+  | EnterRoomMessage
+  | LeaveRoomMessage
+  | HeartbeatMessage
+  | SetStatusMessage
+  | SetDoorMessage
+  | LockRoomMessage
+  | KnockMessage
+  | KnockRespondMessage
+  | LocationUpdateMessage
+  | SummonMessage
+  | SummonRespondMessage
+  | SummonGrantAccessMessage;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Server → client messages (§8, "Server to client" table) plus the
+// non-spec connected / knock_sent / summon_ack ack frames the hub emits
+// in apps/bureau-api/src/routes/ws.routes.ts.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface ConnectedEvent {
+  type: 'connected';
+  user_id: string;
+  session_id: string;
+}
+
+export interface PresenceSnapshotEvent {
+  type: 'presence_snapshot';
+  floorId: string;
+  /** userId → roomId map for the floor. */
+  occupancy: Record<string, string>;
+  /** roomId → flat hash of door overrides (privacy, lockedBy, …). */
+  roomState: Record<string, Record<string, string>>;
+}
+
+export interface PresenceDeltaEvent {
+  type: 'presence_delta';
+  userId: string;
+  roomId?: string | null;
+  status?: PresenceStatus;
+  location?: {
+    url: string;
+    app: string;
+    label?: string | null;
+  };
+}
+
+export interface RoomEnterEvent {
+  type: 'room_enter';
+  roomId: string;
+  userId: string;
+}
+
+export interface RoomLeaveEvent {
+  type: 'room_leave';
+  roomId: string;
+  userId: string;
+}
+
+export interface DoorChangedEvent {
+  type: 'door_changed';
+  roomId: string;
+  privacy: RoomPrivacy;
+  by: string;
+}
+
+export interface RoomLockedEvent {
+  type: 'room_locked';
+  roomId: string;
+  locked: boolean;
+  by: string;
+}
+
+export interface LivekitTokenEvent {
+  type: 'livekit_token';
+  roomName: string;
+  token: string;
+  url: string;
+}
+
+export interface KnockIncomingEvent {
+  type: 'knock_incoming';
+  knockId: string;
+  visitor: { id: string; name: string };
+  roomId: string;
+  message?: string | null;
+}
+
+export interface KnockResolvedEvent {
+  type: 'knock_resolved';
+  knockId: string;
+  decision: KnockResolution;
+}
+
+export interface KnockSentEvent {
+  type: 'knock_sent';
+  knockId: string;
+  roomId: string;
+}
+
+export interface SummonIncomingEvent {
+  type: 'summon_incoming';
+  summonId: string;
+  summoner: { id: string; name: string };
+  targetUrl: string;
+  app: string;
+  label?: string | null;
+  lkRoomHint?: string | null;
+  autoFollow?: boolean;
+}
+
+export interface SummonAccessReportEvent {
+  type: 'summon_access_report';
+  summonId: string;
+  denied: Array<{ userId: string; name: string }>;
+  canShare: boolean;
+}
+
+export interface SummonProgressEvent {
+  type: 'summon_progress';
+  summonId: string;
+  joined: number;
+  total: number;
+}
+
+export interface SummonAckEvent {
+  type: 'summon_ack';
+  // Echoed by the server for any summon-family message it has not yet
+  // implemented; see the workstream-6 stub in ws.routes.ts.
+  // (Will go away once Agent A wires the summon worker.)
+  accepted: boolean;
+  reason?: string;
+}
+
+export interface StatusChangedEvent {
+  type: 'status_changed';
+  userId: string;
+  status: PresenceStatus;
+  statusText?: string | null;
+  emoji?: string | null;
+}
+
+export interface ErrorEvent {
+  type: 'error';
+  code: string;
+  message: string;
+}
+
+export type ServerMessage =
+  | ConnectedEvent
+  | PresenceSnapshotEvent
+  | PresenceDeltaEvent
+  | RoomEnterEvent
+  | RoomLeaveEvent
+  | DoorChangedEvent
+  | RoomLockedEvent
+  | LivekitTokenEvent
+  | KnockIncomingEvent
+  | KnockResolvedEvent
+  | KnockSentEvent
+  | SummonIncomingEvent
+  | SummonAccessReportEvent
+  | SummonProgressEvent
+  | SummonAckEvent
+  | StatusChangedEvent
+  | ErrorEvent;
+
+export type ServerMessageType = ServerMessage['type'];
+
+/** Map of message type → typed payload, used by the on()/off() handler API. */
+export type ServerMessageMap = {
+  [M in ServerMessage as M['type']]: M;
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Occupant / room snapshot — used by the docked-box UI.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface BureauOccupant {
+  userId: string;
+  name?: string;
+  status?: PresenceStatus;
+  isAgent?: boolean;
+}
+
+export interface BureauRoomSnapshot {
+  roomId: string | null;
+  roomName?: string | null;
+  privacy?: RoomPrivacy | null;
+  occupants: BureauOccupant[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// WS-client connection status — exposed via useBureauPresence().
+// ─────────────────────────────────────────────────────────────────────────
+
+export type BureauConnectionStatus =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnected';
