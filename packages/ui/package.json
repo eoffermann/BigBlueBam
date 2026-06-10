@@ -8,6 +8,10 @@
       "types": "./help-viewer.tsx",
       "default": "./help-viewer.tsx"
     },
+    "./incoming-call-overlay": {
+      "types": "./incoming-call-overlay.tsx",
+      "default": "./incoming-call-overlay.tsx"
+    },
     "./launchpad": {
       "types": "./launchpad.tsx",
       "default": "./launchpad.tsx"
@@ -15,6 +19,10 @@
     "./notifications-bell": {
       "types": "./notifications-bell.tsx",
       "default": "./notifications-bell.tsx"
+    },
+    "./presence-chip-strip": {
+      "types": "./presence-chip-strip.tsx",
+      "default": "./presence-chip-strip.tsx"
     },
     "./org-switcher": {
       "types": "./org-switcher.tsx",
