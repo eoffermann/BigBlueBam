@@ -29,11 +29,15 @@ services:
   redis:
     <<: *common
     image: redis:7-alpine
+    # maxmemory-policy MUST be noeviction: this instance backs BullMQ job
+    # queues, and eviction under memory pressure silently corrupts queue
+    # state (BullMQ warns on every connection otherwise). At the cap,
+    # writes error out instead — visible and recoverable, unlike lost jobs.
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --appendonly yes
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}

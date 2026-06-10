@@ -41,7 +41,7 @@ export default async function threadRoutes(fastify: FastifyInstance) {
         limit?: string;
       };
 
-      const limit = Math.min(parseInt(query.limit || '50', 10), 100);
+      const limit = Math.min(Number.parseInt(query.limit || '50', 10), 100);
 
       // Verify parent message exists
       const [parent] = await db

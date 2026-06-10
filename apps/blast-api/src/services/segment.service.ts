@@ -97,7 +97,10 @@ export async function createSegment(
     })
     .returning();
 
-  return segment!;
+  if (!segment) {
+    throw new Error('Segment insert returned no row');
+  }
+  return segment;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,12 +231,18 @@ function buildFilterWhere(
     return orgCondition;
   }
 
+  // drizzle's and()/or() are typed `SQL | undefined` because a zero-arg
+  // call yields undefined — filterConditions is non-empty here (guarded
+  // above), so fall back to the org pin alone rather than assert.
   const combined =
     criteria.match === 'any'
-      ? or(...filterConditions)!
-      : and(...filterConditions)!;
+      ? or(...filterConditions)
+      : and(...filterConditions);
+  if (!combined) {
+    return orgCondition;
+  }
 
-  return and(orgCondition, combined)!;
+  return and(orgCondition, combined) ?? orgCondition;
 }
 
 // ---------------------------------------------------------------------------

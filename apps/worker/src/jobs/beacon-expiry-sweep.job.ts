@@ -24,6 +24,14 @@ export interface BeaconExpirySweepJobData {
   organization_id?: string;
 }
 
+/** Row shape the sweep queries select/return from beacon_entries. */
+interface BeaconSweepRow {
+  id: string;
+  owned_by: string | null;
+  project_id: string | null;
+  organization_id: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Processor
 // ---------------------------------------------------------------------------
@@ -71,14 +79,14 @@ async function runSweep(
   // Step 1: Active beacons past expiry → PendingReview
   // -------------------------------------------------------------------------
 
-  const step1Rows: any[] = await db.execute(sql`
+  const step1Rows = (await db.execute(sql`
     UPDATE beacon_entries
     SET status = 'PendingReview',
         updated_at = NOW()
     WHERE status = 'Active'
       AND expires_at <= NOW()
     RETURNING id, owned_by, project_id, organization_id
-  `);
+  `)) as unknown as BeaconSweepRow[];
 
   logger.info(
     { count: step1Rows.length, step: 1 },
@@ -109,7 +117,7 @@ async function runSweep(
   // Step 2: PendingReview beacons past grace period → Archived
   // -------------------------------------------------------------------------
 
-  const step2Rows: any[] = await db.execute(sql`
+  const step2Rows = (await db.execute(sql`
     UPDATE beacon_entries be
     SET status = 'Archived',
         updated_at = NOW()
@@ -122,7 +130,7 @@ async function runSweep(
       )
       AND be.expires_at + MAKE_INTERVAL(days => bep.grace_period_days) <= NOW()
     RETURNING be.id, be.owned_by, be.project_id, be.organization_id
-  `);
+  `)) as unknown as BeaconSweepRow[];
 
   logger.info(
     { count: step2Rows.length, step: 2 },
@@ -159,7 +167,7 @@ async function runSweep(
   // with PostgresError 42809 (drizzle binds the JS array as one untyped
   // param, which `ANY` rejects — see the same bug class in bond-api's
   // pipeline.service noted by the e2e suite).
-  const drafts30d: any[] = await db.execute(sql`
+  const drafts30d = (await db.execute(sql`
     UPDATE beacon_entries
     SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"draft_expiry_notified": true}'::jsonb
     WHERE status = 'Draft'
@@ -167,7 +175,7 @@ async function runSweep(
       AND created_at >= NOW() - INTERVAL '60 days'
       AND NOT COALESCE((metadata->>'draft_expiry_notified')::boolean, false)
     RETURNING id, owned_by, project_id, organization_id
-  `);
+  `)) as unknown as BeaconSweepRow[];
 
   if (drafts30d.length > 0) {
     logger.info(
@@ -177,12 +185,12 @@ async function runSweep(
   }
 
   // 3b: Delete drafts older than 60 days
-  const deletedDrafts: any[] = await db.execute(sql`
+  const deletedDrafts = (await db.execute(sql`
     DELETE FROM beacon_entries
     WHERE status = 'Draft'
       AND created_at < NOW() - INTERVAL '60 days'
     RETURNING id, owned_by
-  `);
+  `)) as unknown as Array<Pick<BeaconSweepRow, 'id' | 'owned_by'>>;
 
   logger.info(
     { count: deletedDrafts.length, step: '3b' },
@@ -193,11 +201,11 @@ async function runSweep(
   // Step 4: Enqueue all PendingReview beacons for agent verification
   // -------------------------------------------------------------------------
 
-  const pendingBeacons: any[] = await db.execute(sql`
+  const pendingBeacons = (await db.execute(sql`
     SELECT id, owned_by, project_id, organization_id
     FROM beacon_entries
     WHERE status = 'PendingReview'
-  `);
+  `)) as unknown as BeaconSweepRow[];
 
   if (pendingBeacons.length > 0) {
     const agentQueue = new Queue('beacon-agent-verify', {

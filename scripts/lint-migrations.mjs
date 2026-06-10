@@ -69,6 +69,45 @@ const OFF_FILE_SUPPRESSIONS = {
     39: ['drop-if-exists'],
     45: ['create-table-if-not-exists'],
   },
+  // Unguarded `CREATE TYPE ... AS ENUM` in migrations that predate the
+  // create-enum-guarded rule. All six files are applied everywhere
+  // (bodies frozen); on re-runs the runner skips them via
+  // schema_migrations, and on a fresh DB the unguarded CREATE TYPE
+  // succeeds — the warning is purely historical noise. New migrations
+  // must still wrap CREATE TYPE in a duplicate_object guard.
+  '0023_beacon_tables.sql': {
+    13: ['create-enum-guarded'],
+    20: ['create-enum-guarded'],
+    27: ['create-enum-guarded'],
+    34: ['create-enum-guarded'],
+    41: ['create-enum-guarded'],
+    48: ['create-enum-guarded'],
+    55: ['create-enum-guarded'],
+  },
+  '0024_brief_tables.sql': {
+    12: ['create-enum-guarded'],
+    19: ['create-enum-guarded'],
+    26: ['create-enum-guarded'],
+    33: ['create-enum-guarded'],
+    40: ['create-enum-guarded'],
+  },
+  '0026_bolt_tables.sql': {
+    11: ['create-enum-guarded'],
+    16: ['create-enum-guarded'],
+    24: ['create-enum-guarded'],
+    29: ['create-enum-guarded'],
+    34: ['create-enum-guarded'],
+    39: ['create-enum-guarded'],
+  },
+  '0127_agent_identity_heartbeat.sql': {
+    17: ['create-enum-guarded'],
+  },
+  '0128_agent_proposals.sql': {
+    13: ['create-enum-guarded'],
+  },
+  '0132_entity_links.sql': {
+    13: ['create-enum-guarded'],
+  },
 };
 
 function hasOffFileSuppression(filename, lineNumber, rule) {

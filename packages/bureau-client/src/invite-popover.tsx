@@ -41,10 +41,16 @@ interface RosterMember {
 
 type RingOutcome = 'ok' | 'dnd' | 'error';
 
+// Rendered as a native <dialog open>, so the UA defaults (left: 0,
+// right: 0, margin: auto — which would center it) must be explicitly
+// overridden to keep the panel pinned above the docked box.
 const panelStyle: CSSProperties = {
   position: 'absolute',
   bottom: 'calc(100% + 8px)',
+  top: 'auto',
   right: 0,
+  left: 'auto',
+  margin: 0,
   width: 260,
   background: 'rgba(24, 24, 27, 0.98)',
   color: '#fafafa',
@@ -163,7 +169,7 @@ export function InvitePopover({
     null,
   );
 
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDialogElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   // Focus the search input once mounted (same idiom as the bureau SPA's
@@ -272,7 +278,7 @@ export function InvitePopover({
   const sent = results !== null;
 
   return (
-    <div ref={panelRef} style={panelStyle} role="dialog" aria-label="Invite people">
+    <dialog ref={panelRef} open style={panelStyle} aria-label="Invite people">
       <input
         ref={searchRef}
         type="text"
@@ -358,6 +364,6 @@ export function InvitePopover({
           </>
         )}
       </div>
-    </div>
+    </dialog>
   );
 }

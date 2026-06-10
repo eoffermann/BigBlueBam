@@ -173,6 +173,7 @@ export function SummonHandler({
   }, [client]);
 
   // 30s auto-stay timeout per summon (covers the "ignored" case).
+  // biome-ignore lint/correctness/useExhaustiveDependencies(queue.map): timers deliberately re-arm only when the queue COUNT changes; keying on the array identity would reset every countdown on unrelated queue updates.
   useEffect(() => {
     if (queue.length === 0) return;
     const timers = queue.map((s) => {
@@ -253,6 +254,7 @@ function SummonToast({
   );
   const cancelledRef = useRef(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the countdown re-arms per summon identity (localId) and must NOT restart when the parent re-renders with a fresh onJoin closure — onJoin is intentionally read at fire time.
   useEffect(() => {
     if (!summon.autoFollow) return;
     cancelledRef.current = false;
@@ -289,7 +291,7 @@ function SummonToast({
       : summon.targetUrl;
 
   return (
-    <div style={cardStyle} data-bureau-summon-toast role="status">
+    <output style={cardStyle} data-bureau-summon-toast>
       <div style={titleStyle}>Summon</div>
       <div style={bodyStyle}>
         {summon.summoner?.name ?? 'Someone'} pulled the room to
@@ -323,6 +325,6 @@ function SummonToast({
           Stay here
         </button>
       </div>
-    </div>
+    </output>
   );
 }

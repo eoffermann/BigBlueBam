@@ -1115,7 +1115,7 @@ function BureauDockedBoxInner({
         ? `In: ${call.target.label ?? call.target.surfaceApp ?? 'huddle'}`
         : 'Not in a call';
     return (
-      <div
+      <section
         ref={dock.boxRef}
         style={{
           ...collapsedBarStyle,
@@ -1124,7 +1124,7 @@ function BureauDockedBoxInner({
         }}
         data-bureau-docked-box
         data-bureau-collapsed
-        role="region"
+        aria-label="Bureau"
         onPointerDown={dock.headerHandleProps.onPointerDown}
         onPointerMove={dock.headerHandleProps.onPointerMove}
         onPointerUp={dock.headerHandleProps.onPointerUp}
@@ -1162,16 +1162,16 @@ function BureauDockedBoxInner({
         >
           <ChevronIcon up />
         </button>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div
+    <section
       ref={floating ? dock.boxRef : undefined}
       style={floating ? { ...boxContainerStyle, ...dock.positionStyle } : boxContainerStyle}
       data-bureau-docked-box
-      role="region"
+      aria-label="Bureau"
     >
       <div
         style={
@@ -1331,26 +1331,22 @@ function BureauDockedBoxInner({
           door
         </button>
       </div>
-    </div>
+    </section>
   );
 }
 
 /**
  * Placeholder shown in the host page while the real docked box lives in the
  * Document PiP window. Clicking "Return" closes the PiP window and brings
- * the box back inline.
+ * the box back inline. <output> carries an implicit polite live region /
+ * status role, so screen readers announce the swap without extra ARIA.
  */
 function BureauPipPlaceholder(): React.ReactElement {
   return (
-    <div
-      style={placeholderContainerStyle}
-      data-bureau-pip-placeholder
-      role="status"
-      aria-live="polite"
-    >
+    <output style={placeholderContainerStyle} data-bureau-pip-placeholder>
       <span style={{ opacity: 0.85 }}>Bureau is open in a separate window</span>
       <PopoutBureauButton style={placeholderRestoreBtnStyle} title="Return Bureau to the page" />
-    </div>
+    </output>
   );
 }
 

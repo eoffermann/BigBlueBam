@@ -149,6 +149,7 @@ export function KnockHandler({
   }, [client]);
 
   // 30s auto-defer per knock.
+  // biome-ignore lint/correctness/useExhaustiveDependencies(queue.map): timers deliberately re-arm only when the queue COUNT changes; keying on the array identity would reset every countdown on unrelated queue updates.
   useEffect(() => {
     if (queue.length === 0) return;
     const timers = queue.map((k) => {
@@ -217,7 +218,7 @@ function KnockToast({
 }: ToastProps): React.ReactElement {
   const visitor = knock.visitor?.name ?? 'Someone';
   return (
-    <div style={cardStyle} data-bureau-knock-toast role="status">
+    <output style={cardStyle} data-bureau-knock-toast>
       <div style={titleStyle}>Knock</div>
       <div style={bodyStyle}>{visitor} is knocking</div>
       {knock.message ? <div style={messageStyle}>"{knock.message}"</div> : null}
@@ -232,6 +233,6 @@ function KnockToast({
           Decline
         </button>
       </div>
-    </div>
+    </output>
   );
 }

@@ -141,7 +141,7 @@ export function isDocumentPipSupported(): boolean {
 function cloneStylesheets(source: Document, target: Document): void {
   // (1) <link rel="stylesheet">
   const links = source.querySelectorAll('link[rel="stylesheet"]');
-  links.forEach((node) => {
+  for (const node of links) {
     const link = node as HTMLLinkElement;
     const copy = target.createElement('link');
     copy.rel = 'stylesheet';
@@ -149,17 +149,16 @@ function cloneStylesheets(source: Document, target: Document): void {
     if (link.media) copy.media = link.media;
     if (link.crossOrigin) copy.crossOrigin = link.crossOrigin;
     target.head.appendChild(copy);
-  });
+  }
 
   // (2) <style> tags
   const styles = source.querySelectorAll('style');
-  styles.forEach((node) => {
-    const style = node as HTMLStyleElement;
+  for (const style of styles) {
     const copy = target.createElement('style');
     if (style.media) copy.media = style.media;
     copy.textContent = style.textContent ?? '';
     target.head.appendChild(copy);
-  });
+  }
 
   // (3) document.adoptedStyleSheets — best-effort.
   const adopted = (source as Document & { adoptedStyleSheets?: CSSStyleSheet[] })

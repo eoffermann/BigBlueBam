@@ -2242,7 +2242,7 @@ services:
       redis-server
       --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --appendonly yes
     volumes:
       - redisdata:/data

@@ -85,7 +85,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // `cursor` is an alias for `before` (used by frontend's infinite query)
       const beforeCursor = query.before || query.cursor;
 
-      const limit = Math.min(parseInt(query.limit || '50', 10), 100);
+      const limit = Math.min(Number.parseInt(query.limit || '50', 10), 100);
 
       // Verify membership or public channel
       const [channel] = await db
@@ -105,18 +105,23 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const conditions = [
-        eq(banterMessages.channel_id, id),
-        eq(banterMessages.is_deleted, false),
-        // Channel listing shows top-level messages, plus thread replies
-        // that the author opted to mirror into the channel via the
-        // "Also send to channel" checkbox. The partial index
-        // banter_messages_channel_broadcast_idx (migration 0142) keeps
-        // the OR cheap.
+      // Channel listing shows top-level messages, plus thread replies
+      // that the author opted to mirror into the channel via the
+      // "Also send to channel" checkbox. The partial index
+      // banter_messages_channel_broadcast_idx (migration 0142) keeps
+      // the OR cheap. (or() is typed `SQL | undefined` for the zero-arg
+      // case; with two static args it can't be undefined, and the
+      // fallback preserves the dominant top-level filter.)
+      const broadcastFilter =
         or(
           isNull(banterMessages.thread_parent_id),
           eq(banterMessages.also_sent_to_channel, true),
-        )!,
+        ) ?? isNull(banterMessages.thread_parent_id);
+
+      const conditions = [
+        eq(banterMessages.channel_id, id),
+        eq(banterMessages.is_deleted, false),
+        broadcastFilter,
       ];
 
       if (beforeCursor) {
@@ -178,7 +183,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       // Cursor for pagination: use the last message's ID
       const nextCursor = messages.length === limit && data.length > 0
-        ? data[data.length - 1]!.id
+        ? (data[data.length - 1]?.id ?? null)
         : null;
 
       return reply.send({
