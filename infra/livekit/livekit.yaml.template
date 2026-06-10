@@ -11,6 +11,15 @@
 # file with `devkey:secret` as fallback values so local-only flows
 # still work.
 #
+# ⚠ GOTCHA (Docker Desktop): if livekit.yaml does NOT exist when
+# `docker compose up` runs, Docker auto-creates a DIRECTORY at that path
+# to satisfy the bind mount, and every later start fails with
+# "not a directory: Are you trying to mount a directory onto a file".
+# Fix: `Remove-Item infra/livekit/livekit.yaml -Force` (it's an empty
+# dir), then re-render — substitute __LIVEKIT_API_KEY__ /
+# __LIVEKIT_API_SECRET__ in this template with the values from .env
+# (or run the deploy script, which does it for you).
+#
 # Placeholders (rendered as the env values during deploy; written here
 # with extra dashes so they don't get substituted into this comment):
 #   --LIVEKIT_API_KEY--     replaced with env LIVEKIT_API_KEY (or devkey)
