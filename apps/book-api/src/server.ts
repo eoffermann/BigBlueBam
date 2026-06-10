@@ -87,6 +87,7 @@ import publicBookingRoutes from './routes/public-booking.routes.js';
 import connectionRoutes from './routes/connections.routes.js';
 import timelineRoutes from './routes/timeline.routes.js';
 import icalRoutes from './routes/ical.routes.js';
+import internalRoutes from './routes/internal.routes.js';
 
 await fastify.register(calendarRoutes, { prefix: '/v1' });
 await fastify.register(eventRoutes, { prefix: '/v1' });
@@ -96,6 +97,9 @@ await fastify.register(publicBookingRoutes); // No prefix — /meet/:slug
 await fastify.register(connectionRoutes, { prefix: '/v1' });
 await fastify.register(timelineRoutes, { prefix: '/v1' });
 await fastify.register(icalRoutes, { prefix: '/v1' });
+// Internal cross-app routes (X-Internal-Service-Secret). Hosts the
+// bureau-driven event create/cancel/get pair (workstream 4).
+await fastify.register(internalRoutes, { prefix: '/v1' });
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
