@@ -912,6 +912,60 @@ services:
       - backend
       - frontend
 
+  # bureau-api owns floors, rooms, presence aggregation, knocks, summons
+  # (teleport), and the WS hub. Mints LiveKit tokens for spatial rooms; calls
+  # book-api for booking conflicts, board-api/brief-api for resource access
+  # checks during summon. Note: blueprint-api also binds container-internal
+  # port 4015 — this is fine because each service runs in its own container
+  # network namespace; nginx routes by upstream hostname (`bureau-api` vs
+  # `blueprint-api`) not by port. Design doc §16 / bureau-design-document.md.
+  bureau-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/bureau-api/Dockerfile
+      target: production
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - LIVEKIT_HOST=http://livekit:7880
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-secret}
+      - BOOK_INTERNAL_URL=http://book-api:4012
+      - BOARD_INTERNAL_URL=http://board-api:4008
+      - BRIEF_INTERNAL_URL=http://brief-api:4005
+      - BBB_API_INTERNAL_URL=http://api:4000
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - NODE_ENV=production
+      - PORT=4015
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4015/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
   qdrant:
     <<: *common
     image: qdrant/qdrant:latest

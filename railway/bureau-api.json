@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/bureau-api/Dockerfile",
+    "watchPatterns": [
+      "apps/bureau-api/**",
+      "packages/shared/**",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "package.json",
+      "tsconfig.base.json",
+      "apps/bureau-api/Dockerfile"
+    ]
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "startCommand": "node dist/server.js",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100
+  }
+}

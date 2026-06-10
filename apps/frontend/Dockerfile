@@ -162,6 +162,14 @@ COPY --from=build /app/apps/bench/dist /usr/share/nginx/html/bench
 COPY --from=build /app/apps/bill/dist /usr/share/nginx/html/bill
 COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
 COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint
+# TODO(bureau, workstream 8): when apps/bureau/ SPA is scaffolded, mirror the
+# blueprint pattern above — add COPY apps/bureau/package.json in the `deps`
+# stage, COPY apps/bureau/{src,public,index.html,tsconfig*.json,vite.config.ts}
+# in the `build` stage, add `&& pnpm --filter @bigbluebam/bureau build` to the
+# build RUN, and add `COPY --from=build /app/apps/bureau/dist
+# /usr/share/nginx/html/bureau` here. nginx /bureau/ alias is already wired
+# in infra/nginx/nginx-with-site.conf so the SPA is served the moment the
+# files land at /usr/share/nginx/html/bureau/.
 
 # Documentation files for the in-app Help viewer (served at /docs/)
 # These are the hand-authored and pipeline-generated markdown files.

@@ -338,6 +338,29 @@ with **R**, optional with `o`.
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
+### bureau-api
+
+*Bureau API — virtual floors, rooms, presence aggregation, knocks, summons (teleport), LiveKit token minting, and the WS hub*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| **R** | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
+| **R** | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
+| **R** | `LIVEKIT_HOST` | computed | `http://livekit.railway.internal:7880` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
+| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOOK_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOARD_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BRIEF_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `RATE_LIMIT_MAX` | literal | `100` |  |
+| o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
+
 ### mcp-server
 
 *MCP Protocol Server — tool orchestration for AI agents*
@@ -450,8 +473,8 @@ _No environment variables required._
 These are the secrets and references that MUST be identical across
 several services. Set them once, then copy/reference everywhere.
 
-- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api
+- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
-- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, book-api, blank-api, bill-api, blueprint-api, mcp-server, worker
-- `LIVEKIT_API_KEY` — banter-api, board-api, livekit
-- `LIVEKIT_API_SECRET` — banter-api, board-api, livekit
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, mcp-server, worker
+- `LIVEKIT_API_KEY` — banter-api, board-api, bureau-api, livekit
+- `LIVEKIT_API_SECRET` — banter-api, board-api, bureau-api, livekit

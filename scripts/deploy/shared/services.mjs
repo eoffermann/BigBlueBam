@@ -287,6 +287,37 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'bureau-api',
+    description: 'Bureau API — virtual floors, rooms, presence aggregation, knocks, summons (teleport), LiveKit token minting, and the WS hub',
+    dockerfile: 'apps/bureau-api/Dockerfile',
+    // Container-internal port. Shares 4015 with blueprint-api; each container
+    // runs in its own network namespace and nginx routes by upstream hostname.
+    port: 4015,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    needs: ['postgres', 'redis', 'api', 'bolt-api'],
+    public_paths: ['/bureau/api/', '/bureau/ws'],
+    env: {
+      required: [
+        'DATABASE_URL',
+        'REDIS_URL',
+        'SESSION_SECRET',
+        'BBB_API_INTERNAL_URL',
+        'LIVEKIT_API_KEY',
+        'LIVEKIT_API_SECRET',
+        'LIVEKIT_HOST',
+      ],
+      optional: [
+        'CORS_ORIGIN', 'LOG_LEVEL',
+        'INTERNAL_SERVICE_SECRET',
+        'BOLT_API_INTERNAL_URL',
+        'BOOK_INTERNAL_URL', 'BOARD_INTERNAL_URL', 'BRIEF_INTERNAL_URL',
+        'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
+      ],
+    },
+  },
+  {
     name: 'mcp-server',
     description: 'MCP Protocol Server — tool orchestration for AI agents',
     dockerfile: 'apps/mcp-server/Dockerfile',
@@ -376,9 +407,9 @@ export const APP_SERVICES = [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
       'bench-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
-      'mcp-server', 'site',
+      'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/book/', '/blank/', '/bill/', '/blueprint/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];
@@ -536,6 +567,7 @@ export const APP_URLS = {
   'blank': { label: 'Blank (Forms)', path: '/blank/' },
   'bill': { label: 'Bill (Invoicing)', path: '/bill/' },
   'blueprint': { label: 'Blueprint (Diagrams)', path: '/blueprint/' },
+  'bureau': { label: 'Bureau (Virtual Office)', path: '/bureau/' },
   'mcp': { label: 'MCP Server', path: '/mcp/' },
 };
 
