@@ -251,6 +251,12 @@ function OverviewTab({ onNavigate }: { onNavigate: (path: string) => void }) {
             description="Enable or disable agents in the active org. §15 kill switch."
             onClick={() => onNavigate('/superuser/agents')}
           />
+          <AdminToolCard
+            icon={PhoneCall}
+            title="Platform calling"
+            description="LiveKit credentials, voice agent URL, and the global calling kill switch."
+            onClick={() => onNavigate('/superuser/platform-calling')}
+          />
         </div>
       </section>
 

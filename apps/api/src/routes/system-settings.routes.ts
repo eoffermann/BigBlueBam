@@ -7,6 +7,7 @@ import { requireAuth } from '../plugins/auth.js';
 import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+import { validateExternalUrl } from '../lib/url-validator.js';
 
 // Canonical Launchpad app catalog. THIS is the single source of truth for
 // every app the suite exposes — `LAUNCHPAD_CATALOG` carries the rendering
@@ -117,6 +118,22 @@ const REDIRECT_MAP: Record<RootRedirectValue, string | null> = {
 // values via env vars instead — the resolver (apps/worker/src/utils/
 // smtp-config.mjs) reads the DB first and falls back to env vars, so
 // env-only deploys still work.
+// Helper: SSRF-guarded URL validator that surfaces the reason as a Zod issue.
+const externalUrlSchema = (max = 2048) =>
+  z
+    .string()
+    .min(1)
+    .max(max)
+    .refine(
+      (val) => validateExternalUrl(val).safe === true,
+      (val) => {
+        const r = validateExternalUrl(val);
+        return {
+          message: r.safe ? 'OK' : `Unsafe URL: ${r.reason}`,
+        };
+      },
+    );
+
 const KEY_VALIDATORS: Record<string, z.ZodType> = {
   root_redirect: z.enum(ROOT_REDIRECT_VALUES),
 
@@ -141,7 +158,51 @@ const KEY_VALIDATORS: Record<string, z.ZodType> = {
   smtp_password: z.string().min(1).max(512),
   smtp_from: z.string().email(),
   smtp_secure: z.boolean(),
+
+  // ── Platform calling (LiveKit + voice agent) ─────────────────────────
+  // Values written here override the env-var defaults read by
+  // banter-api / board-api / voice-agent. The frontend SuperUser
+  // settings page (apps/frontend/src/pages/superuser/
+  // platform-calling-settings.tsx) drives them.
+  //
+  // Secret keys (api_key / api_secret) are MASKED on read — see the
+  // GET handler below. The frontend renders the masked value as
+  // read-only and forces the SuperUser into an explicit "rotate" mode
+  // before sending a new value.
+  'calling.livekit_host': externalUrlSchema(2048),
+  'calling.livekit_api_key': z.string().min(4).max(256),
+  'calling.livekit_api_secret': z.string().min(16).max(512),
+  'calling.voice_agent_url': externalUrlSchema(2048),
+  'calling.global_enabled': z.boolean(),
 };
+
+// Keys whose stored value is a secret and must be masked on every read.
+// The frontend uses the masked value as a display-only placeholder until
+// the operator explicitly enters "rotate" mode.
+const SECRET_KEYS = new Set<string>([
+  'smtp_password',
+  'calling.livekit_api_key',
+  'calling.livekit_api_secret',
+]);
+
+// Show only the trailing characters of a stored secret. `last` controls
+// how many chars of the raw value leak through (4 for the LiveKit api
+// secret per the task spec; 0 for everything else, which prints a pure
+// placeholder).
+function maskSecret(raw: unknown, last: number): string {
+  if (raw == null) return '';
+  const str = typeof raw === 'string' ? raw : String(raw);
+  if (str.length === 0) return '';
+  if (last <= 0 || str.length <= last) return '••••••••';
+  return '••••••••' + str.slice(-last);
+}
+
+function maskedValueFor(key: string, raw: unknown): unknown {
+  if (!SECRET_KEYS.has(key)) return raw;
+  // LiveKit secret: show last 4 per the task spec. Everything else: full mask.
+  const last = key === 'calling.livekit_api_secret' ? 4 : 0;
+  return maskSecret(raw, last);
+}
 
 export default async function systemSettingsRoutes(fastify: FastifyInstance) {
   // ─── GET /system-settings — list all settings (SuperUser only) ────────
@@ -150,7 +211,15 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('bam.system_setting.list')] },
     async () => {
       const rows = await db.select().from(systemSettings);
-      return { data: rows };
+      // Mask secret values before returning. Even SuperUsers should not
+      // get raw secrets back over the wire on a list request — they can
+      // re-enter the value via the rotate flow if they need to change it.
+      const safe = rows.map((row) => ({
+        ...row,
+        value: maskedValueFor(row.key, row.value),
+        is_secret: SECRET_KEYS.has(row.key),
+      }));
+      return { data: safe };
     },
   );
 
@@ -176,7 +245,10 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return { data: row };
+      const safe = SECRET_KEYS.has(row.key)
+        ? { ...row, value: maskedValueFor(row.key, row.value), is_secret: true }
+        : { ...row, is_secret: false };
+      return { data: safe };
     },
   );
 
@@ -244,21 +316,37 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
           },
         });
 
+      // Never write raw secrets into the audit log — store a masked
+      // form so the audit trail proves a rotation happened without
+      // leaking the new value back in plaintext.
+      const auditValue = SECRET_KEYS.has(key)
+        ? maskedValueFor(key, bodyParsed.data.value)
+        : bodyParsed.data.value;
       await logSuperuserAction({
         superuserId: userId,
         action: 'update_system_setting',
-        details: { key, value: bodyParsed.data.value },
+        details: { key, value: auditValue },
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'] ?? undefined,
       });
 
-      // Return the updated row
+      // Return the updated row. Mask secrets on the way back out so the
+      // PUT response doesn't echo the raw value we just stored.
       const [updated] = await db
         .select()
         .from(systemSettings)
         .where(eq(systemSettings.key, key));
 
-      return { data: updated };
+      if (!updated) {
+        // Unreachable in practice (we just inserted), but keeps the type
+        // checker happy without an unsafe assertion.
+        return { data: null };
+      }
+
+      const safe = SECRET_KEYS.has(updated.key)
+        ? { ...updated, value: maskedValueFor(updated.key, updated.value), is_secret: true }
+        : { ...updated, is_secret: false };
+      return { data: safe };
     },
   );
 

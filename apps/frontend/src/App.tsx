@@ -14,6 +14,7 @@ import { SuperuserPage } from '@/pages/superuser';
 import { SuperuserPeopleListPage } from '@/pages/superuser/people-list';
 import { SuperuserPeopleDetailPage } from '@/pages/superuser/people-detail';
 import { SuperuserAgentsListPage } from '@/pages/superuser/agents-list';
+import { PlatformCallingSettingsPage } from '@/pages/superuser/platform-calling-settings';
 import { PermissionsGroupDetailPage } from '@/pages/superuser/permissions/group-detail';
 import { Shield, ArrowLeft } from 'lucide-react';
 import { PeoplePage } from '@/pages/people';
@@ -47,6 +48,7 @@ type Route =
   | { page: 'superuser-people' }
   | { page: 'superuser-person-detail'; userId: string }
   | { page: 'superuser-agents' }
+  | { page: 'superuser-platform-calling' }
   | { page: 'superuser-permissions-group-detail'; groupId: string }
   | { page: 'people' }
   | { page: 'person-detail'; userId: string }
@@ -106,6 +108,9 @@ function parseRoute(path: string): Route {
   }
   if (p === '/superuser/agents' || p === '/superuser/agents/') {
     return { page: 'superuser-agents' };
+  }
+  if (p === '/superuser/platform-calling' || p === '/superuser/platform-calling/') {
+    return { page: 'superuser-platform-calling' };
   }
   const superuserPermGroupMatch = p.match(/^\/superuser\/permissions\/groups\/([^/]+)$/);
   if (superuserPermGroupMatch) {
@@ -307,6 +312,8 @@ export function App() {
       return <SuperuserPeopleDetailPage userId={route.userId} onNavigate={navigate} />;
     case 'superuser-agents':
       return <SuperuserAgentsListPage onNavigate={navigate} />;
+    case 'superuser-platform-calling':
+      return <PlatformCallingSettingsPage onNavigate={navigate} />;
     case 'superuser-permissions-group-detail':
       return (
         <SuperuserPermissionsGroupDetailLayout groupId={route.groupId} onNavigate={navigate} />
