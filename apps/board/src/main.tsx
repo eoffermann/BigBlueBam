@@ -41,24 +41,24 @@ createRoot(rootElement).render(
 );
 
 // ─── Bureau-client mount (workstream 13) ─────────────────────────────────
-// Board has its own per-canvas LiveKit room (`board-<id>`), so we surface
-// it as `livekitRoom` whenever the route names a specific canvas. That
-// gives Bureau the continuous-audio handoff per §9 Strategy B.
+// Board surfaces the active canvas id as `surface_id` so the unified call
+// manager (Phase 1) derives the canonical `huddle-board-{id}` LiveKit room
+// from it. The old per-canvas `board-<id>` room name is dead with Phase 2.
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/board')) return undefined;
   const tail = path.slice('/board'.length) || '/';
   // Matches /board/:id (canvas) and /board/:id/versions
   const m = tail.match(/^\/([^/]+)(?:\/versions)?$/);
-  let livekitRoom: string | undefined;
+  let surface_id: string | undefined;
   if (m && !['new', 'templates', 'starred', 'archived', 'help', ''].includes(m[1]!)) {
-    livekitRoom = `board-${m[1]}`;
+    surface_id = m[1]!;
   }
   return {
     url: window.location.origin + path,
     app: 'board',
     label: path,
-    livekitRoom,
+    surface_id,
   };
 }
 

@@ -1,6 +1,18 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
+
+// Slug → channel.id registry published on window so main.tsx's
+// describeLocation() can resolve the canonical surface id for
+// `huddle-banter-{channel_id}` without re-fetching. Updated whenever
+// useChannels() resolves. Lives on window because describeLocation is
+// invoked outside React (from history wrappers).
+declare global {
+  interface Window {
+    __banterChannelIndex?: Record<string, string>;
+  }
+}
 
 export interface DmOtherParticipant {
   id: string;
@@ -56,11 +68,30 @@ export function useChannels() {
   // from the previous org. Without this, TanStack Query reuses the old
   // ['channels'] entry regardless of which org the backend now resolves.
   const activeOrgId = useAuthStore((s) => s.user?.active_org_id);
-  return useQuery({
+  const query = useQuery({
     queryKey: ['channels', activeOrgId],
     queryFn: () => api.get<{ data: Channel[] }>('/channels').then((r) => r.data),
     enabled: !!activeOrgId,
   });
+
+  // Publish slug→id map so describeLocation() in main.tsx can resolve
+  // /channels/:slug to the canonical channel.id for the Bureau huddle
+  // room name. DM routes already use the channel id in the URL, so they
+  // don't need the registry.
+  useEffect(() => {
+    if (!query.data) return;
+    const index: Record<string, string> = {};
+    for (const ch of query.data) {
+      if (ch.slug) index[ch.slug] = ch.id;
+    }
+    window.__banterChannelIndex = index;
+    // Notify any non-React listener (the bureau-client SDK pull is
+    // driven by route changes; firing popstate after a fresh fetch
+    // makes the SDK re-read describeLocation() with the new map).
+    window.dispatchEvent(new Event('banter:channels-updated'));
+  }, [query.data]);
+
+  return query;
 }
 
 /** Fetch a single channel by slug or ID */

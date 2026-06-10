@@ -41,20 +41,22 @@ createRoot(rootElement).render(
 );
 
 // ─── Bureau-client mount (workstream 13) ─────────────────────────────────
-// Brief documents have a per-document LiveKit room (`brief-<idOrSlug>`).
-// We expose it on `livekitRoom` whenever the route is /documents/:id or
-// /documents/:id/edit so summons can offer continuous-audio handoff.
+// Unified call model (Phase 1+): for any /documents/:id(/edit)? route we
+// advertise `app: 'brief'` plus the document id as `surface_id`. The
+// docked-box ActiveCallManager derives the canonical huddle room name
+// (`huddle-brief-{id}`) from that pair, so Brief no longer needs its own
+// LiveKit stack or `?lkRoom=` plumbing.
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/brief')) return undefined;
   const tail = path.slice('/brief'.length) || '/';
   const m = tail.match(/^\/documents\/([^/]+)(?:\/edit)?$/);
-  const livekitRoom = m ? `brief-${m[1]}` : undefined;
+  const surface_id = m ? m[1] : undefined;
   return {
     url: window.location.origin + path,
     app: 'brief',
     label: path,
-    livekitRoom,
+    surface_id,
   };
 }
 

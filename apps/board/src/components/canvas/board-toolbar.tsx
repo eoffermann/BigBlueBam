@@ -15,7 +15,6 @@ import { Button } from '@/components/common/button';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { IconPicker } from '@/components/common/icon-picker';
 import { cn } from '@/lib/utils';
-import { AudioControls } from './audio-controls';
 import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface BoardToolbarProps {
@@ -111,7 +110,6 @@ export function BoardToolbar({ boardId, onNavigate, onToggleChat, chatOpen }: Bo
             surfaceLabel={board?.name ?? 'Untitled Board'}
           />
         </div>
-        <AudioControls boardId={boardId} />
 
         <button
           onClick={onToggleChat}

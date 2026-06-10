@@ -24,17 +24,12 @@ interface ChannelState {
   activeThreadMessageId: string | null;
   openThread: (messageId: string) => void;
   closeThread: () => void;
-
-  /** Active call state */
-  activeCallId: string | null;
-  activeCallToken: string | null;
-  activeCallRoomName: string | null;
-  activeCallType: 'voice' | 'video' | 'huddle' | null;
-  activeCallLivekitUrl: string | null;
-  setActiveCall: (callId: string, token: string, roomName: string, type: 'voice' | 'video' | 'huddle', livekitUrl: string) => void;
-  clearActiveCall: () => void;
 }
 
+// Live audio/video call state moved to the shared Bureau docked-box in
+// Phase 2 of the unified-LiveKit migration. The per-channel huddle is
+// implicit: whichever channel the user is viewing, the docked box joins
+// `huddle-banter-{channel_id}`. There is no Banter-side activeCall state.
 export const useChannelStore = create<ChannelState>((set) => ({
   activeChannelId: null,
   setActiveChannel: (id) => set({ activeChannelId: id }),
@@ -66,14 +61,4 @@ export const useChannelStore = create<ChannelState>((set) => ({
   activeThreadMessageId: null,
   openThread: (messageId) => set({ activeThreadMessageId: messageId }),
   closeThread: () => set({ activeThreadMessageId: null }),
-
-  activeCallId: null,
-  activeCallToken: null,
-  activeCallRoomName: null,
-  activeCallType: null,
-  activeCallLivekitUrl: null,
-  setActiveCall: (callId, token, roomName, type, livekitUrl) =>
-    set({ activeCallId: callId, activeCallToken: token, activeCallRoomName: roomName, activeCallType: type, activeCallLivekitUrl: livekitUrl }),
-  clearActiveCall: () =>
-    set({ activeCallId: null, activeCallToken: null, activeCallRoomName: null, activeCallType: null, activeCallLivekitUrl: null }),
 }));

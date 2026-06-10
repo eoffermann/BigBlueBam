@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Sun, Moon, Monitor, Mic, Volume2, Video, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Sun, Moon, Monitor } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useDevices } from '@/hooks/use-devices';
 
 interface PreferencesPageProps {
   onNavigate: (path: string) => void;
@@ -15,10 +14,6 @@ interface UserPreferences {
   enter_to_send: boolean;
   show_typing_indicators: boolean;
   compact_mode: boolean;
-  auto_mute: boolean;
-  auto_camera: boolean;
-  noise_suppression: boolean;
-  echo_cancellation: boolean;
 }
 
 export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
@@ -30,25 +25,12 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
     enter_to_send: true,
     show_typing_indicators: true,
     compact_mode: false,
-    auto_mute: false,
-    auto_camera: true,
-    noise_suppression: true,
-    echo_cancellation: true,
   });
   const [saving, setSaving] = useState(false);
 
-  // Device state
-  const { audioInputs, audioOutputs, videoInputs, hasPermission, requestPermissions } = useDevices();
-  const [selectedMicId, setSelectedMicId] = useState<string>(
-    () => localStorage.getItem('banter-mic-device') ?? '',
-  );
-  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>(
-    () => localStorage.getItem('banter-speaker-device') ?? '',
-  );
-  const [selectedCameraId, setSelectedCameraId] = useState<string>(
-    () => localStorage.getItem('banter-camera-device') ?? '',
-  );
-  const [requestingPermissions, setRequestingPermissions] = useState(false);
+  // Audio/video device selection and mute/camera defaults have moved to the
+  // shared Bureau docked-box (the suite-wide LiveKit endpoint). Banter no
+  // longer owns its own calling stack — see workstream Phase 2 cleanup.
 
   // Load preferences from API
   useEffect(() => {
@@ -59,64 +41,6 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
         // Use defaults
       });
   }, []);
-
-  // Load audio/video toggle prefs from localStorage on mount
-  useEffect(() => {
-    const autoMute = localStorage.getItem('banter-auto-mute');
-    const autoCamera = localStorage.getItem('banter-auto-camera');
-    const noiseSuppression = localStorage.getItem('banter-noise-suppression');
-    const echoCancellation = localStorage.getItem('banter-echo-cancellation');
-    setPrefs((prev) => ({
-      ...prev,
-      ...(autoMute != null && { auto_mute: autoMute === 'true' }),
-      ...(autoCamera != null && { auto_camera: autoCamera === 'true' }),
-      ...(noiseSuppression != null && { noise_suppression: noiseSuppression === 'true' }),
-      ...(echoCancellation != null && { echo_cancellation: echoCancellation === 'true' }),
-    }));
-  }, []);
-
-  // Auto-select first available device when lists populate
-  useEffect(() => {
-    if (!selectedMicId && audioInputs.length > 0) {
-      setSelectedMicId(audioInputs[0]!.deviceId);
-    }
-  }, [audioInputs, selectedMicId]);
-
-  useEffect(() => {
-    if (!selectedSpeakerId && audioOutputs.length > 0) {
-      setSelectedSpeakerId(audioOutputs[0]!.deviceId);
-    }
-  }, [audioOutputs, selectedSpeakerId]);
-
-  useEffect(() => {
-    if (!selectedCameraId && videoInputs.length > 0) {
-      setSelectedCameraId(videoInputs[0]!.deviceId);
-    }
-  }, [videoInputs, selectedCameraId]);
-
-  const handleSelectMic = useCallback((deviceId: string) => {
-    setSelectedMicId(deviceId);
-    localStorage.setItem('banter-mic-device', deviceId);
-  }, []);
-
-  const handleSelectSpeaker = useCallback((deviceId: string) => {
-    setSelectedSpeakerId(deviceId);
-    localStorage.setItem('banter-speaker-device', deviceId);
-  }, []);
-
-  const handleSelectCamera = useCallback((deviceId: string) => {
-    setSelectedCameraId(deviceId);
-    localStorage.setItem('banter-camera-device', deviceId);
-  }, []);
-
-  const handleRequestPermissions = useCallback(async () => {
-    setRequestingPermissions(true);
-    try {
-      await requestPermissions();
-    } finally {
-      setRequestingPermissions(false);
-    }
-  }, [requestPermissions]);
 
   const handleThemeChange = (newTheme: string) => {
     setTheme(newTheme);
@@ -133,11 +57,6 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Persist audio/video toggles to localStorage
-      localStorage.setItem('banter-auto-mute', String(prefs.auto_mute));
-      localStorage.setItem('banter-auto-camera', String(prefs.auto_camera));
-      localStorage.setItem('banter-noise-suppression', String(prefs.noise_suppression));
-      localStorage.setItem('banter-echo-cancellation', String(prefs.echo_cancellation));
       await api.patch('/me/preferences', prefs);
     } catch (err) {
       console.error('Failed to save preferences:', err);
@@ -258,97 +177,9 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
             </div>
           </section>
 
-          {/* Audio & Video */}
-          <section>
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
-              Audio & Video
-            </h3>
-            <div className="space-y-3">
-              {!hasPermission && (
-                <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-                  <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                      Permissions required
-                    </p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                      Grant microphone and camera access to select your devices.
-                    </p>
-                    <button
-                      onClick={handleRequestPermissions}
-                      disabled={requestingPermissions}
-                      className="mt-3 px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                    >
-                      {requestingPermissions ? 'Requesting...' : 'Request Permissions'}
-                    </button>
-                  </div>
-                </div>
-              )}
-              <SelectRow
-                icon={<Mic className="h-4 w-4" />}
-                label="Microphone"
-                description="Select your audio input device"
-                value={selectedMicId}
-                onChange={handleSelectMic}
-                options={audioInputs.map((d) => ({
-                  value: d.deviceId,
-                  label: d.label || `Microphone (${d.deviceId.slice(0, 8)}...)`,
-                }))}
-                disabled={!hasPermission}
-                placeholder="No microphones found"
-              />
-              <SelectRow
-                icon={<Volume2 className="h-4 w-4" />}
-                label="Speaker"
-                description="Select your audio output device"
-                value={selectedSpeakerId}
-                onChange={handleSelectSpeaker}
-                options={audioOutputs.map((d) => ({
-                  value: d.deviceId,
-                  label: d.label || `Speaker (${d.deviceId.slice(0, 8)}...)`,
-                }))}
-                disabled={!hasPermission}
-                placeholder="No speakers found"
-              />
-              <SelectRow
-                icon={<Video className="h-4 w-4" />}
-                label="Camera"
-                description="Select your video input device"
-                value={selectedCameraId}
-                onChange={handleSelectCamera}
-                options={videoInputs.map((d) => ({
-                  value: d.deviceId,
-                  label: d.label || `Camera (${d.deviceId.slice(0, 8)}...)`,
-                }))}
-                disabled={!hasPermission}
-                placeholder="No cameras found"
-              />
-              <ToggleRow
-                label="Auto-join calls muted"
-                description="Start calls with your microphone muted"
-                checked={prefs.auto_mute}
-                onChange={(v) => updatePref('auto_mute', v)}
-              />
-              <ToggleRow
-                label="Auto-enable camera in video calls"
-                description="Automatically turn on your camera when joining video calls"
-                checked={prefs.auto_camera}
-                onChange={(v) => updatePref('auto_camera', v)}
-              />
-              <ToggleRow
-                label="Noise suppression"
-                description="Reduce background noise from your microphone"
-                checked={prefs.noise_suppression}
-                onChange={(v) => updatePref('noise_suppression', v)}
-              />
-              <ToggleRow
-                label="Echo cancellation"
-                description="Prevent echo from your speakers feeding back into your microphone"
-                checked={prefs.echo_cancellation}
-                onChange={(v) => updatePref('echo_cancellation', v)}
-              />
-            </div>
-          </section>
+          {/* Audio & Video device settings live in the shared Bureau
+              docked-box. The huddle for the channel you're viewing is
+              already the room your Bureau client is in. */}
 
           {/* Save */}
           <div className="pt-4">
@@ -397,53 +228,6 @@ function ToggleRow({
           )}
         />
       </button>
-    </div>
-  );
-}
-
-function SelectRow({
-  icon,
-  label,
-  description,
-  value,
-  onChange,
-  options,
-  disabled,
-  placeholder,
-}: {
-  icon?: React.ReactNode;
-  label: string;
-  description: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  disabled?: boolean;
-  placeholder?: string;
-}) {
-  return (
-    <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50">
-      <div className="flex items-center gap-2 mb-2">
-        {icon && <span className="text-zinc-400">{icon}</span>}
-        <div>
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{label}</p>
-          <p className="text-xs text-zinc-500 mt-0.5">{description}</p>
-        </div>
-      </div>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled || options.length === 0}
-        className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-zinc-100 outline-none focus:border-primary-400 dark:focus:border-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {options.length === 0 && (
-          <option value="">{placeholder ?? 'No devices found'}</option>
-        )}
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

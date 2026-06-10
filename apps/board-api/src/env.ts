@@ -22,16 +22,10 @@ const envSchema = z.object({
   MCP_INTERNAL_URL: z.string().default('http://mcp-server:3001'),
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
-  BUREAU_API_INTERNAL_URL: z.string().default('http://bureau-api:4015'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),
-
-  // LiveKit (for future real-time cursor/presence features)
-  LIVEKIT_API_KEY: z.string().default('devkey'),
-  LIVEKIT_API_SECRET: z.string().default('devsecret'),
-  LIVEKIT_URL: z.string().default('ws://localhost:7880'),
 
   // Build metadata
   GIT_COMMIT: z.string().default('dev'),

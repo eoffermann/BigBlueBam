@@ -96,7 +96,6 @@ import templateRoutes from './routes/template.routes.js';
 import linkRoutes from './routes/link.routes.js';
 import collaboratorRoutes from './routes/collaborator.routes.js';
 import exportRoutes from './routes/export.routes.js';
-import audioRoutes from './routes/audio.routes.js';
 import websocketHandler from './ws/handler.js';
 
 await fastify.register(documentRoutes, { prefix: '/v1' });
@@ -108,7 +107,6 @@ await fastify.register(templateRoutes, { prefix: '/v1' });
 await fastify.register(linkRoutes, { prefix: '/v1' });
 await fastify.register(collaboratorRoutes, { prefix: '/v1' });
 await fastify.register(exportRoutes, { prefix: '/v1' });
-await fastify.register(audioRoutes, { prefix: '/v1' });
 
 // WebSocket handler for Yjs real-time collaboration
 await fastify.register(websocketHandler);

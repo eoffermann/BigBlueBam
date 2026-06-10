@@ -93,7 +93,6 @@ import linkRoutes from './routes/link.routes.js';
 import templateRoutes from './routes/template.routes.js';
 import collaboratorRoutes from './routes/collaborator.routes.js';
 import chatRoutes from './routes/chat.routes.js';
-import audioRoutes from './routes/audio.routes.js';
 import sceneRoutes from './routes/scene.routes.js';
 import websocketHandler from './ws/handler.js';
 
@@ -104,7 +103,6 @@ await fastify.register(linkRoutes, { prefix: '/v1' });
 await fastify.register(templateRoutes, { prefix: '/v1' });
 await fastify.register(collaboratorRoutes, { prefix: '/v1' });
 await fastify.register(chatRoutes, { prefix: '/v1' });
-await fastify.register(audioRoutes, { prefix: '/v1' });
 await fastify.register(sceneRoutes, { prefix: '/v1' });
 await fastify.register(websocketHandler);
 

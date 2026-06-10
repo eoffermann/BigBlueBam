@@ -44,15 +44,53 @@ createRoot(rootElement).render(
   </StrictMode>,
 );
 
-// ─── Bureau-client mount (workstream 13) ─────────────────────────────────
+// ─── Bureau-client mount (workstream 13 + Phase 2 unified LiveKit) ───────
 // Reports the current route to Bureau so summons can teleport this user
-// from another app. Reads window.location.pathname directly because Banter's
-// router does not expose route state up to main.tsx; the popstate + history
-// wrappers below trigger a re-evaluation on every navigation.
+// from another app AND so the Bureau docked-box can derive the canonical
+// huddle room for the surface the user is viewing. Channel routes resolve
+// slug → channel.id via window.__banterChannelIndex (published by
+// useChannels() in hooks/use-channels.ts); the bureau-client then joins
+// `huddle-banter-{channel_id}`. Two users on the same channel land in the
+// same LiveKit room with no Banter-side call signaling.
 
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/banter')) return undefined;
+
+  // /banter/channels/:slug  → surface_id = channel.id (resolved via map)
+  const channelMatch = path.match(/^\/banter\/channels\/([^/]+)$/);
+  if (channelMatch) {
+    const slug = channelMatch[1]!;
+    const channelId = window.__banterChannelIndex?.[slug];
+    if (channelId) {
+      return {
+        url: window.location.origin + path,
+        app: 'banter',
+        label: `#${slug}`,
+        surface_id: channelId,
+      };
+    }
+    // Channel list hasn't loaded yet — emit location without surface_id
+    // so summon still works. The huddle target backfills on the next
+    // setRoute() call after the channels query resolves.
+    return {
+      url: window.location.origin + path,
+      app: 'banter',
+      label: `#${slug}`,
+    };
+  }
+
+  // /banter/dm/:id  → :id is already the channel id
+  const dmMatch = path.match(/^\/banter\/dm\/([^/]+)$/);
+  if (dmMatch) {
+    return {
+      url: window.location.origin + path,
+      app: 'banter',
+      label: 'DM',
+      surface_id: dmMatch[1]!,
+    };
+  }
+
   return {
     url: window.location.origin + path,
     app: 'banter',
@@ -77,6 +115,10 @@ try {
   });
   const onChange = () => mount.setRoute(window.location.pathname);
   window.addEventListener('popstate', onChange);
+  // When the channels query resolves, re-evaluate describeLocation()
+  // so a fresh page load that lands on /banter/channels/:slug picks up
+  // the surface_id once the slug→id map is available.
+  window.addEventListener('banter:channels-updated', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);
   window.history.pushState = function (...args: Parameters<typeof origPush>) {
