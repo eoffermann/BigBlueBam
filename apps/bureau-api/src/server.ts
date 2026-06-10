@@ -19,6 +19,8 @@ import bookingsRoutes from './routes/bookings.routes.js';
 import knocksRoutes from './routes/knocks.routes.js';
 import livekitRoutes from './routes/livekit.routes.js';
 import summonsRoutes from './routes/summons.routes.js';
+import presenceHereRoutes from './routes/presence-here.routes.js';
+import ringRoutes from './routes/ring.routes.js';
 import wsRoutes from './routes/ws.routes.js';
 import { sql } from 'drizzle-orm';
 
@@ -128,6 +130,16 @@ await fastify.register(livekitRoutes, { prefix: '/v1' });
 // §4.4 grant-access follow-up). REST mirror of the §8 summon-family
 // WS messages defined in ws.routes.ts.
 await fastify.register(summonsRoutes, { prefix: '/v1' });
+
+// presence-and-immediate-interaction (Agent A, follow-up wave):
+//   - presenceHereRoutes: GET /v1/presence/here?url=... — list other users
+//     currently co-present on the same content surface URL.
+//   - ringRoutes: POST /v1/ring — push an incoming-call overlay to a
+//     specific user on a specific surface (huddle invite signal).
+// Surface-scoped huddle token mint lives inside livekitRoutes above
+// (POST /v1/surface-huddle/token).
+await fastify.register(presenceHereRoutes, { prefix: '/v1' });
+await fastify.register(ringRoutes, { prefix: '/v1' });
 
 // Bureau WebSocket hub — Agent B. Mounted at `/bureau/ws` (no /v1 prefix
 // because nginx proxies `/bureau/ws` straight through to this endpoint).

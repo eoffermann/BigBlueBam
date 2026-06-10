@@ -25,10 +25,12 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { mintRoomToken } from '@bigbluebam/livekit-tokens';
 import { env } from '../env.js';
 import { requireAuth } from '../plugins/auth.js';
 import {
+  badRequest,
   evaluateRoomAccess,
   forbidden,
   loadRoom,
@@ -39,6 +41,38 @@ const TOKEN_TTL_SECONDS = 3600;
 
 export function buildBureauRoomName(roomId: string): string {
   return `bureau-room-${roomId}`;
+}
+
+/**
+ * Allowed surface apps for surface-scoped huddles. Each one is a content
+ * surface a user can be co-present on — the URL of the surface itself is
+ * already the access gate, since the recipient must be on that URL (and
+ * therefore have access to it) for their bureau-client to be reporting the
+ * matching locationUrl in the first place.
+ */
+const SURFACE_APPS = [
+  'brief',
+  'blueprint',
+  'board',
+  'bond',
+  'bam',
+  'beacon',
+  'helpdesk',
+] as const;
+
+/** uuid or 1-64 char lowercase-alphanumeric-and-dash slug. */
+const SURFACE_ID_REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{0,63})$/;
+
+const surfaceHuddleBody = z.object({
+  surface_app: z.enum(SURFACE_APPS),
+  surface_id: z.string().regex(SURFACE_ID_REGEX, 'Invalid surface_id'),
+});
+
+export function buildSurfaceHuddleRoomName(
+  surfaceApp: string,
+  surfaceId: string,
+): string {
+  return `huddle-${surfaceApp}-${surfaceId}`;
 }
 
 export default async function livekitRoutes(fastify: FastifyInstance) {
@@ -91,6 +125,69 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
             display_name: user.display_name,
             org_id: user.org_id,
             bureau_room_id: room.id,
+          },
+          ttlSeconds: TOKEN_TTL_SECONDS,
+        },
+      );
+
+      return reply.status(200).send({
+        data: {
+          token,
+          room_name: roomName,
+          ws_url: env.LIVEKIT_URL,
+        },
+      });
+    },
+  );
+
+  /**
+   * POST /v1/surface-huddle/token
+   *
+   * Mint a LiveKit token for a surface-scoped huddle room. The room name is
+   * deterministic from (surface_app, surface_id), so any two callers on the
+   * same surface end up in the same LiveKit room without prior coordination.
+   *
+   * We DO NOT access-check the destination resource here: any caller who
+   * reaches this endpoint already has a session, and the surface-huddle
+   * primitive is opt-in — the bureau-client only rings/joins via this room
+   * when the user is actually mounted on the surface. The surface itself
+   * (Board, Brief, etc.) already enforces resource access at its REST layer
+   * before the bureau-client mount tells us about the location.
+   */
+  fastify.post(
+    '/surface-huddle/token',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+
+      const parsed = surfaceHuddleBody.safeParse(request.body);
+      if (!parsed.success) {
+        return badRequest(
+          request,
+          reply,
+          'Invalid request body',
+          parsed.error.issues.map((i) => ({
+            field: i.path.join('.'),
+            issue: i.message,
+          })),
+        );
+      }
+      const { surface_app, surface_id } = parsed.data;
+
+      const roomName = buildSurfaceHuddleRoomName(surface_app, surface_id);
+      const token = await mintRoomToken(
+        env.LIVEKIT_API_KEY,
+        env.LIVEKIT_API_SECRET,
+        {
+          identity: user.id,
+          roomName,
+          name: user.display_name,
+          metadata: {
+            user_id: user.id,
+            display_name: user.display_name,
+            org_id: user.org_id,
+            surface_app,
+            surface_id,
           },
           ttlSeconds: TOKEN_TTL_SECONDS,
         },
