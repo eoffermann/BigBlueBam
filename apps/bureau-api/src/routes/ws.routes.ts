@@ -62,6 +62,14 @@ import {
   type KnockResolution,
 } from '../lib/bureau-events.js';
 import { isUserInDnd } from '../services/dnd-check.service.js';
+import * as presence from '../services/presence.service.js';
+import {
+  channels as presenceChannels,
+  mirrorPresenceToShared,
+  publishPresenceDelta,
+  publishRoomEvent,
+  publishUserTarget,
+} from '../services/presence-publisher.service.js';
 import {
   fanOutSummon,
   grantAccessAndSummon,
@@ -108,9 +116,6 @@ interface ConnectedClient {
 const WS_RATE_LIMIT_MAX = 120;
 const WS_RATE_LIMIT_WINDOW_MS = 10_000;
 
-/** Presence session TTL (35s, refreshed every 15s heartbeat — §7). */
-const PRESENCE_TTL_SECONDS = 35;
-
 /** Bureau room name format used for the LiveKit room — matches livekit.routes.ts. */
 function buildBureauRoomName(roomId: string): string {
   return `bureau-room-${roomId}`;
@@ -130,232 +135,16 @@ const ALLOWED_STATUS = new Set([
 const ALLOWED_PRIVACY = new Set(['open', 'knock', 'private']);
 
 // ─────────────────────────────────────────────────────────────────────
-// Inline presence service. Implements the Redis layout from §7.
-// Future-proof: same shape can be lifted into services/presence.service.ts
-// without renaming any keys.
+// Presence + pub/sub live in services/presence.service.ts and
+// services/presence-publisher.service.ts (D-10 consolidation — the §7
+// Redis layout used to be re-implemented inline here). The channel-name
+// builders below are aliases so the subscribe/unsubscribe call sites read
+// the same as before.
 // ─────────────────────────────────────────────────────────────────────
 
-function presenceSessionKey(sessionId: string) {
-  return `bureau:sess:${sessionId}`;
-}
-function presenceUserSessionsKey(userId: string) {
-  return `bureau:user:${userId}:sessions`;
-}
-function presenceRoomOccupantsKey(roomId: string) {
-  return `bureau:room:${roomId}:occupants`;
-}
-function presenceRoomStateKey(roomId: string) {
-  return `bureau:room:${roomId}:state`;
-}
-function presenceFloorIndexKey(floorId: string) {
-  return `bureau:floor:${floorId}:index`;
-}
-
-function floorChannel(floorId: string) {
-  return `bureau:floor:${floorId}`;
-}
-function roomChannel(roomId: string) {
-  return `bureau:room:${roomId}`;
-}
-function userChannel(userId: string) {
-  return `user:${userId}`;
-}
-
-interface PresenceContext {
-  redis: Redis;
-}
-
-const presenceService = {
-  /** Create or refresh the per-session HASH and the per-user fan-in SET. */
-  async openSession(
-    ctx: PresenceContext,
-    client: ConnectedClient,
-    extras: { device?: string } = {},
-  ): Promise<void> {
-    const sessionKey = presenceSessionKey(client.sessionId);
-    const userKey = presenceUserSessionsKey(client.userId);
-    const tx = ctx.redis.multi();
-    tx.hset(sessionKey, {
-      userId: client.userId,
-      isAgent: '0',
-      orgId: client.orgId,
-      floorId: client.floorId ?? '',
-      roomId: client.roomId ?? '',
-      status: client.status,
-      statusText: '',
-      emoji: '',
-      locationUrl: client.locationUrl ?? '',
-      locationApp: client.locationApp ?? '',
-      locationLabel: client.locationLabel ?? '',
-      device: extras.device ?? 'web',
-      lastBeat: String(Date.now()),
-    });
-    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
-    tx.sadd(userKey, client.sessionId);
-    await tx.exec();
-  },
-
-  /** Refresh the session TTL — called on heartbeat. */
-  async heartbeat(ctx: PresenceContext, client: ConnectedClient): Promise<void> {
-    const sessionKey = presenceSessionKey(client.sessionId);
-    const tx = ctx.redis.multi();
-    tx.hset(sessionKey, { lastBeat: String(Date.now()) });
-    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
-    await tx.exec();
-  },
-
-  /** Set the presence status field. Returns the previous status. */
-  async setStatus(
-    ctx: PresenceContext,
-    client: ConnectedClient,
-    next: { status: string; statusText?: string; emoji?: string },
-  ): Promise<string | null> {
-    const sessionKey = presenceSessionKey(client.sessionId);
-    const prev = await ctx.redis.hget(sessionKey, 'status');
-    await ctx.redis.hset(sessionKey, {
-      status: next.status,
-      statusText: next.statusText ?? '',
-      emoji: next.emoji ?? '',
-    });
-    await ctx.redis.expire(sessionKey, PRESENCE_TTL_SECONDS);
-    return prev;
-  },
-
-  /** Move the session into a room: update HASH, occupants SET, floor index. */
-  async enterRoom(
-    ctx: PresenceContext,
-    client: ConnectedClient,
-    roomId: string,
-    floorId: string,
-  ): Promise<void> {
-    const sessionKey = presenceSessionKey(client.sessionId);
-    const tx = ctx.redis.multi();
-    tx.hset(sessionKey, { roomId, floorId });
-    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
-    tx.sadd(presenceRoomOccupantsKey(roomId), client.userId);
-    tx.hset(presenceFloorIndexKey(floorId), client.userId, roomId);
-    await tx.exec();
-  },
-
-  /** Remove the session from its current room. Returns the room it left, if any. */
-  async leaveRoom(
-    ctx: PresenceContext,
-    client: ConnectedClient,
-  ): Promise<{ roomId: string | null; floorId: string | null }> {
-    const roomId = client.roomId;
-    const floorId = client.floorId;
-    if (!roomId) return { roomId: null, floorId };
-    const sessionKey = presenceSessionKey(client.sessionId);
-    const tx = ctx.redis.multi();
-    tx.hset(sessionKey, { roomId: '' });
-    tx.expire(sessionKey, PRESENCE_TTL_SECONDS);
-    tx.srem(presenceRoomOccupantsKey(roomId), client.userId);
-    if (floorId) {
-      tx.hdel(presenceFloorIndexKey(floorId), client.userId);
-    }
-    await tx.exec();
-    return { roomId, floorId };
-  },
-
-  /** Update only the door-privacy override on a room. */
-  async setDoor(
-    ctx: PresenceContext,
-    roomId: string,
-    privacy: string,
-    actorId: string,
-  ): Promise<void> {
-    await ctx.redis.hset(presenceRoomStateKey(roomId), {
-      privacy,
-      lockedBy: actorId,
-    });
-  },
-
-  /** Update the location triple on the session. */
-  async updateLocation(
-    ctx: PresenceContext,
-    client: ConnectedClient,
-    location: { url: string; app: string; label?: string },
-  ): Promise<void> {
-    const sessionKey = presenceSessionKey(client.sessionId);
-    await ctx.redis.hset(sessionKey, {
-      locationUrl: location.url,
-      locationApp: location.app,
-      locationLabel: location.label ?? '',
-    });
-    await ctx.redis.expire(sessionKey, PRESENCE_TTL_SECONDS);
-  },
-
-  /** Tear down session: remove HASH + drop user fan-in entry + drop occupant. */
-  async endSession(
-    ctx: PresenceContext,
-    client: ConnectedClient,
-  ): Promise<{ roomId: string | null; floorId: string | null }> {
-    const roomId = client.roomId;
-    const floorId = client.floorId;
-    const sessionKey = presenceSessionKey(client.sessionId);
-    const tx = ctx.redis.multi();
-    tx.del(sessionKey);
-    tx.srem(presenceUserSessionsKey(client.userId), client.sessionId);
-    if (roomId) {
-      tx.srem(presenceRoomOccupantsKey(roomId), client.userId);
-    }
-    if (floorId) {
-      tx.hdel(presenceFloorIndexKey(floorId), client.userId);
-    }
-    await tx.exec();
-    return { roomId, floorId };
-  },
-
-  /**
-   * Build a presence snapshot for a floor: the userId→roomId map plus
-   * the per-room door-state overrides for every represented room.
-   */
-  async snapshotFloor(
-    ctx: PresenceContext,
-    floorId: string,
-  ): Promise<{
-    occupancy: Record<string, string>;
-    roomState: Record<string, Record<string, string>>;
-  }> {
-    const occupancy = await ctx.redis.hgetall(presenceFloorIndexKey(floorId));
-    const roomState: Record<string, Record<string, string>> = {};
-    const uniqueRooms = new Set(Object.values(occupancy));
-    for (const roomId of uniqueRooms) {
-      if (!roomId) continue;
-      const state = await ctx.redis.hgetall(presenceRoomStateKey(roomId));
-      if (state && Object.keys(state).length > 0) {
-        roomState[roomId] = state;
-      }
-    }
-    return { occupancy, roomState };
-  },
-};
-
-/**
- * Mirror a presence change to the shared bigbluebam:events channel so
- * Banter / Bam stay in sync (§7). Fire-and-forget — we never want a
- * downstream sub-stalled pub to break Bureau. Currently sends a minimal
- * `user.presence` envelope; downstream consumers can ignore unknown
- * fields and expand it later.
- */
-async function mirrorPresenceToShared(
-  redis: Redis,
-  payload: { userId: string; orgId: string; status?: string; roomId?: string | null },
-): Promise<void> {
-  try {
-    await redis.publish(
-      'bigbluebam:events',
-      JSON.stringify({
-        event: 'user.presence',
-        source: 'bureau',
-        data: payload,
-        ts: new Date().toISOString(),
-      }),
-    );
-  } catch {
-    // Swallow — mirror channel is a fan-out optimization, not authoritative.
-  }
-}
+const floorChannel = presenceChannels.floor;
+const roomChannel = presenceChannels.room;
+const userChannel = presenceChannels.user;
 
 // ─────────────────────────────────────────────────────────────────────
 // Outbound frame helpers
@@ -478,11 +267,15 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       channels: new Set<string>(),
     };
 
-    const ctx: PresenceContext = { redis: fastify.redis };
-
     // Open the durable presence session and subscribe to the user's
     // own targeted channel so summons/knocks reach them out of the box.
-    await presenceService.openSession(ctx, client);
+    await presence.createSession(fastify.redis, {
+      sessionId: client.sessionId,
+      userId,
+      isAgent: false,
+      orgId,
+      device: 'web',
+    });
 
     // Forward every PubSub message verbatim to the socket. The publisher
     // is responsible for framing (we use the same {type,data,timestamp}
@@ -506,13 +299,13 @@ export default async function wsRoutes(fastify: FastifyInstance) {
     // ── Helpers that are closures over `client` / `ctx` ──
 
     async function publishFloor(floorId: string, payload: string) {
-      await fastify.redis.publish(floorChannel(floorId), payload);
+      await publishPresenceDelta(fastify.redis, floorId, payload);
     }
     async function publishRoom(roomId: string, payload: string) {
-      await fastify.redis.publish(roomChannel(roomId), payload);
+      await publishRoomEvent(fastify.redis, roomId, payload);
     }
     async function publishUser(targetUserId: string, payload: string) {
-      await fastify.redis.publish(userChannel(targetUserId), payload);
+      await publishUserTarget(fastify.redis, targetUserId, payload);
     }
 
     /** Door-state permission check. Owners of offices may set their own;
@@ -616,15 +409,9 @@ export default async function wsRoutes(fastify: FastifyInstance) {
 
             // Mirror floor onto the session hash so the floor reaper /
             // presence aggregator sees the join.
-            await fastify.redis.hset(presenceSessionKey(client.sessionId), {
-              floorId,
-            });
-            await fastify.redis.expire(
-              presenceSessionKey(client.sessionId),
-              PRESENCE_TTL_SECONDS,
-            );
+            await presence.setFloor(fastify.redis, client.sessionId, floorId);
 
-            const snapshot = await presenceService.snapshotFloor(ctx, floorId);
+            const snapshot = await presence.snapshotFloor(fastify.redis, floorId);
             safeSend(
               socket,
               frame('presence_snapshot', {
@@ -671,13 +458,21 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             // both rooms see the transition. Bolt user.left_room fires for
             // the prior room before user.entered_room for the new one.
             if (client.roomId && client.roomId !== roomId) {
-              const left = await presenceService.leaveRoom(ctx, client);
-              if (left.roomId) {
+              // leaveRoom throws when the session HASH has lapsed mid-flight;
+              // fall back to the socket's own mirror so the leave events
+              // still go out (matches the old inline tolerance).
+              let left: { previousRoomId: string | null; floorId: string | null };
+              try {
+                left = await presence.leaveRoom(fastify.redis, client.sessionId);
+              } catch {
+                left = { previousRoomId: client.roomId, floorId: client.floorId };
+              }
+              if (left.previousRoomId) {
                 const leftPayload = frame('room_leave', {
-                  roomId: left.roomId,
+                  roomId: left.previousRoomId,
                   userId,
                 });
-                await publishRoom(left.roomId, leftPayload);
+                await publishRoom(left.previousRoomId, leftPayload);
                 if (left.floorId) {
                   await publishFloor(
                     left.floorId,
@@ -685,7 +480,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
                   );
                 }
                 emitUserLeftRoom(orgId, userId, {
-                  room: { id: left.roomId, floor_id: left.floorId ?? null },
+                  room: { id: left.previousRoomId, floor_id: left.floorId ?? null },
                   user: { id: userId, name: displayName },
                   session_duration_ms: client.roomEnteredAt
                     ? Date.now() - client.roomEnteredAt
@@ -707,7 +502,12 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               client.channels.add(newRoomChan);
             }
 
-            await presenceService.enterRoom(ctx, client, roomId, room.floor_id);
+            await presence.enterRoom(
+              fastify.redis,
+              client.sessionId,
+              roomId,
+              room.floor_id,
+            );
             client.roomId = roomId;
             client.floorId = room.floor_id;
             client.roomEnteredAt = Date.now();
@@ -775,26 +575,31 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             }).catch(() => {
               /* fire-and-forget */
             });
-            await mirrorPresenceToShared(fastify.redis, {
+            await mirrorPresenceToShared(
+              fastify.redis,
               userId,
-              orgId,
-              status: client.status,
-              roomId,
-            });
+              client.status as presence.PresenceStatus,
+              { orgId, roomId },
+            );
             break;
           }
 
           // ──────────────────────────────────────────────
           case 'leave_room': {
-            const left = await presenceService.leaveRoom(ctx, client);
+            let left: { previousRoomId: string | null; floorId: string | null };
+            try {
+              left = await presence.leaveRoom(fastify.redis, client.sessionId);
+            } catch {
+              left = { previousRoomId: client.roomId, floorId: client.floorId };
+            }
             client.roomId = null;
             client.roomEnteredAt = null;
-            if (left.roomId) {
+            if (left.previousRoomId) {
               const leavePayload = frame('room_leave', {
-                roomId: left.roomId,
+                roomId: left.previousRoomId,
                 userId,
               });
-              await publishRoom(left.roomId, leavePayload);
+              await publishRoom(left.previousRoomId, leavePayload);
               if (left.floorId) {
                 await publishFloor(
                   left.floorId,
@@ -804,13 +609,13 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               // Also unsubscribe the per-socket subscriber from the room
               // channel so we don't receive our own leave echo from
               // mid-flight publishes.
-              const chan = roomChannel(left.roomId);
+              const chan = roomChannel(left.previousRoomId);
               if (client.channels.has(chan)) {
                 await subscriber.unsubscribe(chan);
                 client.channels.delete(chan);
               }
               emitUserLeftRoom(orgId, userId, {
-                room: { id: left.roomId, floor_id: left.floorId ?? null },
+                room: { id: left.previousRoomId, floor_id: left.floorId ?? null },
                 user: { id: userId, name: displayName },
                 actor: { id: userId },
                 org: { id: orgId },
@@ -818,18 +623,18 @@ export default async function wsRoutes(fastify: FastifyInstance) {
                 /* fire-and-forget */
               });
             }
-            await mirrorPresenceToShared(fastify.redis, {
+            await mirrorPresenceToShared(
+              fastify.redis,
               userId,
-              orgId,
-              status: client.status,
-              roomId: null,
-            });
+              client.status as presence.PresenceStatus,
+              { orgId, roomId: null },
+            );
             break;
           }
 
           // ──────────────────────────────────────────────
           case 'heartbeat': {
-            await presenceService.heartbeat(ctx, client);
+            await presence.heartbeat(fastify.redis, client.sessionId);
             break;
           }
 
@@ -852,11 +657,18 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             const statusText =
               typeof msg.statusText === 'string' ? msg.statusText : undefined;
             const emoji = typeof msg.emoji === 'string' ? msg.emoji : undefined;
-            const prev = await presenceService.setStatus(ctx, client, {
-              status,
+            // Read-before-write to keep the Bolt event's previous/current
+            // pair (the consolidated setStatus doesn't return the old value).
+            const prev =
+              (await presence.getSession(fastify.redis, client.sessionId))
+                ?.status ?? null;
+            await presence.setStatus(
+              fastify.redis,
+              client.sessionId,
+              status as presence.PresenceStatus,
               statusText,
               emoji,
-            });
+            );
             client.status = status;
 
             const payload = frame('status_changed', {
@@ -876,12 +688,12 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             }).catch(() => {
               /* fire-and-forget */
             });
-            await mirrorPresenceToShared(fastify.redis, {
+            await mirrorPresenceToShared(
+              fastify.redis,
               userId,
-              orgId,
-              status,
-              roomId: client.roomId,
-            });
+              status as presence.PresenceStatus,
+              { orgId, roomId: client.roomId },
+            );
             break;
           }
 
@@ -920,7 +732,12 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               );
               break;
             }
-            await presenceService.setDoor(ctx, roomId, privacy, userId);
+            await presence.setDoor(
+              fastify.redis,
+              roomId,
+              privacy as presence.RoomPrivacy,
+              userId,
+            );
             const payload = frame('door_changed', {
               roomId,
               privacy,
@@ -965,7 +782,12 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             }
             // Treat "locked" as a door override flipped to private.
             const nextPrivacy = locked ? 'private' : room.privacy_default;
-            await presenceService.setDoor(ctx, roomId, nextPrivacy, userId);
+            await presence.setDoor(
+              fastify.redis,
+              roomId,
+              nextPrivacy as presence.RoomPrivacy,
+              userId,
+            );
 
             const payload = frame('room_locked', {
               roomId,
@@ -1208,11 +1030,13 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             client.locationUrl = url;
             client.locationApp = app;
             client.locationLabel = label ?? null;
-            await presenceService.updateLocation(ctx, client, {
+            await presence.updateLocation(
+              fastify.redis,
+              client.sessionId,
               url,
               app,
-              label,
-            });
+              label ?? null,
+            );
             if (client.floorId) {
               await publishFloor(
                 client.floorId,
@@ -1497,7 +1321,14 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       try {
         const finalRoomId = client.roomId;
         const finalFloorId = client.floorId;
-        const final = await presenceService.endSession(ctx, client);
+        // endSession returns null when the HASH already lapsed; fall back to
+        // the socket's own mirror so the leave events still go out.
+        const final =
+          (await presence.endSession(fastify.redis, client.sessionId)) ?? {
+            userId,
+            roomId: client.roomId,
+            floorId: client.floorId,
+          };
         if (final.roomId) {
           const leavePayload = frame('room_leave', {
             roomId: final.roomId,
@@ -1541,10 +1372,8 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           // Same edge for the room channel — should not happen because
           // endSession also pulls roomId, but defensive.
         }
-        await mirrorPresenceToShared(fastify.redis, {
-          userId,
+        await mirrorPresenceToShared(fastify.redis, userId, 'offline', {
           orgId,
-          status: 'offline',
           roomId: null,
         });
       } catch (err) {

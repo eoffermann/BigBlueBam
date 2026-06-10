@@ -144,15 +144,19 @@ export function publishUserTarget(
 export interface SharedPresenceMirrorEvent {
   type: 'user.presence';
   user_id: string;
-  status: PresenceStatus;
+  /** 'offline' is emitted on session teardown — not a §8 status, hence the union. */
+  status: PresenceStatus | 'offline';
   source: 'bureau';
   timestamp: string;
+  org_id?: string;
+  room_id?: string | null;
 }
 
 export function mirrorPresenceToShared(
   redis: Redis,
   userId: string,
-  status: PresenceStatus,
+  status: PresenceStatus | 'offline',
+  extras: { orgId?: string; roomId?: string | null } = {},
 ): Promise<void> {
   const event: SharedPresenceMirrorEvent = {
     type: 'user.presence',
@@ -160,6 +164,8 @@ export function mirrorPresenceToShared(
     status,
     source: 'bureau',
     timestamp: new Date().toISOString(),
+    org_id: extras.orgId,
+    room_id: extras.roomId,
   };
   return publish(redis, channels.shared, event);
 }

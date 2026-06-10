@@ -271,6 +271,14 @@ export async function enterRoom(
   redis: Redis,
   sessionId: string,
   roomId: string,
+  /**
+   * The floor the room actually belongs to (bureau_rooms.floor_id). The WS
+   * hub passes this because a session can enter a room without ever having
+   * subscribed to its floor (e.g. the SDK's enterRoom action from another
+   * SPA), in which case the session's own floorId is empty or stale. When
+   * omitted, the session's current floorId is used as before.
+   */
+  explicitFloorId?: string,
 ): Promise<EnterRoomResult> {
   const sessionKey = keys.session(sessionId);
   const hash = await redis.hgetall(sessionKey);
@@ -280,7 +288,7 @@ export async function enterRoom(
   }
 
   const previousRoomId = session.roomId;
-  const floorId = session.floorId;
+  const floorId = explicitFloorId ?? session.floorId;
 
   const pipeline = redis.pipeline();
   if (previousRoomId && previousRoomId !== roomId) {
@@ -288,6 +296,13 @@ export async function enterRoom(
   }
   pipeline.sadd(keys.roomOccupants(roomId), session.userId);
   pipeline.hset(sessionKey, 'roomId', roomId, 'lastBeat', String(Date.now()));
+  if (explicitFloorId && explicitFloorId !== session.floorId) {
+    pipeline.hset(sessionKey, 'floorId', explicitFloorId);
+    // The user can't be on two floors — drop the stale index entry.
+    if (session.floorId) {
+      pipeline.hdel(keys.floorIndex(session.floorId), session.userId);
+    }
+  }
   pipeline.expire(sessionKey, SESSION_TTL_SECONDS);
   if (floorId) {
     pipeline.hset(keys.floorIndex(floorId), session.userId, roomId);
@@ -329,6 +344,23 @@ export async function leaveRoom(
   await pipeline.exec();
 
   return { previousRoomId, floorId };
+}
+
+/**
+ * Pin the session to a floor without entering a room (the WS hub's
+ * subscribe_floor path). Refreshes the TTL — subscribing is a liveness
+ * signal.
+ */
+export async function setFloor(
+  redis: Redis,
+  sessionId: string,
+  floorId: string,
+): Promise<void> {
+  const sessionKey = keys.session(sessionId);
+  const pipeline = redis.pipeline();
+  pipeline.hset(sessionKey, 'floorId', floorId, 'lastBeat', String(Date.now()));
+  pipeline.expire(sessionKey, SESSION_TTL_SECONDS);
+  await pipeline.exec();
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -466,6 +498,31 @@ export async function getFloorIndex(
     }
   }
   return map;
+}
+
+/**
+ * Build a full floor snapshot for `presence_snapshot`: the userId→roomId
+ * occupancy map plus the live door-state HASH for every represented room.
+ * Lifted verbatim from the WS hub's inline presence layer (D-10).
+ */
+export async function snapshotFloor(
+  redis: Redis,
+  floorId: string,
+): Promise<{
+  occupancy: Record<string, string>;
+  roomState: Record<string, Record<string, string>>;
+}> {
+  const occupancy = await redis.hgetall(keys.floorIndex(floorId));
+  const roomState: Record<string, Record<string, string>> = {};
+  const uniqueRooms = new Set(Object.values(occupancy));
+  for (const roomId of uniqueRooms) {
+    if (!roomId) continue;
+    const state = await redis.hgetall(keys.roomState(roomId));
+    if (state && Object.keys(state).length > 0) {
+      roomState[roomId] = state;
+    }
+  }
+  return { occupancy, roomState };
 }
 
 /** Read and parse a session HASH. Returns null if it does not exist. */
