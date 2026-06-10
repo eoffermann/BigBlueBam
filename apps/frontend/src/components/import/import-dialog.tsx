@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Loader2,
   SlidersHorizontal,
+  Download,
 } from 'lucide-react';
 import { Dialog } from '@/components/common/dialog';
 import { Button } from '@/components/common/button';
@@ -30,6 +31,22 @@ import {
   type LinkMappingConfig,
 } from './links-mapping-panel';
 import { ImportConfirmStep, type ImportPreviewReport } from './import-confirm-step';
+import {
+  CustomFieldMappingPanel,
+  type CustomFieldState,
+} from './custom-field-mapping-panel';
+import {
+  inferCustomFieldType,
+  serializeCustomFieldMappings,
+  type CustomFieldConfig,
+  type CustomFieldMappingWire,
+  type CustomFieldType,
+} from './custom-field-infer';
+import {
+  downloadErrorReport,
+  parseImportErrors,
+  type ErrorReportEntry,
+} from './error-report';
 
 type ImportSource = 'jira-csv' | 'trello-json' | 'generic-csv' | 'github-issues';
 
@@ -44,6 +61,16 @@ type ColumnMapping = Record<string, string>;
 
 const SKIP = '__skip__';
 const LINKS = '__links__';
+// Sentinel target for "Create a new custom field from this column" — the panel
+// then captures field name / type / create_if_missing. Existing custom fields
+// are offered as `cf:<field name>` targets (see customFieldTargets below).
+const NEW_CUSTOM_FIELD = '__new_custom_field__';
+const CUSTOM_FIELD_PREFIX = 'cf:';
+
+// Rows are POSTed in fixed batches so massive sheets don't hit the 5000-row
+// per-request cap (plan §5.4.7 / G6). The server's find-or-create paths are
+// idempotent so chunks compose without duplication.
+const CHUNK_SIZE = 1000;
 
 const SOURCES: { value: ImportSource; label: string; description: string; icon: typeof FileText }[] = [
   { value: 'jira-csv', label: 'Jira CSV', description: 'Export from Jira as CSV', icon: FileText },
@@ -66,6 +93,10 @@ const TARGET_FIELDS = [
   { value: 'story_points', label: 'Story Points' },
   { value: 'due_date', label: 'Due Date' },
   { value: LINKS, label: 'Links' },
+  // Match key for the "Update existing" duplicate strategy: an exported
+  // sheet carries a human_id column (e.g. FRND-123); mapping it lets a
+  // re-import update the matching tasks instead of creating duplicates.
+  { value: 'human_id', label: 'Existing task ID (for update)' },
 ];
 
 // Fields that support a value map ("Map values…").
@@ -74,7 +105,9 @@ const VALUE_MAPPABLE = new Set(['priority', 'phase_name']);
 interface ImportResult {
   imported: number;
   skipped: number;
+  updated?: number;
   errors: string[];
+  cell_warnings?: { row: number; column: string; value: string; reason: string }[];
 }
 
 // Wire body shared by /import/csv and /import/csv/preview.
@@ -83,7 +116,15 @@ interface ImportBody {
   mapping: ColumnMapping;
   value_maps?: Record<string, Record<string, string | null>>;
   link_mappings?: { column: string; label: string | null; fetch_title: boolean }[];
-  options?: { duplicate_strategy?: 'create' | 'skip' };
+  custom_field_mapping?: CustomFieldMappingWire[];
+  options?: { duplicate_strategy?: 'create' | 'skip' | 'update'; date_locale?: 'us' | 'iso' };
+}
+
+// An existing project custom-field definition (from GET /projects/:id/custom-fields).
+interface CustomFieldDefinition {
+  id: string;
+  name: string;
+  field_type: CustomFieldType;
 }
 
 // Fuzzy auto-suggest a target field for a header. firstNonEmpty marks the
@@ -102,6 +143,14 @@ function suggestTarget(header: string, isFirstNonEmpty: boolean): string {
   if (lower.includes('label') || lower === 'tag' || lower === 'tags') return 'labels';
   if (isFirstNonEmpty) return 'title';
   return SKIP;
+}
+
+// Rebase a "Row N: …" error message by adding a chunk offset, so accumulated
+// errors across chunks carry the global row number. Messages without a "Row N"
+// prefix pass through unchanged.
+function rebaseRowMessage(message: string, offset: number): string {
+  if (offset === 0) return message;
+  return message.replace(/^Row (\d+)\b/, (_m, n) => `Row ${Number(n) + offset}`);
 }
 
 export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProps) {
@@ -126,10 +175,18 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
   // Per-Links-column config.
   const [linkConfigs, setLinkConfigs] = useState<Record<string, LinkMappingConfig>>({});
   // Duplicate handling.
-  const [duplicateStrategy, setDuplicateStrategy] = useState<'create' | 'skip'>('create');
+  const [duplicateStrategy, setDuplicateStrategy] = useState<'create' | 'skip' | 'update'>(
+    'create',
+  );
+  // Date-locale toggle (due_date + date custom fields).
+  const [dateLocale, setDateLocale] = useState<'us' | 'iso'>('iso');
+  // Per-custom-field-column config (keyed by CSV header).
+  const [customFieldConfigs, setCustomFieldConfigs] = useState<Record<string, CustomFieldState>>({});
   // Preview report for the confirm step.
   const [previewReport, setPreviewReport] = useState<ImportPreviewReport | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // Chunked-submission progress: rows POSTed so far / total.
+  const [chunkProgress, setChunkProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Existing project phases (targets for phase_name value maps).
   const phasesQuery = useQuery({
@@ -141,6 +198,28 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
   const phaseOptions = useMemo(
     () => (phasesQuery.data?.data ?? []).map((p) => ({ value: p.name, label: p.name })),
     [phasesQuery.data],
+  );
+
+  // Existing project custom-field definitions (targets for opt-in mapping).
+  const customFieldsQuery = useQuery({
+    queryKey: ['custom-fields', projectId],
+    queryFn: () =>
+      api.get<{ data: CustomFieldDefinition[] }>(`/projects/${projectId}/custom-fields`),
+    enabled: open && source === 'generic-csv',
+    staleTime: 60_000,
+  });
+  const existingCustomFields = useMemo(
+    () => customFieldsQuery.data?.data ?? [],
+    [customFieldsQuery.data],
+  );
+  // Dropdown options for existing custom fields, as `cf:<name>` targets.
+  const customFieldTargets = useMemo(
+    () =>
+      existingCustomFields.map((f) => ({
+        value: `${CUSTOM_FIELD_PREFIX}${f.name}`,
+        label: `Custom: ${f.name}`,
+      })),
+    [existingCustomFields],
   );
 
   const resetState = () => {
@@ -159,8 +238,11 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
     setValueMapColumn(null);
     setLinkConfigs({});
     setDuplicateStrategy('create');
+    setDateLocale('iso');
+    setCustomFieldConfigs({});
     setPreviewReport(null);
     setPreviewError(null);
+    setChunkProgress(null);
   };
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -174,40 +256,119 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
     [csvHeaders, columnMapping],
   );
 
-  // Assemble the shared wire body from current state.
-  const buildBody = useCallback((): ImportBody => {
-    // mapping: only emit canonical target keys (drop SKIP/LINKS). The contract
-    // is keyed target -> CSV header, so invert columnMapping.
-    const mapping: ColumnMapping = {};
-    for (const [header, target] of Object.entries(columnMapping)) {
-      if (target === SKIP || target === LINKS) continue;
-      // first column wins for a given target (e.g. one title)
-      if (!mapping[target]) mapping[target] = header;
-    }
+  // Full dropdown option list: built-ins + existing custom fields + "Create…".
+  const targetOptions = useMemo(
+    () => [
+      ...TARGET_FIELDS,
+      ...customFieldTargets,
+      { value: NEW_CUSTOM_FIELD, label: 'Create custom field…' },
+    ],
+    [customFieldTargets],
+  );
 
-    // value_maps: keyed by target field. Find the header mapped to each
-    // value-mappable target and serialize its selections.
-    const value_maps: Record<string, Record<string, string | null>> = {};
-    for (const target of VALUE_MAPPABLE) {
-      const header = mapping[target];
-      if (!header) continue;
-      const selections = valueMaps[header];
-      if (!selections) continue;
-      const serialized = serializeValueMap(selections);
-      if (Object.keys(serialized).length > 0) value_maps[target] = serialized;
-    }
+  // Columns currently mapped to a custom field (new or existing).
+  const customFieldColumns = useMemo(
+    () =>
+      csvHeaders.filter((h) => {
+        const t = columnMapping[h];
+        return t === NEW_CUSTOM_FIELD || (t?.startsWith(CUSTOM_FIELD_PREFIX) ?? false);
+      }),
+    [csvHeaders, columnMapping],
+  );
 
-    const body: ImportBody = {
-      rows: csvRows,
-      mapping,
-      options: { duplicate_strategy: duplicateStrategy },
-    };
-    if (Object.keys(value_maps).length > 0) body.value_maps = value_maps;
-    if (linkColumns.length > 0) {
-      body.link_mappings = serializeLinkMappings(linkColumns, linkConfigs);
-    }
-    return body;
-  }, [columnMapping, valueMaps, csvRows, duplicateStrategy, linkColumns, linkConfigs]);
+  // Columns mapped to a NEW custom field (need a name/type panel).
+  const newCustomFieldColumns = useMemo(
+    () => csvHeaders.filter((h) => columnMapping[h] === NEW_CUSTOM_FIELD),
+    [csvHeaders, columnMapping],
+  );
+
+  // Inferred type per new-custom-field column (sampled up to 200 cells).
+  const inferredTypes = useMemo(() => {
+    const out: Record<string, CustomFieldType> = {};
+    for (const h of newCustomFieldColumns) out[h] = inferCustomFieldType(csvRows, h);
+    return out;
+  }, [newCustomFieldColumns, csvRows]);
+
+  // Assemble the shared wire body from current state. `rowsOverride` lets the
+  // chunked submitter pass a slice while reusing all the mapping serialization.
+  const buildBody = useCallback(
+    (rowsOverride?: CsvRow[]): ImportBody => {
+      // mapping: only emit canonical built-in target keys. SKIP/LINKS and the
+      // custom-field sentinels (NEW_CUSTOM_FIELD, cf:*) are NOT built-in fields —
+      // links go to link_mappings, custom fields to custom_field_mapping.
+      const mapping: ColumnMapping = {};
+      for (const [header, target] of Object.entries(columnMapping)) {
+        if (target === SKIP || target === LINKS) continue;
+        if (target === NEW_CUSTOM_FIELD || target.startsWith(CUSTOM_FIELD_PREFIX)) continue;
+        // first column wins for a given target (e.g. one title)
+        if (!mapping[target]) mapping[target] = header;
+      }
+
+      // value_maps: keyed by target field. Find the header mapped to each
+      // value-mappable target and serialize its selections.
+      const value_maps: Record<string, Record<string, string | null>> = {};
+      for (const target of VALUE_MAPPABLE) {
+        const header = mapping[target];
+        if (!header) continue;
+        const selections = valueMaps[header];
+        if (!selections) continue;
+        const serialized = serializeValueMap(selections);
+        if (Object.keys(serialized).length > 0) value_maps[target] = serialized;
+      }
+
+      // custom_field_mapping: one entry per custom-field-mapped column.
+      const cfConfigs: CustomFieldConfig[] = customFieldColumns.map((header) => {
+        const target = columnMapping[header] ?? '';
+        const existingName = target.startsWith(CUSTOM_FIELD_PREFIX)
+          ? target.slice(CUSTOM_FIELD_PREFIX.length)
+          : '';
+        const state = customFieldConfigs[header];
+        if (existingName) {
+          // Mapping to an existing field: write to it, never create.
+          const def = existingCustomFields.find((f) => f.name === existingName);
+          return {
+            column: header,
+            field_name: existingName,
+            field_type: def?.field_type ?? state?.field_type ?? 'text',
+            create_if_missing: false,
+          };
+        }
+        // New custom field: name defaults to the header; type is the (possibly
+        // overridden) inferred type; create_if_missing is always true.
+        return {
+          column: header,
+          field_name: (state?.field_name ?? header).trim() || header,
+          field_type: state?.field_type ?? inferCustomFieldType(csvRows, header),
+          create_if_missing: true,
+        };
+      });
+
+      const body: ImportBody = {
+        rows: rowsOverride ?? csvRows,
+        mapping,
+        options: { duplicate_strategy: duplicateStrategy, date_locale: dateLocale },
+      };
+      if (Object.keys(value_maps).length > 0) body.value_maps = value_maps;
+      if (linkColumns.length > 0) {
+        body.link_mappings = serializeLinkMappings(linkColumns, linkConfigs);
+      }
+      const cfWire = serializeCustomFieldMappings(cfConfigs);
+      if (cfWire.length > 0) body.custom_field_mapping = cfWire;
+      return body;
+    },
+    [
+      columnMapping,
+      valueMaps,
+      csvRows,
+      duplicateStrategy,
+      dateLocale,
+      linkColumns,
+      linkConfigs,
+      customFieldColumns,
+      customFieldConfigs,
+      existingCustomFields,
+    ],
+  );
 
   const previewMutation = useMutation({
     mutationFn: (body: ImportBody) =>
@@ -225,14 +386,49 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
     },
   });
 
+  // Chunked CSV submission (plan §5.4.7 / G6): POST the full row set in fixed
+  // batches, accumulating { imported, skipped, updated, errors, cell_warnings }
+  // and reporting progress. The error row numbers are rebased to the global row
+  // index so a downloadable report stays accurate across chunks.
   const importCsv = useMutation({
-    mutationFn: (body: ImportBody) =>
-      api.post<{ data: ImportResult }>(`/projects/${projectId}/import/csv`, body),
-    onSuccess: (res) => {
-      setImportResult(res.data);
+    mutationFn: async (): Promise<ImportResult> => {
+      const total = csvRows.length;
+      const acc: Required<Pick<ImportResult, 'imported' | 'skipped' | 'updated' | 'errors'>> & {
+        cell_warnings: NonNullable<ImportResult['cell_warnings']>;
+      } = { imported: 0, skipped: 0, updated: 0, errors: [], cell_warnings: [] };
+
+      setChunkProgress({ done: 0, total });
+      for (let offset = 0; offset < total; offset += CHUNK_SIZE) {
+        const slice = csvRows.slice(offset, offset + CHUNK_SIZE);
+        const body = buildBody(slice);
+        const res = await api.post<{ data: ImportResult }>(
+          `/projects/${projectId}/import/csv`,
+          body,
+        );
+        const d = res.data;
+        acc.imported += d.imported;
+        acc.skipped += d.skipped;
+        acc.updated += d.updated ?? 0;
+        // Rebase "Row N" prefixes to the global index for accurate reporting.
+        for (const e of d.errors) {
+          acc.errors.push(rebaseRowMessage(e, offset));
+        }
+        for (const w of d.cell_warnings ?? []) {
+          acc.cell_warnings.push({ ...w, row: w.row + offset });
+        }
+        setChunkProgress({ done: Math.min(offset + slice.length, total), total });
+      }
+      return acc;
+    },
+    onSuccess: (data) => {
+      setImportResult(data);
+      setChunkProgress(null);
       setStep(5);
       queryClient.invalidateQueries({ queryKey: ['board', projectId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+    },
+    onError: () => {
+      setChunkProgress(null);
     },
   });
 
@@ -347,11 +543,25 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
           : seedPhaseGuesses(distinct, phaseOptions);
       setValueMaps((prev) => ({ ...prev, [header]: seeded }));
     }
+    // Seed a custom-field config (name = header, type = inferred) when a column
+    // becomes a NEW custom field and we have no config yet.
+    if (target === NEW_CUSTOM_FIELD && !customFieldConfigs[header]) {
+      setCustomFieldConfigs((prev) => ({
+        ...prev,
+        [header]: { field_name: header, field_type: inferCustomFieldType(csvRows, header) },
+      }));
+    }
   };
 
+  // Preview is read-only but still bound by the 5000-row request cap, so for a
+  // larger sheet we preview the first 5000 rows and surface a sample note on the
+  // confirm screen. The actual import always runs the full set (chunked).
+  const PREVIEW_CAP = 5000;
+  const previewIsSampled = csvRows.length > PREVIEW_CAP;
   const handleProceedToConfirm = () => {
     setStep(4);
-    previewMutation.mutate(buildBody());
+    const sample = previewIsSampled ? csvRows.slice(0, PREVIEW_CAP) : csvRows;
+    previewMutation.mutate(buildBody(sample));
   };
 
   const handleImport = () => {
@@ -360,8 +570,26 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
     } else if (source === 'github-issues') {
       importGithub.mutate(githubUrl);
     } else {
-      importCsv.mutate(buildBody());
+      importCsv.mutate();
     }
+  };
+
+  // Build + download a CSV report of failed/warned rows from the commit result.
+  const handleDownloadErrorReport = () => {
+    if (!importResult) return;
+    const entries: ErrorReportEntry[] = [
+      ...parseImportErrors(importResult.errors),
+      ...(importResult.cell_warnings ?? []).map((w) => ({
+        row: w.row,
+        reason: `${w.column}: ${w.reason} ("${w.value}")`,
+      })),
+    ];
+    // Attach the original row cells where the row number is in range (1-based).
+    for (const e of entries) {
+      const original = e.row > 0 ? csvRows[e.row - 1] : undefined;
+      if (original) e.data = original;
+    }
+    downloadErrorReport(entries, csvHeaders);
   };
 
   const hasTitle = Object.values(columnMapping).some((t) => t === 'title');
@@ -558,7 +786,7 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
                           </span>
                           <ChevronRight className="h-4 w-4 text-zinc-400 shrink-0" />
                           <Select
-                            options={TARGET_FIELDS}
+                            options={targetOptions}
                             value={target}
                             onValueChange={(val) => handleMappingChange(header, val)}
                             className="flex-1"
@@ -606,18 +834,50 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
                   </div>
                 )}
 
-                {/* Duplicate strategy */}
-                <div className="flex items-center gap-3 border-t border-zinc-200 dark:border-zinc-700 pt-3">
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">On duplicate title:</span>
-                  <Select
-                    options={[
-                      { value: 'create', label: 'Create anyway' },
-                      { value: 'skip', label: 'Skip duplicates' },
-                    ]}
-                    value={duplicateStrategy}
-                    onValueChange={(val) => setDuplicateStrategy(val as 'create' | 'skip')}
-                    className="w-48"
-                  />
+                {/* New custom fields panel */}
+                {newCustomFieldColumns.length > 0 && (
+                  <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-2">
+                      New custom fields
+                    </p>
+                    <CustomFieldMappingPanel
+                      columns={newCustomFieldColumns}
+                      inferredTypes={inferredTypes}
+                      configs={customFieldConfigs}
+                      onChange={setCustomFieldConfigs}
+                    />
+                  </div>
+                )}
+
+                {/* Duplicate strategy + date locale */}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-zinc-200 dark:border-zinc-700 pt-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">On duplicate title:</span>
+                    <Select
+                      options={[
+                        { value: 'create', label: 'Create anyway' },
+                        { value: 'skip', label: 'Skip duplicates' },
+                        { value: 'update', label: 'Update existing (match by ID or title)' },
+                      ]}
+                      value={duplicateStrategy}
+                      onValueChange={(val) =>
+                        setDuplicateStrategy(val as 'create' | 'skip' | 'update')
+                      }
+                      className="w-48"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">Date format:</span>
+                    <Select
+                      options={[
+                        { value: 'iso', label: 'ISO / DD-MM' },
+                        { value: 'us', label: 'US (MM/DD)' },
+                      ]}
+                      value={dateLocale}
+                      onValueChange={(val) => setDateLocale(val as 'us' | 'iso')}
+                      className="w-40"
+                    />
+                  </div>
                 </div>
 
                 {/* Preview table */}
@@ -677,13 +937,35 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
         {/* Step 4: Confirm (dry-run report) — generic CSV only */}
         {step === 4 && isGeneric && (
           <div className="space-y-4">
+            {previewIsSampled && !previewMutation.isPending && (
+              <p className="text-xs text-yellow-700 dark:text-yellow-400 flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Preview reflects the first {PREVIEW_CAP.toLocaleString()} of{' '}
+                {csvRows.length.toLocaleString()} rows. The full set imports in batches.
+              </p>
+            )}
             <ImportConfirmStep
               report={previewReport}
               loading={previewMutation.isPending}
               error={previewError}
             />
+            {chunkProgress && (
+              <div className="space-y-1">
+                <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                  <div
+                    className="h-full bg-primary-500 transition-[width]"
+                    style={{
+                      width: `${chunkProgress.total > 0 ? Math.round((chunkProgress.done / chunkProgress.total) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-zinc-500 text-center">
+                  Importing {chunkProgress.done.toLocaleString()} / {chunkProgress.total.toLocaleString()} rows…
+                </p>
+              </div>
+            )}
             <div className="flex justify-between pt-2">
-              <Button variant="secondary" onClick={() => setStep(3)}>
+              <Button variant="secondary" onClick={() => setStep(3)} disabled={isImporting}>
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </Button>
@@ -692,7 +974,7 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
                 loading={isImporting}
                 disabled={previewMutation.isPending || !previewReport}
               >
-                Import {previewReport?.will_create ?? 0} Tasks
+                Import {csvRows.length.toLocaleString()} Rows
               </Button>
             </div>
           </div>
@@ -733,7 +1015,15 @@ export function ImportDialog({ open, onOpenChange, projectId }: ImportDialogProp
               <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
             )}
 
-            <Button onClick={() => handleOpenChange(false)}>Close</Button>
+            <div className="flex items-center gap-3">
+              {importResult && importResult.errors.length > 0 && (
+                <Button variant="secondary" onClick={handleDownloadErrorReport}>
+                  <Download className="h-4 w-4" />
+                  Download error report
+                </Button>
+              )}
+              <Button onClick={() => handleOpenChange(false)}>Close</Button>
+            </div>
           </div>
         )}
       </div>

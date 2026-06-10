@@ -1140,6 +1140,7 @@ export const TOOL_TO_PERMISSION: ReadonlyMap<string, string> = new Map([
   ["bam_task_count_by_phrase", "bam.count_by_phrase.task"],
   ["bam_list_epics", "bam.epics.list"],
   ["import_csv", "bam.import.csv"],
+  ["bam_import_csv", "bam.import.csv"],
   ["import_github_issues", "bam.import.github_issues"],
   ["disconnect_github_integration", "bam.integration.disconnect_github"],
   ["bam_list_labels", "bam.labels.list"],

@@ -24,6 +24,7 @@ const TOOL_NAMES = [
   'log_time',
   'duplicate_task',
   'import_csv',
+  'bam_import_csv',
   'list_sprints',
   'create_sprint',
   'start_sprint',

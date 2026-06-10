@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TaskLink } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
+import { customFieldDefinitions } from '../db/schema/custom-fields.js';
 import { requireAuth } from '../plugins/auth.js';
 import { requireProjectAccess } from '../middleware/authorize.js';
 import { shadowOnly } from '../middleware/dual-read.js';
@@ -18,6 +19,24 @@ function formatLinksForCsv(raw: unknown): string {
   return (raw as TaskLink[])
     .map((link) => (link.title ? `${link.title} <${link.url}>` : link.url))
     .join('; ');
+}
+
+/** Quote a CSV cell: wrap in double-quotes and double any embedded quotes. */
+function csvQuote(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Render one custom-field value (from tasks.custom_fields JSONB) as a flat CSV
+ * cell that the importer can read straight back into a value cell. Arrays
+ * (multi_select) join with "; "; booleans (checkbox) emit "true"/"false";
+ * null/undefined emit empty (the skip-empty rule applies on re-import).
+ */
+function formatCustomFieldForCsv(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map((v) => String(v)).join('; ');
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return String(value);
 }
 
 export default async function exportRoutes(fastify: FastifyInstance) {
@@ -63,6 +82,24 @@ export default async function exportRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Lossless round-trip (CSV-import plan §5.7, Phase 3): the export carries
+      // a human_id column (so re-import with duplicate_strategy:'update' matches
+      // on it) plus the links column AND one column per custom-field definition,
+      // headed `cf:<name>`. The importer maps `cf:<name>` columns back via
+      // custom_field_mapping (field_name = the part after `cf:`), and human_id
+      // back via mapping.human_id. Header names here are exactly what the
+      // importer can map.
+      const cfDefs = await db
+        .select({ id: customFieldDefinitions.id, name: customFieldDefinitions.name })
+        .from(customFieldDefinitions)
+        .where(eq(customFieldDefinitions.project_id, request.params.id))
+        .orderBy(asc(customFieldDefinitions.position));
+
+      // tasks.custom_fields is canonically keyed by definition id (see the task
+      // drawer write path), with a legacy name-keyed fallback. Read both.
+      const cfValueOf = (cf: Record<string, unknown>, def: { id: string; name: string }) =>
+        cf[def.id] ?? cf[def.name];
+
       const headers = [
         'id',
         'human_id',
@@ -77,14 +114,16 @@ export default async function exportRoutes(fastify: FastifyInstance) {
         'created_at',
         'completed_at',
         'links',
+        ...cfDefs.map((d) => `cf:${d.name}`),
       ];
 
-      const csvRows = [headers.join(',')];
+      const csvRows = [headers.map((h) => csvQuote(h)).join(',')];
       for (const task of projectTasks) {
+        const customFields = (task.custom_fields ?? {}) as Record<string, unknown>;
         const row = [
           task.id,
           task.human_id,
-          `"${(task.title ?? '').replace(/"/g, '""')}"`,
+          csvQuote(task.title ?? ''),
           task.priority,
           task.story_points ?? '',
           task.phase_id ?? '',
@@ -94,7 +133,11 @@ export default async function exportRoutes(fastify: FastifyInstance) {
           task.reporter_id ?? '',
           task.created_at.toISOString(),
           task.completed_at?.toISOString() ?? '',
-          `"${formatLinksForCsv(task.links).replace(/"/g, '""')}"`,
+          csvQuote(formatLinksForCsv(task.links)),
+          // Custom fields keyed by definition id in the JSONB blob (with a
+          // legacy name-keyed fallback). Quote each so values containing
+          // commas/quotes survive the round-trip.
+          ...cfDefs.map((d) => csvQuote(formatCustomFieldForCsv(cfValueOf(customFields, d)))),
         ];
         csvRows.push(row.join(','));
       }

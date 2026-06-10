@@ -199,7 +199,7 @@ function createMcpServer(
   registerBamResolverTools(server, apiClient);
   registerReportTools(server, apiClient);
   registerTemplateTools(server, apiClient);
-  registerImportTools(server, apiClient);
+  registerImportTools(server, apiClient, confirmTokenStore);
   registerUtilityTools(server, apiClient, rateLimiter, confirmTokenStore);
   registerHelpdeskTools(server, apiClient, env.HELPDESK_API_URL);
   registerBanterTools(server, apiClient, env.BANTER_API_URL);

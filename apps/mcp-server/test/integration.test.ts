@@ -114,6 +114,28 @@ import { registerBenchTools } from '../src/tools/bench-tools.js';
 import { registerBillTools } from '../src/tools/bill-tools.js';
 import { registerBlankTools } from '../src/tools/blank-tools.js';
 import { registerBlueprintTools } from '../src/tools/blueprint-tools.js';
+import type { ConfirmTokenStore, ConfirmTokenEntry } from '../src/lib/confirm-token-store.js';
+
+// In-memory ConfirmTokenStore stub for tool registration + the bam_import_csv
+// update-strategy confirmation gate (no Redis in the unit harness).
+function createTestConfirmTokenStore(): ConfirmTokenStore {
+  const map = new Map<string, ConfirmTokenEntry>();
+  return {
+    async set(token, entry) {
+      map.set(token, entry);
+    },
+    async get(token) {
+      return map.get(token) ?? null;
+    },
+    async delete(token) {
+      map.delete(token);
+    },
+    async close() {
+      map.clear();
+    },
+  };
+}
+const testConfirmTokenStore = createTestConfirmTokenStore();
 
 describe('MCP Integration Tests', () => {
   let api: ApiClient;
@@ -133,7 +155,7 @@ describe('MCP Integration Tests', () => {
     registerMemberTools(mock.server, api);
     registerReportTools(mock.server, api);
     registerTemplateTools(mock.server, api);
-    registerImportTools(mock.server, api);
+    registerImportTools(mock.server, api, testConfirmTokenStore);
     registerMeTools(mock.server, api);
     registerPlatformTools(mock.server, api);
     registerBeaconTools(mock.server, api, 'http://localhost:4004');
@@ -555,6 +577,91 @@ describe('MCP Integration Tests', () => {
         project_id: UUID, rows: [], mapping: {},
       });
       expectErrorFormat(result);
+    });
+  });
+
+  describe('bam_import_csv (Phase 3)', () => {
+    it('is registered', () => {
+      expect(tools.has('bam_import_csv')).toBe(true);
+    });
+
+    it('commits a create-strategy import (no confirmation)', async () => {
+      mockApiOk({ data: { imported: 2, skipped: 0, errors: [] } });
+      const result = await getTool('bam_import_csv').handler({
+        project_id: UUID,
+        rows: [{ Feature: 'A' }, { Feature: 'B' }],
+        mapping: { title: 'Feature' },
+      });
+      expectSuccessFormat(result);
+      // Posted to the commit endpoint (not preview).
+      const call = mockFetch.mock.calls.at(-1)!;
+      expect(call[0]).toBe(`http://localhost:4000/projects/${UUID}/import/csv`);
+    });
+
+    it('routes dry_run to the preview endpoint', async () => {
+      mockApiOk({ data: { total_rows: 1, will_create: 1 } });
+      const result = await getTool('bam_import_csv').handler({
+        project_id: UUID,
+        rows: [{ Feature: 'A' }],
+        mapping: { title: 'Feature' },
+        dry_run: true,
+      });
+      expectSuccessFormat(result);
+      const call = mockFetch.mock.calls.at(-1)!;
+      expect(call[0]).toBe(`http://localhost:4000/projects/${UUID}/import/csv/preview`);
+    });
+
+    it('gates an update-strategy commit behind a confirm_token', async () => {
+      // First call with no token: stages a token, makes NO api call.
+      const staged = await getTool('bam_import_csv').handler({
+        project_id: UUID,
+        rows: [{ Feature: 'A' }],
+        mapping: { title: 'Feature' },
+        options: { duplicate_strategy: 'update' },
+      });
+      const stagedJson = JSON.parse(staged.content[0]!.text);
+      expect(stagedJson.status).toBe('pending_confirmation');
+      expect(stagedJson.confirm_token).toBeTruthy();
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      // Second call WITH the token: consumes it and commits.
+      mockApiOk({ data: { imported: 0, updated: 1, skipped: 0, errors: [] } });
+      const committed = await getTool('bam_import_csv').handler({
+        project_id: UUID,
+        rows: [{ Feature: 'A' }],
+        mapping: { title: 'Feature' },
+        options: { duplicate_strategy: 'update' },
+        confirm_token: stagedJson.confirm_token,
+      });
+      expectSuccessFormat(committed);
+      const call = mockFetch.mock.calls.at(-1)!;
+      expect(call[0]).toBe(`http://localhost:4000/projects/${UUID}/import/csv`);
+    });
+
+    it('does NOT gate a dry_run update (no writes)', async () => {
+      mockApiOk({ data: { total_rows: 1, will_update: 1 } });
+      const result = await getTool('bam_import_csv').handler({
+        project_id: UUID,
+        rows: [{ Feature: 'A' }],
+        mapping: { title: 'Feature' },
+        options: { duplicate_strategy: 'update' },
+        dry_run: true,
+      });
+      expectSuccessFormat(result);
+      const call = mockFetch.mock.calls.at(-1)!;
+      expect(call[0]).toBe(`http://localhost:4000/projects/${UUID}/import/csv/preview`);
+    });
+
+    it('rejects an invalid confirm_token', async () => {
+      const result = await getTool('bam_import_csv').handler({
+        project_id: UUID,
+        rows: [{ Feature: 'A' }],
+        mapping: { title: 'Feature' },
+        options: { duplicate_strategy: 'update' },
+        confirm_token: 'bogus-token',
+      });
+      expect(result.isError).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
@@ -1540,7 +1647,7 @@ describe('MCP Integration Tests', () => {
         // template
         'list_templates', 'create_from_template',
         // import
-        'import_github_issues', 'suggest_branch_name',
+        'import_github_issues', 'suggest_branch_name', 'bam_import_csv',
         // me
         'get_me', 'update_me', 'list_my_orgs', 'switch_active_org',
         'change_my_password', 'logout',

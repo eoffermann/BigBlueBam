@@ -8,6 +8,11 @@ import {
 } from '@/components/import/value-map-editor';
 import { serializeLinkMappings } from '@/components/import/links-mapping-panel';
 import { normalizeSheet, distinctColumnValues } from '@/components/import/csv-parse';
+import {
+  inferCustomFieldType,
+  serializeCustomFieldMappings,
+} from '@/components/import/custom-field-infer';
+import { buildErrorReportCsv, parseImportErrors } from '@/components/import/error-report';
 
 describe('serializeValueMap', () => {
   it('maps concrete values, drops passthrough, nulls leave-unset', () => {
@@ -146,6 +151,93 @@ describe('distinctColumnValues', () => {
     expect(out).toEqual([
       { value: 'P0', count: 3 },
       { value: 'P1', count: 2 },
+    ]);
+  });
+});
+
+describe('inferCustomFieldType', () => {
+  const col = (values: string[]) => values.map((v) => ({ Cell: v }));
+
+  it('infers number for all-numeric columns (incl. $, %, commas)', () => {
+    expect(inferCustomFieldType(col(['$1,200', '85%', '-3.5', '42']), 'Cell')).toBe('number');
+  });
+
+  it('infers date for ISO / locale / word dates', () => {
+    expect(inferCustomFieldType(col(['2026-06-09', '2026/1/1']), 'Cell')).toBe('date');
+    expect(inferCustomFieldType(col(['03/04/2026', '12/25/2026']), 'Cell')).toBe('date');
+    expect(inferCustomFieldType(col(['June 9, 2026', 'Jan 1, 2025']), 'Cell')).toBe('date');
+  });
+
+  it('infers checkbox for all TRUE/FALSE-ish values', () => {
+    expect(inferCustomFieldType(col(['TRUE', 'false', 'yes', 'no', 'x', '1', '0']), 'Cell')).toBe(
+      'checkbox',
+    );
+  });
+
+  it('infers multi_select for low-cardinality comma lists', () => {
+    expect(
+      inferCustomFieldType(col(['A,B', 'B,C', 'A,C', 'A,B,C']), 'Cell'),
+    ).toBe('multi_select');
+  });
+
+  it('infers select for a small repeated distinct set', () => {
+    expect(
+      inferCustomFieldType(col(['High', 'Low', 'High', 'Medium', 'Low', 'High']), 'Cell'),
+    ).toBe('select');
+  });
+
+  it('falls back to text for high-cardinality free text', () => {
+    expect(
+      inferCustomFieldType(col(['alpha', 'beta', 'gamma', 'delta', 'epsilon']), 'Cell'),
+    ).toBe('text');
+  });
+
+  it('ignores empty cells and infers text for an all-empty column', () => {
+    expect(inferCustomFieldType(col(['', '   ', '']), 'Cell')).toBe('text');
+  });
+
+  it('samples at most sampleLimit non-empty cells', () => {
+    // First two are numeric, the rest (beyond the limit) are text. With limit=2
+    // only the numerics are sampled → number.
+    const rows = col(['1', '2', 'text', 'more text']);
+    expect(inferCustomFieldType(rows, 'Cell', 2)).toBe('number');
+  });
+});
+
+describe('serializeCustomFieldMappings', () => {
+  it('serializes configs, dropping blank field names', () => {
+    const out = serializeCustomFieldMappings([
+      { column: 'Cost', field_name: '  QA Cost ', field_type: 'number', create_if_missing: true },
+      { column: 'Junk', field_name: '   ', field_type: 'text', create_if_missing: true },
+    ]);
+    expect(out).toEqual([
+      { column: 'Cost', field_name: 'QA Cost', field_type: 'number', create_if_missing: true },
+    ]);
+  });
+});
+
+describe('buildErrorReportCsv', () => {
+  it('emits row, reason, and original data columns with RFC-4180 quoting', () => {
+    const csv = buildErrorReportCsv(
+      [{ row: 3, reason: 'missing title', data: { Feature: 'a, b', Notes: 'has "quote"' } }],
+      ['Feature', 'Notes'],
+    );
+    const lines = csv.split('\r\n');
+    expect(lines[0]).toBe('row,reason,Feature,Notes');
+    expect(lines[1]).toBe('3,missing title,"a, b","has ""quote"""');
+  });
+
+  it('emits only row + reason when no data is attached', () => {
+    const csv = buildErrorReportCsv([{ row: 0, reason: 'oops' }]);
+    expect(csv.split('\r\n')).toEqual(['row,reason', '0,oops']);
+  });
+});
+
+describe('parseImportErrors', () => {
+  it('extracts the leading row number, defaulting to 0 when absent', () => {
+    expect(parseImportErrors(['Row 5: missing title', 'fatal: no phases'])).toEqual([
+      { row: 5, reason: 'Row 5: missing title' },
+      { row: 0, reason: 'fatal: no phases' },
     ]);
   });
 });

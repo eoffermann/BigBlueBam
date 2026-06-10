@@ -86,9 +86,28 @@ const csvImportBodySchema = z.object({
       }),
     )
     .optional(),
+  // Opt-in custom-field column mapping (Phase 2, §5.2 / G3). Each entry maps a
+  // CSV column into a project custom field, find-or-creating the definition when
+  // create_if_missing. Cells are coerced to field_type (number / date / checkbox
+  // / select / multi_select / url / text).
+  custom_field_mapping: z
+    .array(
+      z.object({
+        column: z.string(),
+        field_name: z.string().min(1).max(255),
+        field_type: z.enum(['text', 'number', 'date', 'select', 'multi_select', 'checkbox', 'url']),
+        create_if_missing: z.boolean().optional(),
+      }),
+    )
+    .optional(),
   options: z
     .object({
-      duplicate_strategy: z.enum(['create', 'skip']).optional(),
+      // 'update' (Phase 3) round-trips an exported sheet: matched rows overwrite
+      // the existing task (skip-empty cells, link union); unmatched rows create.
+      duplicate_strategy: z.enum(['create', 'skip', 'update']).optional(),
+      // Date-locale toggle (Phase 2, §5.4.7) for due_date + date custom fields.
+      // 'us' reads ambiguous numeric dates as MM/DD/YYYY; 'iso' (default) DD/MM.
+      date_locale: z.enum(['us', 'iso']).optional(),
     })
     .optional(),
 });

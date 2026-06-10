@@ -5,11 +5,17 @@ export interface ImportPreviewReport {
   total_rows: number;
   will_create: number;
   will_skip: number;
+  // Present under duplicate_strategy:'update' (Phase 3); 0/absent otherwise.
+  will_update?: number;
   new_phases: string[];
   new_labels: string[];
+  // Custom-field definitions a commit would create (Phase 2, opt-in).
+  new_custom_fields?: { name: string; field_type: string; inferred_options?: string[] }[];
   unmapped_values: Record<string, string[]>;
   unresolved_assignees: { row: number; value: string }[];
   invalid_urls: { row: number; column: string; value: string }[];
+  // Per-cell coercion warnings (custom-field/date coercion); not row failures.
+  cell_warnings?: { row: number; column: string; value: string; reason: string }[];
   duplicate_titles: { row: number; title: string }[];
 }
 
@@ -105,6 +111,8 @@ export function ImportConfirmStep({ report, loading, error }: ImportConfirmStepP
   const unmappedEntries = Object.entries(report.unmapped_values).filter(
     ([, vals]) => vals.length > 0,
   );
+  const newCustomFields = report.new_custom_fields ?? [];
+  const cellWarnings = report.cell_warnings ?? [];
 
   return (
     <div className="space-y-4">
@@ -123,6 +131,17 @@ export function ImportConfirmStep({ report, loading, error }: ImportConfirmStepP
         icon={<Plus className="h-3.5 w-3.5" />}
         title="New labels"
         items={report.new_labels}
+      />
+      <ListSection
+        icon={<Plus className="h-3.5 w-3.5" />}
+        title="New custom fields"
+        items={newCustomFields.map((f) => {
+          const opts =
+            f.inferred_options && f.inferred_options.length > 0
+              ? ` (${f.inferred_options.join(', ')})`
+              : '';
+          return `${f.name} · ${f.field_type}${opts}`;
+        })}
       />
 
       {unmappedEntries.map(([field, vals]) => (
@@ -149,6 +168,12 @@ export function ImportConfirmStep({ report, loading, error }: ImportConfirmStepP
       />
       <ListSection
         icon={<AlertCircle className="h-3.5 w-3.5" />}
+        title="Cell warnings (skipped, not row failures)"
+        items={cellWarnings.map((w) => `Row ${w.row} [${w.column}]: ${w.reason} ("${w.value}")`)}
+        tone="warn"
+      />
+      <ListSection
+        icon={<AlertCircle className="h-3.5 w-3.5" />}
         title="Duplicate titles"
         items={report.duplicate_titles.map((d) => `Row ${d.row}: ${d.title}`)}
         tone="warn"
@@ -158,6 +183,7 @@ export function ImportConfirmStep({ report, loading, error }: ImportConfirmStepP
         unmappedEntries.length === 0 &&
         report.unresolved_assignees.length === 0 &&
         report.invalid_urls.length === 0 &&
+        cellWarnings.length === 0 &&
         report.duplicate_titles.length === 0 && (
           <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
             <CheckCircle2 className="h-4 w-4" />
