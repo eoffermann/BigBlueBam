@@ -32,3 +32,6 @@ agents/
 # time by scripts/deploy/platforms/docker-compose.mjs::renderLivekitConfig.
 # Never commit this; it carries the deployed LIVEKIT_API_SECRET.
 infra/livekit/livekit.yaml
+# Python bytecode caches (apps/voice-agent)
+__pycache__/
+*.pyc
