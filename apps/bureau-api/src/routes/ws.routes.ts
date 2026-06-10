@@ -39,7 +39,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import Redis from 'ioredis';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { mintRoomToken } from '@bigbluebam/livekit-tokens';
 import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
@@ -47,9 +47,10 @@ import { sessions, users } from '../db/schema/index.js';
 import { bureauKnocks, bureauSummons } from '../db/schema/bureau.js';
 import { env } from '../env.js';
 import {
+  canLockRoomDecision,
+  canSetDoorDecision,
   evaluateRoomAccess,
   hasRoomAclEntry,
-  isOrgAdminOrOwner,
   loadRoom,
 } from '../middleware/room-access.js';
 import {
@@ -62,6 +63,7 @@ import {
   type KnockResolution,
 } from '../lib/bureau-events.js';
 import { isUserInDnd } from '../services/dnd-check.service.js';
+import { takeRingRecord } from '../services/ring.service.js';
 import { getCallingConfig } from '../services/calling-settings.service.js';
 import * as presence from '../services/presence.service.js';
 import {
@@ -172,6 +174,23 @@ function safeSend(ws: WebSocket, payload: string): void {
 
 export default async function wsRoutes(fastify: FastifyInstance) {
   fastify.get('/bureau/ws', { websocket: true }, async (socket, request) => {
+    // ── D-13: buffer frames that arrive during async setup. ──
+    // Everything between here and the real message handler binding at the
+    // bottom of this function awaits DB lookups + Redis connects. A client
+    // that sends immediately after the upgrade (the bureau-client SDK
+    // flushes its outbound queue on 'open', BEFORE the `connected` frame)
+    // would otherwise have those frames silently dropped — `ws` discards
+    // messages emitted while no 'message' listener is attached. Buffer
+    // them now and replay them, in order, once the handler is bound.
+    const preInitFrames: Array<Buffer | string> = [];
+    const earlyMessageListener = (raw: Buffer | string) => {
+      // Cap the buffer so a flooding client can't balloon memory while we
+      // are still authenticating it. 100 frames is far beyond anything a
+      // legitimate client sends pre-`connected`.
+      if (preInitFrames.length < 100) preInitFrames.push(raw);
+    };
+    socket.on('message', earlyMessageListener);
+
     // ── Authenticate via shared session cookie at handshake time ──
     const sessionId = request.cookies?.session;
     if (!sessionId) {
@@ -316,25 +335,32 @@ export default async function wsRoutes(fastify: FastifyInstance) {
     async function canSetDoor(
       room: { id: string; type: string; owner_id: string | null },
     ): Promise<boolean> {
-      if (isSuperuser) return true;
-      if (isOrgAdminOrOwner(userRole)) return true;
-      if (room.type === 'office') {
-        return !!room.owner_id && room.owner_id === userId;
+      // Resolve the only DB-bound fact (shared-room ACL manager role) only
+      // when the pure decision actually needs it — superuser / admin / office
+      // owner short-circuit without a query. We re-query here because
+      // hasRoomAclEntry only checks presence, not role.
+      let hasAclManagerRole = false;
+      if (!isSuperuser && room.type !== 'office') {
+        const { bureauRoomAcl } = await import('../db/schema/bureau.js');
+        const [aclRow] = await db
+          .select({ role: bureauRoomAcl.role })
+          .from(bureauRoomAcl)
+          .where(
+            and(
+              eq(bureauRoomAcl.room_id, room.id),
+              eq(bureauRoomAcl.user_id, userId),
+            ),
+          )
+          .limit(1);
+        hasAclManagerRole = aclRow?.role === 'manager';
       }
-      // Shared room: ACL `manager` role grants door rights. We re-query
-      // here because hasRoomAclEntry only checks presence, not role.
-      const { bureauRoomAcl } = await import('../db/schema/bureau.js');
-      const [aclRow] = await db
-        .select({ role: bureauRoomAcl.role })
-        .from(bureauRoomAcl)
-        .where(
-          and(
-            eq(bureauRoomAcl.room_id, room.id),
-            eq(bureauRoomAcl.user_id, userId),
-          ),
-        )
-        .limit(1);
-      return aclRow?.role === 'manager';
+      return canSetDoorDecision({
+        isSuperuser,
+        role: userRole,
+        room,
+        userId,
+        hasAclManagerRole,
+      });
     }
 
     /** Lock-room permission: "anyone in a shared room can lock/unlock"
@@ -345,18 +371,28 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       type: string;
       owner_id: string | null;
     }): Promise<boolean> {
-      if (isSuperuser) return true;
-      if (isOrgAdminOrOwner(userRole)) return true;
-      if (room.type === 'office') {
-        return !!room.owner_id && room.owner_id === userId;
+      const isInRoom = client.roomId === room.id;
+      // Only hit the ACL table when the pure decision would actually need it
+      // (non-privileged, non-office, not currently in the room).
+      let hasAclEntry = false;
+      if (
+        !isSuperuser &&
+        room.type !== 'office' &&
+        !isInRoom
+      ) {
+        hasAclEntry = await hasRoomAclEntry(room.id, userId);
       }
-      // Shared room: must be inside it right now.
-      if (client.roomId === room.id) return true;
-      // Or have a private-room ACL row.
-      return await hasRoomAclEntry(room.id, userId);
+      return canLockRoomDecision({
+        isSuperuser,
+        role: userRole,
+        room,
+        userId,
+        isInRoom,
+        hasAclEntry,
+      });
     }
 
-    socket.on('message', async (raw: Buffer | string) => {
+    const handleMessage = async (raw: Buffer | string) => {
       // ── Per-socket rate limit ──
       const now = Date.now();
       if (now - client.msgWindowStart > WS_RATE_LIMIT_WINDOW_MS) {
@@ -438,11 +474,19 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               break;
             }
 
-            const decision = await evaluateRoomAccess(room, {
-              id: userId,
-              role: userRole,
-              is_superuser: isSuperuser,
-            });
+            // Live door-state overlay: a lock_room / set_door override in
+            // Redis takes precedence over the DB privacy_default, so locked
+            // rooms actually keep non-ACL members out.
+            const doorState = await presence.getDoorState(fastify.redis, roomId);
+            const decision = await evaluateRoomAccess(
+              room,
+              {
+                id: userId,
+                role: userRole,
+                is_superuser: isSuperuser,
+              },
+              doorState?.privacy ?? null,
+            );
             if (!decision.allowed) {
               safeSend(
                 socket,
@@ -494,6 +538,27 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               }
             }
 
+            // Cross-floor entry: when the room lives on a floor the socket
+            // is not currently subscribed to (e.g. the SDK's enterRoom()
+            // jumps straight into a room on another floor without a prior
+            // subscribe_floor), move the floor subscription so the socket
+            // receives the NEW floor's presence deltas and stops getting the
+            // old floor's. Mirrors the subscribe_floor dance.
+            if (room.floor_id !== client.floorId) {
+              if (client.floorId) {
+                const oldFloorChan = floorChannel(client.floorId);
+                if (client.channels.has(oldFloorChan)) {
+                  await subscriber.unsubscribe(oldFloorChan);
+                  client.channels.delete(oldFloorChan);
+                }
+              }
+              const newFloorChan = floorChannel(room.floor_id);
+              if (!client.channels.has(newFloorChan)) {
+                await subscriber.subscribe(newFloorChan);
+                client.channels.add(newFloorChan);
+              }
+            }
+
             // Auto-subscribe to the new room channel so the entering
             // socket receives subsequent room events without an explicit
             // subscribe message.
@@ -512,6 +577,20 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             client.roomId = roomId;
             client.floorId = room.floor_id;
             client.roomEnteredAt = Date.now();
+
+            // Snapshot the room's current occupants to the entering socket so
+            // the docked box shows everyone already here instead of "Just
+            // you" until the next mover. The roster includes the entering
+            // user; the SDK filters self out. Sent before the broadcast
+            // room_enter below so the joiner's own list is complete first.
+            const roomOccupants = await presence.getRoomOccupants(
+              fastify.redis,
+              roomId,
+            );
+            safeSend(
+              socket,
+              frame('room_occupants', { roomId, userIds: roomOccupants }),
+            );
 
             // Mint a LiveKit token so the connecting socket can join
             // audio without a follow-up REST call. Credentials resolve
@@ -748,11 +827,15 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               );
               break;
             }
+            // An explicit door set is a fresh baseline — clear any
+            // lock-restore memory so a later lock/unlock round-trips back to
+            // THIS privacy, not whatever predated it.
             await presence.setDoor(
               fastify.redis,
               roomId,
               privacy as presence.RoomPrivacy,
               userId,
+              { prevPrivacy: null },
             );
             const payload = frame('door_changed', {
               roomId,
@@ -796,14 +879,40 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               );
               break;
             }
-            // Treat "locked" as a door override flipped to private.
-            const nextPrivacy = locked ? 'private' : room.privacy_default;
-            await presence.setDoor(
-              fastify.redis,
-              roomId,
-              nextPrivacy as presence.RoomPrivacy,
-              userId,
-            );
+            // Treat "locked" as a door override flipped to private. On
+            // UNLOCK, restore the door to whatever it was before the lock
+            // (a prior set_door override, e.g. 'knock'), not the DB default —
+            // so locking then unlocking an office that was on 'knock' lands
+            // back on 'knock'. The pre-lock privacy is remembered in the
+            // door-state hash's prevPrivacy field while the lock is active.
+            const priorDoor = await presence.getDoorState(fastify.redis, roomId);
+            const effectiveBefore =
+              priorDoor?.privacy ?? room.privacy_default;
+            let nextPrivacy: presence.RoomPrivacy;
+            if (locked) {
+              // Preserve an already-stored restore target across a re-lock;
+              // otherwise capture the current effective privacy.
+              const restoreTarget = priorDoor?.prevPrivacy ?? effectiveBefore;
+              nextPrivacy = 'private';
+              await presence.setDoor(
+                fastify.redis,
+                roomId,
+                nextPrivacy,
+                userId,
+                { prevPrivacy: restoreTarget as presence.RoomPrivacy },
+              );
+            } else {
+              nextPrivacy = (priorDoor?.prevPrivacy ??
+                room.privacy_default) as presence.RoomPrivacy;
+              // Clear the lock-restore memory now that we've consumed it.
+              await presence.setDoor(
+                fastify.redis,
+                roomId,
+                nextPrivacy,
+                userId,
+                { prevPrivacy: null },
+              );
+            }
 
             const payload = frame('room_locked', {
               roomId,
@@ -817,7 +926,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               emitRoomLocked(orgId, userId, {
                 room: { id: roomId, name: null },
                 privacy: {
-                  previous: room.privacy_default,
+                  previous: effectiveBefore,
                   current: nextPrivacy,
                 },
                 reason: 'ws_lock',
@@ -1066,6 +1175,52 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }
 
           // ──────────────────────────────────────────────
+          // Surface-huddle ring response (presence-and-immediate-interaction).
+          // The recipient's RingHandler sends { ring_token, decision } after
+          // accept / decline / auto-decline. We validate the token against
+          // the short-lived Redis record written by ring.service.ts (one-shot:
+          // the first respond consumes it) and forward `ring_responded` to
+          // the original caller so their UI can close the outgoing-ring state.
+          case 'ring_respond': {
+            const ringToken =
+              typeof msg.ring_token === 'string' ? msg.ring_token : null;
+            const decision =
+              msg.decision === 'accept' ||
+              msg.decision === 'decline' ||
+              msg.decision === 'auto_decline'
+                ? msg.decision
+                : null;
+            if (!ringToken || !decision) {
+              safeSend(
+                socket,
+                frame('error', {
+                  code: 'BAD_FRAME',
+                  message: 'ring_token and decision required',
+                }),
+              );
+              break;
+            }
+            const record = await takeRingRecord(fastify.redis, ringToken);
+            // Unknown/expired token, or a token addressed to someone else:
+            // ignore silently. The ring overlay auto-dismisses client-side,
+            // and we must not leak whether a guessed token was real.
+            if (!record || record.toUserId !== userId || record.orgId !== orgId) {
+              break;
+            }
+            await publishUser(
+              record.fromUserId,
+              frame('ring_responded', {
+                ring_token: ringToken,
+                decision,
+                by: { id: userId, name: displayName },
+                surface_app: record.surfaceApp,
+                surface_id: record.surfaceId,
+              }),
+            );
+            break;
+          }
+
+          // ──────────────────────────────────────────────
           // Summon flow (§10 of the design doc, workstream 6).
           // The §8 trio: summon (start), summon_respond (recipient's
           // join/stay decision), summon_grant_access (§4.4 follow-up
@@ -1233,20 +1388,49 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               break;
             }
             // Only progress out of `pending` — terminal states stick.
+            // The update is a single atomic SQL statement that rewrites ONLY
+            // this user's entry inside the recipients JSONB array. The old
+            // read-modify-write (select → mutate in JS → write whole array)
+            // lost updates when two recipients responded concurrently: the
+            // second write clobbered the first one's outcome.
+            let latestRecipients: RecipientRow[] = recipients;
             if (me.outcome === 'pending') {
-              me.outcome = decision === 'join' ? 'joined' : 'declined';
-              await db
-                .update(bureauSummons)
-                .set({ recipients })
-                .where(eq(bureauSummons.id, summonId));
+              const nextOutcome = decision === 'join' ? 'joined' : 'declined';
+              const result = (await db.execute(sql`
+                UPDATE bureau_summons
+                SET recipients = (
+                  SELECT COALESCE(
+                    jsonb_agg(
+                      CASE
+                        WHEN elem->>'userId' = ${userId}
+                         AND elem->>'outcome' = 'pending'
+                        THEN jsonb_set(elem, '{outcome}', to_jsonb(${nextOutcome}::text))
+                        ELSE elem
+                      END
+                      ORDER BY idx
+                    ),
+                    '[]'::jsonb
+                  )
+                  FROM jsonb_array_elements(recipients) WITH ORDINALITY AS t(elem, idx)
+                )
+                WHERE id = ${summonId} AND org_id = ${orgId}
+                RETURNING recipients
+              `)) as unknown;
+              const rows = Array.isArray(result)
+                ? (result as Array<{ recipients: unknown }>)
+                : ((result as { rows?: Array<{ recipients: unknown }> }).rows ?? []);
+              const returned = rows[0]?.recipients;
+              if (Array.isArray(returned)) {
+                latestRecipients = returned as RecipientRow[];
+              }
             }
 
             // Send a fresh summon_progress to the summoner so the UI can
             // tick its "joined / total" counter.
-            const joined = recipients.filter(
+            const joined = latestRecipients.filter(
               (r) => r.outcome === 'joined' || r.outcome === 'granted',
             ).length;
-            const total = recipients.length;
+            const total = latestRecipients.length;
             await publishUser(
               existing.summoner_id,
               frame('summon_progress', {
@@ -1260,7 +1444,9 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               frame('summon_ack', {
                 summonId,
                 accepted: true,
-                decision: me.outcome,
+                decision:
+                  latestRecipients.find((r) => r.userId === userId)?.outcome ??
+                  me.outcome,
               }),
             );
             break;
@@ -1329,7 +1515,23 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }),
         );
       }
+    };
+
+    // Swap the early buffering listener for the real handler, then replay
+    // anything that arrived during setup — in arrival order, sequentially,
+    // so e.g. subscribe_floor → enter_room keeps its semantics. (D-13.)
+    socket.off('message', earlyMessageListener);
+    socket.on('message', (raw: Buffer | string) => {
+      void handleMessage(raw);
     });
+    if (preInitFrames.length > 0) {
+      const buffered = preInitFrames.splice(0);
+      void (async () => {
+        for (const raw of buffered) {
+          await handleMessage(raw);
+        }
+      })();
+    }
 
     // ── Connection close (graceful or not): tear down presence state,
     //    publish leave events, unsubscribe the per-socket subscriber.

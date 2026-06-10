@@ -28,7 +28,7 @@
  *   2. DND check via dnd-check.service.ts. If the recipient has ANY live
  *      session in 'dnd', return 423 RECIPIENT_DND so the UI can offer
  *      "leave a note" instead of silently failing.
- *   3. Publish a 'ring' frame on user:{to_user_id} via ring.service.ts.
+ *   3. Publish a 'ring_incoming' frame on user:{to_user_id} via ring.service.ts.
  *      The recipient's bureau-client picks it up over WS and shows the
  *      incoming-call overlay.
  *   4. On accept, the recipient's bureau-client navigates to the surface
@@ -43,9 +43,12 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '../db/index.js';
+import { organizationMemberships, users } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
-import { badRequest } from '../middleware/room-access.js';
+import { badRequest, notFound } from '../middleware/room-access.js';
 import { isUserInDnd } from '../services/dnd-check.service.js';
 import { ringUser } from '../services/ring.service.js';
 
@@ -100,6 +103,36 @@ export default async function ringRoutes(fastify: FastifyInstance) {
         return badRequest(request, reply, 'You cannot ring yourself');
       }
 
+      // Org scoping: the recipient must be a member of the sender's active
+      // org. Without this gate any authenticated user could ring (and leak
+      // their display name + surface ids to) arbitrary users in OTHER
+      // orgs — `user:{id}` Redis channels are global, not org-namespaced.
+      // 404 (not 403) so cross-org user-id probing can't confirm existence.
+      const [recipient] = await db
+        .select({ id: users.id, org_id: users.org_id, is_active: users.is_active })
+        .from(users)
+        .where(eq(users.id, to_user_id))
+        .limit(1);
+      let recipientInOrg = !!recipient && recipient.org_id === user.org_id;
+      if (recipient && !recipientInOrg) {
+        // Multi-org users: users.org_id is the legacy home org; check the
+        // canonical membership table for the sender's active org too.
+        const [membership] = await db
+          .select({ id: organizationMemberships.id })
+          .from(organizationMemberships)
+          .where(
+            and(
+              eq(organizationMemberships.user_id, to_user_id),
+              eq(organizationMemberships.org_id, user.org_id),
+            ),
+          )
+          .limit(1);
+        recipientInOrg = !!membership;
+      }
+      if (!recipient || !recipient.is_active || !recipientInOrg) {
+        return notFound(request, reply, 'Recipient not found in your organization');
+      }
+
       // §4.3-style DND check. Any live session of the recipient in 'dnd'
       // blocks the ring with 423; the UI surfaces a "leave a note" affordance
       // that drops back to the existing Banter DM path.
@@ -121,6 +154,7 @@ export default async function ringRoutes(fastify: FastifyInstance) {
         user.id,
         user.display_name,
         to_user_id,
+        user.org_id,
         surface_app,
         surface_id,
         surface_label ?? null,

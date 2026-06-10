@@ -52,6 +52,8 @@ import {
   roleLevel,
   hasRoomAclEntry,
   loadRoom,
+  canSetDoorDecision,
+  canLockRoomDecision,
   type RoomAccessRecord,
 } from '../src/middleware/room-access.js';
 
@@ -185,6 +187,67 @@ describe('evaluateRoomAccess — private', () => {
   });
 });
 
+describe('evaluateRoomAccess — live door-state override (lock_room / set_door)', () => {
+  it("a locked 'open' room (live privacy 'private') rejects non-ACL members", async () => {
+    limitMock.mockResolvedValue([]); // no ACL row
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('member', { id: 'stranger' }),
+      'private',
+    );
+    expect(decision.allowed).toBe(false);
+  });
+
+  it("a locked room still admits ACL holders", async () => {
+    limitMock.mockResolvedValue([{ id: 'acl-row' }]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('member', { id: 'acl-user' }),
+      'private',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('a locked room still admits the room owner (emergency entry)', async () => {
+    limitMock.mockResolvedValue([]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'user-owner' }),
+      user('member', { id: 'user-owner' }),
+      'private',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('a locked room still admits org admins (emergency entry)', async () => {
+    limitMock.mockResolvedValue([]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('admin'),
+      'private',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it("an unlocked door override back to 'open' admits members of a private-default room", async () => {
+    limitMock.mockResolvedValue([]);
+    const decision = await evaluateRoomAccess(
+      room({ privacy_default: 'private', owner_id: 'someone-else' }),
+      user('member'),
+      'open',
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('null / undefined override falls back to privacy_default', async () => {
+    const open = await evaluateRoomAccess(
+      room({ privacy_default: 'open', owner_id: 'someone-else' }),
+      user('member'),
+      null,
+    );
+    expect(open.allowed).toBe(true);
+  });
+});
+
 describe('hasRoomAclEntry', () => {
   it('returns true when a row is present', async () => {
     limitMock.mockResolvedValue([{ id: 'acl-1' }]);
@@ -214,5 +277,62 @@ describe('loadRoom', () => {
     limitMock.mockResolvedValue([row]);
     const got = await loadRoom('room-1', 'org-1');
     expect(got).toEqual(row);
+  });
+});
+
+describe('canSetDoorDecision', () => {
+  const office = { type: 'office', owner_id: 'user-owner' };
+  const shared = { type: 'huddle', owner_id: null };
+
+  it('superuser may set any door', () => {
+    expect(
+      canSetDoorDecision({ isSuperuser: true, role: 'viewer', room: shared, userId: 'u', hasAclManagerRole: false }),
+    ).toBe(true);
+  });
+
+  it('org admin/owner may set any door', () => {
+    expect(canSetDoorDecision({ isSuperuser: false, role: 'admin', room: shared, userId: 'u', hasAclManagerRole: false })).toBe(true);
+    expect(canSetDoorDecision({ isSuperuser: false, role: 'owner', room: office, userId: 'u', hasAclManagerRole: false })).toBe(true);
+  });
+
+  it('office door: only the owner', () => {
+    expect(canSetDoorDecision({ isSuperuser: false, role: 'member', room: office, userId: 'user-owner', hasAclManagerRole: false })).toBe(true);
+    expect(canSetDoorDecision({ isSuperuser: false, role: 'member', room: office, userId: 'someone-else', hasAclManagerRole: true })).toBe(false);
+  });
+
+  it('shared room: only an ACL manager', () => {
+    expect(canSetDoorDecision({ isSuperuser: false, role: 'member', room: shared, userId: 'u', hasAclManagerRole: true })).toBe(true);
+    expect(canSetDoorDecision({ isSuperuser: false, role: 'member', room: shared, userId: 'u', hasAclManagerRole: false })).toBe(false);
+  });
+
+  it('office with no owner_id rejects everyone non-privileged', () => {
+    expect(canSetDoorDecision({ isSuperuser: false, role: 'member', room: { type: 'office', owner_id: null }, userId: 'u', hasAclManagerRole: false })).toBe(false);
+  });
+});
+
+describe('canLockRoomDecision', () => {
+  const office = { type: 'office', owner_id: 'user-owner' };
+  const shared = { type: 'huddle', owner_id: null };
+
+  it('superuser and admin/owner may lock any room', () => {
+    expect(canLockRoomDecision({ isSuperuser: true, role: 'viewer', room: shared, userId: 'u', isInRoom: false, hasAclEntry: false })).toBe(true);
+    expect(canLockRoomDecision({ isSuperuser: false, role: 'admin', room: shared, userId: 'u', isInRoom: false, hasAclEntry: false })).toBe(true);
+  });
+
+  it('office: only the owner', () => {
+    expect(canLockRoomDecision({ isSuperuser: false, role: 'member', room: office, userId: 'user-owner', isInRoom: false, hasAclEntry: false })).toBe(true);
+    expect(canLockRoomDecision({ isSuperuser: false, role: 'member', room: office, userId: 'else', isInRoom: true, hasAclEntry: true })).toBe(false);
+  });
+
+  it('shared room: anyone currently inside may lock', () => {
+    expect(canLockRoomDecision({ isSuperuser: false, role: 'member', room: shared, userId: 'u', isInRoom: true, hasAclEntry: false })).toBe(true);
+  });
+
+  it('shared room: an ACL holder may lock even when not currently inside', () => {
+    expect(canLockRoomDecision({ isSuperuser: false, role: 'member', room: shared, userId: 'u', isInRoom: false, hasAclEntry: true })).toBe(true);
+  });
+
+  it('shared room: a member neither inside nor ACL-listed is rejected', () => {
+    expect(canLockRoomDecision({ isSuperuser: false, role: 'member', room: shared, userId: 'u', isInRoom: false, hasAclEntry: false })).toBe(false);
   });
 });

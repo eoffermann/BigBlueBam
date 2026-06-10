@@ -219,6 +219,20 @@ export interface RoomLeaveEvent {
   userId: string;
 }
 
+/**
+ * Full occupant roster for a room, pushed by the server to a socket the
+ * moment it enters that room (the `enter_room` handler). Without it a user
+ * who joins an already-occupied room via `actions.enterRoom()` sees an empty
+ * docked-box occupant list ("Just you") until someone else moves and emits a
+ * `room_enter` delta. `userIds` includes everyone currently in the room,
+ * including the entering user themselves; the SDK filters self out.
+ */
+export interface RoomOccupantsEvent {
+  type: 'room_occupants';
+  roomId: string;
+  userIds: string[];
+}
+
 export interface DoorChangedEvent {
   type: 'door_changed';
   roomId: string;
@@ -316,6 +330,21 @@ export interface RingIncomingEvent {
 export type RingDecision = 'accept' | 'decline' | 'auto_decline';
 
 /**
+ * Server → caller frame: the recipient answered (or auto-declined) a ring
+ * the caller sent. Delivered on the caller's `user:{id}` channel by the WS
+ * hub's `ring_respond` handler. Lets an outgoing-ring UI ("ringing…") close
+ * itself with the outcome.
+ */
+export interface RingRespondedEvent {
+  type: 'ring_responded';
+  ring_token: string;
+  decision: RingDecision;
+  by: { id: string; name?: string | null };
+  surface_app?: string;
+  surface_id?: string;
+}
+
+/**
  * Client → server frame the SDK posts back through the WS when the receiver
  * decides. Mirrors the bureau-api ring handler contract; not part of the
  * bureau-design-document.md §8 catalog (added with the presence-and-
@@ -363,6 +392,7 @@ export type ServerMessage =
   | PresenceDeltaEvent
   | RoomEnterEvent
   | RoomLeaveEvent
+  | RoomOccupantsEvent
   | DoorChangedEvent
   | RoomLockedEvent
   | LivekitTokenEvent
@@ -375,6 +405,7 @@ export type ServerMessage =
   | SummonAckEvent
   | StatusChangedEvent
   | RingIncomingEvent
+  | RingRespondedEvent
   | ErrorEvent;
 
 export type ServerMessageType = ServerMessage['type'];

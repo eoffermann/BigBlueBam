@@ -212,15 +212,13 @@ This is the live gap list, ordered most-to-least urgent for production.
   are exercised manually but lack dedicated tests. Adding them is
   Workstream 15 follow-up; the underlying authorization helpers in
   `room-access.ts` are covered by `test/room-access.test.ts`.
-- **WS subscribe-vs-message race** — the WS handler binds its message
-  listener AFTER it emits the `connected` frame to the client (see
-  `apps/bureau-api/src/routes/ws.routes.ts` line ~499 vs ~561). On a
-  fast loopback a client can send its first command before the listener
-  is bound and the command is silently dropped. The smoke-test script
-  (Piece 3 of Workstream 15) works around this by waiting for the
-  `connected` frame before sending `subscribe_floor`; the bureau-client
-  SDK should do the same (verify) or the server should bind the message
-  handler before sending `connected`.
+- **WS subscribe-vs-message race — ✅ CLOSED 2026-06-10 (commit 539c163).**
+  The hub now attaches a buffering `'message'` listener as its first
+  statement after upgrade (100-frame cap), swaps in the real handler once
+  auth + Redis init complete, and replays the buffered frames in order.
+  Notably the bureau-client SDK does NOT wait for `connected` before
+  sending — it flushes its outbound queue on socket OPEN — so the race
+  was real in production, not just on loopback.
 - **Floor occupancy snapshot reads** — `presenceService.snapshotFloor`
   does one HGET per unique room in the floor's occupancy hash. This is
   O(rooms-with-occupants), bounded by floor design, but a malicious
@@ -251,10 +249,9 @@ This is the live gap list, ordered most-to-least urgent for production.
    reconnaissance attempts (summoning to a resource the attacker
    suspects exists, watching the denial report come back). Land this as
    a Bench scheduled report.
-3. **Bind the WS message handler before sending `connected`.** The
-   smoke-test workaround proves this race is real on loopback; production
-   would see it under high concurrency. The fix is a 2-line reorder in
-   `ws.routes.ts`.
+3. **Bind the WS message handler before sending `connected`.** ✅ Done
+   (2026-06-10, commit 539c163) — implemented as buffer-and-replay rather
+   than a reorder, which also covers frames sent before auth completes.
 4. **Add WS-level per-(user, floor) cooldown on `subscribe_floor`.**
    3 second floor — 99.9% of legitimate clients only subscribe once
    per page navigation. This caps the snapshotFloor amplification noted

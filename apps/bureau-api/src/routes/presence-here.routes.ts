@@ -174,34 +174,31 @@ export default async function presenceHereRoutes(fastify: FastifyInstance) {
         return reply.status(200).send({ data: [] });
       }
 
-      // ── 2. Cross-app access filter. Only show users whose presence the
-      //    CALLER is allowed to see on this URL. classifyUrlApp returns
-      //    null for unknown URLs; in that case we skip the preflight and
-      //    let the row through (the chip degrades open rather than going
-      //    silent on unmapped surfaces). ──
+      // ── 2. Cross-app access filter. Only show users when the CALLER is
+      //    allowed to see this URL. The check depends solely on the caller
+      //    + URL (it is the same for every candidate), so it runs ONCE —
+      //    the previous per-candidate Promise.all issued N identical HTTP
+      //    preflights for nothing. classifyUrlApp returns null for unknown
+      //    URLs; in that case we skip the preflight and let the rows
+      //    through (the chip degrades open rather than going silent on
+      //    unmapped surfaces). ──
       const app = classifyUrlApp(targetUrl);
-      const visibleIds = new Set<string>();
-      if (!app) {
-        for (const c of candidates) visibleIds.add(c.userId);
-      } else {
-        const decisions = await Promise.all(
-          candidates.map((c) =>
-            resolveAccess({
-              orgId: user.org_id,
-              userId: user.id,
-              app,
-              targetUrl,
-            })
-              .then((d) => ({ id: c.userId, allowed: d.allowed }))
-              .catch(() => ({ id: c.userId, allowed: true })),
-          ),
-        );
-        for (const d of decisions) {
-          if (d.allowed) visibleIds.add(d.id);
-        }
+      let callerAllowed = true;
+      if (app) {
+        callerAllowed = await resolveAccess({
+          orgId: user.org_id,
+          userId: user.id,
+          app,
+          targetUrl,
+        })
+          .then((d) => d.allowed)
+          .catch(() => true);
+      }
+      if (!callerAllowed) {
+        return reply.status(200).send({ data: [] });
       }
 
-      const visibleIdList = Array.from(visibleIds);
+      const visibleIdList = candidates.map((c) => c.userId);
       if (visibleIdList.length === 0) {
         return reply.status(200).send({ data: [] });
       }

@@ -47,8 +47,20 @@ export const keys = {
   roomOccupants: (roomId: string) => `bureau:room:${roomId}:occupants`,
   roomState: (roomId: string) => `bureau:room:${roomId}:state`,
   floorIndex: (floorId: string) => `bureau:floor:${floorId}:index`,
-  /** SCAN match pattern for the lapsed-session reaper. */
+  /** SCAN match pattern for live-session readers (presence-here). */
   sessionScanPattern: () => 'bureau:sess:*',
+  /**
+   * Durable per-session index HASH (sessionId → JSON snapshot, no TTL).
+   * Why it exists: the per-session `bureau:sess:{id}` HASH carries a 35s
+   * TTL, and Redis EVICTS the key the moment it lapses — by the time the
+   * reaper notices, the userId/roomId/floorId needed to clean up the
+   * room-occupants SET, floor index, and user-sessions SET are gone, so a
+   * crashed client used to ghost in its room forever. The index keeps a
+   * tiny TTL-less copy of exactly those fields so the reaper can finish
+   * the job. Deliberately NOT under the `bureau:sess:` prefix so the
+   * presence-here SCAN never picks it up.
+   */
+  sessionIndex: () => 'bureau:presence:index',
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -113,6 +125,24 @@ export interface EndSessionResult {
 export interface EnterRoomResult {
   previousRoomId: string | null;
   floorId: string | null;
+}
+
+/**
+ * The TTL-less snapshot kept in the `bureau:presence:index` HASH per
+ * session. Mirrored (by hand — keep in sync) in
+ * apps/worker/src/services/bureau-presence-cleanup.ts, which consumes it
+ * when the session HASH has already been evicted.
+ */
+export interface SessionIndexEntry {
+  userId: string;
+  orgId: string;
+  floorId: string | null;
+  roomId: string | null;
+  device: SessionDevice;
+}
+
+function indexEntryJson(entry: SessionIndexEntry): string {
+  return JSON.stringify(entry);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -197,6 +227,12 @@ export async function createSession(
   });
   pipeline.expire(sessionKey, SESSION_TTL_SECONDS);
   pipeline.sadd(userKey, sessionId);
+  // Durable reaper index — see keys.sessionIndex for why this exists.
+  pipeline.hset(
+    keys.sessionIndex(),
+    sessionId,
+    indexEntryJson({ userId, orgId, floorId, roomId: null, device }),
+  );
   await pipeline.exec();
 }
 
@@ -244,6 +280,7 @@ export async function endSession(
   }
   pipeline.srem(keys.userSessions(session.userId), sessionId);
   pipeline.del(sessionKey);
+  pipeline.hdel(keys.sessionIndex(), sessionId);
   await pipeline.exec();
 
   return {
@@ -307,6 +344,17 @@ export async function enterRoom(
   if (floorId) {
     pipeline.hset(keys.floorIndex(floorId), session.userId, roomId);
   }
+  pipeline.hset(
+    keys.sessionIndex(),
+    sessionId,
+    indexEntryJson({
+      userId: session.userId,
+      orgId: session.orgId,
+      floorId,
+      roomId,
+      device: session.device,
+    }),
+  );
   await pipeline.exec();
 
   return { previousRoomId, floorId };
@@ -341,6 +389,17 @@ export async function leaveRoom(
   if (floorId) {
     pipeline.hdel(keys.floorIndex(floorId), session.userId);
   }
+  pipeline.hset(
+    keys.sessionIndex(),
+    sessionId,
+    indexEntryJson({
+      userId: session.userId,
+      orgId: session.orgId,
+      floorId,
+      roomId: null,
+      device: session.device,
+    }),
+  );
   await pipeline.exec();
 
   return { previousRoomId, floorId };
@@ -361,6 +420,23 @@ export async function setFloor(
   pipeline.hset(sessionKey, 'floorId', floorId, 'lastBeat', String(Date.now()));
   pipeline.expire(sessionKey, SESSION_TTL_SECONDS);
   await pipeline.exec();
+
+  // Mirror the floor onto the reaper index so a crash on this floor gets
+  // its `presence_delta` cleanup broadcast on the right channel. Read-
+  // modify-write is safe: a single socket owns its sessionId.
+  try {
+    const raw = await redis.hget(keys.sessionIndex(), sessionId);
+    if (raw) {
+      const entry = JSON.parse(raw) as SessionIndexEntry;
+      if (entry.floorId !== floorId) {
+        entry.floorId = floorId;
+        await redis.hset(keys.sessionIndex(), sessionId, indexEntryJson(entry));
+      }
+    }
+  } catch {
+    // Index update is best-effort; the reaper falls back to the room-less
+    // cleanup path when floorId is stale.
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -446,15 +522,27 @@ export async function setDoor(
   roomId: string,
   privacy: RoomPrivacy,
   lockedBy?: string | null,
+  opts?: {
+    /**
+     * The privacy the room should revert to on unlock. Used by lock_room to
+     * remember the pre-lock door override so unlock restores it instead of
+     * collapsing to the DB default. Tri-state:
+     *   - undefined → leave any existing prevPrivacy field untouched,
+     *   - null      → clear the prevPrivacy memory (HDEL),
+     *   - a value   → store it.
+     */
+    prevPrivacy?: RoomPrivacy | null;
+  },
 ): Promise<void> {
   const stateKey = keys.roomState(roomId);
-  await redis.hset(
-    stateKey,
-    'privacy',
-    privacy,
-    'lockedBy',
-    lockedBy ?? '',
-  );
+  await redis.hset(stateKey, 'privacy', privacy, 'lockedBy', lockedBy ?? '');
+  if (opts && 'prevPrivacy' in opts) {
+    if (opts.prevPrivacy == null) {
+      await redis.hdel(stateKey, 'prevPrivacy');
+    } else {
+      await redis.hset(stateKey, 'prevPrivacy', opts.prevPrivacy);
+    }
+  }
 }
 
 /**
@@ -468,6 +556,45 @@ export async function lockRoom(
   lockedBy: string,
 ): Promise<void> {
   return setDoor(redis, roomId, 'private', lockedBy);
+}
+
+export interface DoorState {
+  privacy: RoomPrivacy;
+  lockedBy: string | null;
+  /**
+   * The door privacy to restore when the room is unlocked. Present only
+   * while a lock_room override is active; null when no lock-restore memory
+   * is held. See setDoor's `opts.prevPrivacy`.
+   */
+  prevPrivacy: RoomPrivacy | null;
+}
+
+/**
+ * Read the live door-state override for a room. Returns null when no
+ * override has ever been written (the room is on its DB
+ * `privacy_default`). Callers that gate entry (WS enter_room, the LiveKit
+ * token mints, the internal can-join-room preflight) MUST overlay this on
+ * top of `bureau_rooms.privacy_default` — otherwise `lock_room` /
+ * `set_door` are display-only and a "locked" room blocks nobody.
+ */
+export async function getDoorState(
+  redis: Redis,
+  roomId: string,
+): Promise<DoorState | null> {
+  const state = await redis.hgetall(keys.roomState(roomId));
+  if (!state || Object.keys(state).length === 0) return null;
+  const privacy = state.privacy;
+  if (privacy !== 'open' && privacy !== 'knock' && privacy !== 'private') {
+    return null;
+  }
+  const prev = state.prevPrivacy;
+  const prevPrivacy =
+    prev === 'open' || prev === 'knock' || prev === 'private' ? prev : null;
+  return {
+    privacy,
+    lockedBy: state.lockedBy && state.lockedBy.length > 0 ? state.lockedBy : null,
+    prevPrivacy,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -542,56 +669,10 @@ export async function getUserSessions(
   return redis.smembers(keys.userSessions(userId));
 }
 
-/**
- * Scan all `bureau:sess:*` keys and return the sessionIds whose TTL has
- * lapsed (≤ 0) or is about to lapse. The reaper job (§13) runs every
- * 15s and feeds the result into `endSession` to emit the trailing
- * `user.left_room` + `presence_delta` events.
- *
- * Why scan rather than rely on Redis keyspace notifications: keyspace
- * notifications are disabled by default in our shared Redis instance and
- * would require an opt-in config change that affects every other app.
- * SCAN over a few hundred sessions per sweep is cheap.
- *
- * Returns sessionIds (not full keys) so the caller can pass them to
- * `endSession` directly.
- */
-export async function listLapsedSessions(redis: Redis): Promise<string[]> {
-  const lapsed: string[] = [];
-  let cursor = '0';
-  do {
-    const [nextCursor, batch] = await redis.scan(
-      cursor,
-      'MATCH',
-      keys.sessionScanPattern(),
-      'COUNT',
-      100,
-    );
-    cursor = nextCursor;
-    if (batch.length === 0) continue;
-
-    // PTTL is cheaper than TTL when batching, but ttl in seconds is fine
-    // here — we just need to know "≤ 0" vs "still alive".
-    const pipeline = redis.pipeline();
-    for (const key of batch) pipeline.ttl(key);
-    const results = await pipeline.exec();
-    if (!results) continue;
-
-    for (let i = 0; i < batch.length; i++) {
-      const result = results[i];
-      const key = batch[i];
-      if (!result || !key) continue;
-      const [err, ttl] = result;
-      if (err) continue;
-      // ioredis returns -2 when the key does not exist, -1 when it has
-      // no TTL (shouldn't happen for sessions but treat as alive), and
-      // 0+ for the remaining seconds. We only reap "gone".
-      if (typeof ttl === 'number' && ttl === -2) {
-        const sessionId = key.slice('bureau:sess:'.length);
-        if (sessionId.length > 0) lapsed.push(sessionId);
-      }
-    }
-  } while (cursor !== '0');
-
-  return lapsed;
-}
+// NOTE: an earlier `listLapsedSessions` SCAN helper lived here. It was
+// removed in the bureau troubleshooting pass (2026-06-10): it could only
+// ever surface sessions whose `bureau:sess:{id}` key Redis had ALREADY
+// evicted (TTL lapse deletes the key), at which point the session data
+// needed for cleanup was unrecoverable. The reaper now walks the TTL-less
+// `bureau:presence:index` HASH instead — see keys.sessionIndex and
+// apps/worker/src/jobs/bureau-presence-reap.ts.

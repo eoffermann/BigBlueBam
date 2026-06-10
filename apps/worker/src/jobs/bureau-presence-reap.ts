@@ -6,34 +6,30 @@
  *
  * Flow per tick:
  *
- *   1. SCAN `bureau:sess:*` (cursor-paged so a large org never stalls
- *      Redis on a single MATCH).
- *   2. For each session key, PTTL it. If `pttl <= 0` (lapsed) or the
- *      key has gone missing between SCAN and PTTL, treat the session
- *      as expired.
+ *   1. HSCAN the TTL-less `bureau:presence:index` HASH (cursor-paged so
+ *      a large org never stalls Redis on a single page).
+ *   2. For each indexed session, PTTL its live `bureau:sess:{id}` hash.
+ *      If the hash is gone (`-2` — Redis evicted it on TTL lapse) or
+ *      anomalous (`-1`/`0`), treat the session as expired.
  *   3. Hand the session id to `endBureauSession` in
- *      `services/bureau-presence-cleanup.ts`, which is the lift-and-
- *      shift of bureau-api's presence.service.ts::endSession.
+ *      `services/bureau-presence-cleanup.ts`, which recovers the
+ *      userId/orgId/roomId/floorId from the index entry when the hash
+ *      is already gone, then cleans the room-occupants SET, floor
+ *      index, user-sessions SET, durable row, and the index entry.
  *   4. Emit a Bolt `user.left_room` event for each cleanly-reaped
  *      session that had an associated room, using the §14 catalog
  *      bare-name convention (`source: 'bureau'`).
  *
- * NOTE on the SCAN race. Redis evicts a key the moment its TTL hits 0;
- * if a key is already gone by the time we PTTL it (return value -2)
- * we cannot recover the userId/orgId/roomId for it, and we silently
- * leave the durable `bureau_presence_sessions` row open. With a 35s
- * TTL and a 15s reap cadence this window is small but non-zero. The
- * design doc accepts this as fine because:
- *
- *   • room + floor occupancy sets are SREM'd by the bureau-api WS
- *     handler on `leave_room` and `disconnect`, so visible state
- *     stays right even when the durable row drifts.
- *   • the §13 `bureau.analytics.rollup` daily job can close any
- *     `ended_at IS NULL` rows older than 24h as a backstop.
- *
- * If this becomes a real problem we will switch the live state to
- * Redis keyspace notifications (`__keyevent@0__:expired`) and react
- * to expirations directly rather than polling.
+ * HISTORY (2026-06-10 troubleshooting pass). The original reaper SCANned
+ * `bureau:sess:*` and PTTL'd each key — but Redis evicts a key the moment
+ * its TTL lapses, so every "expired" candidate it ever found was already
+ * unreadable (HGETALL → empty) and `endBureauSession` no-opped. Net
+ * effect: the reaper never cleaned anything, and a client that crashed
+ * (no WS close on the server) ghosted in its room's occupants SET and
+ * floor index FOREVER (those keys carry no TTL). The TTL-less index
+ * written by bureau-api's presence.service closes the hole: live-session
+ * existence still has 35s-TTL semantics for every reader, while the
+ * reaper retains just enough data to clean up after eviction.
  */
 
 import type { Job } from 'bullmq';
@@ -49,9 +45,19 @@ import { publishBoltEvent } from '../utils/bolt-events.js';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** SCAN match pattern (mirrors §7). */
-const SCAN_MATCH = 'bureau:sess:*';
-/** Cursor batch size — high enough to keep tick count low, low enough that
+/**
+ * TTL-less session index HASH (sessionId → JSON snapshot), written by
+ * bureau-api's presence.service. This — not the `bureau:sess:*` keyspace —
+ * is what the reaper walks: a lapsed session's `bureau:sess:{id}` hash is
+ * EVICTED by Redis the moment its TTL hits zero, so scanning the keyspace
+ * can only ever find sessions whose cleanup data is already gone (the
+ * pre-2026-06-10 reaper silently cleaned nothing, leaving crashed clients
+ * ghosted in their room/floor occupancy forever). Keep the key name in
+ * sync with keys.sessionIndex in
+ * apps/bureau-api/src/services/presence.service.ts.
+ */
+const SESSION_INDEX_KEY = 'bureau:presence:index';
+/** HSCAN page size — high enough to keep tick count low, low enough that
  *  one slow batch never blocks Redis for long. */
 const SCAN_COUNT = 200;
 /** Hard cap on sessions reaped per tick — defensive bound against a Redis
@@ -75,9 +81,11 @@ export interface BureauPresenceReapJobData {
 // ---------------------------------------------------------------------------
 
 /**
- * Walk the keyspace with SCAN and yield candidate session ids whose TTL has
- * lapsed. Yields the bare `sessionId` (the suffix after `bureau:sess:`) so
- * the caller can pass it straight to `endBureauSession`.
+ * Walk the TTL-less session index with HSCAN and yield candidate session
+ * ids whose live `bureau:sess:{id}` hash is gone (evicted on TTL lapse) or
+ * anomalous. The index entry retains the userId/orgId/roomId/floorId the
+ * cleanup needs, so `endBureauSession` can finish the job even though the
+ * hash itself no longer exists.
  */
 async function* findExpiredSessionIds(
   redis: Redis,
@@ -88,31 +96,37 @@ async function* findExpiredSessionIds(
 
   do {
     let nextCursor: string;
-    let keys: string[];
+    /** HSCAN reply: flat [field1, value1, field2, value2, ...]. */
+    let flat: string[];
     try {
-      const reply = await redis.scan(
+      const reply = await redis.hscan(
+        SESSION_INDEX_KEY,
         cursor,
-        'MATCH',
-        SCAN_MATCH,
         'COUNT',
         SCAN_COUNT,
       );
       nextCursor = reply[0];
-      keys = reply[1];
+      flat = reply[1];
     } catch (err) {
-      logger.error({ err }, 'bureau.presence.reap: SCAN failed; aborting tick');
+      logger.error({ err }, 'bureau.presence.reap: HSCAN failed; aborting tick');
       return;
     }
 
-    if (keys.length === 0) {
+    const sessionIds: string[] = [];
+    for (let i = 0; i < flat.length; i += 2) {
+      const sessionId = flat[i];
+      if (sessionId) sessionIds.push(sessionId);
+    }
+
+    if (sessionIds.length === 0) {
       cursor = nextCursor;
       continue;
     }
 
-    // PTTL each key in one round-trip.
+    // PTTL each live-session key in one round-trip.
     const pipeline = redis.pipeline();
-    for (const key of keys) {
-      pipeline.pttl(key);
+    for (const sessionId of sessionIds) {
+      pipeline.pttl(`bureau:sess:${sessionId}`);
     }
     let results: [Error | null, unknown][] | null;
     try {
@@ -127,8 +141,8 @@ async function* findExpiredSessionIds(
       continue;
     }
 
-    for (let i = 0; i < keys.length; i++) {
-      const key = keys[i]!;
+    for (let i = 0; i < sessionIds.length; i++) {
+      const sessionId = sessionIds[i]!;
       const entry = results[i];
       if (!entry) continue;
       const [err, pttlValue] = entry;
@@ -136,16 +150,17 @@ async function* findExpiredSessionIds(
       const pttl = typeof pttlValue === 'number' ? pttlValue : -2;
 
       // pttl semantics:
-      //   -2 → key does not exist (already evicted, race vs SCAN)
-      //   -1 → key exists but has no TTL (should never happen for a
+      //   -2 → hash does not exist (TTL lapsed and Redis evicted it —
+      //        the normal crashed-client case; the index entry still has
+      //        the cleanup data)
+      //   -1 → hash exists but has no TTL (should never happen for a
       //        bureau:sess hash, but defensively treat as lapsed)
       //    0 → lapsed
-      //   >0 → still alive
+      //   >0 → still alive (heartbeating); skip
       if (pttl > 0) continue;
 
       scanned += 1;
-      const sessionId = key.slice('bureau:sess:'.length);
-      if (sessionId) yield sessionId;
+      yield sessionId;
 
       if (scanned >= MAX_PER_TICK) {
         logger.warn(

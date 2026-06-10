@@ -15,9 +15,11 @@ import {
   endSession,
   enterRoom,
   leaveRoom,
+  setFloor,
   setStatus,
   setDoor,
   lockRoom,
+  getDoorState,
   getRoomOccupants,
   getFloorIndex,
   getSession,
@@ -384,5 +386,122 @@ describe('presence.service — setStatus / setDoor / lockRoom', () => {
     const hash = await redis.hgetall(keys.roomState('room-Y'));
     expect(hash.privacy).toBe('private');
     expect(hash.lockedBy).toBe('u-owner');
+  });
+
+  it('getDoorState round-trips setDoor and returns null when unset', async () => {
+    expect(await getDoorState(redis as any, 'room-untouched')).toBeNull();
+    await setDoor(redis as any, 'room-Z', 'private', 'u-owner');
+    expect(await getDoorState(redis as any, 'room-Z')).toEqual({
+      privacy: 'private',
+      lockedBy: 'u-owner',
+      prevPrivacy: null,
+    });
+    await setDoor(redis as any, 'room-Z', 'open', null);
+    expect(await getDoorState(redis as any, 'room-Z')).toEqual({
+      privacy: 'open',
+      lockedBy: null,
+      prevPrivacy: null,
+    });
+  });
+
+  it('setDoor stores and clears prevPrivacy (lock-restore memory)', async () => {
+    // Store a restore target alongside the lock.
+    await setDoor(redis as any, 'room-L', 'private', 'u-locker', {
+      prevPrivacy: 'knock',
+    });
+    expect(await getDoorState(redis as any, 'room-L')).toEqual({
+      privacy: 'private',
+      lockedBy: 'u-locker',
+      prevPrivacy: 'knock',
+    });
+    // Re-lock without specifying prevPrivacy leaves the memory intact.
+    await setDoor(redis as any, 'room-L', 'private', 'u-locker');
+    expect((await getDoorState(redis as any, 'room-L'))?.prevPrivacy).toBe('knock');
+    // Unlock clears the memory (prevPrivacy: null → HDEL).
+    await setDoor(redis as any, 'room-L', 'knock', 'u-locker', {
+      prevPrivacy: null,
+    });
+    expect(await getDoorState(redis as any, 'room-L')).toEqual({
+      privacy: 'knock',
+      lockedBy: 'u-locker',
+      prevPrivacy: null,
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Reaper index (bureau:presence:index) — the TTL-less snapshot that lets
+// the worker reaper clean up sessions whose TTL'd hash Redis already
+// evicted. Without it a crashed client ghosts in its room forever.
+// ─────────────────────────────────────────────────────────────────────
+
+function readIndexEntry(redis: MockRedis, sessionId: string) {
+  const raw = redis.store.get(keys.sessionIndex())?.hash?.get(sessionId);
+  return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+}
+
+describe('presence.service — reaper session index', () => {
+  let redis: MockRedis;
+  beforeEach(async () => {
+    redis = makeRedis();
+    await createSession(redis as any, {
+      sessionId: 's-idx',
+      userId: 'u-idx',
+      isAgent: false,
+      orgId: 'org-1',
+      floorId: 'floor-1',
+      device: 'web',
+    });
+  });
+
+  it('createSession writes a TTL-less index entry', () => {
+    expect(readIndexEntry(redis, 's-idx')).toEqual({
+      userId: 'u-idx',
+      orgId: 'org-1',
+      floorId: 'floor-1',
+      roomId: null,
+      device: 'web',
+    });
+    // The index HASH itself must never carry a TTL.
+    expect(redis.store.get(keys.sessionIndex())?.ttl).toBeUndefined();
+  });
+
+  it('enterRoom / leaveRoom keep the index roomId in sync', async () => {
+    await enterRoom(redis as any, 's-idx', 'room-A');
+    expect(readIndexEntry(redis, 's-idx')?.roomId).toBe('room-A');
+
+    await leaveRoom(redis as any, 's-idx');
+    expect(readIndexEntry(redis, 's-idx')?.roomId).toBeNull();
+  });
+
+  it('enterRoom with an explicit floor updates the index floorId', async () => {
+    await enterRoom(redis as any, 's-idx', 'room-B', 'floor-2');
+    const entry = readIndexEntry(redis, 's-idx');
+    expect(entry?.roomId).toBe('room-B');
+    expect(entry?.floorId).toBe('floor-2');
+  });
+
+  it('setFloor mirrors the floor onto the index', async () => {
+    await setFloor(redis as any, 's-idx', 'floor-9');
+    expect(readIndexEntry(redis, 's-idx')?.floorId).toBe('floor-9');
+  });
+
+  it('endSession removes the index entry', async () => {
+    await endSession(redis as any, 's-idx');
+    expect(readIndexEntry(redis, 's-idx')).toBeNull();
+  });
+
+  it('index survives session-hash eviction (the reaper recovery case)', async () => {
+    await enterRoom(redis as any, 's-idx', 'room-A');
+    // Simulate Redis evicting the TTL'd hash on lapse.
+    redis.store.delete(keys.session('s-idx'));
+    const entry = readIndexEntry(redis, 's-idx');
+    expect(entry).toEqual({
+      userId: 'u-idx',
+      orgId: 'org-1',
+      floorId: 'floor-1',
+      roomId: 'room-A',
+      device: 'web',
+    });
   });
 });

@@ -90,8 +90,17 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
     error: FastifyError,
     request: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<void> {
+  ): Promise<FastifyReply | void> {
     const requestId = (request as unknown as { requestId?: string }).requestId ?? request.id;
+
+    // Defensive: if a prior step already flushed the reply (e.g. a
+    // content-type-parser error that Fastify partially handled), do NOT
+    // touch it again — a second send re-runs the onSend pipeline and
+    // throws ERR_HTTP_HEADERS_SENT, which is uncaught and kills the
+    // process. Returning the reply also signals Fastify NOT to auto-send
+    // this async handler's resolved value (the historical double-send that
+    // crashed every service on an empty-JSON-body POST).
+    if (reply.sent) return reply;
 
     if (isZodLikeError(error)) {
       const details = (error as unknown as { issues: Array<{ path: unknown[]; message: string }> }).issues.map((i) => ({
@@ -106,8 +115,7 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
           request_id: String(requestId),
         },
       };
-      reply.status(400).send(envelope);
-      return;
+      return reply.status(400).send(envelope);
     }
 
     if (error.validation) {
@@ -119,8 +127,7 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
           request_id: String(requestId),
         },
       };
-      reply.status(400).send(envelope);
-      return;
+      return reply.status(400).send(envelope);
     }
 
     const statusCode = typeof error.statusCode === 'number' ? error.statusCode : 500;
@@ -133,8 +140,7 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
           request_id: String(requestId),
         },
       };
-      reply.status(statusCode).send(envelope);
-      return;
+      return reply.status(statusCode).send(envelope);
     }
 
     const internalErrorId = randomUUID();
@@ -168,7 +174,7 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
         internal_error_id: internalErrorId,
       },
     };
-    reply.status(500).send(envelope);
+    return reply.status(500).send(envelope);
   };
 }
 

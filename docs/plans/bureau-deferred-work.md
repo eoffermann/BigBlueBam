@@ -1,4 +1,4 @@
-# Bureau / Calling — Deferred Work
+﻿# Bureau / Calling — Deferred Work
 
 Items that came out of the calling prerequisite phase (P-1 through P-6) but were intentionally not landed in the prereq commits. They are documented here so they're not forgotten and so the next agent picking up the work has the full picture.
 
@@ -104,90 +104,16 @@ Effort: 2-3 hours follow-up.
 
 Note for future visibility-model changes: the board/brief internal routes restate their middleware's visibility branch as pure functions — keep them in sync with `requireBoardAccess` / `requireDocumentAccess`.
 
-## D-13: ws.routes.ts subscribe-vs-listener race
+## D-13: ws.routes.ts subscribe-vs-listener race ✅ CLOSED
 
-**Status:** Not started. (Reconstructed, see D-10 note.)
-
-Two-line server fix in `apps/bureau-api/src/routes/ws.routes.ts`: the floor subscribe path can attach its Redis listener after the snapshot is sent, dropping deltas that land in between.
-
-Effort: ~5 minutes.
+**Status:** Closed in two halves. The Redis-subscriber half (listener attached after the first subscribe) was fixed in commit 961d916. The socket half — `ws` silently drops client frames that arrive while no `'message'` listener is attached, and the entire auth + Redis init between upgrade and listener binding is awaited — was fixed in the bureau-troubleshooting pass (2026-06-10, commit 539c163): the hub now attaches a buffering listener as its first statement, swaps in the real handler after init, and replays buffered frames in order. This mattered in practice because the bureau-client SDK flushes its outbound queue on socket OPEN (before the server's `connected` frame), so the first `location_update` after every reconnect raced the window.
 
 ## D-14: Ring API rejects Banter surfaces, so the docked-box Invite button hides on Banter ✅ CLOSED
 
 **Status:** Closed (2026-06-09). `'banter'` added to `SURFACE_APPS`; the receiver-side URL problem (surface_id is the channel id, Banter routes by slug) is solved by a new `/banter/go/:channelId` resolver route in the Banter SPA that bounces to `/channels/:slug` or `/dm/:id` via the existing `GET /channels/:slugOrId`. `surfaceUrlFor()` and the Invite app map both route through it.
 
-`SURFACE_APPS` in `apps/bureau-api/src/routes/ring.routes.ts` does not include `'banter'`, so the docked box's `RING_SURFACE_APP_BY_LOCATION_APP` map (packages/bureau-client/src/index.tsx) deliberately omits it and Banter channels/DMs get no Invite button — even though Banter advertises `surface_id` and the canonical `huddle-banter-{channelId}` room would work fine. To close: add `'banter'` to the server enum, add a `banter` case to `surfaceUrlFor()` in `packages/bureau-client/src/ring-handler.tsx` (note: `surface_id` is the channel *id*, while Banter routes by slug — needs a resolvable URL), then add `banter: 'banter'` to the client map. Related: D-11 and the Banter 1:1-call wiring noted under D-6.
-
-Effort: 2-3 hours (mostly the URL-by-id resolution on the Banter side).
-
-The `beacon-expiry-sweep` daily worker cron throws `PostgresError 42809 "op ANY/ALL (array) requires array on right side"` every time it fires. The query is malformed: it's passing a scalar where an array is expected on the right side of an `= ANY(...)` or `IN (...)` clause.
-
-Recorded per CLAUDE.md "pre-existing is not a dismissal." Locate the failing query in `apps/worker/src/jobs/beacon-expiry-sweep.ts` (or wherever the job's processor lives) and either wrap the scalar in `[...]` or rewrite as `=` rather than `= ANY`. Effort: 30 minutes once found.
-
-## D-11: Banter internal DM endpoint for Bureau "leave a note"
-
-**Status:** Not started (introduced by Bureau workstream 5).
-**Severity:** Low — leave-a-note returns 202 with a logged TODO when the endpoint is missing, so visitors get a reasonable message.
-
-When a Bureau visitor knocks on a DND'd office, they're offered the "leave a note" path which calls `POST http://banter-api:4002/v1/internal/dm` with `X-Internal-Secret` and a body like `{ org_id, from_user_id, to_user_id, content: '[Bureau knock note] {message}', source: 'bureau-knock' }`. That endpoint does NOT currently exist in banter-api — only `/v1/internal/feed`, `/v1/internal/share`, `/v1/internal/transcript`.
-
-Required:
-- New file `apps/banter-api/src/routes/internal-dm.routes.ts` exposing `POST /v1/internal/dm` gated on `X-Internal-Secret` (timing-safe compare against `env.INTERNAL_SERVICE_SECRET`).
-- Resolves/creates the DM channel between `from_user_id` and `to_user_id` in `org_id`.
-- Inserts a banter_messages row with the content.
-- Returns `{ delivered: true, channel_id, message_id }`.
-
-Effort: 2-3 hours.
-
-## D-12: Cross-app `can-read` preflight endpoints for Bureau summons
-
-**Status:** Not started (introduced by Bureau workstream 6).
-**Severity:** Medium — without these, summon access checks return `stub_allow` for everyone and the §4.4 "denied list" is always empty. Functionally Bureau still summons everyone in the room; navigating to a target you can't see surfaces a 403 from the destination app's own UI, so this is graceful but not the experience the design doc describes.
-
-Bureau's `cross-app-access.service.ts` calls these endpoints when planning a summon:
-
-- `POST http://board-api:4008/v1/internal/can-read` body `{ user_id, board_id }` → `{ allowed, canShare }`.
-- `POST http://brief-api:4005/v1/internal/can-read` body `{ user_id, document_id }` → `{ allowed, canShare }`.
-- `POST http://api:4000/internal/can-read` body `{ user_id, project_id }` → `{ allowed, canShare }`.
-
-All three should:
-- Authenticate via `X-Internal-Service-Secret` (timing-safe).
-- Look up the resource and check the caller's existing visibility rules (board collaborators / brief permissions / project members).
-- Return `canShare: true` when the caller can add other users to the resource.
-
-The HTTP code path is already in `apps/bureau-api/src/services/cross-app-access.service.ts` — it activates automatically when each peer ships its endpoint.
-
-Effort: ~1 day total (each endpoint is ~3 hours).
-
-## D-13: Subscribe-vs-listener race in `apps/bureau-api/src/routes/ws.routes.ts`
-
-**Status:** Mitigated client-side, server-side fix recommended.
-**Severity:** Low — symptom is a ~100ms window after WS upgrade in which client messages get dropped.
-
-Discovered by the workstream 15 smoke script while writing E2E coverage. In `apps/bureau-api/src/routes/ws.routes.ts`, the server emits the `connected` frame at line ~499 BEFORE binding `socket.on('message', ...)` at line ~561. A client that sends `subscribe_floor` immediately on receiving `connected` can race the listener; the message arrives at the socket before the handler is bound and is silently dropped.
-
-The bureau-client SDK and the smoke script both wait for the `connected` frame before sending, so this is invisible in practice. But a future client implementation that assumes any post-upgrade send is safe will hit it.
-
-Fix is 2 lines: move the `socket.on('message', ...)` binding BEFORE the `socket.send(JSON.stringify({ type: 'connected', ... }))` line. The listener will be bound when the first user message arrives, and the `connected` frame still goes out in the right order.
-
-Effort: 5 minutes.
-
-## D-10: Consolidate `ws.routes.ts`'s inline presence layer
-
-**Status:** Not started (introduced by Bureau workstream 3).
-**Severity:** Low — works correctly today, but the duplication will drift.
-
-`apps/bureau-api/src/routes/ws.routes.ts` is 1324 lines because the parallel workflow agent that built the WS hub was scoped to "don't modify outside your assigned files." That blocked it from importing the `presence.service.ts` + `presence-publisher.service.ts` that a sibling agent was building in parallel. It inlined a near-duplicate of both.
-
-Both copies currently behave identically (typecheck clean, smoke verified), but any change to the canonical service in `apps/bureau-api/src/services/presence.service.ts` will silently fail to propagate into the WS hub. This is the classic two-codebase-one-feature footgun.
-
-The consolidation is mechanical:
-1. Replace the inlined `presenceService` object in `ws.routes.ts` with imports from `../services/presence.service.js`.
-2. Replace the inlined publishers with imports from `../services/presence-publisher.service.js`.
-3. Remove the dead lines.
-
-Expected delta: `ws.routes.ts` drops from ~1324 to ~500 lines. Effort: 2 hours including verification (rebuild bureau-api, smoke-test WS upgrade, smoke-test enter_room → presence_delta).
+Original gap, for the record: `SURFACE_APPS` in `apps/bureau-api/src/routes/ring.routes.ts` did not include `'banter'`, so the docked box's `RING_SURFACE_APP_BY_LOCATION_APP` map (packages/bureau-client/src/index.tsx) deliberately omitted it and Banter channels/DMs got no Invite button — even though Banter advertises `surface_id` and the canonical `huddle-banter-{channelId}` room works fine. Related: D-11 and the Banter 1:1-call wiring noted under D-6.
 
 ---
 
-**Total deferred effort (open items only): ~5-7 days.** The Phase 3 unified-call-model consolidation closed D-1 (mostly), D-3, D-6, and D-7 outright by deleting the per-app LiveKit stacks those items targeted; what's left is consumer wiring on a smaller surface (bureau-api + voice-agent), Book auto-room creation (D-4), voice-agent per-org persistence (D-5), the ws.routes.ts presence-layer dedup (D-10), the banter `/v1/internal/dm` endpoint (D-11), the cross-app `can-read` preflights (D-12), and the listener-binding race (D-13). None block subsequent Bureau workstreams.
+**Every numbered item D-1 through D-14 is now closed.** Earlier revisions of this file carried stale duplicate "Not started" sections for D-10/D-11/D-12/D-13 below the closed entries (an artifact of the c8afc1b tracker restore), plus an orphaned beacon-expiry-sweep paragraph stranded inside the D-14 section; the 2026-06-10 troubleshooting pass removed them. Newly-discovered Bureau defects and remaining deferred work are tracked in `docs/plans/bureau-troubleshooting-notes.md`.

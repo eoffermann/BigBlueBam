@@ -121,7 +121,10 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
             details: [],
             request_id: request.id,
             dnd_owner: true,
-            leave_a_note_endpoint: `/v1/knocks/${room.id}/leave-note`,
+            // NOTE: the leave-note route is body-addressed (room_id in the
+            // JSON body), not path-addressed — an earlier version advertised
+            // `/v1/knocks/:roomId/leave-note`, which 404s.
+            leave_a_note_endpoint: '/v1/knocks/leave-note',
           },
         });
       }

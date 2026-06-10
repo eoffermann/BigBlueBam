@@ -72,6 +72,15 @@ const k = {
   floorChannel: (floorId: string) => `bureau:floor:${floorId}`,
   roomChannel: (roomId: string) => `bureau:room:${roomId}`,
   mirrorChannel: () => 'bigbluebam:events',
+  /**
+   * TTL-less per-session index (sessionId → JSON snapshot). Written by
+   * bureau-api's presence.service on createSession/enterRoom/leaveRoom/
+   * setFloor; this is what lets the reaper recover userId/roomId/floorId
+   * AFTER Redis has evicted the TTL'd `bureau:sess:{id}` hash. Keep in
+   * sync with keys.sessionIndex in
+   * apps/bureau-api/src/services/presence.service.ts.
+   */
+  sessIndex: () => 'bureau:presence:index',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -125,6 +134,43 @@ async function readSessionSnapshot(
     status: raw.status ?? null,
     lastBeat: raw.lastBeat ?? null,
   };
+}
+
+/**
+ * Fallback snapshot source for sessions whose TTL'd hash Redis has already
+ * evicted: the TTL-less `bureau:presence:index` entry written by
+ * bureau-api's presence.service. Mirrors SessionIndexEntry over there.
+ */
+async function readIndexSnapshot(
+  redis: Redis,
+  sessionId: string,
+): Promise<BureauSessionSnapshot | null> {
+  const raw = await redis.hget(k.sessIndex(), sessionId);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      userId?: unknown;
+      orgId?: unknown;
+      floorId?: unknown;
+      roomId?: unknown;
+      device?: unknown;
+    };
+    if (typeof parsed.userId !== 'string' || typeof parsed.orgId !== 'string') {
+      return null;
+    }
+    return {
+      sessionId,
+      userId: parsed.userId,
+      orgId: parsed.orgId,
+      floorId: typeof parsed.floorId === 'string' && parsed.floorId ? parsed.floorId : null,
+      roomId: typeof parsed.roomId === 'string' && parsed.roomId ? parsed.roomId : null,
+      device: typeof parsed.device === 'string' && parsed.device ? parsed.device : 'web',
+      status: null,
+      lastBeat: null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -259,8 +305,16 @@ export async function endBureauSession(
   redis: Redis,
   sessionId: string,
 ): Promise<BureauCleanupResult> {
-  const snapshot = await readSessionSnapshot(redis, sessionId);
+  // Prefer the live hash; fall back to the TTL-less index entry when Redis
+  // has already evicted the hash (the common case for a crashed client —
+  // this fallback is what un-ghosts them from room/floor occupancy).
+  const snapshot =
+    (await readSessionSnapshot(redis, sessionId)) ??
+    (await readIndexSnapshot(redis, sessionId));
   if (!snapshot) {
+    // Nothing to recover — still drop any stray index entry so the reaper
+    // doesn't revisit this id every tick.
+    await redis.hdel(k.sessIndex(), sessionId).catch(() => {});
     return { cleaned: false, snapshot: null, removedFromRoom: false };
   }
 
@@ -290,8 +344,9 @@ export async function endBureauSession(
     await redis.hdel(k.floorIndex(snapshot.floorId), snapshot.userId);
   }
 
-  // Step 4: drop the session hash itself.
+  // Step 4: drop the session hash itself + its reaper-index entry.
   await redis.del(k.sess(sessionId));
+  await redis.hdel(k.sessIndex(), sessionId);
 
   // Step 5: §8 leave broadcasts. Pipeline already inside.
   await publishLeaveMessages(redis, snapshot);
