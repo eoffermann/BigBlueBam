@@ -22,8 +22,10 @@ COPY apps/bench/package.json ./apps/bench/
 COPY apps/bill/package.json ./apps/bill/
 COPY apps/blank/package.json ./apps/blank/
 COPY apps/blueprint/package.json ./apps/blueprint/
+COPY apps/bureau/package.json ./apps/bureau/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/bureau-client/package.json ./packages/bureau-client/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -127,7 +129,17 @@ COPY apps/blueprint/public ./apps/blueprint/public
 COPY apps/blueprint/index.html ./apps/blueprint/
 COPY apps/blueprint/tsconfig.json apps/blueprint/tsconfig.node.json apps/blueprint/vite.config.ts ./apps/blueprint/
 
+# Bureau client SDK (consumed by the Bureau SPA + every other SPA via mountBureauClient)
+COPY packages/bureau-client/ ./packages/bureau-client/
+
+# Bureau frontend
+COPY apps/bureau/src ./apps/bureau/src
+COPY apps/bureau/public ./apps/bureau/public
+COPY apps/bureau/index.html ./apps/bureau/
+COPY apps/bureau/tsconfig.json apps/bureau/tsconfig.node.json apps/bureau/vite.config.ts ./apps/bureau/
+
 RUN pnpm --filter @bigbluebam/shared build \
+ && pnpm --filter @bigbluebam/bureau-client build \
  && pnpm --filter @bigbluebam/frontend build \
  && pnpm --filter @bigbluebam/helpdesk build \
  && pnpm --filter @bigbluebam/banter build \
@@ -142,7 +154,8 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/bench build \
  && pnpm --filter @bigbluebam/bill build \
  && pnpm --filter @bigbluebam/blank build \
- && pnpm --filter @bigbluebam/blueprint build
+ && pnpm --filter @bigbluebam/blueprint build \
+ && pnpm --filter @bigbluebam/bureau build
 
 # ── Stage: production ────────────────────────────────────────────
 FROM nginx:alpine AS production
@@ -162,14 +175,7 @@ COPY --from=build /app/apps/bench/dist /usr/share/nginx/html/bench
 COPY --from=build /app/apps/bill/dist /usr/share/nginx/html/bill
 COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
 COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint
-# TODO(bureau, workstream 8): when apps/bureau/ SPA is scaffolded, mirror the
-# blueprint pattern above — add COPY apps/bureau/package.json in the `deps`
-# stage, COPY apps/bureau/{src,public,index.html,tsconfig*.json,vite.config.ts}
-# in the `build` stage, add `&& pnpm --filter @bigbluebam/bureau build` to the
-# build RUN, and add `COPY --from=build /app/apps/bureau/dist
-# /usr/share/nginx/html/bureau` here. nginx /bureau/ alias is already wired
-# in infra/nginx/nginx-with-site.conf so the SPA is served the moment the
-# files land at /usr/share/nginx/html/bureau/.
+COPY --from=build /app/apps/bureau/dist /usr/share/nginx/html/bureau
 
 # Documentation files for the in-app Help viewer (served at /docs/)
 # These are the hand-authored and pipeline-generated markdown files.
