@@ -2419,6 +2419,17 @@ const blueprintEvents: EventDefinition[] = [
       { name: 'node_count', type: 'number', description: 'Number of nodes laid out' },
     ],
   },
+  {
+    source: 'blueprint',
+    event_type: 'diagram.promoted_to_tasks',
+    description: 'Fired when a diagram is promoted to Bam tasks via POST /diagrams/:id/promote-to-tasks. Returns a structured plan; caller materializes tasks via Bam endpoints.',
+    payload_schema: [
+      { name: 'diagram.id', type: 'uuid', format: 'uuid', description: 'Diagram ID' },
+      { name: 'project_id', type: 'uuid', format: 'uuid', description: 'Target Bam project ID' },
+      { name: 'task_count', type: 'number', description: 'Number of tasks in the promotion plan' },
+      { name: 'link_count', type: 'number', description: 'Number of parent links in the promotion plan' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
