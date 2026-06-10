@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@bigbluebam/db-stubs": "workspace:*",
+    "@bigbluebam/livekit-tokens": "workspace:*",
     "@bigbluebam/logging": "workspace:*",
     "@bigbluebam/permissions": "workspace:*",
     "@bigbluebam/service-health": "workspace:*",

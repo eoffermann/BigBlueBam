@@ -17,6 +17,7 @@ import { TableOfContents } from '@/components/editor/table-of-contents';
 import { ExportMenu } from '@/components/document/export-menu';
 import { markdownToHtml, htmlToMarkdown } from '@/lib/markdown';
 import { useCollaboration } from '@/hooks/use-collaboration';
+import { ContinuousAudioWidget } from '@/components/continuous-audio-widget';
 
 interface DocumentEditorPageProps {
   idOrSlug?: string;
@@ -249,6 +250,10 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
 
   return (
     <div className="flex flex-col h-full">
+      {/* Bureau §9 Strategy B — hidden audio renderer + tiny status bubble
+          when ?lkRoom=bureau-room-<uuid> is present. Renders null otherwise. */}
+      <ContinuousAudioWidget documentId={existing?.id} />
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
         <div className="flex items-center gap-3 min-w-0 flex-1">

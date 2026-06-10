@@ -13,6 +13,7 @@ COPY packages/logging/package.json ./packages/logging/
 COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/db-stubs/package.json ./packages/db-stubs/
 COPY packages/permissions/package.json ./packages/permissions/
+COPY packages/livekit-tokens/package.json ./packages/livekit-tokens/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -26,6 +27,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
+COPY packages/livekit-tokens/ ./packages/livekit-tokens/
 COPY apps/brief-api/src ./apps/brief-api/src
 COPY apps/brief-api/tsconfig.json apps/brief-api/tsup.config.ts ./apps/brief-api/
 
@@ -34,6 +36,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/service-health build \
  && pnpm --filter @bigbluebam/db-stubs build \
  && pnpm --filter @bigbluebam/permissions build \
+ && pnpm --filter @bigbluebam/livekit-tokens build \
  && pnpm --filter @bigbluebam/brief-api build
 
 # Create a deploy-ready directory with all prod deps
@@ -49,6 +52,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
+COPY packages/livekit-tokens/ ./packages/livekit-tokens/
 COPY apps/brief-api/ ./apps/brief-api/
 
 WORKDIR /app/apps/brief-api
