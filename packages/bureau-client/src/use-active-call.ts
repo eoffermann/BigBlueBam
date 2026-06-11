@@ -15,6 +15,7 @@ import {
   type ActiveCallSnapshot,
   type ActiveCallStatus,
   type ActiveRoomTarget,
+  type VideoTile,
 } from './active-room.js';
 
 const INITIAL_SNAPSHOT: ActiveCallSnapshot = {
@@ -22,6 +23,7 @@ const INITIAL_SNAPSHOT: ActiveCallSnapshot = {
   target: IDLE_TARGET,
   tracks: { micOn: false, camOn: false, screenOn: false },
   errorMessage: null,
+  videoTiles: [],
 };
 
 export interface UseActiveCall {
@@ -31,6 +33,9 @@ export interface UseActiveCall {
   camOn: boolean;
   screenOn: boolean;
   errorMessage: string | null;
+  /** Every video track (remote cams, remote screen-shares, local self-
+   *  preview). Empty when status !== 'connected' or no video is published. */
+  videoTiles: VideoTile[];
   setMic: (on: boolean) => void;
   setCam: (on: boolean) => void;
   setScreen: (on: boolean) => void;
@@ -75,6 +80,7 @@ export function useActiveCall(): UseActiveCall {
     camOn: snapshot.tracks.camOn,
     screenOn: snapshot.tracks.screenOn,
     errorMessage: snapshot.errorMessage,
+    videoTiles: snapshot.videoTiles,
     setMic,
     setCam,
     setScreen,

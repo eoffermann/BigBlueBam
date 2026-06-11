@@ -49,7 +49,11 @@
 import {
   Room,
   RoomEvent,
+  Track,
   type DisconnectReason,
+  type Participant,
+  type TrackPublication,
+  type VideoTrack,
 } from 'livekit-client';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -87,12 +91,45 @@ export interface ActiveCallTrackState {
   screenOn: boolean;
 }
 
+/**
+ * A single video tile to render. Surfaces both local self-preview and
+ * every subscribed remote video track. `source` lets the UI prioritize
+ * screen-share content over face cams in its layout.
+ *
+ * The `track` itself is mutable LiveKit state; the React component that
+ * holds the tile attaches via `track.attach(videoEl)` on mount and
+ * detaches on unmount. We expose only the stable identity fields in this
+ * snapshot so React's render diff stays cheap; track identity is the
+ * (participantId, source, sid) tuple.
+ */
+export interface VideoTile {
+  /** LiveKit publication.trackSid — stable across the lifetime of the track. */
+  sid: string;
+  /** LiveKit participant identity (== users.id). */
+  participantId: string;
+  /** Display name from participant metadata when available, else identity. */
+  participantName: string;
+  /** 'camera' (face cam) or 'screen' (screen-share). */
+  source: 'camera' | 'screen';
+  /** True for the local participant — render as self-preview, mirrored. */
+  isLocal: boolean;
+  /** True when the publisher has muted this track. UI dims the tile. */
+  isMuted: boolean;
+  /** The actual track to attach. Null when the publication exists but the
+   *  remote subscription hasn't materialized a track yet. */
+  track: VideoTrack | null;
+}
+
 export interface ActiveCallSnapshot {
   status: ActiveCallStatus;
   target: ActiveRoomTarget;
   tracks: ActiveCallTrackState;
   /** Last error surfaced via 'mediaDevicesError' or a connect failure. */
   errorMessage: string | null;
+  /** Every renderable video track in the room. Empty when no video is
+   *  published or while connecting/idle. Ordered with screen-share first
+   *  so the tiles UI can pin "documents over faces" without re-sorting. */
+  videoTiles: VideoTile[];
 }
 
 export type ActiveCallListener = (snapshot: ActiveCallSnapshot) => void;
@@ -119,6 +156,25 @@ interface ActiveCallManagerOptions {
 // ─────────────────────────────────────────────────────────────────────────
 
 const IDLE_TARGET: ActiveRoomTarget = { kind: 'none', roomName: null };
+
+/**
+ * Best-effort participant display name. bureau-api's token mint encodes
+ * `display_name` in the participant's metadata; LiveKit also supports a
+ * `name` field on the participant itself. Fall back to `identity` (the
+ * user's UUID) so the tile is never unlabeled.
+ */
+function deriveParticipantName(participant: Participant): string {
+  if (participant.name) return participant.name;
+  if (participant.metadata) {
+    try {
+      const meta = JSON.parse(participant.metadata) as { display_name?: unknown };
+      if (typeof meta.display_name === 'string' && meta.display_name) return meta.display_name;
+    } catch {
+      /* metadata can be anything — only trust JSON we can parse */
+    }
+  }
+  return participant.identity || 'Participant';
+}
 
 function targetsEqual(a: ActiveRoomTarget, b: ActiveRoomTarget): boolean {
   if (a.kind !== b.kind) return false;
@@ -184,6 +240,7 @@ export class ActiveCallManager {
     screenOn: false,
   };
   private errorMessage: string | null = null;
+  private videoTiles: VideoTile[] = [];
 
   /** Monotonically incrementing connect token — guards against late callbacks. */
   private connectGeneration = 0;
@@ -225,6 +282,7 @@ export class ActiveCallManager {
       target: this.target,
       tracks: { ...this.tracks },
       errorMessage: this.errorMessage,
+      videoTiles: this.videoTiles,
     };
   }
 
@@ -313,6 +371,7 @@ export class ActiveCallManager {
 
     this.room = room;
     this.syncTrackStateFromRoom();
+    this.rebuildVideoTiles();
     this.setStatus('connected');
   }
 
@@ -423,10 +482,71 @@ export class ActiveCallManager {
     };
   }
 
+  /**
+   * Walk every participant's publications and rebuild the videoTiles list
+   * from scratch. Cheaper than maintaining an incremental delta; the only
+   * events that mutate this are track (un)published and (un)subscribed,
+   * none of which fire faster than human-scale.
+   *
+   * Ordering: screen-share tracks first, then face cams; within each
+   * group, the local participant goes last (self-preview = least-
+   * important tile). The UI uses this order verbatim — screen-shares
+   * dominate the layout, faces fill the gutter.
+   */
+  private rebuildVideoTiles(): void {
+    const room = this.room;
+    if (!room) {
+      this.videoTiles = [];
+      return;
+    }
+
+    const collect = (participant: Participant, isLocal: boolean): VideoTile[] => {
+      const out: VideoTile[] = [];
+      participant.videoTrackPublications.forEach((pub: TrackPublication) => {
+        const source = pub.source;
+        if (source !== Track.Source.Camera && source !== Track.Source.ScreenShare) return;
+        const t = pub.track as VideoTrack | undefined;
+        // For remote publications, the track is null until subscribed; a
+        // local publication always has its track immediately. Either way
+        // we surface a tile so the UI can show a "loading" placeholder.
+        // Skip remote publications that don't yet have a sid.
+        if (!pub.trackSid) return;
+        out.push({
+          sid: pub.trackSid,
+          participantId: participant.identity,
+          participantName: deriveParticipantName(participant),
+          source: source === Track.Source.ScreenShare ? 'screen' : 'camera',
+          isLocal,
+          isMuted: pub.isMuted,
+          track: t ?? null,
+        });
+      });
+      return out;
+    };
+
+    const tiles: VideoTile[] = [];
+    room.remoteParticipants.forEach((p) => tiles.push(...collect(p, false)));
+    tiles.push(...collect(room.localParticipant, true));
+    // Stable order: screen-shares first, then cameras; locals last in each group.
+    tiles.sort((a, b) => {
+      if (a.source !== b.source) return a.source === 'screen' ? -1 : 1;
+      if (a.isLocal !== b.isLocal) return a.isLocal ? 1 : -1;
+      return a.sid.localeCompare(b.sid);
+    });
+    this.videoTiles = tiles;
+  }
+
   private attachRoomListeners(room: Room, generation: number): void {
     const onTrackChange = () => {
       if (generation !== this.connectGeneration) return;
       this.syncTrackStateFromRoom();
+      this.rebuildVideoTiles();
+      this.emit();
+    };
+
+    const onVideoChange = () => {
+      if (generation !== this.connectGeneration) return;
+      this.rebuildVideoTiles();
       this.emit();
     };
 
@@ -446,6 +566,7 @@ export class ActiveCallManager {
       this.detachRoomListeners();
       this.room = null;
       this.tracks = { micOn: false, camOn: false, screenOn: false };
+      this.videoTiles = [];
       if (this.status === 'idle') {
         // User-initiated; we already cleaned up in disconnectCurrentRoom.
         return;
@@ -458,6 +579,14 @@ export class ActiveCallManager {
     room.on(RoomEvent.TrackUnmuted, onTrackChange);
     room.on(RoomEvent.LocalTrackPublished, onTrackChange);
     room.on(RoomEvent.LocalTrackUnpublished, onTrackChange);
+    // Remote video lifecycle. Subscribed/Unsubscribed are the events that
+    // actually move VideoTile.track from null → set and back, so the UI
+    // can attach the <video> element.
+    room.on(RoomEvent.TrackSubscribed, onVideoChange);
+    room.on(RoomEvent.TrackUnsubscribed, onVideoChange);
+    room.on(RoomEvent.TrackPublished, onVideoChange);
+    room.on(RoomEvent.TrackUnpublished, onVideoChange);
+    room.on(RoomEvent.ParticipantDisconnected, onVideoChange);
     room.on(RoomEvent.MediaDevicesError, onMediaDevicesError);
     room.on(RoomEvent.Disconnected, onDisconnected);
 
@@ -466,6 +595,11 @@ export class ActiveCallManager {
       room.off(RoomEvent.TrackUnmuted, onTrackChange);
       room.off(RoomEvent.LocalTrackPublished, onTrackChange);
       room.off(RoomEvent.LocalTrackUnpublished, onTrackChange);
+      room.off(RoomEvent.TrackSubscribed, onVideoChange);
+      room.off(RoomEvent.TrackUnsubscribed, onVideoChange);
+      room.off(RoomEvent.TrackPublished, onVideoChange);
+      room.off(RoomEvent.TrackUnpublished, onVideoChange);
+      room.off(RoomEvent.ParticipantDisconnected, onVideoChange);
       room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
       room.off(RoomEvent.Disconnected, onDisconnected);
     };
@@ -486,6 +620,7 @@ export class ActiveCallManager {
     this.detachRoomListeners();
     this.room = null;
     this.tracks = { micOn: false, camOn: false, screenOn: false };
+    this.videoTiles = [];
     try {
       await room.disconnect();
     } catch (err) {

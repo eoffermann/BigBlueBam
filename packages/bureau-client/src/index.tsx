@@ -66,6 +66,7 @@ import {
 } from './active-room.js';
 import { useActiveCall } from './use-active-call.js';
 import { InvitePopover } from './invite-popover.js';
+import { VideoTilesWindow } from './video-tiles.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -99,9 +100,14 @@ export type {
   ActiveCallSnapshot,
   ActiveCallTrackState,
   ActiveCallListener,
+  VideoTile,
 } from './active-room.js';
 export { useActiveCall } from './use-active-call.js';
 export type { UseActiveCall } from './use-active-call.js';
+// VideoTilesWindow is mounted by default by mountBureauClient(); exporting
+// it so hosts that opt out of the auto-mounted portal can place it
+// themselves (e.g. tiled inside a custom dashboard).
+export { VideoTilesWindow } from './video-tiles.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // MountOptions — the §11 contract.
@@ -1441,6 +1447,9 @@ function MountedApp({
       {createPortal(
         <>
           {renderDockedBox ? <BureauDockedBox /> : null}
+          {/* Auto-shows when the active call has at least one video track;
+              null otherwise, so it never takes screen space when idle. */}
+          <VideoTilesWindow />
           <SummonHandler client={client} navigate={navigate} />
           <KnockHandler client={client} />
           <RingHandler client={client} navigate={navigate} />
