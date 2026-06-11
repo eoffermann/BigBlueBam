@@ -44,6 +44,19 @@ interface PanelPos {
   collapsed: boolean;
 }
 
+// Dismissal is per-call (keyed by the LiveKit room name) and per-tab. It
+// purposely does NOT persist to localStorage — leaving and re-joining a
+// room should bring the panel back. Holding the dismissal in a module
+// ref keeps it sticky across re-renders while a single call lasts.
+interface DismissState {
+  /** roomName the user dismissed for, or null when not dismissed. */
+  key: string | null;
+  /** Tile count at dismiss time. If new tiles appear after, we restore
+   *  so a freshly-shared screen or a newly-joining participant isn't
+   *  silently hidden. */
+  tileCount: number;
+}
+
 const DEFAULT_POS: PanelPos = {
   x: null,
   y: null,
@@ -107,6 +120,7 @@ export function VideoTilesWindow(): React.ReactElement | null {
   const call = useActiveCall();
   const [pos, setPos] = useState<PanelPos>(loadPos);
   const [dragging, setDragging] = useState(false);
+  const [dismiss, setDismiss] = useState<DismissState>({ key: null, tileCount: 0 });
   const boxRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{ pointerId: number; dx: number; dy: number } | null>(null);
   const resizeStateRef = useRef<{
@@ -122,7 +136,33 @@ export function VideoTilesWindow(): React.ReactElement | null {
   }, [pos]);
 
   const tiles = call.videoTiles;
-  const visible = call.status === 'connected' && tiles.length > 0;
+  const roomKey = call.target.roomName;
+
+  // Reset dismissal whenever the call moves to a different room (or ends).
+  // We do this in an effect rather than a derived value so the state lives
+  // in one place and stays consistent across re-renders.
+  useEffect(() => {
+    if (dismiss.key !== null && dismiss.key !== roomKey) {
+      setDismiss({ key: null, tileCount: 0 });
+    }
+  }, [roomKey, dismiss.key]);
+
+  const dismissed =
+    dismiss.key !== null &&
+    dismiss.key === roomKey &&
+    tiles.length <= dismiss.tileCount;
+
+  const hasTiles = call.status === 'connected' && tiles.length > 0;
+  const visible = hasTiles && !dismissed;
+
+  const handleDismiss = useCallback(() => {
+    if (!roomKey) return;
+    setDismiss({ key: roomKey, tileCount: tiles.length });
+  }, [roomKey, tiles.length]);
+
+  const handleRestore = useCallback(() => {
+    setDismiss({ key: null, tileCount: 0 });
+  }, []);
 
   // Re-clamp on viewport resize so a dragged panel can't strand off-screen.
   useEffect(() => {
@@ -236,7 +276,46 @@ export function VideoTilesWindow(): React.ReactElement | null {
     return { shares: s, cams: c };
   }, [tiles]);
 
-  if (!visible) return null;
+  if (!visible) {
+    // Dismissed-but-call-still-has-tiles: render a tiny restore chip in
+    // the bottom-right so the user has an undo path without leaving the
+    // call. When the call ends or the user moves rooms the chip vanishes
+    // along with the panel itself.
+    if (hasTiles && dismissed) {
+      return (
+        <button
+          type="button"
+          onClick={handleRestore}
+          aria-label="Show video feeds"
+          title={`Show ${tiles.length} video feed${tiles.length === 1 ? '' : 's'}`}
+          data-bureau-video-restore
+          style={{
+            position: 'fixed',
+            right: 16,
+            bottom: 200,
+            zIndex: 999998,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 10px',
+            borderRadius: 999,
+            border: '1px solid rgba(148, 163, 184, 0.35)',
+            background: 'rgba(15, 23, 42, 0.92)',
+            color: '#e2e8f0',
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+          }}
+        >
+          <span aria-hidden="true">📹</span>
+          {tiles.length} feed{tiles.length === 1 ? '' : 's'}
+        </button>
+      );
+    }
+    return null;
+  }
 
   // Position styling: anchor bottom-right by default (above the docked
   // call box, which itself sits at bottom-right with no x/y persisted);
@@ -333,6 +412,16 @@ export function VideoTilesWindow(): React.ReactElement | null {
           style={btnStyle}
         >
           {pos.collapsed ? '▢' : '–'}
+        </button>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          title="Hide video feeds for this call"
+          aria-label="Hide video feeds"
+          data-bureau-video-close
+          style={btnStyle}
+        >
+          ×
         </button>
       </div>
 
