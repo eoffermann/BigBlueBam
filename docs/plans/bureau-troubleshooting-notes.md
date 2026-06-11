@@ -135,6 +135,19 @@ ceiling) and `bureau-test-x@example.com` (mage-inc, cross-org), password
 `BureauTest-2026!`; rooms `Test Lock Room` / `Test Knock Room (knock)` /
 `Test DND Office (office, owner=dnd)` in zone `test-zone` on Main Floor.
 
+> **2026-06-11 (video feeds shipped):** the docked call box previously
+> published cam tracks but rendered no video anywhere — local or remote.
+> Added a floating multi-feed window (`packages/bureau-client/src/video-
+> tiles.tsx`) that auto-shows when ≥1 video track exists, screen-shares
+> dominate the layout (per project owner's "documents over faces"
+> direction), face cams fill an auto-grid below. Verified end-to-end with
+> a two-browser Playwright probe (user A turns cam on, user B sees a
+> rendering tile labeled by display name with videoWidth=1280). Notes for
+> follow-up: the design currently grid-only's a single floating window;
+> a future improvement could let users pop individual tiles out for
+> picture-in-picture (the existing PipPortal infrastructure already
+> handles single-element portaling).
+
 > **2026-06-10 (LiveKit ICE candidate hazard, deferred):** with
 > `infra/livekit/livekit.yaml`'s `rtc.use_external_ip: false` and no
 > `node_ip`, LiveKit advertises its docker bridge IP (172.x) in ICE
