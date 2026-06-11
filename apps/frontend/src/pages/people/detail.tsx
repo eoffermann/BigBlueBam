@@ -179,6 +179,25 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
     },
   });
 
+  // Tiered account deletion (2026-06-11). Org admins may delete an account
+  // only when they administer EVERY org the target belongs to (SuperUsers
+  // skip the check). The eligibility probe drives the button enabled/
+  // disabled state and the tooltip text so the admin knows up-front why
+  // an action isn't available.
+  const deletionEligibility = useQuery({
+    queryKey: ['people', 'deletion-eligibility', userId],
+    queryFn: () => peopleApi.deletionEligibility(userId),
+  });
+  const deleteAccount = useMutation({
+    mutationFn: (reason?: string) => peopleApi.deleteAccount(userId, reason),
+    onSuccess: () => {
+      invalidateAll();
+      onNavigate('/people');
+    },
+  });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+
   const resetPassword = useMutation({
     mutationFn: (password: string | undefined) => peopleApi.resetPassword(userId, password),
     onSuccess: (res) => {
@@ -326,6 +345,35 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
                   <DropdownMenuSeparator />
                   <DropdownMenuItem destructive onSelect={() => setConfirmRemove(true)}>
                     <Trash2 className="h-4 w-4" /> Remove from org
+                  </DropdownMenuItem>
+                  {/* Account deletion. Always shown when the caller can act,
+                      but the action only fires when the eligibility probe
+                      came back true. Tooltip explains why otherwise. */}
+                  <DropdownMenuItem
+                    destructive
+                    disabled={
+                      !deletionEligibility.data?.data.eligible
+                    }
+                    title={
+                      deletionEligibility.data?.data.eligible
+                        ? `Soft-delete this account. The user is removed from every org${
+                            (deletionEligibility.data?.data.target_orgs.length ?? 0) > 1
+                              ? ` (${deletionEligibility.data?.data.target_orgs.length} orgs)`
+                              : ''
+                          }, sessions and API keys are destroyed, the email is tombstoned so it can be re-invited later.`
+                        : deletionEligibility.data?.data.reason === 'is_superuser'
+                          ? 'SuperUser accounts must be demoted first.'
+                          : deletionEligibility.data?.data.reason === 'self'
+                            ? 'Cannot delete your own account here.'
+                            : `You only administer ${deletionEligibility.data?.data.caller_admin_orgs.length ?? 0} of the ${deletionEligibility.data?.data.target_orgs.length ?? 0} org${
+                                (deletionEligibility.data?.data.target_orgs.length ?? 0) === 1
+                                  ? ''
+                                  : 's'
+                              } this user is in.`
+                    }
+                    onSelect={() => setConfirmDelete(true)}
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete account…
                   </DropdownMenuItem>
                 </>
               )}
@@ -558,6 +606,58 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
           >
             Remove
           </Button>
+        </div>
+      </Dialog>
+
+      {/* Confirm delete account */}
+      <Dialog
+        open={confirmDelete}
+        onOpenChange={(open) => {
+          setConfirmDelete(open);
+          if (!open) setDeleteReason('');
+        }}
+        title="Delete this account?"
+        description={
+          deletionEligibility.data?.data.eligible
+            ? `Permanently delete ${member.display_name || member.email}'s account. They will be removed from every org${
+                (deletionEligibility.data?.data.target_orgs.length ?? 0) > 1
+                  ? ` (${deletionEligibility.data?.data.target_orgs.length} total)`
+                  : ''
+              }, all sessions and API keys are revoked, and ${member.email} becomes available for re-invitation. Authored content (tasks, comments, messages) is preserved under the anonymized account. This action cannot be undone.`
+            : ''
+        }
+      >
+        <div className="space-y-3 pt-2">
+          <label className="block text-sm">
+            <span className="text-zinc-700 dark:text-zinc-300">
+              Reason (optional, audited)
+            </span>
+            <textarea
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              maxLength={500}
+              rows={2}
+              className="mt-1 w-full px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="e.g. Left the company; per legal request"
+            />
+          </label>
+          {deleteAccount.isError && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              {(deleteAccount.error as Error).message}
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={deleteAccount.isPending}
+              onClick={() => deleteAccount.mutate(deleteReason.trim() || undefined)}
+            >
+              Delete account
+            </Button>
+          </div>
         </div>
       </Dialog>
 

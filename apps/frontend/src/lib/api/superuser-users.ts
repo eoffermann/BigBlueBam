@@ -144,6 +144,15 @@ export const superuserUsersApi = {
     return api.delete<void>(`/superuser/users/${id}/memberships/${orgId}`);
   },
 
+  /** SuperUser-only account-level soft delete. The server refuses to act
+   *  on self or another SuperUser; demote `is_superuser` first if that
+   *  needs to happen. */
+  deleteAccount(id: string, reason?: string): Promise<{
+    data: { success: boolean; id: string; previous_email: string };
+  }> {
+    return api.delete(`/superuser/users/${id}`, reason ? { reason } : undefined);
+  },
+
   updateMembershipRole(
     id: string,
     orgId: string,

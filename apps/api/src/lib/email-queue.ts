@@ -383,16 +383,26 @@ export async function sendMemberInvitationEmail(
   } = params;
 
   const loginUrl = `${spaBase()}/login`;
+  // For brand-new invitees we have an onboarding token: link directly to
+  // /password-reset?token=... so they set their first password in one click.
+  // For users who already had an account, link them to the SAME page WITHOUT
+  // a token — that surface drops into the "request a reset link" form so a
+  // forgotten password is one button away, no manual "click forgot password
+  // on the login screen" detour. (2026-06-11 follow-up to the invite-flow
+  // incident: the bare login-only existing-user email was confusing folks
+  // who had old accounts and forgotten passwords.)
   const setupUrl =
     isNewUser && onboardingToken
       ? `${spaBase()}/password-reset?token=${encodeURIComponent(onboardingToken)}`
       : null;
+  const forgotUrl = `${spaBase()}/password-reset`;
 
   const safeOrg = escapeHtml(orgName);
   const safeInviter = escapeHtml(inviterName);
   const safeName = escapeHtml(invitedUserName);
   const safeSetup = setupUrl ? escapeHtml(setupUrl) : null;
   const safeLogin = escapeHtml(loginUrl);
+  const safeForgot = escapeHtml(forgotUrl);
   const ttl = onboardingExpiresInMinutes ?? 60;
 
   const subject = `${inviterName} invited you to ${orgName} on BigBlueBam`;
@@ -417,6 +427,11 @@ ${
      style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">
     Open BigBlueBam
   </a>
+</p>
+<p style="margin-top:18px;font-size:13px;color:#444;">
+  Forgot your password?
+  <a href="${safeForgot}" style="color:#2563eb;">Reset it here</a> — we'll
+  email you a link to set a new one.
 </p>`
 }
 <p style="color:#666;font-size:12px;">If you weren't expecting this invitation, you can safely ignore this email.</p>
@@ -429,7 +444,7 @@ ${inviterName} has invited you to collaborate on ${orgName} in BigBlueBam.
 ${
   setupUrl
     ? `Get started by setting your password (link expires in ${ttl} minutes):\n${setupUrl}`
-    : `Sign in with your existing account:\n${loginUrl}`
+    : `Sign in with your existing account:\n${loginUrl}\n\nForgot your password? Reset it here:\n${forgotUrl}`
 }
 
 If you weren't expecting this invitation, you can safely ignore this email.`;

@@ -33,19 +33,38 @@ interface DropdownMenuItemProps {
   children: ReactNode;
   onSelect?: () => void;
   destructive?: boolean;
+  /** When true, the item is shown but cannot be activated. Pair with
+   *  `title` to explain why so users get a tooltip instead of a dead
+   *  click. */
+  disabled?: boolean;
+  /** Native title attribute — surfaces as a tooltip on hover. */
+  title?: string;
   className?: string;
 }
 
-export function DropdownMenuItem({ children, onSelect, destructive, className }: DropdownMenuItemProps) {
+export function DropdownMenuItem({
+  children,
+  onSelect,
+  destructive,
+  disabled,
+  title,
+  className,
+}: DropdownMenuItemProps) {
   return (
     <RadixDropdownMenu.Item
+      disabled={disabled}
+      title={title}
       className={cn(
-        'flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer outline-none',
-        'hover:bg-zinc-100 dark:hover:bg-zinc-800',
-        destructive ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950' : 'text-zinc-700 dark:text-zinc-300',
+        'flex items-center gap-2 rounded-md px-3 py-2 text-sm outline-none',
+        disabled
+          ? 'cursor-not-allowed opacity-50'
+          : 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800',
+        destructive
+          ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950'
+          : 'text-zinc-700 dark:text-zinc-300',
         className,
       )}
-      onSelect={onSelect}
+      onSelect={disabled ? undefined : onSelect}
     >
       {children}
     </RadixDropdownMenu.Item>

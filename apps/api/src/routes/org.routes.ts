@@ -15,6 +15,13 @@ import {
   sendPasswordResetEmail,
   isSmtpConfigured,
 } from '../lib/email-queue.js';
+import {
+  checkAdminDeletionEligibility,
+  softDeleteUser,
+  CannotDeleteSelfError,
+  CannotDeleteSuperuserError,
+  UserNotFoundError,
+} from '../services/user-deletion.service.js';
 
 export default async function orgRoutes(fastify: FastifyInstance) {
   fastify.get('/org', { preHandler: [requireAuth, shadowOnly('bam.org.list')] }, async (request, reply) => {
@@ -1353,6 +1360,116 @@ export default async function orgRoutes(fastify: FastifyInstance) {
         return reply.send({ data: user });
       } catch (err) {
         if (handleRankError(request, reply, err)) return;
+        throw err;
+      }
+    },
+  );
+
+  // ─── GET /org/members/:userId/deletion-eligibility ───────────────────
+  // Probe-only — the People detail UI calls this to decide whether to
+  // render the destructive "Delete account" button. Same eligibility
+  // logic as the action endpoint below.
+  fastify.get<{ Params: { userId: string } }>(
+    '/org/members/:userId/deletion-eligibility',
+    { preHandler: [requireAuth, requireScope('admin')] },
+    async (request, reply) => {
+      const result = await checkAdminDeletionEligibility(
+        request.user!.id,
+        request.user!.is_superuser,
+        request.params.userId,
+      );
+      return reply.send({ data: result });
+    },
+  );
+
+  // ─── POST /org/members/:userId/delete-account ────────────────────────
+  // Cross-org account deletion by an admin. Caller must be admin in EVERY
+  // org the target user is a member of (SuperUsers skip the check). The
+  // user is soft-deleted: email tombstoned, password cleared, sessions
+  // destroyed, API keys revoked, every org/project membership removed.
+  // The users row stays in place so authored content (tasks, comments,
+  // Banter messages, …) keeps a valid FK.
+  fastify.post<{ Params: { userId: string }; Body: { reason?: string } }>(
+    '/org/members/:userId/delete-account',
+    { preHandler: [requireAuth, requireScope('admin')] },
+    async (request, reply) => {
+      const eligibility = await checkAdminDeletionEligibility(
+        request.user!.id,
+        request.user!.is_superuser,
+        request.params.userId,
+      );
+      if (!eligibility.eligible) {
+        return reply.status(eligibility.reason === 'target_not_found' ? 404 : 403).send({
+          error: {
+            code:
+              eligibility.reason === 'self'
+                ? 'CANNOT_DELETE_SELF'
+                : eligibility.reason === 'is_superuser'
+                  ? 'CANNOT_DELETE_SUPERUSER'
+                  : eligibility.reason === 'target_not_found'
+                    ? 'NOT_FOUND'
+                    : 'NOT_ADMIN_EVERYWHERE',
+            message:
+              eligibility.reason === 'self'
+                ? 'You cannot delete your own account through this endpoint'
+                : eligibility.reason === 'is_superuser'
+                  ? 'SuperUser accounts can only be deleted by another SuperUser'
+                  : eligibility.reason === 'target_not_found'
+                    ? 'User not found'
+                    : 'You can only delete an account whose every org membership is one you manage',
+            details:
+              eligibility.reason === 'not_admin_everywhere'
+                ? [
+                    {
+                      field: 'target_orgs',
+                      issue: `target is in ${eligibility.target_orgs.length} org(s); you administer ${eligibility.caller_admin_orgs.length}`,
+                    },
+                  ]
+                : [],
+            request_id: request.id,
+          },
+        });
+      }
+      try {
+        const result = await softDeleteUser({
+          targetUserId: request.params.userId,
+          actorUserId: request.user!.id,
+          actorIsSuperuser: request.user!.is_superuser,
+          reason:
+            typeof request.body?.reason === 'string'
+              ? request.body.reason.slice(0, 500)
+              : undefined,
+        });
+        request.log.info(
+          {
+            event: 'org_admin.user_account_deleted',
+            target_user_id: result.id,
+            previous_email: result.previous_email,
+          },
+          'Org admin deleted a user account',
+        );
+        return reply.send({ data: { success: true, ...result } });
+      } catch (err) {
+        if (err instanceof UserNotFoundError) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        if (err instanceof CannotDeleteSelfError || err instanceof CannotDeleteSuperuserError) {
+          return reply.status(403).send({
+            error: {
+              code: err.name === 'CannotDeleteSelfError' ? 'CANNOT_DELETE_SELF' : 'CANNOT_DELETE_SUPERUSER',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
         throw err;
       }
     },

@@ -51,6 +51,12 @@ import {
   sendEmailVerificationEmail,
   sendEmailChangeNoticeEmail,
 } from '../lib/email-queue.js';
+import {
+  softDeleteUser,
+  CannotDeleteSelfError,
+  CannotDeleteSuperuserError,
+  UserNotFoundError,
+} from '../services/user-deletion.service.js';
 
 const ROLE_VALUES = ['owner', 'admin', 'member', 'viewer', 'guest'] as const;
 const roleSchema = z.enum(ROLE_VALUES);
@@ -680,6 +686,85 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
           is_default: false,
         },
       });
+    },
+  );
+
+  // ─── DELETE /superuser/users/:id ─────────────────────────────────────
+  // SuperUser-only soft-delete of an entire account: email tombstoned so
+  // it can be re-invited, password cleared, every session destroyed,
+  // every API key removed, every org/project membership dropped. The
+  // users row stays in place so authored content keeps its FK. Refuses
+  // to delete self or another SuperUser; for SuperUser-on-SuperUser
+  // deletion the actor must first demote the target's is_superuser flag.
+  fastify.delete<{ Params: { id: string }; Body: { reason?: string } }>(
+    '/users/:id',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.user.delete'),
+      ],
+    },
+    async (request, reply) => {
+      try {
+        const result = await softDeleteUser({
+          targetUserId: request.params.id,
+          actorUserId: request.user!.id,
+          actorIsSuperuser: true,
+          reason:
+            typeof request.body?.reason === 'string'
+              ? request.body.reason.slice(0, 500)
+              : undefined,
+        });
+        await logSuperuserAction({
+          superuserId: request.user!.id,
+          action: 'users.account.delete',
+          details: {
+            target_user_id: result.id,
+            previous_email: result.previous_email,
+            reason: request.body?.reason ?? null,
+          },
+          ipAddress: request.ip,
+          userAgent: request.headers['user-agent'] as string | undefined,
+        });
+        return reply.send({ data: { success: true, ...result } });
+      } catch (err) {
+        if (err instanceof UserNotFoundError) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        if (err instanceof CannotDeleteSelfError) {
+          return reply.status(400).send({
+            error: {
+              code: 'CANNOT_DELETE_SELF',
+              message: err.message,
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        if (err instanceof CannotDeleteSuperuserError) {
+          return reply.status(403).send({
+            error: {
+              code: 'CANNOT_DELETE_SUPERUSER',
+              message: err.message,
+              details: [
+                {
+                  field: 'is_superuser',
+                  issue: 'Demote the target before deleting',
+                },
+              ],
+              request_id: request.id,
+            },
+          });
+        }
+        throw err;
+      }
     },
   );
 

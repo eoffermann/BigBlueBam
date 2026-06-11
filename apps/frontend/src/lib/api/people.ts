@@ -158,6 +158,26 @@ export const peopleApi = {
     return api.delete<void>(`/org/members/${userId}`);
   },
 
+  /** Eligibility probe used by the People detail UI to decide whether
+   *  to render the "Delete account" button. Returns reason on `eligible:
+   *  false` so the UI can show a helpful disabled-state tooltip. */
+  deletionEligibility(userId: string): Promise<{
+    data: {
+      eligible: boolean;
+      reason?: 'self' | 'is_superuser' | 'not_admin_everywhere' | 'target_not_found';
+      target_orgs: string[];
+      caller_admin_orgs: string[];
+    };
+  }> {
+    return api.get(`/org/members/${userId}/deletion-eligibility`);
+  },
+
+  deleteAccount(userId: string, reason?: string): Promise<{
+    data: { success: boolean; id: string; previous_email: string };
+  }> {
+    return api.post(`/org/members/${userId}/delete-account`, reason ? { reason } : {});
+  },
+
   inviteMember(body: {
     email: string;
     display_name?: string;
