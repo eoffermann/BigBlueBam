@@ -5,7 +5,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import { env } from './env.js';
-import { createErrorHandler } from '@bigbluebam/logging';
+import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
 import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
@@ -50,7 +50,19 @@ const fastify = Fastify({
 });
 
 // Error handler
-fastify.setErrorHandler(createErrorHandler({ serviceName: 'banter-api' }));
+// Wire 5xxs into the platform-wide system_errors table via the api's
+// internal endpoint so they show up in the SuperUser Log Analysis tab.
+fastify.setErrorHandler(
+  createErrorHandler({
+    serviceName: 'banter-api',
+    recordError: env.INTERNAL_SERVICE_SECRET
+      ? httpSystemErrorRecorder({
+          url: `${env.BBB_API_INTERNAL_URL.replace(/\/+$/, '')}/internal/system-errors/record`,
+          internalSecret: env.INTERNAL_SERVICE_SECRET,
+        })
+      : undefined,
+  }),
+);
 
 // Not found handler — standard error envelope for 404s
 fastify.setNotFoundHandler((request, reply) => {

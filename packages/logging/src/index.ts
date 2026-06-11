@@ -226,6 +226,84 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
 }
 
 /**
+ * Build a `recordError` callback that POSTs the error context to the
+ * api's `/internal/system-errors/record` endpoint. Used by every
+ * satellite service so the SuperUser Console's Log Analysis tab sees
+ * errors from across the platform, not just the main api.
+ *
+ * Authentication: the api gates the endpoint with
+ * `requireServiceAuth`, which checks the `X-Internal-Secret` header
+ * against `INTERNAL_SERVICE_SECRET`. Each satellite already shares
+ * that secret with the api, so no new config is needed.
+ *
+ * Behavior on failure: best-effort. If the api is down or the network
+ * blips, the POST is silently dropped — logging must never crash a
+ * request that was already failing. A short timeout (3s) keeps a
+ * misbehaving api from stalling the response path.
+ */
+export interface HttpRecorderOptions {
+  /** Full URL to the api's `/internal/system-errors/record` endpoint. */
+  url: string;
+  /** Shared INTERNAL_SERVICE_SECRET. */
+  internalSecret: string;
+  /** Optional override for the fetch implementation (tests, polyfills). */
+  fetchImpl?: typeof fetch;
+  /** Override timeout in ms. Defaults to 3000. */
+  timeoutMs?: number;
+}
+
+export function httpSystemErrorRecorder(
+  opts: HttpRecorderOptions,
+): (err: Error, context: ErrorRecorderContext) => Promise<void> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? 3000;
+
+  return async (err, ctx) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      // The api clips these fields again on the way in, but we also
+      // clip here so the network payload stays bounded even if the
+      // stack is enormous.
+      const stack = err.stack ? err.stack.slice(0, 16000) : null;
+      const message = (err.message ?? '(no message)').slice(0, 4000);
+      const errorCode = (err as unknown as { code?: string }).code ?? null;
+      const smtpContext = (err as unknown as { smtp_context?: unknown }).smtp_context;
+      const serverResponse = (err as unknown as { response?: string }).response;
+      const payload: Record<string, unknown> = { name: err.name };
+      if (smtpContext) payload.smtp_context = smtpContext;
+      if (typeof serverResponse === 'string') payload.server_response = serverResponse;
+
+      await fetchImpl(opts.url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-internal-secret': opts.internalSecret,
+        },
+        body: JSON.stringify({
+          service: ctx.service,
+          request_id: ctx.request_id,
+          user_id: ctx.user_id ?? null,
+          org_id: ctx.org_id ?? null,
+          method: ctx.method ?? null,
+          route: ctx.route ?? null,
+          status_code: ctx.status_code,
+          error_code: errorCode,
+          message,
+          stack,
+          payload,
+        }),
+        signal: controller.signal,
+      });
+    } catch {
+      // Swallow: best-effort, must never throw.
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+/**
  * Sentry init hook. If `SENTRY_DSN` env is set, dynamically import
  * `@sentry/node` and call `init`. If the package is not installed or
  * DSN is unset, this is a no-op. We use dynamic import so services

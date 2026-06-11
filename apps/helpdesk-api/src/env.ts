@@ -76,6 +76,11 @@ const envSchema = z.object({
   // endpoints instead of direct SQL against the Bam tables.
   BBB_API_INTERNAL_URL: z.string().url().default('http://api:4000'),
   INTERNAL_HELPDESK_SECRET: z.string().min(32),
+  // Shared internal secret for forwarding 5xx events to the api's
+  // /internal/system-errors/record endpoint. Optional — when unset, the
+  // recorder is simply not wired, so the satellite still works in
+  // isolation.
+  INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

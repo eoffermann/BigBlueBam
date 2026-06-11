@@ -86,6 +86,7 @@ import permissionsDivergencesRoutes from './routes/permissions-divergences.route
 import permissionsAdminRoutes from './routes/permissions-admin.routes.js';
 import internalPermissionsRoutes from './routes/internal-permissions.routes.js';
 import internalCanReadRoutes from './routes/internal-can-read.routes.js';
+import internalSystemErrorsRoutes from './routes/internal-system-errors.routes.js';
 import deploySettingsRoutes from './routes/deploy-settings.routes.js';
 import superuserLogsRoutes from './routes/superuser-logs.routes.js';
 import { sql } from 'drizzle-orm';
@@ -305,6 +306,7 @@ await fastify.register(permissionsAdminRoutes);
 await fastify.register(internalPermissionsRoutes);
 // D-12: cross-app can-read preflight for the Bureau summon system.
 await fastify.register(internalCanReadRoutes);
+await fastify.register(internalSystemErrorsRoutes, { prefix: '/internal' });
 await fastify.register(deploySettingsRoutes);
 await fastify.register(superuserLogsRoutes);
 

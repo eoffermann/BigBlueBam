@@ -5,7 +5,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import { sql } from 'drizzle-orm';
 import { env } from './env.js';
-import { createErrorHandler } from '@bigbluebam/logging';
+import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
 import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
@@ -28,7 +28,19 @@ const fastify = Fastify({
   genReqId: () => crypto.randomUUID(),
 });
 
-fastify.setErrorHandler(createErrorHandler({ serviceName: 'blueprint-api' }));
+// Wire 5xxs into the platform-wide system_errors table via the api's
+// internal endpoint so they show up in the SuperUser Log Analysis tab.
+fastify.setErrorHandler(
+  createErrorHandler({
+    serviceName: 'blueprint-api',
+    recordError: env.INTERNAL_SERVICE_SECRET
+      ? httpSystemErrorRecorder({
+          url: `${env.BBB_API_INTERNAL_URL.replace(/\/+$/, '')}/internal/system-errors/record`,
+          internalSecret: env.INTERNAL_SERVICE_SECRET,
+        })
+      : undefined,
+  }),
+);
 
 fastify.setNotFoundHandler((request, reply) => {
   return reply.status(404).send({
