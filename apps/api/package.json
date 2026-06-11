@@ -19,6 +19,7 @@
     "@bigbluebam/permissions": "workspace:*",
     "@bigbluebam/service-health": "workspace:*",
     "@bigbluebam/shared": "workspace:*",
+    "@bigbluebam/smtp-resolver": "workspace:*",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",

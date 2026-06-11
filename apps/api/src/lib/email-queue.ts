@@ -4,15 +4,25 @@
 // processEmailJob. The API only enqueues jobs here. Job shape must match
 // apps/worker/src/jobs/email.job.ts → EmailJobData.
 //
-// We expose sendGuestInvitationEmail as the single caller for P1-30. The
-// function returns `email_sent` = true only when the job was successfully
-// enqueued AND SMTP is configured. When SMTP is unset, we still enqueue so
-// the worker will log it, but we return email_sent = false so the API
-// response accurately reflects that the invitee was not actually emailed.
+// Every send function returns `email_sent: boolean`. The boolean is the
+// answer to "is the platform actually configured to deliver this?" — NOT
+// "did SMTP_HOST env var get set", which is what the previous
+// implementation checked and which was wrong any time the operator
+// configured SMTP via the SuperUser UI (system_settings). The resolver
+// now consults system_settings first, env vars second — same precedence
+// the worker uses, so the API's reported flag and the worker's actual
+// delivery behavior can never disagree.
 
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import {
+  SMTP_SETTING_KEYS,
+  isSmtpConfigured as resolveIsSmtpConfigured,
+} from '@bigbluebam/smtp-resolver';
+import { sql, inArray } from 'drizzle-orm';
 import { env } from '../env.js';
+import { db } from '../db/index.js';
+import { systemSettings } from '../db/schema/system-settings.js';
 
 export interface EmailJobData {
   to: string;
@@ -33,9 +43,49 @@ function getQueue(): Queue<EmailJobData> {
   return _queue;
 }
 
-export function isSmtpConfigured(): boolean {
-  return Boolean(env.SMTP_HOST);
+/**
+ * Loads the smtp_* rows from system_settings as a plain map. Used by
+ * the shared resolver to do the precedence math against env vars. The
+ * resolver caches the resolved config for 30s; this loader is only
+ * called when that cache is cold or expired.
+ */
+async function loadSmtpSettings(): Promise<Record<string, unknown>> {
+  try {
+    const rows = await db
+      .select({ key: systemSettings.key, value: systemSettings.value })
+      .from(systemSettings)
+      .where(inArray(systemSettings.key, [...SMTP_SETTING_KEYS]));
+    const out: Record<string, unknown> = {};
+    for (const r of rows) out[r.key] = r.value;
+    return out;
+  } catch {
+    // Don't crash if the table is missing on a fresh deploy or RLS
+    // blocks the read — the resolver will fall through to env vars.
+    return {};
+  }
 }
+
+const RESOLVER_ENV = {
+  SMTP_HOST: env.SMTP_HOST,
+  SMTP_PORT: env.SMTP_PORT,
+  SMTP_USER: env.SMTP_USER,
+  SMTP_PASS: env.SMTP_PASS,
+  EMAIL_FROM: env.SMTP_FROM,
+};
+
+/**
+ * Async because the resolver reads system_settings. Cached for 30s
+ * inside the resolver, so cheap on the hot path. Callers can await it
+ * once per request without measurable overhead.
+ */
+export async function isSmtpConfigured(): Promise<boolean> {
+  return resolveIsSmtpConfigured(loadSmtpSettings, RESOLVER_ENV);
+}
+
+// Silence the unused-import warning when `sql` happens to be tree-
+// shaken; we keep it for the eventual addition of a manual-override
+// route that needs raw SQL.
+void sql;
 
 function escapeHtml(input: string): string {
   return input
@@ -55,8 +105,9 @@ export interface GuestInvitationEmailParams {
 
 /**
  * Enqueue a guest invitation email containing the acceptance link.
- * Returns true if the job was successfully enqueued, false otherwise.
- * Callers should still treat SMTP-unconfigured as `email_sent: false`.
+ * Returns true if the job was successfully enqueued AND SMTP is
+ * configured (so the worker will actually deliver). Returns false if
+ * either step is missing.
  */
 export async function sendGuestInvitationEmail(
   params: GuestInvitationEmailParams,
@@ -100,7 +151,7 @@ If you weren't expecting this invitation, you can safely ignore this email.`;
         removeOnFail: 500,
       },
     );
-    return isSmtpConfigured();
+    return await isSmtpConfigured();
   } catch {
     return false;
   }
@@ -164,7 +215,7 @@ This link expires in 7 days. If you did not expect this, ignore this email.`;
         removeOnFail: 500,
       },
     );
-    return isSmtpConfigured();
+    return await isSmtpConfigured();
   } catch {
     return false;
   }
@@ -219,7 +270,7 @@ If you did not request this, please contact your organization administrator imme
         removeOnFail: 500,
       },
     );
-    return isSmtpConfigured();
+    return await isSmtpConfigured();
   } catch {
     return false;
   }
@@ -288,7 +339,7 @@ If you didn't request this, ignore this email.`;
         removeOnFail: 500,
       },
     );
-    return isSmtpConfigured();
+    return await isSmtpConfigured();
   } catch {
     return false;
   }
@@ -393,7 +444,7 @@ If you weren't expecting this invitation, you can safely ignore this email.`;
         removeOnFail: 500,
       },
     );
-    return isSmtpConfigured();
+    return await isSmtpConfigured();
   } catch {
     return false;
   }

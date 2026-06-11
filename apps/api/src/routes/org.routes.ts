@@ -844,11 +844,21 @@ export default async function orgRoutes(fastify: FastifyInstance) {
             onboardingExpiresInMinutes: onboardingTtl,
           });
           if (!email_sent) {
+            const smtpReady = await isSmtpConfigured();
             request.log.warn(
-              { event: 'invite.email_not_sent', target_email: user.email },
-              isSmtpConfigured()
+              {
+                event: 'invite.email_not_sent',
+                target_email: user.email,
+                smtp_configured: smtpReady,
+              },
+              smtpReady
                 ? 'Invitation email job failed to enqueue'
                 : 'SMTP not configured — invitation email not sent',
+            );
+          } else {
+            request.log.info(
+              { event: 'invite.email_enqueued', target_email: user.email },
+              'Invitation email enqueued for delivery',
             );
           }
         } catch (emailErr) {
@@ -1274,6 +1284,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
         );
       }
 
+      const smtpReady = await isSmtpConfigured();
       request.log.info(
         {
           event: 'admin.password_reset_link_sent',
@@ -1282,7 +1293,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           target_email: target.email,
           org_id: request.user!.org_id,
           email_sent,
-          smtp_configured: isSmtpConfigured(),
+          smtp_configured: smtpReady,
           ttl_minutes: ttlMinutes,
         },
         'Admin sent a password-reset link',
@@ -1293,7 +1304,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           user_id: target.id,
           email: target.email,
           email_sent,
-          smtp_configured: isSmtpConfigured(),
+          smtp_configured: smtpReady,
           expires_in_minutes: ttlMinutes,
           message: email_sent
             ? 'Password reset link sent.'

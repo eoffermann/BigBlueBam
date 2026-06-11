@@ -988,6 +988,22 @@ services:
     networks:
       - backend
 
+  # MailHog: a catch-all SMTP server for local development that captures every
+  # outgoing message and lets you browse them via a tiny web UI. Gated behind
+  # the "mailhog" compose profile so production / CI flows don't pay the cost
+  # by default. Bring up with: `docker compose --profile mailhog up -d mailhog`
+  # then point SMTP at host:1025 (no auth) or browse http://localhost:8025 to
+  # see what was sent.
+  mailhog:
+    <<: *common
+    profiles: ["mailhog"]
+    image: mailhog/mailhog:latest
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+    networks:
+      - backend
+
   # Let's Encrypt sidecar. Gated behind the "letsencrypt" compose profile so
   # it only spins up when the operator picked that cert source. Issues the
   # initial cert via webroot challenge against nginx (the frontend service

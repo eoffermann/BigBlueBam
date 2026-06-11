@@ -119,7 +119,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
         .where(eq(organizations.id, request.user!.org_id))
         .limit(1);
 
-      const smtpConfigured = isSmtpConfigured();
+      const smtpConfigured = await isSmtpConfigured();
       let emailSent = false;
       if (smtpConfigured) {
         emailSent = await sendGuestInvitationEmail({
@@ -131,7 +131,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
       } else {
         request.log.warn(
           { invitation_id: invitation!.id, email: data.email },
-          'SMTP is not configured — guest invitation email was NOT sent. Set SMTP_HOST to enable delivery. (P1-30)',
+          'SMTP is not configured (neither system_settings nor env) — guest invitation email was NOT sent.',
         );
       }
 
@@ -300,7 +300,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
         .where(eq(organizations.id, invitation.org_id))
         .limit(1);
 
-      const smtpConfigured = isSmtpConfigured();
+      const smtpConfigured = await isSmtpConfigured();
       let emailSent = false;
       if (smtpConfigured) {
         emailSent = await sendGuestInvitationEmail({
@@ -312,7 +312,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
       } else {
         request.log.warn(
           { invitation_id: invitation.id, email: invitation.email },
-          'SMTP is not configured — guest invitation email was NOT resent. Set SMTP_HOST to enable delivery.',
+          'SMTP is not configured (neither system_settings nor env) — guest invitation email was NOT resent.',
         );
       }
 

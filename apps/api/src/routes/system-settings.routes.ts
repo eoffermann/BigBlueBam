@@ -8,6 +8,7 @@ import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
+import { clearSmtpConfigCache } from '@bigbluebam/smtp-resolver';
 import {
   clearPolicyCache,
   generatePasswordFromPolicy,
@@ -333,6 +334,11 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
       // a SuperUser flips the setting, invalidate so the next mint sees
       // the new value immediately rather than at the next cache expiry.
       if (key === 'password_policy') clearPolicyCache();
+      // Same idea for SMTP: the resolver caches for 30s. After a write
+      // here, the next `isSmtpConfigured()` call should see the change
+      // immediately so the people-invite UI stops reporting "not
+      // configured" the moment the operator hits Save.
+      if (key.startsWith('smtp_')) clearSmtpConfigCache();
 
       // Upsert the setting
       await db

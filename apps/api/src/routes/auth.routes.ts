@@ -671,7 +671,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         success: true,
         message:
           'If an account exists with that email, a password-reset link has been sent.',
-        smtp_configured: isSmtpConfigured(),
+        smtp_configured: await isSmtpConfigured(),
       },
     });
   });
