@@ -19,6 +19,7 @@ import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
 // (api keys, locked-account marker hashes) still use randomBytes directly
 // because they are not user-typed.
 import { generatePassword } from './services/password-generator.service.js';
+import { seedDefaultPriorities } from './services/priorities.service.js';
 
 // Wave E.F: fixed UUIDs of the five built-in permission groups (seeded by
 // migration 0146). Used by cli.ts to upsert account_group_memberships
@@ -235,6 +236,8 @@ async function createAdmin(flags: Record<string, string>) {
         ],
         set: { group_id: BUILTIN_GROUP_IDS.owner! },
       });
+
+    await seedDefaultPriorities(db, org!.id);
 
     console.log('Admin user created successfully:');
     console.log(`  User ID:   ${user!.id}`);

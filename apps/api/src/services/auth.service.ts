@@ -7,6 +7,7 @@ import { users } from '../db/schema/users.js';
 import { sessions } from '../db/schema/sessions.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { setUserOrgRole } from './role-resolver.js';
+import { seedDefaultPriorities } from './priorities.service.js';
 import { env } from '../env.js';
 import type { BootstrapInput, RegisterInput, UpdateProfileInput } from '@bigbluebam/shared';
 
@@ -155,6 +156,7 @@ export async function bootstrap(data: BootstrapInput, meta?: SessionMetadata) {
     });
     // Wave E.F: role is stored in account_group_memberships.
     await setUserOrgRole(user!.id, org!.id, 'owner', {}, tx);
+    await seedDefaultPriorities(tx, org!.id);
 
     const session = await createSessionInTx(tx, user!.id, meta);
 
@@ -201,6 +203,7 @@ export async function register(data: RegisterInput, meta?: SessionMetadata) {
     });
     // Wave E.F: role lives in account_group_memberships.
     await setUserOrgRole(user!.id, org!.id, 'owner', {}, tx);
+    await seedDefaultPriorities(tx, org!.id);
 
     const session = await createSessionInTx(tx, user!.id, meta);
 

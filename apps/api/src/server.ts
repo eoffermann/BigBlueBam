@@ -20,6 +20,7 @@ import { rlsBoot } from './boot/rls-boot.js';
 import authRoutes from './routes/auth.routes.js';
 import projectRoutes from './routes/project.routes.js';
 import phaseRoutes from './routes/phase.routes.js';
+import priorityRoutes from './routes/priority.routes.js';
 import sprintRoutes from './routes/sprint.routes.js';
 import taskRoutes from './routes/task.routes.js';
 import commentRoutes from './routes/comment.routes.js';
@@ -239,6 +240,7 @@ await fastify.register(healthCheckPlugin, {
 await fastify.register(authRoutes);
 await fastify.register(projectRoutes);
 await fastify.register(phaseRoutes);
+await fastify.register(priorityRoutes);
 await fastify.register(sprintRoutes);
 await fastify.register(taskRoutes);
 await fastify.register(commentRoutes);

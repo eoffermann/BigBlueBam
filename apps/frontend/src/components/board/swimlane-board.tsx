@@ -19,6 +19,7 @@ import { useBoardStore } from '@/stores/board.store';
 import { useMoveTask } from '@/hooks/use-tasks';
 import { ApiError } from '@/lib/api';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { usePriorityMap } from '@/hooks/use-priorities';
 import { PhaseColumn } from './phase-column';
 import { TaskCard } from './task-card';
 
@@ -41,16 +42,14 @@ interface SwimlaneBoardProps {
   members?: Map<string, string>; // userId -> displayName
 }
 
-const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low', 'none'] as const;
-const PRIORITY_LABELS: Record<string, string> = {
-  critical: 'Critical',
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-  none: 'None',
-};
+interface PriorityCatalogEntry { value: string; name: string; position: number }
 
-function buildGroups(phases: (Phase & { tasks: Task[] })[], groupBy: SwimlanGroupBy, members?: Map<string, string>): SwimlaneGroup[] {
+function buildGroups(
+  phases: (Phase & { tasks: Task[] })[],
+  groupBy: SwimlanGroupBy,
+  members?: Map<string, string>,
+  priorityCatalog?: PriorityCatalogEntry[],
+): SwimlaneGroup[] {
   const allTasks = phases.flatMap((p) => p.tasks);
 
   if (groupBy === 'assignee') {
@@ -89,16 +88,31 @@ function buildGroups(phases: (Phase & { tasks: Task[] })[], groupBy: SwimlanGrou
   }
 
   if (groupBy === 'priority') {
-    return PRIORITY_ORDER.map((p) => {
-      const tasks = allTasks.filter((t) => t.priority === p);
-      return {
-        key: p,
-        label: PRIORITY_LABELS[p] ?? p,
-        tasks,
-        taskCount: tasks.length,
-        totalPoints: tasks.reduce((sum, t) => sum + (t.story_points ?? 0), 0),
-      };
-    });
+    // Priority rows are org-scoped (migration 0183); when the catalog
+    // hasn't loaded yet we fall back to the legacy hard-coded order so
+    // the swimlane doesn't disappear under a flash of empty groups.
+    const catalog = priorityCatalog && priorityCatalog.length > 0
+      ? priorityCatalog
+      : [
+          { value: 'critical', name: 'Critical', position: 0 },
+          { value: 'high',     name: 'High',     position: 1 },
+          { value: 'medium',   name: 'Medium',   position: 2 },
+          { value: 'low',      name: 'Low',      position: 3 },
+          { value: 'none',     name: 'None',     position: 4 },
+        ];
+    return catalog
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((p) => {
+        const tasks = allTasks.filter((t) => t.priority === p.value);
+        return {
+          key: p.value,
+          label: p.name,
+          tasks,
+          taskCount: tasks.length,
+          totalPoints: tasks.reduce((sum, t) => sum + (t.story_points ?? 0), 0),
+        };
+      });
   }
 
   if (groupBy === 'epic') {
@@ -162,8 +176,12 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu,
   const moveTaskInStore = useBoardStore((s) => s.moveTask);
   const moveTaskMutation = useMoveTask();
   const prefersReducedMotion = useReducedMotion();
+  const { ordered: priorityRows } = usePriorityMap();
 
-  const groups = useMemo(() => buildGroups(phases, groupBy, members), [phases, groupBy, members]);
+  const groups = useMemo(
+    () => buildGroups(phases, groupBy, members, priorityRows),
+    [phases, groupBy, members, priorityRows],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

@@ -10,6 +10,7 @@ import { superuserAuditLog } from '../db/schema/superuser-audit-log.js';
 import { notifications } from '../db/schema/notifications.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
 import { resolveOrgUserRoles, resolveUserOrgRole } from '../services/role-resolver.js';
+import { seedDefaultPriorities } from '../services/priorities.service.js';
 import { requireAuth } from '../plugins/auth.js';
 
 const IMPERSONATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -108,6 +109,8 @@ export default async function platformRoutes(fastify: FastifyInstance) {
           plan: body.plan,
         })
         .returning();
+
+      await seedDefaultPriorities(db, org!.id);
 
       await logSuperuserAction(user.id, 'org.created', request.ip, {
         org_name: body.name,

@@ -42,6 +42,11 @@ export function generateAvatarInitials(name: string | null | undefined): string 
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
+// LEGACY FALLBACK: prior to migration 0183 these were the only five
+// priorities. The styling for built-in slugs is preserved here so any
+// component that hasn't yet wired in `usePriorityMap()` still renders
+// sensibly. Per-org custom slugs render via the inline-style helpers
+// in `hooks/use-priorities.ts`.
 export function priorityColor(priority: Priority): string {
   switch (priority) {
     case 'critical':
@@ -55,7 +60,7 @@ export function priorityColor(priority: Priority): string {
     case 'none':
       return 'text-priority-none bg-zinc-50 border-zinc-200';
     default:
-      return 'text-zinc-400 bg-zinc-50 border-zinc-200';
+      return 'text-zinc-500 bg-zinc-50 border-zinc-200';
   }
 }
 

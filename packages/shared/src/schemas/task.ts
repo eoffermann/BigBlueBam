@@ -1,6 +1,18 @@
 import { z } from 'zod';
-import { PRIORITIES } from '../constants/index.js';
 import { uuidSchema, isoDateSchema } from './common.js';
+
+// Task priority is now per-org configurable (migration 0183 +
+// /priorities CRUD). What the wire carries is the priority row's
+// `value` slug, which mirrors the [a-z0-9][a-z0-9_-]{0,49} regex the
+// REST route enforces. We deliberately do NOT z.enum() against the
+// old hardcoded PRIORITIES constant because orgs can rename, add, or
+// remove rows. The destination value's existence is checked at the
+// task service layer once we know which org the task lives in.
+const prioritySlugSchema = z
+  .string()
+  .min(1)
+  .max(50)
+  .regex(/^[a-z0-9][a-z0-9_-]{0,49}$/i);
 
 // http(s)-only URL: the URL constructor (z.string().url()) also accepts
 // javascript:, data:, file:, etc., which would become a stored-XSS primitive
@@ -51,7 +63,7 @@ export const createTaskSchema = z.object({
   state_id: uuidSchema.optional(),
   sprint_id: uuidSchema.nullable().optional(),
   assignee_id: uuidSchema.nullable().optional(),
-  priority: z.enum(PRIORITIES).optional(),
+  priority: prioritySlugSchema.optional(),
   story_points: z.number().int().positive().nullable().optional(),
   time_estimate_minutes: z.number().int().positive().nullable().optional(),
   start_date: isoDateSchema.nullable().optional(),

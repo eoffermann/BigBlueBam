@@ -2202,6 +2202,74 @@
       ]
     },
     {
+      "id": "bam.priority.create",
+      "app": "bam",
+      "resource": "priority",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /priorities",
+          "file": "priority.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.priority.delete",
+      "app": "bam",
+      "resource": "priority",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /priorities/:id",
+          "file": "priority.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.priority.list",
+      "app": "bam",
+      "resource": "priority",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /priorities",
+          "file": "priority.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.priority.update",
+      "app": "bam",
+      "resource": "priority",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PATCH /priorities/:id",
+          "file": "priority.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.project_activity.get",
       "app": "bam",
       "resource": "project_activity",

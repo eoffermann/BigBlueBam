@@ -74,7 +74,12 @@ export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 
 // --- Constant-derived type aliases ---
 
-export type Priority = (typeof PRIORITIES)[number];
+// Priority is the row's `value` slug. Migration 0183 made these
+// per-org configurable, so the type is a plain string rather than the
+// closed union over PRIORITIES (which is now just the seed set, kept
+// as a convenience for built-in styling fallback).
+export type Priority = string;
+export type LegacyBuiltInPriority = (typeof PRIORITIES)[number];
 export type SprintStatus = (typeof SPRINT_STATUSES)[number];
 export type TaskStateCategory = (typeof TASK_STATE_CATEGORIES)[number];
 export type OrgRole = (typeof ORG_ROLES)[number];

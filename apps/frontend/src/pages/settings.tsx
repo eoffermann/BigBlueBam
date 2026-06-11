@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Moon, Sun, Monitor, User, Bell, Users, Trash2, Plug, Copy, Check, Plus, Headset, Pencil, Lock, Zap, Bot, RefreshCw, LayoutGrid } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Bell, Users, Trash2, Plug, Copy, Check, Plus, Headset, Pencil, Lock, Zap, Bot, RefreshCw, LayoutGrid, ListChecks } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PaginatedResponse, ApiResponse, Project } from '@bigbluebam/shared';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -13,6 +13,8 @@ import { formatDate } from '@/lib/utils';
 import { SettingsLlmProviders } from '@/pages/settings-llm-providers';
 import { SmtpSettingsForm } from '@/components/settings/smtp-settings-form';
 import { SlackImportCard } from '@/components/settings/slack-import-card';
+import { PriorityManager } from '@/components/settings/priority-manager';
+import { usePriorities, priorityInlineStyle } from '@/hooks/use-priorities';
 
 interface ApiKeyData {
   id: string;
@@ -96,7 +98,8 @@ interface SettingsPageProps {
 export function SettingsPage({ onNavigate }: SettingsPageProps) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'members' | 'integrations' | 'helpdesk' | 'permissions' | 'launchpad' | 'ai-providers'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'members' | 'tasks' | 'integrations' | 'helpdesk' | 'permissions' | 'launchpad' | 'ai-providers'>('profile');
+  const [priorityManagerOpen, setPriorityManagerOpen] = useState(false);
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
@@ -610,6 +613,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
     { id: 'appearance' as const, label: 'Appearance', icon: Sun },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     { id: 'members' as const, label: 'Members', icon: Users },
+    { id: 'tasks' as const, label: 'Tasks', icon: ListChecks },
     { id: 'permissions' as const, label: 'Permissions', icon: Lock },
     { id: 'launchpad' as const, label: 'Launchpad', icon: LayoutGrid },
     { id: 'integrations' as const, label: 'Integrations', icon: Plug },
@@ -741,6 +745,9 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
               </div>
             )}
 
+            {activeTab === 'tasks' && (
+              <TasksTab onOpenPriorityManager={() => setPriorityManagerOpen(true)} />
+            )}
             {activeTab === 'members' && (
               <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-8 text-center space-y-3">
                 <Users className="h-10 w-10 text-zinc-400 mx-auto" />
@@ -1974,7 +1981,70 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
           </div>
         </div>
       </div>
+      <PriorityManager open={priorityManagerOpen} onOpenChange={setPriorityManagerOpen} />
     </AppLayout>
+  );
+}
+
+// ─── Tasks Tab ──────────────────────────────────────────────────────────────
+
+interface TasksTabProps {
+  onOpenPriorityManager: () => void;
+}
+
+function TasksTab({ onOpenPriorityManager }: TasksTabProps) {
+  const { data: prioritiesRes, isLoading } = usePriorities();
+  const rows = (prioritiesRes?.data ?? [])
+    .slice()
+    .sort((a, b) => a.position - b.position);
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Task Priorities</h2>
+          <p className="text-sm text-zinc-500">
+            Configure the priority levels available across this organization. Stored slug values
+            stay constant when you rename, so changing a display label here does not move any tasks.
+          </p>
+        </div>
+        <Button size="sm" onClick={onOpenPriorityManager}>
+          <Pencil className="h-4 w-4" />
+          Manage Priorities
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-zinc-400">Loading priorities…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-zinc-400">No priorities configured.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((row) => (
+            <div
+              key={row.id}
+              className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
+            >
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
+                style={priorityInlineStyle(row)}
+              >
+                {row.name}
+              </span>
+              <span className="text-xs text-zinc-500 font-mono" title="Stored slug">
+                {row.value}
+              </span>
+              <span className="text-xs text-zinc-400 ml-auto">#{row.position}</span>
+              {row.is_default && (
+                <span className="text-[10px] uppercase tracking-wide font-medium text-yellow-600 dark:text-yellow-500">
+                  default
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

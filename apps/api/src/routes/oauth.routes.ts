@@ -11,6 +11,7 @@ import { organizations } from '../db/schema/organizations.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { sessions } from '../db/schema/sessions.js';
 import { setUserOrgRole } from '../services/role-resolver.js';
+import { seedDefaultPriorities } from '../services/priorities.service.js';
 import { requireAuth } from '../plugins/auth.js';
 
 /**
@@ -330,6 +331,7 @@ export default async function oauthRoutes(fastify: FastifyInstance) {
       });
       // Wave E.F: role lives in account_group_memberships.
       await setUserOrgRole(user!.id, org!.id, 'owner', {}, tx);
+      await seedDefaultPriorities(tx, org!.id);
 
       await tx.insert(oauthUserLinks).values({
         user_id: user!.id,
