@@ -412,19 +412,26 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
       // configured" the moment the operator hits Save.
       if (key.startsWith('smtp_')) clearSmtpConfigCache();
 
-      // Upsert the setting
+      // Upsert the setting. Pass the value directly — drizzle / postgres-js
+      // already encodes JS primitives and objects for the JSONB column.
+      // The previous `JSON.stringify` pre-encode was the cause of the 2026-
+      // 06-11 hostname-with-embedded-quotes incident: every row got stored
+      // as a JSON string containing the JSON-encoded text (strings gained
+      // embedded quotes, numbers/booleans became strings-of-themselves,
+      // objects became strings-of-JSON). Migration 0182 unwraps the
+      // pre-existing rows so the storage shape is consistent now.
       await db
         .insert(systemSettings)
         .values({
           key,
-          value: JSON.stringify(bodyParsed.data.value),
+          value: bodyParsed.data.value,
           updated_by: userId,
           updated_at: now,
         })
         .onConflictDoUpdate({
           target: systemSettings.key,
           set: {
-            value: JSON.stringify(bodyParsed.data.value),
+            value: bodyParsed.data.value,
             updated_by: userId,
             updated_at: now,
           },
