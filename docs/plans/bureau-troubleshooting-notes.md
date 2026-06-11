@@ -135,6 +135,19 @@ ceiling) and `bureau-test-x@example.com` (mage-inc, cross-org), password
 `BureauTest-2026!`; rooms `Test Lock Room` / `Test Knock Room (knock)` /
 `Test DND Office (office, owner=dnd)` in zone `test-zone` on Main Floor.
 
+> **2026-06-10 (LiveKit ICE candidate hazard, deferred):** with
+> `infra/livekit/livekit.yaml`'s `rtc.use_external_ip: false` and no
+> `node_ip`, LiveKit advertises its docker bridge IP (172.x) in ICE
+> candidates — unreachable from a browser running on the host. The signal
+> WebSocket connects, then `Room.connect()` rejects with `could not
+> establish pc connection` and the docked widget shows a generic red
+> error. Fixed for localhost by adding `node_ip: 127.0.0.1` to the
+> template (TCP fallback on 7881 is already mapped); LAN access from
+> another machine still needs its own `node_ip` (LAN IP) and the UDP
+> media port range exposed. **Deferred:** the deploy adapter should
+> render `node_ip` based on the configured DOMAIN / detected host IP
+> rather than always-localhost.
+
 > **2026-06-10 (LiveKit key desync hazard, still open):** the rendered
 > `infra/livekit/livekit.yaml` (gitignored) can silently diverge from the
 > `.env` LiveKit key pair — on this dev box the yaml held an April-era key

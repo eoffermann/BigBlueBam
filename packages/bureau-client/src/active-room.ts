@@ -507,10 +507,25 @@ export class ActiveCallManager {
       const res = await fetch(url, {
         method: 'POST',
         credentials: 'include',
+        // Fastify's content-type parser 400s a Content-Type: application/json
+        // request with an empty body, so a payload-free POST that declares
+        // JSON must still send `{}`. Without it the call widget never gets
+        // past the mint and shows a generic "error" with no useful detail.
         headers: { 'Content-Type': 'application/json' },
+        body: '{}',
       });
       if (!res.ok) {
-        throw new Error(`rooms/:id/token returned ${res.status}`);
+        // Pull the server envelope when we can — much more informative than
+        // a bare status code in the docked-box tooltip.
+        let detail = '';
+        try {
+          const j = (await res.json()) as { error?: { message?: string; code?: string } };
+          if (j?.error?.message) detail = `: ${j.error.message}`;
+          else if (j?.error?.code) detail = `: ${j.error.code}`;
+        } catch {
+          /* non-JSON body, status code is the best we can do */
+        }
+      throw new Error(`rooms/:id/token returned ${res.status}${detail}`);
       }
       const body = (await res.json()) as unknown;
       return parseTokenEnvelope(body);
