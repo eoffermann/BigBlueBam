@@ -143,6 +143,23 @@ This rule applies to all verification commands, not just typecheck. Pre-existing
 
 The cost of tracking an existing error is a one-line TaskCreate call. The cost of dismissing it is that it will still be there six months from now, and every future change has to navigate around it.
 
+## IMPORTANT: End every task with "How to see it in action"
+
+When you finish a task or a series of tasks, your final response must have two distinct blocks:
+
+1. **Summary** — what you changed and why, in plain language. The same kind of recap you would put in a PR description: which commits, which files, which mechanism. Keep it tight; the diff and the commit message already tell the story.
+2. **How to see it in action** — a separate, clearly-labeled block (heading or hard rule) that tells the user EXACTLY where to look or what to do to verify the change is live and behaving. Be concrete and operator-grade:
+   - The specific URL path to visit (e.g., `https://bigbluebam.com/b3/settings` → click the **Tasks** tab → click **Manage Priorities**), not a vague gesture at "the settings page".
+   - The exact `curl` / `psql` / `docker compose exec` invocation, including realistic flags, when the verification is a backend probe.
+   - The keyboard shortcut, dialog title, button label, or visible UI string the user should expect to see — quote it so they can grep for it on the page.
+   - For data migrations or backfills, the exact SQL the user can run to confirm row counts / shape (e.g., `SELECT count(*) FROM priorities GROUP BY org_id`).
+   - For background jobs / cron-driven work, the next time it will fire and which log to tail.
+   - When relevant, the *negative* check too — what should NOT happen, or what would prove it didn't land (e.g., "the System Console should no longer show entries with `error_code: null`").
+
+This block is for the *user*, not for you. Assume they have not been watching the tool calls — give them the minimum sequence of clicks or commands that proves the change works on their machine. If a verification step requires credentials, secrets, or an account state you can't observe, say so and tell them what to substitute. Never reply only with the summary; the verification block is mandatory.
+
+If the work is purely internal (refactor, comment cleanup, no observable behavior change), say that explicitly in the verification block — "Nothing user-visible to test; confirm CI is green and the file diff matches your expectations." That still satisfies the rule.
+
 ## Database Schema and Migrations
 
 **Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 141 migration files with tip `0141_book_event_livekit_room.sql` (D-4 Book event LiveKit rooms).
