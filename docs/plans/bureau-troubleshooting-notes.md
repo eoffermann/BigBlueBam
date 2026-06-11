@@ -135,6 +135,17 @@ ceiling) and `bureau-test-x@example.com` (mage-inc, cross-org), password
 `BureauTest-2026!`; rooms `Test Lock Room` / `Test Knock Room (knock)` /
 `Test DND Office (office, owner=dnd)` in zone `test-zone` on Main Floor.
 
+> **2026-06-10 (LiveKit key desync hazard, still open):** the rendered
+> `infra/livekit/livekit.yaml` (gitignored) can silently diverge from the
+> `.env` LiveKit key pair — on this dev box the yaml held an April-era key
+> while `.env` held a newer one, so EVERY app-minted LiveKit token was
+> rejected 401 (`invalid API key`) and the docked call widget showed a red
+> error; LiveKit→banter webhooks fail signature checks in the same state.
+> Fixed locally by re-rendering the yaml keys from `.env` and restarting
+> livekit. **Deferred fix:** the deploy adapter should re-render
+> livekit.yaml on every run (or a boot check should compare yaml key vs
+> env and fail loudly) so the two can never drift apart again.
+
 > **2026-06-10 (later):** the three test rooms were deleted from the dev DB —
 > `test-zone` is not a layout zone, so they were visible on the member floor
 > but invisible (unselectable, unarchivable) in the floor editor. The rooms
