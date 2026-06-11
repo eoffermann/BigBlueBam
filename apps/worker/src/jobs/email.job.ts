@@ -58,13 +58,25 @@ export async function processEmailJob(
     return;
   }
 
-  const info = await transport.sendMail({
-    from: cfg.from,
-    to,
-    subject,
-    html,
-    text: text ?? undefined,
-  });
-
-  logger.info({ jobId: job.id, messageId: info.messageId }, 'Email sent successfully');
+  try {
+    const info = await transport.sendMail({
+      from: cfg.from,
+      to,
+      subject,
+      html,
+      text: text ?? undefined,
+    });
+    logger.info({ jobId: job.id, messageId: info.messageId }, 'Email sent successfully');
+  } catch (err) {
+    // Attach the resolved SMTP context so the SuperUser Log Analysis
+    // tab can show "tried to send via foo:465 (TLS on)" instead of
+    // making the operator guess which config the failure came from.
+    (err as Error & { smtp_context?: unknown }).smtp_context = {
+      host: cfg.host,
+      port: cfg.port,
+      secure: cfg.secure,
+      source: cfg.source,
+    };
+    throw err;
+  }
 }

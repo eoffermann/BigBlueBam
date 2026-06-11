@@ -8,7 +8,14 @@ import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
-import { clearSmtpConfigCache } from '@bigbluebam/smtp-resolver';
+import nodemailer from 'nodemailer';
+import { inArray } from 'drizzle-orm';
+import {
+  SMTP_SETTING_KEYS,
+  clearSmtpConfigCache,
+  resolveSmtpFromSettings,
+} from '@bigbluebam/smtp-resolver';
+import { env } from '../env.js';
 import {
   clearPolicyCache,
   generatePasswordFromPolicy,
@@ -217,6 +224,71 @@ const SECRET_KEYS = new Set<string>([
   'calling.livekit_api_secret',
 ]);
 
+/**
+ * Translate the most common nodemailer/openssl errors into actionable
+ * one-line hints. Operators don't read OpenSSL traceback lines; they
+ * read the line at the top of the error card. So the test endpoint
+ * gives one back tailored to the symptom + the resolved config.
+ */
+function smtpErrorHint(
+  err: Error & { code?: string },
+  cfg: { host: string; port: number; secure: boolean },
+): string | null {
+  const msg = err.message ?? '';
+  const code = err.code ?? '';
+
+  // OpenSSL "wrong version number" — the canonical TLS / STARTTLS mismatch.
+  if (/wrong version number/i.test(msg)) {
+    if (cfg.secure) {
+      return (
+        `Set "Use TLS (secure)" OFF for port ${cfg.port}. SSL was attempted ` +
+        `against a STARTTLS port; the server replied in plaintext so the ` +
+        `handshake failed. Port 465 is the only port that wants TLS on; ` +
+        `587 and 25 want it off (nodemailer auto-issues STARTTLS).`
+      );
+    }
+    return (
+      `Set "Use TLS (secure)" ON for port ${cfg.port}. Plain SMTP was ` +
+      `attempted against an SSL-only port (port 465 expects TLS from the ` +
+      `first byte). Either turn TLS on, or change the port to 587.`
+    );
+  }
+
+  // Common DNS/connectivity failures.
+  if (/EBADNAME|ENOTFOUND/i.test(msg) || code === 'EDNS') {
+    return (
+      `Host "${cfg.host}" doesn't resolve. Check for typos or stray quote ` +
+      `characters in the SMTP Host field, and confirm the worker container ` +
+      `has DNS access to the provider.`
+    );
+  }
+  if (code === 'ECONNREFUSED') {
+    return (
+      `Nothing is listening on ${cfg.host}:${cfg.port}. Verify the port ` +
+      `(465 for SSL, 587 for STARTTLS) and that any provider-side IP ` +
+      `restrictions allow this deployment's outbound IP.`
+    );
+  }
+  if (code === 'ETIMEDOUT' || code === 'ETIME') {
+    return (
+      `Connection to ${cfg.host}:${cfg.port} timed out. The provider may be ` +
+      `blocking outbound SMTP from this network, or a firewall is in the ` +
+      `way. Try port 587 instead of 25 if your network blocks legacy SMTP.`
+    );
+  }
+
+  // Auth.
+  if (code === 'EAUTH' || /authentication|535|invalid login|535-/i.test(msg)) {
+    return (
+      `Authentication rejected. Re-check the SMTP username (often the full ` +
+      `email address) and password. Many providers require an "app password" ` +
+      `or "API key" rather than the normal account password.`
+    );
+  }
+
+  return null;
+}
+
 // Show only the trailing characters of a stored secret. `last` controls
 // how many chars of the raw value leak through (4 for the LiveKit api
 // secret per the task spec; 0 for everything else, which prints a pure
@@ -389,6 +461,155 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
         ? { ...updated, value: maskedValueFor(updated.key, updated.value), is_secret: true }
         : { ...updated, is_secret: false };
       return { data: safe };
+    },
+  );
+
+  // ─── POST /system-settings/smtp/test ──────────────────────────────────
+  // Verifies SMTP settings actually work. Two modes:
+  //   - No `to` field   → just verifies the transport can authenticate
+  //                       and complete a TLS handshake. Returns ok/error.
+  //   - `to` provided   → also sends a short test message to that address
+  //                       so the operator can confirm end-to-end delivery
+  //                       (inbox arrival, spam filter, From-address
+  //                       header rejection, etc.).
+  //
+  // Reads the current effective config exactly the way the worker would,
+  // so a green result here is a real promise that the next invitation
+  // will land. If the operator just edited the SuperUser form, the cache
+  // has already been cleared by the PUT handler above.
+  fastify.post(
+    '/system-settings/smtp/test',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.system_setting.update'),
+      ],
+    },
+    async (request, reply) => {
+      const bodySchema = z.object({
+        to: z.string().email().max(320).optional(),
+      });
+      const parsed = bodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Body validation failed',
+            details: parsed.error.errors.map((e) => ({
+              path: e.path.join('.'),
+              message: e.message,
+            })),
+            request_id: request.id,
+          },
+        });
+      }
+      const { to } = parsed.data;
+
+      // Load smtp_* rows the same way the runtime resolver does so the
+      // test exercises the exact precedence the worker will see.
+      const rows = await db
+        .select({ key: systemSettings.key, value: systemSettings.value })
+        .from(systemSettings)
+        .where(inArray(systemSettings.key, [...SMTP_SETTING_KEYS]));
+      const settings: Record<string, unknown> = {};
+      for (const r of rows) settings[r.key] = r.value;
+      const cfg = resolveSmtpFromSettings(settings, {
+        SMTP_HOST: env.SMTP_HOST,
+        SMTP_PORT: env.SMTP_PORT,
+        SMTP_USER: env.SMTP_USER,
+        SMTP_PASS: env.SMTP_PASS,
+        EMAIL_FROM: env.SMTP_FROM,
+      });
+
+      if (!cfg) {
+        return reply.status(400).send({
+          data: {
+            ok: false,
+            stage: 'config',
+            error:
+              'No SMTP host configured (neither system_settings nor env vars). Set SMTP Host in the form above and save before testing.',
+          },
+        });
+      }
+
+      const transport = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: cfg.user && cfg.pass ? { user: cfg.user, pass: cfg.pass } : undefined,
+        // Force a tight timeout so a wrong host doesn't hang the request.
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 10_000,
+      });
+
+      // Phase 1: verify connection + auth.
+      try {
+        await transport.verify();
+      } catch (err) {
+        const e = err as Error & { code?: string };
+        const hint = smtpErrorHint(e, cfg);
+        request.log.warn({ err: e, stage: 'verify', cfg_source: cfg.source }, 'SMTP test failed (verify)');
+        return reply.send({
+          data: {
+            ok: false,
+            stage: 'verify',
+            error_code: e.code ?? null,
+            error: e.message,
+            hint,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, source: cfg.source },
+          },
+        });
+      }
+
+      // Phase 2: optional send.
+      if (!to) {
+        return reply.send({
+          data: {
+            ok: true,
+            stage: 'verify',
+            message: `Connected to ${cfg.host}:${cfg.port} (${cfg.secure ? 'TLS' : 'STARTTLS'}) successfully.`,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, source: cfg.source },
+          },
+        });
+      }
+      try {
+        const info = await transport.sendMail({
+          from: cfg.from,
+          to,
+          subject: 'BigBlueBam SMTP test',
+          text:
+            'This is a test message sent by the BigBlueBam SuperUser → Platform → SMTP test button. ' +
+            'If you received it, your SMTP relay is configured correctly.\n',
+        });
+        return reply.send({
+          data: {
+            ok: true,
+            stage: 'send',
+            message: `Test email accepted by ${cfg.host} for delivery to ${to}. Message id: ${info.messageId}`,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, source: cfg.source },
+          },
+        });
+      } catch (err) {
+        const e = err as Error & { code?: string; response?: string };
+        const hint = smtpErrorHint(e, cfg);
+        request.log.warn({ err: e, stage: 'send', cfg_source: cfg.source }, 'SMTP test failed (send)');
+        return reply.send({
+          data: {
+            ok: false,
+            stage: 'send',
+            error_code: e.code ?? null,
+            error: e.message,
+            server_response: e.response ?? null,
+            hint,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, source: cfg.source },
+          },
+        });
+      } finally {
+        // nodemailer transports are pool-less by default, but explicitly
+        // closing keeps the FD count tidy under repeated test clicks.
+        transport.close();
+      }
     },
   );
 

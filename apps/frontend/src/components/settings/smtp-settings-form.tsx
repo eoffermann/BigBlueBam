@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Save, Loader2, CheckCircle2, AlertCircle, Send } from 'lucide-react';
 import { api } from '@/lib/api';
+
+interface SmtpTestResult {
+  ok: boolean;
+  stage: 'config' | 'verify' | 'send';
+  message?: string;
+  error?: string;
+  error_code?: string | null;
+  hint?: string | null;
+  server_response?: string | null;
+  resolved?: { host: string; port: number; secure: boolean; source: string };
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -86,6 +97,8 @@ export function SmtpSettingsForm({ isSuperuser }: { isSuperuser: boolean }) {
   const [dirty, setDirty] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState('');
+  const [testResult, setTestResult] = useState<SmtpTestResult | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['system-settings'],
@@ -148,6 +161,26 @@ export function SmtpSettingsForm({ isSuperuser }: { isSuperuser: boolean }) {
     setSaveState('saving');
     saveMutation.mutate(form);
   };
+
+  const testMutation = useMutation({
+    mutationFn: async (to: string | null) => {
+      const res = await api.post<{ data: SmtpTestResult }>(
+        '/system-settings/smtp/test',
+        to ? { to } : {},
+      );
+      return res.data;
+    },
+    onSuccess: (data) => setTestResult(data),
+    onError: (err: unknown) => {
+      setTestResult({
+        ok: false,
+        stage: 'verify',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+
+  const testHostFilled = form.smtp_host.trim().length > 0;
 
   if (!isSuperuser) {
     // Non-superuser fallback: explain that SMTP is platform-wide and
@@ -308,7 +341,7 @@ export function SmtpSettingsForm({ isSuperuser }: { isSuperuser: boolean }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-3 pt-2 flex-wrap">
             <button
               type="button"
               onClick={handleSave}
@@ -334,6 +367,90 @@ export function SmtpSettingsForm({ isSuperuser }: { isSuperuser: boolean }) {
               <span className="inline-flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
                 <AlertCircle className="h-4 w-4" /> {errorMsg}
               </span>
+            )}
+          </div>
+
+          {/* SMTP test panel */}
+          <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Test SMTP
+              </h3>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Uses the currently-saved settings. If you just edited the
+                form, click Save first — the test reads from the same
+                source the worker reads from. "Test connection" verifies
+                login + TLS; the email field also sends a one-line test
+                message so you can confirm delivery.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => testMutation.mutate(null)}
+                disabled={!testHostFilled || testMutation.isPending}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50 text-sm font-medium text-zinc-900 dark:text-zinc-100 transition-colors"
+              >
+                {testMutation.isPending && !testTo ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                Test connection
+              </button>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+                className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[240px]"
+              />
+              <button
+                type="button"
+                onClick={() => testMutation.mutate(testTo.trim() || null)}
+                disabled={
+                  !testHostFilled || !testTo.trim() || testMutation.isPending
+                }
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-sm font-medium text-white transition-colors"
+              >
+                {testMutation.isPending && testTo ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                Send test email
+              </button>
+            </div>
+            {testResult && (
+              <div
+                className={
+                  'rounded-md border px-3 py-2 text-sm space-y-1 ' +
+                  (testResult.ok
+                    ? 'bg-green-50 border-green-200 text-green-900 dark:bg-green-950 dark:border-green-900 dark:text-green-100'
+                    : 'bg-red-50 border-red-200 text-red-900 dark:bg-red-950 dark:border-red-900 dark:text-red-100')
+                }
+              >
+                <div className="font-medium">
+                  {testResult.ok
+                    ? testResult.message ?? 'Success'
+                    : `Failed at ${testResult.stage}: ${testResult.error ?? 'Unknown error'}`}
+                </div>
+                {testResult.hint && (
+                  <div className="text-xs">
+                    <span className="font-medium">Try:</span> {testResult.hint}
+                  </div>
+                )}
+                {testResult.resolved && (
+                  <div className="text-xs font-mono opacity-80">
+                    {testResult.resolved.host}:{testResult.resolved.port}{' '}
+                    ({testResult.resolved.secure ? 'TLS on' : 'TLS off'}, source:{' '}
+                    {testResult.resolved.source})
+                  </div>
+                )}
+                {testResult.server_response && (
+                  <div className="text-xs font-mono opacity-80">
+                    server replied: {testResult.server_response}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </fieldset>

@@ -23,24 +23,9 @@ import {
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { decodeError, type ErrorRow } from './error-decoder';
 
 type Mode = 'errors' | 'audit';
-
-interface ErrorRow {
-  id: string;
-  service: string;
-  request_id: string | null;
-  method: string | null;
-  route: string | null;
-  status_code: number | null;
-  error_code: string | null;
-  message: string;
-  stack: string | null;
-  payload: Record<string, unknown>;
-  created_at: string;
-  user_id: string | null;
-  org_id: string | null;
-}
 
 interface AuditRow {
   id: string;
@@ -336,6 +321,19 @@ function fmtTime(iso: string): string {
   return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, 'Z');
 }
 
+const SEVERITY_BADGE: Record<
+  ReturnType<typeof decodeError>['severity'],
+  string
+> = {
+  config:
+    'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  integration:
+    'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
+  bug: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  unknown:
+    'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
+};
+
 function ErrorRows({
   rows,
   expandedId,
@@ -349,6 +347,7 @@ function ErrorRows({
     <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
       {rows.map((r) => {
         const expanded = expandedId === r.id;
+        const decoded = decodeError(r);
         return (
           <li key={r.id} className="text-sm">
             <button
@@ -359,7 +358,16 @@ function ErrorRows({
               <span className="font-mono text-xs text-zinc-500 shrink-0 mt-0.5 w-[170px]">
                 {fmtTime(r.created_at)}
               </span>
-              <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded font-semibold uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 shrink-0">
+              <span
+                className={
+                  'inline-flex items-center px-1.5 py-0.5 text-[10px] rounded font-semibold uppercase tracking-wide shrink-0 ' +
+                  SEVERITY_BADGE[decoded.severity]
+                }
+                title={`Severity: ${decoded.severity}`}
+              >
+                {decoded.category}
+              </span>
+              <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 shrink-0">
                 {r.service}
               </span>
               {r.status_code != null && (
@@ -368,7 +376,7 @@ function ErrorRows({
                 </span>
               )}
               {r.method && r.route && (
-                <span className="font-mono text-xs text-zinc-500 truncate shrink-0 max-w-[300px]">
+                <span className="font-mono text-xs text-zinc-500 truncate shrink-0 max-w-[280px]">
                   {r.method} {r.route}
                 </span>
               )}
@@ -377,7 +385,45 @@ function ErrorRows({
               </span>
             </button>
             {expanded && (
-              <div className="bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 px-4 py-3 text-xs space-y-2">
+              <div className="bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 px-4 py-3 text-xs space-y-3">
+                {/* Decoded narrative for humans */}
+                <div className="space-y-1.5 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                  <div className="text-zinc-900 dark:text-zinc-100 text-sm font-medium">
+                    {decoded.summary}
+                  </div>
+                  {decoded.whatToTry && (
+                    <div className="text-zinc-700 dark:text-zinc-300">
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        Try:
+                      </span>{' '}
+                      {decoded.whatToTry}
+                    </div>
+                  )}
+                  {decoded.extras.length > 0 && (
+                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
+                      {decoded.extras.map((kv) => (
+                        <div key={kv.label} className="flex items-baseline gap-2">
+                          <span className="text-zinc-500 text-[11px]">
+                            {kv.label}
+                          </span>
+                          <span className="font-mono text-zinc-700 dark:text-zinc-300 break-all">
+                            {kv.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {decoded.topFrame && (
+                    <div className="mt-1">
+                      <span className="text-zinc-500">Thrown at: </span>
+                      <span className="font-mono text-zinc-700 dark:text-zinc-300 break-all">
+                        {decoded.topFrame}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Raw technical fields, still here for engineers */}
                 <Detail label="error_code" value={r.error_code} />
                 <Detail label="request_id" value={r.request_id} />
                 <Detail label="user_id" value={r.user_id} />

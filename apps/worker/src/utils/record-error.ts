@@ -26,6 +26,11 @@ function clip(s: string | null | undefined, n: number): string | null {
 /**
  * Insert a system_errors row for a worker job failure. Best-effort,
  * never throws.
+ *
+ * If the failing job attached job-specific context to the error (e.g.
+ * the email job pins the resolved SMTP host/port/secure as
+ * `err.smtp_context`), it's included in the payload so the SuperUser
+ * Log Analysis tab can show it without re-running the failure.
  */
 export async function recordWorkerError(opts: {
   queueName: string;
@@ -35,6 +40,20 @@ export async function recordWorkerError(opts: {
 }): Promise<void> {
   try {
     const db = getDb();
+    const errAny = opts.err as Error & {
+      code?: string;
+      smtp_context?: unknown;
+      response?: string;
+    };
+    const payload: Record<string, unknown> = {
+      queue: opts.queueName,
+      job_id: opts.jobId ?? null,
+      job_name: opts.jobName ?? null,
+      name: opts.err.name,
+    };
+    if (errAny.smtp_context) payload.smtp_context = errAny.smtp_context;
+    if (errAny.response) payload.server_response = errAny.response;
+
     await db.execute(sql`
       INSERT INTO system_errors (
         service, request_id, method, route, status_code,
@@ -45,15 +64,10 @@ export async function recordWorkerError(opts: {
         NULL,
         ${clip(`${opts.queueName}/${opts.jobName ?? 'job'}`, MAX_ROUTE)},
         NULL,
-        ${clip((opts.err as unknown as { code?: string }).code ?? null, 80)},
+        ${clip(errAny.code ?? null, 80)},
         ${clip(opts.err.message ?? '(no message)', MAX_MESSAGE) ?? '(no message)'},
         ${clip(opts.err.stack ?? null, MAX_STACK)},
-        ${JSON.stringify({
-          queue: opts.queueName,
-          job_id: opts.jobId ?? null,
-          job_name: opts.jobName ?? null,
-          name: opts.err.name,
-        })}::jsonb
+        ${JSON.stringify(payload)}::jsonb
       )
     `);
   } catch {
