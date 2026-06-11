@@ -9,6 +9,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import { env } from './env.js';
 import { db, connection } from './db/index.js';
 import { createErrorHandler } from '@bigbluebam/logging';
+import { recordSystemError } from './services/system-errors.service.js';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
 import redisPlugin from './plugins/redis.js';
 import csrfPlugin from './plugins/csrf.js';
@@ -86,6 +87,7 @@ import permissionsAdminRoutes from './routes/permissions-admin.routes.js';
 import internalPermissionsRoutes from './routes/internal-permissions.routes.js';
 import internalCanReadRoutes from './routes/internal-can-read.routes.js';
 import deploySettingsRoutes from './routes/deploy-settings.routes.js';
+import superuserLogsRoutes from './routes/superuser-logs.routes.js';
 import { sql } from 'drizzle-orm';
 import websocketHandlerPlugin from './plugins/websocket.js';
 
@@ -101,8 +103,14 @@ const fastify = Fastify({
   genReqId: () => crypto.randomUUID(),
 });
 
-// Error handler
-fastify.setErrorHandler(createErrorHandler({ serviceName: 'api' }));
+// Error handler — also captures every 5xx into system_errors so the
+// SuperUser Console's Log Analysis tab can surface them.
+fastify.setErrorHandler(
+  createErrorHandler({
+    serviceName: 'api',
+    recordError: (err, ctx) => recordSystemError(err, ctx),
+  }),
+);
 
 // 404 handler — return the canonical error envelope for unknown routes
 fastify.setNotFoundHandler((request, reply) => {
@@ -298,6 +306,7 @@ await fastify.register(internalPermissionsRoutes);
 // D-12: cross-app can-read preflight for the Bureau summon system.
 await fastify.register(internalCanReadRoutes);
 await fastify.register(deploySettingsRoutes);
+await fastify.register(superuserLogsRoutes);
 
 // BAM-029: TODO — Add a periodic session cleanup job to the worker service.
 // Expired sessions (sessions.expires_at < NOW()) accumulate in the database

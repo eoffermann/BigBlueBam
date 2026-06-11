@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import pino from 'pino';
 import { loadEnv } from './env.js';
 import { createDb, closeDb } from './utils/db.js';
+import { recordWorkerError } from './utils/record-error.js';
 import { processEmailJob, type EmailJobData } from './jobs/email.job.js';
 import { processNotificationJob, type NotificationJobData } from './jobs/notification.job.js';
 import { processSprintCloseJob, type SprintCloseJobData } from './jobs/sprint-close.job.js';
@@ -180,6 +181,14 @@ emailWorker.on('completed', (job) => {
 
 emailWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'email', err }, 'Job failed');
+  // Mirror the failure into system_errors so the SuperUser Console's
+  // Log Analysis tab can surface it. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'email',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
 });
 
 // Notifications worker

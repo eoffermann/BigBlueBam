@@ -62,6 +62,17 @@ export const requestIdPlugin = fp(async (fastify: FastifyInstance) => {
   });
 });
 
+export interface ErrorRecorderContext {
+  request_id: string;
+  internal_error_id: string;
+  service: string;
+  method?: string;
+  route?: string;
+  status_code: number;
+  user_id?: string | null;
+  org_id?: string | null;
+}
+
 export interface CreateErrorHandlerOptions {
   serviceName: string;
   /** Optional Sentry capture function; receives (err, { request_id, internal_error_id }). */
@@ -69,6 +80,13 @@ export interface CreateErrorHandlerOptions {
     err: Error,
     context: { request_id: string; internal_error_id: string; service: string },
   ) => void;
+  /**
+   * Optional sink for 5xx errors — typically inserts a row into the
+   * system_errors table so the SuperUser Console's Log Analysis tab can
+   * display them. Errors thrown by the recorder are swallowed (logging
+   * must never crash a request).
+   */
+  recordError?: (err: Error, context: ErrorRecorderContext) => void | Promise<void>;
 }
 
 interface ErrorEnvelope {
@@ -161,6 +179,35 @@ export function createErrorHandler(options: CreateErrorHandlerOptions) {
         });
       } catch {
         // swallow, logging must never throw
+      }
+    }
+    if (options.recordError) {
+      // Best-effort sink for the SuperUser Log Analysis tab. Pull the
+      // best caller context we can without forcing the host to wire it
+      // up explicitly — `request.user` is the api's convention, but
+      // satellite services that don't set it just skip.
+      const callerUser = (request as unknown as { user?: { id?: string | null; active_org_id?: string | null; org_id?: string | null } | null }).user;
+      const route =
+        (request as unknown as { routeOptions?: { url?: string } }).routeOptions?.url ??
+        request.url.split('?')[0] ??
+        request.url;
+      try {
+        void Promise.resolve(
+          options.recordError(error, {
+            request_id: String(requestId),
+            internal_error_id: internalErrorId,
+            service: options.serviceName,
+            method: request.method,
+            route,
+            status_code: statusCode,
+            user_id: callerUser?.id ?? null,
+            org_id: callerUser?.active_org_id ?? callerUser?.org_id ?? null,
+          }),
+        ).catch(() => {
+          // swallow — logging must never crash a request
+        });
+      } catch {
+        // swallow synchronous throws too
       }
     }
     const envelope: ErrorEnvelope = {
