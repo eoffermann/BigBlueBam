@@ -21,6 +21,7 @@ import {
 } from '@bigbluebam/smtp-resolver';
 import { sql, inArray } from 'drizzle-orm';
 import { env } from '../env.js';
+import { spaBase } from './urls.js';
 import { db } from '../db/index.js';
 import { systemSettings } from '../db/schema/system-settings.js';
 
@@ -113,7 +114,7 @@ export async function sendGuestInvitationEmail(
   params: GuestInvitationEmailParams,
 ): Promise<boolean> {
   const { to, token, orgName, inviterName } = params;
-  const acceptUrl = `${env.FRONTEND_URL.replace(/\/$/, '')}/guests/accept/${token}`;
+  const acceptUrl = `${spaBase()}/guests/accept/${token}`;
 
   const safeOrg = escapeHtml(orgName);
   const safeInviter = escapeHtml(inviterName);
@@ -174,7 +175,7 @@ export async function sendEmailVerificationEmail(
   params: EmailVerificationParams,
 ): Promise<boolean> {
   const { to, token, userName } = params;
-  const verifyUrl = `${env.FRONTEND_URL.replace(/\/$/, '')}/verify-email/${token}`;
+  const verifyUrl = `${spaBase()}/verify-email/${token}`;
 
   const safeName = escapeHtml(userName);
   const safeUrl = escapeHtml(verifyUrl);
@@ -298,7 +299,7 @@ export async function sendPasswordResetEmail(
   params: PasswordResetEmailParams,
 ): Promise<boolean> {
   const { to, token, userName, expiresInMinutes } = params;
-  const resetUrl = `${env.FRONTEND_URL.replace(/\/$/, '')}/password-reset?token=${encodeURIComponent(token)}`;
+  const resetUrl = `${spaBase()}/password-reset?token=${encodeURIComponent(token)}`;
 
   const safeName = escapeHtml(userName);
   const safeUrl = escapeHtml(resetUrl);
@@ -381,10 +382,10 @@ export async function sendMemberInvitationEmail(
     onboardingExpiresInMinutes,
   } = params;
 
-  const loginUrl = `${env.FRONTEND_URL.replace(/\/$/, '')}/login`;
+  const loginUrl = `${spaBase()}/login`;
   const setupUrl =
     isNewUser && onboardingToken
-      ? `${env.FRONTEND_URL.replace(/\/$/, '')}/password-reset?token=${encodeURIComponent(onboardingToken)}`
+      ? `${spaBase()}/password-reset?token=${encodeURIComponent(onboardingToken)}`
       : null;
 
   const safeOrg = escapeHtml(orgName);
