@@ -8,6 +8,11 @@ import { logSuperuserAction } from '../services/superuser-audit.service.js';
 import { isBootstrapRequired } from '../services/bootstrap-status.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import { validateExternalUrl } from '../lib/url-validator.js';
+import {
+  clearPolicyCache,
+  generatePasswordFromPolicy,
+  normalizePolicy,
+} from '../services/password-generator.service.js';
 
 // Canonical Launchpad app catalog. THIS is the single source of truth for
 // every app the suite exposes — `LAUNCHPAD_CATALOG` carries the rendering
@@ -176,6 +181,30 @@ const KEY_VALIDATORS: Record<string, z.ZodType> = {
   'calling.livekit_api_secret': z.string().min(16).max(512),
   'calling.voice_agent_url': externalUrlSchema(2048),
   'calling.global_enabled': z.boolean(),
+
+  // ── Password generation policy (SuperUser only) ──────────────────────
+  // Controls every server-side password mint: admin-issued password
+  // resets, CLI reset-password, future flows. The full default + clamps
+  // live in services/password-generator.service.ts. We accept any object
+  // shape here and let normalizePolicy() do the clamping at read time —
+  // the only thing this validator must reject is non-object junk and
+  // illegal modes, so that invariant is never crossed at the storage
+  // layer.
+  password_policy: z.object({
+    mode: z.enum(['alphanumeric', 'passphrase']).optional(),
+    alphanumeric: z
+      .object({ length: z.number().int().min(12).max(64).optional() })
+      .optional(),
+    passphrase: z
+      .object({
+        word_count: z.number().int().min(3).max(8).optional(),
+        separator: z.string().max(3).optional(),
+        capitalize_words: z.boolean().optional(),
+        digit_count: z.number().int().min(0).max(4).optional(),
+        append_symbol: z.boolean().optional(),
+      })
+      .optional(),
+  }),
 };
 
 // Keys whose stored value is a secret and must be masked on every read.
@@ -300,6 +329,11 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
       const userId = request.user!.id;
       const now = new Date();
 
+      // The password generator caches the policy in-process for 15s. When
+      // a SuperUser flips the setting, invalidate so the next mint sees
+      // the new value immediately rather than at the next cache expiry.
+      if (key === 'password_policy') clearPolicyCache();
+
       // Upsert the setting
       await db
         .insert(systemSettings)
@@ -349,6 +383,42 @@ export default async function systemSettingsRoutes(fastify: FastifyInstance) {
         ? { ...updated, value: maskedValueFor(updated.key, updated.value), is_secret: true }
         : { ...updated, is_secret: false };
       return { data: safe };
+    },
+  );
+
+  // ─── POST /system-settings/password_policy/preview ─────────────────────
+  // Generates N sample passwords against a DRAFT policy without
+  // persisting it. The frontend uses this so a SuperUser can see what
+  // their settings will produce before saving. Reuses normalizePolicy()
+  // so the preview clamps the same way the live generator will, no
+  // matter what the form sends.
+  fastify.post(
+    '/system-settings/password_policy/preview',
+    { preHandler: [requireAuth, fastify.requireCan('bam.system_setting.update')] },
+    async (request, reply) => {
+      const bodySchema = z.object({
+        policy: z.unknown(),
+        count: z.number().int().min(1).max(10).optional(),
+      });
+      const parsed = bodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Body must contain { policy, count? }',
+            details: parsed.error.errors.map((e) => ({
+              path: e.path.join('.'),
+              message: e.message,
+            })),
+            request_id: request.id,
+          },
+        });
+      }
+      const policy = normalizePolicy(parsed.data.policy);
+      const count = parsed.data.count ?? 5;
+      const samples: string[] = [];
+      for (let i = 0; i < count; i++) samples.push(generatePasswordFromPolicy(policy));
+      return { data: { policy, samples } };
     },
   );
 

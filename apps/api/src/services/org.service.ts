@@ -14,6 +14,7 @@ import { apiKeys } from '../db/schema/api-keys.js';
 import { activityLog } from '../db/schema/activity-log.js';
 import { accountGroupMemberships, permissionGroups } from '../db/schema/permissions.js';
 import { resolveUserOrgRole, setUserOrgRole } from './role-resolver.js';
+import { generatePassword } from './password-generator.service.js';
 
 export async function getOrganization(orgId: string) {
   const [org] = await db
@@ -499,20 +500,6 @@ export class PasswordResetForbiddenError extends Error {
   }
 }
 
-// 16 chars from an alphabet that excludes easily-confused glyphs (0/O, 1/l/I,
-// etc.). ~95 bits of entropy — more than enough for a freshly-minted admin
-// reset that the user is expected to change on next login.
-const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-
-function generateStrongPassword(length = 16): string {
-  const bytes = randomBytes(length);
-  let out = '';
-  for (let i = 0; i < length; i++) {
-    out += PASSWORD_ALPHABET[bytes[i]! % PASSWORD_ALPHABET.length];
-  }
-  return out;
-}
-
 /**
  * Resets the password of another user. The caller must be either:
  *  - A SuperUser (may reset anyone, anywhere), or
@@ -572,7 +559,7 @@ export async function resetMemberPassword(opts: {
     }
   }
 
-  const rawPassword = newPassword ?? generateStrongPassword();
+  const rawPassword = newPassword ?? (await generatePassword());
   const passwordHash = await argon2.hash(rawPassword);
 
   await db.transaction(async (tx) => {

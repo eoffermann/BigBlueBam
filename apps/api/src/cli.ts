@@ -13,18 +13,12 @@ import { accountGroupMemberships } from './db/schema/permissions.js';
 import { sessions } from './db/schema/sessions.js';
 import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
 
-// Generator for admin-issued passwords. Same 56-char confusable-safe alphabet
-// as services/org.service.ts::generateStrongPassword so CLI- and API-minted
-// passwords look indistinguishable to end users. ~95 bits of entropy at len=16.
-const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-function generateStrongPassword(length = 16): string {
-  const bytes = randomBytes(length);
-  let out = '';
-  for (let i = 0; i < length; i++) {
-    out += PASSWORD_ALPHABET[bytes[i]! % PASSWORD_ALPHABET.length];
-  }
-  return out;
-}
+// User-facing passwords (admin-issued resets, the CLI reset-password
+// command) all flow through the shared password generator service so a
+// SuperUser policy change applies uniformly. Long-form security tokens
+// (api keys, locked-account marker hashes) still use randomBytes directly
+// because they are not user-typed.
+import { generatePassword } from './services/password-generator.service.js';
 
 // Wave E.F: fixed UUIDs of the five built-in permission groups (seeded by
 // migration 0146). Used by cli.ts to upsert account_group_memberships
@@ -819,7 +813,7 @@ async function resetPasswordCli(flags: Record<string, string>) {
       process.exit(1);
     }
 
-    const rawPassword = providedPassword ?? generateStrongPassword();
+    const rawPassword = providedPassword ?? (await generatePassword());
     const passwordHash = await argon2.hash(rawPassword);
     let sessionsRevoked = 0;
 
