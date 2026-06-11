@@ -117,23 +117,32 @@ function normalizeRow(value: unknown): unknown {
  * Pure function — no I/O, no caching. Use this when you have the
  * settings in hand and just need the precedence math. The cached entry
  * point is `getSmtpConfig` below.
+ *
+ * Every value runs through `normalizeRow` first to peel a potential
+ * JSON-string wrapper. The system_settings PUT handler stringifies
+ * everything it stores via `JSON.stringify`, and depending on the
+ * driver/column config the read can come back as the already-parsed
+ * primitive OR as the raw stringified form. Without the peel a host
+ * of "smtp.example.com" arrives as the literal six-byte string
+ * `"smtp.example.com"` (quotes included), nodemailer hands that to
+ * DNS, and you get `queryA EBADNAME "smtp.example.com"` in worker
+ * logs — the exact crash that the Railway worker hit before this
+ * fix landed.
  */
 export function resolveSmtpFromSettings(
   settings: Record<string, unknown>,
   env: SmtpEnv,
 ): ResolvedSmtpConfig | null {
-  const dbHost =
-    typeof settings.smtp_host === 'string' ? settings.smtp_host : null;
-  const dbPortRaw = normalizeRow(settings.smtp_port);
-  const dbPort = parseStringOrNumberToInt(dbPortRaw);
-  const dbUser =
-    typeof settings.smtp_user === 'string' ? settings.smtp_user : null;
-  const dbPass =
-    typeof settings.smtp_password === 'string' ? settings.smtp_password : null;
-  const dbFrom =
-    typeof settings.smtp_from === 'string' ? settings.smtp_from : null;
-  const dbSecureRaw = normalizeRow(settings.smtp_secure);
-  const dbSecure = parseBoolean(dbSecureRaw);
+  const rawHost = normalizeRow(settings.smtp_host);
+  const dbHost = typeof rawHost === 'string' && rawHost.length > 0 ? rawHost : null;
+  const dbPort = parseStringOrNumberToInt(normalizeRow(settings.smtp_port));
+  const rawUser = normalizeRow(settings.smtp_user);
+  const dbUser = typeof rawUser === 'string' && rawUser.length > 0 ? rawUser : null;
+  const rawPass = normalizeRow(settings.smtp_password);
+  const dbPass = typeof rawPass === 'string' && rawPass.length > 0 ? rawPass : null;
+  const rawFrom = normalizeRow(settings.smtp_from);
+  const dbFrom = typeof rawFrom === 'string' && rawFrom.length > 0 ? rawFrom : null;
+  const dbSecure = parseBoolean(normalizeRow(settings.smtp_secure));
 
   const host = dbHost ?? env.SMTP_HOST ?? null;
   if (!host) return null;

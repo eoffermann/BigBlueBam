@@ -90,6 +90,49 @@ describe('resolveSmtpFromSettings', () => {
     expect(r?.secure).toBe(true);
   });
 
+  it('peels JSON-string wrappers on smtp_host (the Railway 2026-06-11 bug)', () => {
+    // PostgreSQL JSONB read can come back as the raw stringified form
+    // depending on driver config. The system_settings PUT handler stores
+    // every value via JSON.stringify, so a host of "smtp.example.com"
+    // becomes the 18-byte string `"smtp.example.com"` on disk. Without
+    // peeling that wrapper, nodemailer asks DNS for the literal hostname
+    // including the embedded double-quotes: queryA EBADNAME
+    // "smtp.example.com". This regressed on Railway and we never want it
+    // to come back.
+    const r = resolveSmtpFromSettings(
+      { smtp_host: '"smtp.example.com"' },
+      EMPTY_ENV,
+    );
+    expect(r?.host).toBe('smtp.example.com');
+  });
+
+  it('peels JSON-string wrappers on every text field', () => {
+    const r = resolveSmtpFromSettings(
+      {
+        smtp_host: '"smtp.example.com"',
+        smtp_user: '"someuser"',
+        smtp_password: '"correct horse battery staple"',
+        smtp_from: '"noreply@example.com"',
+      },
+      EMPTY_ENV,
+    );
+    expect(r).toMatchObject({
+      host: 'smtp.example.com',
+      user: 'someuser',
+      pass: 'correct horse battery staple',
+      from: 'noreply@example.com',
+    });
+  });
+
+  it('treats empty-string DB values as missing (fall through to env)', () => {
+    const r = resolveSmtpFromSettings(
+      { smtp_host: '', smtp_user: '' },
+      { SMTP_HOST: 'envhost', SMTP_USER: 'envuser' },
+    );
+    expect(r?.host).toBe('envhost');
+    expect(r?.user).toBe('envuser');
+  });
+
   it('classifies source=mixed when both DB and env contribute', () => {
     const r = resolveSmtpFromSettings(
       { smtp_host: 'dbhost' },
