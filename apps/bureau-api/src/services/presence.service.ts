@@ -485,6 +485,7 @@ export async function updateLocation(
   locationUrl: string | null,
   locationApp: string | null,
   locationLabel: string | null,
+  locationSurfaceId: string | null = null,
 ): Promise<void> {
   const sessionKey = keys.session(sessionId);
 
@@ -497,6 +498,14 @@ export async function updateLocation(
     locationApp ?? '',
     'locationLabel',
     locationLabel ?? '',
+    // The surface the SDK resolved for this page (entity id or derived
+    // URL hash). Persisted so the surface-huddle mint check can match
+    // surfaces whose id does NOT appear in the URL — slug-routed pages
+    // like /banter/channels/{slug} were unmintable under the
+    // substring-on-URL check alone. Same trust model as locationUrl:
+    // self-reported by the user's own SDK.
+    'locationSurfaceId',
+    locationSurfaceId ?? '',
     'lastBeat',
     String(Date.now()),
   );

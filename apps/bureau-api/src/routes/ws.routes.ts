@@ -1154,6 +1154,10 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             const url = typeof msg.url === 'string' ? msg.url : null;
             const app = typeof msg.app === 'string' ? msg.app : null;
             const label = typeof msg.label === 'string' ? msg.label : undefined;
+            const surfaceId =
+              typeof msg.surfaceId === 'string' && msg.surfaceId.length <= 64
+                ? msg.surfaceId
+                : null;
             if (!url || !app) break;
             client.locationUrl = url;
             client.locationApp = app;
@@ -1164,6 +1168,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               url,
               app,
               label ?? null,
+              surfaceId,
             );
             if (client.floorId) {
               await publishFloor(

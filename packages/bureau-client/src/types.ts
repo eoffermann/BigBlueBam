@@ -146,6 +146,11 @@ export interface LocationUpdateMessage {
   url: string;
   app: string;
   label?: string;
+  /** The surface the SDK resolved for this page (entity id from the
+   *  host, or the derived URL hash). Persisted on the presence session
+   *  so the surface-huddle mint check can match slug-routed pages whose
+   *  URL doesn't contain the entity id. */
+  surfaceId?: string;
 }
 
 export interface SummonMessage {

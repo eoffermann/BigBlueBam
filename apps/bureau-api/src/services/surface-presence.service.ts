@@ -79,6 +79,7 @@ export async function isUserOnSurface(
       'orgId',
       'locationApp',
       'locationUrl',
+      'locationSurfaceId',
     );
   }
   const results = await pipeline.exec();
@@ -89,7 +90,7 @@ export async function isUserOnSurface(
     const [err, value] = entry;
     if (err) continue;
     if (!Array.isArray(value)) continue;
-    const [sessOrgId, sessApp, sessUrl] = value as Array<string | null>;
+    const [sessOrgId, sessApp, sessUrl, sessSurfaceId] = value as Array<string | null>;
     if (!sessOrgId || sessOrgId !== orgId) continue;
     if (!sessUrl || sessUrl.length === 0) continue;
     if (surfaceApp === URL_SURFACE_APP) {
@@ -105,7 +106,16 @@ export async function isUserOnSurface(
       continue;
     }
     if (!sessApp || sessApp !== surfaceApp) continue;
+    // Two ways a session proves it's on an entity surface:
+    //   1. The entity id appears in the URL (id-routed pages —
+    //      /brief/documents/{id}, /banter/dm/{id}, …).
+    //   2. The session's SDK reported the surface id directly
+    //      (slug-routed pages — /banter/channels/{slug} carries no id
+    //      in the URL, which made those rooms unmintable and broke
+    //      invite-accept with a 403; Bureau troubleshooting 2026-06-12).
+    //      Same self-reported trust model as the URL itself.
     if (sessUrl.includes(surfaceId)) return true;
+    if (sessSurfaceId && sessSurfaceId === surfaceId) return true;
   }
 
   return false;

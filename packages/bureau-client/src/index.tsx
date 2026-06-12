@@ -557,6 +557,9 @@ function BureauProvider({
         url: descriptor.url,
         app: descriptor.app,
         label: descriptor.label,
+        // Lets bureau-api's mint check recognize slug-routed pages
+        // (e.g. /banter/channels/{slug}) whose URL carries no entity id.
+        surfaceId: descriptor.surface_id,
       });
     }
   }, [client, describeLocation, route]);
@@ -1329,43 +1332,45 @@ function BureauDockedBoxInner({
           Bring everyone here
         </button>
       ) : null}
-      {canInvite ? (
+      <div style={{ display: 'flex', gap: 6 }}>
+        {canInvite ? (
+          <button
+            type="button"
+            style={{ ...inviteBtnStyle, flex: 1, minWidth: 0 }}
+            data-bureau-invite-button
+            onClick={() => {
+              setHuntOpen(false);
+              setInviteMode('ask');
+              setInviteOpen((v) => !(v && inviteMode === 'ask'));
+            }}
+            onContextMenu={(e) => {
+              // Right-click = Force Invite (admin/owner/SuperUser; the
+              // server enforces — others see "not allowed" per row).
+              e.preventDefault();
+              setHuntOpen(false);
+              setInviteMode('force');
+              setInviteOpen(true);
+            }}
+            title="Ring people to join you here (right-click: force invite — admin only)"
+            aria-expanded={inviteOpen}
+          >
+            Invite…
+          </button>
+        ) : null}
         <button
           type="button"
-          style={inviteBtnStyle}
-          data-bureau-invite-button
+          style={{ ...inviteBtnStyle, flex: 1, minWidth: 0 }}
+          data-bureau-hunt-button
           onClick={() => {
-            setHuntOpen(false);
-            setInviteMode('ask');
-            setInviteOpen((v) => !(v && inviteMode === 'ask'));
+            setInviteOpen(false);
+            setHuntOpen((v) => !v);
           }}
-          onContextMenu={(e) => {
-            // Right-click = Force Invite (admin/owner/SuperUser; the
-            // server enforces — others see "not allowed" per row).
-            e.preventDefault();
-            setHuntOpen(false);
-            setInviteMode('force');
-            setInviteOpen(true);
-          }}
-          title="Ring people to join you here (right-click: force invite — admin only)"
-          aria-expanded={inviteOpen}
+          title="Find an org member and jump to wherever they are"
+          aria-expanded={huntOpen}
         >
-          Invite…
+          Hunt…
         </button>
-      ) : null}
-      <button
-        type="button"
-        style={inviteBtnStyle}
-        data-bureau-hunt-button
-        onClick={() => {
-          setInviteOpen(false);
-          setHuntOpen((v) => !v);
-        }}
-        title="Find an org member and jump to wherever they are"
-        aria-expanded={huntOpen}
-      >
-        Hunt…
-      </button>
+      </div>
       {inviteOpen && canInvite && ringSurfaceApp && inviteSurfaceId ? (
         <InvitePopover
           surfaceApp={ringSurfaceApp}
