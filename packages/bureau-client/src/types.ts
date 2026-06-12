@@ -173,6 +173,25 @@ export interface SummonGrantAccessMessage {
   userIds: string[];
 }
 
+/** Join a room's text chat (one per socket; re-join switches rooms). */
+export interface ChatJoinMessage {
+  type: 'chat_join';
+  roomKey: string;
+  /** Human label for the room (the location-context name), stored on the thread. */
+  label?: string;
+  app?: string;
+}
+
+export interface ChatLeaveMessage {
+  type: 'chat_leave';
+}
+
+export interface ChatSendMessage {
+  type: 'chat_send';
+  roomKey: string;
+  body: string;
+}
+
 export type ClientMessage =
   | SubscribeFloorMessage
   | EnterRoomMessage
@@ -187,7 +206,10 @@ export type ClientMessage =
   | SummonMessage
   | SummonRespondMessage
   | SummonGrantAccessMessage
-  | RingRespondMessage;
+  | RingRespondMessage
+  | ChatJoinMessage
+  | ChatLeaveMessage
+  | ChatSendMessage;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Server → client messages (§8, "Server to client" table) plus the
@@ -405,6 +427,30 @@ export interface ErrorEvent {
   message: string;
 }
 
+/** One room-chat message as the hub serializes it. */
+export interface BureauChatMessage {
+  id: string;
+  room_key: string;
+  author_id: string | null;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
+/** Ack + initial transcript after chat_join. */
+export interface ChatJoinedEvent {
+  type: 'chat_joined';
+  room_key: string;
+  messages: BureauChatMessage[];
+}
+
+/** Live fan-out of a new message to everyone joined to the room. */
+export interface ChatMessageEvent {
+  type: 'chat_message';
+  room_key: string;
+  message: BureauChatMessage;
+}
+
 export type ServerMessage =
   | ConnectedEvent
   | PresenceSnapshotEvent
@@ -425,6 +471,8 @@ export type ServerMessage =
   | StatusChangedEvent
   | RingIncomingEvent
   | RingRespondedEvent
+  | ChatJoinedEvent
+  | ChatMessageEvent
   | ErrorEvent;
 
 export type ServerMessageType = ServerMessage['type'];

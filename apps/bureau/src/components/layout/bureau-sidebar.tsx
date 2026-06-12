@@ -1,4 +1,4 @@
-import { Building2, DoorOpen, LayoutGrid, Settings, Users } from 'lucide-react';
+import { Building2, DoorOpen, LayoutGrid, MessageSquareText, Settings, Users } from 'lucide-react';
 import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -102,6 +102,16 @@ export function BureauSidebar({
             badge={f.occupancy}
           />
         ))}
+
+        <div className="px-2 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          History
+        </div>
+        <NavItem
+          active={window.location.pathname.startsWith('/bureau/chats')}
+          onClick={() => onNavigate('/chats')}
+          icon={MessageSquareText}
+          label="Recent chats"
+        />
 
         {isOrgAdmin ? (
           <>

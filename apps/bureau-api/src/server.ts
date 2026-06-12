@@ -23,6 +23,7 @@ import presenceHereRoutes from './routes/presence-here.routes.js';
 import presenceWhereRoutes from './routes/presence-where.routes.js';
 import ringRoutes from './routes/ring.routes.js';
 import wsRoutes from './routes/ws.routes.js';
+import chatRoutes from './routes/chat.routes.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -157,6 +158,8 @@ await fastify.register(presenceHereRoutes, { prefix: '/v1' });
 // DND-respecting, destination-access-filtered.
 await fastify.register(presenceWhereRoutes, { prefix: '/v1' });
 await fastify.register(ringRoutes, { prefix: '/v1' });
+// Room text chat recovery + retention (live chat itself rides the WS hub).
+await fastify.register(chatRoutes, { prefix: '/v1' });
 
 // Bureau WebSocket hub — Agent B. Mounted at `/bureau/ws` (no /v1 prefix
 // because nginx proxies `/bureau/ws` straight through to this endpoint).

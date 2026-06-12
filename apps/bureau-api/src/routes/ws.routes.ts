@@ -69,10 +69,12 @@ import * as presence from '../services/presence.service.js';
 import {
   channels as presenceChannels,
   mirrorPresenceToShared,
+  publishChatEvent,
   publishPresenceDelta,
   publishRoomEvent,
   publishUserTarget,
 } from '../services/presence-publisher.service.js';
+import * as chat from '../services/chat.service.js';
 import {
   fanOutSummon,
   grantAccessAndSummon,
@@ -113,6 +115,8 @@ interface ConnectedClient {
   msgWindowStart: number;
   /** Set of pubsub channels this socket has subscribed to, for cleanup. */
   channels: Set<string>;
+  /** Room chat the socket is joined to (one at a time, like floors). */
+  chatRoomKey: string | null;
 }
 
 /** Per-socket WS message rate-limit window (matches board-api defaults). */
@@ -148,6 +152,7 @@ const ALLOWED_PRIVACY = new Set(['open', 'knock', 'private']);
 const floorChannel = presenceChannels.floor;
 const roomChannel = presenceChannels.room;
 const userChannel = presenceChannels.user;
+const chatChannel = presenceChannels.chat;
 
 // ─────────────────────────────────────────────────────────────────────
 // Outbound frame helpers
@@ -285,6 +290,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       msgCount: 0,
       msgWindowStart: Date.now(),
       channels: new Set<string>(),
+      chatRoomKey: null,
     };
 
     // Open the durable presence session and subscribe to the user's
@@ -1185,6 +1191,86 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           // ──────────────────────────────────────────────
           // Surface-huddle ring response (presence-and-immediate-interaction).
           // The recipient's RingHandler sends { ring_token, decision } after
+          // ──────────────────────────────────────────────
+          // Room text chat (0187). One chat room per socket at a time —
+          // the widget joins whatever room/surface the user is on.
+          // Joining records participation (which later entitles the user
+          // to recover the thread from the Bureau app) and returns the
+          // recent unexpired transcript.
+          case 'chat_join': {
+            const roomKey = typeof msg.roomKey === 'string' ? msg.roomKey : null;
+            if (!roomKey || !chat.ROOM_KEY_RE.test(roomKey)) {
+              safeSend(socket, frame('error', { code: 'BAD_CHAT_ROOM' }));
+              break;
+            }
+            if (client.chatRoomKey && client.chatRoomKey !== roomKey) {
+              const oldChan = chatChannel(orgId, client.chatRoomKey);
+              if (client.channels.has(oldChan)) {
+                await subscriber.unsubscribe(oldChan);
+                client.channels.delete(oldChan);
+              }
+            }
+            const chan = chatChannel(orgId, roomKey);
+            if (!client.channels.has(chan)) {
+              await subscriber.subscribe(chan);
+              client.channels.add(chan);
+            }
+            client.chatRoomKey = roomKey;
+            const label = typeof msg.label === 'string' ? msg.label.slice(0, 300) : null;
+            const app = typeof msg.app === 'string' ? msg.app.slice(0, 40) : null;
+            await chat.upsertRoom(orgId, roomKey, label, app);
+            await chat.recordParticipant(orgId, roomKey, userId);
+            const recent = await chat.listRecentMessages(orgId, roomKey, 50);
+            safeSend(
+              socket,
+              frame('chat_joined', { room_key: roomKey, messages: recent }),
+            );
+            break;
+          }
+
+          case 'chat_leave': {
+            if (client.chatRoomKey) {
+              const chan = chatChannel(orgId, client.chatRoomKey);
+              if (client.channels.has(chan)) {
+                await subscriber.unsubscribe(chan);
+                client.channels.delete(chan);
+              }
+              client.chatRoomKey = null;
+            }
+            break;
+          }
+
+          case 'chat_send': {
+            const roomKey = typeof msg.roomKey === 'string' ? msg.roomKey : null;
+            const body = typeof msg.body === 'string' ? msg.body.trim() : '';
+            // Must have joined the room this socket claims to post to —
+            // joining is what proved presence and recorded participation.
+            if (!roomKey || roomKey !== client.chatRoomKey) {
+              safeSend(socket, frame('error', { code: 'CHAT_NOT_JOINED' }));
+              break;
+            }
+            if (!body || body.length > chat.MAX_BODY_LENGTH) {
+              safeSend(socket, frame('error', { code: 'CHAT_BAD_BODY' }));
+              break;
+            }
+            const message = await chat.insertMessage(
+              orgId,
+              roomKey,
+              userId,
+              displayName,
+              body,
+            );
+            // Fan out to every subscribed socket (sender included — the
+            // echo doubles as delivery confirmation).
+            await publishChatEvent(
+              fastify.redis,
+              orgId,
+              roomKey,
+              frame('chat_message', { room_key: roomKey, message }),
+            );
+            break;
+          }
+
           // accept / decline / auto-decline. We validate the token against
           // the short-lived Redis record written by ring.service.ts (one-shot:
           // the first respond consumes it) and forward `ring_responded` to

@@ -117,6 +117,10 @@ import {
   processBureauPresenceReapJob,
   type BureauPresenceReapJobData,
 } from './jobs/bureau-presence-reap.js';
+import {
+  processBureauChatExpiryJob,
+  type BureauChatExpiryJobData,
+} from './jobs/bureau-chat-expiry.job.js';
 // §10 Bureau summon fan-out — large-room recipient delivery off the WS hot path.
 import {
   processBureauSummonFanoutJob,
@@ -1377,6 +1381,37 @@ bureauPresenceReapQueue
     { name: 'tick', data: {} },
   )
   .catch((err) => logger.error({ err }, 'Failed to register bureau-presence-reap scheduler'));
+
+// Bureau room-chat expiry (0187): hourly hard-delete of expired chat
+// messages + husk rooms. Reads already filter expired rows; this is disk
+// hygiene only, so an occasional missed tick is harmless.
+const bureauChatExpiryWorker = new Worker<BureauChatExpiryJobData>(
+  'bureau-chat-expiry',
+  async (job: Job<BureauChatExpiryJobData>) => {
+    await processBureauChatExpiryJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bureauChatExpiryWorker.on('completed', (job) => {
+  logger.debug({ jobId: job.id, queue: 'bureau-chat-expiry' }, 'Job completed');
+});
+bureauChatExpiryWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bureau-chat-expiry', err }, 'Job failed');
+  void recordWorkerError({
+    queueName: 'bureau-chat-expiry',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const bureauChatExpiryQueue = new Queue('bureau-chat-expiry', { connection: redis });
+bureauChatExpiryQueue
+  .upsertJobScheduler(
+    'bureau-chat-expiry-hourly',
+    { pattern: '7 * * * *' }, // hh:07 — offset from other sweeps
+    { name: 'sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bureau-chat-expiry scheduler'));
 
 // §10 Bureau summon fan-out — drains jobs enqueued by bureau-api when a
 // summon has more than FANOUT_INLINE_LIMIT eligible recipients. Each job

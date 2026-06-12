@@ -33,6 +33,8 @@ export const channels = {
   floor: (floorId: string) => `bureau:floor:${floorId}`,
   room: (roomId: string) => `bureau:room:${roomId}`,
   user: (userId: string) => `user:${userId}`,
+  /** Room text chat — org-scoped so the same surface id in two orgs never crosses. */
+  chat: (orgId: string, roomKey: string) => `bureau:chat:${orgId}:${roomKey}`,
   shared: 'bigbluebam:events',
 } as const;
 
@@ -88,6 +90,24 @@ export function publishRoomEvent(
   payload: unknown,
 ): Promise<void> {
   return publish(redis, channels.room(roomId), payload);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Room chat
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Fan out a chat event (new message) to every socket subscribed to the
+ * room's chat channel — i.e. everyone whose widget is currently in that
+ * room, across all bureau-api instances.
+ */
+export function publishChatEvent(
+  redis: Redis,
+  orgId: string,
+  roomKey: string,
+  payload: unknown,
+): Promise<void> {
+  return publish(redis, channels.chat(orgId, roomKey), payload);
 }
 
 // ─────────────────────────────────────────────────────────────────────

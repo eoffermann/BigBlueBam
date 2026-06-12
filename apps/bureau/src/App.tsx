@@ -21,10 +21,12 @@ import { FloorViewPage } from '@/pages/floor-view';
 import { AdminFloorListPage } from '@/pages/admin/floor-list';
 import { FloorEditorPage } from '@/pages/admin/floor-editor';
 import { AdminOfficesPage } from '@/pages/admin/offices';
+import { ChatsPage } from '@/pages/chats';
 
 export type Route =
   | { page: 'floor-list' }
   | { page: 'floor'; id: string }
+  | { page: 'chats' }
   | { page: 'admin-floor-list' }
   | { page: 'admin-floor'; id: string }
   | { page: 'admin-offices' };
@@ -41,6 +43,7 @@ function stripBase(path: string): string {
 export function parseRoute(path: string): Route {
   const p = stripBase(path);
   if (p === '/' || p === '') return { page: 'floor-list' };
+  if (p === '/chats' || p === '/chats/') return { page: 'chats' };
   const floorMatch = p.match(/^\/floors\/([^/]+)$/);
   if (floorMatch) return { page: 'floor', id: floorMatch[1]! };
   if (p === '/admin/floors' || p === '/admin/floors/') {
@@ -141,6 +144,8 @@ export function App({ onRouteChange }: AppProps = {}) {
     switch (route.page) {
       case 'floor-list':
         return <FloorListPage onNavigate={navigate} />;
+      case 'chats':
+        return <ChatsPage />;
       case 'floor':
         return (
           <FloorViewPage

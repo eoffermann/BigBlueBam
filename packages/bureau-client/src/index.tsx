@@ -46,6 +46,7 @@ import { createPortal } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { BureauWsClient } from './ws-client.js';
 import type {
+  BureauChatMessage,
   BureauConnectionStatus,
   BureauOccupant,
   BureauRoomSnapshot,
@@ -53,6 +54,8 @@ import type {
   PresenceStatus,
   RoomPrivacy,
 } from './types.js';
+import { playChatBlip } from './chat-blip.js';
+import { ChatPanel } from './chat-panel.js';
 import { SummonHandler } from './summon-handler.js';
 import { KnockHandler } from './knock-handler.js';
 import { RingHandler } from './ring-handler.js';
@@ -225,6 +228,13 @@ interface PresenceState {
   occupants: BureauOccupant[];
   /** LiveKit handoff payload from the last enter_room. */
   livekit: { roomName: string; token: string; url: string } | null;
+  /** Room text chat: the room key the socket is joined to (the spatial
+   *  room id when in one, else the location surface id). */
+  chatRoomKey: string | null;
+  /** Unexpired transcript + live messages for the joined chat room. */
+  chatMessages: BureauChatMessage[];
+  /** Messages from others since the panel was last open. */
+  chatUnread: number;
 }
 
 const initialState: PresenceState = {
@@ -238,6 +248,9 @@ const initialState: PresenceState = {
   location: null,
   occupants: [],
   livekit: null,
+  chatRoomKey: null,
+  chatMessages: [],
+  chatUnread: 0,
 };
 
 interface BureauContextValue {
@@ -257,6 +270,10 @@ interface BureauContextValue {
     /** Host-app navigation (threaded from mountBureauClient). Used by
      *  Hunt to jump to wherever another org member currently is. */
     navigate: (url: string) => void;
+    /** Send a message to the currently-joined room chat. */
+    chatSend: (body: string) => void;
+    /** Reset the unread counter (panel opened). */
+    chatMarkRead: () => void;
   };
 }
 
@@ -714,9 +731,102 @@ function BureauProvider({
         });
       },
       navigate,
+      chatSend: (body: string) => {
+        const key = stateRef.current.chatRoomKey;
+        const trimmed = body.trim();
+        if (!key || !trimmed) return;
+        client.send({ type: 'chat_send', roomKey: key, body: trimmed });
+      },
+      chatMarkRead: () => {
+        setState((s) => (s.chatUnread === 0 ? s : { ...s, chatUnread: 0 }));
+      },
     }),
     [client, navigate],
   );
+
+  // ── Room text chat: keep the socket joined to wherever the user is ──
+  // The chat room identity is the spatial room when in one, else the
+  // location surface id (the same key presence + calls use). Rejoins on
+  // every fresh WS session (wsEpoch) and re-sends when the human label
+  // improves so the stored thread name stays good.
+  const desiredChatRoomKey = state.roomId ?? state.location?.surface_id ?? null;
+  const chatJoinLabel = state.roomId
+    ? state.location?.spatialRoomName ?? null
+    : state.location?.label ?? null;
+  const chatJoinApp = state.location?.app ?? null;
+  const lastChatJoinRef = useRef<{ key: string; epoch: number; label: string | null } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (state.status !== 'connected') return;
+    if (!desiredChatRoomKey) {
+      if (lastChatJoinRef.current) {
+        lastChatJoinRef.current = null;
+        client.send({ type: 'chat_leave' });
+        setState((s) => ({ ...s, chatRoomKey: null, chatMessages: [], chatUnread: 0 }));
+      }
+      return;
+    }
+    const last = lastChatJoinRef.current;
+    if (
+      last &&
+      last.key === desiredChatRoomKey &&
+      last.epoch === wsEpoch &&
+      last.label === chatJoinLabel
+    ) {
+      return;
+    }
+    const isRoomSwitch = last?.key !== desiredChatRoomKey;
+    lastChatJoinRef.current = {
+      key: desiredChatRoomKey,
+      epoch: wsEpoch,
+      label: chatJoinLabel,
+    };
+    client.send({
+      type: 'chat_join',
+      roomKey: desiredChatRoomKey,
+      label: chatJoinLabel ?? undefined,
+      app: chatJoinApp ?? undefined,
+    });
+    setState((s) => ({
+      ...s,
+      chatRoomKey: desiredChatRoomKey,
+      ...(isRoomSwitch ? { chatMessages: [], chatUnread: 0 } : {}),
+    }));
+  }, [client, desiredChatRoomKey, chatJoinLabel, chatJoinApp, state.status, wsEpoch]);
+
+  useEffect(() => {
+    const off = client.on('chat_joined', (msg) => {
+      const m = msg as unknown as { room_key?: string; messages?: BureauChatMessage[] };
+      if (!m?.room_key) return;
+      setState((s) =>
+        s.chatRoomKey === m.room_key ? { ...s, chatMessages: m.messages ?? [] } : s,
+      );
+    });
+    return off;
+  }, [client]);
+
+  useEffect(() => {
+    const off = client.on('chat_message', (msg) => {
+      const m = msg as unknown as { room_key?: string; message?: BureauChatMessage };
+      if (!m?.room_key || !m.message) return;
+      if (stateRef.current.chatRoomKey !== m.room_key) return;
+      // Gentle blip for messages from others (own sends echo back too).
+      if (m.message.author_id !== stateRef.current.selfUserId) playChatBlip();
+      const incoming = m.message;
+      setState((s) => {
+        if (s.chatRoomKey !== m.room_key) return s;
+        if (s.chatMessages.some((x) => x.id === incoming.id)) return s;
+        return {
+          ...s,
+          chatMessages: [...s.chatMessages, incoming],
+          chatUnread:
+            incoming.author_id === s.selfUserId ? s.chatUnread : s.chatUnread + 1,
+        };
+      });
+    });
+    return off;
+  }, [client]);
 
   const value = useMemo<BureauContextValue>(
     () => ({ client, state, actions }),
@@ -1162,6 +1272,16 @@ function BureauDockedBoxInner({
   // the server rejects non-admins, the popover shows "not allowed".
   const [inviteMode, setInviteMode] = useState<'ask' | 'force'>('ask');
   const [huntOpen, setHuntOpen] = useState(false);
+  // Room text chat panel. Message state lives in the provider (so blips
+  // and unread counting work while this panel is closed); this is pure
+  // open/closed UI state plus the anchor the panel positions against.
+  const [chatOpen, setChatOpen] = useState(false);
+  const chatAnchorRef = useRef<HTMLElement | null>(null);
+  const chatUnreadCount = ctx?.state.chatUnread ?? 0;
+  const chatMarkRead = ctx?.actions.chatMarkRead;
+  useEffect(() => {
+    if (chatOpen && chatUnreadCount > 0) chatMarkRead?.();
+  }, [chatOpen, chatUnreadCount, chatMarkRead]);
   if (!ctx) return null;
   const { state, actions } = ctx;
 
@@ -1353,13 +1473,38 @@ function BureauDockedBoxInner({
     );
   }
 
+  // Human chat-room label: the spatial room's name when in one, else the
+  // same "[App] Title" the Viewing row shows.
+  const chatRoomLabel = inRoom
+    ? (roomDisplayName ?? 'Room chat')
+    : formatLocationDisplay(
+        state.location?.app,
+        state.location?.label,
+        state.location?.url,
+      ) || 'Room chat';
+
   return (
     <section
-      ref={floating ? dock.boxRef : undefined}
+      ref={(el: HTMLElement | null) => {
+        chatAnchorRef.current = el;
+        // Same element the dock drag previously bound directly; the ref
+        // type is divergent (div vs generic) but the element is identical.
+        if (floating) dock.boxRef.current = el as HTMLDivElement | null;
+      }}
       style={floating ? { ...boxContainerStyle, ...dock.positionStyle } : boxContainerStyle}
       data-bureau-docked-box
       aria-label="Bureau"
     >
+      {chatOpen && state.chatRoomKey ? (
+        <ChatPanel
+          roomLabel={chatRoomLabel}
+          messages={state.chatMessages}
+          selfUserId={state.selfUserId}
+          onSend={(body) => actions.chatSend(body)}
+          onClose={() => setChatOpen(false)}
+          anchorRef={chatAnchorRef}
+        />
+      ) : null}
       <div
         style={
           floating
@@ -1379,6 +1524,51 @@ function BureauDockedBoxInner({
           <span style={{ opacity: 0.6 }}>
             {state.status === 'connected' ? '' : state.status}
           </span>
+          {/* Room text chat toggle. The badge counts messages that arrived
+              while the panel was closed. */}
+          {state.chatRoomKey ? (
+            <button
+              type="button"
+              style={{
+                ...dndBtnStyle,
+                position: 'relative',
+                ...(chatOpen
+                  ? {
+                      background: 'rgba(59,130,246,0.35)',
+                      border: '1px solid rgba(147,197,253,0.6)',
+                      color: '#bfdbfe',
+                    }
+                  : {}),
+              }}
+              data-bureau-chat-toggle
+              onClick={() => setChatOpen((v) => !v)}
+              title={chatOpen ? 'Close room chat' : 'Open room chat (ephemeral — 24h)'}
+              aria-expanded={chatOpen}
+            >
+              CHAT
+              {state.chatUnread > 0 && !chatOpen ? (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: -6,
+                    right: -6,
+                    minWidth: 14,
+                    height: 14,
+                    borderRadius: 999,
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 9,
+                    lineHeight: '14px',
+                    textAlign: 'center',
+                    padding: '0 3px',
+                  }}
+                  aria-label={`${state.chatUnread} unread chat messages`}
+                >
+                  {state.chatUnread > 99 ? '99+' : state.chatUnread}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
           {/* Head-down switch. While ON, Invites ring 423 (callers get a
               "leave a note" path to your Banter DMs) and Hunts can't locate
               you; only an admin/SuperUser Force Invite gets through. */}

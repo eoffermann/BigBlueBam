@@ -20,3 +20,10 @@ export {
 // settings) in parallel. Re-enable this re-export once that file lands so
 // route handlers can `import { floors, rooms, ... } from '../db/schema/index.js'`.
 // export * from './bureau.js';
+
+// Room chat (ephemeral, 0187).
+export {
+  bureauChatRooms,
+  bureauChatMessages,
+  bureauChatParticipants,
+} from './bureau-chat.js';
