@@ -232,6 +232,13 @@ services:
       SMTP_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       BOLT_API_INTERNAL_URL: http://bolt-api:4006
+    volumes:
+      # Read-only view of what livekit-config rendered/advertised, for
+      # the hourly livekit-ip-drift job: it re-detects the public IP via
+      # STUN and writes a system_errors warning when LiveKit is
+      # advertising a stale address (e.g. the ISP rotated the WAN IP
+      # after the last render).
+      - ./infra/livekit:/livekit-info:ro
     networks:
       - backend
 
@@ -1025,10 +1032,48 @@ services:
     entrypoint: ["sh", "-c"]
     command: ["echo 'certbot sidecar ready; invoke via docker compose run --rm certbot'"]
 
+  # ── LiveKit config renderer (one-shot, runs before livekit) ──────────
+  # Re-renders infra/livekit/livekit.yaml on EVERY `docker compose up`:
+  # re-detects the public (WAN) IP via STUN so a rotated address never
+  # goes stale, reads the host LAN IP persisted by the deploy script /
+  # `node scripts/livekit/render-config.mjs`, and reports the network
+  # topology (behind NAT? required port-forwards?) to the platform
+  # system_errors Log so any deployer can troubleshoot connectivity from
+  # the SuperUser Log Analysis tab. Same depends_on pattern as migrate.
+  livekit-config:
+    image: node:22-alpine
+    command: ["node", "/scripts/render-config.mjs", "--mode=container"]
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+      LIVEKIT_NODE_IP: ${LIVEKIT_NODE_IP:-auto}
+      LIVEKIT_EXTERNAL_IP: ${LIVEKIT_EXTERNAL_IP:-auto}
+      LIVEKIT_UDP_PORT_RANGE: ${LIVEKIT_UDP_PORT_RANGE:-51000-51100}
+      LIVEKIT_TURN_DOMAIN: ${LIVEKIT_TURN_DOMAIN:-}
+      LIVEKIT_TURN_CERT_FILE: ${LIVEKIT_TURN_CERT_FILE:-}
+      LIVEKIT_TURN_KEY_FILE: ${LIVEKIT_TURN_KEY_FILE:-}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
+      BBB_API_INTERNAL_URL: http://api:4000
+      LIVEKIT_WORK_DIR: /work
+    volumes:
+      - ./scripts/livekit:/scripts:ro
+      - ./infra/livekit:/work
+    restart: "no"
+    networks:
+      - backend
+
   livekit:
     <<: *common
     image: livekit/livekit-server:latest
-    command: --config /etc/livekit.yaml
+    # Directory mount (not a single-file mount) so the livekit-config
+    # render lands without inode/file-vs-directory bind-mount traps —
+    # this also retires the historic "Docker created a directory named
+    # livekit.yaml on first boot" gotcha, since the config now always
+    # exists before this container starts.
+    command: --config /etc/livekit/livekit.yaml
+    depends_on:
+      livekit-config:
+        condition: service_completed_successfully
     ports:
       # Overridable by the advanced-port-mapping flow in scripts/deploy/main.mjs;
       # defaults match the upstream LiveKit defaults so existing installs
@@ -1040,11 +1085,22 @@ services:
       # whose ICE-candidate list points at the host's IP can't reach
       # the UDP ports at all. Symptom of leaving this out: the second
       # LAN device sees "[R] In: <Room> error" with a ConnectionError
-      # from LiveKit's Room.connect(). The range must match
-      # rtc.port_range_start / port_range_end in livekit.yaml.
-      - "${LIVEKIT_UDP_PORT_RANGE:-51000-51100}:51000-51100/udp"
+      # from LiveKit's Room.connect(). The SAME env var drives the
+      # rendered rtc.port_range_start/end (via livekit-config), so the
+      # mapping and the advertised ports cannot drift apart. Both sides
+      # of the mapping must be identical — WebRTC advertises the
+      # container-local port numbers, so an offset mapping would
+      # advertise ports the host doesn't listen on.
+      - "${LIVEKIT_UDP_PORT_RANGE:-51000-51100}:${LIVEKIT_UDP_PORT_RANGE:-51000-51100}/udp"
+      # TURN over TLS (only active when LIVEKIT_TURN_DOMAIN + cert/key
+      # env vars are set; otherwise LiveKit doesn't listen and the
+      # mapping is inert).
+      - "${LIVEKIT_TURN_TLS_PORT:-5349}:5349"
     volumes:
-      - ./infra/livekit/livekit.yaml:/etc/livekit.yaml:ro
+      - ./infra/livekit:/etc/livekit:ro
+      # TLS material for the optional TURN listener; harmless empty dir
+      # when TURN is off.
+      - ./certs:/certs:ro
     networks:
       - backend
       - frontend

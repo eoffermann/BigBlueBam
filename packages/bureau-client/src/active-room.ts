@@ -781,7 +781,17 @@ async function reportBureauCallError(ctx: BureauCallErrorContext): Promise<void>
     // load. If the dynamic import fails for any reason the catch below
     // keeps it silent.
     const { reportSystemError } = await import('./system-error-reporter.js');
+    const { classifyHost } = await import('./host-classify.js');
     const errorObj = ctx.err instanceof Error ? ctx.err : null;
+    // Network-path context so an engineer reading the Log row can tell
+    // which side of the topology the failing client was on without
+    // reproducing: page_host_kind 'private-ip'/'loopback' = LAN-side
+    // client (check the LAN advertisement and the LIVEKIT_BEHIND_NAT
+    // topology row), 'public-ip'/'hostname' = remote client (check
+    // router forwards / TURN). livekit-client's ConnectionError also
+    // carries a reason code worth keeping verbatim.
+    const pageHost = typeof window !== 'undefined' ? window.location.hostname : null;
+    const errAny = ctx.err as { code?: unknown; reason?: unknown; status?: unknown } | null;
     await reportSystemError({
       message: `Bureau call ${ctx.stage} failed: ${ctx.message}`,
       stack: errorObj?.stack,
@@ -796,6 +806,12 @@ async function reportBureauCallError(ctx: BureauCallErrorContext): Promise<void>
         label: ctx.target.label ?? null,
         ws_url: ctx.wsUrl ?? null,
         error_name: errorObj?.name ?? typeof ctx.err,
+        error_reason: errAny?.reason ?? errAny?.code ?? null,
+        error_status: errAny?.status ?? null,
+        page_host: pageHost,
+        page_host_kind: classifyHost(pageHost),
+        page_protocol: typeof window !== 'undefined' ? window.location.protocol : null,
+        online: typeof navigator !== 'undefined' ? navigator.onLine : null,
       },
     });
   } catch {

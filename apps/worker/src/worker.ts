@@ -15,6 +15,7 @@ import { processBanterTranscriptionJob, type BanterTranscriptionJobData } from '
 import { processHelpdeskTaskCreateJob, type HelpdeskTaskCreateJobData } from './jobs/helpdesk-task-create.job.js';
 import { processBeaconVectorSyncJob, type BeaconVectorSyncJobData } from './jobs/beacon-vector-sync.job.js';
 import { processBeaconExpirySweepJob, type BeaconExpirySweepJobData } from './jobs/beacon-expiry-sweep.job.js';
+import { processLivekitIpDriftJob, type LivekitIpDriftJobData } from './jobs/livekit-ip-drift.job.js';
 import { processBearingSnapshotJob, type BearingSnapshotJobData } from './jobs/bearing-snapshot.job.js';
 import { processBearingRecomputeJob, type BearingRecomputeJobData } from './jobs/bearing-recompute.job.js';
 import { processBearingDigestJob, type BearingDigestJobData } from './jobs/bearing-digest.job.js';
@@ -459,6 +460,45 @@ beaconExpirySweepQueue.upsertJobScheduler(
   { pattern: '0 3 * * *' }, // 3 AM daily
   { name: 'daily-sweep', data: {} },
 ).catch((err) => logger.error({ err }, 'Failed to register beacon expiry sweep scheduler'));
+
+// LiveKit address-drift watchdog (hourly). Compares the public IP
+// LiveKit is advertising (advertised.json, rendered by the
+// livekit-config service) against a fresh STUN detection, and writes a
+// LIVEKIT_WAN_IP_DRIFT row to system_errors with the remediation
+// command when the ISP rotated the address out from under the running
+// config. The worker can't restart containers, so loud-and-actionable
+// is the contract here.
+const livekitIpDriftWorker = new Worker<LivekitIpDriftJobData>(
+  'livekit-ip-drift',
+  async (job: Job<LivekitIpDriftJobData>) => {
+    await processLivekitIpDriftJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+
+livekitIpDriftWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'livekit-ip-drift' }, 'Job completed');
+});
+
+livekitIpDriftWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'livekit-ip-drift', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'livekit-ip-drift',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
+// Hourly at :17 — offset from the pile of on-the-hour jobs.
+const livekitIpDriftQueue = new Queue('livekit-ip-drift', { connection: redis });
+livekitIpDriftQueue.upsertJobScheduler(
+  'livekit-ip-drift-hourly',
+  { pattern: '17 * * * *' },
+  { name: 'drift-check', data: {} },
+).catch((err) => logger.error({ err }, 'Failed to register livekit ip drift scheduler'));
 
 // Schedule bearing snapshot as a daily repeatable job (midnight UTC)
 const bearingSnapshotQueue = new Queue('bearing-snapshot', { connection: redis });
@@ -1513,6 +1553,7 @@ const workers = [
   helpdeskTaskCreateWorker,
   beaconVectorSyncWorker,
   beaconExpirySweepWorker,
+  livekitIpDriftWorker,
   bearingSnapshotWorker,
   bearingRecomputeWorker,
   bearingDigestWorker,
@@ -1613,6 +1654,8 @@ logger.info(
       // Workstream 14 Bureau analytics rollup
       'bureau-analytics-rollup',
       'analytics',
+      // LiveKit advertised-address drift watchdog (hourly)
+      'livekit-ip-drift',
     ],
   },
   'All workers started',

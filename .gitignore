@@ -28,10 +28,14 @@ apps/e2e/.auth
 test-results/
 AGENT_DEVELOPMENT.md
 agents/
-# LiveKit server config — rendered from livekit.yaml.template at deploy
-# time by scripts/deploy/platforms/docker-compose.mjs::renderLivekitConfig.
-# Never commit this; it carries the deployed LIVEKIT_API_SECRET.
+# LiveKit deploy artifacts — rendered/detected per machine by
+# scripts/livekit/render-config.mjs (host mode and the livekit-config
+# compose init service). Never commit these: livekit.yaml carries the
+# deployed LIVEKIT_API_SECRET, and .lan-ip / advertised.json carry
+# machine-specific network addresses.
 infra/livekit/livekit.yaml
+infra/livekit/.lan-ip
+infra/livekit/advertised.json
 # Python bytecode caches (apps/voice-agent)
 __pycache__/
 *.pyc
