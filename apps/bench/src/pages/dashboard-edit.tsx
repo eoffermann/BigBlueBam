@@ -3,6 +3,7 @@ import { Plus, Save, ArrowLeft, Trash2, GripVertical, Sparkles } from 'lucide-re
 import { useDashboard, useUpdateDashboard } from '@/hooks/use-dashboards';
 import { useDeleteWidget, useCreateWidget } from '@/hooks/use-widgets';
 import { WidgetGallery, type WidgetPreset } from '@/components/widgets/widget-gallery';
+import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
 
 interface DashboardEditPageProps {
   dashboardId: string;
@@ -15,6 +16,8 @@ export function DashboardEditPage({ dashboardId, onNavigate }: DashboardEditPage
   const deleteWidgetMutation = useDeleteWidget();
   const createWidget = useCreateWidget(dashboardId);
   const dashboard = data?.data;
+  // Bureau widget context: show the dashboard name, not the URL path.
+  useBureauLocationLabel(dashboard?.name ?? null);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

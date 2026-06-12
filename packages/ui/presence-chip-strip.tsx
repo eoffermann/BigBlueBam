@@ -79,12 +79,13 @@ function cn(...parts: Array<string | false | null | undefined>): string {
 function generateAvatarInitials(name: string | null | undefined): string {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
-  if (parts.length === 0 || !parts[0]) return '?';
+  const firstPart = parts[0];
+  if (!firstPart) return '?';
   if (parts.length === 1) {
-    return parts[0]!.substring(0, 2).toUpperCase();
+    return firstPart.substring(0, 2).toUpperCase();
   }
-  const first = parts[0]![0] ?? '';
-  const last = parts[parts.length - 1]![0] ?? '';
+  const first = firstPart[0] ?? '';
+  const last = parts[parts.length - 1]?.[0] ?? '';
   return (first + last).toUpperCase();
 }
 
@@ -371,6 +372,26 @@ export function PresenceChipStrip({
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [toasts, setToasts] = useState<TinyToast[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Announce this surface's human label to the Bureau widget. The strip is
+  // rendered exactly where pages already computed a real entity name
+  // (deal.name, diagram.name, ticket subject…), so dispatching it here
+  // gives the docked box "[Blueprint] Org Chart"-grade "Viewing:" text
+  // with zero per-page wiring. A CustomEvent keeps @bigbluebam/ui free of
+  // any bureau-client dependency — bureau-client installs the listener.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !surfaceLabel?.trim()) return;
+    window.dispatchEvent(
+      new CustomEvent('bureau:location-label', {
+        detail: { label: surfaceLabel, url },
+      }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent('bureau:location-label', { detail: { label: null, url } }),
+      );
+    };
+  }, [surfaceLabel, url]);
 
   // Poll loop.
   useEffect(() => {

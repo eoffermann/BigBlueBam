@@ -22,6 +22,7 @@ import { Input } from '@/components/common/input';
 import { validateAutomationForm } from '@/lib/automation-validation';
 import { validateGraph, type GraphValidationError } from '@/lib/graph-validation';
 import { cn } from '@/lib/utils';
+import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
 
 interface AutomationEditorPageProps {
   id?: string;
@@ -33,6 +34,8 @@ export function AutomationEditorPage({ id, onNavigate }: AutomationEditorPagePro
   const projectId = useProjectStore((s) => s.activeProjectId);
 
   const { data: existing, isLoading } = useAutomation(id);
+  // Bureau widget context: show the automation name, not the URL path.
+  useBureauLocationLabel(existing?.data?.name ?? null);
   const createMutation = useCreateAutomation();
   const updateMutation = useUpdateAutomation();
   const testMutation = useTestAutomation();

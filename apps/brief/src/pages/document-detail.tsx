@@ -14,6 +14,7 @@ import { useDocument, useToggleStar, useArchiveDocument, useDuplicateDocument, u
 import { markdownToHtml } from '@/lib/markdown';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import { useCollaborativeEditor, BriefEditorContent } from '@/components/editor/brief-editor';
+import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
 import { useComments, useCreateComment, useResolveComment, useDeleteComment } from '@/hooks/use-comments';
 import { useVersions } from '@/hooks/use-versions';
 import { StatusBadge } from '@/components/document/status-badge';
@@ -38,6 +39,9 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
   const [commentText, setCommentText] = useState('');
   const projectName = useProjectName(doc?.project_id);
   const displayProjectName = doc?.project_name ?? projectName ?? null;
+
+  // Bureau widget context: show the document title, not the URL path.
+  useBureauLocationLabel(doc?.title ?? null);
 
   const toggleStar = useToggleStar();
   const archiveDoc = useArchiveDocument();

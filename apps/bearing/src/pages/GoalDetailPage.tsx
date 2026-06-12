@@ -15,6 +15,7 @@ import { Input } from '@/components/common/input';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { TimeRemainingBadge } from '@/components/common/TimeRemainingBadge';
 import { formatDate } from '@/lib/utils';
+import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
 
 interface GoalDetailPageProps {
   id: string;
@@ -24,6 +25,8 @@ interface GoalDetailPageProps {
 export function GoalDetailPage({ id, onNavigate }: GoalDetailPageProps) {
   const { data, isLoading } = useGoal(id);
   const goal = data?.data;
+  // Bureau widget context: show the goal title, not the URL path.
+  useBureauLocationLabel(goal?.title ?? null);
   const updateMutation = useUpdateGoal();
   const deleteMutation = useDeleteGoal();
 

@@ -73,6 +73,19 @@ import { AudioUnblockChip } from './audio-unblock-chip.js';
 import { URL_SURFACE_APP, deriveUrlSurfaceId } from '@bigbluebam/shared';
 import { crossAppNavigate } from './cross-app-navigate.js';
 import { formatLocationDisplay, humanizeLocationTitle, appDisplayName } from './format-location.js';
+import {
+  installLocationLabelEventBridge,
+  resolveLocationLabel,
+  subscribeLocationLabels,
+} from './location-context.js';
+
+// Re-exported so host pages can announce what they're showing with one
+// line (see location-context.ts).
+export {
+  useBureauLocationLabel,
+  setLocationLabelForToken,
+  LOCATION_LABEL_EVENT,
+} from './location-context.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -335,6 +348,18 @@ function BureauProvider({
   // The user's CHOSEN presence status — replayed on reconnect so DND
   // survives the Railway edge recycling the websocket.
   const desiredStatusRef = useRef<PresenceStatus>('available');
+  // Bumped whenever a page announces/clears a location label (entity
+  // names arrive AFTER the route change, once the page's query resolves)
+  // so the relay below re-runs and re-announces with the better label.
+  const [labelEpoch, setLabelEpoch] = useState(0);
+  useEffect(() => {
+    const offBridge = installLocationLabelEventBridge();
+    const offStore = subscribeLocationLabels(() => setLabelEpoch((e) => e + 1));
+    return () => {
+      offStore();
+      offBridge();
+    };
+  }, []);
   // Bumped on every server `connected` frame to re-run the location relay.
   const [wsEpoch, setWsEpoch] = useState(0);
 
@@ -527,6 +552,17 @@ function BureauProvider({
         descriptor = { ...descriptor, surface_id: derived, surface_kind: 'url' };
       }
     }
+    // Context labels beat the host adapter's label: pages announce the
+    // real entity name ("Frndo Board", "Org Chart") via
+    // useBureauLocationLabel / the chip-strip event bridge, while
+    // adapters only know the URL. Path-matched, so a label from the
+    // previous page can never leak onto this one.
+    if (descriptor?.url) {
+      const contextLabel = resolveLocationLabel(descriptor.url);
+      if (contextLabel) {
+        descriptor = { ...descriptor, label: contextLabel };
+      }
+    }
     if (!descriptor || !descriptor.url || !descriptor.app) {
       // Host left every located page. If the previous location carried a
       // spatial-room mirror (Bureau floor view), drop the mirrored room —
@@ -595,7 +631,10 @@ function BureauProvider({
     }
     // wsEpoch: see the connected handler — bumps on every fresh server
     // session so presence re-learns the location after a reconnect.
-  }, [client, describeLocation, route, wsEpoch]);
+    // labelEpoch: pages announce entity names asynchronously (once their
+    // queries resolve); the bump re-runs this relay so the wire frame and
+    // the widget pick the name up.
+  }, [client, describeLocation, route, wsEpoch, labelEpoch]);
 
   // ── Active-call routing — keep the ActiveCallManager's target in sync
   //    with (spatial room, surface location). Spatial rooms take priority:

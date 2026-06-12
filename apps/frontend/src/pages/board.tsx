@@ -33,6 +33,7 @@ import { useRealtime } from '@/hooks/use-realtime';
 import { api, ApiError } from '@/lib/api';
 import type { ApiResponse } from '@bigbluebam/shared';
 import { TaskContextMenu } from '@/components/board/task-context-menu';
+import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
 
 interface Member {
   id: string;
@@ -202,6 +203,8 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   }, [boardData, setBoardState, selectedSprintId]);
 
   const project = projectRes?.data;
+  // Bureau widget context: "[Bam] Frndo Board" instead of a path breadcrumb.
+  useBureauLocationLabel(project?.name ? `${project.name} Board` : null);
   const sprints = sprintsRes?.data ?? [];
   const projects = projectsRes?.data ?? [];
 

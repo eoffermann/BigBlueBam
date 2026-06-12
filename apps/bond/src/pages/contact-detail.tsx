@@ -20,6 +20,7 @@ import { useContact, contactDisplayName, useDeleteContact } from '@/hooks/use-co
 import { useContactActivities } from '@/hooks/use-activities';
 import { cn, lifecycleStageLabel, lifecycleStageColor, formatDate, formatRelativeTime } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
 
 interface ContactDetailPageProps {
   contactId: string;
@@ -29,6 +30,8 @@ interface ContactDetailPageProps {
 export function ContactDetailPage({ contactId, onNavigate }: ContactDetailPageProps) {
   const { data: contactData, isLoading } = useContact(contactId);
   const contact = contactData?.data;
+  // Bureau widget context: show the contact name, not the URL path.
+  useBureauLocationLabel(contact ? contactDisplayName(contact) : null);
 
   const { data: activitiesData, isLoading: activitiesLoading } = useContactActivities(contactId);
   const activities = activitiesData?.data ?? [];
