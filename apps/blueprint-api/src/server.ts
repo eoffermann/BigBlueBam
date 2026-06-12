@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import { sql } from 'drizzle-orm';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
@@ -16,6 +17,7 @@ import nodeRoutes from './routes/nodes.routes.js';
 import edgeRoutes from './routes/edges.routes.js';
 import templateRoutes from './routes/templates.routes.js';
 import crossProductRoutes from './routes/cross-product.routes.js';
+import wsRoutes from './routes/ws.routes.js';
 
 const fastify = Fastify({
   logger: {
@@ -75,6 +77,12 @@ await fastify.register(redisPlugin);
 await fastify.register(authPlugin);
 await fastify.register(permissionsPlugin);
 
+// Realtime: subscribe/unsubscribe frames are tiny JSON; 4 KiB caps
+// abuse without constraining the protocol.
+await fastify.register(websocket, {
+  options: { maxPayload: 4096 },
+});
+
 await fastify.register(healthCheckPlugin, {
   service: 'blueprint-api',
   checks: {
@@ -92,6 +100,9 @@ await fastify.register(nodeRoutes, { prefix: '/v1' });
 await fastify.register(edgeRoutes, { prefix: '/v1' });
 await fastify.register(templateRoutes, { prefix: '/v1' });
 await fastify.register(crossProductRoutes, { prefix: '/v1' });
+// Live document sync — nginx exposes this at /blueprint/ws on both
+// deployment profiles (no /v1 prefix; the proxy targets /ws directly).
+await fastify.register(wsRoutes);
 
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {

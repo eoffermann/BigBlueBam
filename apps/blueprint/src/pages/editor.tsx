@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { SHAPE_OPTIONS } from '@/components/canvas/node-types';
 import { useDiagram, useDiagramGraph, useArchiveDiagram, useSnapshotVersion } from '@/hooks/use-diagrams';
+import { useDiagramSync } from '@/hooks/use-diagram-sync';
 import {
   useCreateNode,
   useUpdateNode,
@@ -145,6 +146,10 @@ type ContextMenuState =
 function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const diagramQuery = useDiagram(diagramId);
   const graphQuery = useDiagramGraph(diagramId);
+  // Live document sync: refetches the graph when anyone else mutates
+  // this diagram. The reconciliation effect below applies it without
+  // touching the local viewport — shared document, independent camera.
+  useDiagramSync(diagramId);
   const archiveMutation = useArchiveDiagram();
   const snapshotMutation = useSnapshotVersion(diagramId);
 

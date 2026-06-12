@@ -1566,6 +1566,9 @@ importers:
       '@fastify/rate-limit':
         specifier: ^10.0.0
         version: 10.3.0
+      '@fastify/websocket':
+        specifier: ^11.0.0
+        version: 11.2.0
       argon2:
         specifier: ^0.41.1
         version: 0.41.1
