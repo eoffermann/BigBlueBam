@@ -70,6 +70,7 @@ import { HuntPopover } from './hunt-popover.js';
 import { VideoTilesWindow } from './video-tiles.js';
 import { AudioUnblockChip } from './audio-unblock-chip.js';
 import { URL_SURFACE_APP, deriveUrlSurfaceId } from '@bigbluebam/shared';
+import { crossAppNavigate } from './cross-app-navigate.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -112,6 +113,7 @@ export type { UseActiveCall } from './use-active-call.js';
 // themselves (e.g. tiled inside a custom dashboard).
 export { VideoTilesWindow } from './video-tiles.js';
 export { AudioUnblockChip } from './audio-unblock-chip.js';
+export { crossAppNavigate, firstPathSegment } from './cross-app-navigate.js';
 export { BureauAudioSink, isPlayableAudioSource } from './audio-sink.js';
 export {
   initSystemErrorReporter,
@@ -1539,10 +1541,20 @@ function MountedApp({
   renderDockedBox,
   portalContainer,
 }: MountedAppProps): React.ReactElement {
+  // Single choke point for every SDK-driven navigation (invite accept,
+  // summon/force-invite pull, Hunt jump): host adapters are pushState-
+  // based and can only route INSIDE their own SPA — a cross-app target
+  // would update the URL bar and load nothing. crossAppNavigate keeps
+  // same-app targets soft and turns cross-app/cross-origin targets
+  // into real document loads.
+  const smartNavigate = useMemo(
+    () => (url: string) => crossAppNavigate(navigate, url),
+    [navigate],
+  );
   return (
     <BureauProvider
       client={client}
-      navigate={navigate}
+      navigate={smartNavigate}
       describeLocation={describeLocation}
       route={route}
     >
@@ -1555,9 +1567,9 @@ function MountedApp({
           {/* Auto-shows when the browser's autoplay policy is blocking
               remote audio; one click resumes playback. */}
           <AudioUnblockChip />
-          <SummonHandler client={client} navigate={navigate} />
+          <SummonHandler client={client} navigate={smartNavigate} />
           <KnockHandler client={client} />
-          <RingHandler client={client} navigate={navigate} />
+          <RingHandler client={client} navigate={smartNavigate} />
         </>,
         portalContainer,
       )}
