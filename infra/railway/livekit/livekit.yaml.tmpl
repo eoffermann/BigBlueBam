@@ -1,9 +1,22 @@
 port: 7880
 rtc:
-  port_range_start: 50000
-  port_range_end: 50100
+  port_range_start: 51000
+  port_range_end: 51100
   tcp_port: 7881
-  use_external_ip: true
+  # Railway network reality: containers have no public IP and no public
+  # UDP ingress, so directly-advertised ICE candidates can never be
+  # reached from the internet — STUN-discovering the egress address
+  # (the old use_external_ip: true here) advertised a route that does
+  # not exist. Media connectivity comes from the TURN-TLS block below
+  # (rendered by entrypoint.sh when the LIVEKIT_TURN_* env is set);
+  # full ICE + STUN are kept for parity with the compose render and to
+  # serve any private-network peers.
+  use_external_ip: false
+  use_ice_lite: false
+  stun_servers:
+    - stun.l.google.com:19302
+    - global.stun.twilio.com:3478
+${TURN_BLOCK}
 keys:
   ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
 webhook:

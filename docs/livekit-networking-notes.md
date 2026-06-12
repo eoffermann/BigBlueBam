@@ -98,6 +98,84 @@ docker compose exec -T postgres psql -U bigbluebam -d bigbluebam -c \
    WHERE error_code LIKE 'LIVEKIT_%' ORDER BY created_at DESC LIMIT 5;"
 ```
 
+## TURN on Railway (the only media path there)
+
+Railway containers sit behind Railway's edge: **no public IP on the
+interface, no public UDP at all**, ingress only via the HTTP edge or TCP
+proxies. Directly-advertised ICE candidates can never be reached from the
+internet, so on Railway TURN-TLS is not optional polish — it is the only
+way call media can flow. The architecture:
+
+```
+browser ── wss://bigbluebam.com/livekit-ws ──▶ frontend nginx ──▶ livekit:7880   (signaling)
+browser ── turns://turn.bigbluebam.com:<P> ──▶ Railway TCP proxy ──▶ livekit:<P> (media relay)
+```
+
+Components (all in-repo):
+
+- `infra/railway/livekit/` — the Railway LiveKit image. Its entrypoint
+  re-renders the config from env on EVERY boot (Railway's equivalent of
+  the compose `livekit-config` init service), writes the TURN cert/key
+  from env-var PEMs, and reports boot topology to the platform Log
+  (`LIVEKIT_RAILWAY_BOOT` / `LIVEKIT_RAILWAY_NO_TURN`).
+- `nginx.railway.conf` `/livekit-ws/` — the signaling proxy (added
+  2026-06-12; before that Railway had no signaling path at all).
+- Worker `turn-cert-expiry` job — daily probe of the TURN endpoint;
+  `LIVEKIT_TURN_CERT_EXPIRING` at T-14 days, `LIVEKIT_TURN_UNREACHABLE`
+  on handshake failure. Certs are env-delivered PEMs (Railway has no
+  volumes) so renewal is a deliberate operator action — the watchdog
+  makes the deadline loud.
+
+### Railway env contract
+
+| Service | Var | Value |
+|---|---|---|
+| bureau-api | `LIVEKIT_URL` | `/livekit-ws` (relative; the SDK resolves it against the page origin) |
+| banter-api | `LIVEKIT_WS_URL` | `wss://<domain>/livekit-ws` |
+| livekit | `LIVEKIT_TURN_DOMAIN` | e.g. `turn.bigbluebam.com` |
+| livekit | `LIVEKIT_TURN_TLS_PORT` | the TCP proxy's **public** port (see dance below) |
+| livekit | `LIVEKIT_TURN_CERT_PEM` / `LIVEKIT_TURN_KEY_PEM` | PEM bodies for the TURN domain (browsers validate TURN certs — self-signed will not work) |
+| livekit | `INTERNAL_SERVICE_SECRET` | enables the boot report into the Log |
+| worker | `LIVEKIT_TURN_CHECK_TARGET` | `turn.<domain>:<P>` — enables the expiry watchdog |
+
+### The port-alignment dance
+
+LiveKit has ONE field (`turn.tls_port`) that controls both the port it
+LISTENS on and the port it ADVERTISES to clients — and Railway assigns
+the TCP proxy's public port, you don't choose it. So:
+
+1. Railway dashboard → livekit service → Settings → Networking →
+   **TCP Proxy** → create one (any target port, e.g. 5349).
+2. Note the assigned endpoint, e.g. `tramway.proxy.rlwy.net:34567`.
+3. Edit the proxy's **target port to the same number** (34567).
+4. Set `LIVEKIT_TURN_TLS_PORT=34567` on the livekit service.
+
+Now public port = target port = listen port = advertised port. If
+editing the target isn't offered, delete + recreate the proxy with the
+assigned number as the target (assignments are sticky per service; if it
+reassigns, repeat once with the new number).
+
+### DNS + cert
+
+- DNS: `turn.<domain>` **CNAME** → the proxy host (`*.proxy.rlwy.net`,
+  no port in DNS).
+- Cert: any valid cert for `turn.<domain>` (Let's Encrypt DNS-01 is the
+  usual path since the TURN host serves no HTTP for HTTP-01). Paste the
+  fullchain + key into `LIVEKIT_TURN_CERT_PEM` / `LIVEKIT_TURN_KEY_PEM`.
+  Renewal = repeat before expiry; the watchdog warns at T-14d.
+
+### Verification
+
+```sh
+railway logs --service livekit | grep livekit-railway   # rendered? turn=on?
+# TLS handshake against the TURN endpoint (any machine):
+openssl s_client -connect turn.<domain>:<P> -servername turn.<domain> </dev/null 2>/dev/null | openssl x509 -noout -subject -enddate
+```
+Then a call between two devices on different networks via the Railway
+domain; chrome://webrtc-internals on either side should show the
+selected candidate pair with `relay` type. Failures land in the
+SuperUser Log as `BUREAU_CONNECT_FAILED` with `page_host_kind` context.
+
 ## Sharp edges
 
 - **Windows reserved UDP ports.** Docker Desktop + Windows reserves

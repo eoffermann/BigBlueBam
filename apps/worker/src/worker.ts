@@ -16,6 +16,7 @@ import { processHelpdeskTaskCreateJob, type HelpdeskTaskCreateJobData } from './
 import { processBeaconVectorSyncJob, type BeaconVectorSyncJobData } from './jobs/beacon-vector-sync.job.js';
 import { processBeaconExpirySweepJob, type BeaconExpirySweepJobData } from './jobs/beacon-expiry-sweep.job.js';
 import { processLivekitIpDriftJob, type LivekitIpDriftJobData } from './jobs/livekit-ip-drift.job.js';
+import { processTurnCertExpiryJob, type TurnCertExpiryJobData } from './jobs/turn-cert-expiry.job.js';
 import { processBearingSnapshotJob, type BearingSnapshotJobData } from './jobs/bearing-snapshot.job.js';
 import { processBearingRecomputeJob, type BearingRecomputeJobData } from './jobs/bearing-recompute.job.js';
 import { processBearingDigestJob, type BearingDigestJobData } from './jobs/bearing-digest.job.js';
@@ -499,6 +500,42 @@ livekitIpDriftQueue.upsertJobScheduler(
   { pattern: '17 * * * *' },
   { name: 'drift-check', data: {} },
 ).catch((err) => logger.error({ err }, 'Failed to register livekit ip drift scheduler'));
+
+// TURN-TLS certificate expiry watchdog (daily). On Railway TURN is the
+// only media path and the cert is delivered as env-var PEMs (no
+// auto-renew possible) — an expired cert silently kills calling, so the
+// worker warns the Log at T-14 days with the exact renewal steps. The
+// job no-ops when LIVEKIT_TURN_CHECK_TARGET is unset (LAN deploys).
+const turnCertExpiryWorker = new Worker<TurnCertExpiryJobData>(
+  'turn-cert-expiry',
+  async (job: Job<TurnCertExpiryJobData>) => {
+    await processTurnCertExpiryJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+
+turnCertExpiryWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'turn-cert-expiry' }, 'Job completed');
+});
+
+turnCertExpiryWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'turn-cert-expiry', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'turn-cert-expiry',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
+const turnCertExpiryQueue = new Queue('turn-cert-expiry', { connection: redis });
+turnCertExpiryQueue.upsertJobScheduler(
+  'turn-cert-expiry-daily',
+  { pattern: '23 4 * * *' }, // 04:23 UTC daily
+  { name: 'cert-check', data: {} },
+).catch((err) => logger.error({ err }, 'Failed to register turn cert expiry scheduler'));
 
 // Schedule bearing snapshot as a daily repeatable job (midnight UTC)
 const bearingSnapshotQueue = new Queue('bearing-snapshot', { connection: redis });
@@ -1554,6 +1591,7 @@ const workers = [
   beaconVectorSyncWorker,
   beaconExpirySweepWorker,
   livekitIpDriftWorker,
+  turnCertExpiryWorker,
   bearingSnapshotWorker,
   bearingRecomputeWorker,
   bearingDigestWorker,
@@ -1656,6 +1694,8 @@ logger.info(
       'analytics',
       // LiveKit advertised-address drift watchdog (hourly)
       'livekit-ip-drift',
+      // TURN-TLS certificate expiry watchdog (daily)
+      'turn-cert-expiry',
     ],
   },
   'All workers started',
