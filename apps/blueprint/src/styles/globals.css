@@ -233,3 +233,51 @@ body {
 .dark .rich-text-content .rich-text-inline-code {
   background: #27272a;
 }
+
+/* Markdown-rendered node descriptions on the canvas (NodeBody). The
+ * wrapper is line-clamped to two lines at 11px, so the converter's
+ * block output is flattened to inline and sized to the node text
+ * instead of inheriting editor-preview spacing. */
+.bp-node-desc h1,
+.bp-node-desc h2,
+.bp-node-desc h3,
+.bp-node-desc h4,
+.bp-node-desc h5,
+.bp-node-desc h6,
+.bp-node-desc ul,
+.bp-node-desc li,
+.bp-node-desc p,
+.bp-node-desc pre {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+.bp-node-desc li::before {
+  content: '• ';
+}
+
+.bp-node-desc code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #f4f4f5;
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+}
+
+.dark .bp-node-desc code {
+  background: #27272a;
+}
+
+.bp-node-desc img {
+  display: inline;
+  max-height: 1.25em;
+  width: auto;
+  vertical-align: text-bottom;
+}
+
+.bp-node-desc a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

@@ -9,6 +9,7 @@ import {
   ReactFlowProvider,
   applyNodeChanges,
   applyEdgeChanges,
+  useReactFlow,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -17,6 +18,7 @@ import {
   type NodeMouseHandler,
   type EdgeMouseHandler,
   type OnConnect,
+  type OnConnectEnd,
   type OnNodesChange,
   type OnEdgesChange,
   type OnSelectionChangeParams,
@@ -30,10 +32,12 @@ import {
   ChevronDown,
   CopyPlus,
   Download,
+  Grid3x3,
   Layers,
   Layout,
   Link2,
   Loader2,
+  Magnet,
   Pin,
   PinOff,
   Plus,
@@ -48,6 +52,7 @@ import { useDiagram, useDiagramGraph, useArchiveDiagram, useSnapshotVersion } fr
 import { useDiagramSync } from '@/hooks/use-diagram-sync';
 import {
   useCreateNode,
+  type CreateNodeInput,
   useUpdateNode,
   useMoveNode,
   useDeleteNode,
@@ -79,6 +84,10 @@ const LAYOUT_ALGORITHMS: { value: string; label: string }[] = [
   { value: 'tree', label: 'Tree' },
   { value: 'grid', label: 'Grid' },
 ];
+
+// Snap step for the optional snap-to-grid mode. Matches the Background
+// dots gap (20) so snapped boxes land exactly on the visible grid.
+const SNAP_GRID_SIZE = 20;
 
 const LAYOUT_DIRECTIONS: { value: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT'; label: string }[] = [
   { value: 'DOWN', label: 'Top to bottom' },
@@ -135,12 +144,29 @@ function toRfEdge(e: BlueprintEdge): Edge {
 /*  Editor                                                            */
 /* ------------------------------------------------------------------ */
 
-// Three context-menu targets the editor switches between. Only one is
-// active at a time; opening any clears the others.
+// Context-menu targets the editor switches between. Only one is
+// active at a time; opening any clears the others. 'connect-drop' is
+// the drag-a-connection-onto-empty-canvas palette: pick a shape and a
+// node is created at the drop point, pre-wired to the drag's origin.
+type ConnectDropMenu = {
+  kind: 'connect-drop';
+  x: number;
+  y: number;
+  flow_x: number;
+  flow_y: number;
+  source_node_id: string;
+  source_handle: string | null;
+  /** True when the drag started from a target handle — the new node
+   *  becomes the edge's SOURCE so arrows keep pointing the way the
+   *  user dragged. */
+  source_is_target: boolean;
+};
+
 type ContextMenuState =
   | { kind: 'pane'; x: number; y: number; flow_x: number; flow_y: number }
   | { kind: 'node'; x: number; y: number; node_id: string }
   | { kind: 'edge'; x: number; y: number; edge_id: string }
+  | ConnectDropMenu
   | null;
 
 function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
@@ -177,6 +203,9 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
+  // Exact viewport-transformed coordinates for "create node here"
+  // gestures (pane right-click, connection dropped on empty canvas).
+  const { screenToFlowPosition } = useReactFlow();
 
   // Sidecar maps so we can look up the original blueprint_node/edge row
   // for the inspector without re-fetching. Updated by an effect below.
@@ -209,6 +238,12 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   // because React Flow doesn't know the rebuilt array corresponds to
   // the old one.
   const lastGraphRef = useRef<string>('');
+  // Set by createNodeAndSelect: the id of a just-created node that
+  // should come out of the next graph rebuild visually selected. The
+  // refetch lands after the mutation resolves, so plain state wouldn't
+  // survive the rebuild — React Flow only shows selection via the
+  // `selected` flag on the rebuilt node objects.
+  const pendingSelectRef = useRef<string | null>(null);
   useEffect(() => {
     if (!graph) return;
     const stamp = `${graph.nodes.length}:${graph.edges.length}:${graph.nodes
@@ -222,10 +257,15 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
     if (stamp === lastGraphRef.current) return;
     lastGraphRef.current = stamp;
     setRfNodes((prev) => {
+      const pending = pendingSelectRef.current;
+      const pendingPresent = pending !== null && graph.nodes.some((n) => n.id === pending);
+      if (pendingPresent) pendingSelectRef.current = null;
       const prevSelected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
       return graph.nodes.map((n) => {
         const next = toRfNode(n);
-        if (prevSelected.has(n.id)) next.selected = true;
+        // A freshly-created node wins selection outright; otherwise
+        // carry the user's existing selection across the rebuild.
+        if (pendingPresent ? n.id === pending : prevSelected.has(n.id)) next.selected = true;
         return next;
       });
     });
@@ -381,6 +421,35 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
     [createEdge],
   );
 
+  // Dragging a connection onto empty canvas opens the add-node palette
+  // at the drop point instead of silently discarding the gesture — pick
+  // a shape and the node is created there, pre-wired to the origin.
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (event, connectionState) => {
+      // Landed on a real handle: onConnect already made the edge.
+      if (connectionState.isValid) return;
+      const fromNode = connectionState.fromNode;
+      if (!fromNode) return;
+      const wrap = canvasWrapRef.current;
+      if (!wrap) return;
+      const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+      if (!point) return;
+      const rect = wrap.getBoundingClientRect();
+      const flow = screenToFlowPosition({ x: point.clientX, y: point.clientY });
+      setContextMenu({
+        kind: 'connect-drop',
+        x: point.clientX - rect.left,
+        y: point.clientY - rect.top,
+        flow_x: flow.x,
+        flow_y: flow.y,
+        source_node_id: fromNode.id,
+        source_handle: connectionState.fromHandle?.id ?? null,
+        source_is_target: connectionState.fromHandle?.type === 'target',
+      });
+    },
+    [screenToFlowPosition],
+  );
+
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
     const node = params.nodes[0];
     const edge = params.edges[0];
@@ -410,24 +479,124 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
     return localStorage.getItem('bp.lastShape') ?? 'rounded';
   });
 
+  // Snap-to-grid: while ON, React Flow quantizes node drags to the
+  // SNAP_GRID_SIZE lattice so boxes line up as you move them. Persisted
+  // per-browser like the last-used shape.
+  const [snapToGrid, setSnapToGrid] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('bp.snapToGrid') === '1';
+  });
+
+  const toggleSnapToGrid = useCallback(() => {
+    setSnapToGrid((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('bp.snapToGrid', next ? '1' : '0');
+      } catch {
+        // ignore quota / disabled storage
+      }
+      return next;
+    });
+  }, []);
+
+  // One-shot cleanup: round every existing node onto the grid. Local
+  // React Flow state moves immediately for instant feedback; the
+  // per-node move mutations persist + broadcast to other viewers.
+  const onSnapAllToGrid = useCallback(() => {
+    if (!graph) return;
+    const snap = (v: number) => Math.round(v / SNAP_GRID_SIZE) * SNAP_GRID_SIZE;
+    setRfNodes((nds) =>
+      nds.map((rn) => ({
+        ...rn,
+        position: { x: snap(rn.position.x), y: snap(rn.position.y) },
+      })),
+    );
+    for (const n of graph.nodes) {
+      const sx = snap(n.position_x);
+      const sy = snap(n.position_y);
+      if (sx !== n.position_x || sy !== n.position_y) {
+        moveNode.mutate({ nodeId: n.id, position_x: sx, position_y: sy });
+      }
+    }
+  }, [graph, moveNode]);
+
+  const persistLastShape = useCallback((shape: string) => {
+    setLastShape(shape);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('bp.lastShape', shape);
+      } catch {
+        // ignore quota / disabled storage
+      }
+    }
+  }, []);
+
+  // Every node-creation path funnels through here so a new node is
+  // always selected immediately — inspector open, ready to type. The
+  // pendingSelect ref carries the React Flow `selected` flag across
+  // the post-create graph refetch (see the reconciliation effect).
+  const createNodeAndSelect = useCallback(
+    async (input: CreateNodeInput): Promise<string | null> => {
+      try {
+        const res = await createNode.mutateAsync(input);
+        const id = res.data.id;
+        pendingSelectRef.current = id;
+        setSelectedNodeId(id);
+        setSelectedEdgeId(null);
+        return id;
+      } catch {
+        return null; // surfaced via the mutation's error state
+      }
+    },
+    [createNode],
+  );
+
   const addNodeWithShape = useCallback(
     (shape: string) => {
-      createNode.mutate({
+      void createNodeAndSelect({
         label: 'New node',
         shape,
         position_x: 80 + Math.random() * 200,
         position_y: 80 + Math.random() * 200,
       });
-      setLastShape(shape);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('bp.lastShape', shape);
-        } catch {
-          // ignore quota / disabled storage
-        }
-      }
+      persistLastShape(shape);
     },
-    [createNode],
+    [createNodeAndSelect, persistLastShape],
+  );
+
+  // Connect-drop palette pick: create the node at the drop point, then
+  // wire it to the drag's origin. Edge direction follows the drag — a
+  // drag out of a source handle makes the new node the target, a drag
+  // out of a target handle makes it the source.
+  const onAddConnectedNode = useCallback(
+    (shape: string, drop: ConnectDropMenu) => {
+      void (async () => {
+        const id = await createNodeAndSelect({
+          label: 'New node',
+          shape,
+          position_x: drop.flow_x,
+          position_y: drop.flow_y,
+        });
+        if (!id) return;
+        createEdge.mutate(
+          drop.source_is_target
+            ? {
+                source_node_id: id,
+                target_node_id: drop.source_node_id,
+                target_handle: drop.source_handle,
+                marker_end: 'arrowclosed',
+              }
+            : {
+                source_node_id: drop.source_node_id,
+                target_node_id: id,
+                source_handle: drop.source_handle,
+                marker_end: 'arrowclosed',
+              },
+        );
+        persistLastShape(shape);
+      })();
+    },
+    [createNodeAndSelect, createEdge, persistLastShape],
   );
 
   const onAddNode = useCallback(() => addNodeWithShape(lastShape), [addNodeWithShape, lastShape]);
@@ -973,19 +1142,18 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
             selectedAlgo={selectedAlgo}
             layoutDirection={layoutDirection}
             onAddNodeAt={(shape, x, y) => {
-              createNode.mutate({
+              void createNodeAndSelect({
                 label: 'New node',
                 shape,
                 position_x: x,
                 position_y: y,
               });
-              setLastShape(shape);
-              try {
-                localStorage.setItem('bp.lastShape', shape);
-              } catch {
-                /* ignore */
-              }
+              persistLastShape(shape);
             }}
+            onAddConnectedNode={onAddConnectedNode}
+            snapToGrid={snapToGrid}
+            onToggleSnap={toggleSnapToGrid}
+            onSnapAllToGrid={onSnapAllToGrid}
             onChangeShape={(nodeId, shape) => updateNode.mutate({ nodeId, input: { shape } })}
             onTogglePin={(nodeId, pinned) => updateNode.mutate({ nodeId, input: { pinned } })}
             onSetFill={(nodeId, color) => {
@@ -1030,6 +1198,9 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onConnectEnd={onConnectEnd}
+            snapToGrid={snapToGrid}
+            snapGrid={[SNAP_GRID_SIZE, SNAP_GRID_SIZE]}
             onNodeClick={onNodeClick}
             onEdgeClick={onEdgeClick}
             onSelectionChange={onSelectionChange}
@@ -1049,15 +1220,13 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
               if (!wrap) return;
               const rect = wrap.getBoundingClientRect();
               const mouse = event as React.MouseEvent;
+              const flow = screenToFlowPosition({ x: mouse.clientX, y: mouse.clientY });
               setContextMenu({
                 kind: 'pane',
                 x: mouse.clientX - rect.left,
                 y: mouse.clientY - rect.top,
-                // Flow-space coords approximated as canvas-relative pixels.
-                // A future commit can plumb React Flow's project() API for
-                // exact viewport-transformed coordinates.
-                flow_x: mouse.clientX - rect.left,
-                flow_y: mouse.clientY - rect.top,
+                flow_x: flow.x,
+                flow_y: flow.y,
               });
             }}
             onNodeContextMenu={(event, node) => {
@@ -1314,6 +1483,10 @@ interface CanvasContextMenuProps {
   selectedAlgo: string;
   layoutDirection: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
   onAddNodeAt: (shape: string, x: number, y: number) => void;
+  onAddConnectedNode: (shape: string, drop: ConnectDropMenu) => void;
+  snapToGrid: boolean;
+  onToggleSnap: () => void;
+  onSnapAllToGrid: () => void;
   onChangeShape: (nodeId: string, shape: string) => void;
   onTogglePin: (nodeId: string, pinned: boolean) => void;
   onSetFill: (nodeId: string, color: string | null) => void;
@@ -1351,6 +1524,10 @@ function CanvasContextMenu({
   selectedAlgo,
   layoutDirection,
   onAddNodeAt,
+  onAddConnectedNode,
+  snapToGrid,
+  onToggleSnap,
+  onSnapAllToGrid,
   onChangeShape,
   onTogglePin,
   onSetFill,
@@ -1394,12 +1571,22 @@ function CanvasContextMenu({
             lastShape={lastShape}
             selectedAlgo={selectedAlgo}
             layoutDirection={layoutDirection}
+            snapToGrid={snapToGrid}
             run={run}
             onAddNodeAt={(shape) => onAddNodeAt(shape, state.flow_x, state.flow_y)}
+            onToggleSnap={onToggleSnap}
+            onSnapAllToGrid={onSnapAllToGrid}
             onApplyLayout={onApplyLayout}
             onSnapshot={onSnapshot}
             onExport={onExport}
             onArchive={onArchive}
+          />
+        )}
+        {state.kind === 'connect-drop' && (
+          <ConnectDropMenuContent
+            lastShape={lastShape}
+            run={run}
+            onPick={(shape) => onAddConnectedNode(shape, state)}
           />
         )}
         {state.kind === 'node' &&
@@ -1502,8 +1689,11 @@ function PaneMenuContent({
   lastShape,
   selectedAlgo,
   layoutDirection,
+  snapToGrid,
   run,
   onAddNodeAt,
+  onToggleSnap,
+  onSnapAllToGrid,
   onApplyLayout,
   onSnapshot,
   onExport,
@@ -1512,8 +1702,11 @@ function PaneMenuContent({
   lastShape: string;
   selectedAlgo: string;
   layoutDirection: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
+  snapToGrid: boolean;
   run: (fn: () => void) => () => void;
   onAddNodeAt: (shape: string) => void;
+  onToggleSnap: () => void;
+  onSnapAllToGrid: () => void;
   onApplyLayout: (algorithm: string, direction: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT') => void;
   onSnapshot: () => void;
   onExport: (format: 'json' | 'mermaid') => void;
@@ -1555,6 +1748,22 @@ function PaneMenuContent({
         </MenuItem>
       ))}
       <MenuSeparator />
+      <MenuLabel>Align</MenuLabel>
+      <MenuItem
+        icon={<Magnet className="h-3.5 w-3.5" />}
+        onClick={run(onToggleSnap)}
+        trailing={
+          snapToGrid ? (
+            <Check className="h-3.5 w-3.5 text-primary-600" aria-hidden="true" />
+          ) : null
+        }
+      >
+        Snap to grid
+      </MenuItem>
+      <MenuItem icon={<Grid3x3 className="h-3.5 w-3.5" />} onClick={run(onSnapAllToGrid)}>
+        Snap nodes to grid now
+      </MenuItem>
+      <MenuSeparator />
       <MenuItem icon={<CameraIcon className="h-3.5 w-3.5" />} onClick={run(onSnapshot)}>
         Save snapshot
       </MenuItem>
@@ -1571,6 +1780,40 @@ function PaneMenuContent({
       <MenuItem icon={<Archive className="h-3.5 w-3.5" />} onClick={run(onArchive)} destructive>
         Archive diagram
       </MenuItem>
+    </>
+  );
+}
+
+/* ------ Connect-drop menu (connection released over empty canvas) ------ */
+
+function ConnectDropMenuContent({
+  lastShape,
+  run,
+  onPick,
+}: {
+  lastShape: string;
+  run: (fn: () => void) => () => void;
+  onPick: (shape: string) => void;
+}) {
+  return (
+    <>
+      <MenuLabel>Add connected node</MenuLabel>
+      {SHAPE_OPTIONS.map((s) => (
+        <MenuItem
+          key={s.value}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          onClick={run(() => onPick(s.value))}
+          trailing={
+            s.value === lastShape ? (
+              <span className="text-[9px] text-primary-600 font-medium uppercase tracking-wide">
+                Last
+              </span>
+            ) : null
+          }
+        >
+          {s.label}
+        </MenuItem>
+      ))}
     </>
   );
 }

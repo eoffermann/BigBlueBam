@@ -15,6 +15,7 @@
  * it in the exported `nodeTypes` map. The shape strings here must match
  * what `apps/blueprint-api` writes into `blueprint_nodes.shape`.
  */
+import { useMemo } from 'react';
 import {
   Handle,
   NodeResizer,
@@ -24,6 +25,7 @@ import {
 } from '@xyflow/react';
 import { Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
 
 interface BlueprintNodeData extends Record<string, unknown> {
   label: string;
@@ -80,6 +82,14 @@ function NodeBody({
   const refLabel = data.ref_entity_type
     ? `${data.ref_entity_type}${data.ref_entity_id ? '·linked' : ''}`
     : null;
+  // Descriptions are markdown (same dialect the inspector edits), so
+  // render them styled — *CEO* shows italic on the canvas too. The
+  // `bp-node-desc` rules in globals.css flatten block output to fit
+  // the two-line clamp. Memoized: React Flow re-renders on drag ticks.
+  const descHtml = useMemo(
+    () => (data.description ? sanitizeHtml(markdownToHtml(data.description)) : ''),
+    [data.description],
+  );
   return (
     <div
       className={cn(
@@ -91,10 +101,13 @@ function NodeBody({
       <div className="text-sm font-medium leading-tight break-words text-zinc-900 dark:text-zinc-100">
         {data.label || 'Untitled'}
       </div>
-      {data.description && (
-        <div className="mt-0.5 text-[11px] leading-tight text-zinc-500 dark:text-zinc-400 line-clamp-2">
-          {data.description}
-        </div>
+      {descHtml && (
+        <div
+          className="bp-node-desc mt-0.5 text-[11px] leading-tight text-zinc-500 dark:text-zinc-400 line-clamp-2"
+          // Sanitized above with the same DOMPurify pass the editor
+          // preview uses.
+          dangerouslySetInnerHTML={{ __html: descHtml }}
+        />
       )}
       {refLabel && (
         <div className="absolute top-1 right-1 flex items-center gap-0.5 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide">

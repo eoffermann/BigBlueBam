@@ -40,17 +40,45 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const [preview, setPreview] = useState(() => defaultPreview ?? !!value?.trim());
   const [hasInitialized, setHasInitialized] = useState(false);
-
-  // When value loads asynchronously (e.g., from API), switch to preview if it has content
-  useEffect(() => {
-    if (!hasInitialized && value?.trim()) {
-      setPreview(true);
-      setHasInitialized(true);
-    }
-  }, [value, hasInitialized]);
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // True once the user has edited through THIS editor instance (typing
+  // or a toolbar action). From then on the value is the user's draft —
+  // never an async load the auto-preview effect should react to.
+  const userEditedRef = useRef(false);
+
+  // Every local mutation funnels through here so the async-load
+  // detector below can tell "the user typed" apart from "the parent
+  // passed down a freshly-fetched value".
+  const emitChange = useCallback(
+    (next: string) => {
+      userEditedRef.current = true;
+      onChange(next);
+    },
+    [onChange],
+  );
+
+  // When a non-empty value loads asynchronously (e.g. from the API
+  // after mount), switch to preview ONCE. Guards, in order: an explicit
+  // defaultPreview prop always wins; a value the user just typed is not
+  // an async load (this was the "first keystroke kicked you out of edit
+  // mode" bug); a focused textarea is mid-edit and never yanked away.
+  useEffect(() => {
+    if (hasInitialized || !value?.trim()) return;
+    setHasInitialized(true);
+    if (defaultPreview !== undefined) return;
+    if (userEditedRef.current) return;
+    if (document.activeElement === textareaRef.current) return;
+    setPreview(true);
+  }, [value, hasInitialized, defaultPreview]);
+
+  // Leave preview for the textarea, cursor ready — used by the eye
+  // toggle and by clicking anywhere in the rendered preview.
+  const enterEditMode = useCallback(() => {
+    setPreview(false);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
 
   const wrapSelection = useCallback(
     (before: string, after: string) => {
@@ -62,7 +90,7 @@ export function RichTextEditor({
       const selected = value.slice(start, end);
       const replacement = `${before}${selected || 'text'}${after}`;
       const newValue = value.slice(0, start) + replacement + value.slice(end);
-      onChange(newValue);
+      emitChange(newValue);
 
       // Restore cursor position after React re-render
       requestAnimationFrame(() => {
@@ -73,7 +101,7 @@ export function RichTextEditor({
         ta.setSelectionRange(cursorPos, cursorPos + (selected ? 0 : 4));
       });
     },
-    [value, onChange],
+    [value, emitChange],
   );
 
   const prependLine = useCallback(
@@ -85,14 +113,14 @@ export function RichTextEditor({
       // Find the start of the current line
       const lineStart = value.lastIndexOf('\n', start - 1) + 1;
       const newValue = value.slice(0, lineStart) + prefix + value.slice(lineStart);
-      onChange(newValue);
+      emitChange(newValue);
 
       requestAnimationFrame(() => {
         ta.focus();
         ta.setSelectionRange(start + prefix.length, start + prefix.length);
       });
     },
-    [value, onChange],
+    [value, emitChange],
   );
 
   const handleFormat = useCallback(
@@ -116,7 +144,7 @@ export function RichTextEditor({
           const end = ta.selectionEnd;
           const replacement = `[${linkText}](url)`;
           const newValue = value.slice(0, start) + replacement + value.slice(end);
-          onChange(newValue);
+          emitChange(newValue);
           requestAnimationFrame(() => {
             ta.focus();
             // Select "url" so user can type the actual URL
@@ -136,7 +164,7 @@ export function RichTextEditor({
           break;
       }
     },
-    [wrapSelection, prependLine, value, onChange],
+    [wrapSelection, prependLine, value, emitChange],
   );
 
   const handleImageFile = useCallback(
@@ -150,14 +178,14 @@ export function RichTextEditor({
         const pos = ta?.selectionStart ?? value.length;
         const imageMarkdown = `![image](${url})`;
         const newValue = value.slice(0, pos) + imageMarkdown + value.slice(pos);
-        onChange(newValue);
+        emitChange(newValue);
       } catch (err) {
         console.error('Image upload failed:', err);
       } finally {
         setUploading(false);
       }
     },
-    [onImageUpload, value, onChange],
+    [onImageUpload, value, emitChange],
   );
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -212,7 +240,7 @@ export function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => setPreview(!preview)}
+          onClick={() => (preview ? enterEditMode() : setPreview(true))}
           className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/60 dark:hover:text-zinc-300 dark:hover:bg-zinc-700/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
           title={preview ? 'Edit' : 'Preview'}
           aria-label={preview ? 'Switch to edit mode' : 'Switch to preview mode'}
@@ -222,17 +250,31 @@ export function RichTextEditor({
         </button>
       </div>
 
-      {/* Editor / Preview */}
+      {/* Editor / Preview. The preview is itself a way back into edit
+          mode: click anywhere in the rendered text (links excepted, so
+          they still open) and the textarea returns, focused. */}
       {preview ? (
         <div
-          className="rich-text-content p-3 min-h-[80px] text-sm text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900"
+          className="rich-text-content p-3 min-h-[80px] text-sm text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 cursor-text"
+          title="Click to edit"
+          tabIndex={0}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('a')) return;
+            enterEditMode();
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            if ((e.target as HTMLElement).closest('a')) return;
+            e.preventDefault();
+            enterEditMode();
+          }}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
       ) : (
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => emitChange(e.target.value)}
           placeholder={placeholder}
           rows={minRows}
           className="w-full p-3 text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none resize-y"
