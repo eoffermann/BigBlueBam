@@ -66,6 +66,10 @@ export interface RingPayload {
   surface_app: string;
   surface_id: string;
   surface_label: string | null;
+  /** Concrete destination URL. Required for 'url'-kind surfaces (the
+   *  recipient cannot reconstruct a URL from the hashed surface id);
+   *  optional enrichment for entity surfaces. */
+  surface_url: string | null;
   ring_token: string;
   expires_at: string;
 }
@@ -106,6 +110,7 @@ export async function ringUser(
   surfaceApp: string,
   surfaceId: string,
   surfaceLabel: string | null,
+  surfaceUrl: string | null = null,
 ): Promise<RingResult> {
   const ringToken = nanoid(16);
   const expiresAt = new Date(Date.now() + RING_TTL_MS).toISOString();
@@ -117,6 +122,7 @@ export async function ringUser(
     surface_app: surfaceApp,
     surface_id: surfaceId,
     surface_label: surfaceLabel,
+    surface_url: surfaceUrl,
     ring_token: ringToken,
     expires_at: expiresAt,
   };
@@ -155,6 +161,50 @@ export async function ringUser(
   const delivered = await redis.publish(`user:${toUserId}`, envelope);
 
   return { ring_token: ringToken, expires_at: expiresAt, delivered };
+}
+
+/**
+ * Force-invite (admin/owner/SuperUser; gate enforced in ring.routes.ts).
+ *
+ * Instead of the accept-or-decline ring overlay, the recipient gets the
+ * existing SUMMON toast with autoFollow — a 3-second cancellable
+ * countdown, then their SDK navigates to the destination. Forced, but
+ * never a silent teleport: the recipient always sees who pulled them
+ * and can hit "Stay" inside the window.
+ *
+ * Reuses the summon_incoming frame the SDK already obeys (see
+ * packages/bureau-client/src/summon-handler.tsx); no new client wiring
+ * is needed on the recipient side. The synthetic summonId carries a
+ * `force-` prefix purely for log greppability.
+ */
+export async function forceNavigateUser(
+  redis: Redis,
+  fromUserId: string,
+  fromUserName: string,
+  toUserId: string,
+  targetUrl: string,
+  label: string | null,
+): Promise<RingResult> {
+  const summonId = `force-${nanoid(12)}`;
+  const expiresAt = new Date(Date.now() + RING_TTL_MS).toISOString();
+
+  const envelope = JSON.stringify({
+    type: 'summon_incoming',
+    data: {
+      type: 'summon_incoming',
+      summonId,
+      summoner: { id: fromUserId, name: fromUserName },
+      targetUrl,
+      app: 'url',
+      label,
+      lkRoomHint: null,
+      autoFollow: true,
+    },
+    timestamp: new Date().toISOString(),
+  });
+
+  const delivered = await redis.publish(`user:${toUserId}`, envelope);
+  return { ring_token: summonId, expires_at: expiresAt, delivered };
 }
 
 /**

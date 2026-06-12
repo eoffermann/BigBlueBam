@@ -47,6 +47,7 @@
  */
 
 import type Redis from 'ioredis';
+import { URL_SURFACE_APP, deriveUrlSurfaceId } from '@bigbluebam/shared';
 
 const SESSION_KEY = (sessionId: string) => `bureau:sess:${sessionId}`;
 const USER_SESSIONS_KEY = (userId: string) => `bureau:user:${userId}:sessions`;
@@ -90,8 +91,20 @@ export async function isUserOnSurface(
     if (!Array.isArray(value)) continue;
     const [sessOrgId, sessApp, sessUrl] = value as Array<string | null>;
     if (!sessOrgId || sessOrgId !== orgId) continue;
-    if (!sessApp || sessApp !== surfaceApp) continue;
     if (!sessUrl || sessUrl.length === 0) continue;
+    if (surfaceApp === URL_SURFACE_APP) {
+      // URL-derived surface ("every place is a room"): the synthetic id
+      // is a hash of the normalized path, so a substring check can never
+      // match. Re-derive from the session's reported URL with the SAME
+      // shared function the client used — byte-for-byte agreement is the
+      // whole contract (see @bigbluebam/shared bureau-surface.ts). The
+      // locationApp is intentionally NOT compared here: the path inside
+      // the URL already disambiguates apps, and the pseudo-app 'url' has
+      // no session counterpart.
+      if (deriveUrlSurfaceId(sessUrl) === surfaceId) return true;
+      continue;
+    }
+    if (!sessApp || sessApp !== surfaceApp) continue;
     if (sessUrl.includes(surfaceId)) return true;
   }
 

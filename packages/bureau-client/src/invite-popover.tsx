@@ -24,10 +24,20 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 export interface InvitePopoverProps {
-  /** Ring-API surface app ('brief', 'board', 'bam', …) — already mapped from location.app. */
+  /** Ring-API surface app ('brief', 'board', 'bam', …, or 'url' for
+   *  URL-derived rooms) — already mapped from location.app. */
   surfaceApp: string;
   surfaceId: string;
   surfaceLabel?: string | null;
+  /** The page URL the invite points at. Required for 'url' surfaces
+   *  (the hashed id can't be reversed); harmless enrichment otherwise. */
+  surfaceUrl?: string | null;
+  /**
+   * Force-invite mode (opened via right-click; org admin/owner/SuperUser
+   * only — the server enforces). The recipient gets a 3-second
+   * cancellable auto-navigate instead of the accept prompt.
+   */
+  force?: boolean;
   /** Excluded from the roster — you can't ring yourself. */
   selfUserId: string | null;
   onClose: () => void;
@@ -39,7 +49,7 @@ interface RosterMember {
   display_name: string;
 }
 
-type RingOutcome = 'ok' | 'dnd' | 'error';
+type RingOutcome = 'ok' | 'dnd' | 'forbidden' | 'error';
 
 // Rendered as a native <dialog open>, so the UA defaults (left: 0,
 // right: 0, margin: auto — which would center it) must be explicitly
@@ -151,12 +161,24 @@ const outcomeStyle = (outcome: RingOutcome): CSSProperties => ({
     outcome === 'ok' ? '#22c55e' : outcome === 'dnd' ? '#eab308' : '#fca5a5',
 });
 
+const forceBannerStyle: CSSProperties = {
+  margin: '6px 0 0',
+  padding: '4px 6px',
+  borderRadius: 6,
+  background: 'rgba(245, 158, 11, 0.15)',
+  border: '1px solid rgba(245, 158, 11, 0.4)',
+  color: '#fcd34d',
+  fontSize: 11,
+};
+
 const mutedStyle: CSSProperties = { opacity: 0.6, padding: '6px 6px' };
 
 export function InvitePopover({
   surfaceApp,
   surfaceId,
   surfaceLabel,
+  surfaceUrl,
+  force = false,
   selfUserId,
   onClose,
 }: InvitePopoverProps): React.ReactElement {
@@ -264,9 +286,17 @@ export function InvitePopover({
             surface_app: surfaceApp,
             surface_id: surfaceId,
             surface_label: surfaceLabel ?? undefined,
+            surface_url: surfaceUrl ?? undefined,
+            force: force || undefined,
           }),
         });
-        outcomes[userId] = res.ok ? 'ok' : res.status === 423 ? 'dnd' : 'error';
+        outcomes[userId] = res.ok
+          ? 'ok'
+          : res.status === 423
+            ? 'dnd'
+            : res.status === 403
+              ? 'forbidden'
+              : 'error';
       } catch {
         outcomes[userId] = 'error';
       }
@@ -278,7 +308,12 @@ export function InvitePopover({
   const sent = results !== null;
 
   return (
-    <dialog ref={panelRef} open style={panelStyle} aria-label="Invite people">
+    <dialog
+      ref={panelRef}
+      open
+      style={panelStyle}
+      aria-label={force ? 'Force invite people' : 'Invite people'}
+    >
       <input
         ref={searchRef}
         type="text"
@@ -287,6 +322,12 @@ export function InvitePopover({
         placeholder="Search by name or email…"
         style={searchInputStyle}
       />
+      {force ? (
+        <div style={forceBannerStyle} data-bureau-force-banner>
+          Force invite: recipients are pulled here after a 3-second
+          countdown they can cancel. Admin/owner only.
+        </div>
+      ) : null}
       <div style={listStyle}>
         {loadError ? (
           <div style={{ ...mutedStyle, color: '#fca5a5' }}>{loadError}</div>
@@ -324,10 +365,14 @@ export function InvitePopover({
                 {outcome ? (
                   <span style={outcomeStyle(outcome)}>
                     {outcome === 'ok'
-                      ? 'ringing'
+                      ? force
+                        ? 'pulled'
+                        : 'ringing'
                       : outcome === 'dnd'
                         ? 'DND'
-                        : 'failed'}
+                        : outcome === 'forbidden'
+                          ? 'not allowed'
+                          : 'failed'}
                   </span>
                 ) : null}
               </button>
@@ -353,10 +398,14 @@ export function InvitePopover({
               onClick={() => void sendInvites()}
             >
               {sending
-                ? 'Ringing…'
+                ? force
+                  ? 'Pulling…'
+                  : 'Ringing…'
                 : selected.size > 0
-                  ? `Ring ${selected.size} ${selected.size === 1 ? 'person' : 'people'}`
-                  : 'Ring'}
+                  ? `${force ? 'Pull' : 'Ring'} ${selected.size} ${selected.size === 1 ? 'person' : 'people'}`
+                  : force
+                    ? 'Pull'
+                    : 'Ring'}
             </button>
             <button type="button" style={cancelBtnStyle} onClick={onClose}>
               Cancel

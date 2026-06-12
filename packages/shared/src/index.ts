@@ -10,3 +10,6 @@ export * from './bolt-graph-shape.js';
 export * from './bolt-automation-versions/index.js';
 export * from './mention-syntax.js';
 export * from './queues.js';
+// "Every place is a room": URL-derived Bureau surface ids, shared by
+// bureau-client (room selection) and bureau-api (mint authorization).
+export * from './bureau-surface.js';

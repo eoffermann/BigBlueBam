@@ -3231,6 +3231,9 @@ importers:
 
   packages/bureau-client:
     dependencies:
+      '@bigbluebam/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@bigbluebam/ui':
         specifier: workspace:*
         version: link:../ui

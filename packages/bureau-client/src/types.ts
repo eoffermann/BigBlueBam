@@ -57,9 +57,19 @@ export interface LocationDescriptor {
    * users on the same surface land in the same LiveKit room.
    *
    * Hosts can advertise this without us re-parsing their URL. Apps that
-   * haven't been threaded yet simply omit it and stay in `{ kind: 'none' }`.
+   * haven't been threaded yet simply omit it — the SDK then derives a
+   * synthetic URL surface ("every place is a room") so the page still
+   * gets a call room; see surface_kind.
    */
   surface_id?: string;
+  /**
+   * How surface_id was produced. 'entity' (default when a host supplied
+   * surface_id) joins the app-scoped room `huddle-{app}-{id}`; 'url'
+   * (SDK-derived from the page path via @bigbluebam/shared
+   * deriveUrlSurfaceId) joins the org-scoped room minted by bureau-api
+   * for surface_app 'url'.
+   */
+  surface_kind?: 'entity' | 'url';
   /**
    * Bureau-SPA only: the spatial room the local user currently occupies on
    * the floor being viewed. The floor view drives room membership over its
@@ -317,6 +327,10 @@ export interface RingIncomingEvent {
   surface_id: string;
   /** Human-readable surface label ("Q3 Roadmap", "ACME deal", …); may be null. */
   surface_label?: string | null;
+  /** Concrete destination URL. Always present for 'url'-kind surfaces
+   *  (the hashed surface_id can't be reversed into a URL); optional
+   *  enrichment otherwise. Recipients strip the origin before navigating. */
+  surface_url?: string | null;
   /**
    * One-shot acceptance token. Echoed back to bureau-api when the receiver
    * accepts; bureau-api uses it to gate LiveKit token minting against the

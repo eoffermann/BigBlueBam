@@ -217,7 +217,12 @@ export function RingHandler({
     // Plain surface URL — no ?huddle=1 query param. The destination SPA no
     // longer mounts its own huddle UI; the docked box is the single LiveKit
     // endpoint and it joins on its own once describeLocation() updates.
-    const target = stripOrigin(surfaceUrlFor(ring.surface_app, ring.surface_id));
+    // Prefer the concrete URL carried on the ring (always present for
+    // URL-derived surfaces, whose hashed ids can't be reversed into a
+    // path); fall back to the per-app synthesizer for legacy senders.
+    const target = stripOrigin(
+      ring.surface_url ?? surfaceUrlFor(ring.surface_app, ring.surface_id),
+    );
     try {
       navigate(target);
     } catch (err) {

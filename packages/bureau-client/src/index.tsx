@@ -66,8 +66,10 @@ import {
 } from './active-room.js';
 import { useActiveCall } from './use-active-call.js';
 import { InvitePopover } from './invite-popover.js';
+import { HuntPopover } from './hunt-popover.js';
 import { VideoTilesWindow } from './video-tiles.js';
 import { AudioUnblockChip } from './audio-unblock-chip.js';
+import { URL_SURFACE_APP, deriveUrlSurfaceId } from '@bigbluebam/shared';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -235,6 +237,9 @@ interface BureauContextValue {
     setDoor: (roomId: string, privacy: RoomPrivacy) => void;
     lockRoom: (roomId: string, locked: boolean) => void;
     summonHere: () => void;
+    /** Host-app navigation (threaded from mountBureauClient). Used by
+     *  Hunt to jump to wherever another org member currently is. */
+    navigate: (url: string) => void;
   };
 }
 
@@ -311,7 +316,7 @@ export interface BureauProviderProps {
 
 function BureauProvider({
   client,
-  navigate: _navigate,
+  navigate,
   children,
   route,
   describeLocation,
@@ -480,6 +485,17 @@ function BureauProvider({
       console.warn('[bureau-client] describeLocation threw', err);
       return;
     }
+    // "Every place is a room": pages whose host didn't advertise an
+    // entity surface get a synthetic one derived from the URL path, so
+    // ANY located page is callable and Invite/Hunt always have a
+    // destination. Deterministic on both ends — bureau-api re-derives
+    // the same id from the presence URL to authorize the room mint.
+    if (descriptor && descriptor.url && descriptor.app && !descriptor.surface_id) {
+      const derived = deriveUrlSurfaceId(descriptor.url);
+      if (derived) {
+        descriptor = { ...descriptor, surface_id: derived, surface_kind: 'url' };
+      }
+    }
     if (!descriptor || !descriptor.url || !descriptor.app) {
       // Host left every located page. If the previous location carried a
       // spatial-room mirror (Bureau floor view), drop the mirrored room —
@@ -566,10 +582,13 @@ function BureauProvider({
         label: loc?.spatialRoomName ?? undefined,
       };
     } else if (loc?.surface_id && loc.app) {
+      // URL-derived surfaces mint under the pseudo-app 'url' (bureau-api
+      // org-scopes their room name); entity surfaces keep the host app.
+      const surfaceApp = loc.surface_kind === 'url' ? URL_SURFACE_APP : loc.app;
       target = {
         kind: 'surface',
-        roomName: `huddle-${loc.app}-${loc.surface_id}`,
-        surfaceApp: loc.app,
+        roomName: `huddle-${surfaceApp}-${loc.surface_id}`,
+        surfaceApp,
         surfaceId: loc.surface_id,
         label: loc.label,
       };
@@ -613,8 +632,9 @@ function BureauProvider({
           lkRoomHint: loc.livekitRoom,
         });
       },
+      navigate,
     }),
-    [client],
+    [client, navigate],
   );
 
   const value = useMemo<BureauContextValue>(
@@ -1036,6 +1056,11 @@ function BureauDockedBoxInner({
   const call = useActiveCall();
   const dock = useDockDrag(floating);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // 'ask' = ordinary ring (recipient must accept). 'force' = admin pull
+  // (3s cancellable auto-navigate) — opened via right-click on Invite;
+  // the server rejects non-admins, the popover shows "not allowed".
+  const [inviteMode, setInviteMode] = useState<'ask' | 'force'>('ask');
+  const [huntOpen, setHuntOpen] = useState(false);
   if (!ctx) return null;
   const { state, actions } = ctx;
 
@@ -1048,9 +1073,16 @@ function BureauDockedBoxInner({
   // Bureau todo #7: summoning needs someone to bring (another occupant) and
   // somewhere to bring them (a reported location) — otherwise hide the button.
   const canSummon = inRoom && hasOthers && !!state.location?.url;
-  const ringSurfaceApp = state.location?.app
-    ? RING_SURFACE_APP_BY_LOCATION_APP[state.location.app]
-    : undefined;
+  // URL-derived surfaces ring under the pseudo-app 'url'; entity
+  // surfaces keep the per-app mapping. Since the SDK now derives a
+  // surface for EVERY located page, Invite is effectively always
+  // available while the user is somewhere.
+  const ringSurfaceApp =
+    state.location?.surface_kind === 'url'
+      ? URL_SURFACE_APP
+      : state.location?.app
+        ? RING_SURFACE_APP_BY_LOCATION_APP[state.location.app]
+        : undefined;
   const inviteSurfaceId = state.location?.surface_id;
   const canInvite = !!ringSurfaceApp && !!inviteSurfaceId;
   const callConnected = call.status === 'connected';
@@ -1302,20 +1334,54 @@ function BureauDockedBoxInner({
           type="button"
           style={inviteBtnStyle}
           data-bureau-invite-button
-          onClick={() => setInviteOpen((v) => !v)}
-          title="Ring people to join you on this surface"
+          onClick={() => {
+            setHuntOpen(false);
+            setInviteMode('ask');
+            setInviteOpen((v) => !(v && inviteMode === 'ask'));
+          }}
+          onContextMenu={(e) => {
+            // Right-click = Force Invite (admin/owner/SuperUser; the
+            // server enforces — others see "not allowed" per row).
+            e.preventDefault();
+            setHuntOpen(false);
+            setInviteMode('force');
+            setInviteOpen(true);
+          }}
+          title="Ring people to join you here (right-click: force invite — admin only)"
           aria-expanded={inviteOpen}
         >
           Invite…
         </button>
       ) : null}
+      <button
+        type="button"
+        style={inviteBtnStyle}
+        data-bureau-hunt-button
+        onClick={() => {
+          setInviteOpen(false);
+          setHuntOpen((v) => !v);
+        }}
+        title="Find an org member and jump to wherever they are"
+        aria-expanded={huntOpen}
+      >
+        Hunt…
+      </button>
       {inviteOpen && canInvite && ringSurfaceApp && inviteSurfaceId ? (
         <InvitePopover
           surfaceApp={ringSurfaceApp}
           surfaceId={inviteSurfaceId}
           surfaceLabel={state.location?.label ?? null}
+          surfaceUrl={state.location?.url ?? null}
+          force={inviteMode === 'force'}
           selfUserId={state.selfUserId}
           onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
+      {huntOpen ? (
+        <HuntPopover
+          selfUserId={state.selfUserId}
+          navigate={actions.navigate}
+          onClose={() => setHuntOpen(false)}
         />
       ) : null}
 

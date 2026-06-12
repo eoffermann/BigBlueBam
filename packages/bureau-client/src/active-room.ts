@@ -561,6 +561,12 @@ export class ActiveCallManager {
       participant.videoTrackPublications.forEach((pub: TrackPublication) => {
         const source = pub.source;
         if (source !== Track.Source.Camera && source !== Track.Source.ScreenShare) return;
+        // Muted = the sender turned their camera off / stopped sharing
+        // (LiveKit mutes rather than unpublishes for cameras). Eject the
+        // tile entirely instead of showing a frozen "Muted" placeholder;
+        // TrackMuted/TrackUnmuted events re-run this rebuild, so the tile
+        // reappears the moment they switch back on.
+        if (pub.isMuted) return;
         const t = pub.track as VideoTrack | undefined;
         // For remote publications, the track is null until subscribed; a
         // local publication always has its track immediately. Either way

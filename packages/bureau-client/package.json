@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bigbluebam/shared": "workspace:*",
     "@bigbluebam/ui": "workspace:*",
     "livekit-client": "^2.0.0"
   },

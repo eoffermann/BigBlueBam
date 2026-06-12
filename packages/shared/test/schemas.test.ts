@@ -568,9 +568,20 @@ describe('createTaskSchema', () => {
     ).toThrow();
   });
 
-  it('rejects invalid priority', () => {
+  it('accepts custom priority slugs (per-org configurable since migration 0183)', () => {
+    // Priorities are no longer a closed enum — orgs define their own
+    // rows and tasks store the slug. Any well-formed slug must parse;
+    // existence within the org is checked at the service layer.
+    expect(createTaskSchema.parse({ ...valid, priority: 'urgent' }).priority).toBe('urgent');
+    expect(createTaskSchema.parse({ ...valid, priority: 'p0' }).priority).toBe('p0');
+  });
+
+  it('rejects malformed priority slugs', () => {
     expect(() =>
-      createTaskSchema.parse({ ...valid, priority: 'urgent' }),
+      createTaskSchema.parse({ ...valid, priority: 'has spaces!' }),
+    ).toThrow();
+    expect(() =>
+      createTaskSchema.parse({ ...valid, priority: '-leading-dash' }),
     ).toThrow();
   });
 

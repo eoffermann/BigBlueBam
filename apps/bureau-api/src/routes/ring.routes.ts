@@ -45,12 +45,13 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { deriveUrlSurfaceId } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { organizationMemberships, users } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
-import { badRequest, notFound } from '../middleware/room-access.js';
+import { badRequest, forbidden, notFound } from '../middleware/room-access.js';
 import { isUserInDnd } from '../services/dnd-check.service.js';
-import { ringUser } from '../services/ring.service.js';
+import { forceNavigateUser, ringUser } from '../services/ring.service.js';
 
 const SURFACE_APPS = [
   'brief',
@@ -65,6 +66,11 @@ const SURFACE_APPS = [
   'banter',
   // D-4: Book event pages (surface_id = event id, URL /book/events/:id).
   'book',
+  // "Every place is a room": URL-derived surfaces. surface_id is the
+  // synthetic hash from @bigbluebam/shared deriveUrlSurfaceId and the
+  // body must carry surface_url (the recipient can't reconstruct a URL
+  // from a hash).
+  'url',
 ] as const;
 
 const SURFACE_ID_REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{0,63})$/;
@@ -74,6 +80,16 @@ const ringBody = z.object({
   surface_app: z.enum(SURFACE_APPS),
   surface_id: z.string().regex(SURFACE_ID_REGEX, 'Invalid surface_id'),
   surface_label: z.string().max(255).optional(),
+  /** Destination URL for 'url'-kind surfaces (required there, optional
+   *  elsewhere). Origin is stripped by the recipient before navigating. */
+  surface_url: z.string().max(2048).optional(),
+  /**
+   * Force-invite (admin/owner/SuperUser only): instead of the ring
+   * overlay the recipient gets the summon toast with a 3-second
+   * cancellable auto-navigate — pulled to the sender's location rather
+   * than asked. Regular invites NEVER auto-navigate.
+   */
+  force: z.boolean().optional(),
 });
 
 export default async function ringRoutes(fastify: FastifyInstance) {
@@ -95,12 +111,36 @@ export default async function ringRoutes(fastify: FastifyInstance) {
           })),
         );
       }
-      const { to_user_id, surface_app, surface_id, surface_label } = parsed.data;
+      const { to_user_id, surface_app, surface_id, surface_label, surface_url, force } =
+        parsed.data;
 
       // Self-ring is meaningless; the overlay would pop on the sender's
       // own device. Reject early so the UI can collapse the action.
       if (to_user_id === user.id) {
         return badRequest(request, reply, 'You cannot ring yourself');
+      }
+
+      // URL-kind surfaces must carry the real destination, and the id
+      // must actually derive from it — otherwise a caller could pair an
+      // innocuous-looking label/id with a navigation to anywhere.
+      if (surface_app === 'url') {
+        if (!surface_url) {
+          return badRequest(request, reply, 'surface_url is required for url surfaces');
+        }
+        if (deriveUrlSurfaceId(surface_url) !== surface_id) {
+          return badRequest(request, reply, 'surface_id does not match surface_url');
+        }
+      }
+
+      // Force-invite is an admin power: it bypasses the accept prompt
+      // (the recipient gets a 3s cancellable auto-navigate instead).
+      const isOrgAdmin = user.role === 'admin' || user.role === 'owner';
+      if (force && !isOrgAdmin && !user.is_superuser) {
+        return forbidden(
+          request,
+          reply,
+          'Force invite requires an org admin/owner or SuperUser',
+        );
       }
 
       // Org scoping: the recipient must be a member of the sender's active
@@ -135,18 +175,43 @@ export default async function ringRoutes(fastify: FastifyInstance) {
 
       // §4.3-style DND check. Any live session of the recipient in 'dnd'
       // blocks the ring with 423; the UI surfaces a "leave a note" affordance
-      // that drops back to the existing Banter DM path.
-      const recipientInDnd = await isUserInDnd(fastify.redis, to_user_id);
-      if (recipientInDnd) {
-        return reply.status(423).send({
-          error: {
-            code: 'RECIPIENT_DND',
-            message: 'Recipient is currently in Do Not Disturb',
-            details: [],
-            request_id: request.id,
-            recipient_dnd: true,
-          },
-        });
+      // that drops back to the existing Banter DM path. Force-invite is an
+      // explicit admin override and intentionally pierces DND.
+      if (!force) {
+        const recipientInDnd = await isUserInDnd(fastify.redis, to_user_id);
+        if (recipientInDnd) {
+          return reply.status(423).send({
+            error: {
+              code: 'RECIPIENT_DND',
+              message: 'Recipient is currently in Do Not Disturb',
+              details: [],
+              request_id: request.id,
+              recipient_dnd: true,
+            },
+          });
+        }
+      }
+
+      if (force) {
+        // Reuses the summon toast on the recipient (3s cancellable
+        // auto-navigate). Needs a concrete destination URL; entity
+        // surfaces without one can't be forced.
+        if (!surface_url) {
+          return badRequest(
+            request,
+            reply,
+            'surface_url is required for force invites',
+          );
+        }
+        const result = await forceNavigateUser(
+          fastify.redis,
+          user.id,
+          user.display_name,
+          to_user_id,
+          surface_url,
+          surface_label ?? null,
+        );
+        return reply.status(200).send({ data: result });
       }
 
       const result = await ringUser(
@@ -158,6 +223,7 @@ export default async function ringRoutes(fastify: FastifyInstance) {
         surface_app,
         surface_id,
         surface_label ?? null,
+        surface_url ?? null,
       );
 
       return reply.status(200).send({ data: result });

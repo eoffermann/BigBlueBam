@@ -79,6 +79,11 @@ const SURFACE_APPS = [
   // event's meeting_url deep-links there and the docked box joins
   // huddle-book-{eventId}.
   'book',
+  // "Every place is a room": pages with no entity-specific surface get a
+  // synthetic surface derived from the URL path (see @bigbluebam/shared
+  // bureau-surface.ts). The room is org-scoped at mint time below —
+  // unlike entity ids, URL paths are NOT unique across tenants.
+  'url',
 ] as const;
 
 /** uuid or 1-64 char lowercase-alphanumeric-and-dash slug. */
@@ -256,7 +261,15 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const roomName = buildSurfaceHuddleRoomName(surface_app, surface_id);
+      // URL-derived rooms get the org id baked into the room name:
+      // entity surface ids are globally-unique UUIDs, but two orgs can
+      // be on the same PATH (e.g. /b3/projects) and must never share a
+      // call. Both sides of a same-org pair still converge because the
+      // name is derived server-side from the caller's active org.
+      const roomName =
+        surface_app === 'url'
+          ? `huddle-url-${user.org_id}-${surface_id}`
+          : buildSurfaceHuddleRoomName(surface_app, surface_id);
       const token = await mintRoomToken(
         calling.livekitApiKey,
         calling.livekitApiSecret,

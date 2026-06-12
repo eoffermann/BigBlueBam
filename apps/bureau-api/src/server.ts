@@ -20,6 +20,7 @@ import knocksRoutes from './routes/knocks.routes.js';
 import livekitRoutes from './routes/livekit.routes.js';
 import summonsRoutes from './routes/summons.routes.js';
 import presenceHereRoutes from './routes/presence-here.routes.js';
+import presenceWhereRoutes from './routes/presence-where.routes.js';
 import ringRoutes from './routes/ring.routes.js';
 import wsRoutes from './routes/ws.routes.js';
 import { sql } from 'drizzle-orm';
@@ -151,6 +152,10 @@ await fastify.register(summonsRoutes, { prefix: '/v1' });
 // Surface-scoped huddle token mint lives inside livekitRoutes above
 // (POST /v1/surface-huddle/token).
 await fastify.register(presenceHereRoutes, { prefix: '/v1' });
+// Hunt: GET /v1/presence/where/:userId — where is this org member right
+// now (url/app/label), so the caller can jump to them. Org-scoped,
+// DND-respecting, destination-access-filtered.
+await fastify.register(presenceWhereRoutes, { prefix: '/v1' });
 await fastify.register(ringRoutes, { prefix: '/v1' });
 
 // Bureau WebSocket hub — Agent B. Mounted at `/bureau/ws` (no /v1 prefix
