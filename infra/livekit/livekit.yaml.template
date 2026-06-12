@@ -27,8 +27,12 @@
 
 port: 7880
 rtc:
-  port_range_start: 50000
-  port_range_end: 50100
+  # Avoid 50000-50259 — Windows + Docker Desktop reserves that range
+  # on most setups; binding 0.0.0.0:50000-50100 fails with EACCES.
+  # 51000-51100 is well outside both the Windows reserved ranges and
+  # the typical Linux ephemeral pool.
+  port_range_start: 51000
+  port_range_end: 51100
   tcp_port: 7881
   # ICE candidate advertisement.
   #

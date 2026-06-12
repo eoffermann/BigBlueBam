@@ -1035,6 +1035,14 @@ services:
       # are unaffected. Container-internal ports stay at 7880/7881.
       - "${LIVEKIT_RTC_PORT:-7880}:7880"
       - "${LIVEKIT_TCP_PORT:-7881}:7881"
+      # WebRTC media (UDP). Without this range mapped to the host, the
+      # only media path is the TCP fallback on 7881 — and any browser
+      # whose ICE-candidate list points at the host's IP can't reach
+      # the UDP ports at all. Symptom of leaving this out: the second
+      # LAN device sees "[R] In: <Room> error" with a ConnectionError
+      # from LiveKit's Room.connect(). The range must match
+      # rtc.port_range_start / port_range_end in livekit.yaml.
+      - "${LIVEKIT_UDP_PORT_RANGE:-51000-51100}:51000-51100/udp"
     volumes:
       - ./infra/livekit/livekit.yaml:/etc/livekit.yaml:ro
     networks:
