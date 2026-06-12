@@ -67,6 +67,7 @@ import {
 import { useActiveCall } from './use-active-call.js';
 import { InvitePopover } from './invite-popover.js';
 import { VideoTilesWindow } from './video-tiles.js';
+import { AudioUnblockChip } from './audio-unblock-chip.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -108,6 +109,8 @@ export type { UseActiveCall } from './use-active-call.js';
 // it so hosts that opt out of the auto-mounted portal can place it
 // themselves (e.g. tiled inside a custom dashboard).
 export { VideoTilesWindow } from './video-tiles.js';
+export { AudioUnblockChip } from './audio-unblock-chip.js';
+export { BureauAudioSink, isPlayableAudioSource } from './audio-sink.js';
 export {
   initSystemErrorReporter,
   reportSystemError,
@@ -1458,6 +1461,9 @@ function MountedApp({
           {/* Auto-shows when the active call has at least one video track;
               null otherwise, so it never takes screen space when idle. */}
           <VideoTilesWindow />
+          {/* Auto-shows when the browser's autoplay policy is blocking
+              remote audio; one click resumes playback. */}
+          <AudioUnblockChip />
           <SummonHandler client={client} navigate={navigate} />
           <KnockHandler client={client} />
           <RingHandler client={client} navigate={navigate} />

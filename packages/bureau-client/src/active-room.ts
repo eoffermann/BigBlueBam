@@ -55,6 +55,7 @@ import {
   type TrackPublication,
   type VideoTrack,
 } from 'livekit-client';
+import { BureauAudioSink } from './audio-sink.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Public types
@@ -130,6 +131,10 @@ export interface ActiveCallSnapshot {
    *  published or while connecting/idle. Ordered with screen-share first
    *  so the tiles UI can pin "documents over faces" without re-sorting. */
   videoTiles: VideoTile[];
+  /** True when the browser's autoplay policy is refusing audio playback
+   *  (user hasn't interacted with the page yet). The unblock chip calls
+   *  startAudio() to clear it with a click. */
+  audioPlaybackBlocked: boolean;
 }
 
 export type ActiveCallListener = (snapshot: ActiveCallSnapshot) => void;
@@ -247,6 +252,11 @@ export class ActiveCallManager {
   };
   private errorMessage: string | null = null;
   private videoTiles: VideoTile[] = [];
+  /** Hidden-DOM playback for subscribed remote audio (mics + screen-share
+   *  audio). LiveKit never auto-plays audio; without this sink the other
+   *  side's video shows but their voice is silently dropped. */
+  private audioSink = new BureauAudioSink();
+  private audioPlaybackBlocked = false;
 
   /** Monotonically incrementing connect token — guards against late callbacks. */
   private connectGeneration = 0;
@@ -289,7 +299,25 @@ export class ActiveCallManager {
       tracks: { ...this.tracks },
       errorMessage: this.errorMessage,
       videoTiles: this.videoTiles,
+      audioPlaybackBlocked: this.audioPlaybackBlocked,
     };
+  }
+
+  /**
+   * Resume audio playback after the browser's autoplay policy blocked it
+   * (snapshot.audioPlaybackBlocked). Must run from a user gesture — the
+   * audio-unblock chip's click handler is the canonical caller.
+   */
+  async startAudio(): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    try {
+      await room.startAudio();
+    } catch (err) {
+      this.logger.warn('[bureau-client] startAudio failed', err);
+    }
+    this.audioPlaybackBlocked = !room.canPlaybackAudio;
+    this.emit();
   }
 
   /**
@@ -395,6 +423,11 @@ export class ActiveCallManager {
     this.room = room;
     this.syncTrackStateFromRoom();
     this.rebuildVideoTiles();
+    // Sweep any audio tracks that were subscribed during the connect
+    // handshake into the playback sink, and capture the browser's
+    // autoplay verdict (the listeners keep both current from here on).
+    this.audioSink.sync(room);
+    this.audioPlaybackBlocked = !room.canPlaybackAudio;
     this.setStatus('connected');
   }
 
@@ -576,6 +609,15 @@ export class ActiveCallManager {
     const onVideoChange = () => {
       if (generation !== this.connectGeneration) return;
       this.rebuildVideoTiles();
+      // Same events drive audio playback: a newly subscribed remote mic
+      // must be attached to the hidden sink or it stays silent.
+      this.audioSink.sync(room);
+      this.emit();
+    };
+
+    const onAudioPlaybackChanged = () => {
+      if (generation !== this.connectGeneration) return;
+      this.audioPlaybackBlocked = !room.canPlaybackAudio;
       this.emit();
     };
 
@@ -596,6 +638,8 @@ export class ActiveCallManager {
       this.room = null;
       this.tracks = { micOn: false, camOn: false, screenOn: false };
       this.videoTiles = [];
+      this.audioSink.detachAll();
+      this.audioPlaybackBlocked = false;
       if (this.status === 'idle') {
         // User-initiated; we already cleaned up in disconnectCurrentRoom.
         return;
@@ -616,6 +660,7 @@ export class ActiveCallManager {
     room.on(RoomEvent.TrackPublished, onVideoChange);
     room.on(RoomEvent.TrackUnpublished, onVideoChange);
     room.on(RoomEvent.ParticipantDisconnected, onVideoChange);
+    room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioPlaybackChanged);
     room.on(RoomEvent.MediaDevicesError, onMediaDevicesError);
     room.on(RoomEvent.Disconnected, onDisconnected);
 
@@ -629,6 +674,7 @@ export class ActiveCallManager {
       room.off(RoomEvent.TrackPublished, onVideoChange);
       room.off(RoomEvent.TrackUnpublished, onVideoChange);
       room.off(RoomEvent.ParticipantDisconnected, onVideoChange);
+      room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlaybackChanged);
       room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
       room.off(RoomEvent.Disconnected, onDisconnected);
     };
@@ -650,6 +696,8 @@ export class ActiveCallManager {
     this.room = null;
     this.tracks = { micOn: false, camOn: false, screenOn: false };
     this.videoTiles = [];
+    this.audioSink.detachAll();
+    this.audioPlaybackBlocked = false;
     try {
       await room.disconnect();
     } catch (err) {

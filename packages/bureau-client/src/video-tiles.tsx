@@ -509,11 +509,13 @@ function VideoTile({ tile, prominent }: VideoTileProps): React.ReactElement {
     } catch {
       /* attach can throw if the element is already detached */
     }
-    // Local self-preview never plays audio (the SDK auto-routes the
-    // local mic; remote audio is handled by LiveKit's audio output
-    // sink). Mute the element so we don't get feedback loops if a
-    // future change accidentally subscribes locally to a remote audio
-    // track via this same element.
+    // Video elements never carry call audio: remote audio playback is
+    // owned by BureauAudioSink (audio-sink.ts) — LiveKit does NOT
+    // auto-play subscribed audio, so the sink attaches every remote
+    // mic / screen-share-audio track into a hidden container. The
+    // local self-preview is additionally muted so a future change
+    // that routed audio through a <video> element couldn't create a
+    // feedback loop.
     el.muted = tile.isLocal;
     el.autoplay = true;
     el.playsInline = true;

@@ -24,6 +24,7 @@ const INITIAL_SNAPSHOT: ActiveCallSnapshot = {
   tracks: { micOn: false, camOn: false, screenOn: false },
   errorMessage: null,
   videoTiles: [],
+  audioPlaybackBlocked: false,
 };
 
 export interface UseActiveCall {
@@ -36,9 +37,14 @@ export interface UseActiveCall {
   /** Every video track (remote cams, remote screen-shares, local self-
    *  preview). Empty when status !== 'connected' or no video is published. */
   videoTiles: VideoTile[];
+  /** True when the browser's autoplay policy is blocking remote audio.
+   *  Render an affordance that calls startAudio() from a click. */
+  audioPlaybackBlocked: boolean;
   setMic: (on: boolean) => void;
   setCam: (on: boolean) => void;
   setScreen: (on: boolean) => void;
+  /** Resume audio playback; must be called from a user gesture. */
+  startAudio: () => void;
 }
 
 export function useActiveCall(): UseActiveCall {
@@ -73,6 +79,12 @@ export function useActiveCall(): UseActiveCall {
     void mgr.setScreenShareEnabled(on);
   }, []);
 
+  const startAudio = useCallback(() => {
+    const mgr = getActiveCallManager();
+    if (!mgr) return;
+    void mgr.startAudio();
+  }, []);
+
   return {
     status: snapshot.status,
     target: snapshot.target,
@@ -81,8 +93,10 @@ export function useActiveCall(): UseActiveCall {
     screenOn: snapshot.tracks.screenOn,
     errorMessage: snapshot.errorMessage,
     videoTiles: snapshot.videoTiles,
+    audioPlaybackBlocked: snapshot.audioPlaybackBlocked,
     setMic,
     setCam,
     setScreen,
+    startAudio,
   };
 }
