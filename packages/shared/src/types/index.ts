@@ -291,14 +291,22 @@ export type BearingMetricTypeInput = z.infer<typeof import('../schemas/bearing.j
 export type BearingProgressModeInput = z.infer<typeof import('../schemas/bearing.js').BearingProgressMode>;
 
 // ── Notification queue types ────────────────────────────────────────────
+// Polymorphic per migration 0019 + 0185: a notification attaches to a
+// user_id and OPTIONALLY a project/org/task. Satellite apps (beacon,
+// bearing, bond, …) push with project_id: null + org_id set.
 export interface NotificationJobData {
   user_id: string;
-  project_id: string;
-  task_id?: string;
+  project_id?: string | null;
+  org_id?: string | null;
+  task_id?: string | null;
   type: string;
   title: string;
   body: string;
   category?: string;
+  /** One of: bbb, banter, helpdesk, beacon, bearing, bench, bill, blank,
+   *  blast, blueprint, board, bolt, bond, book, brief, bureau. Enforced
+   *  by the notifications_source_app_check constraint. */
   source_app?: string;
   deep_link?: string;
+  metadata?: Record<string, unknown>;
 }

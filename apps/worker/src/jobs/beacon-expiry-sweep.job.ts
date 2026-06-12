@@ -30,6 +30,7 @@ interface BeaconSweepRow {
   owned_by: string | null;
   project_id: string | null;
   organization_id: string | null;
+  title?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +86,7 @@ async function runSweep(
         updated_at = NOW()
     WHERE status = 'Active'
       AND expires_at <= NOW()
-    RETURNING id, owned_by, project_id, organization_id
+    RETURNING id, owned_by, project_id, organization_id, title
   `)) as unknown as BeaconSweepRow[];
 
   logger.info(
@@ -100,13 +101,22 @@ async function runSweep(
     });
 
     for (const row of step1Rows) {
+      // Skip orphan beacons (owner deleted): without a user_id the
+      // notifications row would violate the NOT NULL constraint, and
+      // there's no one to notify anyway.
+      if (!row.owned_by) continue;
+      const beaconTitle = row.title ?? 'a beacon you own';
       await notifQueue.add('beacon-pending-review', {
+        user_id: row.owned_by,
+        project_id: row.project_id ?? null,
+        org_id: row.organization_id ?? null,
         type: 'beacon.pending_review',
-        beacon_id: row.id,
-        owner_id: row.owned_by,
-        project_id: row.project_id,
-        organization_id: row.organization_id,
+        title: 'Beacon needs review',
+        body: `${beaconTitle} has reached its review window. Confirm it's still accurate.`,
+        category: 'lifecycle',
         source_app: 'beacon',
+        deep_link: `/beacon/entries/${row.id}`,
+        metadata: { beacon_id: row.id },
       });
     }
 
@@ -129,7 +139,7 @@ async function runSweep(
         OR (bep.scope = 'System' AND bep.organization_id IS NULL AND bep.project_id IS NULL)
       )
       AND be.expires_at + MAKE_INTERVAL(days => bep.grace_period_days) <= NOW()
-    RETURNING be.id, be.owned_by, be.project_id, be.organization_id
+    RETURNING be.id, be.owned_by, be.project_id, be.organization_id, be.title
   `)) as unknown as BeaconSweepRow[];
 
   logger.info(
@@ -144,13 +154,19 @@ async function runSweep(
     });
 
     for (const row of step2Rows) {
+      if (!row.owned_by) continue;
+      const beaconTitle = row.title ?? 'a beacon you own';
       await notifQueue.add('beacon-archived', {
+        user_id: row.owned_by,
+        project_id: row.project_id ?? null,
+        org_id: row.organization_id ?? null,
         type: 'beacon.archived',
-        beacon_id: row.id,
-        owner_id: row.owned_by,
-        project_id: row.project_id,
-        organization_id: row.organization_id,
+        title: 'Beacon archived',
+        body: `${beaconTitle} was archived after its review grace period ended.`,
+        category: 'lifecycle',
         source_app: 'beacon',
+        deep_link: `/beacon/entries/${row.id}`,
+        metadata: { beacon_id: row.id },
       });
     }
 

@@ -26,7 +26,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { mintRoomToken } from '@bigbluebam/livekit-tokens';
+import { buildLiveKitIdentity, mintRoomToken } from '@bigbluebam/livekit-tokens';
 import { requireAuth } from '../plugins/auth.js';
 import {
   badRequest,
@@ -148,7 +148,11 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
         calling.livekitApiKey,
         calling.livekitApiSecret,
         {
-          identity: user.id,
+          // Per-session identity so two browser sessions of the same
+          // user (laptop + phone, two tabs, two machines) don't kick
+          // each other with DUPLICATE_IDENTITY. metadata.user_id stays
+          // the canonical user reference for any server-side handler.
+          identity: buildLiveKitIdentity(user.id),
           roomName,
           name: user.display_name,
           metadata: {
@@ -257,7 +261,9 @@ export default async function livekitRoutes(fastify: FastifyInstance) {
         calling.livekitApiKey,
         calling.livekitApiSecret,
         {
-          identity: user.id,
+          // Per-session identity — see /rooms/:id/token above for the
+          // rationale. metadata.user_id is the canonical user pointer.
+          identity: buildLiveKitIdentity(user.id),
           roomName,
           name: user.display_name,
           metadata: {

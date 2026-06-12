@@ -160,8 +160,9 @@ const IDLE_TARGET: ActiveRoomTarget = { kind: 'none', roomName: null };
 /**
  * Best-effort participant display name. bureau-api's token mint encodes
  * `display_name` in the participant's metadata; LiveKit also supports a
- * `name` field on the participant itself. Fall back to `identity` (the
- * user's UUID) so the tile is never unlabeled.
+ * `name` field on the participant itself. Fall back to `identity` (now
+ * `<userId>__<rand>`; we strip the suffix to keep the tile clean) so
+ * the tile is never unlabeled.
  */
 function deriveParticipantName(participant: Participant): string {
   if (participant.name) return participant.name;
@@ -173,7 +174,12 @@ function deriveParticipantName(participant: Participant): string {
       /* metadata can be anything — only trust JSON we can parse */
     }
   }
-  return participant.identity || 'Participant';
+  // Bureau identities are `<userId>__<rand>` since the
+  // multi-session/DUPLICATE_IDENTITY fix — strip the suffix so the
+  // tile label doesn't end up reading "65429e63…__9a3f5e10".
+  const raw = participant.identity || '';
+  const delim = raw.indexOf('__');
+  return (delim === -1 ? raw : raw.slice(0, delim)) || 'Participant';
 }
 
 function targetsEqual(a: ActiveRoomTarget, b: ActiveRoomTarget): boolean {
@@ -511,9 +517,15 @@ export class ActiveCallManager {
         // we surface a tile so the UI can show a "loading" placeholder.
         // Skip remote publications that don't yet have a sid.
         if (!pub.trackSid) return;
+        // participantId carries the canonical user_id (extracted from
+        // the per-session identity) so tiles for the same person stay
+        // grouped if they have multiple sessions in the room.
+        const rawIdentity = participant.identity || '';
+        const delim = rawIdentity.indexOf('__');
+        const participantId = delim === -1 ? rawIdentity : rawIdentity.slice(0, delim);
         out.push({
           sid: pub.trackSid,
-          participantId: participant.identity,
+          participantId,
           participantName: deriveParticipantName(participant),
           source: source === Track.Source.ScreenShare ? 'screen' : 'camera',
           isLocal,

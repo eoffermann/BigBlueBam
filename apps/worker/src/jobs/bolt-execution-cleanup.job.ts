@@ -44,9 +44,14 @@ export async function processBoltExecutionCleanupJob(
 
   const effectiveDays = (isNaN(retentionDays) || retentionDays < 1) ? 90 : retentionDays;
   const cutoff = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000);
+  // postgres-js prepared-statement bind requires string | Buffer |
+  // ArrayBuffer for text/timestamp params — passing the raw Date trips
+  // ERR_INVALID_ARG_TYPE at the protocol layer and never reaches the
+  // server. ISO strings always round-trip as timestamptz cleanly.
+  const cutoffIso = cutoff.toISOString();
 
   logger.info(
-    { retentionDays: effectiveDays, cutoff: cutoff.toISOString() },
+    { retentionDays: effectiveDays, cutoff: cutoffIso },
     'bolt-execution-cleanup: starting cleanup',
   );
 
@@ -55,7 +60,7 @@ export async function processBoltExecutionCleanupJob(
     DELETE FROM bolt_execution_steps
     WHERE execution_id IN (
       SELECT id FROM bolt_executions
-      WHERE created_at < ${cutoff}
+      WHERE created_at < ${cutoffIso}
     )
     RETURNING id
   `);
@@ -64,7 +69,7 @@ export async function processBoltExecutionCleanupJob(
   // 2. Delete old executions
   const execResult: any[] = await db.execute(sql`
     DELETE FROM bolt_executions
-    WHERE created_at < ${cutoff}
+    WHERE created_at < ${cutoffIso}
     RETURNING id
   `);
   const execsDeleted = Array.isArray(execResult) ? execResult.length : 0;
@@ -74,7 +79,7 @@ export async function processBoltExecutionCleanupJob(
       stepsDeleted,
       execsDeleted,
       retentionDays: effectiveDays,
-      cutoff: cutoff.toISOString(),
+      cutoff: cutoffIso,
     },
     'bolt-execution-cleanup: completed',
   );

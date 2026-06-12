@@ -15,7 +15,10 @@ import {
   getUserOrgId,
   leaveCall,
 } from '../services/presence.service.js';
-import { parseAppRoomName } from '@bigbluebam/livekit-tokens';
+import {
+  extractUserIdFromLiveKitIdentity,
+  parseAppRoomName,
+} from '@bigbluebam/livekit-tokens';
 
 /**
  * LiveKit webhook events.
@@ -222,8 +225,11 @@ async function handleRoomStarted(event: LiveKitWebhookEvent) {
 
 async function handleParticipantJoined(event: LiveKitWebhookEvent) {
   const roomName = event.room!.name;
-  const participantIdentity = event.participant?.identity;
-  if (!participantIdentity) return;
+  const rawIdentity = event.participant?.identity;
+  if (!rawIdentity) return;
+  // LiveKit identities are now per-session (`<userId>__<rand>`). Strip
+  // the suffix to recover the canonical user_id used in DB rows.
+  const participantIdentity = extractUserIdFromLiveKitIdentity(rawIdentity);
 
   // Find the call
   const [call] = await db
@@ -298,8 +304,9 @@ async function handleParticipantLeft(
   _fastify: FastifyInstance,
 ) {
   const roomName = event.room!.name;
-  const participantIdentity = event.participant?.identity;
-  if (!participantIdentity) return;
+  const rawIdentity = event.participant?.identity;
+  if (!rawIdentity) return;
+  const participantIdentity = extractUserIdFromLiveKitIdentity(rawIdentity);
 
   const [call] = await db
     .select()

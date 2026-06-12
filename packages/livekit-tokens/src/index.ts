@@ -8,7 +8,59 @@
  * explicit grants via `permissions` for fine-grained control.
  */
 
+import { randomBytes } from 'node:crypto';
 import { AccessToken } from 'livekit-server-sdk';
+
+// ─────────────────────────────────────────────────────────────────────
+// Participant identity helpers — unique-per-session even for the same
+// user.
+//
+// LiveKit treats `identity` as the unique participant key in a room.
+// When two participants present the same identity, the new one ejects
+// the existing one with reason DUPLICATE_IDENTITY. Bureau used to pass
+// `user.id` directly, which meant any second session of the same user
+// (laptop + phone, two tabs, two machines authenticated as the same
+// person) would silently boot the first. That manifested as a "[R] In:
+// <Room> error" tooltip showing `room.disconnect — duplicate identity`.
+//
+// The fix: every mint suffixes the user's id with a short random token
+// using `__` as the delimiter (UUIDs never contain `__`, so the parse
+// back to the user id is unambiguous). Token metadata still carries the
+// raw user_id for any server-side handler that needs to look up the
+// human (banter call-participant rows, presence reconciliation, etc.).
+//
+// `buildLiveKitIdentity` is the canonical mint-time helper.
+// `extractUserIdFromLiveKitIdentity` is the canonical read-time helper.
+// Use both — never split on `__` ad hoc.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Length of the random suffix. 6 base32 chars ≈ 30 bits of entropy,
+ *  more than enough to collision-resist sessions of the same user. */
+const IDENTITY_SUFFIX_BYTES = 4;
+const IDENTITY_DELIM = '__';
+
+export function buildLiveKitIdentity(userId: string): string {
+  // Random suffix is base32 (lowercase, [0-9a-v]) so the identity stays
+  // URL-safe and pleasant to read in logs. Crypto-strength is overkill
+  // for this purpose, but it's just as cheap as Math.random() and
+  // avoids any chance of cross-session collision.
+  const suffix = randomBytes(IDENTITY_SUFFIX_BYTES).toString('hex');
+  return `${userId}${IDENTITY_DELIM}${suffix}`;
+}
+
+/**
+ * Reverse of buildLiveKitIdentity — returns the user id half. When the
+ * incoming identity has no delimiter (legacy room with an older bare
+ * identity, or a third-party joiner like a recorder bot), the entire
+ * identity is returned unchanged so callers stay correct during the
+ * rollout.
+ */
+export function extractUserIdFromLiveKitIdentity(identity: string): string {
+  if (!identity) return identity;
+  const idx = identity.indexOf(IDENTITY_DELIM);
+  if (idx === -1) return identity;
+  return identity.slice(0, idx);
+}
 
 export interface RoomTokenPermissions {
   can_publish?: boolean;

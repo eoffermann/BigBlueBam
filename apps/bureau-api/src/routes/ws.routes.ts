@@ -40,7 +40,7 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import Redis from 'ioredis';
 import { and, eq, sql } from 'drizzle-orm';
-import { mintRoomToken } from '@bigbluebam/livekit-tokens';
+import { buildLiveKitIdentity, mintRoomToken } from '@bigbluebam/livekit-tokens';
 import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { sessions, users } from '../db/schema/index.js';
@@ -614,7 +614,10 @@ export default async function wsRoutes(fastify: FastifyInstance) {
                   calling.livekitApiKey,
                   calling.livekitApiSecret,
                   {
-                    identity: userId,
+                    // Per-session identity so concurrent sessions of
+                    // the same user don't eject each other (LiveKit
+                    // DUPLICATE_IDENTITY). user_id stays in metadata.
+                    identity: buildLiveKitIdentity(userId),
                     roomName,
                     name: displayName,
                     metadata: {
