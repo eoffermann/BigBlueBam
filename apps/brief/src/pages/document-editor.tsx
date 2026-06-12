@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import {
   useDocument,
@@ -42,7 +42,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
 
   // Real-time collaboration via Yjs when editing an existing document
   const docIdForCollab = isEditMode && existing ? existing.id : null;
-  const { ydoc, provider } = useCollaboration(docIdForCollab);
+  const { ydoc, provider, isSynced } = useCollaboration(docIdForCollab);
 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
@@ -152,12 +152,34 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
 
   const editor = docIdForCollab ? collabEditor : standaloneEditor;
 
-  // Sync content into existing editor when template changes or content is set
+  // Sync content into the STANDALONE editor when a template is picked or
+  // content loads. Never in collab mode: there the shared Yjs doc owns the
+  // content, and setContent would rewrite it for every participant with a
+  // markdown roundtrip (the duplicate/clobber failure mode).
   useEffect(() => {
+    if (docIdForCollab) return;
     if (editor && initialContent && editor.getHTML() !== initialContent) {
       editor.commands.setContent(initialContent);
     }
-  }, [editor, initialContent]);
+  }, [editor, initialContent, docIdForCollab]);
+
+  // Legacy-document migration: docs written before collaboration (or via
+  // the standalone create flow) have content only in plain_text — their
+  // persisted Yjs state is empty. After the FIRST server sync (never
+  // before, or we'd race the incoming state and duplicate it), seed the
+  // shared doc exactly once if it is still empty. The remaining
+  // two-tabs-seed-simultaneously window is a few ms and self-heals into
+  // CRDT-merged (possibly doubled) text rather than data loss.
+  const seededDocRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!docIdForCollab || !editor || !isSynced) return;
+    if (seededDocRef.current === docIdForCollab) return;
+    seededDocRef.current = docIdForCollab;
+    const fragment = ydoc.getXmlFragment('default');
+    if (fragment.length === 0 && initialContent) {
+      editor.commands.setContent(initialContent);
+    }
+  }, [docIdForCollab, editor, isSynced, initialContent, ydoc]);
 
   if (isEditMode && (loadingExisting || !contentReady)) {
     return (
@@ -186,6 +208,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
           data: {
             title,
             plain_text: bodyMarkdown,
+            html_snapshot: editorHtml,
             summary: summary || undefined,
             icon: iconEmoji || undefined,
             visibility,
@@ -197,6 +220,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
         const res = await createDocument.mutateAsync({
           title,
           plain_text: bodyMarkdown,
+          html_snapshot: editorHtml,
           summary: summary || undefined,
           icon: iconEmoji || undefined,
           project_id: projectId || undefined,
@@ -221,6 +245,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
           data: {
             title,
             plain_text: bodyMarkdown,
+            html_snapshot: editorHtml,
             summary: summary || undefined,
             icon: iconEmoji || undefined,
             visibility,
@@ -232,6 +257,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
         const res = await createDocument.mutateAsync({
           title,
           plain_text: bodyMarkdown,
+          html_snapshot: editorHtml,
           summary: summary || undefined,
           icon: iconEmoji || undefined,
           project_id: projectId || undefined,

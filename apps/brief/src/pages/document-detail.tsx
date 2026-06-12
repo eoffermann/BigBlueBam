@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Loader2,
   Edit2,
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useDocument, useToggleStar, useArchiveDocument, useDuplicateDocument, usePromoteToBeacon, useRestoreDocument } from '@/hooks/use-documents';
 import { markdownToHtml } from '@/lib/markdown';
+import { useCollaboration } from '@/hooks/use-collaboration';
+import { useCollaborativeEditor, BriefEditorContent } from '@/components/editor/brief-editor';
 import { useComments, useCreateComment, useResolveComment, useDeleteComment } from '@/hooks/use-comments';
 import { useVersions } from '@/hooks/use-versions';
 import { StatusBadge } from '@/components/document/status-badge';
@@ -45,6 +47,32 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
   const createComment = useCreateComment();
   const resolveComment = useResolveComment();
   const deleteComment = useDeleteComment();
+
+  // Live reading: join the document's Yjs room read-only so the body
+  // updates in real time (with the writers' cursors visible) while anyone
+  // is editing — a reader is a participant, not a cache. Falls back to the
+  // static html_snapshot below until the room syncs, and stays static for
+  // docs whose Yjs state is empty (legacy content never opened for edit).
+  const { ydoc, provider, isSynced } = useCollaboration(doc?.id ?? null);
+  const liveEditor = useCollaborativeEditor({
+    ydoc: doc ? ydoc : undefined,
+    provider: doc ? provider : undefined,
+    onUpdate: () => {},
+    editable: false,
+  });
+  const [liveHasContent, setLiveHasContent] = useState(false);
+  useEffect(() => {
+    if (!isSynced) {
+      setLiveHasContent(false);
+      return;
+    }
+    const fragment = ydoc.getXmlFragment('default');
+    const update = () => setLiveHasContent(fragment.length > 0);
+    update();
+    // observeDeep: a doc seeded by an editor moments later flips us live.
+    fragment.observeDeep(update);
+    return () => fragment.unobserveDeep(update);
+  }, [isSynced, ydoc]);
 
   if (isLoading) {
     return (
@@ -87,8 +115,16 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
     deleteComment.mutate({ documentId: doc.id, commentId });
   };
 
-  // Render the document body: prefer html_snapshot, fall back to markdown conversion, then plain_text
+  // Render the document body: live collaborative view when the Yjs room
+  // has content, else html_snapshot, then markdown conversion, then plain_text
   const renderBody = () => {
+    if (liveHasContent && liveEditor) {
+      return (
+        <article className="prose prose-zinc dark:prose-invert max-w-none text-sm leading-relaxed document-content">
+          <BriefEditorContent editor={liveEditor} />
+        </article>
+      );
+    }
     if (doc.html_snapshot) {
       return (
         <article

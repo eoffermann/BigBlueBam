@@ -67,6 +67,7 @@ import {
 import { useActiveCall } from './use-active-call.js';
 import { InvitePopover } from './invite-popover.js';
 import { HuntPopover } from './hunt-popover.js';
+import { PeopleHereButton } from './people-here.js';
 import { VideoTilesWindow } from './video-tiles.js';
 import { AudioUnblockChip } from './audio-unblock-chip.js';
 import { URL_SURFACE_APP, deriveUrlSurfaceId } from '@bigbluebam/shared';
@@ -1311,10 +1312,28 @@ function BureauDockedBoxInner({
         </span>
       </div>
 
-      {/* "In:" row */}
-      <div>
-        <span style={{ opacity: 0.7 }}>In:</span>{' '}
-        <strong>{inRoom ? roomDisplayName : 'No room'}</strong>
+      {/* "In:" row — room name on the left, live "(X people here)" count
+          for the current space (same-URL presence) on the right. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 6,
+        }}
+      >
+        <span
+          style={{
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span style={{ opacity: 0.7 }}>In:</span>{' '}
+          <strong>{inRoom ? roomDisplayName : 'No room'}</strong>
+        </span>
+        <PeopleHereButton url={state.location?.url ?? null} />
       </div>
 
       {/* Occupants */}

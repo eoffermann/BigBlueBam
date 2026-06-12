@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import * as Y from 'yjs';
 import { db } from '../db/index.js';
 import { briefDocuments } from '../db/schema/index.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
@@ -65,8 +66,56 @@ export async function loadYjsState(
 }
 
 /**
+ * Extracts searchable plain text from a Yjs state snapshot. The Tiptap
+ * Collaboration extension stores the document in the 'default' XmlFragment.
+ * The tree is walked node-by-node — XmlText content is read via toDelta()
+ * (raw text; Yjs's toString() embeds formatting tags AND leaves literal
+ * `<`/`>` in user text unescaped, so it cannot be regex-stripped safely).
+ * Top-level blocks become lines. Returns null when the fragment is empty so
+ * callers can skip overwriting legacy plain_text with nothing.
+ */
+export function yjsStateToPlainText(state: Buffer | Uint8Array): string | null {
+  const collect = (node: unknown): string => {
+    if (node instanceof Y.XmlText) {
+      return (node.toDelta() as { insert?: unknown }[])
+        .map((op) => (typeof op.insert === 'string' ? op.insert : ' '))
+        .join('');
+    }
+    if (node instanceof Y.XmlElement) {
+      const parts: string[] = [];
+      for (let i = 0; i < node.length; i++) {
+        parts.push(collect(node.get(i)));
+      }
+      return parts.join(' ');
+    }
+    return '';
+  };
+
+  const doc = new Y.Doc();
+  try {
+    Y.applyUpdate(doc, state instanceof Buffer ? new Uint8Array(state) : state);
+    const fragment = doc.getXmlFragment('default');
+    if (fragment.length === 0) return null;
+    const lines: string[] = [];
+    for (let i = 0; i < fragment.length; i++) {
+      const text = collect(fragment.get(i)).replace(/\s+/g, ' ').trim();
+      if (text) lines.push(text);
+    }
+    const joined = lines.join('\n').trim();
+    return joined || null;
+  } catch {
+    return null; // corrupt/foreign state — leave plain_text untouched
+  } finally {
+    doc.destroy();
+  }
+}
+
+/**
  * Writes a Yjs binary state immediately, updating yjs_last_saved_at and emitting
- * a `document.yjs_saved` Bolt event on the 6+1 canonical signature.
+ * a `document.yjs_saved` Bolt event on the 6+1 canonical signature. Plain text
+ * is re-derived from the state in the same write so search, embeds, and the
+ * static viewer fallback never lag the collaborative content by more than one
+ * debounce window.
  *
  * Returns `true` when a row was updated, `false` when the document is missing
  * or belongs to a different org.
@@ -78,6 +127,7 @@ export async function saveYjsStateImmediate(
   userId: string,
 ): Promise<boolean> {
   const now = new Date();
+  const plainText = yjsStateToPlainText(state);
   const [row] = await db
     .update(briefDocuments)
     .set({
@@ -85,6 +135,7 @@ export async function saveYjsStateImmediate(
       yjs_last_saved_at: now,
       updated_at: now,
       updated_by: userId,
+      ...(plainText !== null ? { plain_text: plainText } : {}),
     })
     .where(and(eq(briefDocuments.id, docId), eq(briefDocuments.org_id, orgId)))
     .returning({ id: briefDocuments.id });

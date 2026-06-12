@@ -46,6 +46,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { IncomingCallOverlay } from '@bigbluebam/ui/incoming-call-overlay';
 import type { BureauWsClient } from './ws-client.js';
 import type { RingIncomingEvent } from './types.js';
+import { getRingToneUrl } from './ring-tone.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,9 @@ export interface RingHandlerProps {
    * if the WS reconnects mid-ring.
    */
   maxAutoDeclineMs?: number;
-  /** Optional ringtone URL passed through to the overlay. */
+  /** Optional ringtone URL passed through to the overlay. Defaults to the
+   *  synthesized Bureau chime (see ring-tone.ts) so incoming rings are
+   *  audible without any host configuration. */
   ringtoneUrl?: string;
   /** Optional hook for hosts that want to surface a toast on accept failure. */
   onAcceptError?: (err: Error, ring: RingIncomingEvent) => void;
@@ -278,7 +281,7 @@ export function RingHandler({
       onDecline={() => sendDecline(active)}
       onDismiss={() => removeFromQueue(active.localId)}
       autoDeclineMs={autoDeclineMs}
-      ringtoneUrl={ringtoneUrl}
+      ringtoneUrl={ringtoneUrl ?? getRingToneUrl() ?? undefined}
     />
   );
 }

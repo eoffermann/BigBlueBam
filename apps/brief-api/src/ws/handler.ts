@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
@@ -26,9 +26,11 @@ import { nanoid } from 'nanoid';
 // ---------------------------------------------------------------------------
 // Yjs WebSocket collaboration handler for Brief
 //
-// Each document is a "room". Clients connect to /ws?doc=<docId> and exchange
-// Yjs sync + awareness messages using y-protocols. Redis PubSub fans out
-// updates across multiple brief-api instances.
+// Each document is a "room". Clients connect to /ws/<docId> — the shape the
+// stock y-websocket provider dials (room name appended to the PATH) — or the
+// original /ws?doc=<docId> query form, and exchange Yjs sync + awareness
+// messages using y-protocols. Redis PubSub fans out updates across multiple
+// brief-api instances.
 //
 // Message types (first byte):
 //   0 = sync protocol
@@ -50,6 +52,10 @@ interface ConnectedClient {
   docId: string;
   displayName: string;
   canEdit: boolean;
+  /** Yjs awareness clientIDs this socket announced — removed on disconnect
+   *  so other participants drop the cursor immediately instead of waiting
+   *  out the awareness timeout. */
+  controlledAwarenessIds: Set<number>;
 }
 
 interface DocumentRoom {
@@ -82,10 +88,20 @@ function getOrCreateRoom(docId: string): DocumentRoom {
     lastOrgId: null,
   };
 
-  // When awareness changes, broadcast to all clients in room
+  // When awareness changes, broadcast to all clients in room. The origin
+  // (set by applyAwarenessUpdate) tells us which socket announced which
+  // awareness clientIDs so the close handler can retract exactly those.
   awareness.on(
     'update',
-    ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
+    (
+      { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+      origin: unknown,
+    ) => {
+      if (origin && typeof origin === 'object' && 'controlledAwarenessIds' in origin) {
+        const ids = (origin as ConnectedClient).controlledAwarenessIds;
+        for (const id of added.concat(updated)) ids.add(id);
+        for (const id of removed) ids.delete(id);
+      }
       const changedClients = added.concat(updated, removed);
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, MSG_AWARENESS);
@@ -216,7 +232,7 @@ export default async function websocketHandler(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get('/ws', { websocket: true }, async (socket, request) => {
+  const connectionHandler = async (socket: WebSocket, request: FastifyRequest) => {
     // Authenticate via session cookie
     const sessionId = request.cookies?.session;
     if (!sessionId) {
@@ -249,9 +265,12 @@ export default async function websocketHandler(fastify: FastifyInstance) {
       return;
     }
 
-    // Extract document ID from query string
+    // Document id: y-websocket appends the room name to the PATH
+    // (/ws/<docId>) — that is what the Brief client actually dials. The
+    // ?doc= query form is the original contract, kept for back-compat.
+    const params = request.params as { docId?: string };
     const url = new URL(request.url, `http://${request.hostname}`);
-    const docId = url.searchParams.get('doc');
+    const docId = params.docId ?? url.searchParams.get('doc');
     if (!docId) {
       sendAuthMessage(socket, AUTH_DENIED);
       socket.close(4002, 'Missing doc parameter');
@@ -298,6 +317,7 @@ export default async function websocketHandler(fastify: FastifyInstance) {
       docId,
       displayName: row.user.display_name,
       canEdit: access.canEdit,
+      controlledAwarenessIds: new Set(),
     };
 
     const room = getOrCreateRoom(docId);
@@ -331,6 +351,15 @@ export default async function websocketHandler(fastify: FastifyInstance) {
 
         switch (messageType) {
           case MSG_SYNC: {
+            // Read-only clients (viewers, no edit grant) may request state
+            // (sync step 1) but never mutate the shared doc — drop their
+            // step-2/update frames before they apply.
+            const syncStart = decoder.pos;
+            const syncSubType = decoding.readVarUint(decoder);
+            if (!client.canEdit && syncSubType !== syncProtocol.messageYjsSyncStep1) {
+              break;
+            }
+            decoder.pos = syncStart;
             const encoder = encoding.createEncoder();
             encoding.writeVarUint(encoder, MSG_SYNC);
             const syncMessageType = syncProtocol.readSyncMessage(
@@ -415,8 +444,27 @@ export default async function websocketHandler(fastify: FastifyInstance) {
 
     socket.on('close', () => {
       room.clients.delete(client);
-      // Remove awareness state for this client
-      awarenessProtocol.removeAwarenessStates(room.awareness, [room.doc.clientID], null);
+      // Retract THIS client's awareness entries (their cursor). The room
+      // listener broadcasts the removal locally; mirror it to Redis so
+      // viewers on other instances drop the ghost cursor immediately too.
+      const controlled = Array.from(client.controlledAwarenessIds);
+      if (controlled.length > 0) {
+        awarenessProtocol.removeAwarenessStates(room.awareness, controlled, null);
+        const removal = awarenessProtocol.encodeAwarenessUpdate(room.awareness, controlled);
+        fastify.redis
+          .publish(
+            'brief:yjs',
+            JSON.stringify({
+              _instanceId: instanceId,
+              docId,
+              type: 'awareness',
+              update: Buffer.from(removal).toString('base64'),
+            }),
+          )
+          .catch(() => {
+            /* best effort — awareness timeout is the fallback */
+          });
+      }
 
       // Clean up empty rooms after a short delay
       if (room.clients.size === 0) {
@@ -430,5 +478,11 @@ export default async function websocketHandler(fastify: FastifyInstance) {
         setTimeout(() => cleanupRoom(docId), 5_000);
       }
     });
-  });
+  };
+
+  // Both URL shapes hit the same handler: /ws/<docId> is what the stock
+  // y-websocket provider sends (room appended to the path); /ws?doc= is
+  // the original contract this server shipped with.
+  fastify.get('/ws', { websocket: true }, connectionHandler);
+  fastify.get('/ws/:docId', { websocket: true }, connectionHandler);
 }

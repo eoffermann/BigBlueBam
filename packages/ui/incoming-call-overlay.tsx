@@ -14,10 +14,10 @@
  *     entry: slides + fades from the top-right corner.
  *   - Auto-declines after `autoDeclineMs` (default 30s) by calling
  *     `onDecline`. The host owns what 'decline' actually does on the wire.
- *   - Plays a subtle ring sound via Audio() IF document.hasFocus() is true
- *     when the overlay first mounts. Audio is best-effort: failures are
- *     swallowed (autoplay policies, missing asset, etc.) and the overlay
- *     remains usable.
+ *   - Plays a looping ring sound via Audio() when `ringtoneUrl` is given,
+ *     focused tab or not (a call should ring like a phone). Audio is
+ *     best-effort: failures are swallowed (autoplay policies, missing
+ *     asset, etc.) and the overlay remains usable.
  *   - Accept / Decline / Dismiss are caller-controlled. `onDismiss` is
  *     called once after either Accept or Decline is hit, so the host can
  *     unmount cleanly.
@@ -25,8 +25,8 @@
  * Light- and dark-mode safe. No external deps beyond React + lucide-react.
  */
 
-import { useEffect, useRef, useState } from 'react';
 import { Phone, PhoneOff } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface IncomingCallOverlayProps {
   fromUserName: string;
@@ -45,8 +45,8 @@ export interface IncomingCallOverlayProps {
   /** Defaults to 30000 (30s). */
   autoDeclineMs?: number;
   /**
-   * Optional ringtone URL. If omitted, no audio is attempted. Audio only
-   * plays when document.hasFocus() returns true at mount time.
+   * Optional ringtone URL. If omitted, no audio is attempted. Playback is
+   * best-effort and subject to the browser's autoplay policy.
    */
   ringtoneUrl?: string;
 }
@@ -58,12 +58,13 @@ function cn(...parts: Array<string | false | null | undefined>): string {
 function generateAvatarInitials(name: string | null | undefined): string {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
-  if (parts.length === 0 || !parts[0]) return '?';
+  const firstPart = parts[0];
+  if (!firstPart) return '?';
   if (parts.length === 1) {
-    return parts[0]!.substring(0, 2).toUpperCase();
+    return firstPart.substring(0, 2).toUpperCase();
   }
-  const first = parts[0]![0] ?? '';
-  const last = parts[parts.length - 1]![0] ?? '';
+  const first = firstPart[0] ?? '';
+  const last = parts[parts.length - 1]?.[0] ?? '';
   return (first + last).toUpperCase();
 }
 
@@ -99,11 +100,13 @@ export function IncomingCallOverlay({
     return () => window.clearTimeout(timer);
   }, [autoDeclineMs, onDecline, onDismiss]);
 
-  // Ring sound — only when the host page has focus at mount time.
+  // Ring sound. Played regardless of tab focus — an incoming call should
+  // be audible from a background tab, exactly like a phone. The browser's
+  // autoplay policy is the real gate (no sound until the user has ever
+  // interacted with the page) and the .catch below honors it silently.
   useEffect(() => {
     if (!ringtoneUrl) return;
     if (typeof document === 'undefined') return;
-    if (!document.hasFocus()) return;
     try {
       const audio = new Audio(ringtoneUrl);
       audio.loop = true;
@@ -164,9 +167,7 @@ export function IncomingCallOverlay({
       className={cn(
         'fixed top-4 right-4 z-[70] w-80 max-w-[calc(100vw-2rem)]',
         'transition-all duration-200 ease-out',
-        entered
-          ? 'opacity-100 translate-y-0'
-          : 'opacity-0 -translate-y-2 scale-95',
+        entered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 scale-95',
       )}
       role="alertdialog"
       aria-labelledby="incoming-call-title"
@@ -215,9 +216,7 @@ export function IncomingCallOverlay({
             </p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
               wants to huddle on{' '}
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                {surfaceLabel}
-              </span>
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">{surfaceLabel}</span>
               <span className="text-zinc-400 dark:text-zinc-500"> · {surfaceApp}</span>
             </p>
           </div>

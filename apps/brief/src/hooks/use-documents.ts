@@ -177,6 +177,7 @@ export function useCreateDocument() {
     mutationFn: (data: {
       title: string;
       plain_text: string;
+      html_snapshot?: string;
       summary?: string;
       icon?: string;
       project_id?: string;
@@ -200,6 +201,7 @@ export function useUpdateDocument() {
       data: Partial<{
         title: string;
         plain_text: string;
+        html_snapshot: string;
         summary: string;
         icon: string;
         visibility: DocumentVisibility;

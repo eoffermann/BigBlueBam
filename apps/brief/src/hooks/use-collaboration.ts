@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { useAuthStore } from '@/stores/auth.store';
@@ -51,7 +51,15 @@ export interface CollaborationState {
 export function useCollaboration(docId: string | null | undefined) {
   const user = useAuthStore((s) => s.user);
   const ydocRef = useRef<Y.Doc | null>(null);
-  const providerRef = useRef<WebsocketProvider | null>(null);
+  // State, not a ref: the consumer must RE-RENDER when the provider lands
+  // so the Tiptap editor is built with CollaborationCursor bound. (The old
+  // ref version meant the editor was created with provider=null and remote
+  // cursors never attached until an unrelated re-render rebuilt it.)
+  const [provider, setProvider] = useState<WebsocketProvider | null>(null);
+  // True once the provider has completed its first sync handshake with the
+  // server — the signal that the shared doc now reflects persisted state
+  // (used to decide whether a legacy doc needs one-time content seeding).
+  const [isSynced, setIsSynced] = useState(false);
 
   // Create a stable Y.Doc for the lifetime of the docId
   const ydoc = useMemo(() => {
@@ -66,30 +74,32 @@ export function useCollaboration(docId: string | null | undefined) {
   useEffect(() => {
     if (!docId || !user) return;
 
-    // Build the WebSocket URL. In production this is proxied through nginx
-    // at /brief/ws. In development it may point to a different host.
+    // Build the WebSocket URL. nginx proxies /brief/ws on both deployment
+    // profiles. y-websocket appends the room name to the PATH, so the final
+    // URL is wss://host/brief/ws/<docId> — served by brief-api GET /ws/:docId.
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/brief/ws`;
 
-    const provider = new WebsocketProvider(wsUrl, docId, ydoc, {
+    const p = new WebsocketProvider(wsUrl, docId, ydoc, {
       connect: true,
-      // The y-websocket provider appends ?doc=<roomName> by default through
-      // the room name parameter. No extra query wiring needed.
     });
 
     // Set awareness local state so other users see cursor info
-    provider.awareness.setLocalStateField('user', {
+    p.awareness.setLocalStateField('user', {
       name: user.display_name,
       color: pickColor(user.id),
       userId: user.id,
     });
 
-    providerRef.current = provider;
+    p.on('sync', (synced: boolean) => setIsSynced(synced));
+
+    setProvider(p);
 
     return () => {
-      provider.disconnect();
-      provider.destroy();
-      providerRef.current = null;
+      setProvider(null);
+      setIsSynced(false);
+      p.disconnect();
+      p.destroy();
     };
   }, [docId, user, ydoc]);
 
@@ -105,6 +115,7 @@ export function useCollaboration(docId: string | null | undefined) {
 
   return {
     ydoc,
-    provider: providerRef.current,
+    provider,
+    isSynced,
   };
 }
