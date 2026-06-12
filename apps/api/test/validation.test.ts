@@ -220,10 +220,21 @@ describe('Validation Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('rejects invalid priority', () => {
+    it('accepts org-defined priority slugs (priorities are per-org configurable)', () => {
+      // Migration 0183: priority is no longer an enum — orgs define their
+      // own rows and the wire carries the row's value slug. Existence is
+      // validated at the service layer where the org is known.
       const result = createTaskSchema.safeParse({
         ...validInput,
         priority: 'super-urgent',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects priority values that are not valid slugs', () => {
+      const result = createTaskSchema.safeParse({
+        ...validInput,
+        priority: 'Not A Slug!',
       });
       expect(result.success).toBe(false);
     });

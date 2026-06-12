@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, asc, gt, sql, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, gt, sql, inArray } from 'drizzle-orm';
 import { createCommentSchema, updateCommentSchema } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { comments } from '../db/schema/comments.js';
 import { commentReactions } from '../db/schema/comment-reactions.js';
+import { commentRevisions } from '../db/schema/comment-revisions.js';
 import { tasks } from '../db/schema/tasks.js';
 import { users } from '../db/schema/users.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
@@ -250,6 +251,19 @@ export default async function commentRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // No-op edits don't burn a revision or flip the edited badge.
+      if (data.body === existing.body) {
+        return reply.send({ data: existing });
+      }
+
+      // Preserve the superseded text BEFORE the update so the comment's
+      // history is reconstructable ("(edited)" badge + history viewer).
+      await db.insert(commentRevisions).values({
+        comment_id: existing.id,
+        body: existing.body,
+        revised_by: request.user!.id,
+      });
+
       const [comment] = await db
         .update(comments)
         .set({
@@ -260,6 +274,46 @@ export default async function commentRoutes(fastify: FastifyInstance) {
         .returning();
 
       return reply.send({ data: comment });
+    },
+  );
+
+  // Edit history for a comment: every prior body, newest first. Readable
+  // by anyone who can read the comment (same project-access gate as the
+  // list endpoint) — history is transparency, not a private draft.
+  fastify.get<{ Params: { id: string } }>(
+    '/comments/:id/revisions',
+    { preHandler: [requireAuth, requireProjectAccessForEntity('comment')] },
+    async (request, reply) => {
+      const [existing] = await db
+        .select({ id: comments.id })
+        .from(comments)
+        .where(eq(comments.id, request.params.id))
+        .limit(1);
+      if (!existing) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Comment not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const rows = await db
+        .select({
+          id: commentRevisions.id,
+          body: commentRevisions.body,
+          revised_at: commentRevisions.revised_at,
+          revised_by: commentRevisions.revised_by,
+          revised_by_name: users.display_name,
+        })
+        .from(commentRevisions)
+        .leftJoin(users, eq(commentRevisions.revised_by, users.id))
+        .where(eq(commentRevisions.comment_id, request.params.id))
+        .orderBy(desc(commentRevisions.revised_at));
+
+      return reply.send({ data: rows });
     },
   );
 

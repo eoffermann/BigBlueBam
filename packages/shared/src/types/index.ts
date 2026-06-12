@@ -191,6 +191,11 @@ export interface Task {
   completed_at: string | null;
   epic_id: string | null;
   parent_task_id: string | null;
+  /** All parent tasks (m2m task_parent_links plus the legacy
+   *  parent_task_id pointer), enriched on board/list payloads so subtask
+   *  cards can badge their parents without per-task fetches. Optional:
+   *  endpoints that don't enrich simply omit it. */
+  parents?: { id: string; human_id: string | null }[];
   labels: string[];
   watchers: string[];
   is_blocked: boolean;

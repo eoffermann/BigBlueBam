@@ -496,9 +496,16 @@ describe('Task Service', () => {
       const tasksWhere = vi.fn().mockReturnValue({ orderBy: tasksOrderBy });
       const tasksFrom = vi.fn().mockReturnValue({ where: tasksWhere });
 
+      // Third select: parent enrichment (task_parent_links ⋈ tasks).
+      // No links and no legacy parent_task_id on the fixtures → empty.
+      const linksWhere = vi.fn().mockResolvedValue([]);
+      const linksInnerJoin = vi.fn().mockReturnValue({ where: linksWhere });
+      const linksFrom = vi.fn().mockReturnValue({ innerJoin: linksInnerJoin });
+
       mockDb.select
         .mockReturnValueOnce({ from: phasesFrom })
-        .mockReturnValueOnce({ from: tasksFrom });
+        .mockReturnValueOnce({ from: tasksFrom })
+        .mockReturnValueOnce({ from: linksFrom });
 
       const result = await getBoardState('proj-1');
 
@@ -507,6 +514,8 @@ describe('Task Service', () => {
       expect(result[1]!.tasks).toHaveLength(1);
       expect(result[0]!.name).toBe('To Do');
       expect(result[1]!.name).toBe('Done');
+      // Every board task now carries its parents array (empty here).
+      expect(result[0]!.tasks[0]!.parents).toEqual([]);
     });
   });
 

@@ -20,6 +20,7 @@ export { timeEntries } from './time-entries.js';
 export { webhooks } from './webhooks.js';
 export { taskTemplates } from './task-templates.js';
 export { commentReactions } from './comment-reactions.js';
+export { commentRevisions } from './comment-revisions.js';
 export { savedViews } from './saved-views.js';
 export { tickets, ticketMessages } from './tickets.js';
 export { superuserAuditLog } from './superuser-audit-log.js';

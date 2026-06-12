@@ -114,7 +114,9 @@ describe('Auth Service', () => {
           .mockResolvedValueOnce([fakeUser])
           .mockResolvedValueOnce([fakeSession]);
 
-        const localTx = { insert: txInsert };
+        // seedDefaultPriorities runs inside the same transaction via
+        // raw SQL (tx.execute).
+        const localTx = { insert: txInsert, execute: vi.fn().mockResolvedValue(undefined) };
         return cb(localTx as any);
       });
 
@@ -147,7 +149,7 @@ describe('Auth Service', () => {
           onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
         });
         const txInsert = vi.fn().mockReturnValue({ values: txInsertValues });
-        return cb({ insert: txInsert });
+        return cb({ insert: txInsert, execute: vi.fn().mockResolvedValue(undefined) });
       });
 
       await register({

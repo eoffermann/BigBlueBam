@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, Upload, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download, Phone } from 'lucide-react';
+import { Loader2, Import, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Task, PaginatedResponse } from '@bigbluebam/shared';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -20,7 +20,6 @@ import { TemplateManager } from '@/components/tasks/template-manager';
 import { EpicManager } from '@/components/board/epic-manager';
 import { PhaseManager } from '@/components/board/phase-manager';
 import { CustomFieldManager } from '@/components/board/custom-field-manager';
-import { CallingSettingsManager } from '@/components/board/calling-settings-manager';
 import { KeyboardShortcutsOverlay } from '@/components/common/keyboard-shortcuts-overlay';
 import { CommandPalette } from '@/components/common/command-palette';
 import { Select } from '@/components/common/select';
@@ -87,7 +86,6 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showPhaseManager, setShowPhaseManager] = useState(false);
   const [showCustomFieldManager, setShowCustomFieldManager] = useState(false);
-  const [showCallingSettings, setShowCallingSettings] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
   const [exportSprintId, setExportSprintId] = useState<string>('');
@@ -236,9 +234,19 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
     }),
   }));
 
-  const selectedTask = selectedTaskId
+  const storeTask = selectedTaskId
     ? boardPhases.flatMap((p) => p.tasks).find((t) => t.id === selectedTaskId) ?? null
     : null;
+
+  // Parent/subtask navigation can target a task that is NOT on the current
+  // board (different sprint, backlog). Fall back to fetching it directly so
+  // the drawer can still open it.
+  const { data: fetchedTaskRes } = useQuery({
+    queryKey: ['task', selectedTaskId],
+    queryFn: () => api.get<ApiResponse<Task>>(`/tasks/${selectedTaskId}`),
+    enabled: !!selectedTaskId && !storeTask,
+  });
+  const selectedTask = storeTask ?? (selectedTaskId ? fetchedTaskRes?.data ?? null : null);
 
   const handleTaskClick = useCallback((taskId: string) => {
     setSelectedTaskId(taskId);
@@ -530,7 +538,8 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                   onClick={() => setShowImportDialog(true)}
                   title="Import tasks"
                 >
-                  <Upload className="h-4 w-4" />
+                  {/* Inward arrow — Upload read as "export" (BAM batch #4). */}
+                  <Import className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -589,16 +598,13 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                           <Layers className="h-4 w-4" />
                           Custom Fields
                         </button>
-                        <button
-                          onClick={() => {
-                            setShowProjectMenu(false);
-                            setShowCallingSettings(true);
-                          }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                          <Phone className="h-4 w-4" />
-                          Calling Settings
-                        </button>
+                        {/* Per-project "Calling Settings" removed: the
+                            project_calling_settings overrides are stored but
+                            never consumed by any enforcement path (see
+                            docs/plans/bureau-calling-audit.md P-4). Calling is
+                            configured at the org level (/banter/admin/calling-
+                            settings) and platform level (/b3/superuser/
+                            platform-calling). */}
                         <button
                           onClick={() => {
                             setShowProjectMenu(false);
@@ -654,6 +660,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
         // labels, assignee, etc.) that the board query returns; the
         // flatMap-lookup narrows to the base Task, so widen here.
         task={selectedTask as Parameters<typeof TaskDetailDrawer>[0]['task']}
+        onNavigateToTask={(taskId) => setSelectedTaskId(taskId)}
         onUpdate={handleUpdateTask}
         onDelete={handleDeleteTask}
         phases={boardPhases.map((p) => ({ id: p.id, name: p.name }))}
@@ -713,12 +720,6 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
       <CustomFieldManager
         open={showCustomFieldManager}
         onOpenChange={setShowCustomFieldManager}
-        projectId={projectId}
-      />
-
-      <CallingSettingsManager
-        open={showCallingSettings}
-        onOpenChange={setShowCallingSettings}
         projectId={projectId}
       />
 

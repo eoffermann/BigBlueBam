@@ -32,11 +32,14 @@ import {
   GitCommit,
   GitPullRequest,
   ExternalLink,
+  Pencil,
+  History,
 } from 'lucide-react';
 import type { Task, Priority, ApiResponse, PaginatedResponse, TaskLink, TaskLinkInput } from '@bigbluebam/shared';
 import { PRIORITIES } from '@bigbluebam/shared';
 import { cn, formatDate, formatRelativeTime, isOverdue } from '@/lib/utils';
 import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
+import { useAuthStore } from '@/stores/auth.store';
 import { Button } from '@/components/common/button';
 import { Badge } from '@/components/common/badge';
 import { Avatar } from '@/components/common/avatar';
@@ -75,8 +78,16 @@ interface CommentData {
   body: string;
   created_at: string;
   updated_at: string;
+  edited_at?: string | null;
   author?: { display_name: string; avatar_url: string | null };
   reactions?: CommentReaction[];
+}
+
+interface CommentRevision {
+  id: string;
+  body: string;
+  revised_at: string;
+  revised_by_name: string | null;
 }
 
 const REACTION_EMOJIS = ['\uD83D\uDC4D', '\u2764\uFE0F', '\uD83D\uDE80', '\uD83D\uDC40', '\uD83C\uDF89'];
@@ -127,6 +138,9 @@ interface TaskDetailDrawerProps {
   projectId?: string;
   states?: { id: string; name: string; category: string }[];
   sprints?: { id: string; name: string }[];
+  /** Switch the drawer to another task (parent/subtask chips navigate
+   *  through this — the host owns the selected-task state). */
+  onNavigateToTask?: (taskId: string) => void;
 }
 
 export function TaskDetailDrawer({
@@ -139,6 +153,7 @@ export function TaskDetailDrawer({
   projectId,
   states = [],
   sprints = [],
+  onNavigateToTask,
 }: TaskDetailDrawerProps) {
   const queryClient = useQueryClient();
 
@@ -222,6 +237,40 @@ export function TaskDetailDrawer({
       setNewComment('');
     },
   });
+
+  // Comment edit/delete (author-only; the server enforces). An edit
+  // snapshots the prior body server-side so the "(edited)" badge can open
+  // the full history.
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentValue, setEditingCommentValue] = useState('');
+  const [historyCommentId, setHistoryCommentId] = useState<string | null>(null);
+  const currentUser = useAuthStore((s) => s.user);
+
+  const editComment = useMutation({
+    mutationFn: ({ commentId, body }: { commentId: string; body: string }) =>
+      api.patch<ApiResponse<CommentData>>(`/comments/${commentId}`, { body }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task-comments', task?.id] });
+      queryClient.invalidateQueries({ queryKey: ['comment-revisions'] });
+      setEditingCommentId(null);
+    },
+  });
+
+  const deleteComment = useMutation({
+    mutationFn: (commentId: string) => api.delete(`/comments/${commentId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task-comments', task?.id] });
+      queryClient.invalidateQueries({ queryKey: ['board'] }); // comment_count badge
+    },
+  });
+
+  const { data: revisionsRes } = useQuery({
+    queryKey: ['comment-revisions', historyCommentId],
+    queryFn: () =>
+      api.get<ApiResponse<CommentRevision[]>>(`/comments/${historyCommentId}/revisions`),
+    enabled: !!historyCommentId,
+  });
+  const commentRevisions = revisionsRes?.data ?? [];
 
   // Create subtask mutation
   const createSubtask = useMutation({
@@ -762,6 +811,7 @@ export function TaskDetailDrawer({
                           <ParentTasksSection
                             taskId={task.id}
                             projectId={projectId}
+                            onNavigateToTask={onNavigateToTask}
                           />
 
                           {/* Subtasks */}
@@ -787,17 +837,37 @@ export function TaskDetailDrawer({
                                 <div className="space-y-1 mb-3">
                                   {subtasks.map((sub) => {
                                     const isDone = sub.completed_at != null;
+                                    // Checkbox toggles done-state; the rest
+                                    // of the row OPENS the subtask in this
+                                    // drawer (falls back to toggling when no
+                                    // navigation handler is wired).
                                     return (
                                       <div
                                         key={sub.id}
                                         className="flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer"
-                                        onClick={() => handleToggleSubtask(sub)}
+                                        onClick={() =>
+                                          onNavigateToTask
+                                            ? onNavigateToTask(sub.id)
+                                            : handleToggleSubtask(sub)
+                                        }
+                                        title={onNavigateToTask ? 'Open subtask' : undefined}
                                       >
-                                        {isDone ? (
-                                          <CheckSquare className="h-4 w-4 text-primary-600 shrink-0" />
-                                        ) : (
-                                          <Square className="h-4 w-4 text-zinc-400 shrink-0" />
-                                        )}
+                                        <button
+                                          type="button"
+                                          className="shrink-0 rounded hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60 p-0.5 -m-0.5"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleSubtask(sub);
+                                          }}
+                                          title={isDone ? 'Mark as not done' : 'Mark as done'}
+                                          aria-label={isDone ? 'Mark subtask as not done' : 'Mark subtask as done'}
+                                        >
+                                          {isDone ? (
+                                            <CheckSquare className="h-4 w-4 text-primary-600" />
+                                          ) : (
+                                            <Square className="h-4 w-4 text-zinc-400" />
+                                          )}
+                                        </button>
                                         <span className={cn('text-sm flex-1', isDone && 'line-through text-zinc-400')}>
                                           {sub.human_id && (
                                             <span className="font-mono text-xs text-zinc-400 mr-1.5">{sub.human_id}</span>
@@ -1027,11 +1097,121 @@ export function TaskDetailDrawer({
                                     <span className="text-xs text-zinc-400">
                                       {formatRelativeTime(comment.created_at)}
                                     </span>
+                                    {comment.edited_at && (
+                                      <button
+                                        type="button"
+                                        className="text-xs text-zinc-400 italic hover:text-primary-600 hover:underline inline-flex items-center gap-0.5"
+                                        onClick={() =>
+                                          setHistoryCommentId((v) =>
+                                            v === comment.id ? null : comment.id,
+                                          )
+                                        }
+                                        title="View edit history"
+                                        aria-expanded={historyCommentId === comment.id}
+                                      >
+                                        <History className="h-3 w-3" aria-hidden />
+                                        (edited)
+                                      </button>
+                                    )}
+                                    {/* Author-only hover actions */}
+                                    {currentUser?.id === comment.author_id && editingCommentId !== comment.id && (
+                                      <span className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                          type="button"
+                                          className="rounded p-1 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-700"
+                                          onClick={() => {
+                                            setEditingCommentId(comment.id);
+                                            setEditingCommentValue(comment.body);
+                                          }}
+                                          title="Edit comment"
+                                          aria-label="Edit comment"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="rounded p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                                          onClick={() => {
+                                            if (window.confirm('Delete this comment? Its edit history goes with it.')) {
+                                              deleteComment.mutate(comment.id);
+                                            }
+                                          }}
+                                          title="Delete comment"
+                                          aria-label="Delete comment"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </span>
+                                    )}
                                   </div>
-                                  <div
-                                    className="rich-text-content text-sm text-zinc-700 dark:text-zinc-300"
-                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(markdownToHtml(comment.body)) }}
-                                  />
+                                  {editingCommentId === comment.id ? (
+                                    <div className="space-y-2">
+                                      <RichTextEditor
+                                        value={editingCommentValue}
+                                        onChange={setEditingCommentValue}
+                                        placeholder="Edit comment..."
+                                        minRows={2}
+                                        compact
+                                        defaultPreview={false}
+                                      />
+                                      <div className="flex justify-end gap-2">
+                                        <Button
+                                          size="sm"
+                                          variant="secondary"
+                                          onClick={() => setEditingCommentId(null)}
+                                        >
+                                          Cancel
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          disabled={!editingCommentValue.trim()}
+                                          loading={editComment.isPending}
+                                          onClick={() =>
+                                            editComment.mutate({
+                                              commentId: comment.id,
+                                              body: editingCommentValue.trim(),
+                                            })
+                                          }
+                                        >
+                                          Save
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="rich-text-content text-sm text-zinc-700 dark:text-zinc-300"
+                                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(markdownToHtml(comment.body)) }}
+                                    />
+                                  )}
+                                  {/* Edit history */}
+                                  {historyCommentId === comment.id && (
+                                    <div className="mt-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 p-2 space-y-2">
+                                      <div className="text-[10px] uppercase tracking-wide text-zinc-400">
+                                        Previous versions
+                                      </div>
+                                      {commentRevisions.length === 0 ? (
+                                        <p className="text-xs text-zinc-400">Loading history…</p>
+                                      ) : (
+                                        commentRevisions.map((rev) => (
+                                          <div
+                                            key={rev.id}
+                                            className="border-l-2 border-zinc-300 dark:border-zinc-600 pl-2"
+                                          >
+                                            <div className="text-[11px] text-zinc-400 mb-0.5">
+                                              until {formatRelativeTime(rev.revised_at)}
+                                              {rev.revised_by_name ? ` · edited by ${rev.revised_by_name}` : ''}
+                                            </div>
+                                            <div
+                                              className="rich-text-content text-xs text-zinc-600 dark:text-zinc-400"
+                                              dangerouslySetInnerHTML={{
+                                                __html: sanitizeHtml(markdownToHtml(rev.body)),
+                                              }}
+                                            />
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  )}
                                   {/* Reactions */}
                                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                                     {(comment.reactions ?? []).map((r) => (
@@ -1514,6 +1694,7 @@ export function TaskDetailDrawer({
 interface ParentTasksSectionProps {
   taskId: string;
   projectId: string | undefined;
+  onNavigateToTask?: (taskId: string) => void;
 }
 
 interface TaskSearchResult {
@@ -1523,7 +1704,7 @@ interface TaskSearchResult {
   completed_at: string | null;
 }
 
-function ParentTasksSection({ taskId, projectId }: ParentTasksSectionProps) {
+function ParentTasksSection({ taskId, projectId, onNavigateToTask }: ParentTasksSectionProps) {
   const { data: parentsRes } = useTaskParents(taskId);
   const parents = (parentsRes?.data ?? []) as ParentTaskSummary[];
   const addParent = useAddTaskParent();
@@ -1605,10 +1786,23 @@ function ParentTasksSection({ taskId, projectId }: ParentTasksSectionProps) {
                   : 'border-primary-300 bg-primary-100 text-primary-900 dark:border-primary-700 dark:bg-primary-900/40 dark:text-primary-100',
               )}
             >
-              {p.human_id && (
-                <span className="font-mono text-[10px] tracking-tight">{p.human_id}</span>
-              )}
-              <span className="truncate max-w-[16rem]">{p.title}</span>
+              {/* Chip body navigates to the parent's inspector; the X
+                  beside it removes the link. */}
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex items-center gap-1.5 min-w-0',
+                  onNavigateToTask && 'hover:underline cursor-pointer',
+                )}
+                onClick={() => onNavigateToTask?.(p.id)}
+                disabled={!onNavigateToTask}
+                title={onNavigateToTask ? 'Open parent task' : undefined}
+              >
+                {p.human_id && (
+                  <span className="font-mono text-[10px] tracking-tight">{p.human_id}</span>
+                )}
+                <span className="truncate max-w-[16rem]">{p.title}</span>
+              </button>
               <button
                 type="button"
                 onClick={() =>

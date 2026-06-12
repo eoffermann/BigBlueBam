@@ -1,4 +1,4 @@
-import { eq, and, or, sql, ilike, asc, gt, desc, inArray, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, ilike, asc, gt, desc, inArray, isNull, aliasedTable } from 'drizzle-orm';
 import Redis from 'ioredis';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
@@ -165,22 +165,29 @@ async function assertSubtasksDoneBeforeTerminal(
 }
 
 /**
- * Add `parentTaskId` as a parent of `taskId`. Idempotent (ON CONFLICT DO
- * NOTHING). Cycle detection walks up to depth 16 from the proposed parent
- * — if it ever reaches `taskId`, the addition would create a cycle and
- * is rejected.
+ * Rejects a proposed `taskId → parentTaskId` relation that would create a
+ * cycle. Walks upward from the proposed parent through BOTH the
+ * task_parent_links join table and the legacy tasks.parent_task_id self-FK;
+ * if the walk ever reaches `taskId`, the child is an ancestor of its
+ * would-be parent and the relation is recursive. The visited set bounds the
+ * walk by the number of distinct ancestors; the depth cap is a backstop
+ * against pathological data, generous enough (256) that no legitimate
+ * hierarchy hits it — the old cap of 16 let cycles past chains deeper than
+ * 16 links.
+ *
+ * Shared by every path that can write a parent relation: addTaskParent
+ * (POST /tasks/:id/parents) and updateTask's parent_task_id field (PATCH
+ * /tasks/:id, MCP task-update).
  */
-export async function addTaskParent(
+export async function assertNoParentCycle(
   taskId: string,
   parentTaskId: string,
-  createdBy: string | null,
-): Promise<{ already_linked: boolean }> {
+): Promise<void> {
   if (taskId === parentTaskId) throw new TaskRelationSelfLoopError();
 
-  // Walk upward from parentTaskId; if we hit taskId, that's a cycle.
   const visited = new Set<string>();
   let frontier = [parentTaskId];
-  for (let depth = 0; depth < 16 && frontier.length > 0; depth++) {
+  for (let depth = 0; depth < 256 && frontier.length > 0; depth++) {
     if (frontier.includes(taskId)) throw new TaskRelationCycleError();
     for (const id of frontier) visited.add(id);
     const next = await db
@@ -197,6 +204,18 @@ export async function addTaskParent(
     for (const r of legacy) if (r.id && !visited.has(r.id)) merged.add(r.id);
     frontier = Array.from(merged);
   }
+}
+
+/**
+ * Add `parentTaskId` as a parent of `taskId`. Idempotent (ON CONFLICT DO
+ * NOTHING). Rejects self-loops and ancestor cycles via assertNoParentCycle.
+ */
+export async function addTaskParent(
+  taskId: string,
+  parentTaskId: string,
+  createdBy: string | null,
+): Promise<{ already_linked: boolean }> {
+  await assertNoParentCycle(taskId, parentTaskId);
 
   // Skip insert if the link already exists.
   const [existing] = await db
@@ -556,7 +575,16 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
   if (data.start_date !== undefined) { updateValues.start_date = data.start_date; changedFields.push('start_date'); }
   if (data.due_date !== undefined) { updateValues.due_date = data.due_date; changedFields.push('due_date'); }
   if (data.label_ids !== undefined) { updateValues.labels = data.label_ids; changedFields.push('labels'); }
-  if (data.parent_task_id !== undefined) { updateValues.parent_task_id = data.parent_task_id; changedFields.push('parent_task_id'); }
+  if (data.parent_task_id !== undefined) {
+    // Same recursion guard the POST /tasks/:id/parents path enforces — this
+    // legacy field used to be writable unchecked, letting a task become a
+    // child of its own descendant.
+    if (data.parent_task_id !== null) {
+      await assertNoParentCycle(taskId, data.parent_task_id);
+    }
+    updateValues.parent_task_id = data.parent_task_id;
+    changedFields.push('parent_task_id');
+  }
   if (data.custom_fields !== undefined) { updateValues.custom_fields = data.custom_fields; changedFields.push('custom_fields'); }
 
   // Links field (CSV-import plan Phase 0): the incoming array replaces the
@@ -1100,9 +1128,68 @@ export async function getBoardState(projectId: string, sprintId?: string) {
     .where(and(...taskConditions))
     .orderBy(asc(tasks.position));
 
+  // Enrich every task with its parents — union of the m2m join table and
+  // the legacy parent_task_id pointer — as `{ id, human_id }[]`. Board
+  // cards badge subtasks with their parents' ids, and the list view builds
+  // its hierarchy from this, so it has to ride along with the board
+  // payload rather than costing a request per task.
+  const taskIds = allTasks.map((t) => t.id);
+  const parentsByTask = new Map<string, { id: string; human_id: string | null }[]>();
+  if (taskIds.length > 0) {
+    const parentTasks = aliasedTable(tasks, 'parent_tasks');
+    const linkRows = await db
+      .select({
+        task_id: taskParentLinks.task_id,
+        parent_id: parentTasks.id,
+        parent_human_id: parentTasks.human_id,
+      })
+      .from(taskParentLinks)
+      .innerJoin(parentTasks, eq(parentTasks.id, taskParentLinks.parent_task_id))
+      .where(inArray(taskParentLinks.task_id, taskIds));
+    for (const row of linkRows) {
+      const list = parentsByTask.get(row.task_id) ?? [];
+      list.push({ id: row.parent_id, human_id: row.parent_human_id });
+      parentsByTask.set(row.task_id, list);
+    }
+    // Legacy single-FK parents not yet mirrored into the join table.
+    const humanIdById = new Map(allTasks.map((t) => [t.id, t.human_id] as const));
+    const missingLegacyParentIds = new Set<string>();
+    for (const task of allTasks) {
+      if (!task.parent_task_id) continue;
+      const list = parentsByTask.get(task.id) ?? [];
+      if (list.some((p) => p.id === task.parent_task_id)) continue;
+      if (!humanIdById.has(task.parent_task_id)) {
+        missingLegacyParentIds.add(task.parent_task_id);
+      }
+    }
+    if (missingLegacyParentIds.size > 0) {
+      const extra = await db
+        .select({ id: tasks.id, human_id: tasks.human_id })
+        .from(tasks)
+        .where(inArray(tasks.id, Array.from(missingLegacyParentIds)));
+      for (const row of extra) humanIdById.set(row.id, row.human_id);
+    }
+    for (const task of allTasks) {
+      if (!task.parent_task_id) continue;
+      const list = parentsByTask.get(task.id) ?? [];
+      if (!list.some((p) => p.id === task.parent_task_id)) {
+        list.push({
+          id: task.parent_task_id,
+          human_id: humanIdById.get(task.parent_task_id) ?? null,
+        });
+        parentsByTask.set(task.id, list);
+      }
+    }
+  }
+
+  const enrichedTasks = allTasks.map((task) => ({
+    ...task,
+    parents: parentsByTask.get(task.id) ?? [],
+  }));
+
   // Group tasks by phase (skip tasks with null phase_id)
-  const tasksByPhase = new Map<string, typeof allTasks>();
-  for (const task of allTasks) {
+  const tasksByPhase = new Map<string, typeof enrichedTasks>();
+  for (const task of enrichedTasks) {
     if (!task.phase_id) continue;
     const list = tasksByPhase.get(task.phase_id) ?? [];
     list.push(task);

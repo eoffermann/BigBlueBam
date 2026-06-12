@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
@@ -36,6 +37,73 @@ function PriorityIcon({ priority }: { priority: Priority }) {
     default:
       return null;
   }
+}
+
+/**
+ * Parent-task badges on subtask cards: up to two parent ids inline, then a
+ * `…` chip whose hover/click popover lists every parent (multi-parent
+ * tasks are rare but legal — parents depend on shared subtasks).
+ * Pointer events are stopped so the chip neither opens the task nor
+ * starts a drag.
+ */
+function ParentBadges({ parents }: { parents: { id: string; human_id: string | null }[] }) {
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  if (parents.length === 0) return null;
+  const shown = parents.slice(0, 2);
+  const overflow = parents.slice(2);
+  return (
+    <span className="flex items-center gap-1 min-w-0" title="Parent tasks">
+      <span aria-hidden className="text-[10px] text-zinc-400">↑</span>
+      {shown.map((p) => (
+        <span
+          key={p.id}
+          className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded px-1 leading-4 truncate max-w-[72px]"
+        >
+          {p.human_id ?? p.id.slice(0, 6)}
+        </span>
+      ))}
+      {overflow.length > 0 && (
+        <span
+          className="relative"
+          onMouseEnter={() => setOverflowOpen(true)}
+          onMouseLeave={() => setOverflowOpen(false)}
+        >
+          <button
+            type="button"
+            className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded px-1 leading-4 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+            aria-label={`Show all ${parents.length} parent tasks`}
+            aria-expanded={overflowOpen}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOverflowOpen((v) => !v);
+            }}
+          >
+            …
+          </button>
+          {overflowOpen && (
+            <span
+              className="absolute left-0 top-full mt-1 z-30 min-w-[120px] max-w-[200px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg py-1 px-2 flex flex-col gap-0.5"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="text-[9px] uppercase tracking-wide text-zinc-400">
+                Parent tasks
+              </span>
+              {parents.map((p) => (
+                <span
+                  key={p.id}
+                  className="text-[11px] font-mono text-zinc-600 dark:text-zinc-300 whitespace-nowrap"
+                >
+                  {p.human_id ?? p.id.slice(0, 8)}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function TaskCard({ task, onClick, onContextMenu, isDragOverlay = false }: TaskCardProps) {
@@ -97,6 +165,7 @@ export function TaskCard({ task, onClick, onContextMenu, isDragOverlay = false }
       <div className="flex items-center gap-1.5 mb-1.5">
         <span className="h-2 w-2 rounded-full shrink-0 bg-blue-500" />
         <span className="text-xs font-mono text-zinc-400">{task.human_id}</span>
+        <ParentBadges parents={task.parents ?? []} />
         {task.priority !== 'none' && <PriorityIcon priority={task.priority} />}
         {task.carry_forward_count > 0 && (
           <span className="flex items-center gap-0.5 text-xs text-orange-500" title={`Carried forward ${task.carry_forward_count} time(s)`}>

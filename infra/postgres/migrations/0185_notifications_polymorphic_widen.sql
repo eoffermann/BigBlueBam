@@ -1,4 +1,6 @@
 -- 0185_notifications_polymorphic_widen.sql
+-- Client impact: additive only — widens a CHECK and relaxes a NOT NULL;
+--      existing rows and inserts keep working unchanged.
 -- Why: The notifications table was advertised as "polymorphic" in
 --      migration 0019 (its header literally says so), but two of the
 --      constraints still encode a Bam-centric assumption:

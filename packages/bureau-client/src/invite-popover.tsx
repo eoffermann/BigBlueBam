@@ -375,6 +375,20 @@ export function InvitePopover({
                           : 'failed'}
                   </span>
                 ) : null}
+                {outcome === 'dnd' ? (
+                  // Head-down recipients aren't reachable by ring — offer
+                  // the asynchronous path instead (Banter DM in note mode,
+                  // same flow the presence chips use).
+                  <a
+                    href={`/banter/dm/${m.id}?mode=note`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#fbbf24', fontSize: 10, whiteSpace: 'nowrap' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    leave a note
+                  </a>
+                ) : null}
               </button>
             );
           })

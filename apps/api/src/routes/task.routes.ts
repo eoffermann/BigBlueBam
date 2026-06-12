@@ -346,6 +346,28 @@ export default async function taskRoutes(fastify: FastifyInstance) {
             },
           });
         }
+        // parent_task_id updates run the same recursion guard as the
+        // dedicated parents endpoint — surface them as 4xx, not 500.
+        if (err instanceof taskService.TaskRelationSelfLoopError) {
+          return reply.status(400).send({
+            error: {
+              code: 'TASK_SELF_PARENT',
+              message: 'A task cannot be its own parent',
+              details: [{ field: 'parent_task_id', issue: 'self-loop' }],
+              request_id: request.id,
+            },
+          });
+        }
+        if (err instanceof taskService.TaskRelationCycleError) {
+          return reply.status(409).send({
+            error: {
+              code: 'TASK_RELATION_CYCLE',
+              message: 'This parent assignment would create a cycle (the task is an ancestor of the proposed parent)',
+              details: [{ field: 'parent_task_id', issue: 'cycle' }],
+              request_id: request.id,
+            },
+          });
+        }
         throw err;
       }
     },

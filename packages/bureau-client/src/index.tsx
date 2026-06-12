@@ -72,6 +72,7 @@ import { VideoTilesWindow } from './video-tiles.js';
 import { AudioUnblockChip } from './audio-unblock-chip.js';
 import { URL_SURFACE_APP, deriveUrlSurfaceId } from '@bigbluebam/shared';
 import { crossAppNavigate } from './cross-app-navigate.js';
+import { formatLocationDisplay, humanizeLocationTitle, appDisplayName } from './format-location.js';
 
 // BureauWsClient is exported as a value (not just a type) so consumers
 // like the Bureau SPA's useBureauWs hook can `new BureauWsClient(...)`.
@@ -331,6 +332,9 @@ function BureauProvider({
   // Last descriptor pushed over the wire (declared here, used by both the
   // connected handler below and the location-relay effect further down).
   const lastLocationRef = useRef<LocationDescriptor | null>(null);
+  // The user's CHOSEN presence status — replayed on reconnect so DND
+  // survives the Railway edge recycling the websocket.
+  const desiredStatusRef = useRef<PresenceStatus>('available');
   // Bumped on every server `connected` frame to re-run the location relay.
   const [wsEpoch, setWsEpoch] = useState(0);
 
@@ -359,6 +363,12 @@ function BureauProvider({
       // /b3/ with rings still arriving — the smoking-gun split).
       lastLocationRef.current = null;
       setWsEpoch((e) => e + 1);
+      // Same replay for presence status: a fresh session boots as
+      // 'available', which would silently drop the user's DND shield on
+      // every reconnect. Re-assert anything non-default.
+      if (desiredStatusRef.current !== 'available') {
+        client.send({ type: 'set_status', status: desiredStatusRef.current });
+      }
     });
     return off;
   }, [client]);
@@ -634,6 +644,12 @@ function BureauProvider({
         client.send({ type: 'leave_room' });
       },
       setStatus: (status, extras) => {
+        // Optimistic: the server's status_changed broadcast only reaches
+        // floor/room occupants, so a user in no room would never see their
+        // own toggle reflect. The ref carries the choice across WS
+        // reconnects (fresh sessions default to 'available').
+        desiredStatusRef.current = status;
+        setState((s) => ({ ...s, selfStatus: status }));
         client.send({
           type: 'set_status',
           status,
@@ -1017,6 +1033,26 @@ function ChevronIcon({ up }: { up: boolean }): React.ReactElement {
   );
 }
 
+const dndBtnStyle: CSSProperties = {
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.14)',
+  color: 'rgba(250, 250, 250, 0.55)',
+  cursor: 'pointer',
+  padding: '0 5px',
+  borderRadius: 999,
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: 0.5,
+  lineHeight: '14px',
+};
+
+const dndBtnActiveStyle: CSSProperties = {
+  ...dndBtnStyle,
+  background: 'rgba(220, 38, 38, 0.35)',
+  border: '1px solid rgba(248, 113, 113, 0.7)',
+  color: '#fecaca',
+};
+
 const chevronBtnStyle: CSSProperties = {
   background: 'transparent',
   border: 'none',
@@ -1136,18 +1172,20 @@ function BureauDockedBoxInner({
       </>
     );
   } else if (call.target.kind === 'surface') {
-    const label =
-      call.target.label ??
-      state.location?.label ??
-      call.target.surfaceApp ??
-      'surface';
+    // Same no-locators rule as the Viewing row: ids stripped, app named.
+    const surfaceTitle =
+      humanizeLocationTitle(
+        call.target.label ?? state.location?.label ?? null,
+        state.location?.url ?? null,
+        call.target.surfaceApp ?? state.location?.app ?? null,
+      ) || appDisplayName(call.target.surfaceApp) || 'huddle';
     callStripContent = (
       <>
         <span style={callStripIconStyle} aria-hidden title="Surface huddle">
           [H]
         </span>
         <span>
-          <span style={{ opacity: 0.7 }}>In:</span> <strong>{label}</strong>
+          <span style={{ opacity: 0.7 }}>In:</span> <strong>{surfaceTitle}</strong>
         </span>
       </>
     );
@@ -1211,11 +1249,19 @@ function BureauDockedBoxInner({
   // Collapsed: a one-line draggable status bar (Bureau todo #5). Only the
   // floating inline box collapses — the PiP copy always shows the full UI.
   if (floating && dock.pos.collapsed) {
-    const collapsedSummary = inRoom
+    const collapsedBase = inRoom
       ? `In: ${roomDisplayName}`
       : callConnected && call.target.kind === 'surface'
-        ? `In: ${call.target.label ?? call.target.surfaceApp ?? 'huddle'}`
+        ? `In: ${
+            humanizeLocationTitle(
+              call.target.label ?? state.location?.label ?? null,
+              state.location?.url ?? null,
+              call.target.surfaceApp ?? state.location?.app ?? null,
+            ) || appDisplayName(call.target.surfaceApp) || 'huddle'
+          }`
         : 'Not in a call';
+    const collapsedSummary =
+      state.selfStatus === 'dnd' ? `⛔ DND · ${collapsedBase}` : collapsedBase;
     return (
       <section
         ref={dock.boxRef}
@@ -1294,6 +1340,25 @@ function BureauDockedBoxInner({
           <span style={{ opacity: 0.6 }}>
             {state.status === 'connected' ? '' : state.status}
           </span>
+          {/* Head-down switch. While ON, Invites ring 423 (callers get a
+              "leave a note" path to your Banter DMs) and Hunts can't locate
+              you; only an admin/SuperUser Force Invite gets through. */}
+          <button
+            type="button"
+            style={state.selfStatus === 'dnd' ? dndBtnActiveStyle : dndBtnStyle}
+            data-bureau-dnd-toggle
+            onClick={() =>
+              actions.setStatus(state.selfStatus === 'dnd' ? 'available' : 'dnd')
+            }
+            title={
+              state.selfStatus === 'dnd'
+                ? 'Do Not Disturb is ON — invites and hunts are blocked (admins can still force-invite, notes land in your DMs). Click to become available.'
+                : 'Go head-down: block invites and hunts (DND)'
+            }
+            aria-pressed={state.selfStatus === 'dnd'}
+          >
+            DND
+          </button>
           {/* PiP stays available but de-emphasized — the docked box itself is
               now repositionable, so popping out is the secondary path. */}
           <PopoutBureauButton style={{ opacity: 0.5 }} />
@@ -1352,12 +1417,18 @@ function BureauDockedBoxInner({
         </div>
       ) : null}
 
-      {/* Viewing + actions */}
+      {/* Viewing + actions. Human-readable: "[Bam] Frndo Board" — never
+          UUIDs, surface hashes, or raw paths (those stay in the title
+          attribute for debugging). */}
       <div style={sectionStyle}>
         <span style={{ opacity: 0.7 }}>Viewing:</span>{' '}
         {state.location ? (
           <span title={state.location.url}>
-            "{state.location.label ?? state.location.app}" ({state.location.app})
+            {formatLocationDisplay(
+              state.location.app,
+              state.location.label,
+              state.location.url,
+            )}
           </span>
         ) : (
           <span style={{ opacity: 0.55 }}>—</span>

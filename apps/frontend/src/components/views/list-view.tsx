@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowUpDown, CornerDownRight } from 'lucide-react';
 import type { Task, Phase, Priority } from '@bigbluebam/shared';
 import { PRIORITIES } from '@bigbluebam/shared';
 import { cn, formatDate, isOverdue } from '@/lib/utils';
@@ -40,9 +40,8 @@ export function ListView({ phases, onTaskClick, onUpdateTask }: ListViewProps) {
     return tasks;
   }, [phases]);
 
-  const sortedTasks = useMemo(() => {
-    const sorted = [...allTasks];
-    sorted.sort((a, b) => {
+  const compareTasks = useMemo(() => {
+    return (a: Task, b: Task): number => {
       let cmp = 0;
       switch (sortField) {
         case 'human_id':
@@ -73,9 +72,54 @@ export function ListView({ phases, onTaskClick, onUpdateTask }: ListViewProps) {
           break;
       }
       return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return sorted;
-  }, [allTasks, sortField, sortDir]);
+    };
+  }, [sortField, sortDir]);
+
+  // Hierarchical rows: top-level tasks (no parent IN THIS DATASET) first,
+  // children indented beneath each of their parents, recursively. A task
+  // with several parents appears under every one of them — same task,
+  // several rows — so the unique render key is the full path, not the id.
+  // The chosen column sort applies within each sibling group. Cycle
+  // defense: a task already on the current ancestor path is skipped (the
+  // server guards against creating cycles, but the view must never
+  // infinite-loop on bad data), plus a hard depth cap.
+  const treeRows = useMemo(() => {
+    type Row = { task: (typeof allTasks)[number]; depth: number; pathKey: string };
+    const byId = new Map(allTasks.map((t) => [t.id, t]));
+    const childrenByParent = new Map<string, typeof allTasks>();
+    const roots: typeof allTasks = [];
+    for (const t of allTasks) {
+      const parentRefs =
+        t.parents ?? (t.parent_task_id ? [{ id: t.parent_task_id, human_id: null }] : []);
+      const presentParents = parentRefs.filter((p) => byId.has(p.id));
+      if (presentParents.length === 0) {
+        // No parents, or parents outside the current board/sprint — show
+        // at top level rather than hiding the task.
+        roots.push(t);
+      }
+      for (const p of presentParents) {
+        const list = childrenByParent.get(p.id) ?? [];
+        list.push(t);
+        childrenByParent.set(p.id, list);
+      }
+    }
+    const rows: Row[] = [];
+    const visit = (t: (typeof allTasks)[number], depth: number, path: Set<string>, pathKey: string) => {
+      rows.push({ task: t, depth, pathKey });
+      if (depth >= 12) return;
+      const kids = (childrenByParent.get(t.id) ?? []).slice().sort(compareTasks);
+      for (const k of kids) {
+        if (path.has(k.id)) continue;
+        const nextPath = new Set(path);
+        nextPath.add(k.id);
+        visit(k, depth + 1, nextPath, `${pathKey}/${k.id}`);
+      }
+    };
+    for (const r of roots.slice().sort(compareTasks)) {
+      visit(r, 0, new Set([r.id]), r.id);
+    }
+    return rows;
+  }, [allTasks, compareTasks]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -129,21 +173,32 @@ export function ListView({ phases, onTaskClick, onUpdateTask }: ListViewProps) {
 
       {/* Table body */}
       <div className="flex-1 overflow-y-auto">
-        {sortedTasks.length === 0 ? (
+        {treeRows.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-sm text-zinc-400">
             No tasks found.
           </div>
         ) : (
-          sortedTasks.map((task) => {
+          treeRows.map(({ task, depth, pathKey }) => {
             const overdue = isOverdue(task.due_date);
             return (
               <div
-                key={task.id}
+                key={pathKey}
                 className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 cursor-pointer transition-colors text-sm"
                 onClick={() => onTaskClick(task.id)}
               >
+                {/* Hierarchy indent + connector */}
+                {depth > 0 && (
+                  <div
+                    className="shrink-0 flex items-center justify-end text-zinc-300 dark:text-zinc-600"
+                    style={{ width: depth * 18 }}
+                    aria-hidden
+                  >
+                    <CornerDownRight className="h-3.5 w-3.5" />
+                  </div>
+                )}
+
                 {/* ID */}
-                <div className="w-24 font-mono text-xs text-zinc-400 truncate">
+                <div className="w-24 font-mono text-xs text-zinc-400 truncate shrink-0">
                   {task.human_id}
                 </div>
 
