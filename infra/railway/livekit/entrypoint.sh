@@ -19,11 +19,15 @@
 #   LIVEKIT_TURN_DOMAIN                     e.g. turn.bigbluebam.com
 #   LIVEKIT_TURN_TLS_PORT                   the Railway TCP proxy's PUBLIC
 #                                           port. LiveKit listens on AND
-#                                           advertises this number, so the
-#                                           proxy's target port must be set
-#                                           to the same value ("port
-#                                           alignment dance" — see
-#                                           docs/livekit-networking-notes.md)
+#                                           advertises this number; the
+#                                           Railway proxy targets the FIXED
+#                                           container port 5349, and a socat
+#                                           relay below bridges 5349 →
+#                                           localhost:<this port> so
+#                                           advertised == reachable without
+#                                           any Railway-side port control
+#                                           (their public ports are random
+#                                           by design)
 #   LIVEKIT_TURN_CERT_PEM / LIVEKIT_TURN_KEY_PEM
 #                                           PEM bodies for the TURN domain.
 #                                           Browsers VALIDATE TURN-TLS certs;
@@ -101,6 +105,16 @@ fi
 if [ "${1:-}" = "--print-config" ]; then
   cat /etc/livekit.yaml
   exit 0
+fi
+
+# ── TURN port-alignment relay ───────────────────────────────────────
+# The Railway TCP proxy targets fixed container port 5349; LiveKit
+# listens on the PUBLIC port number (so what it advertises to clients
+# is what they can actually reach). socat bridges the two with raw TCP
+# (TLS passes through untouched). Skipped when they already coincide.
+if [ "$TURN_ENABLED" = "true" ] && [ "${LIVEKIT_TURN_TLS_PORT}" != "5349" ]; then
+  echo "[livekit-railway] relay: container :5349 -> 127.0.0.1:${LIVEKIT_TURN_TLS_PORT} (Railway proxy target -> LiveKit TURN listener)"
+  socat TCP-LISTEN:5349,fork,reuseaddr "TCP:127.0.0.1:${LIVEKIT_TURN_TLS_PORT}" &
 fi
 
 exec /livekit-server --config /etc/livekit.yaml

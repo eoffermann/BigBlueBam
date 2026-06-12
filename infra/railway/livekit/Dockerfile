@@ -15,7 +15,14 @@
 # not re-downloaded).
 FROM alpine:3.20
 
-RUN apk add --no-cache gettext ca-certificates
+# socat powers the TURN port-alignment relay: Railway assigns the TCP
+# proxy's PUBLIC port randomly (no update mutation, no requested-port
+# field — verified against their GraphQL schema), while LiveKit has a
+# single turn.tls_port field controlling both its listen AND advertised
+# port. The entrypoint therefore points the Railway proxy at a FIXED
+# container port (5349) and relays it to wherever LiveKit listens
+# (the public port number), keeping advertised == reachable.
+RUN apk add --no-cache gettext ca-certificates socat
 
 COPY --from=livekit/livekit-server:v1.11.0 /livekit-server /livekit-server
 

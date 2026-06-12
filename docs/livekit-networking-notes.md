@@ -138,22 +138,29 @@ Components (all in-repo):
 | livekit | `INTERNAL_SERVICE_SECRET` | enables the boot report into the Log |
 | worker | `LIVEKIT_TURN_CHECK_TARGET` | `turn.<domain>:<P>` — enables the expiry watchdog |
 
-### The port-alignment dance
+### Port alignment (solved in-container — no Railway-side dance)
 
-LiveKit has ONE field (`turn.tls_port`) that controls both the port it
-LISTENS on and the port it ADVERTISES to clients — and Railway assigns
-the TCP proxy's public port, you don't choose it. So:
+LiveKit has ONE field (`turn.tls_port`) controlling both the port it
+LISTENS on and the port it ADVERTISES to clients, while Railway assigns
+the TCP proxy's public port RANDOMLY — verified against their GraphQL
+schema: there is no update mutation and no requested-port field, and
+delete/recreate draws a fresh random port every time, so no amount of
+recreating converges.
 
-1. Railway dashboard → livekit service → Settings → Networking →
-   **TCP Proxy** → create one (any target port, e.g. 5349).
-2. Note the assigned endpoint, e.g. `tramway.proxy.rlwy.net:34567`.
-3. Edit the proxy's **target port to the same number** (34567).
-4. Set `LIVEKIT_TURN_TLS_PORT=34567` on the livekit service.
+The image solves this internally instead: the Railway TCP proxy targets
+the FIXED container port **5349**, LiveKit listens on (and therefore
+advertises) the PUBLIC port number, and the entrypoint runs a socat
+relay bridging container :5349 → 127.0.0.1:<public port>. Raw TCP
+passthrough — the TLS stream is untouched. Setup is one-shot:
 
-Now public port = target port = listen port = advertised port. If
-editing the target isn't offered, delete + recreate the proxy with the
-assigned number as the target (assignments are sticky per service; if it
-reassigns, repeat once with the new number).
+1. Create the TCP proxy on the livekit service with **target port
+   5349** (dashboard, or the `tcpProxyCreate` GraphQL mutation).
+2. Note the assigned endpoint, e.g. `thomas.proxy.rlwy.net:17468`.
+3. Set `LIVEKIT_TURN_TLS_PORT=17468` (the public number) on the
+   livekit service. The entrypoint wires the relay automatically.
+
+The proxy is permanent once created — the public port only changes if
+the proxy is deleted and recreated, in which case update the env var.
 
 ### DNS + cert
 
