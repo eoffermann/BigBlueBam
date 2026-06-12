@@ -229,6 +229,26 @@ export function RingHandler({
       const wrapped = err instanceof Error ? err : new Error(String(err));
       onAcceptError?.(wrapped, ring);
     }
+
+    // Accepting an invite to the page you're ALREADY on is a same-URL
+    // navigate — no route change fires, so a call manager stuck in
+    // 'error' (e.g. a mint that 403'd during a presence-session gap)
+    // would stay stuck. setTarget() with the unchanged target retries
+    // precisely in that case (its no-op guard passes error states
+    // through). Delay slightly so a real navigation's location update
+    // wins the race when the page DID change.
+    window.setTimeout(() => {
+      import('./active-room.js')
+        .then(({ getActiveCallManager }) => {
+          const mgr = getActiveCallManager();
+          if (mgr && mgr.getStatus() === 'error') {
+            void mgr.setTarget(mgr.getTarget());
+          }
+        })
+        .catch(() => {
+          /* best-effort nudge */
+        });
+    }, 750);
   }
 
   // Only render the topmost ring at a time — surface huddles are 1-on-1ish

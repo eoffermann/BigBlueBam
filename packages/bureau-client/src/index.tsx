@@ -325,6 +325,12 @@ function BureauProvider({
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Last descriptor pushed over the wire (declared here, used by both the
+  // connected handler below and the location-relay effect further down).
+  const lastLocationRef = useRef<LocationDescriptor | null>(null);
+  // Bumped on every server `connected` frame to re-run the location relay.
+  const [wsEpoch, setWsEpoch] = useState(0);
+
   // ── WS status & connected/disconnected handling ──
   useEffect(() => {
     const off = client.onStatus((next) => {
@@ -340,6 +346,16 @@ function BureauProvider({
         selfUserId: msg.user_id || s.selfUserId,
         sessionId: msg.session_id || s.sessionId,
       }));
+      // Every `connected` frame means a FRESH server-side presence
+      // session (reconnects get a new sessionId with an empty location).
+      // Re-announce where we are, or the new session never learns it and
+      // every surface-huddle mint 403s NOT_ON_SURFACE until the next
+      // route change. Locally the socket never drops so this was
+      // invisible; Railway's edge recycles long-lived websockets
+      // routinely (2026-06-12 Railway-calling incident: mint 403 on
+      // /b3/ with rings still arriving — the smoking-gun split).
+      lastLocationRef.current = null;
+      setWsEpoch((e) => e + 1);
     });
     return off;
   }, [client]);
@@ -473,8 +489,10 @@ function BureauProvider({
     return off;
   }, [client]);
 
-  // ── Location relay — every time the host's route changes, push it. ──
-  const lastLocationRef = useRef<LocationDescriptor | null>(null);
+  // ── Location relay — every time the host's route changes (or the WS
+  //    reconnects: wsEpoch), push it. lastLocationRef is declared up by
+  //    the connected handler, which nulls it so a fresh server session
+  //    always gets a location_update even when the route is unchanged. ──
   useEffect(() => {
     let descriptor: LocationDescriptor | undefined;
     try {
@@ -562,7 +580,9 @@ function BureauProvider({
         surfaceId: descriptor.surface_id,
       });
     }
-  }, [client, describeLocation, route]);
+    // wsEpoch: see the connected handler — bumps on every fresh server
+    // session so presence re-learns the location after a reconnect.
+  }, [client, describeLocation, route, wsEpoch]);
 
   // ── Active-call routing — keep the ActiveCallManager's target in sync
   //    with (spatial room, surface location). Spatial rooms take priority:
