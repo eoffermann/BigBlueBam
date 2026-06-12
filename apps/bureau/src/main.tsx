@@ -18,10 +18,16 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PermissionsProvider } from '@bigbluebam/ui/permissions-context';
 import {
+  initSystemErrorReporter,
   mountBureauClient,
   type LocationDescriptor,
   type UnmountFn,
 } from '@bigbluebam/bureau-client';
+
+// Browser-side system_errors reporter — every error a user sees in
+// this SPA forwards to the SuperUser Log Analysis tab. Initialised as
+// the first thing after imports so errors during boot are caught.
+initSystemErrorReporter({ service: 'bureau' });
 import { App, type Route } from './App';
 import { useBureauStore } from './stores/bureau-store';
 import { useAuthStore } from './stores/auth.store';

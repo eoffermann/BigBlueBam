@@ -108,6 +108,14 @@ export type { UseActiveCall } from './use-active-call.js';
 // it so hosts that opt out of the auto-mounted portal can place it
 // themselves (e.g. tiled inside a custom dashboard).
 export { VideoTilesWindow } from './video-tiles.js';
+export {
+  initSystemErrorReporter,
+  reportSystemError,
+} from './system-error-reporter.js';
+export type {
+  SystemErrorReporterConfig,
+  SystemErrorPayload,
+} from './system-error-reporter.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // MountOptions — the §11 contract.

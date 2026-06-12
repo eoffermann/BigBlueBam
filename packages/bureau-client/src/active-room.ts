@@ -333,6 +333,16 @@ export class ActiveCallManager {
       if (generation !== this.connectGeneration) return;
       this.errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error('[bureau-client] token mint failed', err);
+      // Forward to the platform system_errors sink so the failure
+      // appears in the SuperUser Log Analysis tab with the same shape
+      // as a server-side 5xx. Lazy import keeps this file SSR-clean
+      // (the helper is a no-op outside the browser anyway).
+      void reportBureauCallError({
+        stage: 'mint',
+        err,
+        target,
+        message: this.errorMessage,
+      });
       this.setStatus('error');
       return;
     }
@@ -359,6 +369,13 @@ export class ActiveCallManager {
       }
       this.errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error('[bureau-client] Room.connect failed', err);
+      void reportBureauCallError({
+        stage: 'room-connect',
+        err,
+        target,
+        message: this.errorMessage,
+        wsUrl: resolveWsUrl(minted.ws_url),
+      });
       this.detachRoomListeners();
       this.room = null;
       this.setStatus('error');
@@ -737,3 +754,51 @@ export function setActiveCallManager(manager: ActiveCallManager | null): void {
 }
 
 export { IDLE_TARGET };
+
+// ─────────────────────────────────────────────────────────────────────
+// System-errors bridge.
+//
+// Every call.status='error' transition is forwarded to the platform
+// system_errors sink so a "red label" in the docked box also lands in
+// the SuperUser Log Analysis tab. The reporter is initialized once by
+// the host SPA via initSystemErrorReporter(); when not configured
+// reportSystemError() is a console.error no-op, so this is always
+// safe to call.
+// ─────────────────────────────────────────────────────────────────────
+
+interface BureauCallErrorContext {
+  stage: 'mint' | 'room-connect';
+  err: unknown;
+  target: ActiveRoomTarget;
+  message: string;
+  wsUrl?: string;
+}
+
+async function reportBureauCallError(ctx: BureauCallErrorContext): Promise<void> {
+  try {
+    // Lazy import so test environments that don't ship the reporter
+    // module (we ship it in the same package so this just works) still
+    // load. If the dynamic import fails for any reason the catch below
+    // keeps it silent.
+    const { reportSystemError } = await import('./system-error-reporter.js');
+    const errorObj = ctx.err instanceof Error ? ctx.err : null;
+    await reportSystemError({
+      message: `Bureau call ${ctx.stage} failed: ${ctx.message}`,
+      stack: errorObj?.stack,
+      error_code: ctx.stage === 'mint' ? 'BUREAU_MINT_FAILED' : 'BUREAU_CONNECT_FAILED',
+      payload: {
+        stage: ctx.stage,
+        target_kind: ctx.target.kind,
+        room_name: ctx.target.roomName,
+        spatial_room_id: ctx.target.spatialRoomId ?? null,
+        surface_app: ctx.target.surfaceApp ?? null,
+        surface_id: ctx.target.surfaceId ?? null,
+        label: ctx.target.label ?? null,
+        ws_url: ctx.wsUrl ?? null,
+        error_name: errorObj?.name ?? typeof ctx.err,
+      },
+    });
+  } catch {
+    // Never let logging break the caller's error path.
+  }
+}

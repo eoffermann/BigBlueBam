@@ -3,12 +3,17 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PermissionsProvider } from '@bigbluebam/ui/permissions-context';
 import {
+  initSystemErrorReporter,
   mountBureauClient,
   type LocationDescriptor,
 } from '@bigbluebam/bureau-client';
 import { App } from './App';
 import { api } from './lib/api';
 import './styles/globals.css';
+
+// Install the browser-side system_errors reporter as early as
+// possible so even an error during initial render gets captured.
+initSystemErrorReporter({ service: 'b3' });
 
 const queryClient = new QueryClient({
   defaultOptions: {

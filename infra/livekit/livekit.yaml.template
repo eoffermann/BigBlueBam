@@ -30,7 +30,29 @@ rtc:
   port_range_start: 50000
   port_range_end: 50100
   tcp_port: 7881
-  use_external_ip: false
+  # ICE candidate advertisement.
+  #
+  # `node_ip` is the address LiveKit puts in the ICE candidate list it
+  # sends to every joining client. If that address is unreachable from
+  # the client (e.g. 127.0.0.1, the container's internal 172.x bridge
+  # IP, or the wrong host on a LAN), the DTLS handshake times out and
+  # the docked Bureau box shows a red "error".
+  #
+  # The renderer picks one of three modes based on LIVEKIT_NODE_IP:
+  #   - LIVEKIT_NODE_IP=<ip-or-hostname>  → node_ip: <value>,
+  #                                          use_external_ip: false.
+  #   - LIVEKIT_NODE_IP="" or unset       → use_external_ip: true (STUN
+  #                                          autodetects the public IP).
+  #   - LIVEKIT_NODE_IP=auto               → same as the empty case;
+  #                                          provided as a memorable opt-in.
+  #
+  # For a deployment that lives behind a fixed public IP / domain
+  # (bigbluebam.com), set LIVEKIT_NODE_IP to that IP in .env so every
+  # browser — even one across the network — gets a candidate it can
+  # actually reach. The TCP fallback port (7881) is already mapped
+  # 0.0.0.0:7881 on the host so the candidate works regardless of
+  # whether UDP is reachable.
+__LIVEKIT_RTC_BLOCK__
 keys:
   __LIVEKIT_API_KEY__: __LIVEKIT_API_SECRET__
 webhook:

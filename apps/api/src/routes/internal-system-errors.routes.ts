@@ -1,5 +1,5 @@
 /**
- * Internal endpoint for the platform-wide system_errors sink.
+ * Internal endpoints for the platform-wide system_errors sink.
  *
  * Every satellite service runs the shared @bigbluebam/logging error
  * handler. The handler captures 5xxs and calls an optional recorder.
@@ -7,10 +7,25 @@
  * to POST here, so the SuperUser Console's Log Analysis tab can show
  * errors from anywhere in the platform, not just the main api.
  *
- * The route is INTERNAL_SERVICE_SECRET-gated (requireServiceAuth). A
- * misbehaving client cannot inject arbitrary rows because they don't
- * have the shared secret. The fields are clipped to safe sizes before
- * insertion so a noisy error path can't blow up the table.
+ * Two routes live here:
+ *
+ *   POST /internal/system-errors/record
+ *     Server-to-server. INTERNAL_SERVICE_SECRET-gated. The satellites
+ *     post here from inside the cluster — they have the shared secret.
+ *
+ *   POST /internal/system-errors/record-browser
+ *     Browser-callable. Session-cookie auth (requireAuth). Used by the
+ *     frontend SystemErrorReporter so any error a user actually SEES
+ *     on the screen — including Bureau call.errorMessage, unhandled
+ *     rejections, network failures — lands in the same table the
+ *     SuperUser already monitors. Without this, the only signal is "the
+ *     user reported a red label, please investigate", which is exactly
+ *     the loop we want to close.
+ *
+ * Both routes clip fields to safe sizes before insertion so a noisy
+ * error path can't blow up the table. The browser route additionally
+ * force-prefixes `service` with `frontend/` so server-side `service`
+ * names (api/worker/etc.) can't be spoofed from the browser.
  *
  * Mount prefix: /internal (routes register at the root because there's
  * no per-feature prefix here).
@@ -21,6 +36,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { db } from '../db/index.js';
 import { systemErrors } from '../db/schema/system-errors.js';
 import { env } from '../env.js';
+import { requireAuth } from '../plugins/auth.js';
 
 // Mirrors the auth pattern in internal-can-read.routes.ts /
 // internal-permissions.routes.ts: x-internal-secret header against
@@ -125,4 +141,77 @@ export default async function internalSystemErrorsRoutes(fastify: FastifyInstanc
       return reply.status(204).send();
     },
   );
+
+  // ── POST /internal/system-errors/record-browser ─────────────────
+  // Browser-facing variant. The frontend SystemErrorReporter posts
+  // here whenever anything user-visible goes wrong. Same shape as the
+  // satellite route minus the fields a browser shouldn't pick (the
+  // session is the source of truth for user_id / org_id, not the
+  // payload — we ignore those if sent).
+  fastify.post(
+    '/system-errors/record-browser',
+    {
+      preHandler: [requireAuth],
+      // Per-IP rate limit so a runaway browser tab can't flood the
+      // table. 60 / minute is comfortably above any honest pattern
+      // (panic-loop reporters typically include their own throttle).
+      config: {
+        rateLimit: {
+          max: 60,
+          timeWindow: 60_000,
+        },
+      },
+    },
+    async (request, reply) => {
+      const parsed = browserRecordSchema.safeParse(request.body);
+      if (!parsed.success) {
+        request.log.warn(
+          { details: parsed.error.errors },
+          'system-errors/record-browser: invalid payload',
+        );
+        return reply.status(204).send();
+      }
+      const d = parsed.data;
+      const user = request.user;
+      // Force-prefix the service tag so a browser can't claim to be
+      // (e.g.) `api` and pollute the SuperUser console's service
+      // filter. Sources like `b3`, `banter`, `bureau-client` become
+      // `frontend/b3`, `frontend/banter`, etc.
+      const safeService = `frontend/${d.service}`.slice(0, 40);
+      try {
+        await db.insert(systemErrors).values({
+          service: safeService,
+          request_id: clip(d.request_id ?? null, 80),
+          // Trust the session, not the payload, for these two.
+          user_id: user?.id ?? null,
+          org_id: user?.active_org_id ?? null,
+          method: clip(d.method ?? null, 10),
+          route: clip(d.route ?? null, MAX_ROUTE_LEN),
+          status_code: d.status_code ?? null,
+          error_code: clip(d.error_code ?? null, 80),
+          message: clip(d.message, MAX_MESSAGE_LEN) ?? d.message,
+          stack: clip(d.stack ?? null, MAX_STACK_LEN),
+          payload: d.payload,
+        });
+      } catch (err) {
+        request.log.warn({ err }, 'system-errors/record-browser: insert failed');
+      }
+      return reply.status(204).send();
+    },
+  );
 }
+
+const browserRecordSchema = z.object({
+  // Forced through a `frontend/` prefix at insert time, so this is just
+  // the app name (b3, banter, bureau, bureau-client, helpdesk, …).
+  service: z.string().min(1).max(30),
+  request_id: z.string().max(80).nullable().optional(),
+  // user_id / org_id intentionally omitted — populated from the session.
+  method: z.string().max(10).nullable().optional(),
+  route: z.string().max(MAX_ROUTE_LEN).nullable().optional(),
+  status_code: z.number().int().min(100).max(599).nullable().optional(),
+  error_code: z.string().max(80).nullable().optional(),
+  message: z.string().min(1).max(MAX_MESSAGE_LEN),
+  stack: z.string().max(MAX_STACK_LEN).nullable().optional(),
+  payload: z.record(z.unknown()).default({}),
+});

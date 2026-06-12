@@ -371,9 +371,21 @@ export function renderLivekitConfig(envConfig) {
   const template = fs.readFileSync(templatePath, 'utf8');
   const apiKey = envConfig.LIVEKIT_API_KEY || 'devkey';
   const apiSecret = envConfig.LIVEKIT_API_SECRET || 'secret';
+  // Choose the ICE advertisement strategy. LIVEKIT_NODE_IP is the
+  // operator's escape hatch when STUN autodetection picks the wrong
+  // address (multi-NIC hosts, NAT'd dev boxes, etc.).
+  const nodeIpRaw = (envConfig.LIVEKIT_NODE_IP ?? '').trim();
+  const nodeIpLower = nodeIpRaw.toLowerCase();
+  let rtcBlock;
+  if (nodeIpRaw && nodeIpLower !== 'auto' && nodeIpLower !== 'external') {
+    rtcBlock = `  node_ip: ${nodeIpRaw}\n  use_external_ip: false`;
+  } else {
+    rtcBlock = '  use_external_ip: true';
+  }
   const rendered = template
     .replace(/__LIVEKIT_API_KEY__/g, apiKey)
-    .replace(/__LIVEKIT_API_SECRET__/g, apiSecret);
+    .replace(/__LIVEKIT_API_SECRET__/g, apiSecret)
+    .replace(/__LIVEKIT_RTC_BLOCK__/g, rtcBlock);
   fs.writeFileSync(outPath, rendered, { encoding: 'utf8' });
   return outPath;
 }
