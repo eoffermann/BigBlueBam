@@ -59,7 +59,11 @@ function safeEqual(provided: string, expected: string): boolean {
 }
 
 type ToolsCallHandler = (
-  request: { params: { name: string; arguments?: Record<string, unknown> } },
+  // `method` is required: the SDK's tools/call handler validates the request
+  // against CallToolRequestSchema (method: z.literal('tools/call')). Typing it
+  // here forces the synthesized request to carry it so the route can't regress
+  // to the params-only shape that 500s.
+  request: { method: 'tools/call'; params: { name: string; arguments?: Record<string, unknown> } },
   extra: { requestId: string; sessionId: string },
 ) => Promise<unknown>;
 
@@ -198,7 +202,12 @@ export async function handleToolsCall(
 
   try {
     const result = await handler(
-      { params: { name, arguments: (args as Record<string, unknown>) ?? {} } },
+      // The SDK's tools/call handler validates the request against
+      // CallToolRequestSchema, which requires `method: z.literal('tools/call')`.
+      // The normal /mcp transport supplies `method` from the JSON-RPC envelope;
+      // this internal route synthesizes the request, so it must include `method`
+      // explicitly or the SDK rejects it with a Zod error and the route 500s.
+      { method: 'tools/call', params: { name, arguments: (args as Record<string, unknown>) ?? {} } },
       { requestId, sessionId },
     );
     sendJson(res, 200, result);
