@@ -524,7 +524,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const q = request.query;
       const limit = Math.min(
-        Math.max(parseInt(q.limit ?? '50', 10) || 50, 1),
+        Math.max(Number.parseInt(q.limit ?? '50', 10) || 50, 1),
         100,
       );
       const search = q.search?.trim() || undefined;
@@ -1303,7 +1303,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const q = request.query;
       const limit = Math.min(
-        Math.max(parseInt(q.limit ?? '50', 10) || 50, 1),
+        Math.max(Number.parseInt(q.limit ?? '50', 10) || 50, 1),
         200,
       );
 
@@ -1355,7 +1355,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
 
       const q = request.query;
       const limit = Math.min(
-        Math.max(parseInt(q.limit ?? '50', 10) || 50, 1),
+        Math.max(Number.parseInt(q.limit ?? '50', 10) || 50, 1),
         200,
       );
 

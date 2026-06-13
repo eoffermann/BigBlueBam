@@ -13,7 +13,7 @@
  * chip), shows only while connected-and-blocked, and clears itself the
  * moment Room.startAudio() succeeds inside the click gesture.
  */
-import { type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import { useActiveCall } from './use-active-call.js';
 
 const chipStyle: CSSProperties = {

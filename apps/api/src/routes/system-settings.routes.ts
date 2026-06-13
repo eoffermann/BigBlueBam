@@ -165,7 +165,7 @@ const KEY_VALIDATORS: Record<string, z.ZodType> = {
   smtp_port: z.union([
     z.number().int().min(1).max(65535),
     z.string().regex(/^\d+$/).refine((v) => {
-      const n = parseInt(v, 10);
+      const n = Number.parseInt(v, 10);
       return n >= 1 && n <= 65535;
     }, 'smtp_port must be an integer between 1 and 65535'),
   ]),

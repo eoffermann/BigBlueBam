@@ -14,7 +14,7 @@ export default async function activityRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const result = await activityService.getProjectActivity(request.params.id, {
         cursor: request.query.cursor,
-        limit: request.query.limit ? parseInt(request.query.limit, 10) : undefined,
+        limit: request.query.limit ? Number.parseInt(request.query.limit, 10) : undefined,
       });
 
       return reply.send(result);

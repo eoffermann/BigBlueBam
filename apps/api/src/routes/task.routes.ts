@@ -40,7 +40,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         labels: query['filter[labels]']?.split(','),
         search: query.search,
         cursor: query.cursor,
-        limit: query.limit ? parseInt(query.limit, 10) : undefined,
+        limit: query.limit ? Number.parseInt(query.limit, 10) : undefined,
       });
 
       return reply.send(result);

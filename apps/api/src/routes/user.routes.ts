@@ -77,7 +77,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const activeOnly = request.query.active_only !== 'false'; // default true
       const limit = Math.min(
-        Math.max(parseInt(request.query.limit ?? '50', 10) || 50, 1),
+        Math.max(Number.parseInt(request.query.limit ?? '50', 10) || 50, 1),
         200,
       );
 
@@ -224,7 +224,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
       }
 
       const limit = Math.min(
-        Math.max(parseInt(request.query.limit ?? '20', 10) || 20, 1),
+        Math.max(Number.parseInt(request.query.limit ?? '20', 10) || 20, 1),
         20,
       );
 

@@ -735,7 +735,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('bam.org_member_activity.get'), requireScope('admin')] },
     async (request, reply) => {
       const limit = Math.min(
-        Math.max(parseInt(request.query.limit ?? '50', 10) || 50, 1),
+        Math.max(Number.parseInt(request.query.limit ?? '50', 10) || 50, 1),
         200,
       );
       const cursor = request.query.cursor ?? null;

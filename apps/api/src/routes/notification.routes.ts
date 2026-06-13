@@ -20,7 +20,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     '/me/notifications',
     { preHandler: [requireAuth, shadowOnly('bam.me_notification.list')] },
     async (request, reply) => {
-      const limit = Math.min(request.query.limit ? parseInt(request.query.limit, 10) : 50, 200);
+      const limit = Math.min(request.query.limit ? Number.parseInt(request.query.limit, 10) : 50, 200);
       const conditions = [eq(notifications.user_id, request.user!.id)];
 
       // Legacy filter — kept for backwards compat.

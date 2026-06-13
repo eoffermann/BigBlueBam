@@ -571,6 +571,7 @@ function VideoTile({ tile, prominent }: VideoTileProps): React.ReactElement {
   return (
     <div style={containerStyle} data-bureau-tile data-tile-sid={tile.sid}>
       {tile.track ? (
+        // biome-ignore lint/a11y/useMediaCaption: live WebRTC video stream from a LiveKit track — there is no caption track to provide.
         <video ref={videoRef} style={videoStyle} />
       ) : (
         <div

@@ -67,8 +67,8 @@ export default async function platformRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('bam.platform_org.list')] },
     async (request, reply) => {
       const query = request.query as { search?: string; limit?: string; offset?: string };
-      const limit = Math.min(parseInt(query.limit || '50', 10), 100);
-      const offset = parseInt(query.offset || '0', 10);
+      const limit = Math.min(Number.parseInt(query.limit || '50', 10), 100);
+      const offset = Number.parseInt(query.offset || '0', 10);
 
       let q = db
         .select({
@@ -452,8 +452,8 @@ export default async function platformRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('bam.platform_audit_log.list')] },
     async (request, reply) => {
       const query = request.query as { limit?: string; offset?: string };
-      const limit = Math.min(parseInt(query.limit || '50', 10), 100);
-      const offset = parseInt(query.offset || '0', 10);
+      const limit = Math.min(Number.parseInt(query.limit || '50', 10), 100);
+      const offset = Number.parseInt(query.offset || '0', 10);
 
       const logs = await db
         .select({

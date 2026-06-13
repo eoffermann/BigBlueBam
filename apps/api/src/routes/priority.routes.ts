@@ -266,7 +266,7 @@ export default async function priorityRoutes(fastify: FastifyInstance) {
       `)) as unknown as Array<{ task_count: number }>;
       const task_count = taskCountRows[0]?.task_count ?? 0;
 
-      let migrateTo: string | null = request.query.migrate_to ?? null;
+      const migrateTo: string | null = request.query.migrate_to ?? null;
       if (task_count > 0 && !migrateTo) {
         return reply.status(409).send({
           error: {

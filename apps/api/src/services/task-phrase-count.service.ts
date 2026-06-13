@@ -148,7 +148,7 @@ export async function countTasksByPhrase(
     const ts = r.bucket_start instanceof Date
       ? r.bucket_start.toISOString()
       : new Date(String(r.bucket_start)).toISOString();
-    const c = typeof r.count === 'number' ? r.count : parseInt(String(r.count), 10);
+    const c = typeof r.count === 'number' ? r.count : Number.parseInt(String(r.count), 10);
     return { bucket_start: ts, count: c };
   });
   const total = buckets.reduce((acc, b) => acc + b.count, 0);

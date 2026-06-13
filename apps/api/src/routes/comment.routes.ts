@@ -22,7 +22,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
     '/tasks/:id/comments',
     { preHandler: [requireAuth, requireProjectAccessForEntity('task'), shadowOnly('bam.task_comment.get')] },
     async (request, reply) => {
-      const limit = Math.min(request.query.limit ? parseInt(request.query.limit, 10) : 50, 200);
+      const limit = Math.min(request.query.limit ? Number.parseInt(request.query.limit, 10) : 50, 200);
       const conditions = [eq(comments.task_id, request.params.id)];
 
       if (request.query.cursor) {
@@ -56,7 +56,7 @@ export default async function commentRoutes(fastify: FastifyInstance) {
 
       // Fetch reactions for all returned comments
       const commentIds = data.map((c) => c.id);
-      let reactionsMap = new Map<string, Array<{ emoji: string; count: number; reacted: boolean }>>();
+      const reactionsMap = new Map<string, Array<{ emoji: string; count: number; reacted: boolean }>>();
 
       if (commentIds.length > 0) {
         const allReactions = await db

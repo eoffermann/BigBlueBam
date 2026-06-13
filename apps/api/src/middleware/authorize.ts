@@ -123,7 +123,7 @@ async function resolveProjectId(
  */
 export function requireProjectAccessForEntity(
   entityType: EntityType,
-  paramName: string = 'id',
+  paramName = 'id',
 ) {
   return async function checkProjectAccessForEntity(
     request: FastifyRequest,
@@ -223,7 +223,7 @@ export function requireProjectAccessForEntity(
  * Use this for project-scoped routes like GET /projects/:id/tasks.
  * Membership-only check (no role required). Returns 404 on denial (anti-enumeration).
  */
-export function requireProjectAccess(paramName: string = 'id') {
+export function requireProjectAccess(paramName = 'id') {
   return async function checkProjectAccess(
     request: FastifyRequest,
     reply: FastifyReply,

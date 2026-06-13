@@ -25,7 +25,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_report_velocity.get')] },
     async (request, reply) => {
       const raw = request.query.limit ?? request.query.count;
-      const limit = raw ? Math.max(1, Math.min(50, parseInt(raw, 10) || 10)) : 10;
+      const limit = raw ? Math.max(1, Math.min(50, Number.parseInt(raw, 10) || 10)) : 10;
       const data = await buildVelocity(request.params.id, limit);
       return reply.send({ data });
     },
@@ -94,7 +94,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, requireProjectAccess(), shadowOnly('bam.project_report_cfd.get')] },
     async (request, reply) => {
       const days = request.query.days
-        ? Math.max(1, Math.min(180, parseInt(request.query.days, 10) || 30))
+        ? Math.max(1, Math.min(180, Number.parseInt(request.query.days, 10) || 30))
         : 30;
       const data = await buildCfd(
         request.params.id,

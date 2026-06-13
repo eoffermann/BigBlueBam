@@ -384,7 +384,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
             assignee_id: assigneeId,
             reporter_id: userId,
             priority: normalizePriority(row['Priority']),
-            story_points: row['Story Points'] ? parseInt(row['Story Points']!, 10) || null : null,
+            story_points: row['Story Points'] ? Number.parseInt(row['Story Points']!, 10) || null : null,
             labels: labelIds,
             position,
           });

@@ -8,7 +8,7 @@
  * upgrade time) AND this constant (for orgs minted after).
  */
 import { sql } from 'drizzle-orm';
-import { db as defaultDb } from '../db/index.js';
+import type { db as defaultDb } from '../db/index.js';
 
 export const DEFAULT_PRIORITIES = [
   { value: 'critical', name: 'Critical', color: '#dc2626', icon: 'alert-triangle', position: 0, is_default: false },

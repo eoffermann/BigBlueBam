@@ -229,7 +229,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       }
 
       const limit = Math.min(
-        request.query.limit ? parseInt(request.query.limit, 10) : 50,
+        request.query.limit ? Number.parseInt(request.query.limit, 10) : 50,
         200,
       );
 

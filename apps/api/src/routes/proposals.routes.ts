@@ -162,7 +162,7 @@ export default async function proposalRoutes(fastify: FastifyInstance) {
       const user = request.user!;
       const isOrgAdmin = user.role === 'owner' || user.role === 'admin' || user.is_superuser;
       const limit = Math.min(
-        request.query.limit ? parseInt(request.query.limit, 10) : 50,
+        request.query.limit ? Number.parseInt(request.query.limit, 10) : 50,
         200,
       );
 
