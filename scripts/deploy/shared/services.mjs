@@ -364,7 +364,10 @@ export const APP_SERVICES = [
         'WORKER_CONCURRENCY', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
-        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
+        // worker reads EMAIL_FROM (apps/worker/src/env.ts:10), not SMTP_FROM —
+        // SMTP_FROM is kept for the prompt/alias and EMAIL_FROM is backfilled
+        // from it in extractUserIntegrationsFromEnvConfig.
+        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM', 'EMAIL_FROM',
         // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
         // TURN cert lapses; no-op until set (format turn.example.com:port).
         'LIVEKIT_TURN_CHECK_TARGET',

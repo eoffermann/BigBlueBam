@@ -102,8 +102,17 @@ export function buildServiceVariables(service, context) {
         // `<frontend-public-url>/b3` produce `https://host.up.railway.app/b3`
         // not `https://host.up.railway.app//b3`.
         const base = publicUrl.replace(/\/+$/, '');
+        // WebSocket variant: https→wss, http→ws. Used by the LiveKit browser
+        // URLs (LIVEKIT_WS_URL/LIVEKIT_URL), which the SDK requires to be an
+        // absolute ws(s):// URL — see docs/deploy/railway-var-decisions.md.
+        const wsBase = base.replace(/^http/, 'ws');
         const template = String(hint.value);
-        return template.replace('<frontend-public-url>', base);
+        // Replace the more-specific `-ws` token FIRST — it contains
+        // `<frontend-public-url>` as a prefix substring, so replacing the
+        // shorter token first would corrupt it.
+        return template
+          .replace('<frontend-public-url-ws>', wsBase)
+          .replace('<frontend-public-url>', base);
       }
 
       case 'user': {

@@ -128,7 +128,7 @@ with **R**, optional with `o`.
 | o | `LIVEKIT_HOST` | computed | `http://livekit.railway.internal:7880` |  |
 | o | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
-| o | `LIVEKIT_WS_URL` | literal | `/livekit-ws` |  |
+| o | `LIVEKIT_WS_URL` | public | `<frontend-public-url-ws>/livekit-ws` |  |
 | o | `VOICE_AGENT_URL` | computed | `http://voice-agent.railway.internal:8080` |  |
 
 ### beacon-api
@@ -215,7 +215,7 @@ with **R**, optional with `o`.
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
-| o | `LIVEKIT_URL` | literal | `/livekit-ws` |  |
+| o | `LIVEKIT_URL` | public | `<frontend-public-url-ws>/livekit-ws` |  |
 
 ### bond-api
 
@@ -354,7 +354,7 @@ with **R**, optional with `o`.
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
-| o | `LIVEKIT_URL` | literal | `/livekit-ws` |  |
+| o | `LIVEKIT_URL` | public | `<frontend-public-url-ws>/livekit-ws` |  |
 | o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BOOK_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BOARD_INTERNAL_URL` | unknown | `<see app docs>` |  |
@@ -411,6 +411,7 @@ with **R**, optional with `o`.
 | o | `SMTP_USER` | user | `<smtp-user>` |  |
 | o | `SMTP_PASS` | user | `<smtp-password>` |  |
 | o | `SMTP_FROM` | user | `noreply@yourdomain.com` |  |
+| o | `EMAIL_FROM` | user | `noreply@yourdomain.com` |  |
 | o | `LIVEKIT_TURN_CHECK_TARGET` | user | `<turn.your-domain:port>` | Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>. |
 
 ### voice-agent
@@ -419,7 +420,7 @@ with **R**, optional with `o`.
 
 | R/o | Variable | Kind | Value | Note |
 |---|---|---|---|---|
-| **R** | `LIVEKIT_URL` | literal | `/livekit-ws` |  |
+| **R** | `LIVEKIT_URL` | public | `<frontend-public-url-ws>/livekit-ws` |  |
 | **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
 
 ### site

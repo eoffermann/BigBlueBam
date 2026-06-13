@@ -645,6 +645,33 @@ describe('RailwayOrchestrator.run() — done event', () => {
 // Authoritative variable partitioning
 // ---------------------------------------------------------------------------
 
+describe('LiveKit browser URL resolves to absolute wss (regression guard for the 2026-06-12 calling outage)', () => {
+  it('banter-api LIVEKIT_WS_URL becomes wss://<domain>/livekit-ws, never a relative path', () => {
+    const banter = APP_SERVICES.find((s) => s.name === 'banter-api');
+    const vars = buildServiceVariables(banter, fullContext()); // publicUrl https://example.up.railway.app
+    expect(vars.LIVEKIT_WS_URL).toBe('wss://example.up.railway.app/livekit-ws');
+    expect(vars.LIVEKIT_WS_URL.startsWith('/')).toBe(false); // banter returns this verbatim to the SDK
+  });
+
+  it('bureau-api LIVEKIT_URL becomes the same absolute wss URL', () => {
+    const bureau = APP_SERVICES.find((s) => s.name === 'bureau-api');
+    const vars = buildServiceVariables(bureau, fullContext());
+    expect(vars.LIVEKIT_URL).toBe('wss://example.up.railway.app/livekit-ws');
+  });
+
+  it('an http public URL yields ws:// (not wss://)', () => {
+    const banter = APP_SERVICES.find((s) => s.name === 'banter-api');
+    const vars = buildServiceVariables(banter, { ...fullContext(), publicUrl: 'http://nas.local:8080' });
+    expect(vars.LIVEKIT_WS_URL).toBe('ws://nas.local:8080/livekit-ws');
+  });
+
+  it('LIVEKIT_HOST stays the internal http SFU address (server-side SDK)', () => {
+    const banter = APP_SERVICES.find((s) => s.name === 'banter-api');
+    const vars = buildServiceVariables(banter, fullContext());
+    expect(vars.LIVEKIT_HOST).toBe('http://livekit.railway.internal:7880');
+  });
+});
+
 describe('buildAuthoritativeVariables', () => {
   it('keeps reconcilable (computed/literal) vars and drops everything else', () => {
     const api = getApiService();

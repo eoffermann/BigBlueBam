@@ -111,17 +111,18 @@ export const ENV_HINTS = {
   // validation) — internal DNS is correct because these calls originate
   // inside Railway's private network.
   LIVEKIT_HOST: { kind: 'computed', value: internal('livekit') },
-  // Browser-facing signaling URL. A RELATIVE path is deliberate: the call
-  // widget resolves `/livekit-ws` against the page origin, so an https page
-  // gets a same-origin `wss://<domain>/livekit-ws` and never a mixed-content
-  // ws://host:7880. nginx proxies /livekit-ws/ → livekit:7880. This is exactly
-  // what docker-compose uses and it is domain-independent, so it stays correct
-  // across custom domains with no per-deploy substitution. (Previously
-  // LIVEKIT_URL was the internal ws:// DNS and LIVEKIT_WS_URL omitted the
-  // /livekit-ws path — both handed browsers an unreachable address, so calling
-  // was broken-by-deploy on Railway.)
-  LIVEKIT_URL: { kind: 'literal', value: '/livekit-ws' },
-  LIVEKIT_WS_URL: { kind: 'literal', value: '/livekit-ws' },
+  // Browser-facing signaling URL — must be ABSOLUTE wss://<domain>/livekit-ws.
+  // Code-verified (docs/deploy/railway-var-decisions.md): banter returns
+  // LIVEKIT_WS_URL verbatim to the LiveKit SDK (apps/banter-api/src/services/
+  // livekit-url.ts:38-41) and the SDK rejects a relative path; bureau passes an
+  // absolute URL through unchanged (packages/bureau-client/src/active-room.ts:
+  // 210-215). A relative `/livekit-ws` works for bureau but breaks banter, so
+  // absolute is the only value correct for both. nginx proxies /livekit-ws →
+  // livekit:7880. `public` so it derives from the deploy domain and an operator
+  // can override it to an external LiveKit endpoint. (An earlier `/livekit-ws`
+  // literal here broke banter calling on prod — 2026-06-12.)
+  LIVEKIT_URL: { kind: 'public', value: '<frontend-public-url-ws>/livekit-ws' },
+  LIVEKIT_WS_URL: { kind: 'public', value: '<frontend-public-url-ws>/livekit-ws' },
   LIVEKIT_WEBHOOK_URL: {
     kind: 'computed',
     value: `${internal('banter-api')}/v1/webhooks/livekit`,
