@@ -44,7 +44,10 @@ export const APP_SERVICES = [
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         'OAUTH_GITHUB_CLIENT_ID', 'OAUTH_GITHUB_CLIENT_SECRET',
         'OAUTH_GOOGLE_CLIENT_ID', 'OAUTH_GOOGLE_CLIENT_SECRET',
-        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
+        // EMAIL_FROM is the single canonical SMTP from-address fallback (the
+        // shared @bigbluebam/smtp-resolver key). The DB system_settings.smtp_from
+        // (set in the UI) takes precedence over it.
+        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
       ],
     },
   },
@@ -103,6 +106,9 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
+        // Optional Qdrant auth (apps/beacon-api/src/lib/qdrant.ts:10) — needed
+        // only for a managed/cloud Qdrant; the bundled image has no auth.
+        'QDRANT_API_KEY',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
       ],
     },
@@ -119,7 +125,12 @@ export const APP_SERVICES = [
     public_paths: ['/brief/api/', '/brief/ws'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS'],
+      optional: [
+        'CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
+        // brief-api reads QDRANT_URL for semantic search (document.routes.ts:175)
+        // + optional QDRANT_API_KEY for managed Qdrant — both were missing.
+        'QDRANT_URL', 'QDRANT_API_KEY',
+      ],
     },
   },
   {
@@ -201,8 +212,9 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
-        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS',
-        'SMTP_FROM_EMAIL', 'SMTP_FROM_NAME',
+        // No SMTP here: blast-api sends no email itself — the worker does
+        // (apps/worker/src/jobs/blast-send.job.ts), and the worker catalog
+        // carries the SMTP_* + EMAIL_FROM fallback.
       ],
     },
   },
@@ -311,6 +323,11 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
+        // Browser-facing signaling URL the bureau call widget hands to
+        // clients. Without it bureau-api defaults to ws://localhost:7880 and
+        // calls cannot connect on Railway. Resolves to the relative
+        // /livekit-ws path (same-origin wss via nginx).
+        'LIVEKIT_URL',
         'BOLT_API_INTERNAL_URL',
         'BOOK_INTERNAL_URL', 'BOARD_INTERNAL_URL', 'BRIEF_INTERNAL_URL',
         'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
@@ -334,10 +351,12 @@ export const APP_SERVICES = [
     env: {
       required: ['MCP_TRANSPORT', 'API_INTERNAL_URL', 'REDIS_URL'],
       optional: [
-        'HELPDESK_API_URL', 'BEACON_API_URL', 'BOLT_API_URL', 'BEARING_API_URL',
-        'BOARD_API_URL', 'BOND_API_URL', 'BLAST_API_URL', 'BOOK_API_URL',
-        'BENCH_API_URL', 'BILL_API_URL', 'BLANK_API_URL', 'BLUEPRINT_API_URL',
+        'HELPDESK_API_URL', 'BANTER_API_URL', 'BEACON_API_URL', 'BOLT_API_URL',
+        'BEARING_API_URL', 'BOARD_API_URL', 'BOND_API_URL', 'BLAST_API_URL',
+        'BOOK_API_URL', 'BENCH_API_URL', 'BILL_API_URL', 'BLANK_API_URL',
+        'BLUEPRINT_API_URL', 'BUREAU_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
+        'MCP_INTERNAL_API_TOKEN',
       ],
     },
   },
@@ -357,7 +376,22 @@ export const APP_SERVICES = [
         'WORKER_CONCURRENCY', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
-        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
+        // worker reads EMAIL_FROM (apps/worker/src/env.ts:10) — the single
+        // canonical SMTP from-address fallback (the shared @bigbluebam/smtp-
+        // resolver uses env.EMAIL_FROM; the real source of truth is the UI →
+        // system_settings.smtp_from).
+        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
+        // worker BUILDS the outbound email tracking links and Slack-import
+        // deep-links — without these it emits http://localhost/t/... pixels and
+        // /unsub/... links in real campaign mail. Code: blast-send.job.ts:182,
+        // 259-260; slack-import.job.ts:746.
+        'TRACKING_BASE_URL', 'FRONTEND_URL',
+        // worker vector-sync / brief-embed jobs read QDRANT_URL (+ optional
+        // QDRANT_API_KEY for managed Qdrant). beacon-vector-sync.job.ts:49-50.
+        'QDRANT_URL', 'QDRANT_API_KEY',
+        // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
+        // TURN cert lapses; no-op until set (format turn.example.com:port).
+        'LIVEKIT_TURN_CHECK_TARGET',
       ],
     },
   },
@@ -494,7 +528,15 @@ export const INFRA_SERVICES = [
     volume: null, // stateless — config is baked into the image
     env: {
       required: ['LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'],
-      optional: [],
+      // TURN-TLS makes public-internet calls work; all operator-supplied
+      // (cert/DNS/domain), surfaced by the post-deploy LiveKit checklist.
+      // INTERNAL_SERVICE_SECRET lets the container post its boot topology
+      // report (LIVEKIT_RAILWAY_BOOT / _NO_TURN) to the platform log.
+      optional: [
+        'LIVEKIT_TURN_DOMAIN', 'LIVEKIT_TURN_TLS_PORT',
+        'LIVEKIT_TURN_CERT_PEM', 'LIVEKIT_TURN_KEY_PEM',
+        'INTERNAL_SERVICE_SECRET',
+      ],
     },
   },
 ];

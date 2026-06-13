@@ -7,6 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildServiceVariables,
+  buildAuthoritativeVariables,
+  diffAuthoritativeVariables,
   RailwayOrchestrator,
 } from './railway-orchestrator.mjs';
 import {
@@ -42,6 +44,7 @@ function makeFakeClient(overrides = {}) {
     updateServiceInstance: vi.fn().mockResolvedValue(true),
     upsertVariables: vi.fn().mockResolvedValue(true),
     triggerDeploy: vi.fn().mockResolvedValue(true),
+    getServiceVariables: vi.fn().mockResolvedValue({}),
     ...overrides,
   };
 }
@@ -71,6 +74,7 @@ function makeOptions(overrides = {}) {
       SMTP_USER: 'smtp-user',
       SMTP_PASS: 'smtp-pass',
       SMTP_FROM: 'noreply@example.com',
+      EMAIL_FROM: 'noreply@example.com',
     },
     awaitPluginConfirmation: vi.fn().mockResolvedValue(undefined),
     onProgress: vi.fn(),
@@ -121,6 +125,7 @@ function fullContext() {
       SMTP_USER: 'smtp-user',
       SMTP_PASS: 'smtp-pass',
       SMTP_FROM: 'noreply@example.com',
+      EMAIL_FROM: 'noreply@example.com',
     },
   };
 }
@@ -164,7 +169,8 @@ describe('buildServiceVariables', () => {
     expect(result.SMTP_PORT).toBe('587');
     expect(result.SMTP_USER).toBe('smtp-user');
     expect(result.SMTP_PASS).toBe('smtp-pass');
-    expect(result.SMTP_FROM).toBe('noreply@example.com');
+    // api reads EMAIL_FROM (the single canonical from-address fallback), not SMTP_FROM
+    expect(result.EMAIL_FROM).toBe('noreply@example.com');
   });
 
   it('strips trailing slashes on publicUrl so substituted values have no double slashes', () => {
@@ -635,5 +641,225 @@ describe('RailwayOrchestrator.run() — done event', () => {
     // run() returns the same summary
     expect(result).toEqual(lastEvent.summary);
     expect(result.servicesCreated).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Authoritative variable partitioning
+// ---------------------------------------------------------------------------
+
+describe('LiveKit browser URL resolves to absolute wss (regression guard for the 2026-06-12 calling outage)', () => {
+  it('banter-api LIVEKIT_WS_URL becomes wss://<domain>/livekit-ws, never a relative path', () => {
+    const banter = APP_SERVICES.find((s) => s.name === 'banter-api');
+    const vars = buildServiceVariables(banter, fullContext()); // publicUrl https://example.up.railway.app
+    expect(vars.LIVEKIT_WS_URL).toBe('wss://example.up.railway.app/livekit-ws');
+    expect(vars.LIVEKIT_WS_URL.startsWith('/')).toBe(false); // banter returns this verbatim to the SDK
+  });
+
+  it('bureau-api LIVEKIT_URL becomes the same absolute wss URL', () => {
+    const bureau = APP_SERVICES.find((s) => s.name === 'bureau-api');
+    const vars = buildServiceVariables(bureau, fullContext());
+    expect(vars.LIVEKIT_URL).toBe('wss://example.up.railway.app/livekit-ws');
+  });
+
+  it('an http public URL yields ws:// (not wss://)', () => {
+    const banter = APP_SERVICES.find((s) => s.name === 'banter-api');
+    const vars = buildServiceVariables(banter, { ...fullContext(), publicUrl: 'http://nas.local:8080' });
+    expect(vars.LIVEKIT_WS_URL).toBe('ws://nas.local:8080/livekit-ws');
+  });
+
+  it('LIVEKIT_HOST stays the internal http SFU address (server-side SDK)', () => {
+    const banter = APP_SERVICES.find((s) => s.name === 'banter-api');
+    const vars = buildServiceVariables(banter, fullContext());
+    expect(vars.LIVEKIT_HOST).toBe('http://livekit.railway.internal:7880');
+  });
+});
+
+describe('buildAuthoritativeVariables', () => {
+  it('keeps reconcilable (computed/literal) vars and drops everything else', () => {
+    const api = getApiService();
+    const auth = buildAuthoritativeVariables(api);
+    // computed + literal stay (concrete strings that actually drift)
+    expect(auth.S3_ENDPOINT).toMatch(/railway\.internal/); // computed
+    expect(auth.S3_BUCKET).toBe('bigbluebam-uploads'); // literal
+    // plugin/reference are symbolic ${{...}} refs Railway resolves — excluded
+    // from reconcile so the live-vs-template diff is never a false positive.
+    expect(auth.DATABASE_URL).toBeUndefined(); // plugin
+    expect(auth.S3_ACCESS_KEY).toBeUndefined(); // reference
+    // secrets and user integrations are excluded — never clobbered on reconcile
+    expect(auth.SESSION_SECRET).toBeUndefined(); // secret
+    expect(auth.OAUTH_GITHUB_CLIENT_ID).toBeUndefined(); // user
+    expect(auth.CORS_ORIGIN).toBeUndefined(); // public
+  });
+
+  it('mcp-server authoritative set includes the corrected internal API URL on :8080 and the newly-wired app URLs', () => {
+    const mcp = APP_SERVICES.find((s) => s.name === 'mcp-server');
+    const auth = buildAuthoritativeVariables(mcp);
+    expect(auth.API_INTERNAL_URL).toBe('http://api.railway.internal:8080');
+    expect(auth.BANTER_API_URL).toBe('http://banter-api.railway.internal:8080');
+    expect(auth.BUREAU_API_URL).toBe('http://bureau-api.railway.internal:8080/v1');
+    expect(auth.BLUEPRINT_API_URL).toBe('http://blueprint-api.railway.internal:8080/v1');
+    // MCP_INTERNAL_API_TOKEN is a `user` var — must NOT be in the authoritative
+    // (overwritable) set, so reconcile never wipes a minted token.
+    expect(auth.MCP_INTERNAL_API_TOKEN).toBeUndefined();
+  });
+});
+
+describe('diffAuthoritativeVariables', () => {
+  it('classifies missing vs changed and ignores in-sync keys', () => {
+    const desired = { A: '1', B: '2', C: '3' };
+    const live = { A: '1', B: 'stale', /* C missing */ };
+    const { changed, missing } = diffAuthoritativeVariables(desired, live);
+    expect(changed).toEqual({ B: { from: 'stale', to: '2' } });
+    expect(missing).toEqual({ C: '3' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reconcile
+// ---------------------------------------------------------------------------
+
+describe('RailwayOrchestrator.reconcile()', () => {
+  function liveServicesFromPlan() {
+    // Every required app service + self-hosted infra + jobs, as if already deployed.
+    return [
+      ...getRequiredAppServices().filter((s) => s.name !== 'voice-agent'),
+      ...getSelfHostedInfra(),
+      ...JOB_SERVICES,
+    ].map((s) => ({ id: `svc_${s.name}`, name: s.name }));
+  }
+
+  it('overwrites a drifted deploy-owned var (API_INTERNAL_URL :4000 → :8080) and redeploys only that service', async () => {
+    const live = liveServicesFromPlan();
+    const client = makeFakeClient({
+      listServices: vi.fn().mockResolvedValue(live),
+      // Everything in sync EXCEPT mcp-server, which has the stale :4000 value.
+      getServiceVariables: vi.fn().mockImplementation(({ serviceId }) => {
+        if (serviceId === 'svc_mcp-server') {
+          return Promise.resolve({ API_INTERNAL_URL: 'http://api.railway.internal:4000' });
+        }
+        // Return the desired authoritative set so other services show no drift.
+        const name = serviceId.replace(/^svc_/, '');
+        const svc = APP_SERVICES.find((s) => s.name === name) ?? null;
+        if (!svc) return Promise.resolve({});
+        return Promise.resolve(buildAuthoritativeVariables(svc));
+      }),
+    });
+    const orch = new RailwayOrchestrator(client, makeOptions());
+    const result = await orch.reconcile();
+
+    // The mcp-server got an upsert that overwrites API_INTERNAL_URL to :8080.
+    const mcpUpsert = client.upsertVariables.mock.calls
+      .map((c) => c[0])
+      .find((a) => a.serviceId === 'svc_mcp-server');
+    expect(mcpUpsert).toBeDefined();
+    expect(mcpUpsert.variables.API_INTERNAL_URL).toBe('http://api.railway.internal:8080');
+    // Newly-wired URLs that were absent live are pushed too.
+    expect(mcpUpsert.variables.BANTER_API_URL).toBe('http://banter-api.railway.internal:8080');
+    // Only mcp-server was redeployed.
+    const redeployed = client.triggerDeploy.mock.calls.map((c) => c[0].serviceId);
+    expect(redeployed).toContain('svc_mcp-server');
+    expect(result.driftedCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('dryRun reports drift without writing or deploying', async () => {
+    const live = liveServicesFromPlan();
+    const client = makeFakeClient({
+      listServices: vi.fn().mockResolvedValue(live),
+      getServiceVariables: vi.fn().mockResolvedValue({}), // everything missing → drift
+    });
+    const orch = new RailwayOrchestrator(client, makeOptions());
+    const result = await orch.reconcile({ dryRun: true });
+    expect(client.upsertVariables).not.toHaveBeenCalled();
+    expect(client.triggerDeploy).not.toHaveBeenCalled();
+    expect(result.dryRun).toBe(true);
+    expect(result.driftedCount).toBeGreaterThan(0);
+  });
+
+  it('never overwrites operator-owned secrets/integrations during reconcile', async () => {
+    const live = liveServicesFromPlan();
+    const client = makeFakeClient({
+      listServices: vi.fn().mockResolvedValue(live),
+      // api has a rotated session secret and a custom CORS origin live.
+      getServiceVariables: vi.fn().mockResolvedValue({
+        SESSION_SECRET: 'OPERATOR-ROTATED',
+        CORS_ORIGIN: 'https://custom.example.com',
+      }),
+    });
+    const orch = new RailwayOrchestrator(client, makeOptions());
+    await orch.reconcile();
+    for (const call of client.upsertVariables.mock.calls) {
+      const vars = call[0].variables;
+      expect(vars).not.toHaveProperty('SESSION_SECRET');
+      expect(vars).not.toHaveProperty('CORS_ORIGIN');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Post-deploy smoke verify
+// ---------------------------------------------------------------------------
+
+describe('RailwayOrchestrator.verify()', () => {
+  function mockFetch(handler) {
+    return vi.fn(async (url, init = {}) => handler(String(url), init));
+  }
+  function res({ status = 200, headers = {}, text = '' } = {}) {
+    const h = new Map(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+    return {
+      status,
+      ok: status >= 200 && status < 300,
+      headers: { get: (k) => h.get(String(k).toLowerCase()) ?? null },
+      text: async () => text,
+    };
+  }
+
+  it('passes the no-token path when ingress, api, and mcp are reachable', async () => {
+    global.fetch = mockFetch((url) => {
+      if (url.includes('/b3/api/public/config')) return res({ status: 200, text: '{}' });
+      if (url.includes('/mcp/')) return res({ status: 401 }); // up, unauthenticated
+      if (url.endsWith('/')) return res({ status: 200 });
+      return res({ status: 404 });
+    });
+    const orch = new RailwayOrchestrator(makeFakeClient(), makeOptions());
+    const result = await orch.verify({ publicUrl: 'https://x.example.com' });
+    expect(result.ok).toBe(true);
+    expect(result.checks.find((c) => c.name === 'mcp→api hop').detail).toMatch(/skipped/);
+  });
+
+  it('fails the mcp→api hop check when get_me returns "fetch failed" (the :4000-class outage)', async () => {
+    global.fetch = mockFetch((url, init) => {
+      if (url.includes('/b3/api/public/config')) return res({ status: 200 });
+      // mcp handshake — match on body before the generic /mcp/ probe
+      const body = typeof init.body === 'string' ? init.body : '';
+      if (body.includes('initialize')) return res({ status: 200, headers: { 'mcp-session-id': 'sess-1' } });
+      if (body.includes('notifications/initialized')) return res({ status: 202 });
+      if (body.includes('get_me')) return res({ status: 200, text: '{"error":"fetch failed"}' });
+      if (url.includes('/mcp/')) return res({ status: 401 });
+      if (url.endsWith('/')) return res({ status: 200 });
+      return res({ status: 404 });
+    });
+    const orch = new RailwayOrchestrator(makeFakeClient(), makeOptions());
+    const result = await orch.verify({ publicUrl: 'https://x.example.com', token: 'bbam_test' });
+    const hop = result.checks.find((c) => c.name === 'mcp→api hop');
+    expect(hop.ok).toBe(false);
+    expect(hop.detail).toMatch(/upstream api fetch failed/i);
+    expect(result.ok).toBe(false);
+  });
+
+  it('passes the mcp→api hop when get_me resolves a profile', async () => {
+    global.fetch = mockFetch((url, init) => {
+      if (url.includes('/b3/api/public/config')) return res({ status: 200 });
+      const body = typeof init.body === 'string' ? init.body : '';
+      if (body.includes('initialize')) return res({ status: 200, headers: { 'mcp-session-id': 'sess-1' } });
+      if (body.includes('notifications/initialized')) return res({ status: 202 });
+      if (body.includes('get_me')) return res({ status: 200, text: '{"data":{"email":"a@b.com"}}' });
+      if (url.includes('/mcp/')) return res({ status: 401 });
+      if (url.endsWith('/')) return res({ status: 200 });
+      return res({ status: 404 });
+    });
+    const orch = new RailwayOrchestrator(makeFakeClient(), makeOptions());
+    const result = await orch.verify({ publicUrl: 'https://x.example.com', token: 'bbam_test' });
+    expect(result.ok).toBe(true);
   });
 });

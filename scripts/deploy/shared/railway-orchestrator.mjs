@@ -102,8 +102,17 @@ export function buildServiceVariables(service, context) {
         // `<frontend-public-url>/b3` produce `https://host.up.railway.app/b3`
         // not `https://host.up.railway.app//b3`.
         const base = publicUrl.replace(/\/+$/, '');
+        // WebSocket variant: https→wss, http→ws. Used by the LiveKit browser
+        // URLs (LIVEKIT_WS_URL/LIVEKIT_URL), which the SDK requires to be an
+        // absolute ws(s):// URL — see docs/deploy/railway-var-decisions.md.
+        const wsBase = base.replace(/^http/, 'ws');
         const template = String(hint.value);
-        return template.replace('<frontend-public-url>', base);
+        // Replace the more-specific `-ws` token FIRST — it contains
+        // `<frontend-public-url>` as a prefix substring, so replacing the
+        // shorter token first would corrupt it.
+        return template
+          .replace('<frontend-public-url-ws>', wsBase)
+          .replace('<frontend-public-url>', base);
       }
 
       case 'user': {
@@ -155,6 +164,63 @@ export function buildServiceVariables(service, context) {
   const sorted = {};
   for (const k of Object.keys(out).sort()) sorted[k] = out[k];
   return sorted;
+}
+
+/**
+ * The deploy-owned ("authoritative") subset of a service's variables: those
+ * whose value is a pure function of the catalog (computed/literal/plugin/
+ * reference per env-hints). These are the only variables the reconcile flow
+ * may OVERWRITE on a live service, because if they drift they are always
+ * wrong — this is the class that produced the API_INTERNAL_URL=:4000 outage.
+ * Secrets, public URLs, and user integrations are deliberately excluded so a
+ * rotated secret or custom domain is never clobbered.
+ *
+ * Resolved DIRECTLY from the hints (not via buildServiceVariables) so it needs
+ * no secret/public/integration context and cannot throw on an unresolved
+ * required secret — authoritative kinds are always concrete literals in the
+ * hint. This keeps `reconcile()` decoupled from the operator's secret bundle.
+ *
+ * Exposed for the orchestrator's reconcile() and for tests.
+ */
+export function buildAuthoritativeVariables(service) {
+  const required = service?.env?.required ?? [];
+  const optional = service?.env?.optional ?? [];
+  const out = {};
+  for (const name of [...required, ...optional]) {
+    const hint = hintFor(name);
+    // Only `computed` and `literal` are reconciled: their hint value is the
+    // exact concrete string Railway stores and returns, so a live-vs-desired
+    // diff is meaningful and this is the class that actually drifts (internal
+    // URLs, ports, flags). `plugin`/`reference` are deploy-owned too, but
+    // their value is a symbolic `${{Service.VAR}}` reference that Railway
+    // RESOLVES — comparing the template against the resolved live value would
+    // be a guaranteed false positive, and they don't silently go stale the way
+    // a hardcoded URL does. So we leave them to first-provision only.
+    if (hint.kind === 'computed' || hint.kind === 'literal') out[name] = hint.value;
+  }
+  // Stable key order for deterministic diffs / upsert payloads.
+  const sorted = {};
+  for (const k of Object.keys(out).sort()) sorted[k] = out[k];
+  return sorted;
+}
+
+/**
+ * Diff a service's desired authoritative variables against the live values.
+ * Returns { changed: { KEY: { from, to } }, missing: { KEY: to } } where
+ * `changed` is keys whose live value differs and `missing` is keys absent
+ * live. Both together are what reconcile would push. Pure — no I/O.
+ */
+export function diffAuthoritativeVariables(desired, live) {
+  const changed = {};
+  const missing = {};
+  for (const [k, to] of Object.entries(desired)) {
+    if (!(k in live)) {
+      missing[k] = to;
+    } else if (live[k] !== to) {
+      changed[k] = { from: live[k], to };
+    }
+  }
+  return { changed, missing };
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────
@@ -537,5 +603,203 @@ export class RailwayOrchestrator {
     });
 
     return summary;
+  }
+
+  // ─── Reconcile (self-heal drifted deploy-owned variables) ───────────
+  //
+  // Re-pushes the authoritative (catalog-computed) variables to every
+  // already-deployed service, overwriting any that have drifted — e.g. a
+  // stale internal URL left behind by an older port/host convention. Does
+  // NOT create services, does NOT touch secrets / public URLs / user
+  // integrations, and only redeploys the services that actually changed.
+  //
+  // This is the safety net for the failure mode where the live stack was
+  // first provisioned under an older catalog and never re-provisioned, so a
+  // computed value (like API_INTERNAL_URL) is frozen at a now-wrong value.
+  //
+  // Options: { dryRun = false, onlyServices = null }. With dryRun it reports
+  // the diff without writing anything. onlyServices is an optional array of
+  // service names to limit the scope.
+  async reconcile({ dryRun = false, onlyServices = null } = {}) {
+    await this._phaseValidate();
+    await this._phaseProject();
+
+    const liveServices = await this.client.listServices(this.projectId);
+    const liveByName = new Map(liveServices.map((s) => [s.name, s.id]));
+
+    const plan = buildDeployPlan().filter((svc) => {
+      if (onlyServices && !onlyServices.includes(svc.name)) return false;
+      return liveByName.has(svc.name);
+    });
+
+    const report = [];
+    for (const svc of plan) {
+      const serviceId = liveByName.get(svc.name);
+      const desired = buildAuthoritativeVariables(svc);
+      if (Object.keys(desired).length === 0) continue;
+
+      const live = await this.client.getServiceVariables({
+        projectId: this.projectId,
+        environmentId: this.defaultEnvironmentId,
+        serviceId,
+      });
+      const { changed, missing } = diffAuthoritativeVariables(desired, live);
+      const toPush = { ...missing };
+      for (const [k, { to }] of Object.entries(changed)) toPush[k] = to;
+
+      const drift = Object.keys(toPush);
+      if (drift.length === 0) {
+        report.push({ service: svc.name, changed: {}, missing: {}, applied: false });
+        this._emit({ phase: 'reconcile', service: svc.name, message: `${svc.name}: in sync`, ok: true });
+        continue;
+      }
+
+      this._emit({
+        phase: 'reconcile',
+        service: svc.name,
+        message: `${svc.name}: ${drift.length} var(s) drifted — ${drift.join(', ')}`,
+        ok: true,
+        changed,
+        missing,
+      });
+
+      if (!dryRun) {
+        // replace:false merges — it overwrites exactly the keys we send and
+        // leaves every operator-owned secret/integration untouched.
+        await this.client.upsertVariables({
+          projectId: this.projectId,
+          environmentId: this.defaultEnvironmentId,
+          serviceId,
+          variables: toPush,
+          skipDeploys: true,
+        });
+        await this.client.triggerDeploy({
+          projectId: this.projectId,
+          environmentId: this.defaultEnvironmentId,
+          serviceId,
+        });
+      }
+      report.push({ service: svc.name, changed, missing, applied: !dryRun });
+    }
+
+    const driftedCount = report.filter((r) => Object.keys(r.changed).length || Object.keys(r.missing).length).length;
+    this._emit({
+      phase: 'reconcile-done',
+      message: dryRun
+        ? `Reconcile (dry run): ${driftedCount} service(s) would change`
+        : `Reconcile complete: ${driftedCount} service(s) corrected and redeployed`,
+      ok: true,
+      summary: { dryRun, driftedCount, report },
+    });
+    return { dryRun, driftedCount, report };
+  }
+
+  // ─── Post-deploy smoke verification ─────────────────────────────────
+  //
+  // Probes the live stack through the PUBLIC ingress to catch the failure
+  // class the per-service Railway healthcheck cannot: a service that is green
+  // on localhost:8080 but whose OUTBOUND internal URL is wrong (the
+  // API_INTERNAL_URL=:4000 outage was exactly this — every dashboard tile
+  // healthy while the MCP→api hop was dead).
+  //
+  // checks (best-effort, each independent):
+  //   - ingress root reachable
+  //   - Bam api reachable via ingress (/b3/api/public/config)
+  //   - mcp-server reachable via ingress (/mcp/ → 401 without a token proves up)
+  //   - if `token` given: the MCP→api hop, by running a real streamable-HTTP
+  //     handshake + get_me through /mcp/ and asserting the profile resolves.
+  //
+  // Returns { ok, checks: [{ name, ok, detail }] }. Never throws — a probe
+  // error is just a failed check so the caller decides whether to hard-fail.
+  async verify({ publicUrl, token = null, timeoutMs = 12000 } = {}) {
+    if (!publicUrl) {
+      return { ok: false, checks: [{ name: 'publicUrl', ok: false, detail: 'no public URL to probe' }] };
+    }
+    const base = publicUrl.replace(/\/+$/, '');
+
+    const probe = async (url, init = {}) => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { ...init, signal: ctrl.signal });
+        return { status: res.status, ok: res.ok, body: res };
+      } catch (err) {
+        return { status: 0, ok: false, error: err?.message ?? String(err) };
+      } finally {
+        clearTimeout(t);
+      }
+    };
+
+    const checks = [];
+    const record = (name, ok, detail) => {
+      checks.push({ name, ok, detail });
+      this._emit({ phase: 'verify', message: `${name}: ${detail}`, ok });
+    };
+
+    // 1. Ingress root.
+    {
+      const r = await probe(`${base}/`);
+      record('ingress', r.status > 0 && r.status < 500, r.error ? `unreachable (${r.error})` : `HTTP ${r.status}`);
+    }
+    // 2. Bam api via ingress — /public/config is unauthenticated.
+    {
+      const r = await probe(`${base}/b3/api/public/config`);
+      record('bam-api', r.ok, r.error ? `unreachable (${r.error})` : `HTTP ${r.status}`);
+    }
+    // 3. mcp-server up via ingress. Without a token the server replies 401 —
+    //    that IS the success signal (it proves ingress→mcp resolves).
+    {
+      const r = await probe(`${base}/mcp/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const up = r.status === 401 || r.status === 400 || r.ok;
+      record('mcp-server', up, r.error ? `unreachable (${r.error})` : `HTTP ${r.status}`);
+    }
+    // 4. MCP→api hop (only with a token). A full streamable-HTTP handshake:
+    //    initialize → capture mcp-session-id → notifications/initialized →
+    //    tools/call get_me. Success = the profile resolves, which is only
+    //    possible if the mcp-server can reach the api internally.
+    if (token) {
+      const ok = await this._verifyMcpApiHop(base, token, probe);
+      record('mcp→api hop', ok.ok, ok.detail);
+    } else {
+      record('mcp→api hop', true, 'skipped (no verify token provided)');
+    }
+
+    const ok = checks.every((c) => c.ok);
+    this._emit({ phase: 'verify-done', message: ok ? 'All smoke checks passed' : 'Smoke checks FAILED', ok, summary: { checks } });
+    return { ok, checks };
+  }
+
+  // Run the streamable-HTTP handshake + get_me through the public /mcp/ path
+  // with a bearer token. Returns { ok, detail }. Used by verify().
+  async _verifyMcpApiHop(base, token, probe) {
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    };
+    const initBody = JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'initialize',
+      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'deploy-verify', version: '1.0' } },
+    });
+    const init = await probe(`${base}/mcp/`, { method: 'POST', headers, body: initBody });
+    if (!init.ok || !init.body) return { ok: false, detail: init.error ? `initialize failed (${init.error})` : `initialize HTTP ${init.status}` };
+    const sessionId = init.body.headers?.get?.('mcp-session-id');
+    if (!sessionId) return { ok: false, detail: 'no mcp-session-id returned from initialize' };
+
+    const sessHeaders = { ...headers, 'mcp-session-id': sessionId };
+    await probe(`${base}/mcp/`, {
+      method: 'POST', headers: sessHeaders,
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+    });
+    const callBody = JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'get_me', arguments: {} } });
+    const call = await probe(`${base}/mcp/`, { method: 'POST', headers: sessHeaders, body: callBody });
+    if (!call.ok || !call.body) return { ok: false, detail: call.error ? `get_me failed (${call.error})` : `get_me HTTP ${call.status}` };
+    let text = '';
+    try { text = await call.body.text(); } catch { /* ignore */ }
+    // The mcp-server surfaces an upstream connect failure as "fetch failed"
+    // inside the tool result — the exact symptom of a broken internal URL.
+    if (/fetch failed/i.test(text)) return { ok: false, detail: 'mcp-server reached but its upstream api fetch failed (internal URL likely wrong)' };
+    if (/"error"/.test(text) && !/"email"/.test(text)) return { ok: false, detail: 'get_me returned an error (token or hop problem)' };
+    return { ok: true, detail: 'get_me resolved through the MCP→api hop' };
   }
 }

@@ -71,7 +71,7 @@ const RESOLVER_ENV = {
   SMTP_PORT: env.SMTP_PORT,
   SMTP_USER: env.SMTP_USER,
   SMTP_PASS: env.SMTP_PASS,
-  EMAIL_FROM: env.SMTP_FROM,
+  EMAIL_FROM: env.EMAIL_FROM,
 };
 
 /**

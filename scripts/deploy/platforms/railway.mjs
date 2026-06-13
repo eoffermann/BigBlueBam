@@ -303,14 +303,18 @@ function extractUserIntegrationsFromEnvConfig(envConfig = {}) {
     'SMTP_USER',
     'SMTP_PASS',
     'SMTP_FROM',
-    'SMTP_FROM_EMAIL',
-    'SMTP_FROM_NAME',
     'EMAIL_FROM',
   ];
   const out = {};
   for (const k of keys) {
     out[k] = envConfig[k] ?? '';
   }
+  // The deploy prompt collects the from-address as SMTP_FROM, but every service
+  // reads the single canonical name EMAIL_FROM (the shared smtp-resolver key;
+  // the UI → system_settings.smtp_from is the real source of truth). Alias the
+  // entered value into EMAIL_FROM so the one name that's actually read is set.
+  const from = out.SMTP_FROM?.trim();
+  if (from && !out.EMAIL_FROM) out.EMAIL_FROM = from;
   return out;
 }
 
@@ -788,6 +792,23 @@ async function deploy(envConfig, { branch = 'stable' } = {}) {
     console.log(`Watch progress at: ${cyan('https://railway.com/project/' + summary.projectId)}`);
     console.log('');
 
+    // LiveKit calling residuals + best-effort TURN proxy creation.
+    try {
+      await printLiveKitChecklist(client, {
+        environmentId: orchestrator.defaultEnvironmentId,
+        serviceIds: orchestrator.serviceIds,
+      });
+    } catch (lkErr) {
+      console.log(`  ${warn} LiveKit checklist step skipped: ${lkErr?.message ?? lkErr}`);
+    }
+
+    console.log('');
+    console.log(dim('  Once every service is green, smoke-test the live stack:'));
+    console.log(`     ${cyan('./scripts/deploy.sh --verify')}   ${dim('(add BBB_VERIFY_TOKEN=<bbam_ key> to test the MCP→api hop)')}`);
+    console.log(dim('  And to self-heal any drifted internal URLs on a later run:'));
+    console.log(`     ${cyan('./scripts/deploy.sh --reconcile')}  ${dim('(or --reconcile-dry-run to preview)')}`);
+    console.log('');
+
     // Write a debug bundle on success too — operators hitting build/
     // deploy failures AFTER the script exits (e.g. a Railway build
     // breaking mid-compile) still need these identifiers to find logs,
@@ -888,6 +909,138 @@ async function deploy(envConfig, { branch = 'stable' } = {}) {
 }
 
 /**
+ * Resolve a validated client + the project/environment ids for the auxiliary
+ * commands (reconcile, verify, livekit-turn) that operate on an already-
+ * deployed project rather than provisioning a new one.
+ */
+async function resolveProjectContext() {
+  let client = cachedClient;
+  if (!client) {
+    await checkPrerequisites();
+    client = cachedClient;
+  }
+  if (!client) throw new Error('No validated Railway client. Re-run and paste a PAT when prompted.');
+
+  const projectName = await ask('Railway project name:', 'bigbluebam');
+  let workspaceId;
+  const workspaces = await client.listWorkspaces();
+  workspaceId = workspaces.length === 1
+    ? workspaces[0].id
+    : await select('Workspace:', workspaces.map((w) => ({ label: w.name, value: w.id, description: w.id })));
+  const matches = await client.findProjectsByName(projectName, { workspaceId });
+  if (matches.length === 0) throw new Error(`No Railway project named "${projectName}" found in this workspace.`);
+  const projectId = matches[0].id;
+  const env = await client.getDefaultEnvironment(projectId);
+  if (!env) throw new Error(`Project "${projectName}" has no environment.`);
+  return { client, projectName, workspaceId, projectId, environmentId: env.id };
+}
+
+const auxProgress = (event) => {
+  if (!event) return;
+  const { service, message, ok } = event;
+  const prefix = service ? `${cyan(service)}: ` : '';
+  if (ok === true) console.log(`  ${green(check)} ${prefix}${message ?? ''}`);
+  else if (ok === false) console.log(`  ${red(cross)} ${prefix}${message ?? ''}`);
+  else console.log(`  ${dim('…')} ${prefix}${message ?? ''}`);
+};
+
+/**
+ * Re-push drifted deploy-owned variables to an already-deployed project and
+ * redeploy only the services that changed. This is the self-heal for stale
+ * computed values (the API_INTERNAL_URL=:4000 class of outage). Reconcile
+ * needs no secrets — it only touches catalog-computed/literal/reference vars.
+ */
+async function reconcile({ dryRun = false } = {}) {
+  const { client, projectName, workspaceId } = await resolveProjectContext();
+  const orchestrator = new RailwayOrchestrator(client, {
+    projectName, workspaceId, githubRepo: detectGithubRepo() ?? 'owner/repo', branch: 'main',
+    onProgress: auxProgress,
+  });
+  console.log('');
+  console.log(bold(dryRun ? '  Reconcile (dry run) — reporting drift, writing nothing' : '  Reconcile — correcting drifted deploy-owned variables'));
+  console.log('');
+  const result = await orchestrator.reconcile({ dryRun });
+  console.log('');
+  console.log(`${green(check)} ${result.driftedCount} service(s) ${dryRun ? 'would change' : 'corrected'}`);
+  return result;
+}
+
+/**
+ * Post-deploy smoke verification of a live stack. Probes the public ingress,
+ * the Bam api, and the mcp-server — and, with a token, the MCP→api hop that
+ * the per-service healthcheck cannot see. Run this once the stack is green.
+ */
+async function verify({ publicUrl, token = null } = {}) {
+  // No Railway API needed — verify only HTTP-probes the public ingress. Use a
+  // placeholder client so we never force a PAT prompt for a smoke test.
+  const orchestrator = new RailwayOrchestrator(cachedClient ?? new RailwayClient('x'.repeat(40)), {
+    projectName: 'bigbluebam', githubRepo: 'owner/repo', branch: 'main', onProgress: auxProgress,
+  });
+  let url = publicUrl;
+  if (!url) url = await ask('Public URL of the deployed stack (https://…):');
+  url = url?.replace(/^https?:\/\//, '');
+  url = url ? `https://${url.replace(/\/+$/, '')}` : null;
+  const tok = token ?? process.env.BBB_VERIFY_TOKEN ?? null;
+  console.log('');
+  console.log(bold('  Smoke-verifying the live stack'));
+  if (!tok) console.log(dim('  (set BBB_VERIFY_TOKEN to a bbam_ API key to also test the MCP→api hop)'));
+  console.log('');
+  const result = await orchestrator.verify({ publicUrl: url, token: tok });
+  console.log('');
+  console.log(result.ok ? `${green(check)} All smoke checks passed` : red('✗ Smoke checks FAILED — see above'));
+  return result;
+}
+
+/**
+ * Print the residual manual LiveKit/TURN steps for public-internet calling on
+ * Railway, and best-effort auto-create the TURN TCP proxy so the operator
+ * doesn't have to do it by hand. The cert + DNS are irreducibly operator-
+ * supplied; everything the deploy CAN do, it does — and what it can't, it
+ * spells out here instead of leaving it buried in a doc.
+ */
+async function printLiveKitChecklist(client, { environmentId, serviceIds } = {}) {
+  console.log('');
+  console.log(bold('  ── LiveKit calling on Railway ─────────────────────────────'));
+  console.log(dim('  In-app/LAN calling works out of the box. Public-internet calls need'));
+  console.log(dim('  a TURN-TLS relay; the cert + DNS are yours to supply. Steps:'));
+  console.log('');
+
+  // Best-effort: auto-create the TURN TCP proxy (container :5349 → public port).
+  let turnPort = null;
+  const livekitId = serviceIds?.get?.('livekit');
+  if (client && environmentId && livekitId) {
+    try {
+      const existing = await client.listTcpProxies({ environmentId, serviceId: livekitId });
+      const found = existing.find((p) => Number(p.applicationPort) === 5349);
+      if (found) {
+        turnPort = found.proxyPort;
+        console.log(`  ${green(check)} TURN TCP proxy already exists — public port ${bold(String(turnPort))}`);
+      } else {
+        const proxy = await client.createTcpProxy({ environmentId, serviceId: livekitId, applicationPort: 5349 });
+        turnPort = proxy.proxyPort;
+        console.log(`  ${green(check)} Created TURN TCP proxy → public port ${bold(String(turnPort))} (host ${proxy.domain ?? '?'})`);
+      }
+    } catch (err) {
+      console.log(`  ${warn} Could not auto-create the TURN TCP proxy: ${err?.message ?? err}`);
+      console.log(dim('     Create one by hand: livekit service → Settings → Networking → TCP Proxy → target port 5349.'));
+    }
+  }
+
+  const port = turnPort ?? '<tcp-proxy-port>';
+  console.log(`  ${bold('1.')} Point a DNS CNAME ${cyan('turn.<your-domain>')} at the TCP-proxy host above.`);
+  console.log(`  ${bold('2.')} Issue a publicly-trusted cert for ${cyan('turn.<your-domain>')} (Let's Encrypt DNS-01).`);
+  console.log(`  ${bold('3.')} On the ${bold('livekit')} service set:`);
+  console.log(`        LIVEKIT_TURN_DOMAIN   = turn.<your-domain>`);
+  console.log(`        LIVEKIT_TURN_TLS_PORT = ${port}`);
+  console.log(`        LIVEKIT_TURN_CERT_PEM = <fullchain.pem body>`);
+  console.log(`        LIVEKIT_TURN_KEY_PEM  = <privkey.pem body>`);
+  console.log(`  ${bold('4.')} On the ${bold('worker')} service set ${dim('(cert-expiry watchdog)')}:`);
+  console.log(`        LIVEKIT_TURN_CHECK_TARGET = turn.<your-domain>:${port}`);
+  console.log('');
+  console.log(dim('  Skip all of this if you only need in-app/LAN calling.'));
+}
+
+/**
  * Run a one-off command in a Railway service. Used by createSuperUser.
  *
  * The deploy path no longer needs the Railway CLI, but this admin-bootstrap
@@ -935,6 +1088,8 @@ export default {
   description,
   checkPrerequisites,
   deploy,
+  reconcile,
+  verify,
   runCommand,
   verifyLogin,
   stop,
