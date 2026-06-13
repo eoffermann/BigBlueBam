@@ -85,8 +85,16 @@ Build the spec per `reference.md` §Task spec:
 
 Spawn **bam-task-importer** with the spec (org/project/phase ids
 resolved — never names) and relay its manifest: created human_ids,
-idempotent skips, failures. If anything failed, surface it verbatim;
-do not retry silently.
+idempotent skips, near-duplicates, failures. If anything failed, surface
+it verbatim; do not retry silently.
+
+**Near-duplicates need a human call.** The importer refuses to create a
+task whose title is *almost* an existing one (typos, minor rewording) —
+it can't tell a re-run with drifted source files from a genuinely new
+task. For each `near_duplicates` entry, show the user the incoming title
+beside the existing card (`existing_human_id`) and ask: treat as the same
+(skip), or create anyway? Re-dispatch any "create anyway" items to the
+importer in a second spec with `"allow_near_duplicates": true`.
 
 ## Phase 4 — Draft missing stories (interactive, then delegate)
 
@@ -122,7 +130,8 @@ against its source story.
 
 - This skill creates and updates tasks; it NEVER deletes anything, and it
   never edits the user's original source files (the addendum is a new file).
-- Re-runs must be idempotent: the importer checks for an existing task
-  with the same title before creating (skips + reports).
+- Re-runs must be idempotent: exact-title matches (normalized) skip
+  silently; NEAR matches (typos, minor rewording) are never auto-created
+  and never auto-skipped — they come back to the user to adjudicate.
 - Local sandbox first: if `get_server_info` shows anything other than the
   local/dev server, stop and confirm with the user before writing.

@@ -93,6 +93,7 @@ Gotchas:
   "project_id": "uuid",
   "phase_id": "uuid",
   "epic_id": "uuid | null",
+  "allow_near_duplicates": false,
   "tasks": [
     {
       "title": "Reduce Latency - Reduce Inter-Sentence Latency Perception and Enable Reliable Interruption",
