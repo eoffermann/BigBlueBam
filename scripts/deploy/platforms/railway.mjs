@@ -979,9 +979,9 @@ async function reconcile({ dryRun = false } = {}) {
  * the per-service healthcheck cannot see. Run this once the stack is green.
  */
 async function verify({ publicUrl, token = null } = {}) {
-  let client = cachedClient;
-  if (!client) { await checkPrerequisites(); client = cachedClient; }
-  const orchestrator = new RailwayOrchestrator(client ?? new RailwayClient('x'.repeat(40)), {
+  // No Railway API needed — verify only HTTP-probes the public ingress. Use a
+  // placeholder client so we never force a PAT prompt for a smoke test.
+  const orchestrator = new RailwayOrchestrator(cachedClient ?? new RailwayClient('x'.repeat(40)), {
     projectName: 'bigbluebam', githubRepo: 'owner/repo', branch: 'main', onProgress: auxProgress,
   });
   let url = publicUrl;
