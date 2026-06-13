@@ -173,9 +173,25 @@ livekit+banter+board+bureau+voice-agent), `LIVEKIT_WEBHOOK_URL`
 (`/v1/webhooks/livekit` on banter-api `webhook.routes.ts:153`), `MCP_TRANSPORT`/
 `MCP_AUTH_REQUIRED`, `NODE_ENV`, and all rate-limit / timeout literals.
 
-**Known limitation (documented, not fixed — needs per-service var values):**
-`FRONTEND_URL` is mount-specific per app (api `/b3`, beacon `/beacon`, board
-`/board`, bearing `/bearing`), but env-hints has one global value. Only `api`
-receives it; beacon/board/bearing fall back to `http://localhost/...` for the
-deep-links they embed in Bolt automation payloads. Fixing this properly requires
-per-service variable overrides in the catalog (a follow-up enhancement).
+## Deep-link base — `FRONTEND_URL` removed, standardized on `PUBLIC_URL`
+
+`FRONTEND_URL` was retired. It carried a different meaning per service (api
+expected `<root>/b3`, beacon expected `<root>/beacon` baked in, board/bearing/brief
+expected the bare `<root>` and appended their own mount), so one global value
+could never serve them all and the deploy only set it on api — leaving
+beacon/board/bearing/brief emitting `http://localhost/...` deep-links on Railway.
+
+The fix standardizes on the **bare site root** in `PUBLIC_URL` (the convention
+book/bill/bond/blank already used), with every backend appending its own SPA
+mount:
+- api `lib/urls.ts` → `PUBLIC_URL` + `/b3` (still tolerant of a stray `/b3`);
+  `slack-notify` now delegates to that one builder.
+- beacon `lib/urls.ts` → appends `/beacon` (was the lone outlier that baked the
+  mount into the var).
+- board/bearing/brief → already appended their mount; just read `PUBLIC_URL`.
+- bureau's `FRONTEND_URL` was dead (no consumer) — removed.
+- env-hints drops `FRONTEND_URL`; `PUBLIC_URL` (bare `<frontend-public-url>`) is
+  set on every deep-link service in the catalog. secrets.mjs/docker-compose updated.
+
+One value now serves every app, no per-service override machinery. Code-verified
+against each consumer; api + 5 satellite apps typecheck clean, all tests green.

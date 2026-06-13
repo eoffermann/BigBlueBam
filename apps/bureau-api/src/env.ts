@@ -11,7 +11,6 @@ const envSchema = z.object({
   SESSION_SECRET: z.string().min(32),
 
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
-  FRONTEND_URL: z.string().default('http://localhost'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 

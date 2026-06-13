@@ -108,7 +108,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost/b3}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       # env.ts auto-promotes COOKIE_SECURE to true whenever NODE_ENV=production
       # (which it always is in this image). Browsers silently drop a Secure
       # cookie sent over plain HTTP, so the session cookie never comes back

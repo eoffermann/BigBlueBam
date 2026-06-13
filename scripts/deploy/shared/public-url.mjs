@@ -1,5 +1,5 @@
 // Port-aware public URL formation. Single source of truth used by:
-//   - secrets.mjs::buildEnvConfig (BASE_URL / CORS_ORIGIN / FRONTEND_URL /
+//   - secrets.mjs::buildEnvConfig (BASE_URL / CORS_ORIGIN / PUBLIC_URL /
 //     HELPDESK_URL / TRACKING_BASE_URL / PUBLIC_URL — anything written into
 //     the .env that backends echo back to browsers)
 //   - summary.mjs::printSummary ("here's where to log in" banner)

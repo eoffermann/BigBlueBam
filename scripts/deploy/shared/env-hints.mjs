@@ -219,14 +219,17 @@ export const ENV_HINTS = {
   },
 
   // ── Public URLs (point at your frontend service's Railway domain) ─
+  // The bare public site root. Every backend's deep-link builder appends its
+  // own SPA mount (/b3, /beacon, /board, …), so ONE value serves them all —
+  // this replaced the old per-app FRONTEND_URL, which baked a different mount
+  // into the var for each service and could never be set globally.
   PUBLIC_URL: {
     kind: 'public',
     value: '<frontend-public-url>',
-    note: 'e.g. https://your-frontend-service.up.railway.app or your custom domain',
+    note: 'Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links.',
   },
   TRACKING_BASE_URL: { kind: 'public', value: '<frontend-public-url>' },
   CORS_ORIGIN: { kind: 'public', value: '<frontend-public-url>' },
-  FRONTEND_URL: { kind: 'public', value: '<frontend-public-url>/b3' },
   HELPDESK_URL: { kind: 'public', value: '<frontend-public-url>/helpdesk' },
 
   // ── Logs / rate limits / tunables ─────────────────────────────────

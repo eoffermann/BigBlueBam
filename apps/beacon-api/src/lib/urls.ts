@@ -2,15 +2,14 @@
 // URL builders for deep-links into the Beacon SPA.
 //
 // Used by Bolt event payloads and anywhere else we need to hand a user
-// (or an automation rule) a canonical link to a Beacon entry. The base
-// URL comes from env.FRONTEND_URL (default `http://localhost/beacon`),
-// matching the nginx mount point for the Beacon SPA.
+// (or an automation rule) a canonical link to a Beacon entry. The base URL
+// is env.PUBLIC_URL (the bare site root) with the `/beacon` SPA mount appended.
 // ---------------------------------------------------------------------------
 
 import { env } from '../env.js';
 
 function base(): string {
-  return env.FRONTEND_URL.replace(/\/$/, '');
+  return `${env.PUBLIC_URL.replace(/\/$/, '')}/beacon`;
 }
 
 /**

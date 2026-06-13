@@ -753,7 +753,7 @@ async function deploy(envConfig, { branch = 'stable' } = {}) {
   };
 
   // Resolve the public URL from the domain the operator entered in Step 3.
-  // env-hints.mjs uses this to compute TRACKING_BASE_URL, FRONTEND_URL,
+  // env-hints.mjs uses this to compute TRACKING_BASE_URL, PUBLIC_URL,
   // CORS_ORIGIN, and any other public-kind env vars. If it's null, services
   // that REQUIRE a public-kind var (e.g. blast-api needs TRACKING_BASE_URL)
   // will fail with "Cannot resolve required variable" at the Setting-

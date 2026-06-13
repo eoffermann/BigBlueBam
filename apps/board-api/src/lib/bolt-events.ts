@@ -93,7 +93,7 @@ export async function buildBoardEventPayload(
     // Tolerate transient count failures — leave zeros.
   }
 
-  const boardUrl = `${env.FRONTEND_URL.replace(/\/$/, '')}/board/${boardId}`;
+  const boardUrl = `${env.PUBLIC_URL.replace(/\/$/, '')}/board/${boardId}`;
 
   const payload: Record<string, unknown> = {
     'board.id': boardId,

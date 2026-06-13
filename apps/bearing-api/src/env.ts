@@ -12,7 +12,7 @@ const envSchema = z.object({
 
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
-  FRONTEND_URL: z.string().default('http://localhost'),
+  PUBLIC_URL: z.string().default('http://localhost'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 

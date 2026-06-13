@@ -23,7 +23,7 @@ import { env } from '../env.js';
  */
 
 function frontendBase(): string {
-  return env.FRONTEND_URL.replace(/\/$/, '');
+  return env.PUBLIC_URL.replace(/\/$/, '');
 }
 
 export function buildGoalUrl(goalId: string): string {

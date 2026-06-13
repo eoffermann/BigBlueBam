@@ -211,13 +211,12 @@ export function buildEnvConfig(choices) {
     // Domain
     DOMAIN: domain || 'localhost',
     BASE_URL: baseUrl,
-    // Echoed into every API service's CORS_ORIGIN and FRONTEND_URL so the
+    // Echoed into every API service's CORS_ORIGIN / PUBLIC_URL so the
     // browser-side origin (which always includes the actual host port the
     // user typed) matches what the API checks against. The launchpad
     // resolver, login cookie path, and helpdesk routing all derive from
-    // these.
+    // these. PUBLIC_URL is the bare site root every app appends its mount to.
     CORS_ORIGIN: baseUrl,
-    FRONTEND_URL: `${baseUrl}/b3`,
     HELPDESK_URL: `${baseUrl}/helpdesk`,
     PUBLIC_URL: baseUrl,
     TRACKING_BASE_URL: `${baseUrl}/t`,

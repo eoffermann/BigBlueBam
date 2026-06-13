@@ -743,7 +743,7 @@ async function maybeSendInvite(
   if (prefs.invite_sent === true) return; // already queued in an earlier run
 
   const inviteToken = (prefs.invite_token as string) ?? crypto.randomBytes(16).toString('hex');
-  const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost';
+  const frontendUrl = process.env.PUBLIC_URL ?? 'http://localhost';
   const acceptUrl = `${frontendUrl.replace(/\/$/, '')}/b3/accept-invite?token=${inviteToken}`;
 
   try {

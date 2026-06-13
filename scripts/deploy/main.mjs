@@ -175,7 +175,7 @@ async function main() {
     console.log(`\n${bold('Step 3: Configure your deployment')}\n`);
 
     // Domain — platform-specific prompt + default. The value gets written
-    // into CORS_ORIGIN and FRONTEND_URL on every API service, so it needs
+    // into CORS_ORIGIN and PUBLIC_URL on every API service, so it needs
     // to match what humans will actually type into a browser to reach the
     // deployed app. For Docker Compose on a laptop, "localhost" is the
     // right answer. For Railway (and any other managed-cloud adapter), the
@@ -186,7 +186,7 @@ async function main() {
     let domain;
     if (isRailway) {
       console.log(dim('  The public URL that humans will use to reach your deployed app.'));
-      console.log(dim('  This gets baked into CORS_ORIGIN and FRONTEND_URL on every API service.'));
+      console.log(dim('  This gets baked into CORS_ORIGIN and PUBLIC_URL on every API service.'));
       console.log('');
       console.log(dim('  Accepted forms:'));
       console.log(dim('    - a custom domain you already own (e.g. bigbluebam.example.com)'));

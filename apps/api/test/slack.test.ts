@@ -18,7 +18,7 @@ vi.mock('../src/db/index.js', () => ({
 
 vi.mock('../src/env.js', () => ({
   env: {
-    FRONTEND_URL: 'http://localhost/b3',
+    PUBLIC_URL: 'http://localhost/b3',
     DATABASE_URL: 'postgres://test',
     NODE_ENV: 'test',
     PORT: 4000,

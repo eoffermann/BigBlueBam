@@ -157,9 +157,10 @@ describe('buildServiceVariables', () => {
     expect(result.S3_BUCKET).toBe('bigbluebam-uploads');
     expect(result.S3_REGION).toBe('us-east-1');
     expect(result.LOG_LEVEL).toBe('info');
-    // public (needs publicUrl)
+    // public (needs publicUrl) — PUBLIC_URL is the bare site root; each app
+    // appends its own mount, so the deploy value carries no /b3.
     expect(result.CORS_ORIGIN).toBe('https://example.up.railway.app');
-    expect(result.FRONTEND_URL).toBe('https://example.up.railway.app/b3');
+    expect(result.PUBLIC_URL).toBe('https://example.up.railway.app');
     // user integrations
     expect(result.OAUTH_GITHUB_CLIENT_ID).toBe('gh-client-id');
     expect(result.OAUTH_GITHUB_CLIENT_SECRET).toBe('gh-client-secret');
@@ -177,15 +178,15 @@ describe('buildServiceVariables', () => {
     const ctx = { ...fullContext(), publicUrl: 'https://example.up.railway.app/' };
     const result = buildServiceVariables(getApiService(), ctx);
     expect(result.CORS_ORIGIN).toBe('https://example.up.railway.app');
-    expect(result.FRONTEND_URL).toBe('https://example.up.railway.app/b3');
-    expect(result.FRONTEND_URL).not.toMatch(/\/\/b3/);
+    expect(result.PUBLIC_URL).toBe('https://example.up.railway.app');
+    expect(result.PUBLIC_URL).not.toMatch(/\/$/); // bare root, no trailing slash
   });
 
   it('skips all public-kind vars when no publicUrl is provided', () => {
     const ctx = { ...fullContext(), publicUrl: null };
     const result = buildServiceVariables(getApiService(), ctx);
     expect(result).not.toHaveProperty('CORS_ORIGIN');
-    expect(result).not.toHaveProperty('FRONTEND_URL');
+    expect(result).not.toHaveProperty('PUBLIC_URL');
     // required non-public vars still present
     expect(result.DATABASE_URL).toBeDefined();
     expect(result.SESSION_SECRET).toBeDefined();

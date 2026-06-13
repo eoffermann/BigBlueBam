@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { slackIntegrations } from '../db/schema/slack-integrations.js';
-import { env } from '../env.js';
+import { taskUrl } from '../lib/urls.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Slack outbound notifications
@@ -88,5 +88,7 @@ export async function postToSlack(
 
 /** Build a deep link to a task in Bam (used as the "view" link in Slack messages). */
 export function taskDeepLink(projectId: string, taskId: string): string {
-  return `${env.FRONTEND_URL}/projects/${projectId}/board?task=${taskId}`;
+  // Delegate to the single normalized builder so the /b3 mount + PUBLIC_URL
+  // handling lives in exactly one place (lib/urls.ts).
+  return taskUrl(projectId, taskId);
 }

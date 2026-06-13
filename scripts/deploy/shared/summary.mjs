@@ -20,7 +20,7 @@ import { formatPublicUrl } from './public-url.mjs';
  */
 export function printSummary(config) {
   // Prefer the BASE_URL the env was actually built with — guarantees the
-  // banner matches CORS_ORIGIN/FRONTEND_URL/HELPDESK_URL on the running
+  // banner matches CORS_ORIGIN/PUBLIC_URL/HELPDESK_URL on the running
   // services. Fall back to re-deriving for callers that don't pass it.
   const baseUrl = config.baseUrl ?? formatPublicUrl({
     domain: config.domain || 'localhost',

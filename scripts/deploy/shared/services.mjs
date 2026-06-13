@@ -39,7 +39,7 @@ export const APP_SERVICES = [
         'INTERNAL_HELPDESK_SECRET',
       ],
       optional: [
-        'CORS_ORIGIN', 'LOG_LEVEL', 'FRONTEND_URL',
+        'CORS_ORIGIN', 'LOG_LEVEL', 'PUBLIC_URL',
         'INTERNAL_SERVICE_SECRET',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         'OAUTH_GITHUB_CLIENT_ID', 'OAUTH_GITHUB_CLIENT_SECRET',
@@ -110,6 +110,7 @@ export const APP_SERVICES = [
         // only for a managed/cloud Qdrant; the bundled image has no auth.
         'QDRANT_API_KEY',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
+        'PUBLIC_URL', // deep-link base for Beacon entries (lib/urls.ts)
       ],
     },
   },
@@ -130,6 +131,7 @@ export const APP_SERVICES = [
         // brief-api reads QDRANT_URL for semantic search (document.routes.ts:175)
         // + optional QDRANT_API_KEY for managed Qdrant — both were missing.
         'QDRANT_URL', 'QDRANT_API_KEY',
+        'PUBLIC_URL', // deep-link base for Brief documents (lib/urls.ts)
       ],
     },
   },
@@ -160,7 +162,7 @@ export const APP_SERVICES = [
     public_paths: ['/bearing/api/'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS'],
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'PUBLIC_URL'],
     },
   },
   {
@@ -179,6 +181,7 @@ export const APP_SERVICES = [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
         'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'LIVEKIT_URL',
+        'PUBLIC_URL', // deep-link base for board.* Bolt event payloads (lib/bolt-events.ts)
       ],
     },
   },
@@ -194,7 +197,7 @@ export const APP_SERVICES = [
     public_paths: ['/bond/api/'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS'],
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'PUBLIC_URL'],
     },
   },
   {
@@ -265,7 +268,7 @@ export const APP_SERVICES = [
     public_paths: ['/blank/api/', '/forms/'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'PUBLIC_FORM_RATE_LIMIT', 'PUBLIC_FORM_RATE_WINDOW_MS'],
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'PUBLIC_FORM_RATE_LIMIT', 'PUBLIC_FORM_RATE_WINDOW_MS', 'PUBLIC_URL'],
     },
   },
   {
@@ -295,7 +298,7 @@ export const APP_SERVICES = [
     public_paths: ['/blueprint/api/', '/blueprint/ws'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'BOLT_API_INTERNAL_URL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS'],
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'BOLT_API_INTERNAL_URL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'PUBLIC_URL'],
     },
   },
   {
@@ -385,7 +388,7 @@ export const APP_SERVICES = [
         // deep-links — without these it emits http://localhost/t/... pixels and
         // /unsub/... links in real campaign mail. Code: blast-send.job.ts:182,
         // 259-260; slack-import.job.ts:746.
-        'TRACKING_BASE_URL', 'FRONTEND_URL',
+        'TRACKING_BASE_URL', 'PUBLIC_URL',
         // worker vector-sync / brief-embed jobs read QDRANT_URL (+ optional
         // QDRANT_API_KEY for managed Qdrant). beacon-vector-sync.job.ts:49-50.
         'QDRANT_URL', 'QDRANT_API_KEY',

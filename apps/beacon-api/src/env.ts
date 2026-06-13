@@ -37,10 +37,9 @@ const envSchema = z.object({
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
-  // Public-facing base URL for the Beacon SPA (used for deep-link URLs
-  // in Bolt event payloads, notifications, etc.). Matches the mount point
-  // configured in nginx — e.g. http://localhost/beacon.
-  FRONTEND_URL: z.string().default('http://localhost/beacon'),
+  // Bare public site root (default http://localhost). The Beacon SPA mount
+  // (/beacon) is appended by lib/urls.ts. Matches the book/bill/bond convention.
+  PUBLIC_URL: z.string().default('http://localhost'),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),

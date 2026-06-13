@@ -65,7 +65,7 @@ with **R**, optional with `o`.
 | **R** | `INTERNAL_HELPDESK_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on api and helpdesk-api. Both validate z.string().min(32), so use 32 bytes (64 hex chars); hex-16 sits exactly on the floor and a shorter value crashes both at boot. |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
-| o | `FRONTEND_URL` | public | `<frontend-public-url>/b3` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
@@ -151,6 +151,7 @@ with **R**, optional with `o`.
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
 | o | `S3_BUCKET` | literal | `bigbluebam-uploads` |  |
 | o | `S3_REGION` | literal | `us-east-1` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 
 ### brief-api
 
@@ -169,6 +170,7 @@ with **R**, optional with `o`.
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 | o | `QDRANT_URL` | computed | `http://qdrant.railway.internal:6333` |  |
 | o | `QDRANT_API_KEY` | user | `` | Only needed if you point QDRANT_URL at a managed Qdrant (e.g. Qdrant Cloud). The bundled self-hosted image requires no key. |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 
 ### bolt-api
 
@@ -202,6 +204,7 @@ with **R**, optional with `o`.
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 
 ### board-api
 
@@ -219,6 +222,7 @@ with **R**, optional with `o`.
 | o | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_URL` | public | `<frontend-public-url-ws>/livekit-ws` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 
 ### bond-api
 
@@ -235,6 +239,7 @@ with **R**, optional with `o`.
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 
 ### blast-api
 
@@ -278,7 +283,7 @@ with **R**, optional with `o`.
 | **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
 | **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
-| **R** | `PUBLIC_URL` | public | `<frontend-public-url>` | e.g. https://your-frontend-service.up.railway.app or your custom domain |
+| **R** | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
@@ -302,6 +307,7 @@ with **R**, optional with `o`.
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `PUBLIC_FORM_RATE_LIMIT` | literal | `10` |  |
 | o | `PUBLIC_FORM_RATE_WINDOW_MS` | literal | `3600000` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 
 ### bill-api
 
@@ -313,7 +319,7 @@ with **R**, optional with `o`.
 | **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
 | **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
-| **R** | `PUBLIC_URL` | public | `<frontend-public-url>` | e.g. https://your-frontend-service.up.railway.app or your custom domain |
+| **R** | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
@@ -334,6 +340,7 @@ with **R**, optional with `o`.
 | o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 
 ### bureau-api
 
@@ -409,7 +416,7 @@ with **R**, optional with `o`.
 | o | `SMTP_PASS` | user | `<smtp-password>` |  |
 | o | `EMAIL_FROM` | user | `noreply@yourdomain.com` |  |
 | o | `TRACKING_BASE_URL` | public | `<frontend-public-url>` |  |
-| o | `FRONTEND_URL` | public | `<frontend-public-url>/b3` |  |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 | o | `QDRANT_URL` | computed | `http://qdrant.railway.internal:6333` |  |
 | o | `QDRANT_API_KEY` | user | `` | Only needed if you point QDRANT_URL at a managed Qdrant (e.g. Qdrant Cloud). The bundled self-hosted image requires no key. |
 | o | `LIVEKIT_TURN_CHECK_TARGET` | user | `<turn.your-domain:port>` | Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>. |

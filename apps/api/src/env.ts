@@ -80,8 +80,10 @@ const envSchema = z.object({
   // overrides it. (Renamed from SMTP_FROM to kill the 4-name sprawl.)
   EMAIL_FROM: z.string().default('noreply@bigbluebam.com'),
 
-  // Public URL used to build invitation acceptance links in emails.
-  FRONTEND_URL: z.string().default('http://localhost/b3'),
+  // Bare public site root (no app mount). Deep-link builders append their own
+  // mount (/b3, /beacon, …). Matches the book/bill/bond/blank convention; the
+  // old per-app FRONTEND_URL was retired in favor of this single name.
+  PUBLIC_URL: z.string().default('http://localhost'),
 
   // HB-7: Shared secret used by helpdesk-api to authenticate to the
   // /internal/helpdesk/* surface. Must be at least 32 chars. Both apps
