@@ -13,12 +13,20 @@ didn't create, and never edit files.
 Procedure:
 
 1. Load tool schemas via ToolSearch:
-   `select:mcp__bigbluebam__get_me,mcp__bigbluebam__create_task,mcp__bigbluebam__update_task,mcp__bigbluebam__search_tasks,mcp__bigbluebam__bam_list_task_subtasks`
+   `select:mcp__bigbluebam__get_me,mcp__bigbluebam__create_task,mcp__bigbluebam__update_task,mcp__bigbluebam__search_tasks,mcp__bigbluebam__bam_list_task_subtasks,mcp__bigbluebam__bam_list_epics,mcp__bigbluebam__bam_create_epic`
    (plus `switch_active_org` if the spec's org_id differs from get_me's
    active org — switch before any write, and say so in the manifest).
 2. Sanity: `get_me` — confirm the active org matches `spec.org_id`.
    Mismatch you can't fix by switching = stop and report; do not write
    into the wrong org.
+2b. Epic pre-pass (only if any task has `epic_name`): `bam_list_epics(
+   project_id)` once, build a `name → epic_id` map (exact name, case-
+   sensitive — epic names are the verbatim CSV Features cell). For each
+   DISTINCT `epic_name` in the spec not already in the map, `bam_create_epic
+   (project_id, name)` and add it to the map. Now every task can resolve
+   `epic_name → epic_id` locally without another round-trip. Track which
+   epics you created vs reused for the manifest. Epics are idempotent by
+   name: never create a second epic with a name already present.
 3. Idempotency pre-pass: fetch ALL existing task titles in the project
    ONCE up front (`search_tasks(project_id, limit: 200)`, follow cursors)
    and compare each spec title against them locally. Normalize both
@@ -31,12 +39,18 @@ Procedure:
      - List the existing parent's subtasks
        (`bam_list_task_subtasks(parent_id)`), normalize their titles.
      - Any spec subtask whose normalized title is NOT present → create it
-       under the existing parent (this is the orphan-recovery path).
+       under the existing parent (this is the orphan-recovery path); set
+       its `epic_id` (resolved from the task's `epic_name`) at creation.
      - If the spec has a `due_date` and the existing parent has none, set
        it (`update_task`).
-     - Record `{title, human_id, subtasks_backfilled: N, status:
-       N>0 ? "repaired" : "skipped-existing"}`. N=0 means it was already
-       complete; N>0 means you healed an interrupted run.
+     - **Epic retrofit**: if the task has an `epic_name`, set the resolved
+       `epic_id` on the existing parent AND on every existing subtask via
+       `update_task(task_id, epic_id)` (only those not already pointing at
+       it). This is how a board imported BEFORE epics existed gets
+       back-assigned without recreating anything.
+     - Record `{title, human_id, subtasks_backfilled: N, epic_assigned:
+       bool, status: (N>0 || newly-epic-assigned) ? "repaired" :
+       "skipped-existing"}`.
    - **Near-duplicate** — not equal, but clearly the same work item:
      typos, singular/plural, minor rewording, reordered halves of the
      `Feature - Story` title, or one side truncated. (Heuristic: would a
@@ -55,13 +69,18 @@ Procedure:
    create all parents in a batch and subtasks later, so an interruption
    leaves at most ONE parent half-populated (and the exact-match
    reconcile in step 3 heals even that on the next run):
-   a. `create_task` with project_id/phase_id/epic_id from the spec +
-      title/description/priority. Capture `data.id` and `data.human_id`.
+   Resolve the task's `epic_id` first: spec-level `epic_id` if set, else
+   the task's `epic_name` looked up in the pre-pass map (else none).
+   a. `create_task` with project_id/phase_id + title/description/priority
+      + `epic_id` (the resolved one). Capture `data.id` and `data.human_id`.
    b. If `due_date` present: `update_task(task_id: id, due_date)`.
    c. For each subtask in order: `create_task` with the SAME
       project/phase, `parent_task_id: <parent id>`, the subtask title
-      (and description when given), priority inherited from the parent.
-   d. Record `{title, human_id, subtasks_created, status: "created"}`.
+      (and description when given), priority inherited from the parent,
+      AND the SAME `epic_id` as the parent (parent and subtasks share the
+      epic).
+   d. Record `{title, human_id, subtasks_created, epic: <name|null>,
+      status: "created"}`.
 5. On any tool error: record `{title, status: "failed", error: <message>,
    partial: <what did land>}` and CONTINUE with the next task. One retry
    for transient errors (timeouts, 429 after a pause); none for 4xx.
@@ -74,7 +93,8 @@ ONLY a JSON manifest —
 ```json
 {
   "org_switched": false,
-  "created": [{ "title": "…", "human_id": "BBB-12", "task_id": "uuid", "subtasks_created": 6 }],
+  "epics": { "created": ["Reduce Latency", "Diary"], "reused": ["Push notifications"] },
+  "created": [{ "title": "…", "human_id": "BBB-12", "task_id": "uuid", "subtasks_created": 6, "epic": "Reduce Latency" }],
   "repaired": [{ "title": "…", "human_id": "BBB-7", "subtasks_backfilled": 6 }],
   "skipped_existing": [{ "title": "…", "human_id": "BBB-9" }],
   "near_duplicates": [{ "title": "…", "existing_title": "…", "existing_human_id": "BBB-10", "reason": "same story title, feature half reworded ('Reduce Latency' vs 'Reduce latencies')" }],

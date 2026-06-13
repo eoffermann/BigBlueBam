@@ -38,6 +38,7 @@ interface SwimlaneBoardProps {
   groupBy: SwimlanGroupBy;
   onTaskClick: (taskId: string) => void;
   onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
+  onEpicClick?: (epicId: string) => void;
   onAddTask: (phaseId: string) => void;
   members?: Map<string, string>; // userId -> displayName
 }
@@ -170,7 +171,7 @@ function filterPhasesForGroup(
   }));
 }
 
-export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu, onAddTask, members }: SwimlaneBoardProps) {
+export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, members }: SwimlaneBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const moveTaskInStore = useBoardStore((s) => s.moveTask);
@@ -308,6 +309,7 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu,
               phase={phase}
               onTaskClick={onTaskClick}
               onTaskContextMenu={onTaskContextMenu}
+              onEpicClick={onEpicClick}
               onAddTask={onAddTask}
             />
           ))}
@@ -378,6 +380,7 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu,
                           phase={phase}
                           onTaskClick={onTaskClick}
                           onTaskContextMenu={onTaskContextMenu}
+                          onEpicClick={onEpicClick}
                           onAddTask={onAddTask}
                         />
                       ))}

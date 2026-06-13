@@ -5,6 +5,7 @@ import { PRIORITIES } from '@bigbluebam/shared';
 import { cn, formatDate, isOverdue } from '@/lib/utils';
 import { Badge } from '@/components/common/badge';
 import { Select } from '@/components/common/select';
+import { EpicChip, taskEpic } from '@/components/board/epic-chip';
 
 type SortField = 'human_id' | 'title' | 'state_name' | 'phase_name' | 'assignee' | 'priority' | 'story_points' | 'due_date' | 'created_at';
 type SortDirection = 'asc' | 'desc';
@@ -13,6 +14,8 @@ interface ListViewProps {
   phases: (Phase & { tasks: Task[] })[];
   onTaskClick: (taskId: string) => void;
   onUpdateTask?: (taskId: string, data: Partial<Task>) => void;
+  /** Navigate to the epic detail route when a row's epic chip is clicked. */
+  onEpicClick?: (epicId: string) => void;
 }
 
 const priorityOrder: Record<string, number> = {
@@ -26,7 +29,7 @@ const priorityOrder: Record<string, number> = {
 // PriorityIcon removed — not currently rendered by this view. Reintroduce
 // from git history if columns start showing priority badges again.
 
-export function ListView({ phases, onTaskClick, onUpdateTask }: ListViewProps) {
+export function ListView({ phases, onTaskClick, onUpdateTask, onEpicClick }: ListViewProps) {
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
 
@@ -202,9 +205,22 @@ export function ListView({ phases, onTaskClick, onUpdateTask }: ListViewProps) {
                   {task.human_id}
                 </div>
 
-                {/* Title */}
-                <div className="flex-1 min-w-[200px] text-zinc-900 dark:text-zinc-100 font-medium truncate">
-                  {task.title}
+                {/* Title + epic chip */}
+                <div className="flex-1 min-w-[200px] min-w-0">
+                  <div className="text-zinc-900 dark:text-zinc-100 font-medium truncate">
+                    {task.title}
+                  </div>
+                  {(() => {
+                    const epic = taskEpic(task);
+                    return epic ? (
+                      <div className="mt-0.5">
+                        <EpicChip
+                          epic={epic}
+                          onClick={onEpicClick ? () => onEpicClick(epic.id) : undefined}
+                        />
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* Phase */}

@@ -19,6 +19,7 @@ import { registerCommentTools } from './tools/comment-tools.js';
 import { registerMemberTools } from './tools/member-tools.js';
 import { registerUserResolverTools } from './tools/user-resolver-tools.js';
 import { registerBamResolverTools } from './tools/bam-resolver-tools.js';
+import { registerEpicTools } from './tools/epic-tools.js';
 import { registerReportTools } from './tools/report-tools.js';
 import { registerTemplateTools } from './tools/template-tools.js';
 import { registerImportTools } from './tools/import-tools.js';
@@ -197,6 +198,7 @@ function createMcpServer(
   registerMemberTools(server, apiClient);
   registerUserResolverTools(server, apiClient);
   registerBamResolverTools(server, apiClient);
+  registerEpicTools(server, apiClient);
   registerReportTools(server, apiClient);
   registerTemplateTools(server, apiClient);
   registerImportTools(server, apiClient, confirmTokenStore);

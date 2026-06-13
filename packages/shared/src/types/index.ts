@@ -169,6 +169,27 @@ export interface Sprint {
   updated_at: string;
 }
 
+export type EpicStatus = 'open' | 'in_progress' | 'closed';
+
+export interface Epic {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string | null;
+  color: string | null; // #RRGGBB
+  start_date: string | null;
+  target_date: string | null;
+  status: EpicStatus;
+  created_at: string;
+  updated_at: string;
+  /** Present on list + detail payloads. */
+  task_count?: number;
+  /** Detail-only rollup over ALL tasks with epic_id = this epic. */
+  done_count?: number; // tasks with completed_at not null
+  total_story_points?: number;
+  done_story_points?: number;
+}
+
 export interface Task {
   id: string;
   project_id: string;
@@ -196,6 +217,11 @@ export interface Task {
    *  cards can badge their parents without per-task fetches. Optional:
    *  endpoints that don't enrich simply omit it. */
   parents?: { id: string; human_id: string | null }[];
+  /** The epic this task belongs to (epic.color is a #RRGGBB hex or null).
+   *  Enriched on board/list payloads so cards can render an epic chip
+   *  without a per-task fetch. Optional: endpoints that don't enrich omit
+   *  it; null when the task has no epic. */
+  epic?: { id: string; name: string; color: string | null } | null;
   labels: string[];
   watchers: string[];
   is_blocked: boolean;

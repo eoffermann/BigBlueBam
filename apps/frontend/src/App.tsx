@@ -7,6 +7,7 @@ import { BoardPage } from '@/pages/board';
 import { SettingsPage } from '@/pages/settings';
 import { MyWorkPage } from '@/pages/my-work';
 import { ProjectDashboardPage } from '@/pages/project-dashboard';
+import { EpicDetailPage } from '@/pages/epic-detail';
 import { AuditLogPage } from '@/pages/audit-log';
 import { SprintReportPage } from '@/pages/sprint-report';
 import { ProjectReportsPage } from '@/pages/project-reports';
@@ -38,6 +39,7 @@ type Route =
   | { page: 'password-reset'; token: string | null }
   | { page: 'dashboard' }
   | { page: 'board'; projectId: string }
+  | { page: 'epic-detail'; projectId: string; epicId: string }
   | { page: 'project-dashboard'; projectId: string }
   | { page: 'audit-log'; projectId: string }
   | { page: 'sprint-report'; projectId: string; sprintId: string }
@@ -82,6 +84,10 @@ function parseRoute(path: string): Route {
   const boardMatch = p.match(/^\/projects\/([^/]+)\/board$/);
   if (boardMatch) {
     return { page: 'board', projectId: boardMatch[1]! };
+  }
+  const epicDetailMatch = p.match(/^\/projects\/([^/]+)\/epics\/([^/]+)$/);
+  if (epicDetailMatch) {
+    return { page: 'epic-detail', projectId: epicDetailMatch[1]!, epicId: epicDetailMatch[2]! };
   }
   const dashboardMatch = p.match(/^\/projects\/([^/]+)\/dashboard$/);
   if (dashboardMatch) {
@@ -292,6 +298,8 @@ export function App() {
   switch (route.page) {
     case 'board':
       return <BoardPage projectId={route.projectId} onNavigate={navigate} />;
+    case 'epic-detail':
+      return <EpicDetailPage projectId={route.projectId} epicId={route.epicId} onNavigate={navigate} />;
     case 'project-dashboard':
       return <ProjectDashboardPage projectId={route.projectId} onNavigate={navigate} />;
     case 'audit-log':

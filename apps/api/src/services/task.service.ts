@@ -3,6 +3,7 @@ import Redis from 'ioredis';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { projects } from '../db/schema/projects.js';
+import { epics } from '../db/schema/epics.js';
 import { phases } from '../db/schema/phases.js';
 import { tickets, ticketMessages } from '../db/schema/tickets.js';
 import { taskParentLinks } from '../db/schema/task-parent-links.js';
@@ -1182,9 +1183,28 @@ export async function getBoardState(projectId: string, sprintId?: string) {
     }
   }
 
+  // Enrich every task with its epic mini-shape — { id, name, color } | null —
+  // so board cards can render an epic chip without a per-task fetch. Same
+  // Map pre-pass pattern as the `parents` enrichment above: one query over
+  // the distinct epic_ids referenced by this project's tasks.
+  const epicsById = new Map<string, { id: string; name: string; color: string | null }>();
+  const epicIds = Array.from(
+    new Set(allTasks.map((t) => t.epic_id).filter((id): id is string => id != null)),
+  );
+  if (epicIds.length > 0) {
+    const epicRows = await db
+      .select({ id: epics.id, name: epics.name, color: epics.color })
+      .from(epics)
+      .where(inArray(epics.id, epicIds));
+    for (const row of epicRows) {
+      epicsById.set(row.id, { id: row.id, name: row.name, color: row.color });
+    }
+  }
+
   const enrichedTasks = allTasks.map((task) => ({
     ...task,
     parents: parentsByTask.get(task.id) ?? [],
+    epic: task.epic_id ? epicsById.get(task.epic_id) ?? null : null,
   }));
 
   // Group tasks by phase (skip tasks with null phase_id)

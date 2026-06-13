@@ -402,6 +402,12 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
         .string()
         .optional()
         .describe("New state — name (e.g. 'Done'), category, or UUID"),
+      epic_id: z
+        .string()
+        .uuid()
+        .nullable()
+        .optional()
+        .describe('Epic to link/unlink (UUID or null)'),
       start_date: z.string().optional().describe('Start date (ISO 8601)'),
       due_date: z.string().optional().describe('Due date (ISO 8601)'),
     },

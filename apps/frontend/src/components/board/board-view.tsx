@@ -23,11 +23,12 @@ interface BoardViewProps {
   phases: (Phase & { tasks: Task[] })[];
   onTaskClick: (taskId: string) => void;
   onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
+  onEpicClick?: (epicId: string) => void;
   onAddTask: (phaseId: string) => void;
   onInlineCreate?: (phaseId: string, title: string) => Promise<void>;
 }
 
-export function BoardView({ phases, onTaskClick, onTaskContextMenu, onAddTask, onInlineCreate }: BoardViewProps) {
+export function BoardView({ phases, onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, onInlineCreate }: BoardViewProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const moveTaskInStore = useBoardStore((s) => s.moveTask);
   const moveTaskMutation = useMoveTask();
@@ -163,6 +164,7 @@ export function BoardView({ phases, onTaskClick, onTaskContextMenu, onAddTask, o
             phase={phase}
             onTaskClick={onTaskClick}
             onTaskContextMenu={onTaskContextMenu}
+            onEpicClick={onEpicClick}
             onAddTask={onAddTask}
             onInlineCreate={onInlineCreate}
           />

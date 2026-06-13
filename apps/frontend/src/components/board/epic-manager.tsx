@@ -24,9 +24,11 @@ interface EpicManagerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  /** Navigate to an epic's detail page (closes the dialog first). */
+  onOpenEpic?: (epicId: string) => void;
 }
 
-export function EpicManager({ open, onOpenChange, projectId }: EpicManagerProps) {
+export function EpicManager({ open, onOpenChange, projectId, onOpenEpic }: EpicManagerProps) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -83,18 +85,41 @@ export function EpicManager({ open, onOpenChange, projectId }: EpicManagerProps)
                 key={epic.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
               >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span
-                    className="h-3 w-3 rounded-full shrink-0"
-                    style={{ backgroundColor: epic.color ?? '#a1a1aa' }}
-                  />
-                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                    {epic.name}
-                  </span>
-                  <span className="text-xs text-zinc-400 shrink-0">
-                    {epic.task_count} task{epic.task_count !== 1 ? 's' : ''}
-                  </span>
-                </div>
+                {onOpenEpic ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      onOpenEpic(epic.id);
+                    }}
+                    className="flex items-center gap-2.5 min-w-0 text-left rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 group"
+                    title={`Open ${epic.name}`}
+                  >
+                    <span
+                      className="h-3 w-3 rounded-full shrink-0"
+                      style={{ backgroundColor: epic.color ?? '#a1a1aa' }}
+                    />
+                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate group-hover:text-primary-600 group-hover:underline">
+                      {epic.name}
+                    </span>
+                    <span className="text-xs text-zinc-400 shrink-0">
+                      {epic.task_count} task{epic.task_count !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className="h-3 w-3 rounded-full shrink-0"
+                      style={{ backgroundColor: epic.color ?? '#a1a1aa' }}
+                    />
+                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                      {epic.name}
+                    </span>
+                    <span className="text-xs text-zinc-400 shrink-0">
+                      {epic.task_count} task{epic.task_count !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
                 <button
                   onClick={() => {
                     if (confirm(`Delete epic "${epic.name}"? Tasks will be unlinked but not deleted.`)) {

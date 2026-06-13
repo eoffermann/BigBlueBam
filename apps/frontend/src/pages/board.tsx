@@ -75,7 +75,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   }, []);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createDialogPhaseId, setCreateDialogPhaseId] = useState<string | undefined>();
-  const [filters, setFilters] = useState<{ assignee_id?: string; priority?: string; state_id?: string; search?: string }>({});
+  const [filters, setFilters] = useState<{ assignee_id?: string; priority?: string; state_id?: string; epic_id?: string; search?: string }>({});
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [swimlaneGroupBy, setSwimlaneGroupBy] = useState<SwimlanGroupBy>('none');
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -175,6 +175,23 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   });
   const projectStates = statesRes?.data ?? [];
 
+  // Fetch project epics (powers the filter-bar Epic dropdown)
+  const { data: epicsRes } = useQuery({
+    queryKey: ['epics', projectId],
+    queryFn: () => api.get<PaginatedResponse<{ id: string; name: string; color: string | null }>>(`/projects/${projectId}/epics`),
+    enabled: !!projectId,
+  });
+  const projectEpics = epicsRes?.data ?? [];
+
+  // Navigate to the epic detail page when an epic chip is clicked on a card
+  // or list row.
+  const handleEpicClick = useCallback(
+    (epicId: string) => {
+      onNavigate(`/projects/${projectId}/epics/${epicId}`);
+    },
+    [onNavigate, projectId],
+  );
+
   const boardPhases = useBoardStore((s) => s.phases);
   const setBoardState = useBoardStore.setState;
 
@@ -228,6 +245,15 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
       if (filters.state_id) {
         const stateIds = filters.state_id.split(',');
         if (!task.state_id || !stateIds.includes(task.state_id)) return false;
+      }
+      if (filters.epic_id) {
+        const epicIds = filters.epic_id.split(',');
+        // Prefer the enriched epic mini-shape (`task.epic.id`) but fall back
+        // to the always-present `task.epic_id` so the filter works whether or
+        // not the board payload has been enriched yet.
+        const taskEpicId =
+          (task as { epic?: { id: string } | null }).epic?.id ?? task.epic_id ?? null;
+        if (!taskEpicId || !epicIds.includes(taskEpicId)) return false;
       }
       if (filters.search) {
         const q = filters.search.toLowerCase();
@@ -416,6 +442,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
               groupBy={swimlaneGroupBy}
               onTaskClick={handleTaskClick}
               onTaskContextMenu={handleTaskContextMenu}
+              onEpicClick={handleEpicClick}
               onAddTask={handleAddTask}
               members={membersMap}
             />
@@ -426,6 +453,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
             phases={filteredPhases}
             onTaskClick={handleTaskClick}
             onTaskContextMenu={handleTaskContextMenu}
+            onEpicClick={handleEpicClick}
             onAddTask={handleAddTask}
             onInlineCreate={handleInlineCreate}
           />
@@ -437,6 +465,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
             phases={filteredPhases}
             onTaskClick={handleTaskClick}
             onUpdateTask={handleUpdateTask}
+            onEpicClick={handleEpicClick}
           />
         );
 
@@ -512,6 +541,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                 onFilterChange={setFilters}
                 assignees={members.map((m) => ({ id: m.id, display_name: m.display_name }))}
                 states={projectStates.map((s) => ({ id: s.id, name: s.name }))}
+                epics={projectEpics.map((e) => ({ id: e.id, name: e.name }))}
               />
 
               {viewMode === 'board' && (
@@ -712,6 +742,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
         open={showEpicManager}
         onOpenChange={setShowEpicManager}
         projectId={projectId}
+        onOpenEpic={handleEpicClick}
       />
 
       <PhaseManager

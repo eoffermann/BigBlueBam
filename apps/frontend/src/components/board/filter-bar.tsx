@@ -9,11 +9,13 @@ interface FilterBarProps {
     assignee_id?: string;
     priority?: string;
     state_id?: string;
+    epic_id?: string;
     search?: string;
   };
   onFilterChange: (filters: FilterBarProps['filters']) => void;
   assignees?: { id: string; display_name: string }[];
   states?: { id: string; name: string }[];
+  epics?: { id: string; name: string }[];
 }
 
 interface MultiSelectDropdownProps {
@@ -100,7 +102,7 @@ function MultiSelectDropdown({ label, options, selectedValues, onToggle }: Multi
   );
 }
 
-export function FilterBar({ filters, onFilterChange, assignees = [], states = [] }: FilterBarProps) {
+export function FilterBar({ filters, onFilterChange, assignees = [], states = [], epics = [] }: FilterBarProps) {
   const [searchValue, setSearchValue] = useState(filters.search ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -125,13 +127,15 @@ export function FilterBar({ filters, onFilterChange, assignees = [], states = []
 
   const assigneeOptions = assignees.map((a) => ({ value: a.id, label: a.display_name }));
   const stateOptions = states.map((s) => ({ value: s.id, label: s.name }));
+  const epicOptions = epics.map((e) => ({ value: e.id, label: e.name }));
 
   // Parse multi-select values from comma-separated string
   const selectedPriorities = filters.priority ? filters.priority.split(',') : [];
   const selectedAssignees = filters.assignee_id ? filters.assignee_id.split(',') : [];
   const selectedStates = filters.state_id ? filters.state_id.split(',') : [];
+  const selectedEpics = filters.epic_id ? filters.epic_id.split(',') : [];
 
-  const toggleFilter = (field: 'priority' | 'assignee_id' | 'state_id', value: string) => {
+  const toggleFilter = (field: 'priority' | 'assignee_id' | 'state_id' | 'epic_id', value: string) => {
     const currentStr = filters[field] ?? '';
     const current = currentStr ? currentStr.split(',') : [];
     const next = current.includes(value)
@@ -143,7 +147,7 @@ export function FilterBar({ filters, onFilterChange, assignees = [], states = []
     });
   };
 
-  const hasAnyFilter = !!(filters.priority || filters.assignee_id || filters.state_id || filters.search);
+  const hasAnyFilter = !!(filters.priority || filters.assignee_id || filters.state_id || filters.epic_id || filters.search);
 
   const clearFilters = () => {
     setSearchValue('');
@@ -190,6 +194,16 @@ export function FilterBar({ filters, onFilterChange, assignees = [], states = []
           options={stateOptions}
           selectedValues={selectedStates}
           onToggle={(val) => toggleFilter('state_id', val)}
+        />
+      )}
+
+      {/* Epic multi-select */}
+      {epicOptions.length > 0 && (
+        <MultiSelectDropdown
+          label="Epic"
+          options={epicOptions}
+          selectedValues={selectedEpics}
+          onToggle={(val) => toggleFilter('epic_id', val)}
         />
       )}
 

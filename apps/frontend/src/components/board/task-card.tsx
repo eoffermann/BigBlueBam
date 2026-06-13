@@ -16,11 +16,14 @@ import {
 import type { Task, Priority } from '@bigbluebam/shared';
 import { cn, formatDate, isOverdue, truncate } from '@/lib/utils';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { EpicChip, taskEpic } from './epic-chip';
 
 interface TaskCardProps {
   task: Task;
   onClick?: () => void;
   onContextMenu?: (e: React.MouseEvent, task: Task) => void;
+  /** Navigate to the epic detail route when the epic chip is clicked. */
+  onEpicClick?: (epicId: string) => void;
   isDragOverlay?: boolean;
 }
 
@@ -106,8 +109,9 @@ function ParentBadges({ parents }: { parents: { id: string; human_id: string | n
   );
 }
 
-export function TaskCard({ task, onClick, onContextMenu, isDragOverlay = false }: TaskCardProps) {
+export function TaskCard({ task, onClick, onContextMenu, onEpicClick, isDragOverlay = false }: TaskCardProps) {
   const prefersReducedMotion = useReducedMotion();
+  const epic = taskEpic(task);
 
   const sortable = useSortable({
     id: task.id,
@@ -184,6 +188,13 @@ export function TaskCard({ task, onClick, onContextMenu, isDragOverlay = false }
       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-snug mb-2">
         {truncate(task.title, 80)}
       </p>
+
+      {/* Epic chip — only when the task is assigned to an epic */}
+      {epic && (
+        <div className="mb-2">
+          <EpicChip epic={epic} onClick={onEpicClick ? () => onEpicClick(epic.id) : undefined} />
+        </div>
+      )}
 
       {/* Row 3: Metadata */}
       <div className="flex items-center justify-between text-xs text-zinc-500">

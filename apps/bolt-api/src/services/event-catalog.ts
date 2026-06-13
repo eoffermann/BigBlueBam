@@ -380,6 +380,43 @@ const bamEvents: EventDefinition[] = [
   },
   {
     source: 'bam',
+    event_type: 'epic.created',
+    description: 'Fired when an epic is created.',
+    payload_schema: [
+      { name: 'epic.id', type: 'uuid', description: 'Epic ID' },
+      { name: 'epic.name', type: 'string', description: 'Epic name' },
+      { name: 'project.id', type: 'uuid', description: 'Project ID' },
+      { name: 'actor.id', type: 'uuid?', description: 'User who created the epic' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+    ],
+  },
+  {
+    source: 'bam',
+    event_type: 'epic.updated',
+    description: 'Fired when an epic is updated.',
+    payload_schema: [
+      { name: 'epic.id', type: 'uuid', description: 'Epic ID' },
+      { name: 'epic.name', type: 'string', description: 'Epic name' },
+      { name: 'changed_fields', type: 'string', description: 'Comma-separated list of fields that changed' },
+      { name: 'actor.id', type: 'uuid?', description: 'User who updated the epic' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+    ],
+  },
+  {
+    source: 'bam',
+    event_type: 'epic.status_changed',
+    description: 'Fired when an epic status transitions.',
+    payload_schema: [
+      { name: 'epic.id', type: 'uuid', description: 'Epic ID' },
+      { name: 'epic.name', type: 'string', description: 'Epic name' },
+      { name: 'old_status', type: 'string', description: 'Previous epic status' },
+      { name: 'new_status', type: 'string', description: 'New epic status' },
+      { name: 'actor.id', type: 'uuid?', description: 'User who changed the status' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+    ],
+  },
+  {
+    source: 'bam',
     event_type: 'sprint.started',
     description: 'Fired when a sprint is activated.',
     payload_schema: [

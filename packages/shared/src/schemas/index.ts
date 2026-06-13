@@ -4,6 +4,7 @@ export * from './organization.js';
 export * from './project.js';
 export * from './phase.js';
 export * from './sprint.js';
+export * from './epic.js';
 export * from './task.js';
 export * from './comment.js';
 export * from './superuser.js';

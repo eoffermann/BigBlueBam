@@ -12,6 +12,7 @@ interface PhaseColumnProps {
   phase: Phase & { tasks: Task[] };
   onTaskClick: (taskId: string) => void;
   onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
+  onEpicClick?: (epicId: string) => void;
   onAddTask: (phaseId: string) => void;
   onInlineCreate?: (phaseId: string, title: string) => Promise<void>;
 }
@@ -25,7 +26,7 @@ const VIRTUALIZE_THRESHOLD = 50;
 const ESTIMATED_CARD_HEIGHT = 104;
 const CARD_GAP = 8;
 
-export function PhaseColumn({ phase, onTaskClick, onTaskContextMenu, onAddTask, onInlineCreate }: PhaseColumnProps) {
+export function PhaseColumn({ phase, onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, onInlineCreate }: PhaseColumnProps) {
   const [isCreating, setIsCreating] = useState(false);
   const { setNodeRef, isOver } = useDroppable({
     id: `phase-${phase.id}`,
@@ -86,6 +87,7 @@ export function PhaseColumn({ phase, onTaskClick, onTaskContextMenu, onAddTask, 
           setNodeRef={setNodeRef}
           onTaskClick={onTaskClick}
           onTaskContextMenu={onTaskContextMenu}
+          onEpicClick={onEpicClick}
           isCreating={isCreating}
           onInlineCreate={onInlineCreate}
           onCancelCreate={() => setIsCreating(false)}
@@ -102,6 +104,7 @@ export function PhaseColumn({ phase, onTaskClick, onTaskContextMenu, onAddTask, 
                 task={task}
                 onClick={() => onTaskClick(task.id)}
                 onContextMenu={onTaskContextMenu}
+                onEpicClick={onEpicClick}
               />
             ))}
           </SortableContext>
@@ -132,6 +135,7 @@ interface VirtualTaskListProps {
   setNodeRef: (el: HTMLElement | null) => void;
   onTaskClick: (taskId: string) => void;
   onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
+  onEpicClick?: (epicId: string) => void;
   isCreating: boolean;
   onInlineCreate?: (phaseId: string, title: string) => Promise<void>;
   onCancelCreate: () => void;
@@ -150,6 +154,7 @@ function VirtualTaskList({
   setNodeRef,
   onTaskClick,
   onTaskContextMenu,
+  onEpicClick,
   isCreating,
   onInlineCreate,
   onCancelCreate,
@@ -216,6 +221,7 @@ function VirtualTaskList({
                   task={task}
                   onClick={() => onTaskClick(task.id)}
                   onContextMenu={onTaskContextMenu}
+                  onEpicClick={onEpicClick}
                 />
               </div>
             );

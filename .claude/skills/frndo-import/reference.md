@@ -74,7 +74,10 @@ Load schemas first via ToolSearch (`select:mcp__bigbluebam__<name>`).
 | Create parent | `create_task` | required: `project_id`, `title` (≤500), `phase_id` (name or UUID both work; pass UUIDs). Optional: `description` (markdown), `priority` enum `critical/high/medium/low/none`, `epic_id`, `label_ids` |
 | Create subtask | `create_task` with `parent_task_id` (parent UUID) | parent's subtask counter updates server-side |
 | Due date | `update_task` (`task_id`, `due_date` ISO) | `create_task` has NO due_date field |
-| Epic lookup | `bam_list_epics` | only if the user asked for epic grouping |
+| Epic: list | `bam_list_epics` (`project_id`) | the idempotency half — find an epic by name before creating |
+| Epic: create | `bam_create_epic` (`project_id`, `name`, …) | create-if-absent; returns `{data:{id,…}}` |
+| Epic: assign (new task) | `create_task` `epic_id` | set at creation for parent AND each subtask |
+| Epic: assign (existing task) | `update_task` (`task_id`, `epic_id`) | retrofit path — `update_task` now accepts `epic_id` |
 
 Gotchas:
 - `create_task` returns `{data: {id, human_id, …}}` — capture `id` for
@@ -84,6 +87,9 @@ Gotchas:
 - Rate limits exist; on a 429 back off a few seconds and continue.
 - NEVER call `delete_task` in this pipeline. Failed half-imports are
   reported, not rolled back.
+- Epics are idempotent by NAME within a project: list once up front, build
+  a `name → epic_id` map, create only the missing ones. Both the parent
+  task and ALL its subtasks get the same `epic_id`.
 
 ## Task spec (coordinator → bam-task-importer)
 
@@ -100,6 +106,7 @@ Gotchas:
       "description": "## Story\n…\n\n## Context\n…\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Jul 15\"_",
       "priority": "critical",
       "due_date": "2026-07-15",
+      "epic_name": "Reduce Latency",
       "subtasks": [
         { "title": "<criterion>", "description": null }
       ]
@@ -107,3 +114,10 @@ Gotchas:
   ]
 }
 ```
+
+`epic_name` (optional, per task): the verbatim CSV **Features** cell. When
+present, the importer ensures an epic with that exact name exists in the
+project (idempotent by name) and assigns BOTH the parent task and every
+subtask to it. Omit it (or leave null) to skip epic assignment. The
+spec-level `epic_id` is a different thing — a single pre-resolved epic for
+the whole batch; `epic_name` is per-task and resolved by the importer.
