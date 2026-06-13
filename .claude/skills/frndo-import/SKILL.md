@@ -130,8 +130,12 @@ against its source story.
 
 - This skill creates and updates tasks; it NEVER deletes anything, and it
   never edits the user's original source files (the addendum is a new file).
-- Re-runs must be idempotent: exact-title matches (normalized) skip
-  silently; NEAR matches (typos, minor rewording) are never auto-created
-  and never auto-skipped — they come back to the user to adjudicate.
+- Re-runs must be idempotent AND self-healing: exact-title matches
+  (normalized) are reconciled, not blind-skipped — the importer lists the
+  existing parent's subtasks and backfills any the spec defines but the
+  board lacks (recovers a run that died between creating a parent and its
+  subtasks), reporting them under `repaired`. NEAR matches (typos, minor
+  rewording) are never auto-created and never auto-skipped — they come
+  back to the user to adjudicate.
 - Local sandbox first: if `get_server_info` shows anything other than the
   local/dev server, stop and confirm with the user before writing.
