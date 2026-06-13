@@ -761,3 +761,71 @@ describe('RailwayOrchestrator.reconcile()', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Post-deploy smoke verify
+// ---------------------------------------------------------------------------
+
+describe('RailwayOrchestrator.verify()', () => {
+  function mockFetch(handler) {
+    return vi.fn(async (url, init = {}) => handler(String(url), init));
+  }
+  function res({ status = 200, headers = {}, text = '' } = {}) {
+    const h = new Map(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+    return {
+      status,
+      ok: status >= 200 && status < 300,
+      headers: { get: (k) => h.get(String(k).toLowerCase()) ?? null },
+      text: async () => text,
+    };
+  }
+
+  it('passes the no-token path when ingress, api, and mcp are reachable', async () => {
+    global.fetch = mockFetch((url) => {
+      if (url.includes('/b3/api/public/config')) return res({ status: 200, text: '{}' });
+      if (url.includes('/mcp/')) return res({ status: 401 }); // up, unauthenticated
+      if (url.endsWith('/')) return res({ status: 200 });
+      return res({ status: 404 });
+    });
+    const orch = new RailwayOrchestrator(makeFakeClient(), makeOptions());
+    const result = await orch.verify({ publicUrl: 'https://x.example.com' });
+    expect(result.ok).toBe(true);
+    expect(result.checks.find((c) => c.name === 'mcp→api hop').detail).toMatch(/skipped/);
+  });
+
+  it('fails the mcp→api hop check when get_me returns "fetch failed" (the :4000-class outage)', async () => {
+    global.fetch = mockFetch((url, init) => {
+      if (url.includes('/b3/api/public/config')) return res({ status: 200 });
+      // mcp handshake — match on body before the generic /mcp/ probe
+      const body = typeof init.body === 'string' ? init.body : '';
+      if (body.includes('initialize')) return res({ status: 200, headers: { 'mcp-session-id': 'sess-1' } });
+      if (body.includes('notifications/initialized')) return res({ status: 202 });
+      if (body.includes('get_me')) return res({ status: 200, text: '{"error":"fetch failed"}' });
+      if (url.includes('/mcp/')) return res({ status: 401 });
+      if (url.endsWith('/')) return res({ status: 200 });
+      return res({ status: 404 });
+    });
+    const orch = new RailwayOrchestrator(makeFakeClient(), makeOptions());
+    const result = await orch.verify({ publicUrl: 'https://x.example.com', token: 'bbam_test' });
+    const hop = result.checks.find((c) => c.name === 'mcp→api hop');
+    expect(hop.ok).toBe(false);
+    expect(hop.detail).toMatch(/upstream api fetch failed/i);
+    expect(result.ok).toBe(false);
+  });
+
+  it('passes the mcp→api hop when get_me resolves a profile', async () => {
+    global.fetch = mockFetch((url, init) => {
+      if (url.includes('/b3/api/public/config')) return res({ status: 200 });
+      const body = typeof init.body === 'string' ? init.body : '';
+      if (body.includes('initialize')) return res({ status: 200, headers: { 'mcp-session-id': 'sess-1' } });
+      if (body.includes('notifications/initialized')) return res({ status: 202 });
+      if (body.includes('get_me')) return res({ status: 200, text: '{"data":{"email":"a@b.com"}}' });
+      if (url.includes('/mcp/')) return res({ status: 401 });
+      if (url.endsWith('/')) return res({ status: 200 });
+      return res({ status: 404 });
+    });
+    const orch = new RailwayOrchestrator(makeFakeClient(), makeOptions());
+    const result = await orch.verify({ publicUrl: 'https://x.example.com', token: 'bbam_test' });
+    expect(result.ok).toBe(true);
+  });
+});

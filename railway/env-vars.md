@@ -128,7 +128,7 @@ with **R**, optional with `o`.
 | o | `LIVEKIT_HOST` | computed | `http://livekit.railway.internal:7880` |  |
 | o | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
-| o | `LIVEKIT_WS_URL` | public | `wss://<your-public-domain>` | Public WebSocket URL clients use. If exposing LiveKit publicly, point to its Railway domain or your custom subdomain. Otherwise leave blank to disable voice/video. |
+| o | `LIVEKIT_WS_URL` | literal | `/livekit-ws` |  |
 | o | `VOICE_AGENT_URL` | computed | `http://voice-agent.railway.internal:8080` |  |
 
 ### beacon-api
@@ -215,7 +215,7 @@ with **R**, optional with `o`.
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 | o | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | o | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
-| o | `LIVEKIT_URL` | computed | `ws://livekit.railway.internal:7880` |  |
+| o | `LIVEKIT_URL` | literal | `/livekit-ws` |  |
 
 ### bond-api
 
@@ -354,6 +354,7 @@ with **R**, optional with `o`.
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
+| o | `LIVEKIT_URL` | literal | `/livekit-ws` |  |
 | o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BOOK_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BOARD_INTERNAL_URL` | unknown | `<see app docs>` |  |
@@ -410,6 +411,7 @@ with **R**, optional with `o`.
 | o | `SMTP_USER` | user | `<smtp-user>` |  |
 | o | `SMTP_PASS` | user | `<smtp-password>` |  |
 | o | `SMTP_FROM` | user | `noreply@yourdomain.com` |  |
+| o | `LIVEKIT_TURN_CHECK_TARGET` | user | `<turn.your-domain:port>` | Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>. |
 
 ### voice-agent
 
@@ -417,7 +419,7 @@ with **R**, optional with `o`.
 
 | R/o | Variable | Kind | Value | Note |
 |---|---|---|---|---|
-| **R** | `LIVEKIT_URL` | computed | `ws://livekit.railway.internal:7880` |  |
+| **R** | `LIVEKIT_URL` | literal | `/livekit-ws` |  |
 | **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
 
 ### site
@@ -461,6 +463,11 @@ _No environment variables required._
 |---|---|---|---|---|
 | **R** | `LIVEKIT_API_KEY` | secret | `<generate>` | openssl rand -hex 16 — must MATCH on livekit, banter-api, board-api, voice-agent |
 | **R** | `LIVEKIT_API_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent |
+| o | `LIVEKIT_TURN_DOMAIN` | user | `<turn.your-domain>` | Public FQDN for the TURN relay, e.g. turn.example.com. Add a DNS CNAME to the Railway TCP-proxy host. Required for public-internet calls. |
+| o | `LIVEKIT_TURN_TLS_PORT` | user | `<railway-tcp-proxy-port>` | The public port of the livekit TCP proxy (target 5349). The deploy creates the proxy and prints this port; paste it here. |
+| o | `LIVEKIT_TURN_CERT_PEM` | user | `<lets-encrypt-fullchain-pem>` | PEM body of a publicly-trusted cert for LIVEKIT_TURN_DOMAIN (browsers validate it; self-signed fails). Issue via Let's Encrypt DNS-01. |
+| o | `LIVEKIT_TURN_KEY_PEM` | user | `<lets-encrypt-privkey-pem>` | PEM body of the private key paired with LIVEKIT_TURN_CERT_PEM. |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
 
 ### migrate
 
@@ -478,6 +485,6 @@ several services. Set them once, then copy/reference everywhere.
 
 - `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
-- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, mcp-server, worker
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, mcp-server, worker, livekit
 - `LIVEKIT_API_KEY` — banter-api, board-api, bureau-api, livekit
 - `LIVEKIT_API_SECRET` — banter-api, board-api, bureau-api, livekit

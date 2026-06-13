@@ -107,16 +107,54 @@ export const ENV_HINTS = {
     value: '<generate>',
     note: 'openssl rand -hex 32 — must MATCH on livekit, banter-api, board-api, voice-agent',
   },
+  // Server-side SFU address (token minting, room management, webhook
+  // validation) — internal DNS is correct because these calls originate
+  // inside Railway's private network.
   LIVEKIT_HOST: { kind: 'computed', value: internal('livekit') },
-  LIVEKIT_URL: { kind: 'computed', value: internal('livekit').replace('http://', 'ws://') },
-  LIVEKIT_WS_URL: {
-    kind: 'public',
-    value: 'wss://<your-public-domain>',
-    note: 'Public WebSocket URL clients use. If exposing LiveKit publicly, point to its Railway domain or your custom subdomain. Otherwise leave blank to disable voice/video.',
-  },
+  // Browser-facing signaling URL. A RELATIVE path is deliberate: the call
+  // widget resolves `/livekit-ws` against the page origin, so an https page
+  // gets a same-origin `wss://<domain>/livekit-ws` and never a mixed-content
+  // ws://host:7880. nginx proxies /livekit-ws/ → livekit:7880. This is exactly
+  // what docker-compose uses and it is domain-independent, so it stays correct
+  // across custom domains with no per-deploy substitution. (Previously
+  // LIVEKIT_URL was the internal ws:// DNS and LIVEKIT_WS_URL omitted the
+  // /livekit-ws path — both handed browsers an unreachable address, so calling
+  // was broken-by-deploy on Railway.)
+  LIVEKIT_URL: { kind: 'literal', value: '/livekit-ws' },
+  LIVEKIT_WS_URL: { kind: 'literal', value: '/livekit-ws' },
   LIVEKIT_WEBHOOK_URL: {
     kind: 'computed',
     value: `${internal('banter-api')}/v1/webhooks/livekit`,
+  },
+  // ── LiveKit TURN-TLS (public-internet media relay) ────────────────
+  // Railway has no public UDP, so browsers off the LAN can only reach the
+  // SFU through a TURN-TLS relay. The cert + DNS are irreducibly operator-
+  // supplied; the TLS port is auto-filled by the deploy after it creates the
+  // livekit TCP proxy (see the post-deploy LiveKit checklist).
+  LIVEKIT_TURN_DOMAIN: {
+    kind: 'user',
+    value: '<turn.your-domain>',
+    note: 'Public FQDN for the TURN relay, e.g. turn.example.com. Add a DNS CNAME to the Railway TCP-proxy host. Required for public-internet calls.',
+  },
+  LIVEKIT_TURN_TLS_PORT: {
+    kind: 'user',
+    value: '<railway-tcp-proxy-port>',
+    note: 'The public port of the livekit TCP proxy (target 5349). The deploy creates the proxy and prints this port; paste it here.',
+  },
+  LIVEKIT_TURN_CERT_PEM: {
+    kind: 'user',
+    value: '<lets-encrypt-fullchain-pem>',
+    note: 'PEM body of a publicly-trusted cert for LIVEKIT_TURN_DOMAIN (browsers validate it; self-signed fails). Issue via Let\'s Encrypt DNS-01.',
+  },
+  LIVEKIT_TURN_KEY_PEM: {
+    kind: 'user',
+    value: '<lets-encrypt-privkey-pem>',
+    note: 'PEM body of the private key paired with LIVEKIT_TURN_CERT_PEM.',
+  },
+  LIVEKIT_TURN_CHECK_TARGET: {
+    kind: 'user',
+    value: '<turn.your-domain:port>',
+    note: 'Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>.',
   },
 
   // ── Inter-service URLs (internal Railway DNS) ────────────────────

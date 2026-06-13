@@ -31,6 +31,23 @@ const PLATFORMS = [dockerCompose, railway];
 async function main() {
   banner('BigBlueBam Deployment Setup');
 
+  // --- Auxiliary Railway subcommands (operate on an already-deployed stack) ---
+  // These short-circuit the full guided flow. They are Railway-only.
+  const argv = process.argv;
+  if (argv.includes('--reconcile') || argv.includes('--reconcile-dry-run')) {
+    const dryRun = argv.includes('--reconcile-dry-run');
+    if (typeof railway.reconcile !== 'function') throw new Error('Reconcile is only supported on the Railway platform.');
+    await railway.reconcile({ dryRun });
+    return;
+  }
+  if (argv.includes('--verify')) {
+    if (typeof railway.verify !== 'function') throw new Error('Verify is only supported on the Railway platform.');
+    // Optional --url=<host> ; token comes from BBB_VERIFY_TOKEN.
+    const urlArg = argv.find((a) => a.startsWith('--url='));
+    await railway.verify({ publicUrl: urlArg ? urlArg.slice('--url='.length) : null });
+    return;
+  }
+
   // Railway referral. Signing up with the referral code doesn't cost the
   // operator anything extra — it just gives BigBlueBam a small Railway
   // credit that helps fund continued development. Shown before the

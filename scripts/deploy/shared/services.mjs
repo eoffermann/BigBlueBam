@@ -311,6 +311,11 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
+        // Browser-facing signaling URL the bureau call widget hands to
+        // clients. Without it bureau-api defaults to ws://localhost:7880 and
+        // calls cannot connect on Railway. Resolves to the relative
+        // /livekit-ws path (same-origin wss via nginx).
+        'LIVEKIT_URL',
         'BOLT_API_INTERNAL_URL',
         'BOOK_INTERNAL_URL', 'BOARD_INTERNAL_URL', 'BRIEF_INTERNAL_URL',
         'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
@@ -360,6 +365,9 @@ export const APP_SERVICES = [
         'INTERNAL_SERVICE_SECRET',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
+        // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
+        // TURN cert lapses; no-op until set (format turn.example.com:port).
+        'LIVEKIT_TURN_CHECK_TARGET',
       ],
     },
   },
@@ -496,7 +504,15 @@ export const INFRA_SERVICES = [
     volume: null, // stateless — config is baked into the image
     env: {
       required: ['LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'],
-      optional: [],
+      // TURN-TLS makes public-internet calls work; all operator-supplied
+      // (cert/DNS/domain), surfaced by the post-deploy LiveKit checklist.
+      // INTERNAL_SERVICE_SECRET lets the container post its boot topology
+      // report (LIVEKIT_RAILWAY_BOOT / _NO_TURN) to the platform log.
+      optional: [
+        'LIVEKIT_TURN_DOMAIN', 'LIVEKIT_TURN_TLS_PORT',
+        'LIVEKIT_TURN_CERT_PEM', 'LIVEKIT_TURN_KEY_PEM',
+        'INTERNAL_SERVICE_SECRET',
+      ],
     },
   },
 ];
