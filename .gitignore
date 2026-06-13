@@ -13,7 +13,10 @@ Thumbs.db
 .vite/
 e2e-*.png
 test-*.png
-.claude/
+# Claude Code: local/session state stays private, but shared agent
+# definitions and skills are versioned like any other project tooling.
+.claude/*
+site/.claude/
 .claire/
 .deploy-state.json
 .deploy-state-railway.json
@@ -39,3 +42,10 @@ infra/livekit/advertised.json
 # Python bytecode caches (apps/voice-agent)
 __pycache__/
 *.pyc
+
+# Re-include Claude Code shared agent/skill definitions (overrides the
+# .claude/* and agents/ rules above — negations must come last).
+!.claude/agents
+!.claude/agents/**
+!.claude/skills
+!.claude/skills/**
