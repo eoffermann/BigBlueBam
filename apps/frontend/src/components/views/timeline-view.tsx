@@ -12,10 +12,21 @@ import {
 } from 'date-fns';
 import type { Phase, Task } from '@bigbluebam/shared';
 import { cn } from '@/lib/utils';
+import { usePriorityMap, type Priority } from '@/hooks/use-priorities';
+import {
+  type LaneSort,
+  LANE_SORT_OPTIONS,
+  sortGroups,
+  topPriority,
+  topPriorityPosition,
+  taskEpicRef,
+} from '@/lib/epic-grouping';
+import { EpicPriorityBadge } from '@/components/board/epic-group-ui';
+import { Select } from '@/components/common/select';
 import { TimelineExportMenu } from './timeline-export-menu';
 
 type ZoomLevel = 'day' | 'week' | 'month';
-type GroupBy = 'assignee' | 'phase';
+type GroupBy = 'assignee' | 'phase' | 'epic';
 
 interface TimelineViewProps {
   phases: (Phase & { tasks: Task[] })[];
@@ -43,6 +54,8 @@ interface TimelineGroup {
   key: string;
   label: string;
   tasks: Task[];
+  topPriorityPos?: number;
+  topPriorityRow?: Priority | null;
 }
 
 function getTaskDateRange(task: Task): { start: Date; end: Date } | null {
@@ -68,7 +81,9 @@ function getTaskDot(task: Task): Date {
 export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewProps) {
   const [zoom, setZoom] = useState<ZoomLevel>('week');
   const [groupBy, setGroupBy] = useState<GroupBy>('phase');
+  const [laneSort, setLaneSort] = useState<LaneSort>('priority-desc');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { ordered: priorityRows } = usePriorityMap();
 
   const allTasks = useMemo(() => phases.flatMap((p) => p.tasks), [phases]);
 
@@ -137,6 +152,25 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
     if (groupBy === 'phase') {
       return phases.map((p) => ({ key: p.id, label: p.name, tasks: p.tasks }));
     }
+    if (groupBy === 'epic') {
+      const posByValue = new Map(priorityRows.map((p) => [p.value, p.position]));
+      const byEpic = new Map<string, { label: string; tasks: Task[] }>();
+      for (const task of allTasks) {
+        const epic = taskEpicRef(task);
+        const key = epic?.id ?? task.epic_id ?? '__no_epic__';
+        const label = epic?.name ?? 'No Epic';
+        if (!byEpic.has(key)) byEpic.set(key, { label, tasks: [] });
+        byEpic.get(key)!.tasks.push(task);
+      }
+      const built = [...byEpic.entries()].map(([key, val]) => ({
+        key,
+        label: val.label,
+        tasks: val.tasks,
+        topPriorityPos: topPriorityPosition(val.tasks, posByValue),
+        topPriorityRow: topPriority(val.tasks, priorityRows),
+      }));
+      return sortGroups(built, laneSort);
+    }
     // assignee
     const byAssignee = new Map<string, { label: string; tasks: Task[] }>();
     for (const task of allTasks) {
@@ -155,7 +189,7 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
         return 0;
       })
       .map(([key, val]) => ({ key, label: val.label, tasks: val.tasks }));
-  }, [groupBy, phases, allTasks]);
+  }, [groupBy, phases, allTasks, laneSort, priorityRows]);
 
   // Today marker position
   const todayX = dateToX(startOfDay(new Date()));
@@ -166,7 +200,7 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
       <div className="flex items-center gap-4 px-6 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
         {/* Group by tabs */}
         <div className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 p-0.5">
-          {(['phase', 'assignee'] as const).map((g) => (
+          {(['phase', 'assignee', 'epic'] as const).map((g) => (
             <button
               key={g}
               onClick={() => setGroupBy(g)}
@@ -177,10 +211,20 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
                   : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300',
               )}
             >
-              {g === 'phase' ? 'By Phase' : 'By Assignee'}
+              {g === 'phase' ? 'By Phase' : g === 'assignee' ? 'By Assignee' : 'By Epic'}
             </button>
           ))}
         </div>
+
+        {groupBy === 'epic' && (
+          <Select
+            options={LANE_SORT_OPTIONS}
+            value={laneSort}
+            onValueChange={(val) => setLaneSort(val as LaneSort)}
+            placeholder="Sort epics"
+            className="w-48"
+          />
+        )}
 
         {/* Zoom buttons */}
         <div className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 p-0.5">
@@ -204,7 +248,9 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
           <TimelineExportMenu
             phases={phases}
             projectName={projectName ?? 'Project'}
-            groupBy={groupBy}
+            // The PNG export groups by phase/assignee only; fall back to
+            // phase when the on-screen view is grouped by epic.
+            groupBy={groupBy === 'epic' ? 'phase' : groupBy}
           />
         </div>
       </div>
@@ -241,8 +287,15 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
               <div className="flex">
                 {/* Group label */}
                 <div className="w-48 shrink-0 px-3 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky left-0 z-[5]">
-                  {group.label}
-                  <span className="text-xs text-zinc-400 ml-1">({group.tasks.length})</span>
+                  <div className="flex items-center gap-1">
+                    <span className="truncate" title={group.label}>{group.label}</span>
+                    <span className="text-xs text-zinc-400 shrink-0">({group.tasks.length})</span>
+                  </div>
+                  {group.topPriorityRow && (
+                    <div className="mt-1">
+                      <EpicPriorityBadge priority={group.topPriorityRow} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Task bars area */}

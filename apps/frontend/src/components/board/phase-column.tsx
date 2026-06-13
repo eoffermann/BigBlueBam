@@ -15,6 +15,12 @@ interface PhaseColumnProps {
   onEpicClick?: (epicId: string) => void;
   onAddTask: (phaseId: string) => void;
   onInlineCreate?: (phaseId: string, title: string) => Promise<void>;
+  /** Disambiguates the droppable id when the same phase is rendered in
+   *  multiple swimlanes — without it every lane's column shares one
+   *  droppable id and dnd-kit only registers one, breaking cross-status
+   *  drag in all but one lane. The drag handler still reads the real
+   *  phaseId from the droppable's data. */
+  laneKey?: string;
 }
 
 // Threshold at which virtualization activates. Below this, render the column
@@ -26,10 +32,10 @@ const VIRTUALIZE_THRESHOLD = 50;
 const ESTIMATED_CARD_HEIGHT = 104;
 const CARD_GAP = 8;
 
-export function PhaseColumn({ phase, onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, onInlineCreate }: PhaseColumnProps) {
+export function PhaseColumn({ phase, onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, onInlineCreate, laneKey }: PhaseColumnProps) {
   const [isCreating, setIsCreating] = useState(false);
   const { setNodeRef, isOver } = useDroppable({
-    id: `phase-${phase.id}`,
+    id: laneKey ? `phase-${laneKey}-${phase.id}` : `phase-${phase.id}`,
     data: { type: 'phase', phaseId: phase.id },
   });
 

@@ -19,7 +19,15 @@ import { useBoardStore } from '@/stores/board.store';
 import { useMoveTask } from '@/hooks/use-tasks';
 import { ApiError } from '@/lib/api';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { usePriorityMap } from '@/hooks/use-priorities';
+import { usePriorityMap, type Priority } from '@/hooks/use-priorities';
+import {
+  type LaneSort,
+  sortGroups,
+  topPriority,
+  topPriorityPosition,
+  taskEpicRef,
+} from '@/lib/epic-grouping';
+import { EpicPriorityBadge, CollapseAllMenu } from './epic-group-ui';
 import { PhaseColumn } from './phase-column';
 import { TaskCard } from './task-card';
 
@@ -31,11 +39,15 @@ interface SwimlaneGroup {
   tasks: Task[];
   taskCount: number;
   totalPoints: number;
+  topPriorityPos: number;
+  topPriorityRow: Priority | null;
 }
 
 interface SwimlaneBoardProps {
   phases: (Phase & { tasks: Task[] })[];
   groupBy: SwimlanGroupBy;
+  /** Lane ordering when grouped by epic (priority/name, either direction). */
+  laneSort?: LaneSort;
   onTaskClick: (taskId: string) => void;
   onTaskContextMenu?: (e: React.MouseEvent, task: Task) => void;
   onEpicClick?: (epicId: string) => void;
@@ -43,15 +55,24 @@ interface SwimlaneBoardProps {
   members?: Map<string, string>; // userId -> displayName
 }
 
-interface PriorityCatalogEntry { value: string; name: string; position: number }
-
 function buildGroups(
   phases: (Phase & { tasks: Task[] })[],
   groupBy: SwimlanGroupBy,
   members?: Map<string, string>,
-  priorityCatalog?: PriorityCatalogEntry[],
+  priorityCatalog?: Priority[],
 ): SwimlaneGroup[] {
   const allTasks = phases.flatMap((p) => p.tasks);
+  const pcat = priorityCatalog ?? [];
+  const posByValue = new Map(pcat.map((p) => [p.value, p.position]));
+  const decorate = (
+    g: { key: string; label: string; tasks: Task[] },
+  ): SwimlaneGroup => ({
+    ...g,
+    taskCount: g.tasks.length,
+    totalPoints: g.tasks.reduce((sum, t) => sum + (t.story_points ?? 0), 0),
+    topPriorityPos: topPriorityPosition(g.tasks, posByValue),
+    topPriorityRow: topPriority(g.tasks, pcat),
+  });
 
   if (groupBy === 'assignee') {
     const byAssignee = new Map<string, Task[]>();
@@ -76,16 +97,9 @@ function buildGroups(
       return (labels.get(a) ?? '').localeCompare(labels.get(b) ?? '');
     });
 
-    return keys.map((key) => {
-      const tasks = byAssignee.get(key)!;
-      return {
-        key,
-        label: labels.get(key) ?? 'Unknown',
-        tasks,
-        taskCount: tasks.length,
-        totalPoints: tasks.reduce((sum, t) => sum + (t.story_points ?? 0), 0),
-      };
-    });
+    return keys.map((key) =>
+      decorate({ key, label: labels.get(key) ?? 'Unknown', tasks: byAssignee.get(key)! }),
+    );
   }
 
   if (groupBy === 'priority') {
@@ -104,16 +118,7 @@ function buildGroups(
     return catalog
       .slice()
       .sort((a, b) => a.position - b.position)
-      .map((p) => {
-        const tasks = allTasks.filter((t) => t.priority === p.value);
-        return {
-          key: p.value,
-          label: p.name,
-          tasks,
-          taskCount: tasks.length,
-          totalPoints: tasks.reduce((sum, t) => sum + (t.story_points ?? 0), 0),
-        };
-      });
+      .map((p) => decorate({ key: p.value, label: p.name, tasks: allTasks.filter((t) => t.priority === p.value) }));
   }
 
   if (groupBy === 'epic') {
@@ -125,7 +130,7 @@ function buildGroups(
       // (see getBoardState). The legacy flat `epic_name` field this used to
       // read never exists on that payload, so every lane fell back to
       // "No Epic"; read the nested object instead.
-      const epic = (task as Task & { epic?: { id: string; name: string } | null }).epic;
+      const epic = taskEpicRef(task);
       const key = epic?.id ?? task.epic_id ?? '__no_epic__';
       const label = epic?.name ?? 'No Epic';
       if (!byEpic.has(key)) {
@@ -135,34 +140,14 @@ function buildGroups(
       byEpic.get(key)!.push(task);
     }
 
-    const keys = [...byEpic.keys()].sort((a, b) => {
-      if (a === '__no_epic__') return 1;
-      if (b === '__no_epic__') return -1;
-      return (labels.get(a) ?? '').localeCompare(labels.get(b) ?? '');
-    });
-
-    return keys.map((key) => {
-      const tasks = byEpic.get(key)!;
-      return {
-        key,
-        label: labels.get(key) ?? 'Unknown',
-        tasks,
-        taskCount: tasks.length,
-        totalPoints: tasks.reduce((sum, t) => sum + (t.story_points ?? 0), 0),
-      };
-    });
+    // Order is applied by the caller via sortGroups(laneSort); just emit them.
+    return [...byEpic.keys()].map((key) =>
+      decorate({ key, label: labels.get(key) ?? 'Unknown', tasks: byEpic.get(key)! }),
+    );
   }
 
   // 'none' — single group with all tasks
-  return [
-    {
-      key: '__all__',
-      label: 'All Tasks',
-      tasks: allTasks,
-      taskCount: allTasks.length,
-      totalPoints: allTasks.reduce((sum, t) => sum + (t.story_points ?? 0), 0),
-    },
-  ];
+  return [decorate({ key: '__all__', label: 'All Tasks', tasks: allTasks })];
 }
 
 function filterPhasesForGroup(
@@ -176,18 +161,27 @@ function filterPhasesForGroup(
   }));
 }
 
-export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, members }: SwimlaneBoardProps) {
+export function SwimlaneBoard({ phases, groupBy, laneSort = 'priority-desc', onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, members }: SwimlaneBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [laneMenu, setLaneMenu] = useState<{ x: number; y: number } | null>(null);
   const moveTaskInStore = useBoardStore((s) => s.moveTask);
   const moveTaskMutation = useMoveTask();
   const prefersReducedMotion = useReducedMotion();
   const { ordered: priorityRows } = usePriorityMap();
 
-  const groups = useMemo(
-    () => buildGroups(phases, groupBy, members, priorityRows),
-    [phases, groupBy, members, priorityRows],
+  const groups = useMemo(() => {
+    const built = buildGroups(phases, groupBy, members, priorityRows);
+    // The configurable lane sort applies when grouping by epic; assignee/
+    // priority/none keep their domain-specific ordering.
+    return groupBy === 'epic' ? sortGroups(built, laneSort) : built;
+  }, [phases, groupBy, members, priorityRows, laneSort]);
+
+  const collapseAll = useCallback(
+    () => setCollapsedGroups(new Set(groups.map((g) => g.key))),
+    [groups],
   );
+  const expandAll = useCallback(() => setCollapsedGroups(new Set()), []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -344,20 +338,27 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu,
 
           return (
             <div key={group.key} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-              {/* Swimlane header */}
+              {/* Swimlane header. Right-click anywhere on it for collapse
+                  all / expand all. */}
               <button
                 onClick={() => toggleGroup(group.key)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setLaneMenu({ x: e.clientX, y: e.clientY });
+                }}
                 className="flex items-center gap-3 w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition-colors text-left"
                 aria-expanded={!isCollapsed}
+                title="Right-click for collapse all / expand all"
               >
                 {isCollapsed ? (
                   <ChevronRight className="h-4 w-4 text-zinc-400 shrink-0" />
                 ) : (
                   <ChevronDown className="h-4 w-4 text-zinc-400 shrink-0" />
                 )}
-                <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 truncate max-w-[40vw]">
                   {group.label}
                 </span>
+                {group.topPriorityRow && <EpicPriorityBadge priority={group.topPriorityRow} />}
                 <span className="inline-flex items-center justify-center h-5 min-w-[20px] rounded-full bg-zinc-200 dark:bg-zinc-700 px-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
                   {group.taskCount}
                 </span>
@@ -382,6 +383,7 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu,
                       {groupPhases.map((phase) => (
                         <PhaseColumn
                           key={`${group.key}-${phase.id}`}
+                          laneKey={group.key}
                           phase={phase}
                           onTaskClick={onTaskClick}
                           onTaskContextMenu={onTaskContextMenu}
@@ -401,6 +403,16 @@ export function SwimlaneBoard({ phases, groupBy, onTaskClick, onTaskContextMenu,
       <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)' }}>
         {activeTask ? <TaskCard task={activeTask} isDragOverlay /> : null}
       </DragOverlay>
+
+      {laneMenu && (
+        <CollapseAllMenu
+          x={laneMenu.x}
+          y={laneMenu.y}
+          onCollapseAll={collapseAll}
+          onExpandAll={expandAll}
+          onClose={() => setLaneMenu(null)}
+        />
+      )}
     </DndContext>
   );
 }

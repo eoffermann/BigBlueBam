@@ -1,11 +1,21 @@
-import { useState, useMemo } from 'react';
-import { ArrowUp, ArrowDown, ArrowUpDown, CornerDownRight } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { ArrowUp, ArrowDown, ArrowUpDown, CornerDownRight, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Task, Phase, Priority } from '@bigbluebam/shared';
 import { PRIORITIES } from '@bigbluebam/shared';
 import { cn, formatDate, isOverdue } from '@/lib/utils';
 import { Badge } from '@/components/common/badge';
 import { Select } from '@/components/common/select';
 import { EpicChip, taskEpic } from '@/components/board/epic-chip';
+import { EpicPriorityBadge, CollapseAllMenu } from '@/components/board/epic-group-ui';
+import { usePriorityMap } from '@/hooks/use-priorities';
+import {
+  type LaneSort,
+  LANE_SORT_OPTIONS,
+  sortGroups,
+  topPriority,
+  topPriorityPosition,
+  taskEpicRef,
+} from '@/lib/epic-grouping';
 
 type SortField = 'human_id' | 'title' | 'state_name' | 'phase_name' | 'assignee' | 'priority' | 'story_points' | 'due_date' | 'created_at';
 type SortDirection = 'asc' | 'desc';
@@ -32,6 +42,11 @@ const priorityOrder: Record<string, number> = {
 export function ListView({ phases, onTaskClick, onUpdateTask, onEpicClick }: ListViewProps) {
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
+  const [groupByEpic, setGroupByEpic] = useState(false);
+  const [laneSort, setLaneSort] = useState<LaneSort>('priority-desc');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [laneMenu, setLaneMenu] = useState<{ x: number; y: number } | null>(null);
+  const { ordered: priorityRows } = usePriorityMap();
 
   const allTasks = useMemo(() => {
     const tasks: (Task & { phase_name?: string; state_name?: string })[] = [];
@@ -124,6 +139,40 @@ export function ListView({ phases, onTaskClick, onUpdateTask, onEpicClick }: Lis
     return rows;
   }, [allTasks, compareTasks]);
 
+  // Epic-grouped rows: each epic a collapsible section (parent + subtasks
+  // both carry the epic), tasks within sorted by the active column sort.
+  const epicGroups = useMemo(() => {
+    const posByValue = new Map(priorityRows.map((p) => [p.value, p.position]));
+    const byEpic = new Map<string, { label: string; tasks: typeof allTasks }>();
+    for (const t of allTasks) {
+      const epic = taskEpicRef(t);
+      const key = epic?.id ?? t.epic_id ?? '__no_epic__';
+      const label = epic?.name ?? 'No Epic';
+      if (!byEpic.has(key)) byEpic.set(key, { label, tasks: [] });
+      byEpic.get(key)!.tasks.push(t);
+    }
+    const built = [...byEpic.entries()].map(([key, val]) => ({
+      key,
+      label: val.label,
+      tasks: val.tasks.slice().sort(compareTasks),
+      topPriorityPos: topPriorityPosition(val.tasks, posByValue),
+      topPriorityRow: topPriority(val.tasks, priorityRows),
+    }));
+    return sortGroups(built, laneSort);
+  }, [allTasks, compareTasks, laneSort, priorityRows]);
+
+  const collapseAll = useCallback(
+    () => setCollapsed(new Set(epicGroups.map((g) => g.key))),
+    [epicGroups],
+  );
+  const expandAll = useCallback(() => setCollapsed(new Set()), []);
+  const toggleSection = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -155,9 +204,101 @@ export function ListView({ phases, onTaskClick, onUpdateTask, onEpicClick }: Lis
     { field: 'created_at', label: 'Created', className: 'w-28' },
   ];
 
+  const renderRow = (task: (typeof allTasks)[number], depth: number, key: string) => {
+    const overdue = isOverdue(task.due_date);
+    const epic = taskEpic(task);
+    return (
+      <div
+        key={key}
+        className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 cursor-pointer transition-colors text-sm"
+        onClick={() => onTaskClick(task.id)}
+      >
+        {depth > 0 && (
+          <div
+            className="shrink-0 flex items-center justify-end text-zinc-300 dark:text-zinc-600"
+            style={{ width: depth * 18 }}
+            aria-hidden
+          >
+            <CornerDownRight className="h-3.5 w-3.5" />
+          </div>
+        )}
+        <div className="w-24 font-mono text-xs text-zinc-400 truncate shrink-0">
+          {task.human_id}
+        </div>
+        <div className="flex-1 min-w-[200px] min-w-0">
+          <div className="text-zinc-900 dark:text-zinc-100 font-medium truncate">
+            {task.title}
+          </div>
+          {/* Hide the epic chip when already grouped by epic — redundant. */}
+          {!groupByEpic && epic && (
+            <div className="mt-0.5">
+              <EpicChip epic={epic} onClick={onEpicClick ? () => onEpicClick(epic.id) : undefined} />
+            </div>
+          )}
+        </div>
+        <div className="w-28 truncate">
+          <Badge variant="default">{(task as { phase_name?: string }).phase_name ?? '-'}</Badge>
+        </div>
+        <div className="w-32" onClick={(e) => e.stopPropagation()}>
+          <Select
+            options={priorityOptions}
+            value={task.priority}
+            onValueChange={(val) => onUpdateTask?.(task.id, { priority: val as Priority })}
+            className="w-full"
+          />
+        </div>
+        <div className="w-20" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="number"
+            min={0}
+            value={task.story_points ?? ''}
+            onChange={(e) => {
+              const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+              onUpdateTask?.(task.id, { story_points: val } as Partial<Task>);
+            }}
+            className="w-full rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-zinc-700 dark:text-zinc-100"
+            placeholder="-"
+          />
+        </div>
+        <div className={cn('w-28 text-xs', overdue ? 'text-red-600 font-medium' : 'text-zinc-500')}>
+          {task.due_date ? formatDate(task.due_date) : '-'}
+        </div>
+        <div className="w-28 text-xs text-zinc-400">{formatDate(task.created_at)}</div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Table header */}
+      {/* Controls: group-by-epic toggle + (when on) lane sort */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+        <button
+          type="button"
+          onClick={() => setGroupByEpic((v) => !v)}
+          className={cn(
+            'rounded-lg border px-3 py-1.5 text-sm transition-colors',
+            groupByEpic
+              ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-700 dark:bg-zinc-800 dark:text-primary-400'
+              : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400',
+          )}
+        >
+          Group by Epic
+        </button>
+        {groupByEpic && (
+          <Select
+            options={LANE_SORT_OPTIONS}
+            value={laneSort}
+            onValueChange={(val) => setLaneSort(val as LaneSort)}
+            placeholder="Sort epics"
+            className="w-48"
+          />
+        )}
+        {groupByEpic && (
+          <span className="text-xs text-zinc-400">Right-click an epic header for collapse all / expand all</span>
+        )}
+      </div>
+
+      {/* Column header */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-xs font-medium text-zinc-500 uppercase tracking-wider shrink-0">
         {columns.map((col) => (
           <button
@@ -176,99 +317,56 @@ export function ListView({ phases, onTaskClick, onUpdateTask, onEpicClick }: Lis
 
       {/* Table body */}
       <div className="flex-1 overflow-y-auto">
-        {treeRows.length === 0 ? (
+        {allTasks.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-sm text-zinc-400">
             No tasks found.
           </div>
-        ) : (
-          treeRows.map(({ task, depth, pathKey }) => {
-            const overdue = isOverdue(task.due_date);
+        ) : groupByEpic ? (
+          epicGroups.map((group) => {
+            const isCollapsed = collapsed.has(group.key);
             return (
-              <div
-                key={pathKey}
-                className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 cursor-pointer transition-colors text-sm"
-                onClick={() => onTaskClick(task.id)}
-              >
-                {/* Hierarchy indent + connector */}
-                {depth > 0 && (
-                  <div
-                    className="shrink-0 flex items-center justify-end text-zinc-300 dark:text-zinc-600"
-                    style={{ width: depth * 18 }}
-                    aria-hidden
-                  >
-                    <CornerDownRight className="h-3.5 w-3.5" />
-                  </div>
-                )}
-
-                {/* ID */}
-                <div className="w-24 font-mono text-xs text-zinc-400 truncate shrink-0">
-                  {task.human_id}
-                </div>
-
-                {/* Title + epic chip */}
-                <div className="flex-1 min-w-[200px] min-w-0">
-                  <div className="text-zinc-900 dark:text-zinc-100 font-medium truncate">
-                    {task.title}
-                  </div>
-                  {(() => {
-                    const epic = taskEpic(task);
-                    return epic ? (
-                      <div className="mt-0.5">
-                        <EpicChip
-                          epic={epic}
-                          onClick={onEpicClick ? () => onEpicClick(epic.id) : undefined}
-                        />
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-
-                {/* Phase */}
-                <div className="w-28 truncate">
-                  <Badge variant="default">
-                    {(task as { phase_name?: string }).phase_name ?? '-'}
-                  </Badge>
-                </div>
-
-                {/* Priority - inline editable */}
-                <div className="w-32" onClick={(e) => e.stopPropagation()}>
-                  <Select
-                    options={priorityOptions}
-                    value={task.priority}
-                    onValueChange={(val) => onUpdateTask?.(task.id, { priority: val as Priority })}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Story Points - inline editable */}
-                <div className="w-20" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="number"
-                    min={0}
-                    value={task.story_points ?? ''}
-                    onChange={(e) => {
-                      const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                      onUpdateTask?.(task.id, { story_points: val } as Partial<Task>);
-                    }}
-                    className="w-full rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-zinc-700 dark:text-zinc-100"
-                    placeholder="-"
-                  />
-                </div>
-
-                {/* Due Date */}
-                <div className={cn('w-28 text-xs', overdue ? 'text-red-600 font-medium' : 'text-zinc-500')}>
-                  {task.due_date ? formatDate(task.due_date) : '-'}
-                </div>
-
-                {/* Created */}
-                <div className="w-28 text-xs text-zinc-400">
-                  {formatDate(task.created_at)}
-                </div>
+              <div key={group.key}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection(group.key)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setLaneMenu({ x: e.clientX, y: e.clientY });
+                  }}
+                  className="flex items-center gap-2 w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-900/70 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 border-b border-zinc-200 dark:border-zinc-800 text-left sticky top-0 z-[5]"
+                  title="Right-click for collapse all / expand all"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="h-4 w-4 text-zinc-400 shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-zinc-400 shrink-0" />
+                  )}
+                  <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 truncate max-w-[50vw]">
+                    {group.label}
+                  </span>
+                  {group.topPriorityRow && <EpicPriorityBadge priority={group.topPriorityRow} />}
+                  <span className="inline-flex items-center justify-center h-5 min-w-[20px] rounded-full bg-zinc-200 dark:bg-zinc-700 px-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    {group.tasks.length}
+                  </span>
+                </button>
+                {!isCollapsed && group.tasks.map((t) => renderRow(t, 0, `${group.key}/${t.id}`))}
               </div>
             );
           })
+        ) : (
+          treeRows.map(({ task, depth, pathKey }) => renderRow(task, depth, pathKey))
         )}
       </div>
+
+      {laneMenu && (
+        <CollapseAllMenu
+          x={laneMenu.x}
+          y={laneMenu.y}
+          onCollapseAll={collapseAll}
+          onExpandAll={expandAll}
+          onClose={() => setLaneMenu(null)}
+        />
+      )}
     </div>
   );
 }

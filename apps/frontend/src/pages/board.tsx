@@ -5,6 +5,7 @@ import type { Task, PaginatedResponse } from '@bigbluebam/shared';
 import { AppLayout } from '@/components/layout/app-layout';
 import { BoardView } from '@/components/board/board-view';
 import { SwimlaneBoard, type SwimlanGroupBy } from '@/components/board/swimlane-board';
+import { type LaneSort, LANE_SORT_OPTIONS } from '@/lib/epic-grouping';
 import { SprintSelector } from '@/components/board/sprint-selector';
 import { FilterBar } from '@/components/board/filter-bar';
 import { ViewSwitcher, type ViewMode } from '@/components/board/view-switcher';
@@ -78,6 +79,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   const [filters, setFilters] = useState<{ assignee_id?: string; priority?: string; state_id?: string; epic_id?: string; search?: string }>({});
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [swimlaneGroupBy, setSwimlaneGroupBy] = useState<SwimlanGroupBy>('none');
+  const [laneSort, setLaneSort] = useState<LaneSort>('priority-desc');
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -440,6 +442,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
             <SwimlaneBoard
               phases={filteredPhases}
               groupBy={swimlaneGroupBy}
+              laneSort={laneSort}
               onTaskClick={handleTaskClick}
               onTaskContextMenu={handleTaskContextMenu}
               onEpicClick={handleEpicClick}
@@ -551,6 +554,17 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                   onValueChange={(val) => setSwimlaneGroupBy(val as SwimlanGroupBy)}
                   placeholder="Swimlanes"
                   className="w-40"
+                />
+              )}
+
+              {/* Lane ordering — only meaningful when grouping by epic. */}
+              {viewMode === 'board' && swimlaneGroupBy === 'epic' && (
+                <Select
+                  options={LANE_SORT_OPTIONS}
+                  value={laneSort}
+                  onValueChange={(val) => setLaneSort(val as LaneSort)}
+                  placeholder="Sort epics"
+                  className="w-48"
                 />
               )}
 
