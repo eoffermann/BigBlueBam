@@ -36,6 +36,7 @@ vi.mock('../src/env.js', () => ({
     SESSION_SECRET: 'a'.repeat(32),
     REDIS_URL: 'redis://localhost:6379',
     CORS_ORIGIN: 'http://localhost:3000',
+    PUBLIC_URL: 'http://localhost',
     LOG_LEVEL: 'info',
     RATE_LIMIT_MAX: 100,
     RATE_LIMIT_WINDOW_MS: 60000,
