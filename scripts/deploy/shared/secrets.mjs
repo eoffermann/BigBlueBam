@@ -219,7 +219,9 @@ export function buildEnvConfig(choices) {
     CORS_ORIGIN: baseUrl,
     HELPDESK_URL: `${baseUrl}/helpdesk`,
     PUBLIC_URL: baseUrl,
-    TRACKING_BASE_URL: `${baseUrl}/t`,
+    // Bare root — the worker/blast append /t/o, /t/c, /unsub themselves
+    // (blast-send.job.ts:259-260). The old `${baseUrl}/t` doubled to /t/t/o.
+    TRACKING_BASE_URL: baseUrl,
 
     // Database
     POSTGRES_USER: 'bigbluebam',

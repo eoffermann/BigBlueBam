@@ -107,7 +107,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
+      EMAIL_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       # env.ts auto-promotes COOKIE_SECURE to true whenever NODE_ENV=production
       # (which it always is in this image). Browsers silently drop a Secure
@@ -237,7 +237,10 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
+      EMAIL_FROM: ${SMTP_FROM:-noreply@bigbluebam.com}
+      # worker builds outbound campaign tracking/pixel/unsub links from this
+      # bare root (blast-send.job.ts appends /t/o, /t/c, /unsub). Matches blast-api.
+      TRACKING_BASE_URL: ${PUBLIC_URL:-http://localhost}
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       BOLT_API_INTERNAL_URL: http://bolt-api:4006
     volumes:
@@ -698,12 +701,9 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASS=${SMTP_PASS:-}
-      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
-      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-}
+      # blast-api sends no email itself (the worker does); it only reads
+      # TRACKING_BASE_URL for in-SPA campaign deep-links. The SMTP_* block here
+      # was dead and was removed.
       - TRACKING_BASE_URL=${PUBLIC_URL:-http://localhost}
       # Wave D Phase 3: per-action permission enforcement at this satellite.
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
