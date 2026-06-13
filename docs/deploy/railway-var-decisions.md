@@ -81,15 +81,36 @@ differently and a third (voice-agent) uses the same var name server-side.
 
 ## mcp-server app-URL fan-out — the `/v1` suffix
 
-- **Code:** the mcp-server tool clients embed `/v1` in their request **paths**, so
-  their base URL must NOT include it: `apps/mcp-server/src/tools/banter-tools.ts`
-  (`/v1/channels`…), `beacon-tools.ts`, `helpdesk-tools.ts:467` (`/v1/helpdesk-users/upsert`).
-  Cross-checked against the proven docker-compose values (`docker-compose.yml`
-  mcp-server env): BANTER/BEACON/HELPDESK have **no** `/v1`; the rest carry `/v1`.
-- **DECISION:** `BANTER_API_URL`, `BEACON_API_URL`, `HELPDESK_API_URL` →
-  `http://<svc>.railway.internal:8080` (no `/v1`). `BUREAU_API_URL`,
-  `BLUEPRINT_API_URL`, and the BOLT/BEARING/BOARD/BOND/BLAST/BOOK/BENCH/BILL/BLANK
-  family → `…:8080/v1`.
+The `/v1` belongs in the base URL **iff the client requests bare resource paths
+while the target api mounts its routes under a `/v1` prefix.** It is per-service
+and must be checked from BOTH sides — the client path AND the api's route prefix.
+Do NOT infer it from docker-compose: the compose values had a latent Beacon bug
+(below), so cross-checking against them is circular.
+
+- **Clients that carry the prefix in the request path → base omits `/v1`:**
+  - `BANTER_API_URL` — `banter-tools.ts` requests `/v1/channels`, `/v1/users/…`.
+  - `HELPDESK_API_URL` — `helpdesk-tools.ts` requests `/helpdesk/tickets`,
+    `/helpdesk/settings`, `/v1/helpdesk-users/upsert` (each path self-prefixed).
+- **Clients that request bare resource paths → base MUST carry `/v1`** (because
+  every one of these apis registers routes with `prefix: '/v1'`, verified in each
+  `apps/<svc>-api/src/server.ts`):
+  - `BEACON_API_URL` — `beacon-tools.ts` requests bare `/beacons`; beacon-api
+    mounts `/v1` (`server.ts:104-112`). **Compose + env-hints had dropped the
+    `/v1`, so the 30 Beacon MCP tools 404'd on every stack incl. prod.** The
+    `env.ts` default (`…:4004/v1`) was the correct one all along; the override lost
+    it. **FIXED** 2026-06-13 in `docker-compose.yml`, `env-hints.mjs`, and pinned
+    by a `railway-orchestrator.test.mjs` assertion.
+  - `BRIEF_API_URL` — `brief-tools.ts` requests bare `/documents`; brief-api
+    mounts `/v1`. **Was absent from the mcp-server catalog optional list AND from
+    env-hints entirely, so reconcile never set it and prod fell back to the
+    `localhost:4005` default → Brief MCP tools failed on Railway.** **FIXED**
+    2026-06-13: added to `services.mjs` mcp-server `optional` + `env-hints.mjs`.
+  - `BOLT/BEARING/BOARD/BOND/BLAST/BOOK/BENCH/BILL/BLANK/BLUEPRINT/BUREAU` — all
+    bare-path clients against `/v1`-mounted apis (verified by sweep); base `/v1`.
+- **DECISION:** `BANTER_API_URL`, `HELPDESK_API_URL` →
+  `http://<svc>.railway.internal:8080` (no `/v1`). Every other satellite —
+  `BEACON`, `BRIEF`, `BOLT`, `BEARING`, `BOARD`, `BOND`, `BLAST`, `BOOK`, `BENCH`,
+  `BILL`, `BLANK`, `BLUEPRINT`, `BUREAU` → `http://<svc>.railway.internal:8080/v1`.
 
 ## `MCP_INTERNAL_API_TOKEN`
 - **Code:** `apps/mcp-server/src/env.ts:52` + `routes/tools-call.ts` — gates the

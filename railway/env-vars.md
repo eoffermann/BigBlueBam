@@ -377,7 +377,8 @@ with **R**, optional with `o`.
 | **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
 | o | `HELPDESK_API_URL` | computed | `http://helpdesk-api.railway.internal:8080` |  |
 | o | `BANTER_API_URL` | computed | `http://banter-api.railway.internal:8080` |  |
-| o | `BEACON_API_URL` | computed | `http://beacon-api.railway.internal:8080` |  |
+| o | `BEACON_API_URL` | computed | `http://beacon-api.railway.internal:8080/v1` |  |
+| o | `BRIEF_API_URL` | computed | `http://brief-api.railway.internal:8080/v1` |  |
 | o | `BOLT_API_URL` | computed | `http://bolt-api.railway.internal:8080/v1` |  |
 | o | `BEARING_API_URL` | computed | `http://bearing-api.railway.internal:8080/v1` |  |
 | o | `BOARD_API_URL` | computed | `http://board-api.railway.internal:8080/v1` |  |

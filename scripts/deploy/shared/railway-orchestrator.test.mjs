@@ -700,6 +700,12 @@ describe('buildAuthoritativeVariables', () => {
     expect(auth.BANTER_API_URL).toBe('http://banter-api.railway.internal:8080');
     expect(auth.BUREAU_API_URL).toBe('http://bureau-api.railway.internal:8080/v1');
     expect(auth.BLUEPRINT_API_URL).toBe('http://blueprint-api.railway.internal:8080/v1');
+    // Beacon's client uses bare `/beacons` paths while beacon-api mounts at /v1,
+    // so its base MUST carry /v1 (compose/env-hints had wrongly dropped it).
+    expect(auth.BEACON_API_URL).toBe('http://beacon-api.railway.internal:8080/v1');
+    // Brief was absent from the mcp-server catalog + env-hints entirely; once
+    // wired it computes with /v1 like the other bare-path-client satellites.
+    expect(auth.BRIEF_API_URL).toBe('http://brief-api.railway.internal:8080/v1');
     // MCP_INTERNAL_API_TOKEN is a `user` var — must NOT be in the authoritative
     // (overwritable) set, so reconcile never wipes a minted token.
     expect(auth.MCP_INTERNAL_API_TOKEN).toBeUndefined();

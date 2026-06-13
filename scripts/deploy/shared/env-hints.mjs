@@ -172,7 +172,19 @@ export const ENV_HINTS = {
   MCP_INTERNAL_URL: { kind: 'computed', value: internal('mcp-server') },
   BOND_API_INTERNAL_URL: { kind: 'computed', value: internal('bond-api') },
   HELPDESK_API_URL: { kind: 'computed', value: internal('helpdesk-api') },
-  BEACON_API_URL: { kind: 'computed', value: internal('beacon-api') },
+  // beacon-api mounts EVERY route under prefix '/v1' (apps/beacon-api/src/
+  // server.ts) and the mcp beacon client requests bare paths like `/beacons`
+  // (apps/mcp-server/src/tools/beacon-tools.ts), so the base MUST carry /v1 —
+  // unlike banter/helpdesk, whose clients embed the prefix in the request path.
+  // (The compose value + this hint had dropped the /v1, so beacon MCP tools
+  // 404'd; the env.ts default already carried /v1 and was the correct one.)
+  BEACON_API_URL: { kind: 'computed', value: `${internal('beacon-api')}/v1` },
+  // brief-api likewise mounts under '/v1' and the mcp brief client uses bare
+  // `/documents` paths, so its base carries /v1 too. This was missing from both
+  // this map AND the mcp-server catalog optional list, so reconcile never set it
+  // on Railway and prod fell back to the localhost:4005 default — Brief MCP
+  // tools failed there the same way the unset Banter/Bureau/Blueprint URLs did.
+  BRIEF_API_URL: { kind: 'computed', value: `${internal('brief-api')}/v1` },
   BOLT_API_URL: { kind: 'computed', value: `${internal('bolt-api')}/v1` },
   BEARING_API_URL: { kind: 'computed', value: `${internal('bearing-api')}/v1` },
   BOARD_API_URL: { kind: 'computed', value: `${internal('board-api')}/v1` },
@@ -185,10 +197,11 @@ export const ENV_HINTS = {
   // The mcp-server fans out to every app API. These three were missing, so on
   // Railway the mcp-server fell back to its `localhost:<port>` defaults and the
   // Banter (50+), Bureau, and Blueprint MCP tool families silently failed —
-  // the same class of bug as the API_INTERNAL_URL=:4000 mismatch. The /v1
-  // suffix matches what the mcp-server clients expect (Banter/Helpdesk/Beacon
-  // embed /v1 in their request paths so their base omits it; the rest carry
-  // /v1 in the base — see docker-compose.yml mcp-server env for the reference).
+  // the same class of bug as the API_INTERNAL_URL=:4000 mismatch. Banter and
+  // Helpdesk omit /v1 because their clients carry the prefix in the request
+  // path (/v1/channels, /helpdesk/tickets); every OTHER satellite client
+  // (beacon, brief, bond, board, …) uses bare resource paths, so its base
+  // carries /v1 — see docker-compose.yml mcp-server env for the reference.
   BANTER_API_URL: { kind: 'computed', value: internal('banter-api') },
   BUREAU_API_URL: { kind: 'computed', value: `${internal('bureau-api')}/v1` },
   BLUEPRINT_API_URL: { kind: 'computed', value: `${internal('blueprint-api')}/v1` },
