@@ -378,6 +378,13 @@ export const APP_SERVICES = [
       optional: [
         'WORKER_CONCURRENCY', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
+        // The worker's bolt-execute job POSTs to mcp-server's internal
+        // /tools/call to run MCP-tool actions (apps/worker/src/jobs/
+        // bolt-execute.job.ts:352 reads MCP_INTERNAL_URL, :267 sends the shared
+        // INTERNAL_SERVICE_SECRET). Without MCP_INTERNAL_URL it falls back to
+        // http://mcp-server:3001 — wrong host AND port on Railway — so Bolt
+        // automations with MCP-tool actions silently fail. env-hints computes it.
+        'MCP_INTERNAL_URL',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         // worker reads EMAIL_FROM (apps/worker/src/env.ts:10) — the single
         // canonical SMTP from-address fallback (the shared @bigbluebam/smtp-

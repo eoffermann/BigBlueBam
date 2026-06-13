@@ -406,6 +406,7 @@ with **R**, optional with `o`.
 | o | `WORKER_CONCURRENCY` | literal | `5` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| o | `MCP_INTERNAL_URL` | computed | `http://mcp-server.railway.internal:8080` |  |
 | o | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
 | o | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
 | o | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
