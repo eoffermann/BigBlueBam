@@ -232,6 +232,7 @@ services:
       S3_REGION: ${S3_REGION:-us-east-1}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -457,6 +458,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       BBB_API_INTERNAL_URL: http://api:4000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Wave D Phase 3: per-action permission enforcement at this satellite.
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
@@ -487,6 +489,7 @@ services:
       - HOST=0.0.0.0
       - LOG_LEVEL=info
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       # Wave D Phase 3: per-action permission enforcement at this satellite.
@@ -566,6 +569,7 @@ services:
       - HOST=0.0.0.0
       - LOG_LEVEL=info
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       # Wave D Phase 3: per-action permission enforcement at this satellite.
@@ -611,6 +615,7 @@ services:
       - HOST=0.0.0.0
       - LOG_LEVEL=info
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       # Wave D Phase 3: per-action permission enforcement at this satellite.
@@ -650,6 +655,7 @@ services:
       - HOST=0.0.0.0
       - LOG_LEVEL=info
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       # Wave D Phase 3: per-action permission enforcement at this satellite.
@@ -863,6 +869,7 @@ services:
       - HOST=0.0.0.0
       - LOG_LEVEL=info
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       - PUBLIC_FORM_RATE_LIMIT=10
@@ -906,6 +913,7 @@ services:
       - HOST=0.0.0.0
       - LOG_LEVEL=info
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       # Wave D Phase 3: per-action permission enforcement at this satellite.
