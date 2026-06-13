@@ -7,6 +7,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildServiceVariables,
+  buildAuthoritativeVariables,
+  diffAuthoritativeVariables,
   RailwayOrchestrator,
 } from './railway-orchestrator.mjs';
 import {
@@ -42,6 +44,7 @@ function makeFakeClient(overrides = {}) {
     updateServiceInstance: vi.fn().mockResolvedValue(true),
     upsertVariables: vi.fn().mockResolvedValue(true),
     triggerDeploy: vi.fn().mockResolvedValue(true),
+    getServiceVariables: vi.fn().mockResolvedValue({}),
     ...overrides,
   };
 }
@@ -635,5 +638,126 @@ describe('RailwayOrchestrator.run() — done event', () => {
     // run() returns the same summary
     expect(result).toEqual(lastEvent.summary);
     expect(result.servicesCreated).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Authoritative variable partitioning
+// ---------------------------------------------------------------------------
+
+describe('buildAuthoritativeVariables', () => {
+  it('keeps deploy-owned (computed/literal/plugin/reference) vars and drops context-owned ones', () => {
+    const api = getApiService();
+    const auth = buildAuthoritativeVariables(api);
+    // computed/plugin/literal stay
+    expect(auth.DATABASE_URL).toBe('${{Postgres.DATABASE_URL}}'); // plugin
+    expect(auth.S3_ENDPOINT).toMatch(/railway\.internal/); // computed
+    // secrets and user integrations are excluded — never clobbered on reconcile
+    expect(auth.SESSION_SECRET).toBeUndefined(); // secret
+    expect(auth.OAUTH_GITHUB_CLIENT_ID).toBeUndefined(); // user
+    expect(auth.CORS_ORIGIN).toBeUndefined(); // public
+  });
+
+  it('mcp-server authoritative set includes the corrected internal API URL on :8080 and the newly-wired app URLs', () => {
+    const mcp = APP_SERVICES.find((s) => s.name === 'mcp-server');
+    const auth = buildAuthoritativeVariables(mcp);
+    expect(auth.API_INTERNAL_URL).toBe('http://api.railway.internal:8080');
+    expect(auth.BANTER_API_URL).toBe('http://banter-api.railway.internal:8080');
+    expect(auth.BUREAU_API_URL).toBe('http://bureau-api.railway.internal:8080/v1');
+    expect(auth.BLUEPRINT_API_URL).toBe('http://blueprint-api.railway.internal:8080/v1');
+    // MCP_INTERNAL_API_TOKEN is a `user` var — must NOT be in the authoritative
+    // (overwritable) set, so reconcile never wipes a minted token.
+    expect(auth.MCP_INTERNAL_API_TOKEN).toBeUndefined();
+  });
+});
+
+describe('diffAuthoritativeVariables', () => {
+  it('classifies missing vs changed and ignores in-sync keys', () => {
+    const desired = { A: '1', B: '2', C: '3' };
+    const live = { A: '1', B: 'stale', /* C missing */ };
+    const { changed, missing } = diffAuthoritativeVariables(desired, live);
+    expect(changed).toEqual({ B: { from: 'stale', to: '2' } });
+    expect(missing).toEqual({ C: '3' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reconcile
+// ---------------------------------------------------------------------------
+
+describe('RailwayOrchestrator.reconcile()', () => {
+  function liveServicesFromPlan() {
+    // Every required app service + self-hosted infra + jobs, as if already deployed.
+    return [
+      ...getRequiredAppServices().filter((s) => s.name !== 'voice-agent'),
+      ...getSelfHostedInfra(),
+      ...JOB_SERVICES,
+    ].map((s) => ({ id: `svc_${s.name}`, name: s.name }));
+  }
+
+  it('overwrites a drifted deploy-owned var (API_INTERNAL_URL :4000 → :8080) and redeploys only that service', async () => {
+    const live = liveServicesFromPlan();
+    const client = makeFakeClient({
+      listServices: vi.fn().mockResolvedValue(live),
+      // Everything in sync EXCEPT mcp-server, which has the stale :4000 value.
+      getServiceVariables: vi.fn().mockImplementation(({ serviceId }) => {
+        if (serviceId === 'svc_mcp-server') {
+          return Promise.resolve({ API_INTERNAL_URL: 'http://api.railway.internal:4000' });
+        }
+        // Return the desired authoritative set so other services show no drift.
+        const name = serviceId.replace(/^svc_/, '');
+        const svc = APP_SERVICES.find((s) => s.name === name) ?? null;
+        if (!svc) return Promise.resolve({});
+        return Promise.resolve(buildAuthoritativeVariables(svc));
+      }),
+    });
+    const orch = new RailwayOrchestrator(client, makeOptions());
+    const result = await orch.reconcile();
+
+    // The mcp-server got an upsert that overwrites API_INTERNAL_URL to :8080.
+    const mcpUpsert = client.upsertVariables.mock.calls
+      .map((c) => c[0])
+      .find((a) => a.serviceId === 'svc_mcp-server');
+    expect(mcpUpsert).toBeDefined();
+    expect(mcpUpsert.variables.API_INTERNAL_URL).toBe('http://api.railway.internal:8080');
+    // Newly-wired URLs that were absent live are pushed too.
+    expect(mcpUpsert.variables.BANTER_API_URL).toBe('http://banter-api.railway.internal:8080');
+    // Only mcp-server was redeployed.
+    const redeployed = client.triggerDeploy.mock.calls.map((c) => c[0].serviceId);
+    expect(redeployed).toContain('svc_mcp-server');
+    expect(result.driftedCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('dryRun reports drift without writing or deploying', async () => {
+    const live = liveServicesFromPlan();
+    const client = makeFakeClient({
+      listServices: vi.fn().mockResolvedValue(live),
+      getServiceVariables: vi.fn().mockResolvedValue({}), // everything missing → drift
+    });
+    const orch = new RailwayOrchestrator(client, makeOptions());
+    const result = await orch.reconcile({ dryRun: true });
+    expect(client.upsertVariables).not.toHaveBeenCalled();
+    expect(client.triggerDeploy).not.toHaveBeenCalled();
+    expect(result.dryRun).toBe(true);
+    expect(result.driftedCount).toBeGreaterThan(0);
+  });
+
+  it('never overwrites operator-owned secrets/integrations during reconcile', async () => {
+    const live = liveServicesFromPlan();
+    const client = makeFakeClient({
+      listServices: vi.fn().mockResolvedValue(live),
+      // api has a rotated session secret and a custom CORS origin live.
+      getServiceVariables: vi.fn().mockResolvedValue({
+        SESSION_SECRET: 'OPERATOR-ROTATED',
+        CORS_ORIGIN: 'https://custom.example.com',
+      }),
+    });
+    const orch = new RailwayOrchestrator(client, makeOptions());
+    await orch.reconcile();
+    for (const call of client.upsertVariables.mock.calls) {
+      const vars = call[0].variables;
+      expect(vars).not.toHaveProperty('SESSION_SECRET');
+      expect(vars).not.toHaveProperty('CORS_ORIGIN');
+    }
   });
 });

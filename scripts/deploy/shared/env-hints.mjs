@@ -135,6 +135,16 @@ export const ENV_HINTS = {
   BENCH_API_URL: { kind: 'computed', value: `${internal('bench-api')}/v1` },
   BILL_API_URL: { kind: 'computed', value: `${internal('bill-api')}/v1` },
   BLANK_API_URL: { kind: 'computed', value: `${internal('blank-api')}/v1` },
+  // The mcp-server fans out to every app API. These three were missing, so on
+  // Railway the mcp-server fell back to its `localhost:<port>` defaults and the
+  // Banter (50+), Bureau, and Blueprint MCP tool families silently failed —
+  // the same class of bug as the API_INTERNAL_URL=:4000 mismatch. The /v1
+  // suffix matches what the mcp-server clients expect (Banter/Helpdesk/Beacon
+  // embed /v1 in their request paths so their base omits it; the rest carry
+  // /v1 in the base — see docker-compose.yml mcp-server env for the reference).
+  BANTER_API_URL: { kind: 'computed', value: internal('banter-api') },
+  BUREAU_API_URL: { kind: 'computed', value: `${internal('bureau-api')}/v1` },
+  BLUEPRINT_API_URL: { kind: 'computed', value: `${internal('blueprint-api')}/v1` },
   VOICE_AGENT_URL: { kind: 'computed', value: internal('voice-agent') },
 
   // ── MCP server ────────────────────────────────────────────────────
@@ -145,6 +155,17 @@ export const ENV_HINTS = {
     note: 'Recommended for production deployments',
   },
   MCP_PORT: { kind: 'literal', value: '3001' },
+  // Bearer token for the internal POST /tools/call route (server-to-server
+  // tool invocation, e.g. bolt-api → mcp-server). It must be a real
+  // `bbam_svc_`-prefixed service-account token minted against the deployed
+  // api, so it cannot be auto-generated like a random secret — the deploy
+  // mints it once the api is live (see post-deploy step) and writes it here.
+  // Until set, /tools/call returns 503 and agent-to-agent tool calls are off.
+  MCP_INTERNAL_API_TOKEN: {
+    kind: 'user',
+    value: '<mint-after-api-is-up>',
+    note: 'docker compose / railway run: api node dist/cli.js create-service-account --name mcp-internal --org-slug <org>; paste the bbam_svc_ token here',
+  },
 
   // ── Public URLs (point at your frontend service's Railway domain) ─
   PUBLIC_URL: {
@@ -221,4 +242,32 @@ export const ENV_HINTS = {
  */
 export function hintFor(varName) {
   return ENV_HINTS[varName] ?? { kind: 'unknown', value: '<see app docs>', note: '' };
+}
+
+// ── Variable ownership ───────────────────────────────────────────────
+//
+// "Authoritative" (deploy-owned) variables have a value that is a pure
+// function of the service catalog — internal DNS URLs, fixed literals,
+// Railway plugin/service references. An operator should never hand-edit
+// these, and if the live value ever drifts from the computed one it is
+// always wrong (that is exactly how prod ended up with API_INTERNAL_URL
+// pointing at :4000). The reconcile flow may therefore OVERWRITE them.
+//
+// Everything else is "context-owned": secrets (which the operator may have
+// rotated), public URLs (which may point at a custom domain), and user
+// integrations (OAuth/SMTP). Reconcile must MERGE-PRESERVE these — never
+// clobber a value the operator deliberately set.
+const AUTHORITATIVE_KINDS = new Set(['computed', 'literal', 'plugin', 'reference']);
+
+/** True if a hint `kind` is deploy-owned and safe to overwrite on reconcile. */
+export function isAuthoritativeKind(kind) {
+  return AUTHORITATIVE_KINDS.has(kind);
+}
+
+/**
+ * Ownership of a variable by name: 'deploy' (authoritative, overwrite on
+ * reconcile) or 'context' (operator may own it, merge-preserve).
+ */
+export function ownershipOf(varName) {
+  return isAuthoritativeKind(hintFor(varName).kind) ? 'deploy' : 'context';
 }

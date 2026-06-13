@@ -578,6 +578,90 @@ export class RailwayClient {
     return true;
   }
 
+  /**
+   * Read the resolved variable collection for a service in an environment.
+   * Returns a plain { KEY: value } object (Railway's `variables` query returns
+   * a JSON scalar). Used by the reconcile flow to diff live values against the
+   * catalog-computed values so we only re-push (and only redeploy) when a
+   * deploy-owned variable has actually drifted — e.g. a stale
+   * `API_INTERNAL_URL=...:4000` that predates the :8080 port convention.
+   *
+   * `serviceId` may be omitted for shared/project-level variables.
+   */
+  async getServiceVariables({ projectId, environmentId, serviceId } = {}) {
+    const data = await this.query(
+      `
+      query variables($projectId: String!, $environmentId: String!, $serviceId: String) {
+        variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+      }
+      `,
+      { projectId, environmentId, serviceId },
+    );
+    const vars = data?.variables;
+    return vars && typeof vars === 'object' ? vars : {};
+  }
+
+  /**
+   * Create a TCP proxy for a service so an internal container port is reachable
+   * from the public internet on a Railway-assigned (random) external port.
+   * Used to expose LiveKit's TURN-TLS relay (container :5349) without the
+   * operator hand-creating the proxy in the dashboard. Returns
+   * { id, domain, proxyPort, applicationPort }. Idempotent at the caller level
+   * (callers check listTcpProxies first) — Railway itself will create a second
+   * proxy if asked twice, so do NOT call this blindly.
+   */
+  async createTcpProxy({ environmentId, serviceId, applicationPort } = {}) {
+    const input = stripUndefined({ environmentId, serviceId, applicationPort });
+    const data = await this.query(
+      `
+      mutation tcpProxyCreate($input: TCPProxyCreateInput!) {
+        tcpProxyCreate(input: $input) {
+          id
+          domain
+          proxyPort
+          applicationPort
+        }
+      }
+      `,
+      { input },
+    );
+    const p = data?.tcpProxyCreate ?? {};
+    return {
+      id: p.id ?? null,
+      domain: p.domain ?? null,
+      proxyPort: p.proxyPort ?? null,
+      applicationPort: p.applicationPort ?? null,
+    };
+  }
+
+  /**
+   * List existing TCP proxies for a service instance. Used to make TURN-proxy
+   * creation idempotent — if a proxy targeting the application port already
+   * exists we reuse its public port instead of creating a duplicate.
+   */
+  async listTcpProxies({ environmentId, serviceId } = {}) {
+    const data = await this.query(
+      `
+      query tcpProxies($environmentId: String!, $serviceId: String!) {
+        tcpProxies(environmentId: $environmentId, serviceId: $serviceId) {
+          id
+          domain
+          proxyPort
+          applicationPort
+        }
+      }
+      `,
+      { environmentId, serviceId },
+    );
+    const rows = Array.isArray(data?.tcpProxies) ? data.tcpProxies : [];
+    return rows.filter(Boolean).map((p) => ({
+      id: p.id ?? null,
+      domain: p.domain ?? null,
+      proxyPort: p.proxyPort ?? null,
+      applicationPort: p.applicationPort ?? null,
+    }));
+  }
+
   async triggerDeploy({ projectId, environmentId, serviceId } = {}) {
     const input = stripUndefined({ projectId, environmentId, serviceId });
     await this.query(

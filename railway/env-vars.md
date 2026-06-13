@@ -371,6 +371,7 @@ with **R**, optional with `o`.
 | **R** | `API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
 | o | `HELPDESK_API_URL` | computed | `http://helpdesk-api.railway.internal:8080` |  |
+| o | `BANTER_API_URL` | computed | `http://banter-api.railway.internal:8080` |  |
 | o | `BEACON_API_URL` | computed | `http://beacon-api.railway.internal:8080` |  |
 | o | `BOLT_API_URL` | computed | `http://bolt-api.railway.internal:8080/v1` |  |
 | o | `BEARING_API_URL` | computed | `http://bearing-api.railway.internal:8080/v1` |  |
@@ -381,10 +382,12 @@ with **R**, optional with `o`.
 | o | `BENCH_API_URL` | computed | `http://bench-api.railway.internal:8080/v1` |  |
 | o | `BILL_API_URL` | computed | `http://bill-api.railway.internal:8080/v1` |  |
 | o | `BLANK_API_URL` | computed | `http://blank-api.railway.internal:8080/v1` |  |
-| o | `BLUEPRINT_API_URL` | unknown | `<see app docs>` |  |
+| o | `BLUEPRINT_API_URL` | computed | `http://blueprint-api.railway.internal:8080/v1` |  |
+| o | `BUREAU_API_URL` | computed | `http://bureau-api.railway.internal:8080/v1` |  |
 | o | `MCP_AUTH_REQUIRED` | literal | `true` | Recommended for production deployments |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.) |
+| o | `MCP_INTERNAL_API_TOKEN` | user | `<mint-after-api-is-up>` | docker compose / railway run: api node dist/cli.js create-service-account --name mcp-internal --org-slug <org>; paste the bbam_svc_ token here |
 
 ### worker
 

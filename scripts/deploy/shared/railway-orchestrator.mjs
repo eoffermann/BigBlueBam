@@ -22,7 +22,7 @@ import {
   getSelfHostedInfra,
   JOB_SERVICES,
 } from './services.mjs';
-import { hintFor } from './env-hints.mjs';
+import { hintFor, isAuthoritativeKind } from './env-hints.mjs';
 
 // ─── Plan assembly ────────────────────────────────────────────────────
 //
@@ -155,6 +155,55 @@ export function buildServiceVariables(service, context) {
   const sorted = {};
   for (const k of Object.keys(out).sort()) sorted[k] = out[k];
   return sorted;
+}
+
+/**
+ * The deploy-owned ("authoritative") subset of a service's variables: those
+ * whose value is a pure function of the catalog (computed/literal/plugin/
+ * reference per env-hints). These are the only variables the reconcile flow
+ * may OVERWRITE on a live service, because if they drift they are always
+ * wrong — this is the class that produced the API_INTERNAL_URL=:4000 outage.
+ * Secrets, public URLs, and user integrations are deliberately excluded so a
+ * rotated secret or custom domain is never clobbered.
+ *
+ * Resolved DIRECTLY from the hints (not via buildServiceVariables) so it needs
+ * no secret/public/integration context and cannot throw on an unresolved
+ * required secret — authoritative kinds are always concrete literals in the
+ * hint. This keeps `reconcile()` decoupled from the operator's secret bundle.
+ *
+ * Exposed for the orchestrator's reconcile() and for tests.
+ */
+export function buildAuthoritativeVariables(service) {
+  const required = service?.env?.required ?? [];
+  const optional = service?.env?.optional ?? [];
+  const out = {};
+  for (const name of [...required, ...optional]) {
+    const hint = hintFor(name);
+    if (isAuthoritativeKind(hint.kind)) out[name] = hint.value;
+  }
+  // Stable key order for deterministic diffs / upsert payloads.
+  const sorted = {};
+  for (const k of Object.keys(out).sort()) sorted[k] = out[k];
+  return sorted;
+}
+
+/**
+ * Diff a service's desired authoritative variables against the live values.
+ * Returns { changed: { KEY: { from, to } }, missing: { KEY: to } } where
+ * `changed` is keys whose live value differs and `missing` is keys absent
+ * live. Both together are what reconcile would push. Pure — no I/O.
+ */
+export function diffAuthoritativeVariables(desired, live) {
+  const changed = {};
+  const missing = {};
+  for (const [k, to] of Object.entries(desired)) {
+    if (!(k in live)) {
+      missing[k] = to;
+    } else if (live[k] !== to) {
+      changed[k] = { from: live[k], to };
+    }
+  }
+  return { changed, missing };
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────
@@ -537,5 +586,94 @@ export class RailwayOrchestrator {
     });
 
     return summary;
+  }
+
+  // ─── Reconcile (self-heal drifted deploy-owned variables) ───────────
+  //
+  // Re-pushes the authoritative (catalog-computed) variables to every
+  // already-deployed service, overwriting any that have drifted — e.g. a
+  // stale internal URL left behind by an older port/host convention. Does
+  // NOT create services, does NOT touch secrets / public URLs / user
+  // integrations, and only redeploys the services that actually changed.
+  //
+  // This is the safety net for the failure mode where the live stack was
+  // first provisioned under an older catalog and never re-provisioned, so a
+  // computed value (like API_INTERNAL_URL) is frozen at a now-wrong value.
+  //
+  // Options: { dryRun = false, onlyServices = null }. With dryRun it reports
+  // the diff without writing anything. onlyServices is an optional array of
+  // service names to limit the scope.
+  async reconcile({ dryRun = false, onlyServices = null } = {}) {
+    await this._phaseValidate();
+    await this._phaseProject();
+
+    const liveServices = await this.client.listServices(this.projectId);
+    const liveByName = new Map(liveServices.map((s) => [s.name, s.id]));
+
+    const plan = buildDeployPlan().filter((svc) => {
+      if (onlyServices && !onlyServices.includes(svc.name)) return false;
+      return liveByName.has(svc.name);
+    });
+
+    const report = [];
+    for (const svc of plan) {
+      const serviceId = liveByName.get(svc.name);
+      const desired = buildAuthoritativeVariables(svc);
+      if (Object.keys(desired).length === 0) continue;
+
+      const live = await this.client.getServiceVariables({
+        projectId: this.projectId,
+        environmentId: this.defaultEnvironmentId,
+        serviceId,
+      });
+      const { changed, missing } = diffAuthoritativeVariables(desired, live);
+      const toPush = { ...missing };
+      for (const [k, { to }] of Object.entries(changed)) toPush[k] = to;
+
+      const drift = Object.keys(toPush);
+      if (drift.length === 0) {
+        report.push({ service: svc.name, changed: {}, missing: {}, applied: false });
+        this._emit({ phase: 'reconcile', service: svc.name, message: `${svc.name}: in sync`, ok: true });
+        continue;
+      }
+
+      this._emit({
+        phase: 'reconcile',
+        service: svc.name,
+        message: `${svc.name}: ${drift.length} var(s) drifted — ${drift.join(', ')}`,
+        ok: true,
+        changed,
+        missing,
+      });
+
+      if (!dryRun) {
+        // replace:false merges — it overwrites exactly the keys we send and
+        // leaves every operator-owned secret/integration untouched.
+        await this.client.upsertVariables({
+          projectId: this.projectId,
+          environmentId: this.defaultEnvironmentId,
+          serviceId,
+          variables: toPush,
+          skipDeploys: true,
+        });
+        await this.client.triggerDeploy({
+          projectId: this.projectId,
+          environmentId: this.defaultEnvironmentId,
+          serviceId,
+        });
+      }
+      report.push({ service: svc.name, changed, missing, applied: !dryRun });
+    }
+
+    const driftedCount = report.filter((r) => Object.keys(r.changed).length || Object.keys(r.missing).length).length;
+    this._emit({
+      phase: 'reconcile-done',
+      message: dryRun
+        ? `Reconcile (dry run): ${driftedCount} service(s) would change`
+        : `Reconcile complete: ${driftedCount} service(s) corrected and redeployed`,
+      ok: true,
+      summary: { dryRun, driftedCount, report },
+    });
+    return { dryRun, driftedCount, report };
   }
 }
