@@ -646,12 +646,16 @@ describe('RailwayOrchestrator.run() — done event', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildAuthoritativeVariables', () => {
-  it('keeps deploy-owned (computed/literal/plugin/reference) vars and drops context-owned ones', () => {
+  it('keeps reconcilable (computed/literal) vars and drops everything else', () => {
     const api = getApiService();
     const auth = buildAuthoritativeVariables(api);
-    // computed/plugin/literal stay
-    expect(auth.DATABASE_URL).toBe('${{Postgres.DATABASE_URL}}'); // plugin
+    // computed + literal stay (concrete strings that actually drift)
     expect(auth.S3_ENDPOINT).toMatch(/railway\.internal/); // computed
+    expect(auth.S3_BUCKET).toBe('bigbluebam-uploads'); // literal
+    // plugin/reference are symbolic ${{...}} refs Railway resolves — excluded
+    // from reconcile so the live-vs-template diff is never a false positive.
+    expect(auth.DATABASE_URL).toBeUndefined(); // plugin
+    expect(auth.S3_ACCESS_KEY).toBeUndefined(); // reference
     // secrets and user integrations are excluded — never clobbered on reconcile
     expect(auth.SESSION_SECRET).toBeUndefined(); // secret
     expect(auth.OAUTH_GITHUB_CLIENT_ID).toBeUndefined(); // user

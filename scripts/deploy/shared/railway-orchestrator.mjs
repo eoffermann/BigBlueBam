@@ -22,7 +22,7 @@ import {
   getSelfHostedInfra,
   JOB_SERVICES,
 } from './services.mjs';
-import { hintFor, isAuthoritativeKind } from './env-hints.mjs';
+import { hintFor } from './env-hints.mjs';
 
 // ─── Plan assembly ────────────────────────────────────────────────────
 //
@@ -179,7 +179,15 @@ export function buildAuthoritativeVariables(service) {
   const out = {};
   for (const name of [...required, ...optional]) {
     const hint = hintFor(name);
-    if (isAuthoritativeKind(hint.kind)) out[name] = hint.value;
+    // Only `computed` and `literal` are reconciled: their hint value is the
+    // exact concrete string Railway stores and returns, so a live-vs-desired
+    // diff is meaningful and this is the class that actually drifts (internal
+    // URLs, ports, flags). `plugin`/`reference` are deploy-owned too, but
+    // their value is a symbolic `${{Service.VAR}}` reference that Railway
+    // RESOLVES — comparing the template against the resolved live value would
+    // be a guaranteed false positive, and they don't silently go stale the way
+    // a hardcoded URL does. So we leave them to first-provision only.
+    if (hint.kind === 'computed' || hint.kind === 'literal') out[name] = hint.value;
   }
   // Stable key order for deterministic diffs / upsert payloads.
   const sorted = {};
