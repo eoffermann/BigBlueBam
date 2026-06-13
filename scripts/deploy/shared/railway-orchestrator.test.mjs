@@ -74,6 +74,7 @@ function makeOptions(overrides = {}) {
       SMTP_USER: 'smtp-user',
       SMTP_PASS: 'smtp-pass',
       SMTP_FROM: 'noreply@example.com',
+      EMAIL_FROM: 'noreply@example.com',
     },
     awaitPluginConfirmation: vi.fn().mockResolvedValue(undefined),
     onProgress: vi.fn(),
@@ -124,6 +125,7 @@ function fullContext() {
       SMTP_USER: 'smtp-user',
       SMTP_PASS: 'smtp-pass',
       SMTP_FROM: 'noreply@example.com',
+      EMAIL_FROM: 'noreply@example.com',
     },
   };
 }
@@ -167,7 +169,8 @@ describe('buildServiceVariables', () => {
     expect(result.SMTP_PORT).toBe('587');
     expect(result.SMTP_USER).toBe('smtp-user');
     expect(result.SMTP_PASS).toBe('smtp-pass');
-    expect(result.SMTP_FROM).toBe('noreply@example.com');
+    // api reads EMAIL_FROM (the single canonical from-address fallback), not SMTP_FROM
+    expect(result.EMAIL_FROM).toBe('noreply@example.com');
   });
 
   it('strips trailing slashes on publicUrl so substituted values have no double slashes', () => {

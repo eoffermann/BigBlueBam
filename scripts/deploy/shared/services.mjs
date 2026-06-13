@@ -44,7 +44,10 @@ export const APP_SERVICES = [
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
         'OAUTH_GITHUB_CLIENT_ID', 'OAUTH_GITHUB_CLIENT_SECRET',
         'OAUTH_GOOGLE_CLIENT_ID', 'OAUTH_GOOGLE_CLIENT_SECRET',
-        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
+        // EMAIL_FROM is the single canonical SMTP from-address fallback (the
+        // shared @bigbluebam/smtp-resolver key). The DB system_settings.smtp_from
+        // (set in the UI) takes precedence over it.
+        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
       ],
     },
   },
@@ -103,6 +106,9 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
+        // Optional Qdrant auth (apps/beacon-api/src/lib/qdrant.ts:10) — needed
+        // only for a managed/cloud Qdrant; the bundled image has no auth.
+        'QDRANT_API_KEY',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
       ],
     },
@@ -119,7 +125,12 @@ export const APP_SERVICES = [
     public_paths: ['/brief/api/', '/brief/ws'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS'],
+      optional: [
+        'CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
+        // brief-api reads QDRANT_URL for semantic search (document.routes.ts:175)
+        // + optional QDRANT_API_KEY for managed Qdrant — both were missing.
+        'QDRANT_URL', 'QDRANT_API_KEY',
+      ],
     },
   },
   {
@@ -201,8 +212,9 @@ export const APP_SERVICES = [
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
-        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS',
-        'SMTP_FROM_EMAIL', 'SMTP_FROM_NAME',
+        // No SMTP here: blast-api sends no email itself — the worker does
+        // (apps/worker/src/jobs/blast-send.job.ts), and the worker catalog
+        // carries the SMTP_* + EMAIL_FROM fallback.
       ],
     },
   },
@@ -364,10 +376,19 @@ export const APP_SERVICES = [
         'WORKER_CONCURRENCY', 'LOG_LEVEL',
         'INTERNAL_SERVICE_SECRET',
         'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
-        // worker reads EMAIL_FROM (apps/worker/src/env.ts:10), not SMTP_FROM —
-        // SMTP_FROM is kept for the prompt/alias and EMAIL_FROM is backfilled
-        // from it in extractUserIntegrationsFromEnvConfig.
-        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM', 'EMAIL_FROM',
+        // worker reads EMAIL_FROM (apps/worker/src/env.ts:10) — the single
+        // canonical SMTP from-address fallback (the shared @bigbluebam/smtp-
+        // resolver uses env.EMAIL_FROM; the real source of truth is the UI →
+        // system_settings.smtp_from).
+        'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM',
+        // worker BUILDS the outbound email tracking links and Slack-import
+        // deep-links — without these it emits http://localhost/t/... pixels and
+        // /unsub/... links in real campaign mail. Code: blast-send.job.ts:182,
+        // 259-260; slack-import.job.ts:746.
+        'TRACKING_BASE_URL', 'FRONTEND_URL',
+        // worker vector-sync / brief-embed jobs read QDRANT_URL (+ optional
+        // QDRANT_API_KEY for managed Qdrant). beacon-vector-sync.job.ts:49-50.
+        'QDRANT_URL', 'QDRANT_API_KEY',
         // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
         // TURN cert lapses; no-op until set (format turn.example.com:port).
         'LIVEKIT_TURN_CHECK_TARGET',

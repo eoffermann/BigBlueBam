@@ -303,26 +303,18 @@ function extractUserIntegrationsFromEnvConfig(envConfig = {}) {
     'SMTP_USER',
     'SMTP_PASS',
     'SMTP_FROM',
-    'SMTP_FROM_EMAIL',
-    'SMTP_FROM_NAME',
     'EMAIL_FROM',
   ];
   const out = {};
   for (const k of keys) {
     out[k] = envConfig[k] ?? '';
   }
-  // The deploy SMTP prompt only collects SMTP_FROM, but three services read
-  // differently-named "from" vars: helpdesk-api/worker want EMAIL_FROM and
-  // blast-api wants SMTP_FROM_EMAIL/SMTP_FROM_NAME. Without this backfill an
-  // operator who configured SMTP would still see those services silently
-  // unable to send (the entered value was dropped on the floor). Alias the
-  // address-shaped ones from SMTP_FROM and default a display name.
+  // The deploy prompt collects the from-address as SMTP_FROM, but every service
+  // reads the single canonical name EMAIL_FROM (the shared smtp-resolver key;
+  // the UI → system_settings.smtp_from is the real source of truth). Alias the
+  // entered value into EMAIL_FROM so the one name that's actually read is set.
   const from = out.SMTP_FROM?.trim();
-  if (from) {
-    if (!out.EMAIL_FROM) out.EMAIL_FROM = from;
-    if (!out.SMTP_FROM_EMAIL) out.SMTP_FROM_EMAIL = from;
-    if (!out.SMTP_FROM_NAME) out.SMTP_FROM_NAME = 'BigBlueBam';
-  }
+  if (from && !out.EMAIL_FROM) out.EMAIL_FROM = from;
   return out;
 }
 

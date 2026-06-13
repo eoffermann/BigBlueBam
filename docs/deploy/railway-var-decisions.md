@@ -113,7 +113,69 @@ named var. Verified against each service's `env.ts`:
 | blast-api | `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` | `apps/blast-api/src/env.ts:32-33` | listed ✓ |
 | worker | `EMAIL_FROM` | `apps/worker/src/env.ts:10`; used in `jobs/blast-send.job.ts:252`, `jobs/helpdesk-email-notify.job.ts:143` | **listed `SMTP_FROM` only — GAP** |
 
-- **DECISION:** (1) backfill `EMAIL_FROM` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME`
-  from the entered `SMTP_FROM` (done in `extractUserIntegrationsFromEnvConfig`);
-  (2) **add `EMAIL_FROM` to the worker catalog** so the orchestrator actually
-  sets it (a catalog var is only set if it's listed).
+- **DECISION (consolidated to ONE name):** the from-address is `system_settings.smtp_from`
+  (UI) with a **single** env fallback, `EMAIL_FROM` — the only name the shared
+  `@bigbluebam/smtp-resolver` reads (`packages/smtp-resolver/src/index.ts:38,153`).
+  Concretely:
+  - **api** now reads `EMAIL_FROM` (was `SMTP_FROM`, which it remapped anyway) —
+    `apps/api/src/env.ts`, `lib/email-queue.ts:74`, `routes/system-settings.routes.ts:528`.
+  - **blast-api**'s entire SMTP block was **dead** (it sends nothing; the worker
+    does) — removed from `apps/blast-api/src/env.ts` and the catalog.
+  - **worker** gets `EMAIL_FROM` in its catalog (it reads it; was missing).
+  - The deploy prompt still collects one `SMTP_FROM` and aliases it to
+    `EMAIL_FROM` (`extractUserIntegrationsFromEnvConfig`).
+  Net: four names (`SMTP_FROM` / `EMAIL_FROM` / `SMTP_FROM_EMAIL` / `SMTP_FROM_NAME`)
+  collapsed to one (`EMAIL_FROM`), with the DB/UI as the real source of truth.
+
+---
+
+## Exhaustive verification pass — remaining variables
+
+Every other deploy-set variable was verified against its consumer. Summary
+(full evidence gathered 2026-06-13):
+
+**Public-URL family — all values correct as-is.** `<frontend-public-url>` resolves
+to a bare origin with no trailing slash (`scripts/deploy/shared/public-url.mjs:47-54`).
+- `CORS_ORIGIN` = bare origin — every API does `env.CORS_ORIGIN.split(',')` into
+  `@fastify/cors` and the WS gate does an exact `Set.has(origin)` match
+  (`apps/api/src/plugins/websocket.ts:179`); a path/trailing-slash would never
+  match the browser `Origin`. ✓
+- `FRONTEND_URL` = `<root>/b3` — `apps/api/src/lib/urls.ts:28-35` + the raw
+  `slack-notify.service.ts:91` consumer require the `/b3` mount. ✓ (api only)
+- `PUBLIC_URL` / `TRACKING_BASE_URL` = bare origin — consumers strip a trailing
+  slash then append their own mount (`/book`, `/bill`, `/t/`, `/unsub/`). A path
+  here would double the mount or break the open-pixel/unsub links. ✓
+
+**Gaps found & fixed (service reads it, catalog didn't set it):**
+- **worker** was missing `TRACKING_BASE_URL` + `FRONTEND_URL` — it builds the
+  outbound email tracking pixel / click / unsubscribe links
+  (`apps/worker/src/jobs/blast-send.job.ts:182,259-260`); without them real
+  campaign mail shipped `http://localhost/t/...` links. **Added.**
+- **worker** + **brief-api** were missing `QDRANT_URL`; **beacon-api / brief-api /
+  worker** were missing the optional `QDRANT_API_KEY` (read in
+  `beacon-vector-sync.job.ts:49-50`, `document.routes.ts:175,191`). **Added**
+  (`QDRANT_API_KEY` is `user`-kind, empty by default — the bundled Qdrant has no
+  auth; only managed Qdrant needs it).
+
+**Footgun removed:** `MCP_PORT=3001` was emitted by env-hints but would WIN over
+Railway's injected `PORT=8080` (`apps/mcp-server/src/env.ts:8-12`) and break the
+ingress healthcheck if ever applied. It was never in the mcp-server catalog (so
+never applied), but it's now removed from the hints so it can't be reintroduced.
+
+**Doc fix:** the generated-secret notes said `openssl rand -hex 16` (= exactly the
+32-char `z.string().min(32)` floor — fragile). The actual generator already uses
+`randomHex(32)` = 64 chars (`secrets.mjs:21-23`); notes corrected to `hex 32`.
+
+**Verified correct, no change:** `DATABASE_URL`/`DATABASE_READ_URL`/`REDIS_URL`
+(plugin refs), `S3_*` (port 9000, `bigbluebam-uploads`, `us-east-1`), `QDRANT_URL`
+(6333), `MINIO_ROOT_USER/PASSWORD`, `LIVEKIT_API_KEY/SECRET` (must match across
+livekit+banter+board+bureau+voice-agent), `LIVEKIT_WEBHOOK_URL`
+(`/v1/webhooks/livekit` on banter-api `webhook.routes.ts:153`), `MCP_TRANSPORT`/
+`MCP_AUTH_REQUIRED`, `NODE_ENV`, and all rate-limit / timeout literals.
+
+**Known limitation (documented, not fixed — needs per-service var values):**
+`FRONTEND_URL` is mount-specific per app (api `/b3`, beacon `/beacon`, board
+`/board`, bearing `/bearing`), but env-hints has one global value. Only `api`
+receives it; beacon/board/bearing fall back to `http://localhost/...` for the
+deep-links they embed in Bolt automation payloads. Fixing this properly requires
+per-service variable overrides in the catalog (a follow-up enhancement).

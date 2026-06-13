@@ -75,7 +75,10 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default('noreply@bigbluebam.com'),
+  // Canonical SMTP from-address env fallback — same name every service and the
+  // shared @bigbluebam/smtp-resolver use. The UI → system_settings.smtp_from
+  // overrides it. (Renamed from SMTP_FROM to kill the 4-name sprawl.)
+  EMAIL_FROM: z.string().default('noreply@bigbluebam.com'),
 
   // Public URL used to build invitation acceptance links in emails.
   FRONTEND_URL: z.string().default('http://localhost/b3'),

@@ -68,12 +68,12 @@ export const ENV_HINTS = {
   INTERNAL_HELPDESK_SECRET: {
     kind: 'secret',
     value: '<generate>',
-    note: 'openssl rand -hex 16 — must be IDENTICAL on api and helpdesk-api',
+    note: 'openssl rand -hex 32 — must be IDENTICAL on api and helpdesk-api. Both validate z.string().min(32), so use 32 bytes (64 hex chars); hex-16 sits exactly on the floor and a shorter value crashes both at boot.',
   },
   INTERNAL_SERVICE_SECRET: {
     kind: 'secret',
     value: '<generate>',
-    note: 'openssl rand -hex 16 — protects internal service-to-service calls (bolt-api event ingestion etc.)',
+    note: 'openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars.',
   },
 
   // ── MinIO (object storage) ────────────────────────────────────────
@@ -95,6 +95,14 @@ export const ENV_HINTS = {
 
   // ── Qdrant (vector search) ────────────────────────────────────────
   QDRANT_URL: { kind: 'computed', value: internal('qdrant') },
+  // Optional auth — read by beacon-api/brief-api/worker (qdrant.ts:10,
+  // beacon-vector-sync.job.ts:50). The bundled Railway Qdrant image has no
+  // auth, so this is empty by default; set it only for managed/cloud Qdrant.
+  QDRANT_API_KEY: {
+    kind: 'user',
+    value: '',
+    note: 'Only needed if you point QDRANT_URL at a managed Qdrant (e.g. Qdrant Cloud). The bundled self-hosted image requires no key.',
+  },
 
   // ── LiveKit (voice / video SFU) ───────────────────────────────────
   LIVEKIT_API_KEY: {
@@ -193,7 +201,11 @@ export const ENV_HINTS = {
     value: 'true',
     note: 'Recommended for production deployments',
   },
-  MCP_PORT: { kind: 'literal', value: '3001' },
+  // NOTE: MCP_PORT is deliberately NOT emitted. On Railway the mcp-server must
+  // bind the injected PORT=8080; an explicit MCP_PORT=3001 would WIN over PORT
+  // (apps/mcp-server/src/env.ts:8-12) and break the ingress healthcheck. It is
+  // absent from the mcp-server catalog so it is never applied — kept out of the
+  // hints too so it can't be reintroduced by accident.
   // Bearer token for the internal POST /tools/call route (server-to-server
   // tool invocation, e.g. bolt-api → mcp-server). It must be a real
   // `bbam_svc_`-prefixed service-account token minted against the deployed
@@ -255,9 +267,12 @@ export const ENV_HINTS = {
   SMTP_PORT: { kind: 'literal', value: '587' },
   SMTP_USER: { kind: 'user', value: '<smtp-user>' },
   SMTP_PASS: { kind: 'user', value: '<smtp-password>' },
+  // Single canonical SMTP from-address. The deploy prompt collects SMTP_FROM
+  // and aliases it to EMAIL_FROM (the only name the shared smtp-resolver and
+  // every consuming service read); the UI → system_settings.smtp_from is the
+  // real source of truth and overrides this. (Was previously sprawled across
+  // SMTP_FROM / EMAIL_FROM / SMTP_FROM_EMAIL / SMTP_FROM_NAME.)
   SMTP_FROM: { kind: 'user', value: 'noreply@yourdomain.com' },
-  SMTP_FROM_EMAIL: { kind: 'user', value: 'noreply@yourdomain.com' },
-  SMTP_FROM_NAME: { kind: 'user', value: 'BigBlueBam' },
   EMAIL_FROM: { kind: 'user', value: 'noreply@yourdomain.com' },
 
   // ── Frontend ingress ─────────────────────────────────────────────

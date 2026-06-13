@@ -25,12 +25,10 @@ const envSchema = z.object({
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
   // SMTP configuration for sending emails
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().default(587),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM_EMAIL: z.string().optional(),
-  SMTP_FROM_NAME: z.string().optional(),
+  // NOTE: blast-api sends no email itself — the worker (blast-send.job.ts)
+  // does, via the shared SMTP resolver. blast-api previously declared a dead
+  // SMTP_HOST/PORT/USER/PASS/SMTP_FROM_EMAIL/SMTP_FROM_NAME block that nothing
+  // read; removed to kill the from-address sprawl flagged in review.
 
   // Tracking base URL (public-facing URL for tracking pixels and click redirects)
   TRACKING_BASE_URL: z.string().default('http://localhost'),
