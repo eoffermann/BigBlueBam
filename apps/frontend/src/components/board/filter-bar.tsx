@@ -23,9 +23,13 @@ interface MultiSelectDropdownProps {
   options: { value: string; label: string }[];
   selectedValues: string[];
   onToggle: (value: string) => void;
+  /** Wide panel for long option labels (e.g. epic names, which can be full
+   *  sentences) — one per line, truncated with an ellipsis rather than
+   *  wrapped. */
+  wide?: boolean;
 }
 
-function MultiSelectDropdown({ label, options, selectedValues, onToggle }: MultiSelectDropdownProps) {
+function MultiSelectDropdown({ label, options, selectedValues, onToggle, wide = false }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -65,7 +69,15 @@ function MultiSelectDropdown({ label, options, selectedValues, onToggle }: Multi
       </button>
 
       {isOpen && (
-        <div role="listbox" aria-multiselectable="true" aria-label={label} className="absolute top-full left-0 mt-1 z-50 min-w-[200px] rounded-lg border border-zinc-200 bg-white shadow-lg dark:bg-zinc-900 dark:border-zinc-700 py-1">
+        <div
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label={label}
+          className={cn(
+            'absolute top-full left-0 mt-1 z-50 rounded-lg border border-zinc-200 bg-white shadow-lg dark:bg-zinc-900 dark:border-zinc-700 py-1 max-h-[60vh] overflow-y-auto',
+            wide ? 'w-[480px] max-w-[90vw]' : 'min-w-[200px]',
+          )}
+        >
           {options.map((option) => {
             const isSelected = selectedValues.includes(option.value);
             return (
@@ -74,12 +86,13 @@ function MultiSelectDropdown({ label, options, selectedValues, onToggle }: Multi
                 onClick={() => onToggle(option.value)}
                 role="option"
                 aria-selected={isSelected}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:bg-zinc-50 dark:focus-visible:bg-zinc-800"
+                title={option.label}
+                className="flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:bg-zinc-50 dark:focus-visible:bg-zinc-800"
               >
                 <div
                   aria-hidden="true"
                   className={cn(
-                    'flex items-center justify-center h-4 w-4 rounded border transition-colors',
+                    'flex items-center justify-center h-4 w-4 shrink-0 rounded border transition-colors',
                     isSelected
                       ? 'bg-primary-600 border-primary-600'
                       : 'border-zinc-300 dark:border-zinc-600',
@@ -88,7 +101,7 @@ function MultiSelectDropdown({ label, options, selectedValues, onToggle }: Multi
                   {isSelected && <Check className="h-3 w-3 text-white" />}
                 </div>
                 <span className={cn(
-                  'text-zinc-700 dark:text-zinc-300',
+                  'flex-1 min-w-0 truncate text-zinc-700 dark:text-zinc-300',
                   isSelected && 'font-medium',
                 )}>
                   {option.label}
@@ -197,13 +210,15 @@ export function FilterBar({ filters, onFilterChange, assignees = [], states = []
         />
       )}
 
-      {/* Epic multi-select */}
+      {/* Epic multi-select — wide panel: epic names can be full sentences
+          (the verbatim CSV Features cell), so one per line, truncated. */}
       {epicOptions.length > 0 && (
         <MultiSelectDropdown
           label="Epic"
           options={epicOptions}
           selectedValues={selectedEpics}
           onToggle={(val) => toggleFilter('epic_id', val)}
+          wide
         />
       )}
 

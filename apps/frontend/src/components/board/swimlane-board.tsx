@@ -121,8 +121,13 @@ function buildGroups(
     const labels = new Map<string, string>();
 
     for (const task of allTasks) {
-      const key = (task as Task & { epic_id?: string | null }).epic_id ?? '__no_epic__';
-      const label = (task as Task & { epic_name?: string | null }).epic_name ?? 'No Epic';
+      // The board payload enriches each task with `epic: {id, name, color}`
+      // (see getBoardState). The legacy flat `epic_name` field this used to
+      // read never exists on that payload, so every lane fell back to
+      // "No Epic"; read the nested object instead.
+      const epic = (task as Task & { epic?: { id: string; name: string } | null }).epic;
+      const key = epic?.id ?? task.epic_id ?? '__no_epic__';
+      const label = epic?.name ?? 'No Epic';
       if (!byEpic.has(key)) {
         byEpic.set(key, []);
         labels.set(key, key === '__no_epic__' ? 'No Epic' : label);
