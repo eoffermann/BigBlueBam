@@ -22,6 +22,7 @@ import {
   useEditMessage,
   usePinMessage,
   useBookmark,
+  useRemoveBookmarkByMessage,
   type Message,
   type Reaction,
 } from '@/hooks/use-messages';
@@ -66,6 +67,7 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
   const editMessage = useEditMessage();
   const pinMessage = usePinMessage();
   const bookmarkMessage = useBookmark();
+  const removeBookmark = useRemoveBookmarkByMessage();
 
   // Pin and Bookmark land their result on other surfaces (the channel's pins
   // panel / the Bookmarks page), so without a tiny inline confirmation a click
@@ -129,13 +131,23 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
 
   const handleBookmark = () => {
     setMenuOpen(false);
-    bookmarkMessage.mutate(
-      { messageId: message.id },
-      {
-        onSuccess: () => flash('Bookmarked'),
-        onError: () => flash("Couldn't bookmark"),
-      },
-    );
+    if (message.is_bookmarked) {
+      removeBookmark.mutate(
+        { messageId: message.id, channelId },
+        {
+          onSuccess: () => flash('Bookmark removed'),
+          onError: () => flash("Couldn't remove bookmark"),
+        },
+      );
+    } else {
+      bookmarkMessage.mutate(
+        { messageId: message.id, channelId },
+        {
+          onSuccess: () => flash('Bookmarked'),
+          onError: () => flash("Couldn't bookmark"),
+        },
+      );
+    }
   };
 
   const isOwn = currentUser?.id === message.author_id;
@@ -422,11 +434,14 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
             onClick={handlePin}
           />
 
-          {/* Bookmark */}
+          {/* Bookmark — filled + tinted when the current user has bookmarked it */}
           <ActionButton
-            icon={<Bookmark className="h-4 w-4" />}
-            title="Bookmark"
+            icon={
+              <Bookmark className={cn('h-4 w-4', message.is_bookmarked && 'fill-current')} />
+            }
+            title={message.is_bookmarked ? 'Remove bookmark' : 'Bookmark'}
             onClick={handleBookmark}
+            active={message.is_bookmarked}
           />
 
           {/* More menu */}
@@ -466,8 +481,8 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
                   className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none"
                   onSelect={handleBookmark}
                 >
-                  <Bookmark className="h-4 w-4" />
-                  Bookmark
+                  <Bookmark className={cn('h-4 w-4', message.is_bookmarked && 'fill-current text-primary-500')} />
+                  {message.is_bookmarked ? 'Remove bookmark' : 'Bookmark'}
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none"
@@ -488,16 +503,23 @@ function ActionButton({
   icon,
   title,
   onClick,
+  active = false,
 }: {
   icon: React.ReactNode;
   title: string;
   onClick?: () => void;
+  active?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+      className={cn(
+        'p-1.5 rounded-md transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-700',
+        active
+          ? 'text-primary-500 hover:text-primary-600'
+          : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300',
+      )}
     >
       {icon}
     </button>

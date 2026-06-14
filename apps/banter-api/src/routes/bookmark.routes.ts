@@ -128,6 +128,32 @@ export default async function bookmarkRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // DELETE /v1/bookmarks/by-message/:messageId — remove the current user's
+  // bookmark for a message, identified by message id (the message row knows
+  // its own id but not the bookmark id, so this powers toggle-off from a
+  // message's Bookmark control without threading bookmark ids through the
+  // message payload). Registered BEFORE /:id so "by-message" isn't captured
+  // as an :id.
+  fastify.delete(
+    '/v1/bookmarks/by-message/:messageId',
+    { preHandler: [requireAuth, requireScope('read_write')] },
+    async (request, reply) => {
+      const { messageId } = request.params as { messageId: string };
+      const user = request.user!;
+
+      await db
+        .delete(banterBookmarks)
+        .where(
+          and(
+            eq(banterBookmarks.message_id, messageId),
+            eq(banterBookmarks.user_id, user.id),
+          ),
+        );
+
+      return reply.send({ data: { success: true } });
+    },
+  );
+
   // DELETE /v1/bookmarks/:id — remove bookmark
   fastify.delete(
     '/v1/bookmarks/:id',

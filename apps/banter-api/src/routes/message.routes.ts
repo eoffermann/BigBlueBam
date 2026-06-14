@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { eq, and, or, sql, lt, gt, desc, asc, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, lt, gt, desc, asc, isNull, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   banterChannels,
   banterChannelMemberships,
   banterMessages,
+  banterBookmarks,
   users,
 } from '../db/schema/index.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
@@ -164,6 +165,29 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         messages.reverse();
       }
 
+      // Per-current-user bookmark state, so each message row can render a
+      // persistent "bookmarked" indicator. The list otherwise carried no
+      // bookmark state at all, so a bookmark was invisible on re-render —
+      // the user saw the transient confirmation pill once and nothing after.
+      // One set-based lookup for the whole page (not a subquery per row).
+      const pageMessageIds = messages.map((row) => row.message.id);
+      const bookmarkedMessageIds =
+        pageMessageIds.length > 0
+          ? new Set(
+              (
+                await db
+                  .select({ message_id: banterBookmarks.message_id })
+                  .from(banterBookmarks)
+                  .where(
+                    and(
+                      eq(banterBookmarks.user_id, user.id),
+                      inArray(banterBookmarks.message_id, pageMessageIds),
+                    ),
+                  )
+              ).map((r) => r.message_id),
+            )
+          : new Set<string>();
+
       const data = messages.map((row) => ({
         ...row.message,
         author_id: row.message.author_id,
@@ -174,6 +198,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         // list endpoint does not join it today. Consumers treat absence
         // as false.
         is_pinned: false,
+        is_bookmarked: bookmarkedMessageIds.has(row.message.id),
         is_edited: row.message.is_edited ?? false,
         thread_reply_count: row.message.reply_count ?? 0,
         thread_latest_reply_at: row.message.last_reply_at ?? null,

@@ -14,6 +14,11 @@ export interface Message {
   is_system: boolean;
   is_bot: boolean;
   is_pinned: boolean;
+  /** Whether the CURRENT user has bookmarked this message. Drives the
+   *  persistent bookmarked indicator on the row (the list endpoint computes
+   *  it per-request). Optional because thread/single-message payloads may
+   *  not populate it yet. */
+  is_bookmarked?: boolean;
   /** Who may edit this message. 'own' (default) = author only;
    *  'thread_starter' = the root author of the thread this message belongs to;
    *  'none' = locked, nobody may edit. Seeded on a handful of demo rows. */
@@ -155,13 +160,36 @@ export function usePinMessage() {
 export function useBookmark() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ messageId, note }: { messageId: string; note?: string }) =>
+    mutationFn: ({ messageId, note }: { messageId: string; channelId?: string; note?: string }) =>
       api.post<{ data: { id?: string; already_bookmarked?: boolean } }>(`/bookmarks`, {
         message_id: messageId,
         note,
       }),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+      // Refresh the channel so the message's is_bookmarked flips to true.
+      if (vars.channelId) {
+        queryClient.invalidateQueries({ queryKey: ['messages', vars.channelId] });
+      }
+    },
+  });
+}
+
+/**
+ * Remove the current user's bookmark for a message, by message id (the row
+ * knows its own id, not the bookmark id). Powers toggle-off from a message's
+ * Bookmark control. Route: `DELETE /v1/bookmarks/by-message/:messageId`.
+ */
+export function useRemoveBookmarkByMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ messageId }: { messageId: string; channelId?: string }) =>
+      api.delete(`/bookmarks/by-message/${messageId}`),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+      if (vars.channelId) {
+        queryClient.invalidateQueries({ queryKey: ['messages', vars.channelId] });
+      }
     },
   });
 }
