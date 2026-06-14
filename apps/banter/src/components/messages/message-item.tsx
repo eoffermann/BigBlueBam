@@ -42,6 +42,10 @@ interface MessageItemProps {
 export function MessageItem({ message, channelId, grouped, onNavigate: _onNavigate }: MessageItemProps) {
   const [hovered, setHovered] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  // Controlled open state for the more-actions dropdown. The action bar keys
+  // its visibility off this (see below) so the portaled menu isn't torn down
+  // when the pointer leaves the row to move onto the menu.
+  const [menuOpen, setMenuOpen] = useState(false);
   const openThread = useChannelStore((s) => s.openThread);
   const currentUser = useAuthStore((s) => s.user);
   const toggleReaction = useToggleReaction();
@@ -230,9 +234,20 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
         )}
       </div>
 
-      {/* Hover actions */}
-      {hovered && (
-        <div className="absolute -top-3 right-2 flex items-center gap-0.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm p-0.5">
+      {/* Hover actions — always mounted, shown on row hover/focus (CSS) or
+          while the more-menu is open. Previously this whole bar was gated on
+          the React `hovered` flag, which unmounted the portaled dropdown the
+          instant the pointer moved off the row onto the menu, so the menu
+          flashed open and closed before anything could be clicked. */}
+        <div
+          className={cn(
+            'absolute -top-3 right-2 flex items-center gap-0.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm p-0.5',
+            'opacity-0 pointer-events-none transition-opacity duration-100',
+            'group-hover:opacity-100 group-hover:pointer-events-auto',
+            'focus-within:opacity-100 focus-within:pointer-events-auto',
+            menuOpen && 'opacity-100 pointer-events-auto',
+          )}
+        >
           {/* Quick emoji */}
           <div className="relative">
             <ActionButton
@@ -282,7 +297,7 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
           />
 
           {/* More menu */}
-          <DropdownMenu.Root>
+          <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenu.Trigger asChild>
               <button className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">
                 <MoreHorizontal className="h-4 w-4" />
@@ -323,7 +338,6 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
         </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MessageItem } from '../src/components/messages/message-item';
 import { TypingIndicator } from '../src/components/messages/typing-indicator';
@@ -107,6 +107,31 @@ describe('MessageItem', () => {
       </TestWrapper>,
     );
     expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+  });
+
+  // Regression for the "3-dots menu flashes and closes instantly" bug: the
+  // hover action bar (which hosts the more-menu trigger) used to be gated on a
+  // `hovered` flag and was unmounted by the row's onMouseLeave — so the instant
+  // the pointer left the row to enter the (portaled) dropdown, the whole bar
+  // including the open menu was torn down. It is now always mounted and shown
+  // via CSS, so mouseleave must not remove it.
+  it('keeps the action bar mounted across mouseleave (regression: menu used to unmount)', () => {
+    const { container } = render(
+      <TestWrapper>
+        <MessageItem
+          message={sampleMessage}
+          channelId="ch1"
+          grouped={false}
+          onNavigate={vi.fn()}
+        />
+      </TestWrapper>,
+    );
+    // Action bar present without any hover interaction.
+    expect(screen.getByTitle('Reply in thread')).toBeInTheDocument();
+    expect(screen.getByTitle('Pin message')).toBeInTheDocument();
+    // Firing the exact event that used to tear it down leaves it mounted.
+    fireEvent.mouseLeave(container.firstChild as HTMLElement);
+    expect(screen.getByTitle('Reply in thread')).toBeInTheDocument();
   });
 
   it('renders message content as HTML', () => {
