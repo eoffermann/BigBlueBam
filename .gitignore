@@ -49,3 +49,6 @@ __pycache__/
 !.claude/agents/**
 !.claude/skills
 !.claude/skills/**
+
+# Help-docs build scratch (working artifacts, not deliverables)
+docs/.help-build/

@@ -897,6 +897,24 @@ site/               → Marketing site (served at /)
 | [Book (Scheduling) Guide](docs/apps/book/guide.md) | User guide and MCP tool reference |
 | [Brief (Documents) Guide](docs/apps/brief/guide.md) | User guide and MCP tool reference |
 | [Helpdesk (Support Portal) Guide](docs/apps/helpdesk/guide.md) | User guide and MCP tool reference |
+| | |
+| **Per-App Help** | |
+| [Bam (Project Management) Help](docs/apps/bam/help.md) | Feature reference and step-by-step user stories |
+| [Banter (Team Messaging) Help](docs/apps/banter/help.md) | Feature reference and step-by-step user stories |
+| [Beacon (Knowledge Base) Help](docs/apps/beacon/help.md) | Feature reference and step-by-step user stories |
+| [Bearing (Goals & OKRs) Help](docs/apps/bearing/help.md) | Feature reference and step-by-step user stories |
+| [Bench (Analytics) Help](docs/apps/bench/help.md) | Feature reference and step-by-step user stories |
+| [Bill (Invoicing) Help](docs/apps/bill/help.md) | Feature reference and step-by-step user stories |
+| [Blank (Forms) Help](docs/apps/blank/help.md) | Feature reference and step-by-step user stories |
+| [Blast (Email Campaigns) Help](docs/apps/blast/help.md) | Feature reference and step-by-step user stories |
+| [Blueprint (Structured Diagrams) Help](docs/apps/blueprint/help.md) | Feature reference and step-by-step user stories |
+| [Board (Visual Collaboration) Help](docs/apps/board/help.md) | Feature reference and step-by-step user stories |
+| [Bolt (Workflow Automation) Help](docs/apps/bolt/help.md) | Feature reference and step-by-step user stories |
+| [Bond (CRM) Help](docs/apps/bond/help.md) | Feature reference and step-by-step user stories |
+| [Book (Scheduling) Help](docs/apps/book/help.md) | Feature reference and step-by-step user stories |
+| [Brief (Documents) Help](docs/apps/brief/help.md) | Feature reference and step-by-step user stories |
+| [Bureau (Virtual Office) Help](docs/apps/bureau/help.md) | Feature reference and step-by-step user stories |
+| [Helpdesk (Support Portal) Help](docs/apps/helpdesk/help.md) | Feature reference and step-by-step user stories |
 
 <!-- AUTODOCS:DOCS_INDEX:END -->
 ---
