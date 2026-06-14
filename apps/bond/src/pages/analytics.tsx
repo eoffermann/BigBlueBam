@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { TrendingUp, DollarSign, Clock, AlertTriangle, Trophy } from 'lucide-react';
 import { Badge } from '@/components/common/badge';
 import {
@@ -8,8 +9,9 @@ import {
   useForecast,
   useStaleDeals,
 } from '@/hooks/use-analytics';
+import { usePipelines } from '@/hooks/use-pipelines';
 import { usePipelineStore } from '@/stores/pipeline.store';
-import { formatCurrencyCompact, cn } from '@/lib/utils';
+import { formatCurrencyCompact } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
 interface AnalyticsPageProps {
@@ -46,26 +48,78 @@ function StatCard({
   );
 }
 
+// Human-friendly labels for the forecast buckets returned by the API.
+const FORECAST_BUCKET_LABELS: Array<{
+  key: 'next_30' | 'next_60' | 'next_90' | 'beyond' | 'no_date';
+  label: string;
+}> = [
+  { key: 'next_30', label: 'Next 30 days' },
+  { key: 'next_60', label: 'Next 60 days' },
+  { key: 'next_90', label: 'Next 90 days' },
+  { key: 'beyond', label: 'Beyond 90 days' },
+  { key: 'no_date', label: 'No close date' },
+];
+
 export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
   const activePipelineId = usePipelineStore((s) => s.activePipelineId);
 
-  const { data: summaryData, isLoading: summaryLoading } = usePipelineSummary(activePipelineId ?? undefined);
+  // Resolve an effective pipeline id: the explicitly-selected one, otherwise
+  // the org's default pipeline (or the first available). deal-velocity and
+  // conversion-rates require a pipeline_id server-side, so we feed them this
+  // resolved value and let their hooks no-op when it is still undefined.
+  const { data: pipelinesData } = usePipelines();
+  const pipelines = pipelinesData?.data ?? [];
+  const effectivePipelineId =
+    activePipelineId ??
+    pipelines.find((p) => p.is_default)?.id ??
+    pipelines[0]?.id ??
+    undefined;
+  const pipelineName =
+    pipelines.find((p) => p.id === effectivePipelineId)?.name ?? 'Pipeline';
+
+  const { data: summaryData, isLoading: summaryLoading } = usePipelineSummary(
+    effectivePipelineId,
+  );
   const summary = summaryData?.data;
+  const totals = summary?.totals;
+  const stages = summary?.stages ?? [];
 
-  const { data: velocityData } = useDealVelocity(activePipelineId ?? undefined);
-  const velocity = velocityData?.data ?? [];
+  const { data: velocityData } = useDealVelocity(effectivePipelineId);
+  const velocityStages = velocityData?.data?.stage_velocity ?? [];
 
-  const { data: winLossData } = useWinLossStats(activePipelineId ?? undefined);
+  const { data: winLossData } = useWinLossStats(effectivePipelineId);
   const winLoss = winLossData?.data;
+  const lossReasons = winLoss?.loss_reasons ?? [];
+  const competitors = winLoss?.competitors ?? [];
 
-  const { data: forecastData } = useForecast(activePipelineId ?? undefined);
-  const forecast = forecastData?.data ?? [];
+  const { data: forecastData } = useForecast(effectivePipelineId);
+  const forecastBuckets = forecastData?.data?.buckets;
+  const forecastRows = useMemo(
+    () =>
+      forecastBuckets
+        ? FORECAST_BUCKET_LABELS.map(({ key, label }) => ({
+            key,
+            label,
+            weighted_value: forecastBuckets[key] ?? 0,
+          })).filter((row) => row.weighted_value > 0)
+        : [],
+    [forecastBuckets],
+  );
 
-  const { data: staleData } = useStaleDeals(activePipelineId ?? undefined);
-  const staleDeals = staleData?.data ?? [];
+  const { data: staleData } = useStaleDeals(effectivePipelineId);
+  const staleDeals = staleData?.data?.stale_deals ?? [];
 
-  const { data: conversionData } = useConversionRates(activePipelineId ?? undefined);
-  const conversions = conversionData?.data ?? [];
+  const { data: conversionData } = useConversionRates(effectivePipelineId);
+  const conversionRows = useMemo(() => {
+    const resp = conversionData?.data;
+    if (!resp) return [];
+    const stageName = new Map(resp.stages.map((s) => [s.id, s.name]));
+    return (resp.conversions ?? []).map((c) => ({
+      from_stage: stageName.get(c.from_stage_id) ?? 'Unknown',
+      to_stage: stageName.get(c.to_stage_id) ?? 'Unknown',
+      transition_count: c.transition_count,
+    }));
+  }, [conversionData]);
 
   if (summaryLoading) {
     return (
@@ -79,9 +133,7 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
     <div className="flex flex-col h-full overflow-y-auto">
       <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Analytics</h2>
-        <p className="text-sm text-zinc-500 mt-0.5">
-          {summary?.pipeline_name ?? 'Pipeline'} overview
-        </p>
+        <p className="text-sm text-zinc-500 mt-0.5">{pipelineName} overview</p>
       </div>
 
       <div className="flex-1 p-6 space-y-8">
@@ -89,21 +141,25 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="Total Pipeline"
-            value={formatCurrencyCompact(summary?.total_value ?? 0)}
-            subValue={`${summary?.total_deals ?? 0} deals`}
+            value={formatCurrencyCompact(totals?.total_value ?? 0)}
+            subValue={`${totals?.deal_count ?? 0} deals`}
             icon={DollarSign}
             color="#16a34a"
           />
           <StatCard
             label="Weighted Forecast"
-            value={formatCurrencyCompact(summary?.weighted_value ?? 0)}
+            value={formatCurrencyCompact(totals?.weighted_value ?? 0)}
             icon={TrendingUp}
             color="#0891b2"
           />
           <StatCard
             label="Win Rate"
-            value={winLoss ? `${winLoss.win_rate_pct}%` : '-'}
-            subValue={winLoss ? `${winLoss.total_won} won / ${winLoss.total_lost} lost` : undefined}
+            value={winLoss ? `${winLoss.win_rate_pct ?? 0}%` : '-'}
+            subValue={
+              winLoss
+                ? `${winLoss.won_count ?? 0} won / ${winLoss.lost_count ?? 0} lost`
+                : undefined
+            }
             icon={Trophy}
             color="#f59e0b"
           />
@@ -117,14 +173,16 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
         </div>
 
         {/* Pipeline funnel */}
-        {summary && summary.stages.length > 0 && (
+        {stages.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Pipeline Stages</h3>
             <div className="grid grid-cols-1 gap-3">
-              {summary.stages
+              {stages
                 .filter((s) => s.stage_type === 'active')
                 .map((stage) => {
-                  const pct = summary.total_value > 0 ? (stage.total_value / summary.total_value) * 100 : 0;
+                  const totalValue = totals?.total_value ?? 0;
+                  const stageValue = stage.total_value ?? 0;
+                  const pct = totalValue > 0 ? (stageValue / totalValue) * 100 : 0;
                   return (
                     <div key={stage.stage_id} className="flex items-center gap-4">
                       <div className="w-32 text-sm text-zinc-700 dark:text-zinc-300 truncate">
@@ -140,7 +198,7 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
                         />
                         <div className="absolute inset-0 flex items-center justify-between px-3">
                           <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                            {stage.deal_count} deals
+                            {stage.deal_count ?? 0} deals
                           </span>
                           <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                             {formatCurrencyCompact(stage.total_value)}
@@ -155,42 +213,43 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
         )}
 
         {/* Deal Velocity */}
-        {velocity.length > 0 && (
+        {velocityStages.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Average Deal Velocity (days per stage)</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {velocity.map((v) => (
+              {velocityStages.map((v) => (
                 <div
-                  key={v.stage_name}
+                  key={v.stage_id}
                   className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 text-center"
                 >
                   <p className="text-sm text-zinc-500 mb-1">{v.stage_name}</p>
                   <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center justify-center gap-1">
                     <Clock className="h-4 w-4 text-primary-500" />
-                    {v.avg_days.toFixed(1)}d
+                    {v.avg_duration_days != null ? `${v.avg_duration_days.toFixed(1)}d` : '-'}
                   </p>
-                  <p className="text-xs text-zinc-400 mt-0.5">median: {v.median_days.toFixed(1)}d</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {v.sample_count ?? 0} sample{v.sample_count === 1 ? '' : 's'}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Conversion rates */}
-        {conversions.length > 0 && (
+        {/* Conversion counts */}
+        {conversionRows.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Stage Conversion Rates</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              {conversions.map((c, i) => (
-                <div key={i} className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Stage Transitions</h3>
+            <div className="flex items-center gap-3 flex-wrap">
+              {conversionRows.map((c, i) => (
+                <div
+                  key={`${c.from_stage}-${c.to_stage}-${i}`}
+                  className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5"
+                >
                   <span className="text-sm text-zinc-600 dark:text-zinc-400">{c.from_stage}</span>
-                  <span className={cn(
-                    'text-sm font-bold',
-                    c.rate_pct >= 50 ? 'text-green-600' : c.rate_pct >= 25 ? 'text-yellow-600' : 'text-red-600',
-                  )}>
-                    {c.rate_pct}%
-                  </span>
                   <span className="text-zinc-400">→</span>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-400">{c.to_stage}</span>
+                  <Badge variant="info">{c.transition_count}</Badge>
                 </div>
               ))}
             </div>
@@ -198,21 +257,18 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
         )}
 
         {/* Revenue forecast */}
-        {forecast.length > 0 && (
+        {forecastRows.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Revenue Forecast</h3>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Revenue Forecast (weighted)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {forecast.map((bucket) => (
+              {forecastRows.map((bucket) => (
                 <div
-                  key={bucket.period}
+                  key={bucket.key}
                   className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4"
                 >
-                  <p className="text-sm text-zinc-500 mb-2">{bucket.period}</p>
+                  <p className="text-sm text-zinc-500 mb-2">{bucket.label}</p>
                   <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
                     {formatCurrencyCompact(bucket.weighted_value)}
-                  </p>
-                  <p className="text-xs text-zinc-400">
-                    {bucket.deal_count} deals, total: {formatCurrencyCompact(bucket.total_value)}
                   </p>
                 </div>
               ))}
@@ -236,13 +292,11 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
                 >
                   <div>
                     <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{deal.deal_name}</p>
-                    <p className="text-xs text-zinc-500">
-                      {deal.stage_name} · {deal.company_name ?? 'No company'} · {deal.owner_name ?? 'Unassigned'}
-                    </p>
+                    <p className="text-xs text-zinc-500">{deal.stage_name ?? 'No stage'}</p>
                   </div>
                   <div className="text-right">
                     <Badge variant="danger">
-                      {deal.days_in_stage}d / {deal.rotting_days_threshold}d
+                      {deal.days_in_stage ?? 0}d / {deal.rotting_days_threshold ?? 0}d
                     </Badge>
                     {deal.value != null && (
                       <p className="text-xs text-zinc-500 mt-1">{formatCurrencyCompact(deal.value)}</p>
@@ -255,14 +309,14 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
         )}
 
         {/* Win/Loss details */}
-        {winLoss && (winLoss.top_loss_reasons.length > 0 || winLoss.top_competitors.length > 0) && (
+        {winLoss && (lossReasons.length > 0 || competitors.length > 0) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {winLoss.top_loss_reasons.length > 0 && (
+            {lossReasons.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Top Loss Reasons</h3>
                 <div className="space-y-2">
-                  {winLoss.top_loss_reasons.map((r, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
+                  {lossReasons.map((r, i) => (
+                    <div key={`${r.reason}-${i}`} className="flex items-center justify-between text-sm">
                       <span className="text-zinc-600 dark:text-zinc-400">{r.reason}</span>
                       <Badge variant="danger">{r.count}</Badge>
                     </div>
@@ -270,12 +324,12 @@ export function AnalyticsPage({ onNavigate }: AnalyticsPageProps) {
                 </div>
               </div>
             )}
-            {winLoss.top_competitors.length > 0 && (
+            {competitors.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Top Competitors</h3>
                 <div className="space-y-2">
-                  {winLoss.top_competitors.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
+                  {competitors.map((c, i) => (
+                    <div key={`${c.name}-${i}`} className="flex items-center justify-between text-sm">
                       <span className="text-zinc-600 dark:text-zinc-400">{c.name}</span>
                       <Badge>{c.count} losses</Badge>
                     </div>

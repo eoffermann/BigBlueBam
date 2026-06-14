@@ -9,6 +9,7 @@ import { CompanyListPage } from '@/pages/company-list';
 import { CompanyDetailPage } from '@/pages/company-detail';
 import { AnalyticsPage } from '@/pages/analytics';
 import { SettingsPage } from '@/pages/settings';
+import { ErrorBoundary } from '@/components/common/error-boundary';
 import { HelpViewer } from '@bigbluebam/ui/help-viewer';
 import { Loader2 } from 'lucide-react';
 
@@ -184,7 +185,9 @@ export function App() {
 
   return (
     <BondLayout onNavigate={navigate} activeRoute={route}>
-      {renderPage()}
+      {/* Remount the boundary per route so an error on one page does not
+          permanently wedge navigation to others. */}
+      <ErrorBoundary key={route.page}>{renderPage()}</ErrorBoundary>
     </BondLayout>
   );
 }
