@@ -28,7 +28,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { bureauKnocks } from '../db/schema/bureau.js';
+import { bureauKnocks, bureauRooms } from '../db/schema/bureau.js';
 import { env } from '../env.js';
 import { requireAuth } from '../plugins/auth.js';
 import {
@@ -41,6 +41,7 @@ import {
 import { isUserInDnd } from '../services/dnd-check.service.js';
 import { scheduleKnockTimeout } from '../services/knock-queue.service.js';
 import { emitKnockRequested } from '../lib/bureau-events.js';
+import { enqueueBureauNotification } from '../services/notify.service.js';
 
 const createBody = z.object({
   room_id: z.string().uuid(),
@@ -180,6 +181,47 @@ export default async function knocksRoutes(fastify: FastifyInstance) {
       }).catch(() => {
         /* fire-and-forget */
       });
+
+      // In-app notification → the office OWNER. Acknowledge-only on the
+      // frontend (the knock inbox lives at /bureau), but we still attach a
+      // deep_link so the row is navigable. Best-effort: a queue hiccup must
+      // not fail the knock. `loadRoom` doesn't select the room name, so look
+      // it up cheaply for the body; fall back to a generic phrase on miss.
+      const ownerId = created.owner_id;
+      void (async () => {
+        let roomName: string | null = null;
+        try {
+          const [r] = await db
+            .select({ name: bureauRooms.name })
+            .from(bureauRooms)
+            .where(eq(bureauRooms.id, room.id))
+            .limit(1);
+          roomName = r?.name ?? null;
+        } catch {
+          /* name is best-effort */
+        }
+        const actorName = user.display_name ?? 'Someone';
+        await enqueueBureauNotification(
+          {
+            user_id: ownerId,
+            org_id: user.org_id,
+            type: 'bureau.knock',
+            category: 'knock',
+            source_app: 'bureau',
+            title: `${actorName} knocked`,
+            body: created.message
+              ? `${actorName} knocked on ${roomName ? `your office "${roomName}"` : 'your office'}: ${created.message}`
+              : `${actorName} knocked on ${roomName ? `your office "${roomName}"` : 'your office'}`,
+            deep_link: '/bureau/',
+            metadata: {
+              knock_id: created.id,
+              room_id: room.id,
+              visitor_id: user.id,
+            },
+          },
+          request.log,
+        );
+      })();
 
       return reply.status(201).send({ data: created });
     },

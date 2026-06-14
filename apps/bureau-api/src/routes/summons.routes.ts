@@ -25,6 +25,7 @@ import {
   recordSummon,
   reportDenials,
 } from '../services/summon.service.js';
+import { enqueueBureauNotification } from '../services/notify.service.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Schemas
@@ -124,6 +125,39 @@ export default async function summonsRoutes(fastify: FastifyInstance) {
           canShare: plan.canShare,
         });
       }
+
+      // 5. In-app notification → each eligible RECIPIENT (the summoned user).
+      //    Wired here (not in fanOutSummon) so both the inline and the
+      //    BullMQ-offload fan-out paths produce exactly one notification per
+      //    recipient. Best-effort / fire-and-forget per recipient: a queue
+      //    hiccup must not fail the summon. We never notify the summoner.
+      const summonerName = user.display_name ?? 'Someone';
+      const destinationLabel = target_label ?? target_app;
+      void Promise.all(
+        plan.eligibleRecipients
+          .filter((r) => r.userId !== user.id)
+          .map((r) =>
+            enqueueBureauNotification(
+              {
+                user_id: r.userId,
+                org_id: user.org_id,
+                type: 'bureau.summon',
+                category: 'invite',
+                source_app: 'bureau',
+                title: `${summonerName} invited you to ${destinationLabel}`,
+                body: `${summonerName} summoned you to ${destinationLabel}. Join them in Bureau.`,
+                deep_link: '/bureau/',
+                metadata: {
+                  summon_id: summonId,
+                  summoner_id: user.id,
+                  target_app,
+                  target_url,
+                },
+              },
+              fastify.log,
+            ),
+          ),
+      );
 
       return reply.status(201).send({
         data: {
