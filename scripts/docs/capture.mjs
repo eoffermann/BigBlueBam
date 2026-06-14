@@ -411,6 +411,12 @@ async function login(page) {
 }
 
 async function applyTheme(page, theme) {
+  // A storageState context starts at about:blank, where localStorage throws.
+  // Land on the app origin first so the theme preference can be written.
+  if (!page.url().startsWith('http')) {
+    await page.goto(`${BASE_URL}/b3/`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+    await page.waitForTimeout(SETTLE_DELAY);
+  }
   await page.evaluate((t) => {
     localStorage.setItem('bbam-theme', t);
     if (t === 'dark') {
@@ -499,6 +505,20 @@ let hasFailure = false;
 
 const browser = await chromium.launch({ headless: true });
 
+// Log in ONCE and reuse the authenticated session for every context via
+// storageState. Re-logging-in per app/theme hammers /b3/api/auth/login, which
+// the non-permissive local stack rate-limits, leaving later apps (e.g. bureau,
+// whose App.tsx gates on /b3/api/auth/me) stuck on the logged-out gate.
+let storageState;
+{
+  const authCtx = await browser.newContext({ viewport: VIEWPORT, ignoreHTTPSErrors: true });
+  const authPage = await authCtx.newPage();
+  authPage.setDefaultTimeout(15_000);
+  await login(authPage);
+  storageState = await authCtx.storageState();
+  await authCtx.close();
+}
+
 try {
   for (const app of targetApps) {
     const scenes = APP_SCENES[app];
@@ -510,12 +530,11 @@ try {
     let appFailed = false;
 
     for (const theme of themes) {
-      const context = await browser.newContext({ viewport: VIEWPORT, ignoreHTTPSErrors: true });
+      const context = await browser.newContext({ viewport: VIEWPORT, ignoreHTTPSErrors: true, storageState });
       const page = await context.newPage();
       page.setDefaultTimeout(15_000);
 
       try {
-        await login(page);
         await applyTheme(page, theme);
 
         for (const scene of scenes) {

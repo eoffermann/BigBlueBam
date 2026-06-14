@@ -43,11 +43,11 @@ The sidebar (brand label **"Bureau"**) groups navigation under:
 
 Floor and office administration require org admin, owner, or SuperUser. Audio huddles require LiveKit to be configured and the platform calling switch to be on; if calling is disabled, joining a room's audio returns a "calling disabled" error.
 
-A visual walkthrough (screenshots) is not yet available for Bureau. The steps below describe the views in prose.
-
 ## Feature reference
 
 ### Browse floors
+
+![Floor directory](screenshots/light/01-floors.png)
 
 The Floors landing is where you pick a place to drop in.
 
@@ -60,6 +60,8 @@ To browse floors:
 If no floors exist yet you will see "No floors yet" and "Ask an org admin to create the first floor under Admin to Floors."
 
 ### The live floor view (presence canvas)
+
+![Live floor view](screenshots/light/02-floor.png)
 
 The floor view is the spatial map. It draws one rectangle per room over a grid background, with a dot for each occupant.
 
@@ -241,6 +243,8 @@ When you are in an audio huddle, the call strip shows your controls:
 The box is draggable by its header and collapsible. Because your presence lives on the server, navigating between pages does not drop your room or your call; the box re-attaches to the surface huddle of wherever you land.
 
 ### Admin - Floors list
+
+![Admin floor management](screenshots/light/03-admin-floors.png)
 
 Admins manage the org's floors here.
 
