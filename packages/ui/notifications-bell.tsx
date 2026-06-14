@@ -554,10 +554,22 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
     }
 
     if (item.kind === 'banter-channel' && item.channel) {
-      // Drop it from the bell now; opening the channel marks it read in Banter
-      // server-side, so it won't come back on the next poll.
-      dropChannelFromCache(item.channel.id);
-      window.location.href = `/banter/channels/${item.channel.slug}`;
+      const channel = item.channel;
+      // Optimistically drop it for instant badge feedback...
+      dropChannelFromCache(channel.id);
+      // ...but clicking MUST also mark the channel read server-side. The old
+      // code only dropped the cache and hard-navigated, trusting "opening the
+      // channel marks it read" — it doesn't reliably, so the destination page's
+      // bell re-fetched the still-unread channel and the count snapped back
+      // (the "click an alert, it still says 11" bug; only Clear all, which marks
+      // every channel read, reduced the count). mark-read needs the latest
+      // message id (two fetches), so await it before navigating so the read
+      // persists across the page unload.
+      markBanterChannelRead(channel)
+        .catch(() => {})
+        .finally(() => {
+          window.location.href = `/banter/channels/${channel.slug}`;
+        });
     }
   };
 
