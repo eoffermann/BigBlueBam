@@ -136,6 +136,44 @@ export function useCreateChannel() {
   });
 }
 
+/** One row in a bulk-create input list. */
+export interface BulkChannelInput {
+  name: string;
+  type?: 'public' | 'private';
+  topic?: string;
+  description?: string;
+}
+
+/** Per-row outcome returned by POST /channels/bulk. */
+export interface BulkChannelResult {
+  name: string;
+  status: 'created' | 'duplicate' | 'invalid' | 'error';
+  channel?: Channel;
+  error?: string;
+}
+
+/**
+ * Create many channels at once ("Add many").
+ *
+ * Hits POST /channels/bulk, which has its own rate-limit budget separate
+ * from the 5/hour single-create ceiling (a client-side loop over the single
+ * endpoint would die after 5). Returns a per-row results array; the whole
+ * batch never fails just because one row is a duplicate/invalid, so callers
+ * should inspect each result's `status`.
+ */
+export function useBulkCreateChannels() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { channels: BulkChannelInput[]; type?: 'public' | 'private' }) =>
+      api
+        .post<{ data: { results: BulkChannelResult[] } }>('/channels/bulk', data)
+        .then((r) => r.data.results),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['channels'] });
+    },
+  });
+}
+
 /** Join a channel */
 export function useJoinChannel() {
   const queryClient = useQueryClient();

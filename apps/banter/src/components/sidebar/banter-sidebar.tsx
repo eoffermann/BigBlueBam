@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
 import { cn, generateAvatarInitials, presenceColor } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { BulkCreateChannelsDialog } from './bulk-create-channels-dialog';
 
 interface BanterSidebarProps {
   onNavigate: (path: string) => void;
@@ -38,9 +39,16 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
   // settings entry. Permission matches the API gate on PATCH /v1/admin/settings.
   const canEditCallingSettings = useCan('banter.admin_setting.update');
 
+  // Right-click "Add many" is gated on the same admin-setting permission as
+  // the calling-settings entry above; only org admins/owners get the bulk
+  // affordance. Everyone with banter.channel.create still gets left-click
+  // single-create.
+  const canBulkCreate = canEditCallingSettings;
+
   const [channelsOpen, setChannelsOpen] = useState(true);
   const [dmsOpen, setDmsOpen] = useState(true);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showBulkCreate, setShowBulkCreate] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const createChannel = useCreateChannel();
 
@@ -152,8 +160,17 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
                 e.stopPropagation();
                 setShowCreateChannel(true);
               }}
+              onContextMenu={
+                canBulkCreate
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowBulkCreate(true);
+                    }
+                  : undefined
+              }
               className="ml-auto p-0.5 rounded hover:bg-sidebar-hover"
-              title="Create channel"
+              title={canBulkCreate ? 'Create channel — right-click to add many' : 'Create channel'}
             >
               <Plus className="h-3 w-3" />
             </button>
@@ -268,6 +285,14 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
       </div>
 
       <SidebarPlatformFooter user={user} />
+
+      {canBulkCreate && (
+        <BulkCreateChannelsDialog
+          open={showBulkCreate}
+          onOpenChange={setShowBulkCreate}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }
