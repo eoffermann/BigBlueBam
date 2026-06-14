@@ -33,8 +33,10 @@ vi.mock('../src/hooks/use-reactions', () => ({
 
 vi.mock('../src/hooks/use-messages', () => ({
   usePostMessage: () => ({ mutate: vi.fn(), isPending: false }),
-  useEditMessage: () => ({ mutate: vi.fn() }),
+  useEditMessage: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteMessage: () => ({ mutate: vi.fn() }),
+  usePinMessage: () => ({ mutate: vi.fn(), isPending: false }),
+  useBookmark: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock('../src/hooks/use-channels', () => ({

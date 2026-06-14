@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import {
   SmilePlus,
   MessageSquare,
@@ -17,7 +17,14 @@ import {
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useChannelStore } from '@/stores/channel.store';
 import { useToggleReaction } from '@/hooks/use-reactions';
-import { useDeleteMessage, type Message, type Reaction } from '@/hooks/use-messages';
+import {
+  useDeleteMessage,
+  useEditMessage,
+  usePinMessage,
+  useBookmark,
+  type Message,
+  type Reaction,
+} from '@/hooks/use-messages';
 import { useAuthStore } from '@/stores/auth.store';
 import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
 import {
@@ -46,10 +53,90 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
   // its visibility off this (see below) so the portaled menu isn't torn down
   // when the pointer leaves the row to move onto the menu.
   const [menuOpen, setMenuOpen] = useState(false);
+  // Inline-edit state lives on the row itself — there is no shared editing
+  // store in Banter (channel.store has no editingMessageId), and only one
+  // message edits at a time per row, so local state is the simplest correct
+  // place for it. `editValue` seeds the textarea from the current content.
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(message.content);
   const openThread = useChannelStore((s) => s.openThread);
   const currentUser = useAuthStore((s) => s.user);
   const toggleReaction = useToggleReaction();
   const deleteMessage = useDeleteMessage();
+  const editMessage = useEditMessage();
+  const pinMessage = usePinMessage();
+  const bookmarkMessage = useBookmark();
+
+  // Pin and Bookmark land their result on other surfaces (the channel's pins
+  // panel / the Bookmarks page), so without a tiny inline confirmation a click
+  // looks like it did nothing. `feedback` shows a brief pill; it also surfaces
+  // the failure case — the pin endpoint is channel-admin-gated, so a member's
+  // click would otherwise 403 in silence.
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = (msg: string) => {
+    setFeedback(msg);
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => setFeedback(null), 1800);
+  };
+  useEffect(() => () => {
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+  }, []);
+
+  const startEditing = () => {
+    setEditValue(message.content);
+    setIsEditing(true);
+    setMenuOpen(false);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditValue(message.content);
+  };
+
+  const saveEdit = () => {
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === message.content) {
+      cancelEditing();
+      return;
+    }
+    editMessage.mutate(
+      { channelId, messageId: message.id, content: trimmed },
+      { onSuccess: () => setIsEditing(false) },
+    );
+  };
+
+  const handleEditKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      saveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditing();
+    }
+  };
+
+  const handlePin = () => {
+    setMenuOpen(false);
+    pinMessage.mutate(
+      { channelId, messageId: message.id },
+      {
+        onSuccess: () => flash('Pinned to channel'),
+        onError: () => flash("Couldn't pin — channel admins only"),
+      },
+    );
+  };
+
+  const handleBookmark = () => {
+    setMenuOpen(false);
+    bookmarkMessage.mutate(
+      { messageId: message.id },
+      {
+        onSuccess: () => flash('Bookmarked'),
+        onError: () => flash("Couldn't bookmark"),
+      },
+    );
+  };
 
   const isOwn = currentUser?.id === message.author_id;
   // Enforce the server's edit_permission policy in the UI too. 'none'
@@ -172,11 +259,48 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
           </div>
         )}
 
-        {/* Message body */}
-        <div
-          className="rich-text-content text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: renderedHtml }}
-        />
+        {/* Message body — inline editor when editing, rendered HTML otherwise */}
+        {isEditing ? (
+          <div className="mt-0.5">
+            <textarea
+              autoFocus
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleEditKeyDown}
+              rows={Math.min(editValue.split('\n').length, 8)}
+              className={cn(
+                'w-full resize-none rounded-md border border-zinc-300 dark:border-zinc-600',
+                'bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm',
+                'text-zinc-900 dark:text-zinc-100',
+                'outline-none focus:border-primary-400 dark:focus:border-primary-600',
+              )}
+            />
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                onClick={saveEdit}
+                disabled={editMessage.isPending}
+                className="px-2.5 py-1 rounded-md text-xs font-medium bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={cancelEditing}
+                className="px-2.5 py-1 rounded-md text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <span className="text-[10px] text-zinc-400">
+                <kbd className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 font-mono">Enter</kbd> to save,{' '}
+                <kbd className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 font-mono">Esc</kbd> to cancel
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="rich-text-content text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: renderedHtml }}
+          />
+        )}
 
         {/* Cross-product embeds (Bam task, Bond deal previews) */}
         {!message.is_system && (
@@ -231,6 +355,13 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
             <MessageSquare className="h-3.5 w-3.5" />
             {message.thread_reply_count} {message.thread_reply_count === 1 ? 'reply' : 'replies'}
           </button>
+        )}
+
+        {/* Transient confirmation for Pin / Bookmark (they have no inline state) */}
+        {feedback && (
+          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+            {feedback}
+          </div>
         )}
       </div>
 
@@ -288,12 +419,14 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
           <ActionButton
             icon={<Pin className="h-4 w-4" />}
             title="Pin message"
+            onClick={handlePin}
           />
 
           {/* Bookmark */}
           <ActionButton
             icon={<Bookmark className="h-4 w-4" />}
             title="Bookmark"
+            onClick={handleBookmark}
           />
 
           {/* More menu */}
@@ -310,7 +443,10 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
                 align="end"
               >
                 {canEdit && (
-                  <DropdownMenu.Item className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none">
+                  <DropdownMenu.Item
+                    className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none"
+                    onSelect={startEditing}
+                  >
                     <Pencil className="h-4 w-4" />
                     Edit message
                   </DropdownMenu.Item>
@@ -326,11 +462,17 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
                     Delete message
                   </DropdownMenu.Item>
                 )}
-                <DropdownMenu.Item className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none">
+                <DropdownMenu.Item
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none"
+                  onSelect={handleBookmark}
+                >
                   <Bookmark className="h-4 w-4" />
                   Bookmark
                 </DropdownMenu.Item>
-                <DropdownMenu.Item className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none">
+                <DropdownMenu.Item
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none"
+                  onSelect={handlePin}
+                >
                   <Pin className="h-4 w-4" />
                   Pin to channel
                 </DropdownMenu.Item>

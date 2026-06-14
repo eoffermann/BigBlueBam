@@ -130,6 +130,12 @@ async function bbbPost<T>(path: string, body?: unknown): Promise<T> {
     headers: body ? { 'Content-Type': 'application/json' } : {},
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
+    // keepalive lets the request finish even if the click immediately
+    // triggers a (cross-app) navigation that unloads the page. Without it,
+    // clicking a notification that deep-links elsewhere aborts the in-flight
+    // mark-read POST, so the notification never actually clears — which is
+    // exactly why "Clear all" (no navigation) worked but single clicks didn't.
+    keepalive: true,
   });
   if (!res.ok) throw new Error(`Bam API error: ${res.status}`);
   return res.json();
@@ -495,12 +501,50 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
     }
   };
 
+  // Optimistically drop a persistent notification from the queue + badge the
+  // instant it's clicked, so it visibly clears even before the POST settles and
+  // even if a navigation unloads the page mid-request.
+  const dropNotificationFromCache = useCallback(
+    (id: string) => {
+      queryClient.setQueryData<{ data: Notification[]; meta?: { unread_count?: number } }>(
+        ['bbb', 'notifications'],
+        (old) => {
+          if (!old) return old;
+          const data = old.data.filter((n) => n.id !== id);
+          const removed = old.data.length - data.length;
+          return {
+            ...old,
+            data,
+            meta: {
+              ...old.meta,
+              unread_count: Math.max(0, (old.meta?.unread_count ?? 0) - removed),
+            },
+          };
+        },
+      );
+    },
+    [queryClient],
+  );
+
+  // Same idea for a Banter unread channel item.
+  const dropChannelFromCache = useCallback(
+    (channelId: string) => {
+      queryClient.setQueryData<BanterChannel[]>(
+        ['bbb', 'banter-unread', orgId ?? 'no-org'],
+        (old) => (old ? old.filter((c) => c.id !== channelId) : old),
+      );
+    },
+    [queryClient, orgId],
+  );
+
   const handleItemClick = (item: QueueItem) => {
     setOpen(false);
 
     if (item.kind === 'notification' && item.notification) {
       const n = item.notification;
-      // Always acknowledge (mark read) first.
+      // Clear it from the UI immediately, then persist the read (keepalive POST
+      // survives the navigation below).
+      dropNotificationFromCache(n.id);
       markOneRead.mutate(n.id, { onSettled: () => refetchQueue() });
       // Invite/knock: acknowledge only — no navigation, it just leaves the queue.
       if (n.category === 'invite' || n.category === 'knock') return;
@@ -510,8 +554,9 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
     }
 
     if (item.kind === 'banter-channel' && item.channel) {
-      // Opening the channel marks it read in Banter, so it drops off the next
-      // poll — a hard navigation is enough.
+      // Drop it from the bell now; opening the channel marks it read in Banter
+      // server-side, so it won't come back on the next poll.
+      dropChannelFromCache(item.channel.id);
       window.location.href = `/banter/channels/${item.channel.slug}`;
     }
   };

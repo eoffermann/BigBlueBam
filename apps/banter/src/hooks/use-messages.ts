@@ -124,3 +124,43 @@ export function useDeleteMessage() {
     },
   });
 }
+
+/**
+ * Pin a message to its channel. The POST is idempotent server-side: pinning an
+ * already-pinned message returns `{ data: { already_pinned: true } }` with no
+ * error, so callers can fire-and-forget without checking current pin state.
+ */
+export function usePinMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ channelId, messageId }: { channelId: string; messageId: string }) =>
+      api.post<{ data: { id?: string; already_pinned?: boolean } }>(
+        `/channels/${channelId}/pins`,
+        { message_id: messageId },
+      ),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', variables.channelId] });
+      queryClient.invalidateQueries({ queryKey: ['pins', variables.channelId] });
+    },
+  });
+}
+
+/**
+ * Bookmark a message for the current user. The POST is idempotent server-side:
+ * bookmarking an already-bookmarked message returns
+ * `{ data: { already_bookmarked: true } }`. The request body is `{ message_id }`
+ * with an optional `note` (see banter-api createBookmarkSchema).
+ */
+export function useBookmark() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ messageId, note }: { messageId: string; note?: string }) =>
+      api.post<{ data: { id?: string; already_bookmarked?: boolean } }>(`/bookmarks`, {
+        message_id: messageId,
+        note,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+    },
+  });
+}
