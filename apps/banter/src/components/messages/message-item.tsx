@@ -21,6 +21,7 @@ import {
   useDeleteMessage,
   useEditMessage,
   usePinMessage,
+  useUnpinMessage,
   useBookmark,
   useRemoveBookmarkByMessage,
   type Message,
@@ -66,6 +67,7 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
   const deleteMessage = useDeleteMessage();
   const editMessage = useEditMessage();
   const pinMessage = usePinMessage();
+  const unpinMessage = useUnpinMessage();
   const bookmarkMessage = useBookmark();
   const removeBookmark = useRemoveBookmarkByMessage();
 
@@ -120,13 +122,23 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
 
   const handlePin = () => {
     setMenuOpen(false);
-    pinMessage.mutate(
-      { channelId, messageId: message.id },
-      {
-        onSuccess: () => flash('Pinned to channel'),
-        onError: () => flash("Couldn't pin — channel admins only"),
-      },
-    );
+    if (message.is_pinned) {
+      unpinMessage.mutate(
+        { channelId, messageId: message.id },
+        {
+          onSuccess: () => flash('Unpinned'),
+          onError: () => flash("Couldn't unpin — channel admins only"),
+        },
+      );
+    } else {
+      pinMessage.mutate(
+        { channelId, messageId: message.id },
+        {
+          onSuccess: () => flash('Pinned to channel'),
+          onError: () => flash("Couldn't pin — channel admins only"),
+        },
+      );
+    }
   };
 
   const handleBookmark = () => {
@@ -427,11 +439,12 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
             onClick={() => openThread(message.id)}
           />
 
-          {/* Pin */}
+          {/* Pin — filled + tinted when pinned to the channel (visible to all) */}
           <ActionButton
-            icon={<Pin className="h-4 w-4" />}
-            title="Pin message"
+            icon={<Pin className={cn('h-4 w-4', message.is_pinned && 'fill-current')} />}
+            title={message.is_pinned ? 'Unpin message' : 'Pin message'}
             onClick={handlePin}
+            active={message.is_pinned}
           />
 
           {/* Bookmark — filled + tinted when the current user has bookmarked it */}
@@ -488,8 +501,8 @@ export function MessageItem({ message, channelId, grouped, onNavigate: _onNaviga
                   className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 outline-none"
                   onSelect={handlePin}
                 >
-                  <Pin className="h-4 w-4" />
-                  Pin to channel
+                  <Pin className={cn('h-4 w-4', message.is_pinned && 'fill-current text-primary-500')} />
+                  {message.is_pinned ? 'Unpin from channel' : 'Pin to channel'}
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Portal>

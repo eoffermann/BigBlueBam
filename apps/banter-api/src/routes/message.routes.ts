@@ -7,6 +7,7 @@ import {
   banterChannelMemberships,
   banterMessages,
   banterBookmarks,
+  banterPins,
   users,
 } from '../db/schema/index.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
@@ -188,16 +189,33 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             )
           : new Set<string>();
 
+      // Pin state is channel-wide (a banter_pins row, visible to everyone), not
+      // per-user. Same set-based lookup so a pinned message renders pinned on
+      // re-render instead of the old hardcoded is_pinned:false.
+      const pinnedMessageIds =
+        pageMessageIds.length > 0
+          ? new Set(
+              (
+                await db
+                  .select({ message_id: banterPins.message_id })
+                  .from(banterPins)
+                  .where(
+                    and(
+                      eq(banterPins.channel_id, id),
+                      inArray(banterPins.message_id, pageMessageIds),
+                    ),
+                  )
+              ).map((r) => r.message_id),
+            )
+          : new Set<string>();
+
       const data = messages.map((row) => ({
         ...row.message,
         author_id: row.message.author_id,
         author_display_name: row.author.display_name,
         author_avatar_url: row.author.avatar_url,
         is_bot: row.message.is_bot ?? false,
-        // Pin state lives in a separate banter_pinned_messages table; the
-        // list endpoint does not join it today. Consumers treat absence
-        // as false.
-        is_pinned: false,
+        is_pinned: pinnedMessageIds.has(row.message.id),
         is_bookmarked: bookmarkedMessageIds.has(row.message.id),
         is_edited: row.message.is_edited ?? false,
         thread_reply_count: row.message.reply_count ?? 0,

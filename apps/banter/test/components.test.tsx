@@ -36,6 +36,7 @@ vi.mock('../src/hooks/use-messages', () => ({
   useEditMessage: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteMessage: () => ({ mutate: vi.fn() }),
   usePinMessage: () => ({ mutate: vi.fn(), isPending: false }),
+  useUnpinMessage: () => ({ mutate: vi.fn(), isPending: false }),
   useBookmark: () => ({ mutate: vi.fn(), isPending: false }),
   useRemoveBookmarkByMessage: () => ({ mutate: vi.fn(), isPending: false }),
 }));

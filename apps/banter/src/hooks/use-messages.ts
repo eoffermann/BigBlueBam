@@ -152,6 +152,22 @@ export function usePinMessage() {
 }
 
 /**
+ * Unpin a message from its channel. Route: `DELETE /v1/channels/:id/pins/:messageId`.
+ * Admin-gated server-side (same as pin). Powers toggle-off from the row.
+ */
+export function useUnpinMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ channelId, messageId }: { channelId: string; messageId: string }) =>
+      api.delete(`/channels/${channelId}/pins/${messageId}`),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', variables.channelId] });
+      queryClient.invalidateQueries({ queryKey: ['pins', variables.channelId] });
+    },
+  });
+}
+
+/**
  * Bookmark a message for the current user. The POST is idempotent server-side:
  * bookmarking an already-bookmarked message returns
  * `{ data: { already_bookmarked: true } }`. The request body is `{ message_id }`
