@@ -43,7 +43,20 @@ export interface BenchDataSource {
   filters: FilterDefinition[];
   baseTable: string;
   joins?: JoinDefinition[];
+  /**
+   * Name of the tenant-isolation column on `baseTable`. The query builder
+   * always injects `<orgColumn> = $org` so a tenant can never read another
+   * org's rows. Most BigBlueBam tables (bond_*, blast_*, beacon_*, and the
+   * bench_mv_* materialized views) name this column `organization_id`, which
+   * is the default. Bureau tables use the shorter `org_id`, so that source
+   * sets `orgColumn: 'org_id'` explicitly. Any future org_id-scoped source
+   * just overrides this field instead of touching query.service.ts.
+   */
+  orgColumn?: string;
 }
+
+/** Default tenant-isolation column when a source doesn't override `orgColumn`. */
+export const DEFAULT_ORG_COLUMN = 'organization_id';
 
 const DATA_SOURCES: BenchDataSource[] = [
   // ── Bam (Project Management) ──────────────────────────────────
@@ -230,12 +243,27 @@ const DATA_SOURCES: BenchDataSource[] = [
   },
 
   // ── Bureau (Spatial presence) ─────────────────────────────────
+  //
+  // IMPORTANT (reviewers): `bureau_floor_analytics` is a NIGHTLY ROLLUP, not a
+  // live feed. The `bureau.analytics.rollup` BullMQ worker writes one row per
+  // (floor, day) at midnight UTC for the *previous* day, so any activity a user
+  // does today (summons, knocks, bookings) only shows up in this source
+  // tomorrow. A 1-day window is therefore usually blank mid-day — widgets here
+  // should use a forgiving window (last_7_days). Real-time counters are NOT
+  // served from this table: subscribe to the `bureau.summon.issued` Bolt event
+  // instead. Do not "fix" the latency here; it is by design.
+  //
+  // Tenant column note: every bureau_* table (incl. this one, migration 0176)
+  // uses `org_id`, NOT `organization_id`. That's why `orgColumn` is overridden
+  // below — without it the query builder would emit `organization_id = $1` and
+  // every Bureau widget would 42703 ("column does not exist") and return nothing.
   {
     product: 'bureau',
     entity: 'floor_analytics',
     label: 'Bureau Floor Analytics (Daily)',
     description: 'Daily per-floor utilization rollup: peak occupancy, summons, knocks, bookings. Written nightly by the bureau.analytics.rollup worker.',
     baseTable: 'bureau_floor_analytics',
+    orgColumn: 'org_id',
     measures: [
       { field: 'peak_occupancy', label: 'Peak Occupancy', aggregations: ['max', 'avg', 'sum'], type: 'integer' },
       { field: 'summon_count', label: 'Summons', aggregations: ['sum', 'avg', 'max'], type: 'integer' },
