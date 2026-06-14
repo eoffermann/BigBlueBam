@@ -91,12 +91,15 @@ export function usePostMessage() {
   });
 }
 
-/** Edit an existing message */
+/**
+ * Edit an existing message. The banter-api route is `PATCH /v1/messages/:id`
+ * (NOT channel-scoped) — `channelId` is carried only so onSuccess can target
+ * the right ['messages', channelId] cache key.
+ */
 export function useEditMessage() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      channelId,
       messageId,
       content,
     }: {
@@ -104,21 +107,19 @@ export function useEditMessage() {
       messageId: string;
       content: string;
     }) =>
-      api
-        .patch<{ data: Message }>(`/channels/${channelId}/messages/${messageId}`, { content })
-        .then((r) => r.data),
+      api.patch<{ data: Message }>(`/messages/${messageId}`, { content }).then((r) => r.data),
     onSuccess: (msg) => {
       queryClient.invalidateQueries({ queryKey: ['messages', msg.channel_id] });
     },
   });
 }
 
-/** Delete a message */
+/** Delete a message. Route is `DELETE /v1/messages/:id` (not channel-scoped). */
 export function useDeleteMessage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ channelId, messageId }: { channelId: string; messageId: string }) =>
-      api.delete(`/channels/${channelId}/messages/${messageId}`),
+    mutationFn: ({ messageId }: { channelId: string; messageId: string }) =>
+      api.delete(`/messages/${messageId}`),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.channelId] });
     },

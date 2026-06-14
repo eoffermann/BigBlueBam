@@ -23,11 +23,11 @@ export function BookmarksPage({ onNavigate }: BookmarksPageProps) {
 
   const { data: bookmarks, isLoading } = useQuery({
     queryKey: ['bookmarks'],
-    queryFn: () => api.get<{ data: BookmarkEntry[] }>('/me/bookmarks').then((r) => r.data),
+    queryFn: () => api.get<{ data: BookmarkEntry[] }>('/bookmarks').then((r) => r.data),
   });
 
   const removeBookmark = useMutation({
-    mutationFn: (bookmarkId: string) => api.delete(`/me/bookmarks/${bookmarkId}`),
+    mutationFn: (bookmarkId: string) => api.delete(`/bookmarks/${bookmarkId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
     },

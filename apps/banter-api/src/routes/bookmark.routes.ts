@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   banterBookmarks,
@@ -24,29 +24,27 @@ export default async function bookmarkRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const user = request.user!;
 
-      const bookmarks = await db
+      // Flat, page-ready shape: the Bookmarks SPA renders channel name/slug
+      // (for navigation), the message preview, and the author — so join all
+      // three here rather than make the client stitch a nested payload.
+      const data = await db
         .select({
-          bookmark: banterBookmarks,
-          message: banterMessages,
-          author: {
-            id: users.id,
-            display_name: users.display_name,
-            avatar_url: users.avatar_url,
-          },
+          id: banterBookmarks.id,
+          message_id: banterBookmarks.message_id,
+          note: banterBookmarks.note,
+          created_at: banterBookmarks.created_at,
+          channel_id: banterChannels.id,
+          channel_name: banterChannels.name,
+          channel_slug: banterChannels.slug,
+          message_content: banterMessages.content,
+          message_author_display_name: users.display_name,
         })
         .from(banterBookmarks)
         .innerJoin(banterMessages, eq(banterBookmarks.message_id, banterMessages.id))
+        .innerJoin(banterChannels, eq(banterChannels.id, banterMessages.channel_id))
         .innerJoin(users, eq(banterMessages.author_id, users.id))
         .where(eq(banterBookmarks.user_id, user.id))
-        .orderBy(banterBookmarks.created_at);
-
-      const data = bookmarks.map((row) => ({
-        ...row.bookmark,
-        message: {
-          ...row.message,
-          author: row.author,
-        },
-      }));
+        .orderBy(desc(banterBookmarks.created_at));
 
       return reply.send({ data });
     },
