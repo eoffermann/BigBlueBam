@@ -191,7 +191,7 @@ async function loadScenes() {
             const url = p.url();
             const previewUrl = url.replace(/\/edit$/, '/preview');
             if (previewUrl !== url) {
-              await p.goto(previewUrl, { waitUntil: 'networkidle', timeout: 15000 });
+              await p.goto(previewUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
               await p.waitForTimeout(2000);
             }
           }
@@ -333,6 +333,17 @@ async function loadScenes() {
           await click(p, 'button:has-text("New Ticket")');
         } },
     ],
+    blueprint: [
+      { id: '01-diagrams', label: 'Diagram list', route: '/blueprint/', waitFor: 'main' },
+      { id: '02-editor', label: 'Diagram editor', route: '/blueprint/d/38e60a5c-803c-477a-9763-937a36c3a1ee', waitFor: 'body',
+        setup: async (p) => { await p.waitForTimeout(3500); } },
+    ],
+    bureau: [
+      { id: '01-floors', label: 'Floor directory', route: '/bureau/', waitFor: 'main' },
+      { id: '02-floor', label: 'Live floor view', route: '/bureau/floors/a0000000-0000-4000-8000-bbb00000f100', waitFor: 'body',
+        setup: async (p) => { await p.waitForTimeout(3500); } },
+      { id: '03-admin-floors', label: 'Admin floor management', route: '/bureau/admin/floors', waitFor: 'main' },
+    ],
   };
 }
 
@@ -376,7 +387,7 @@ async function login(page) {
   const email = process.env.DOCS_CAPTURE_USER || 'admin@example.com';
   const password = process.env.DOCS_CAPTURE_PASSWORD || 'BigBlueBam-2026-dev-pw';
 
-  await page.goto(`${BASE_URL}/b3/login`, { waitUntil: 'networkidle', timeout: 20_000 });
+  await page.goto(`${BASE_URL}/b3/login`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
 
   // Check if already logged in (redirected away from login)
   if (!page.url().includes('/login')) return;
@@ -408,7 +419,7 @@ async function applyTheme(page, theme) {
       document.documentElement.classList.remove('dark');
     }
   }, theme);
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(SETTLE_DELAY);
   // Re-apply after reload
   await page.evaluate((t) => {
@@ -427,7 +438,7 @@ async function captureScene(page, scene, theme, app) {
 
   // Navigate
   await page.goto(`${BASE_URL}${scene.route}`, {
-    waitUntil: 'networkidle',
+    waitUntil: 'domcontentloaded',
     timeout: 20_000,
   });
   await page.waitForTimeout(SETTLE_DELAY);
@@ -499,7 +510,7 @@ try {
     let appFailed = false;
 
     for (const theme of themes) {
-      const context = await browser.newContext({ viewport: VIEWPORT });
+      const context = await browser.newContext({ viewport: VIEWPORT, ignoreHTTPSErrors: true });
       const page = await context.newPage();
       page.setDefaultTimeout(15_000);
 

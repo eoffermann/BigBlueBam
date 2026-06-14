@@ -32,11 +32,11 @@ Blueprint is served at `/blueprint/`. Reach it from the platform Launchpad in th
 
 You need a signed-in BigBlueBam account; the app refuses to load when you are not authenticated and links you to `/b3/` to log in. To use the Bam-integration features (generate from Bam, promote to tasks, two-way sync), you also need a Bam project with tasks, because those flows talk to Bam directly using your shared session.
 
-A visual walkthrough of Blueprint is not yet available; there are no screenshots in this guide. The steps below name every button and field exactly as it appears in the app so you can follow along on screen.
-
 ## Feature reference
 
 ### Browse and filter diagrams
+
+![Diagram list](screenshots/light/01-diagrams.png)
 
 The diagram list at `/blueprint/` shows every diagram you can see, as a grid of cards. Each card shows the type icon, the diagram name, the type label, a Star toggle, and a More menu. The card footer shows the visibility (Private, Project, or Organization, each with its own icon) and the relative time the diagram was last updated.
 
@@ -65,6 +65,8 @@ The split button next to New diagram has a chevron menu with two entries: **Blan
 Note on templates: the Template select is present, but a chosen template does not seed any nodes or edges into the new diagram. The backend accepts a template id and ignores it, and there is no way to create templates today, so the list is empty unless rows were inserted directly into the database. Treat every new diagram as a blank canvas regardless of the template you pick.
 
 ### The editor canvas
+
+![Diagram editor](screenshots/light/02-editor.png)
 
 Opening a diagram shows the editor at `/blueprint/d/<id>`. The canvas is an infinite, pannable React Flow surface with a dotted background, zoom and fit controls at the bottom left, and a minimap at the bottom right. The top bar shows a Back arrow (titled **Back to diagrams**), the diagram name, an uppercase type chip, and a count line reading `N nodes · M edges`.
 
