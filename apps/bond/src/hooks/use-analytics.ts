@@ -2,71 +2,115 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
-// Types
+// Types — these mirror the ACTUAL bond-api analytics response shapes
+// (apps/bond-api/src/services/analytics.service.ts), NOT an idealized
+// contract. Every field below is what the server really sends.
 // ---------------------------------------------------------------------------
+
+// --- pipeline-summary ------------------------------------------------------
 
 export interface PipelineSummaryStage {
   stage_id: string;
   stage_name: string;
   stage_type: 'active' | 'won' | 'lost';
+  sort_order: number;
+  color: string | null;
   deal_count: number;
   total_value: number;
   weighted_value: number;
-  color: string | null;
 }
 
 export interface PipelineSummary {
-  pipeline_id: string;
-  pipeline_name: string;
-  total_deals: number;
-  total_value: number;
-  weighted_value: number;
   stages: PipelineSummaryStage[];
+  totals: {
+    deal_count: number;
+    total_value: number;
+    weighted_value: number;
+  };
 }
 
-export interface ConversionRate {
-  from_stage: string;
-  to_stage: string;
-  rate_pct: number;
-  deal_count: number;
+// --- conversion-rates ------------------------------------------------------
+
+export interface ConversionRatesResponse {
+  stages: Array<{ id: string; name: string; sort_order: number }>;
+  conversions: Array<{
+    from_stage_id: string;
+    to_stage_id: string;
+    transition_count: number;
+  }>;
 }
 
-export interface DealVelocity {
+// --- deal-velocity ---------------------------------------------------------
+
+export interface DealVelocityStage {
+  stage_id: string;
   stage_name: string;
-  avg_days: number;
-  median_days: number;
+  sort_order: number;
+  avg_duration_seconds: number;
+  sample_count: number;
+  avg_duration_days: number | null;
 }
 
-export interface WinLossStats {
-  total_won: number;
-  total_lost: number;
-  won_value: number;
-  lost_value: number;
-  win_rate_pct: number;
-  top_loss_reasons: Array<{ reason: string; count: number }>;
-  top_competitors: Array<{ name: string; count: number }>;
+export interface DealVelocityResponse {
+  stage_velocity: DealVelocityStage[];
+  avg_cycle_days: number | null;
+  closed_deal_count: number;
 }
 
-export interface ForecastBucket {
-  period: string;
+// --- forecast --------------------------------------------------------------
+
+export interface ForecastResponse {
+  total_weighted_value: number;
   deal_count: number;
-  total_value: number;
-  weighted_value: number;
+  buckets: {
+    next_30: number;
+    next_60: number;
+    next_90: number;
+    beyond: number;
+    no_date: number;
+  };
 }
+
+// --- stale-deals -----------------------------------------------------------
 
 export interface StaleDeal {
   deal_id: string;
   deal_name: string;
+  value: number | null;
+  owner_id: string | null;
   stage_name: string;
   days_in_stage: number;
   rotting_days_threshold: number;
-  value: number | null;
-  owner_name: string | null;
-  company_name: string | null;
+  last_activity_at: string | null;
+}
+
+export interface StaleDealsResponse {
+  stale_deals: StaleDeal[];
+  count: number;
+}
+
+// --- win-loss --------------------------------------------------------------
+
+export interface WinLossStats {
+  total_closed: number;
+  won_count: number;
+  lost_count: number;
+  win_rate_pct: number;
+  won_value: number;
+  lost_value: number;
+  loss_reasons: Array<{ reason: string; count: number }>;
+  competitors: Array<{ name: string; count: number }>;
 }
 
 // ---------------------------------------------------------------------------
 // Query hooks
+//
+// deal-velocity and conversion-rates require a pipeline_id server-side
+// (apps/bond-api/src/routes/analytics.routes.ts declares it as a required
+// uuid). The page may not always have a pipeline selected, so those two
+// hooks are gated with `enabled: !!pipelineId` to avoid firing a guaranteed
+// 400. The other four endpoints accept an optional pipeline_id and run
+// unconditionally.
 // ---------------------------------------------------------------------------
 
 export function usePipelineSummary(pipelineId?: string) {
@@ -84,9 +128,10 @@ export function useConversionRates(pipelineId?: string) {
   return useQuery({
     queryKey: ['bond', 'analytics', 'conversion-rates', pipelineId],
     queryFn: () =>
-      api.get<{ data: ConversionRate[] }>('/analytics/conversion-rates', {
+      api.get<{ data: ConversionRatesResponse }>('/analytics/conversion-rates', {
         pipeline_id: pipelineId,
       }),
+    enabled: !!pipelineId,
     staleTime: 60_000,
   });
 }
@@ -95,9 +140,10 @@ export function useDealVelocity(pipelineId?: string) {
   return useQuery({
     queryKey: ['bond', 'analytics', 'deal-velocity', pipelineId],
     queryFn: () =>
-      api.get<{ data: DealVelocity[] }>('/analytics/deal-velocity', {
+      api.get<{ data: DealVelocityResponse }>('/analytics/deal-velocity', {
         pipeline_id: pipelineId,
       }),
+    enabled: !!pipelineId,
     staleTime: 60_000,
   });
 }
@@ -117,7 +163,7 @@ export function useForecast(pipelineId?: string) {
   return useQuery({
     queryKey: ['bond', 'analytics', 'forecast', pipelineId],
     queryFn: () =>
-      api.get<{ data: ForecastBucket[] }>('/analytics/forecast', {
+      api.get<{ data: ForecastResponse }>('/analytics/forecast', {
         pipeline_id: pipelineId,
       }),
     staleTime: 60_000,
@@ -128,7 +174,7 @@ export function useStaleDeals(pipelineId?: string) {
   return useQuery({
     queryKey: ['bond', 'analytics', 'stale-deals', pipelineId],
     queryFn: () =>
-      api.get<{ data: StaleDeal[] }>('/analytics/stale-deals', {
+      api.get<{ data: StaleDealsResponse }>('/analytics/stale-deals', {
         pipeline_id: pipelineId,
       }),
     staleTime: 30_000,

@@ -170,5 +170,69 @@ describe('Query Builder', () => {
 
       expect(pq.text).toContain('LIMIT 10000');
     });
+
+    it('isolates tenants on organization_id for organization_id-scoped sources', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'bam',
+        'tasks',
+        { measures: [{ field: 'id', agg: 'count' }] },
+        ORG_ID,
+      );
+
+      expect(pq.text).toMatch(/WHERE organization_id = \$\d+/);
+      expect(pq.params).toContain(ORG_ID);
+    });
+
+    it('isolates tenants on org_id for bureau (DEFECT A regression)', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'bureau',
+        'floor_analytics',
+        { measures: [{ field: 'summon_count', agg: 'sum', alias: 'summons' }] },
+        ORG_ID,
+      );
+
+      // Must scope on org_id, NOT organization_id (which does not exist on
+      // bureau_floor_analytics and would 42703).
+      expect(pq.text).toMatch(/WHERE org_id = \$\d+/);
+      expect(pq.text).not.toContain('organization_id');
+      expect(pq.params).toContain(ORG_ID);
+    });
+
+    it('applies date_range to the source temporal column without a time_dimension (DEFECT B regression)', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'bureau',
+        'floor_analytics',
+        {
+          measures: [{ field: 'summon_count', agg: 'sum', alias: 'summons' }],
+          date_range: { preset: 'last_7_days' },
+        },
+        ORG_ID,
+      );
+
+      // bureau's temporal dimension is `day`; the range must be applied to it
+      // even though no time_dimension was supplied.
+      expect(pq.text).toMatch(/day >= \$\d+/);
+      expect(pq.text).toMatch(/day <= \$\d+/);
+    });
+
+    it('resolves the last_1_days preset (DEFECT C regression)', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'bureau',
+        'floor_analytics',
+        {
+          measures: [{ field: 'summon_count', agg: 'sum', alias: 'summons' }],
+          date_range: { preset: 'last_1_days' },
+        },
+        ORG_ID,
+      );
+
+      // last_1_days previously resolved to null and dropped the filter entirely.
+      expect(pq.text).toMatch(/day >= \$\d+/);
+      expect(pq.text).toMatch(/day <= \$\d+/);
+    });
   });
 });

@@ -49,6 +49,27 @@ const createChannelSchema = z.object({
   channel_group_id: z.string().uuid().optional(),
 });
 
+// Bulk channel creation (admin "Add many" affordance). The top-level
+// `type` acts as the default channel type for any row that doesn't carry
+// its own. Row names are validated per-row at execution time (NOT via the
+// Zod schema) so a single bad name doesn't reject the whole batch — invalid
+// rows come back as { status: 'invalid' } in the per-row results instead.
+const MAX_BULK_CHANNELS = 50;
+const bulkCreateChannelSchema = z.object({
+  channels: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z.enum(['public', 'private']).optional(),
+        topic: z.string().max(500).optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .max(MAX_BULK_CHANNELS),
+  type: z.enum(['public', 'private']).optional(),
+});
+
 const updateChannelSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   display_name: z.string().max(100).nullable().optional(),
@@ -453,6 +474,248 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       })();
 
       return reply.status(201).send({ data: channel });
+    },
+  );
+
+  // POST /v1/channels/bulk — create many channels in one request ("Add many")
+  //
+  // Why this exists: POST /v1/channels is rate-limited to 5/hour per user
+  // (see server.ts), so a client-side loop dies after 5 creations. This
+  // endpoint takes the whole list in one request and reports a per-row
+  // outcome WITHOUT failing the whole batch on a single bad/duplicate row.
+  //
+  // #general special-case: the single-create route force-renames the first
+  // channel in a fresh org to #general. We deliberately DO NOT do that here.
+  // An admin who pastes a list of explicit names does not expect one of them
+  // to silently become "general", and picking which row gets renamed mid-batch
+  // is arbitrary. We DO preserve the other first-channel semantics for a truly
+  // empty org: the first successfully-inserted channel is marked is_default and
+  // gets every active org member added (so the org isn't left with an empty
+  // default-less workspace). The channel keeps the name the admin typed.
+  //
+  // Auth/permission gate matches single-create exactly.
+  fastify.post(
+    '/v1/channels/bulk',
+    { preHandler: [requireAuth, fastify.requireCan('banter.channel.create'), requireScope('read_write')] },
+    async (request, reply) => {
+      const user = request.user!;
+      const body = bulkCreateChannelSchema.parse(request.body);
+
+      // Org-level permission enforcement for non-admin members. Mirrors the
+      // single-create gate: if members can't create channels at all, reject
+      // the whole batch (this is an org policy, not a per-row condition).
+      const isPrivileged = user.is_superuser || user.role === 'admin' || user.role === 'owner';
+      let membersCanCreatePrivate = true;
+      if (!isPrivileged) {
+        const perms = await getEffectiveBanterPermissions(user.org_id);
+        if (!perms.members_can_create_channels) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Your organization does not allow members to create channels',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        membersCanCreatePrivate = perms.members_can_create_private_channels;
+      }
+
+      const defaultType = body.type ?? 'public';
+
+      // Per-row name validation reuses the single-create rules. We mirror the
+      // exact regex + length bounds rather than calling createChannelSchema so
+      // a bad row yields a structured 'invalid' result instead of a thrown
+      // ZodError that would 400 the entire batch.
+      const nameSchema = z
+        .string()
+        .min(1)
+        .max(80)
+        .regex(/^[a-z0-9][a-z0-9-]*$/);
+
+      type RowResult = {
+        name: string;
+        status: 'created' | 'duplicate' | 'invalid' | 'error';
+        channel?: typeof banterChannels.$inferSelect;
+        error?: string;
+      };
+      const results: RowResult[] = [];
+
+      // De-dupe within the submitted list by slug. The FIRST occurrence is
+      // processed normally; later occurrences short-circuit to 'duplicate'
+      // so we don't even attempt the insert (it would hit the unique index
+      // and be reported as duplicate anyway, but this saves a round-trip and
+      // makes the intent explicit).
+      const seenSlugs = new Set<string>();
+
+      // Track whether the org currently has any non-DM channel, so the first
+      // successful insert in a truly-empty org gets the default + member-fanout
+      // treatment. Read once up front; flip locally after the first insert.
+      const [existingChannels] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(banterChannels)
+        .where(
+          and(
+            eq(banterChannels.org_id, user.org_id),
+            ne(banterChannels.type, 'dm'),
+            ne(banterChannels.type, 'group_dm'),
+          ),
+        );
+      let orgHasChannels = (existingChannels?.count ?? 0) > 0;
+
+      const insertedChannels: Array<typeof banterChannels.$inferSelect> = [];
+
+      for (const row of body.channels) {
+        const rawName = (row.name ?? '').trim().toLowerCase();
+        const rowType = row.type ?? defaultType;
+
+        // Validate name against the single-create rules.
+        const parsed = nameSchema.safeParse(rawName);
+        if (!parsed.success) {
+          results.push({ name: row.name, status: 'invalid', error: 'Name must be 1-80 lowercase alphanumeric/hyphen characters' });
+          continue;
+        }
+
+        // Private-channel restriction mirrors single-create: members obey the
+        // org flag; admins/owners/superusers always allowed.
+        if (rowType === 'private' && !membersCanCreatePrivate) {
+          results.push({ name: rawName, status: 'error', error: 'Your organization does not allow members to create private channels' });
+          continue;
+        }
+
+        const slug = rawName.replace(/\s+/g, '-');
+
+        if (seenSlugs.has(slug)) {
+          results.push({ name: rawName, status: 'duplicate', error: 'Duplicate within this list' });
+          continue;
+        }
+        seenSlugs.add(slug);
+
+        const isFirstInEmptyOrg = !orgHasChannels;
+
+        try {
+          const inserted = await db
+            .insert(banterChannels)
+            .values({
+              org_id: user.org_id,
+              name: rawName,
+              slug,
+              type: rowType,
+              topic: row.topic ?? null,
+              description: row.description ?? null,
+              created_by: user.id,
+              is_default: isFirstInEmptyOrg,
+              member_count: 1,
+            })
+            .onConflictDoNothing({
+              target: [banterChannels.org_id, banterChannels.slug],
+            })
+            .returning();
+
+          const channel = inserted[0];
+          if (!channel) {
+            // onConflictDoNothing returned no row → a channel with this slug
+            // already exists in the org (the unique (org_id, slug) index).
+            results.push({ name: rawName, status: 'duplicate', error: 'A channel with this name already exists' });
+            continue;
+          }
+
+          // Creator becomes owner of every channel they create.
+          await db.insert(banterChannelMemberships).values({
+            channel_id: channel.id,
+            user_id: user.id,
+            role: 'owner',
+          }).onConflictDoNothing();
+
+          // First channel in a previously-empty org: add all active org
+          // members and set the authoritative member_count. Same fanout as
+          // single-create, minus the forced #general rename.
+          if (isFirstInEmptyOrg) {
+            const orgUsers = await db
+              .select({ id: users.id })
+              .from(users)
+              .where(and(eq(users.org_id, user.org_id), eq(users.is_active, true), ne(users.id, user.id)));
+
+            if (orgUsers.length > 0) {
+              await db.insert(banterChannelMemberships).values(
+                orgUsers.map((u) => ({
+                  channel_id: channel.id,
+                  user_id: u.id,
+                  role: 'member' as const,
+                })),
+              ).onConflictDoNothing();
+            }
+
+            await db
+              .update(banterChannels)
+              .set({
+                member_count: sql`(SELECT COUNT(*)::int FROM banter_channel_memberships WHERE channel_id = ${channel.id})`,
+              })
+              .where(eq(banterChannels.id, channel.id));
+          }
+
+          orgHasChannels = true;
+          insertedChannels.push(channel);
+          results.push({ name: rawName, status: 'created', channel });
+        } catch (err: unknown) {
+          // Defensive: the unique-slug collision is handled by
+          // onConflictDoNothing above, but any other Postgres error (or a
+          // 23505 on a different constraint) is reported per-row so the rest
+          // of the batch still proceeds.
+          const code = (err as { code?: string })?.code;
+          if (code === '23505') {
+            results.push({ name: rawName, status: 'duplicate', error: 'A channel with this name already exists' });
+          } else {
+            results.push({ name: rawName, status: 'error', error: 'Failed to create channel' });
+          }
+        }
+      }
+
+      // One org-level broadcast carrying the channels that actually landed,
+      // so connected clients refresh their sidebar once for the whole batch.
+      if (insertedChannels.length > 0) {
+        broadcastToOrg(user.org_id, {
+          type: 'channels.bulk_created',
+          data: { channels: insertedChannels },
+          timestamp: new Date().toISOString(),
+        });
+
+        // Fire a Bolt channel.created event per created channel (fire-and-forget).
+        (async () => {
+          try {
+            const [enrichedActor, enrichedOrg] = await Promise.all([
+              loadEnrichedActor(user.id),
+              loadEnrichedOrg(user.org_id),
+            ]);
+            for (const channel of insertedChannels) {
+              await publishBoltEvent(
+                'channel.created',
+                'banter',
+                {
+                  channel: {
+                    id: channel.id,
+                    name: channel.name,
+                    handle: channel.slug,
+                    type: channel.type,
+                    description: channel.description,
+                    member_count: channel.member_count,
+                    url: channelDeepLink(channel.slug),
+                  },
+                  actor: enrichedActor,
+                  org: enrichedOrg,
+                },
+                user.org_id,
+                user.id,
+                'user',
+              );
+            }
+          } catch {
+            // Fire-and-forget — never affect channel creation
+          }
+        })();
+      }
+
+      return reply.status(201).send({ data: { results } });
     },
   );
 

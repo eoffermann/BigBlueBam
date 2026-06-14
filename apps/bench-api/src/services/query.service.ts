@@ -1,6 +1,7 @@
 import { readConnection } from '../db/index.js';
 import { env } from '../env.js';
-import { getDataSource } from '../lib/data-source-registry.js';
+import { DEFAULT_ORG_COLUMN, getDataSource } from '../lib/data-source-registry.js';
+import type { BenchDataSource } from '../lib/data-source-registry.js';
 import { badRequest } from '../lib/utils.js';
 
 // ---------------------------------------------------------------------------
@@ -125,6 +126,12 @@ function resolveDateRange(dr: DateRange): { start: string; end: string } | null 
     case 'today':
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       break;
+    case 'last_1_days':
+      start = new Date(now.getTime() - 1 * 86400000);
+      break;
+    case 'last_2_days':
+      start = new Date(now.getTime() - 2 * 86400000);
+      break;
     case 'last_7_days':
       start = new Date(now.getTime() - 7 * 86400000);
       break;
@@ -149,6 +156,18 @@ function resolveDateRange(dr: DateRange): { start: string; end: string } | null 
       return null;
   }
   return { start: start.toISOString(), end: now.toISOString() };
+}
+
+/**
+ * Pick the column a `date_range` should be applied against when the caller did
+ * NOT supply an explicit `time_dimension`. We use the source's first declared
+ * temporal dimension (e.g. Bureau's `day`, Bond's `created_at`). Returns null
+ * when the source has no temporal dimension, in which case the date range is
+ * simply not applied (rather than guessing at a column that may not exist).
+ */
+function resolveTemporalColumn(source: BenchDataSource): string | null {
+  const temporal = source.dimensions.find((d) => d.type === 'temporal');
+  return temporal ? temporal.field : null;
 }
 
 /**
@@ -201,8 +220,12 @@ export function buildQuery(
 
   if (selectParts.length === 0) throw badRequest('Query must have at least one measure');
 
-  // Build WHERE — always starts with org_id tenant isolation
-  const whereParts: string[] = [`organization_id = ${addParam(pq, orgId)}`];
+  // Build WHERE — always starts with tenant isolation on the source's org
+  // column. Most sources use `organization_id`; bureau_* tables use `org_id`.
+  // The literal comes from the trusted registry (not user input) but we still
+  // run it through validateIdent as defense-in-depth.
+  const orgColumn = validateIdent(source.orgColumn ?? DEFAULT_ORG_COLUMN);
+  const whereParts: string[] = [`${orgColumn} = ${addParam(pq, orgId)}`];
 
   if (config.filters) {
     for (const f of config.filters) {
@@ -210,13 +233,22 @@ export function buildQuery(
     }
   }
 
-  // Apply date range to time dimension
-  if (config.date_range && config.time_dimension) {
+  // Apply date range. When the caller supplies an explicit time_dimension we
+  // scope against that column (existing behavior). Otherwise we fall back to
+  // the source's own temporal dimension (e.g. bureau's `day`) so seeded widgets
+  // that set `date_range` but no `time_dimension` are still scoped instead of
+  // silently scanning the whole table.
+  if (config.date_range) {
     const range = resolveDateRange(config.date_range);
     if (range) {
-      const tf = validateIdent(config.time_dimension.field);
-      whereParts.push(`${tf} >= ${addParam(pq, range.start)}`);
-      whereParts.push(`${tf} <= ${addParam(pq, range.end)}`);
+      const temporalField = config.time_dimension
+        ? config.time_dimension.field
+        : resolveTemporalColumn(source);
+      if (temporalField) {
+        const tf = validateIdent(temporalField);
+        whereParts.push(`${tf} >= ${addParam(pq, range.start)}`);
+        whereParts.push(`${tf} <= ${addParam(pq, range.end)}`);
+      }
     }
   }
 

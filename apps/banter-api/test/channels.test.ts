@@ -200,4 +200,68 @@ describe('Channel Routes - Validation', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  describe('bulkCreateChannelSchema', () => {
+    const MAX_BULK_CHANNELS = 50;
+    // Mirrors bulkCreateChannelSchema in channel.routes.ts. Per-row names are
+    // intentionally NOT regex-validated here — they're validated at execution
+    // time so a single bad row reports 'invalid' instead of 400-ing the batch.
+    const bulkCreateChannelSchema = z.object({
+      channels: z
+        .array(
+          z.object({
+            name: z.string(),
+            type: z.enum(['public', 'private']).optional(),
+            topic: z.string().max(500).optional(),
+            description: z.string().optional(),
+          }),
+        )
+        .min(1)
+        .max(MAX_BULK_CHANNELS),
+      type: z.enum(['public', 'private']).optional(),
+    });
+
+    it('should validate a batch with a top-level default type', () => {
+      const result = bulkCreateChannelSchema.safeParse({
+        channels: [{ name: 'one' }, { name: 'two' }],
+        type: 'private',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept per-row type overrides', () => {
+      const result = bulkCreateChannelSchema.safeParse({
+        channels: [{ name: 'one', type: 'public' }, { name: 'two', type: 'private' }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject an empty channels array', () => {
+      const result = bulkCreateChannelSchema.safeParse({ channels: [] });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject more than the max batch size', () => {
+      const result = bulkCreateChannelSchema.safeParse({
+        channels: Array.from({ length: MAX_BULK_CHANNELS + 1 }, (_, i) => ({ name: `c${i}` })),
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept exactly the max batch size', () => {
+      const result = bulkCreateChannelSchema.safeParse({
+        channels: Array.from({ length: MAX_BULK_CHANNELS }, (_, i) => ({ name: `c${i}` })),
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should not regex-reject malformed names at the schema layer', () => {
+      // Per-row validation happens at execution time; the schema only checks
+      // that name is a string so the batch isn't rejected wholesale.
+      const result = bulkCreateChannelSchema.safeParse({
+        channels: [{ name: 'Invalid Name With Spaces' }],
+      });
+      expect(result.success).toBe(true);
+    });
+  });
 });

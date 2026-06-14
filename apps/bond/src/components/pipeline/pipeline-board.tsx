@@ -227,13 +227,13 @@ export function PipelineBoard({ onNavigate, pipelineId: propPipelineId }: Pipeli
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {pipeline.name}
           </h2>
-          {summary && (
+          {summary?.totals && (
             <div className="flex items-center gap-3 text-sm text-zinc-500">
-              <span>{summary.total_deals} deals</span>
+              <span>{summary.totals.deal_count ?? 0} deals</span>
               <span className="text-zinc-300 dark:text-zinc-600">|</span>
-              <span>Total: {formatCurrencyCompact(summary.total_value)}</span>
+              <span>Total: {formatCurrencyCompact(summary.totals.total_value)}</span>
               <span className="text-zinc-300 dark:text-zinc-600">|</span>
-              <span>Weighted: {formatCurrencyCompact(summary.weighted_value)}</span>
+              <span>Weighted: {formatCurrencyCompact(summary.totals.weighted_value)}</span>
             </div>
           )}
         </div>

@@ -136,6 +136,11 @@ fastify.addHook('onRoute', (routeOptions) => {
     'POST:/v1/messages/:id/reactions': { max: 60, timeWindow: '1 minute' },
     // Channel create: 5/hr per user
     'POST:/v1/channels': { max: 5, timeWindow: '1 hour' },
+    // Bulk channel create ("Add many"): a handful of batches per hour. Each
+    // batch can create up to 50 channels, so this is intentionally separate
+    // from (and more generous than) the single-create 5/hr ceiling — without
+    // it the single-create limit would block the very feature it necessitates.
+    'POST:/v1/channels/bulk': { max: 10, timeWindow: '1 hour' },
     // Call start: 5/hr per user
     'POST:/v1/channels/:id/calls': { max: 5, timeWindow: '1 hour' },
   };

@@ -18,7 +18,7 @@
 //
 // Parameter templating uses the same `{{ event.<field> }}` style as the
 // other templates in template.service.ts. The two fields consumed are:
-//   - {{ event.approver.id }}  -> banter_send_dm user_id
+//   - {{ event.approver.id }}  -> banter_send_dm to_user_id
 //   - {{ event.body }}         -> banter_send_dm content
 
 import type { AutomationTemplate } from '../services/template.service.js';
@@ -45,7 +45,7 @@ export const banterApprovalDmTemplate: AutomationTemplate = {
       sort_order: 0,
       mcp_tool: 'banter_send_dm',
       parameters: {
-        user_id: '{{ event.approver.id }}',
+        to_user_id: '{{ event.approver.id }}',
         content: '{{ event.body }}',
       },
       on_error: 'continue',
