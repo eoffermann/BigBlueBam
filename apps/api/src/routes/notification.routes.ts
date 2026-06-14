@@ -5,6 +5,7 @@ import { db } from '../db/index.js';
 import { notifications } from '../db/schema/notifications.js';
 import { requireAuth } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+import { broadcastToUser } from '../services/realtime.service.js';
 
 export default async function notificationRoutes(fastify: FastifyInstance) {
   fastify.get<{
@@ -129,6 +130,10 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
           );
       }
 
+      // Push a realtime 'notification' event so other apps' bells refetch and
+      // reflect the read state live (cross-app propagation).
+      broadcastToUser(request.user!.id, 'notification', { action: 'read' });
+
       return reply.send({ data: { success: true } });
     },
   );
@@ -148,6 +153,11 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
             eq(notifications.is_read, false),
           ),
         );
+
+      // Push a realtime 'notification' event so other apps' bells refetch and
+      // reflect the read state live (cross-app propagation).
+      broadcastToUser(request.user!.id, 'notification', { action: 'read' });
+
       return reply.send({ data: { success: true } });
     },
   );
@@ -167,6 +177,11 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
             eq(notifications.user_id, request.user!.id),
           ),
         );
+
+      // Push a realtime 'notification' event so other apps' bells refetch and
+      // reflect the read state live (cross-app propagation).
+      broadcastToUser(request.user!.id, 'notification', { action: 'read' });
+
       return reply.send({ data: { success: true } });
     },
   );

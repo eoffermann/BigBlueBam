@@ -23,6 +23,12 @@ vi.mock('../utils/db.js', () => ({
   }),
 }));
 
+// The realtime push is fire-and-forget and opens a real Redis socket. Stub it
+// so these input-validation tests don't depend on (or hang waiting for) Redis.
+vi.mock('../lib/realtime-publish.js', () => ({
+  publishToUser: vi.fn(),
+}));
+
 const { processNotificationJob } = await import('./notification.job.js');
 
 function fakeLogger(): Logger {

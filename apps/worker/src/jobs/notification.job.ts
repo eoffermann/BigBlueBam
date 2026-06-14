@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
+import { publishToUser } from '../lib/realtime-publish.js';
 import type { NotificationJobData } from '@bigbluebam/shared';
 
 export type { NotificationJobData };
@@ -44,7 +45,7 @@ export async function processNotificationJob(
 
   const db = getDb();
 
-  await db.execute(sql`
+  const inserted = await db.execute(sql`
     INSERT INTO notifications (
       id, user_id, project_id, org_id, task_id,
       type, title, body, category, source_app, deep_link,
@@ -66,10 +67,26 @@ export async function processNotificationJob(
       false,
       NOW()
     )
+    RETURNING id
   `);
 
   logger.info(
     { jobId: job.id, user_id, type, title },
     'Notification created successfully',
   );
+
+  // Push a realtime 'notification' event to the recipient's personal room so
+  // every app's bell refetches and surfaces the new notification live. This
+  // mirrors the api's broadcastToUser(userId, 'notification', ...) by
+  // publishing the SAME { room, event } envelope to the SAME Redis channel.
+  // Fire-and-forget — the row is already persisted, so a delivery failure is
+  // never allowed to fail the job.
+  const notification_id =
+    (inserted as Array<{ id?: string }> | undefined)?.[0]?.id ?? null;
+  publishToUser(user_id, 'notification', {
+    action: 'created',
+    notification_id,
+    category: category ?? null,
+    source_app: source_app ?? 'bbb',
+  });
 }
