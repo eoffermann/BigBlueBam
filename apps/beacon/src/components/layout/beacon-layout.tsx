@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, Search, Bell } from 'lucide-react';
+import { ChevronRight, Search } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
+import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BeaconSidebar } from '@/components/layout/beacon-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -113,12 +114,7 @@ export function BeaconLayout({ children, onNavigate, activeRoute }: BeaconLayout
                 />
               </div>
 
-              <button
-                className="relative rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 transition-colors"
-                title="Notifications"
-              >
-                <Bell className="h-4.5 w-4.5" />
-              </button>
+              <NotificationsBell inAppPrefix="/beacon/" onNavigate={onNavigate} />
 
               <UserMenu user={user} />
             </div>

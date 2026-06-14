@@ -5,7 +5,7 @@ import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BanterSidebar } from '@/components/sidebar/banter-sidebar';
 import { ThreadPanel } from '@/components/threads/thread-panel';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
-import { NotificationsBell } from '@/components/layout/notifications-bell';
+import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
 import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
 import { usePresence } from '@/hooks/use-presence';
@@ -151,7 +151,7 @@ export function BanterLayout({
                   className="w-64 rounded-lg border border-zinc-200 bg-zinc-50 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
                 />
               </div>
-              <NotificationsBell onNavigate={onNavigate} />
+              <NotificationsBell inAppPrefix="/banter/" onNavigate={onNavigate} />
               <UserMenu user={user} />
             </div>
           </header>

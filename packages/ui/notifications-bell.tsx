@@ -4,26 +4,100 @@
  * Every frontend app imports this file via a Vite alias:
  *   '@bigbluebam/ui/notifications-bell' -> '<root>/packages/ui/notifications-bell.tsx'
  *
- * Reads the unified per-user notification feed from the Bam auth API
- * (GET /b3/api/me/notifications, authenticated via the shared session
- * cookie). Polls every 30 seconds to refresh the unread badge.
+ * It folds together two unread sources into one recency-sorted queue:
  *
- * Clicking a notification marks it read (POST /me/notifications/:id/read)
- * and either routes in-app (when its `deep_link` matches `inAppPrefix`)
- * or navigates cross-app via a full page load.
+ *  - Source A — persistent notification rows from the Bam auth API
+ *    (GET /b3/api/me/notifications?unread_only=true). The API returns
+ *    `is_read` (NOT `read`), and the badge count comes from
+ *    `meta.unread_count`, never a client-side `!is_read` tally.
+ *  - Source B — Banter unread channels (GET /banter/api/v1/channels,
+ *    filtered to unread_count > 0). One synthetic queue item per channel.
+ *
+ * The badge = persistent unread_count + total unread Banter messages.
+ *
+ * Clicking an item:
+ *  - task/assignment notification → mark read, then navigate (deep_link,
+ *    else /b3/tasks/<task_id>) honoring inAppPrefix/onNavigate.
+ *  - invite/knock notification → mark read ONLY (acknowledge), no nav.
+ *  - Banter channel → hard-navigate to /banter/channels/<slug>.
+ *
+ * Realtime: a WebSocket to /b3/ws subscribes to the current user's personal
+ * room `user:<userId>`. Any `{ type: 'notification' }` event invalidates both
+ * queries so the bell updates instantly. The protocol (subscribe message,
+ * ping keepalive, exponential-backoff reconnect) mirrors
+ * apps/frontend/src/lib/websocket.ts exactly. A 30s poll remains as a
+ * fallback, so the bell still works in apps where /b3/ws is unreachable.
+ *
+ * Identity (userId + orgId) is fetched INSIDE the component from
+ * GET /b3/api/auth/me so the public props can stay minimal and every host
+ * app can render <NotificationsBell inAppPrefix="..." onNavigate={...} />.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { Bell, CheckCheck } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bell, CheckCheck, CheckSquare, Hash, Hand, MessageCircle, UserPlus } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+// ── Types ────────────────────────────────────────────────────
+
+/**
+ * A persistent notification row as returned by GET /me/notifications.
+ * NOTE: the API returns `is_read`, NOT `read`. The legacy interface used
+ * `read`, so `filter(n => !n.read)` treated every row as unread and the
+ * badge was always wrong. The richer fields (category/source_app/type/
+ * deep_link/task_id) are optional because older rows / satellite apps may
+ * not populate them.
+ */
 interface Notification {
   id: string;
   title: string;
   body: string;
-  read: boolean;
+  is_read: boolean;
   created_at: string;
+  category?: string | null;
+  source_app?: string | null;
+  type?: string | null;
   deep_link?: string | null;
+  task_id?: string | null;
+}
+
+/**
+ * A single Banter channel with an unread count, as returned by
+ * GET /banter/api/v1/channels. We only consume the fields we render.
+ */
+interface BanterChannel {
+  id: string;
+  slug: string;
+  name: string;
+  type: string;
+  unread_count: number;
+  last_message_at: string | null;
+  dm_other_participant: { id: string; display_name: string } | null;
+}
+
+/** The current user's identity, from GET /b3/api/auth/me. */
+interface MeIdentity {
+  id: string;
+  orgId: string | null;
+}
+
+/**
+ * The unified queue item. Every source (persistent notification or Banter
+ * unread channel) is normalized into this shape so the dropdown renders one
+ * recency-sorted list. `kind` discriminates click behavior.
+ */
+interface QueueItem {
+  key: string;
+  kind: 'notification' | 'banter-channel';
+  // Drives the lucide icon + click handling.
+  category: 'assignment' | 'invite' | 'knock' | 'dm' | 'channel' | 'other';
+  title: string;
+  body: string;
+  // ISO timestamp used for recency sort + relative-time display.
+  timestamp: string;
+  // Present only for kind === 'notification'.
+  notification?: Notification;
+  // Present only for kind === 'banter-channel'.
+  channel?: BanterChannel;
 }
 
 export interface NotificationsBellProps {
@@ -37,6 +111,8 @@ export interface NotificationsBellProps {
   /** In-app navigation handler for the host SPA's router. */
   onNavigate?: (path: string) => void;
 }
+
+// ── Bam API helpers ──────────────────────────────────────────
 
 function joinUrl(path: string): string {
   return `/b3/api${path}`;
@@ -79,31 +155,317 @@ function formatRelativeTime(iso: string | null | undefined): string {
   return `${yr}y ago`;
 }
 
+/** Map a queue item category to its lucide icon. */
+function queueItemIcon(category: QueueItem['category']) {
+  switch (category) {
+    case 'assignment':
+      return CheckSquare;
+    case 'dm':
+      return MessageCircle;
+    case 'channel':
+      return Hash;
+    case 'invite':
+      return UserPlus;
+    case 'knock':
+      return Hand;
+    default:
+      return Bell;
+  }
+}
+
+// ── Realtime: mirror apps/frontend/src/lib/websocket.ts ───────
+//
+// Same wire protocol the Bam SPA uses for /b3/ws:
+//   - connect to `${ws|wss}://<host>/b3/ws` (cookie auth on upgrade)
+//   - on open: send { type: 'subscribe', room: 'user:<userId>' }
+//     (the server also auto-subscribes the personal room, but we send it
+//     explicitly so we mirror the SPA and survive any server-side change)
+//   - keepalive: { type: 'ping' } every 30s
+//   - reconnect: exponential backoff 1s → 30s
+//   - ignore internal frames: connected / subscribed / unsubscribed / pong
+// We do NOT depend on the SPA's singleton `ws` manager (satellite apps don't
+// ship it), so this is a small self-contained connection scoped to the bell.
+
+const WS_MIN_RECONNECT_DELAY = 1000;
+const WS_MAX_RECONNECT_DELAY = 30000;
+const WS_RECONNECT_MULTIPLIER = 2;
+
+interface NotificationSocket {
+  close: () => void;
+}
+
+/**
+ * Open a notification-only WebSocket for `userId`. Calls `onNotification`
+ * whenever a `{ type: 'notification' }` frame arrives. Fully self-healing
+ * (reconnects with backoff) and never throws — if /b3/ws can't be reached
+ * (e.g. a satellite app whose nginx doesn't proxy it), the socket simply
+ * keeps retrying in the background and the 30s poll carries the load.
+ */
+function openNotificationSocket(userId: string, onNotification: () => void): NotificationSocket {
+  const room = `user:${userId}`;
+  let socket: WebSocket | null = null;
+  let pingTimer: ReturnType<typeof setInterval> | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectDelay = WS_MIN_RECONNECT_DELAY;
+  let closed = false;
+
+  const clearPing = () => {
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+  };
+
+  const scheduleReconnect = () => {
+    if (closed || reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * WS_RECONNECT_MULTIPLIER, WS_MAX_RECONNECT_DELAY);
+  };
+
+  function connect() {
+    if (closed) return;
+    let next: WebSocket;
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      next = new WebSocket(`${protocol}//${window.location.host}/b3/ws`);
+    } catch {
+      // Constructing the socket can throw on malformed URLs / blocked schemes.
+      scheduleReconnect();
+      return;
+    }
+    socket = next;
+
+    next.onopen = () => {
+      reconnectDelay = WS_MIN_RECONNECT_DELAY;
+      try {
+        next.send(JSON.stringify({ type: 'subscribe', room }));
+      } catch {
+        // ignore — close handler will reconnect
+      }
+      pingTimer = setInterval(() => {
+        if (next.readyState === WebSocket.OPEN) {
+          try {
+            next.send(JSON.stringify({ type: 'ping' }));
+          } catch {
+            // ignore
+          }
+        }
+      }, 30000);
+    };
+
+    next.onmessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data as string) as { type?: string };
+        if (data.type === 'notification') {
+          onNotification();
+        }
+        // All other frames (connected/subscribed/unsubscribed/pong/task.*)
+        // are irrelevant to the bell and ignored.
+      } catch {
+        // Ignore malformed frames.
+      }
+    };
+
+    next.onclose = () => {
+      clearPing();
+      if (!closed) scheduleReconnect();
+    };
+
+    next.onerror = () => {
+      // The close event fires after this and drives reconnection.
+    };
+  }
+
+  connect();
+
+  return {
+    close() {
+      closed = true;
+      clearPing();
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (socket) {
+        try {
+          socket.close(1000, 'Client disconnect');
+        } catch {
+          // ignore
+        }
+        socket = null;
+      }
+    },
+  };
+}
+
+// ── Component ────────────────────────────────────────────────
+
 export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBellProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Identity — fetched inside the component so the public props stay minimal.
+  // /b3/api/auth/me returns { data: { id, active_org_id, org_id, ... } }.
+  // (The route is /auth/me, not /me; /me 404s.) orgId falls back to org_id
+  // when active_org_id is absent. Cached indefinitely-ish; the session rarely
+  // changes within a page lifetime and a stale id just means one extra poll.
+  const { data: me } = useQuery<MeIdentity>({
+    queryKey: ['bbb', 'notifications', 'me'],
+    queryFn: async () => {
+      const res = await bbbGet<{
+        data?: { id: string; active_org_id?: string | null; org_id?: string | null };
+      }>('/auth/me');
+      const d = res.data;
+      return { id: d?.id ?? '', orgId: d?.active_org_id ?? d?.org_id ?? null };
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const userId = me?.id || null;
+  const orgId = me?.orgId ?? null;
+
+  // Source A — persistent unread notification rows. The badge trusts the
+  // server's meta.unread_count, not a client-side !is_read tally.
   const { data: notificationsRes } = useQuery({
     queryKey: ['bbb', 'notifications'],
-    queryFn: () => bbbGet<{ data: Notification[] }>('/me/notifications'),
+    queryFn: () =>
+      bbbGet<{ data: Notification[]; meta?: { unread_count?: number } }>(
+        '/me/notifications?unread_only=true',
+      ),
     refetchInterval: 30_000,
   });
-  const notifications = notificationsRes?.data ?? [];
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const notifications = useMemo(() => notificationsRes?.data ?? [], [notificationsRes]);
+  const notificationUnreadCount = notificationsRes?.meta?.unread_count ?? 0;
 
-  const markAllRead = useMutation({
-    mutationFn: () => bbbPost('/me/notifications/mark-read'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bbb', 'notifications'] });
+  // Source B — Banter unread channels. Plain fetch (not the Bam helper)
+  // because this hits /banter/api, forwarding X-Org-Id so the request is
+  // pinned to the org this tab is viewing. If the header can't be built (no
+  // orgId yet) or the request fails (no Banter in this deployment), we return
+  // an empty list — a missing Banter must never break the host app's chrome.
+  const { data: banterChannelsRes } = useQuery({
+    queryKey: ['bbb', 'banter-unread', orgId ?? 'no-org'],
+    queryFn: async () => {
+      const headers: Record<string, string> = {};
+      if (orgId) headers['X-Org-Id'] = orgId;
+      const res = await fetch('/banter/api/v1/channels', {
+        credentials: 'include',
+        headers,
+      });
+      if (!res.ok) return [] as BanterChannel[];
+      const body = (await res.json()) as { data?: BanterChannel[] };
+      return (body.data ?? []).filter((c) => (c.unread_count ?? 0) > 0);
     },
+    refetchInterval: 30_000,
+    retry: false,
   });
+  const unreadChannels = useMemo(() => banterChannelsRes ?? [], [banterChannelsRes]);
+  const banterUnreadTotal = useMemo(
+    () => unreadChannels.reduce((sum, c) => sum + (c.unread_count ?? 0), 0),
+    [unreadChannels],
+  );
+
+  // Badge = unread persistent notifications + total unread Banter messages.
+  const unreadCount = notificationUnreadCount + banterUnreadTotal;
+
+  // Merge both sources into one recency-sorted queue.
+  const queueItems = useMemo<QueueItem[]>(() => {
+    const items: QueueItem[] = [];
+
+    for (const n of notifications) {
+      const cat = n.category;
+      const category: QueueItem['category'] =
+        cat === 'assignment' || cat === 'task'
+          ? 'assignment'
+          : cat === 'invite'
+            ? 'invite'
+            : cat === 'knock'
+              ? 'knock'
+              : 'other';
+      items.push({
+        key: `notif:${n.id}`,
+        kind: 'notification',
+        category,
+        title: n.title,
+        body: n.body,
+        timestamp: n.created_at,
+        notification: n,
+      });
+    }
+
+    for (const c of unreadChannels) {
+      const isDm = c.type === 'dm';
+      items.push({
+        key: `banter:${c.id}`,
+        kind: 'banter-channel',
+        category: isDm ? 'dm' : 'channel',
+        title: isDm ? (c.dm_other_participant?.display_name ?? 'Direct message') : `#${c.name}`,
+        body: `${c.unread_count} new message${c.unread_count === 1 ? '' : 's'}`,
+        timestamp: c.last_message_at ?? new Date(0).toISOString(),
+        channel: c,
+      });
+    }
+
+    return items.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+  }, [notifications, unreadChannels]);
+
+  const refetchQueue = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['bbb', 'notifications'] });
+    queryClient.invalidateQueries({ queryKey: ['bbb', 'banter-unread'] });
+  }, [queryClient]);
+
+  // Realtime — open the socket once we know who we are, tear it down on
+  // unmount or identity change. invalidate-both-queries is the whole reaction.
+  useEffect(() => {
+    if (!userId) return;
+    const conn = openNotificationSocket(userId, refetchQueue);
+    return () => conn.close();
+  }, [userId, refetchQueue]);
+
+  // POST a Banter mark-read for one channel. The endpoint requires the latest
+  // message_id, which the channels list doesn't expose, so we fetch the newest
+  // message (limit=1, newest-first) to get it, then mark read. Best-effort.
+  const markBanterChannelRead = useCallback(
+    async (channel: BanterChannel) => {
+      const headers: Record<string, string> = {};
+      if (orgId) headers['X-Org-Id'] = orgId;
+      const msgRes = await fetch(`/banter/api/v1/channels/${channel.id}/messages?limit=1`, {
+        credentials: 'include',
+        headers,
+      });
+      if (!msgRes.ok) return;
+      const msgBody = (await msgRes.json()) as { data?: { id: string }[] };
+      const latestId = msgBody.data?.[0]?.id;
+      if (!latestId) return;
+      await fetch(`/banter/api/v1/channels/${channel.id}/mark-read`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: latestId }),
+      });
+    },
+    [orgId],
+  );
 
   const markOneRead = useMutation({
     mutationFn: (id: string) => bbbPost(`/me/notifications/${id}/read`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bbb', 'notifications'] });
+  });
+
+  // Clear all: mark every persistent notification read AND mark each unread
+  // Banter channel read, then refetch so the queue empties.
+  const clearAll = useMutation({
+    mutationFn: async () => {
+      await bbbPost('/me/notifications/mark-all-read').catch(() => {});
+      await Promise.all(
+        unreadChannels.map((c) => markBanterChannelRead(c).catch(() => {})),
+      );
     },
+    onSuccess: () => refetchQueue(),
   });
 
   // Close dropdown on outside click.
@@ -117,13 +479,10 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  const handleNotifClick = (notif: Notification) => {
-    if (!notif.read) {
-      markOneRead.mutate(notif.id);
-    }
-    setOpen(false);
-    const deepLink = notif.deep_link;
-    if (!deepLink) return;
+  // Cross-app navigation. deep_link starting with inAppPrefix routes in-app
+  // via onNavigate (strip the prefix, keep the leading slash); everything else
+  // is a hard cross-app navigation via window.location.
+  const navigateTo = (deepLink: string) => {
     if (deepLink.startsWith(inAppPrefix)) {
       const relative = deepLink.slice(inAppPrefix.length - 1) || '/';
       if (onNavigate) {
@@ -133,6 +492,27 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
       }
     } else {
       window.location.href = deepLink;
+    }
+  };
+
+  const handleItemClick = (item: QueueItem) => {
+    setOpen(false);
+
+    if (item.kind === 'notification' && item.notification) {
+      const n = item.notification;
+      // Always acknowledge (mark read) first.
+      markOneRead.mutate(n.id, { onSettled: () => refetchQueue() });
+      // Invite/knock: acknowledge only — no navigation, it just leaves the queue.
+      if (n.category === 'invite' || n.category === 'knock') return;
+      const target = n.deep_link ?? (n.task_id ? `/b3/tasks/${n.task_id}` : null);
+      if (target) navigateTo(target);
+      return;
+    }
+
+    if (item.kind === 'banter-channel' && item.channel) {
+      // Opening the channel marks it read in Banter, so it drops off the next
+      // poll — a hard navigation is enough.
+      window.location.href = `/banter/channels/${item.channel.slug}`;
     }
   };
 
@@ -162,48 +542,56 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-700">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Notifications</h3>
-            {unreadCount > 0 && (
+            {queueItems.length > 0 && (
               <button
                 type="button"
-                onClick={() => markAllRead.mutate()}
-                className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 transition-colors"
+                onClick={() => clearAll.mutate()}
+                disabled={clearAll.isPending}
+                className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 transition-colors disabled:opacity-50"
               >
                 <CheckCheck className="h-3.5 w-3.5" />
-                Mark all read
+                Clear all
               </button>
             )}
           </div>
-          {notifications.length > 0 ? (
+          {queueItems.length > 0 ? (
             <div className="divide-y divide-zinc-100 dark:divide-zinc-700">
-              {notifications.map((notif) => (
-                <button
-                  type="button"
-                  key={notif.id}
-                  onClick={() => handleNotifClick(notif)}
-                  className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700/40 transition-colors ${
-                    !notif.read ? 'bg-primary-50/50 dark:bg-zinc-800/30' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {!notif.read && (
-                      <span className="mt-1.5 h-2 w-2 rounded-full bg-primary-500 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                        {notif.title}
-                      </p>
-                      <p className="text-zinc-500 dark:text-zinc-400 line-clamp-2">{notif.body}</p>
-                      <p className="text-xs text-zinc-400 mt-1">
-                        {formatRelativeTime(notif.created_at)}
-                      </p>
+              {queueItems.map((item) => {
+                const Icon = queueItemIcon(item.category);
+                return (
+                  <button
+                    type="button"
+                    key={item.key}
+                    role="menuitem"
+                    onClick={() => handleItemClick(item)}
+                    className="w-full text-left px-4 py-3 text-sm bg-primary-50/50 dark:bg-zinc-800/30 hover:bg-primary-100/60 dark:hover:bg-zinc-700/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Icon
+                        className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500"
+                        aria-hidden="true"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                          {item.title}
+                        </p>
+                        <p className="text-zinc-500 dark:text-zinc-400 line-clamp-2">{item.body}</p>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          {formatRelativeTime(item.timestamp)}
+                        </p>
+                      </div>
+                      <span
+                        className="mt-1.5 h-2 w-2 rounded-full bg-primary-500 shrink-0"
+                        aria-label="Unread"
+                      />
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="px-4 py-8 text-center text-sm text-zinc-400">
-              No notifications yet
+              You're all caught up
             </div>
           )}
         </div>

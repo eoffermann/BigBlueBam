@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, Bell } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
+import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BondSidebar } from '@/components/layout/bond-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -98,14 +99,7 @@ export function BondLayout({ children, onNavigate, activeRoute }: BondLayoutProp
 
             <div className="flex items-center gap-4">
               <OrgSwitcher />
-
-              <button
-                className="relative rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 transition-colors"
-                title="Notifications"
-              >
-                <Bell className="h-4.5 w-4.5" />
-              </button>
-
+              <NotificationsBell inAppPrefix="/bond/" onNavigate={onNavigate} />
               <UserMenu user={user} />
             </div>
           </header>
