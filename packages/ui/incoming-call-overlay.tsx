@@ -42,6 +42,13 @@ export interface IncomingCallOverlayProps {
    * use this to drop the overlay from its render tree.
    */
   onDismiss: () => void;
+  /**
+   * Verb phrase rendered before the surface label. Defaults to the
+   * huddle/ring wording ("wants to huddle on"); callers with different
+   * semantics (e.g. Bureau "Bring") pass their own ("wants to bring you
+   * along to") while keeping the identical overlay + ringtone.
+   */
+  actionLabel?: string;
   /** Defaults to 30000 (30s). */
   autoDeclineMs?: number;
   /**
@@ -76,6 +83,7 @@ export function IncomingCallOverlay({
   onAccept,
   onDecline,
   onDismiss,
+  actionLabel = 'wants to huddle on',
   autoDeclineMs = 30000,
   ringtoneUrl,
 }: IncomingCallOverlayProps) {
@@ -215,7 +223,7 @@ export function IncomingCallOverlay({
               {fromUserName}
             </p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-              wants to huddle on{' '}
+              {actionLabel}{' '}
               <span className="font-medium text-zinc-700 dark:text-zinc-300">{surfaceLabel}</span>
               <span className="text-zinc-400 dark:text-zinc-500"> · {surfaceApp}</span>
             </p>

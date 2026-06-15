@@ -54,11 +54,13 @@ import type {
   PresenceStatus,
   RoomPrivacy,
 } from './types.js';
+import { IncomingCallOverlay } from '@bigbluebam/ui/incoming-call-overlay';
 import { playChatBlip } from './chat-blip.js';
 import { ChatPanel } from './chat-panel.js';
 import { SummonHandler } from './summon-handler.js';
 import { KnockHandler } from './knock-handler.js';
 import { RingHandler } from './ring-handler.js';
+import { getRingToneUrl } from './ring-tone.js';
 import { PipPortal, PopoutBureauButton, usePipMode } from './pip-host.js';
 import {
   ActiveCallManager,
@@ -1414,32 +1416,6 @@ const bringActiveBtnStyle: CSSProperties = {
   fontWeight: 600,
 };
 
-// Incoming bring request prompt (a non-admin asked to lead us).
-const bringPromptStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  marginTop: 6,
-  padding: '5px 8px',
-  borderRadius: 8,
-  background: 'rgba(245, 158, 11, 0.14)',
-  border: '1px solid rgba(245, 158, 11, 0.35)',
-  fontSize: 11.5,
-};
-const bringPromptAcceptStyle: CSSProperties = {
-  ...summonBtnStyle,
-  padding: '3px 8px',
-  background: 'rgba(34, 197, 94, 0.25)',
-  border: '1px solid rgba(34, 197, 94, 0.5)',
-  fontWeight: 600,
-};
-const bringPromptDeclineStyle: CSSProperties = {
-  ...summonBtnStyle,
-  padding: '3px 8px',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-};
-
 // location.app → ring-API surface_app. Mirrors SURFACE_APPS in
 // apps/bureau-api/src/routes/ring.routes.ts; apps absent here (bureau,
 // bolt, …) don't get an Invite button because the ring endpoint would
@@ -1887,28 +1863,9 @@ function BureauDockedBoxInner({
           Bring everyone here
         </button>
       ) : null}
-      {/* Incoming bring requests (a non-admin asked to lead us). */}
-      {bring.prompts.map((p) => (
-        <div key={p.requestId} style={bringPromptStyle} data-bureau-bring-prompt>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <strong>{p.leaderName}</strong> wants to bring you along
-          </span>
-          <button
-            type="button"
-            style={bringPromptAcceptStyle}
-            onClick={() => actions.respondBring(p.requestId, 'accept')}
-          >
-            Join
-          </button>
-          <button
-            type="button"
-            style={bringPromptDeclineStyle}
-            onClick={() => actions.respondBring(p.requestId, 'decline')}
-          >
-            No
-          </button>
-        </div>
-      ))}
+      {/* Incoming bring requests now ring exactly like Invite — the
+          IncomingCallOverlay (with the calling tone) is rendered in the SDK
+          portal by <BringRingHandler/>, not embedded in this widget. */}
 
       {/* Bring mode replaces Invite/Hunt/Bring with a single Cancel/Leave. */}
       {bring.role === 'leading' ? (
@@ -2149,6 +2106,35 @@ export function BureauDockedBox(): React.ReactElement | null {
 // Internal: the rendered tree mountBureauClient() pushes into the portal.
 // ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * BringRingHandler — renders an incoming "Bring" request with the EXACT same
+ * IncomingCallOverlay + ringtone that Invite uses, instead of an embedded
+ * widget prompt. Accept begins following the leader (bring_respond → the server
+ * starts the follow and pushes bring_begin); decline / 30s auto-decline notifies
+ * the leader. Only the top request rings at a time (queued like RingHandler).
+ */
+function BringRingHandler(): React.ReactElement | null {
+  const ctx = useContext(BureauContext);
+  const active = ctx?.bring.prompts[0] ?? null;
+  if (!ctx || !active) return null;
+  const { respondBring } = ctx.actions;
+  return (
+    <IncomingCallOverlay
+      key={active.requestId}
+      fromUserName={active.leaderName}
+      surfaceApp={appDisplayName(active.app) || active.app}
+      surfaceLabel={active.label ?? 'your team'}
+      actionLabel="wants to bring you along to"
+      onAccept={() => respondBring(active.requestId, 'accept')}
+      onDecline={() => respondBring(active.requestId, 'decline')}
+      // respondBring already drops the prompt from bring.prompts (which
+      // unmounts this overlay); nothing else to clean up on dismiss.
+      onDismiss={() => {}}
+      ringtoneUrl={getRingToneUrl() ?? undefined}
+    />
+  );
+}
+
 interface MountedAppProps {
   client: BureauWsClient;
   describeLocation: MountOptions['describeLocation'];
@@ -2195,6 +2181,7 @@ function MountedApp({
           <SummonHandler client={client} navigate={smartNavigate} />
           <KnockHandler client={client} />
           <RingHandler client={client} navigate={smartNavigate} />
+          <BringRingHandler />
         </>,
         portalContainer,
       )}

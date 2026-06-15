@@ -87,6 +87,22 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
     }
     window.history.replaceState(null, '', url.pathname + url.search + url.hash);
   }, [selectedTaskId]);
+  // React to IN-SESSION url changes to `?task=`. The initializer above only
+  // runs at mount, so a teammate who pulls us here while we're already on this
+  // board — Bureau Invite/Bring/summon all navigate via pushState + a
+  // dispatched popstate — would change the URL but never open the drawer. Also
+  // covers browser back/forward. Our own task clicks use replaceState (no
+  // popstate), so this never fights the user's own selection.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncTaskFromUrl = () => {
+      const taskParam = new URLSearchParams(window.location.search).get('task');
+      const next = taskParam && /^[0-9a-f]{8}-/i.test(taskParam) ? taskParam : null;
+      setSelectedTaskId((prev) => (prev === next ? prev : next));
+    };
+    window.addEventListener('popstate', syncTaskFromUrl);
+    return () => window.removeEventListener('popstate', syncTaskFromUrl);
+  }, []);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createDialogPhaseId, setCreateDialogPhaseId] = useState<string | undefined>();
   const [filters, setFilters] = useState<{ assignee_id?: string; priority?: string; state_id?: string; epic_id?: string; search?: string }>({});
