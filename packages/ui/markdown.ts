@@ -48,14 +48,38 @@ export function markdownToHtml(md: string): string {
   // Italic: *text* (but not inside words with **)
   html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 
-  // Process line-by-line for headings and lists
+  // Process line-by-line for headings, blockquotes, and lists
   const lines = html.split('\n');
   const processed: string[] = [];
   let inList = false;
+  let inQuote = false;
+  // The HTML-escape pass above turned a leading markdown `>` into `&gt;`, so we
+  // match that here. Consecutive quote lines fold into one <blockquote>.
+  const closeQuote = () => {
+    if (inQuote) {
+      processed.push('</blockquote>');
+      inQuote = false;
+    }
+  };
 
   for (const line of lines) {
+    // Blockquote: `> text` (escaped to `&gt; text`)
+    if (/^\s*&gt;\s?/.test(line)) {
+      if (inList) {
+        processed.push('</ul>');
+        inList = false;
+      }
+      if (!inQuote) {
+        processed.push('<blockquote class="rich-text-blockquote">');
+        inQuote = true;
+      }
+      processed.push(line.replace(/^\s*&gt;\s?/, ''));
+      continue;
+    }
+
     // Headings: ## text - generate id for anchor linking
     if (/^#{1,6}\s/.test(line)) {
+      closeQuote();
       if (inList) {
         processed.push('</ul>');
         inList = false;
@@ -75,6 +99,7 @@ export function markdownToHtml(md: string): string {
 
     // Unordered list: - item
     if (/^\s*[-*]\s/.test(line)) {
+      closeQuote();
       if (!inList) {
         processed.push('<ul class="rich-text-list">');
         inList = true;
@@ -90,10 +115,12 @@ export function markdownToHtml(md: string): string {
       inList = false;
     }
 
-    // Empty line = paragraph break
+    // Empty line = paragraph break (also ends a blockquote)
     if (line.trim() === '') {
+      closeQuote();
       processed.push('<br />');
     } else {
+      closeQuote();
       processed.push(line);
     }
   }
@@ -101,11 +128,15 @@ export function markdownToHtml(md: string): string {
   if (inList) {
     processed.push('</ul>');
   }
+  closeQuote();
 
   html = processed.join('\n');
 
   // Convert remaining single newlines to <br> (except after block elements)
-  html = html.replace(/(?<!<\/(?:pre|ul|li|h[1-6]|br\s?\/)>)\n(?!<(?:pre|ul|li|h[1-6]|br))/g, '<br />');
+  html = html.replace(
+    /(?<!<\/(?:pre|ul|li|h[1-6]|blockquote|br\s?\/)>)(?<!<blockquote class="rich-text-blockquote">)\n(?!<(?:pre|ul|li|h[1-6]|blockquote|\/blockquote|br))/g,
+    '<br />',
+  );
 
   return html;
 }

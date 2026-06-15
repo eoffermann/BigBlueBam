@@ -47,3 +47,6 @@ jobs:
 
       - name: Check permission catalog drift
         run: pnpm check:permission-catalog
+
+      - name: Check help index drift
+        run: pnpm help:check

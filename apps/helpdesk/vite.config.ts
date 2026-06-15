@@ -10,6 +10,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
       '@bigbluebam/ui/user-menu': resolve(__dirname, '../../packages/ui/user-menu.tsx'),
+      '@bigbluebam/ui/help-center': resolve(__dirname, '../../packages/ui/help-center.tsx'),
       '@bigbluebam/ui/help-viewer': resolve(__dirname, '../../packages/ui/help-viewer.tsx'),
       '@bigbluebam/ui/markdown': resolve(__dirname, '../../packages/ui/markdown.ts'),
       '@bigbluebam/ui/presence-chip-strip': resolve(__dirname, '../../packages/ui/presence-chip-strip.tsx'),

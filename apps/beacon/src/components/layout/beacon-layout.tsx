@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight, Search } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BeaconSidebar } from '@/components/layout/beacon-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -115,6 +116,7 @@ export function BeaconLayout({ children, onNavigate, activeRoute }: BeaconLayout
               </div>
 
               <NotificationsBell inAppPrefix="/beacon/" onNavigate={onNavigate} />
+              <HelpTrigger app="beacon" />
 
               <UserMenu user={user} />
             </div>

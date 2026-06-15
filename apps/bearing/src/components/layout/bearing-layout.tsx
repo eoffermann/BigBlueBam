@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BearingSidebar } from '@/components/layout/bearing-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -84,6 +85,7 @@ export function BearingLayout({ children, onNavigate, activeRoute }: BearingLayo
             <div className="flex items-center gap-4">
               <OrgSwitcher />
               <NotificationsBell inAppPrefix="/bearing/" onNavigate={onNavigate} />
+              <HelpTrigger app="bearing" />
               <UserMenu user={user} />
             </div>
           </header>

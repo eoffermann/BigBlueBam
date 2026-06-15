@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { Sidebar } from './sidebar';
 import { CommandPalette } from '@/components/common/command-palette';
@@ -206,6 +207,8 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
             </a>
 
             <NotificationsBell inAppPrefix="/b3/" onNavigate={onNavigate} />
+
+            <HelpTrigger app="bam" />
 
             <UserMenu user={user} />
           </div>

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight, Search } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BriefSidebar } from '@/components/layout/brief-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -121,6 +122,7 @@ export function BriefLayout({ children, onNavigate, activeRoute }: BriefLayoutPr
               </div>
 
               <NotificationsBell inAppPrefix="/brief/" onNavigate={onNavigate} />
+              <HelpTrigger app="brief" />
 
               <UserMenu user={user} />
             </div>

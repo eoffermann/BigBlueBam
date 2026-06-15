@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { OrgSwitcher } from '@bigbluebam/ui/org-switcher';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BureauSidebar } from '@/components/layout/bureau-sidebar';
 import { useAuthStore } from '@/stores/auth.store';
@@ -122,6 +123,7 @@ export function BureauLayout({
                 fallbackActiveOrgId={user?.org_id}
               />
               <NotificationsBell inAppPrefix="/bureau/" onNavigate={onNavigate} />
+              <HelpTrigger app="bureau" />
               <UserMenu user={user} />
             </div>
           </header>

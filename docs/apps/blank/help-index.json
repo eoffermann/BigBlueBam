@@ -1,0 +1,383 @@
+{
+  "app": "blank",
+  "title": "Blank",
+  "toc": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "level": 2
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "level": 3
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "level": 3
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "level": 2
+    },
+    {
+      "anchor": "forms-list",
+      "title": "Forms list",
+      "level": 3
+    },
+    {
+      "anchor": "form-builder",
+      "title": "Form Builder",
+      "level": 3
+    },
+    {
+      "anchor": "field-settings",
+      "title": "Field Settings",
+      "level": 3
+    },
+    {
+      "anchor": "form-settings-dialog",
+      "title": "Form Settings dialog",
+      "level": 3
+    },
+    {
+      "anchor": "publish-dialog",
+      "title": "Publish dialog",
+      "level": 3
+    },
+    {
+      "anchor": "preview",
+      "title": "Preview",
+      "level": 3
+    },
+    {
+      "anchor": "responses",
+      "title": "Responses",
+      "level": 3
+    },
+    {
+      "anchor": "analytics",
+      "title": "Analytics",
+      "level": 3
+    },
+    {
+      "anchor": "per-form-settings-page",
+      "title": "Per-form Settings page",
+      "level": 3
+    },
+    {
+      "anchor": "blank-settings-app-level",
+      "title": "Blank Settings (app-level)",
+      "level": 3
+    },
+    {
+      "anchor": "public-form",
+      "title": "Public form",
+      "level": 3
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "level": 3
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "level": 2
+    },
+    {
+      "anchor": "story-build-and-publish-your-first-form",
+      "title": "Story: Build and publish your first form",
+      "level": 3
+    },
+    {
+      "anchor": "story-collect-and-review-responses",
+      "title": "Story: Collect and review responses",
+      "level": 3
+    },
+    {
+      "anchor": "story-analyze-results",
+      "title": "Story: Analyze results",
+      "level": 3
+    },
+    {
+      "anchor": "story-duplicate-a-form-as-a-template",
+      "title": "Story: Duplicate a form as a template",
+      "level": 3
+    },
+    {
+      "anchor": "story-restrict-a-form-to-your-organization-or-a-project",
+      "title": "Story: Restrict a form to your organization or a project",
+      "level": 3
+    },
+    {
+      "anchor": "story-build-a-multi-page-survey",
+      "title": "Story: Build a multi-page survey",
+      "level": 3
+    },
+    {
+      "anchor": "story-close-a-form-to-stop-accepting-responses-api-or-agent",
+      "title": "Story: Close a form to stop accepting responses (API or agent)",
+      "level": 3
+    },
+    {
+      "anchor": "story-have-an-agent-draft-create-and-publish-a-form",
+      "title": "Story: Have an agent draft, create, and publish a form",
+      "level": 3
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "level": 2
+    }
+  ],
+  "sections": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "text": "Blank lets you build forms and surveys, publish them, and gather responses from anyone with the link. You start from the Forms list, design the form in a visual builder by adding fields from a palette, set who can see it, then publish to get a shareable public URL. Responses flow back into a Responses table and an Analytics view. The core objects are forms and submissions. A form holds a set of ordered fields and a collection of behavior settings (visibility, confirmation, theming, response limits). A submission is one filled-in response, stored against the form. Forms move through a lifecycle from draft to published, and an author can later close a form to stop accepting responses. Blank fits alongside the rest of the suite as the intake layer. Forms can be scoped to your organization or to a specific Bam project, and submitted responses can be routed into Bond (as a contact) or Helpdesk (as a ticket) when that routing is configured at the API level. Authoring happens in the Blank SPA, which requires a BigBlueBam login. Filling out and submitting a published form does not require a login when the form is set to public visibility."
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "text": "- Form - the top-level object you build and share. It has a name, a slug (used in its public URL), a description, fields, and behavior settings. - Field - a single input or element on the form. Fields are ordered, can be marked required, and each has a stable field key (letters, digits, and underscores) used as the storage key for answers. - Field type - what kind of input a field is, for example Short Text, Email, Rating, NPS, or Dropdown. You pick the type from the builder palette when you add a field. - Form status - the lifecycle state of a form: draft (still being built), published (live and accepting responses), or closed (no longer accepting responses). New forms start as draft. - Form type - a label on the form (Public, Internal, or Embedded) found on the per-form Settings page. - Visibility - who can reach the form through its URL: Public (anyone with the link), Organization (members of your org), or Project members (members of a chosen Bam project). - Submission - one response to a form. Submissions are listed in the Responses view and aggregated in Analytics. - Confirmation - what a respondent sees after submitting: a message, a redirect, or a custom page. - Public form URL - the shareable link to your published form, in the form https://YOUR-DOMAIN/forms/<slug. This is the server-rendered page the Publish dialog hands you."
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "text": "Blank is served at /blank/. Reach it from the Launchpad app switcher in the top-left of the layout chrome, or go directly to /blank/. The left sidebar has two items: Forms (the Forms list at /blank/) and Blank Settings (a read-only app information page at /blank/settings). Pressing the question-mark key opens this Help. Prerequisites: - A BigBlueBam session or a bbam / bbamsvc API key. Unauthenticated visitors to the authoring SPA see a \"Please log in to BigBlueBam first\" screen with a link to /b3/. - Membership in an organization. All forms and submissions are scoped to your org. - Publishing a form requires the blank.form.publish permission. Closing a form requires blank.form.close, and deleting a submission requires blank.submission.delete."
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "text": ""
+    },
+    {
+      "anchor": "forms-list",
+      "title": "Forms list",
+      "text": "The Forms list at /blank/ is the home screen. It is headed Forms with the subtitle \"Build forms and surveys to capture responses from anyone.\" Each form appears as a card showing its name, description, a status pill (draft, published, or closed), the field count, the submission count, and a relative \"updated\" time. See screenshots/light/01-form-list.png for the Forms list with cards. To create a form: 1. Click New Form (the button with the plus icon, top-right). 2. Blank creates a draft named \"Untitled Form\" with a generated slug and opens it in the builder. 3. Continue in the builder to rename it and add fields. To open an existing form: 1. Click the form's card. The builder opens at /blank/forms/<id/edit. Each card has an overflow menu (the three-dot icon that appears on hover). It contains: - Preview - opens the full-page Form Preview. - Responses - opens the Responses table for the form. - Duplicate - clones the form and its fields into a new draft. The copy's name gets \"(Copy)\" appended and it starts as a draft. - Delete - permanently removes the form. This also removes its fields and submissions. This action is destructive and cannot be undone. If you have no forms yet, the list shows an empty state: \"No forms yet\" with \"Create your first form to start collecting responses.\""
+    },
+    {
+      "anchor": "form-builder",
+      "title": "Form Builder",
+      "text": "The builder at /blank/forms/<id/edit is where you design a form. It has a left field palette, a center canvas, an optional right field-config panel, and an optional live-preview panel. See screenshots/light/02-form-builder.png for the builder with the palette and canvas. The left palette is headed Add Field. Click any type to append a field of that type to the canvas. The available types are: Short Text, Long Text, Email, Phone, URL, Number, Single Select, Multi Select, Dropdown, Date, Time, Rating, Scale, NPS, Checkbox, Toggle, File Upload, Section Header, Paragraph, and Hidden Field. To name the form: 1. In the center canvas, edit the form Title input at the top. 2. Edit the Description input below it. Both save automatically as you type. To add a field: 1. Click a type in the Add Field palette on the left. 2. The new field appears at the bottom of the canvas. Click it to configure it in the Field Settings panel on the right. To reorder fields: 1. Drag a field row by its grip handle and drop it in the new position. The order is saved automatically. To delete a field: 1. Click the trash icon on the field row in the canvas. The top-right action bar of the builder has these controls: - Preview (eye icon) - toggles the live-preview panel on the right. - Settings (gear icon) - opens the Form Settings dialog (visibility, expiration, and project). - Share (external-link icon) - appears only after the form is published. It reopens the \"Your form is live\" dialog with the public URL. - Publish (send icon) - publishes the form. It is disabled once the form is already published. If the form has no fields, the canvas shows \"Click a field type on the left to add it\". Note: the palette also lists a Page Break item, but adding one currently fails because the API does not accept the page-break field type. To create a multi-page form, set the Page Number on individual fields in Field Settings instead. See \"Multi-page forms\" below."
+    },
+    {
+      "anchor": "field-settings",
+      "title": "Field Settings",
+      "text": "When you select a field in the canvas, the right panel is headed Field Settings. The controls available depend on the field's type. Every control saves to the field when you change it or leave the input. Common controls: - Label - the visible question text. - Key - the field key (shown in a monospace font). This is the storage key for the answer. - Description - helper text shown under the label. - Placeholder - placeholder text inside the input. - Required - a checkbox that makes the field mandatory. - Page Number - which page the field belongs to in a multi-page form. Type-specific controls: - Options editor - for Single Select, Multi Select, and Dropdown. Use \"+ Add option\" to add choices. - Min Length and Max Length - for text fields. - Min Value and Max Value - for numeric fields. - Scale Min and Scale Max - for Scale fields. - Regex Pattern - an optional validation pattern applied to string answers."
+    },
+    {
+      "anchor": "form-settings-dialog",
+      "title": "Form Settings dialog",
+      "text": "The Settings button in the builder action bar opens the Form Settings dialog, titled Form Settings. It covers visibility, expiration, and project scoping. To set visibility: 1. Click Settings in the builder. 2. Under Visibility, choose one of the radio options: - Public - \"Anyone with the link can view and submit this form.\" - Organization - \"Only members of your organization can view this form.\" - Project members - \"Only members of the chosen project can view this form.\" 3. If you choose Project members, a Project picker appears. Select a Bam project. 4. Click Save. Save is disabled if you chose Project members without picking a project. To set an expiration: 1. In the Form Settings dialog, use the Expires at datetime field to set when the form stops accepting responses. 2. Use the Clear button next to it to remove an expiration. 3. Click Save. Use Cancel to close the dialog without saving."
+    },
+    {
+      "anchor": "publish-dialog",
+      "title": "Publish dialog",
+      "text": "When you click Publish in the builder, Blank publishes the form (it must have at least one field) and opens the publish-result dialog, titled Your form is live. The dialog shows: - A read-only public URL of the shape https://YOUR-DOMAIN/forms/<slug. - A Copy button that copies the URL (the button text changes to \"Copied\"). - An Open in new tab link. - The form's current visibility label. - A Done button to close the dialog. To share a published form: 1. Click Publish (or Share, if the form is already published) in the builder. 2. In the Your form is live dialog, click Copy to copy the public URL, or Open in new tab to view it. 3. Click Done. Note: the URL handed out here is the server-rendered page at /forms/<slug. That is the canonical public form. This is the link to share with respondents."
+    },
+    {
+      "anchor": "preview",
+      "title": "Preview",
+      "text": "Preview shows the form exactly as a respondent would see it, without accepting input. See screenshots/light/03-form-preview.png for the full-page preview. There are two ways to preview: - In the builder, click Preview (eye icon) to toggle the live-preview panel on the right. The panel renders the form as you edit. - From the Forms list overflow menu, click Preview, or go to /blank/forms/<id/preview, for the full-page Form Preview. The header has a \"Back to Builder\" link and a \"PREVIEW MODE\" label, and all inputs are disabled."
+    },
+    {
+      "anchor": "responses",
+      "title": "Responses",
+      "text": "The Responses view lists every submission for a form. Open it from a form card's overflow menu (Responses) or at /blank/forms/<id/responses. The page is titled \"<form name - Responses\" and shows the submission count. The back chevron returns you to the builder. Actions on the Responses page: - Analytics - opens the Analytics view for this form. - Export CSV - downloads all submissions for the form as a CSV file named submissions.csv. To filter by attachment processing state: 1. Use the Attachment status: filter pills above the table: all, pending, processing, complete, or failed. This filters the visible rows. The table columns are: a row number (), Email, the first five display fields' answers, Files (a processing-status pill), and Date. If there are no submissions, the table shows \"No responses yet.\" To export responses: 1. Open the Responses view for the form. 2. Click Export CSV. The browser downloads submissions.csv with every submission."
+    },
+    {
+      "anchor": "analytics",
+      "title": "Analytics",
+      "text": "The Analytics view aggregates the responses to a form. Open it with the Analytics button on the Responses page or at /blank/forms/<id/analytics. The page is titled \"<form name - Analytics\" and shows the total submission count. It contains: - Summary cards: Total Submissions, Active Fields, and Form Status. - A Submissions (Last 30 Days) bar chart driven by the daily submission trend. - A Per-Field Breakdown section. For each non-decorative field, this shows aggregated values: option counts for select, multi-select, and dropdown fields; numeric statistics (average, minimum, maximum, and count) for rating, scale, NPS, and number fields; and a text count for other fields."
+    },
+    {
+      "anchor": "per-form-settings-page",
+      "title": "Per-form Settings page",
+      "text": "Each form has a settings page at /blank/forms/<id/settings with additional toggles. Reach it by entering the URL directly. The builder's Settings button opens the in-builder Form Settings dialog instead, which covers only visibility, expiration, and project. The per-form Settings page has these sections: - Access - Form Type (Public, Internal, Embedded), Accept Responses (whether new submissions are accepted), and One per Email (limit to one submission per email address). - Confirmation - Type (Show Message, Redirect, or Custom Page) and a Confirmation Message textarea. - Branding - a Theme Color picker and a Show Progress Bar checkbox for multi-page forms. - Notifications - an Email on Submit checkbox to be notified when someone submits. Each control saves immediately when you change it."
+    },
+    {
+      "anchor": "blank-settings-app-level",
+      "title": "Blank Settings (app-level)",
+      "text": "The Blank Settings item in the sidebar opens a read-only information page at /blank/settings, headed Settings. It displays the app defaults (default form type Public, default theme color 3b82f6), the rate-limiting policy (10 submissions per hour), and the events Blank emits. Nothing on this page is editable. See screenshots/light/04-settings.png for the app-level Blank Settings page."
+    },
+    {
+      "anchor": "public-form",
+      "title": "Public form",
+      "text": "A published form is served as a self-contained HTML page at https://YOUR-DOMAIN/forms/<slug. This is the page the Publish dialog gives you and the one respondents fill out. It renders the form's fields, splits a multi-page form across pages with Back and Next controls and a progress bar, optionally collects the respondent's email, and shows the confirmation (message, redirect, or page) after a successful submission. Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission."
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "text": "Agents can drive much of Blank through MCP tools that proxy to the same API the SPA uses. The tools share your permissions, so an agent can only do what you could do. Common agent actions and the tools that perform them: - Draft a form from a description with blankgenerateform, which returns a suggested form specification (it does not save anything), then create it with blankcreateform (which accepts inline field definitions). - List and inspect forms with blanklistforms and blankgetform. - Update form settings with blankupdateform. - Publish a draft with blankpublishform. - Read responses with blanklistsubmissions and blankgetsubmission. - Summarize and report on results with blanksummarizeresponses and blankgetformanalytics (these return the same analytics payload the Analytics view uses). - Export raw responses with blankexportsubmissions (returns CSV text). There are 11 Blank MCP tools in total. Some have no matching screen in the SPA: blankgenerateform and blankgetsubmission are agent-only, since the builder has no AI-draft entry point and the Responses table has no per-submission detail view. There is also no MCP tool to add, edit, reorder, or delete fields after a form is created; an agent that needs specific fields should supply them inline when calling blankcreateform. When reviewing agent work, check the form's fields and visibility in the builder before publishing, and confirm the public URL from the Your form is live dialog. For the full tool catalog and argument shapes, see the MCP-tools reference in docs/apps/blank/mcp-tools.md."
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "text": ""
+    },
+    {
+      "anchor": "story-build-and-publish-your-first-form",
+      "title": "Story: Build and publish your first form",
+      "text": "Who: A team member collecting feedback or intake. Goal: Create a form, add a few fields, and get a shareable public URL. Before you start: You are logged in to BigBlueBam and have the blank.form.publish permission. Steps 1. Go to /blank/. On the Forms list, click New Form. 2. The builder opens with an \"Untitled Form\" draft. Click the form Title input in the center canvas and type a name. Add a Description below it. 3. In the Add Field palette on the left, click the field types you want, for example Rating, NPS, and Long Text. Each appears in the canvas. 4. Click a field in the canvas to open the Field Settings panel on the right. Set its Label, mark it Required if needed, and adjust type-specific options. 5. Reorder fields by dragging their grip handles. Remove a field with its trash icon. 6. Click Settings in the top-right action bar. Choose a Visibility option, set an Expires at date if you want one, and click Save. 7. Click Publish. In the Your form is live dialog, click Copy to copy the public URL. Result: The form's status pill reads \"published\" on the Forms list, and you have a https://YOUR-DOMAIN/forms/<slug URL to share. Related: \"Collect and review responses.\" An agent can do the same with blankcreateform then blankpublishform."
+    },
+    {
+      "anchor": "story-collect-and-review-responses",
+      "title": "Story: Collect and review responses",
+      "text": "Who: The form author after sharing the link. Goal: Let people submit the form and review what came in. Before you start: The form is published and set to a visibility that lets your respondents reach it. Steps 1. Share the public URL (from the Your form is live dialog) with respondents. They open /forms/<slug, fill out the fields, and submit. After submitting they see the confirmation you configured. 2. Back in Blank, go to the Forms list and open the form's overflow menu (three-dot icon). 3. Click Responses. 4. Review the table. Each row shows the row number, Email, the first five fields' answers, the Files status, and the Date. 5. To narrow the list by attachment processing state, click a pill under Attachment status: (all, pending, processing, complete, or failed). 6. Click Export CSV to download every submission as submissions.csv. Result: You have reviewed the responses in the table and, if you exported, a CSV file of all submissions. Related: \"Analyze results.\" An agent can pull the same data with blanklistsubmissions and blankexportsubmissions."
+    },
+    {
+      "anchor": "story-analyze-results",
+      "title": "Story: Analyze results",
+      "text": "Who: The form author wanting aggregate numbers. Goal: See totals, the recent trend, and per-field breakdowns. Before you start: The form has at least one submission. Steps 1. Open the form's Responses view. 2. Click Analytics. 3. Read the summary cards: Total Submissions, Active Fields, and Form Status. 4. Review the Submissions (Last 30 Days) bar chart for the recent trend. 5. Scroll to Per-Field Breakdown to see option counts for choice fields and numeric statistics (average, minimum, maximum, count) for rating, scale, NPS, and number fields. Result: You understand how many responses arrived, when, and how each field was answered. Related: An agent can request the same payload with blanksummarizeresponses or blankgetformanalytics and write a summary."
+    },
+    {
+      "anchor": "story-duplicate-a-form-as-a-template",
+      "title": "Story: Duplicate a form as a template",
+      "text": "Who: Someone who reuses a form structure for a new round. Goal: Start a new form from an existing one without rebuilding it. Before you start: You have an existing form to copy. Steps 1. On the Forms list, open the source form's overflow menu (three-dot icon). 2. Click Duplicate. 3. A new draft appears in the list with \"(Copy)\" in its name and the same fields. 4. Open the copy, adjust its title, fields, and settings, then click Publish when ready. Result: A new draft form with the same fields, ready to edit and publish independently of the original."
+    },
+    {
+      "anchor": "story-restrict-a-form-to-your-organization-or-a-project",
+      "title": "Story: Restrict a form to your organization or a project",
+      "text": "Who: An author who wants the form limited to internal people. Goal: Stop people outside your org or project from viewing or submitting the form. Before you start: You are editing the form in the builder. Steps 1. Click Settings in the builder action bar. 2. Under Visibility, choose Organization to limit to your org, or Project members to limit to a Bam project. 3. If you chose Project members, select a project in the Project picker that appears. 4. Click Save. Result: People who are not in the org (or not members of the chosen project) get a forbidden response when they open the public URL. Members can view and submit as normal."
+    },
+    {
+      "anchor": "story-build-a-multi-page-survey",
+      "title": "Story: Build a multi-page survey",
+      "text": "Who: An author with a longer survey to split across pages. Goal: Group fields onto separate pages so respondents page through them. Before you start: The form has several fields. Steps 1. In the builder, click a field in the canvas to open Field Settings. 2. Set the field's Page Number to the page you want it on. 3. Repeat for the other fields, assigning each a page number. 4. (Optional) Open the per-form Settings page at /blank/forms/<id/settings and enable Show Progress Bar under Branding. 5. Click Preview to confirm the pages, then Publish. Result: The public form shows fields grouped by page with Back and Next controls and, if enabled, a progress bar. Note: do not use the palette's Page Break item to split pages. It currently fails because the API does not accept the page-break field type. Use Page Number on each field instead."
+    },
+    {
+      "anchor": "story-close-a-form-to-stop-accepting-responses-api-or-agent",
+      "title": "Story: Close a form to stop accepting responses (API or agent)",
+      "text": "Who: An author or agent wrapping up a collection. Goal: Stop new submissions on a published form. Before you start: You have the blank.form.close permission. There is no button for this in the SPA; close is performed through the API. Steps 1. Call POST /blank/api/v1/forms/<id/close with your session cookie or API key. 2. Blank sets the form's status to closed, turns off Accept Responses, and emits a form.closed event. Result: The form's public page no longer accepts submissions, and its status pill reads \"closed\" on the Forms list. There is no in-app control to reopen or un-publish a form. Related: To pause without closing, an author can turn off Accept Responses on the per-form Settings page instead."
+    },
+    {
+      "anchor": "story-have-an-agent-draft-create-and-publish-a-form",
+      "title": "Story: Have an agent draft, create, and publish a form",
+      "text": "Who: A user delegating form creation to an AI agent. Goal: Go from a plain-language description to a published, shareable form. Before you start: The agent runs with your credentials and your publish permission. Steps 1. Ask the agent to draft the form. It calls blankgenerateform with your description and returns a suggested specification of fields. Nothing is saved yet. 2. Review the suggested fields with the agent and adjust. 3. The agent calls blankcreateform with the field definitions inline to create the draft. 4. The agent calls blankpublishform to publish it. 5. Open the form in the builder to confirm the fields and visibility, then copy the public URL from the Your form is live dialog (open it with the Share button). 6. Later, ask the agent to report on results with blanksummarizeresponses. Result: A published form created from a description, with a public URL you can share and an agent that can summarize responses on demand. Related: \"Build and publish your first form\" covers the same flow by hand."
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "text": "- Bond - submissions can be routed to create a Bond contact when routing is configured for the form at the API level. - Helpdesk - submissions can be routed to create a Helpdesk ticket when routing is configured for the form at the API level. - Bam - forms can be scoped to a Bam project through Project members visibility, and the Form Settings dialog loads your Bam projects to choose from. - Bolt - Blank emits form.published, form.closed, and submission.created events (source blank) that Bolt automations can react to. - MCP tools reference: docs/apps/blank/mcp-tools.md. - App guide: docs/apps/blank/guide.md."
+    }
+  ],
+  "labels": {
+    "Accept Responses": "per-form-settings-page",
+    "Access": "per-form-settings-page",
+    "Active Fields": "analytics",
+    "Add Field": "form-builder",
+    "Analytics": "responses",
+    "Attachment status:": "responses",
+    "Bam": "related",
+    "Blank Settings": "where-to-find-it",
+    "Bolt": "related",
+    "Bond": "related",
+    "Branding": "per-form-settings-page",
+    "Cancel": "form-settings-dialog",
+    "Clear": "form-settings-dialog",
+    "Confirmation": "key-concepts",
+    "Confirmation Message": "per-form-settings-page",
+    "Copy": "publish-dialog",
+    "Date": "responses",
+    "Delete": "forms-list",
+    "Description": "field-settings",
+    "Done": "publish-dialog",
+    "Duplicate": "forms-list",
+    "Email": "responses",
+    "Email on Submit": "per-form-settings-page",
+    "Expires at": "form-settings-dialog",
+    "Export CSV": "responses",
+    "Field": "key-concepts",
+    "Field Settings": "field-settings",
+    "Field type": "key-concepts",
+    "Files": "responses",
+    "Form": "key-concepts",
+    "Form Settings": "form-settings-dialog",
+    "Form Status": "analytics",
+    "Form Type": "per-form-settings-page",
+    "Form status": "key-concepts",
+    "Form type": "key-concepts",
+    "Forms": "where-to-find-it",
+    "Helpdesk": "related",
+    "Key": "field-settings",
+    "Label": "field-settings",
+    "Long Text": "story-build-and-publish-your-first-form",
+    "Max Length": "field-settings",
+    "Max Value": "field-settings",
+    "Min Length": "field-settings",
+    "Min Value": "field-settings",
+    "NPS": "story-build-and-publish-your-first-form",
+    "New Form": "forms-list",
+    "Notifications": "per-form-settings-page",
+    "One per Email": "per-form-settings-page",
+    "Open in new tab": "publish-dialog",
+    "Options editor": "field-settings",
+    "Organization": "key-concepts",
+    "Page Break": "form-builder",
+    "Page Number": "form-builder",
+    "Per-Field Breakdown": "analytics",
+    "Placeholder": "field-settings",
+    "Preview": "forms-list",
+    "Project": "form-settings-dialog",
+    "Project members": "key-concepts",
+    "Public": "key-concepts",
+    "Public form URL": "key-concepts",
+    "Publish": "form-builder",
+    "Rating": "story-build-and-publish-your-first-form",
+    "Regex Pattern": "field-settings",
+    "Required": "field-settings",
+    "Responses": "forms-list",
+    "Save": "form-settings-dialog",
+    "Scale Max": "field-settings",
+    "Scale Min": "field-settings",
+    "Settings": "form-builder",
+    "Share": "form-builder",
+    "Show Progress Bar": "per-form-settings-page",
+    "Submission": "key-concepts",
+    "Submissions (Last 30 Days)": "analytics",
+    "Theme Color": "per-form-settings-page",
+    "Total Submissions": "analytics",
+    "Type": "per-form-settings-page",
+    "Visibility": "key-concepts",
+    "Your form is live": "publish-dialog",
+    "`blank_create_form`": "working-with-ai-agents",
+    "`blank_export_submissions`": "working-with-ai-agents",
+    "`blank_generate_form`": "working-with-ai-agents",
+    "`blank_get_form_analytics`": "working-with-ai-agents",
+    "`blank_get_form`": "working-with-ai-agents",
+    "`blank_get_submission`": "working-with-ai-agents",
+    "`blank_list_forms`": "working-with-ai-agents",
+    "`blank_list_submissions`": "working-with-ai-agents",
+    "`blank_publish_form`": "working-with-ai-agents",
+    "`blank_summarize_responses`": "working-with-ai-agents",
+    "`blank_update_form`": "working-with-ai-agents",
+    "closed": "key-concepts",
+    "draft": "key-concepts",
+    "field key": "key-concepts",
+    "forms": "overview",
+    "published": "key-concepts",
+    "submissions": "overview"
+  },
+  "crossrefs": [
+    {
+      "app": "bond",
+      "title": "Bond"
+    },
+    {
+      "app": "helpdesk",
+      "title": "Helpdesk"
+    },
+    {
+      "app": "bam",
+      "title": "Bam"
+    },
+    {
+      "app": "bolt",
+      "title": "Bolt"
+    }
+  ]
+}

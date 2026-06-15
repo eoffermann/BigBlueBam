@@ -1,0 +1,436 @@
+{
+  "app": "bill",
+  "title": "Bill",
+  "toc": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "level": 2
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "level": 3
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "level": 3
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "level": 2
+    },
+    {
+      "anchor": "dashboard",
+      "title": "Dashboard",
+      "level": 3
+    },
+    {
+      "anchor": "invoice-list",
+      "title": "Invoice list",
+      "level": 3
+    },
+    {
+      "anchor": "create-an-invoice",
+      "title": "Create an invoice",
+      "level": 3
+    },
+    {
+      "anchor": "invoice-from-time-entries",
+      "title": "Invoice from time entries",
+      "level": 3
+    },
+    {
+      "anchor": "invoice-detail",
+      "title": "Invoice detail",
+      "level": 3
+    },
+    {
+      "anchor": "edit-an-invoice",
+      "title": "Edit an invoice",
+      "level": 3
+    },
+    {
+      "anchor": "clients",
+      "title": "Clients",
+      "level": 3
+    },
+    {
+      "anchor": "expenses",
+      "title": "Expenses",
+      "level": 3
+    },
+    {
+      "anchor": "rates",
+      "title": "Rates",
+      "level": 3
+    },
+    {
+      "anchor": "reports",
+      "title": "Reports",
+      "level": 3
+    },
+    {
+      "anchor": "settings",
+      "title": "Settings",
+      "level": 3
+    },
+    {
+      "anchor": "pdf-generation",
+      "title": "PDF generation",
+      "level": 3
+    },
+    {
+      "anchor": "public-invoice-view",
+      "title": "Public invoice view",
+      "level": 3
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "level": 3
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "level": 2
+    },
+    {
+      "anchor": "story-set-up-your-billing-identity",
+      "title": "Story: Set up your billing identity",
+      "level": 3
+    },
+    {
+      "anchor": "story-add-a-client-and-send-your-first-invoice",
+      "title": "Story: Add a client and send your first invoice",
+      "level": 3
+    },
+    {
+      "anchor": "story-record-a-payment-to-closeout",
+      "title": "Story: Record a payment to closeout",
+      "level": 3
+    },
+    {
+      "anchor": "story-capture-and-approve-an-expense",
+      "title": "Story: Capture and approve an expense",
+      "level": 3
+    },
+    {
+      "anchor": "story-send-an-invoice-for-approval-before-billing",
+      "title": "Story: Send an invoice for approval before billing",
+      "level": 3
+    },
+    {
+      "anchor": "story-turn-a-won-bond-deal-into-an-invoice",
+      "title": "Story: Turn a won Bond deal into an invoice",
+      "level": 3
+    },
+    {
+      "anchor": "story-bill-tracked-time-from-a-project",
+      "title": "Story: Bill tracked time from a project",
+      "level": 3
+    },
+    {
+      "anchor": "story-close-out-a-billing-period",
+      "title": "Story: Close out a billing period",
+      "level": 3
+    },
+    {
+      "anchor": "story-chase-overdue-invoices-automatically",
+      "title": "Story: Chase overdue invoices automatically",
+      "level": 3
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "level": 2
+    }
+  ],
+  "sections": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "text": "Bill is the invoicing and billing app in the BigBlueBam suite. You create an invoice for a client, fill it with line items, finalize it to assign a permanent number, send it, and record payments until it is fully paid. Alongside invoices, Bill tracks expenses (with an approval step), rates that drive time-based billing, and a set of financial reports. Bill is org-scoped: every client, invoice, expense, rate, and setting belongs to your active organization. It connects to the rest of the suite in several places. It can pull billable time from Bam projects and tasks, generate an invoice from a won Bond deal, route an invoice for approval through Bam's approval queue, and emit events that Bolt automation rules can react to. A few conventions to know up front. All money in Bill is stored and entered in integer cents, not dollars. The amount, rate, and payment inputs in the UI are labeled \"(cents)\" and take whole numbers, so typing 150 means one dollar and fifty cents. Invoices are only editable while they are in draft; once you finalize an invoice, its number and line items are locked."
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "text": "- Invoice - A billable document addressed to one client. It snapshots your company details (the \"from\" side) and the client details (the \"to\" side) when it is created, and carries an invoice date, due date, line items, tax, totals, and payment history. Its number is literally DRAFT until you finalize it. - Invoice status - The lifecycle of an invoice. The values that the app actually sets are draft (editable, no number yet), sent (finalized, number assigned, edits locked), viewed (a client opened the public link), partiallypaid (some payment recorded, balance remains), paid (paid in full), and void (cancelled). The Invoices list also shows an Overdue filter pill, but see the note under \"Invoice list\" - no action ever sets an invoice's stored status to overdue; overdue is computed from the due date by the Reports view and the reminder job. - Line item - One row on an invoice: a description, quantity, unit (default hours), and unit price in cents. The amount is quantity times unit price. Line items can only be added, edited, or removed while the invoice is a draft. - Client - The recipient of an invoice. Carries name, email, phone, address, tax ID, default payment terms (in days), default payment instructions, and notes. A Bill client is separate from a Bond contact or company, though it can be linked to a Bond company. - Payment - A recorded receipt against an invoice: an amount in cents, a method (Bank Transfer, Credit Card, Check, Cash, Stripe, PayPal, or Other), an optional reference, and a date. - Expense - A project cost: description, amount in cents, category, vendor, date, and a billable flag. Expenses start as pending and a reviewer moves them to approved or rejected. - Rate - A billing rate scoped to your org, a project, a user, or a user-on-a-project, with an amount in cents and a type (hourly, daily, or fixed). When Bill bills tracked time, it resolves the most specific rate that applies. - Settings - Your company identity and the defaults new invoices inherit: invoice prefix, default tax rate, payment terms, payment instructions, footer text, and terms text. - Public view token - A long opaque token on each invoice that grants read-only access (and a PDF) without logging in. It is how a sent invoice can be viewed by someone outside your org."
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "text": "Bill is served at /bill/. You must be logged in to BigBlueBam first; if you are not, Bill shows a \"Please log in to BigBlueBam first\" screen with a link to /b3/. Everything is scoped to your active organization, and mutating actions require the matching Bill permission on your account. The left sidebar carries a fixed New Invoice quick-action button, then the nav items Dashboard, Invoices, Clients, Expenses, Rates, and Reports, and under a Bill Settings subheading the Bill Settings item. Press ? anywhere in Bill to open the embedded Help viewer."
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "text": ""
+    },
+    {
+      "anchor": "dashboard",
+      "title": "Dashboard",
+      "text": "The Dashboard is the default view at /bill/, titled Dashboard with the subtitle \"Overview of invoicing activity.\" It shows four stat tiles - Outstanding, Paid, Overdue, and Drafts - and a Recent activity table listing recent invoices (Number, Client, Date, Total, Status) with a View all invoices link. The tiles and the link are summary indicators; clicking a tile or \"View all invoices\" returns you to the Dashboard rather than a filtered list. The numbers are computed in the browser from your full invoice list. Note that the Overdue tile counts invoices whose stored status equals overdue, and because no action in Bill sets that status, this tile stays at zero even when invoices are past due. Use the Reports view's \"Overdue Invoices\" table for the real overdue picture. To open an invoice from the Dashboard: 1. Go to /bill/ from the sidebar Dashboard item. 2. In the Recent activity table, click any row. 3. You land on that invoice's detail page."
+    },
+    {
+      "anchor": "invoice-list",
+      "title": "Invoice list",
+      "text": "The Invoices list at /bill/invoices is titled Invoices with the subtitle \"Manage and track all your invoices.\" It is the main place to scan, filter, and act on invoices. The columns are Number, Client, Date, Due (the due date), Total, Due (the remaining balance, which is total minus amount paid), Status, and Actions. The two \"Due\" columns are a date and a balance respectively. Above the table is a row of status filter pills; the empty pill is labeled All. Per-row actions include PDF, Finalize (drafts only), and Request approval. To filter the list: 1. Open Invoices in the sidebar. 2. Click a status pill (All, or a specific status such as Draft, Sent, or Paid). 3. The table reloads with only invoices in that status. The Overdue pill filters on the stored overdue status, which nothing sets, so it returns no rows. To see invoices that are actually past due, use Reports. To finalize a draft from the list: 1. Find a draft row. 2. Click Finalize in its Actions cell. 3. The invoice is assigned a number and moves to sent; it can no longer be edited. To download a PDF from the list: 1. Click PDF on any row. 2. The invoice PDF opens inline. To request approval from the list: 1. Click Request approval on a row. 2. In the Request approval for {number} modal, choose an Approver from the select (the list is active Bam users), optionally type a Message (optional), and click Send request. 3. The helper text reads \"Sends a Banter DM to the approver via Bolt.\" The request is posted to Bam's approval queue with subject type bill.invoice; the approver acts on it inside Bam. The two entry points for creating invoices live at the top of this view: From Time Entries (see \"Invoice from time entries\") and New Invoice (see \"Create an invoice\")."
+    },
+    {
+      "anchor": "create-an-invoice",
+      "title": "Create an invoice",
+      "text": "The New Invoice form at /bill/invoices/new (titled New Invoice) builds a draft invoice manually. Reach it from the sidebar New Invoice button, the Invoices list New Invoice button, or a client's + New Invoice link. To create an invoice: 1. Click New Invoice. 2. Choose a Client from the select. The Create Draft Invoice button stays disabled until a client is chosen. 3. In the Line Items table, fill in Description, Qty, and Unit Price (in cents) for each row. The Amount column is computed. Click + Add line item to add another row, or the X at the end of a row to remove it. 4. In the totals box, review the Subtotal, edit the Tax Rate if needed (the Tax and Total update automatically). 5. Optionally add Notes (internal). 6. Click Create Draft Invoice. Bill creates the draft, adds each line item, and opens the new invoice's detail page. Use Cancel to return to the Dashboard instead."
+    },
+    {
+      "anchor": "invoice-from-time-entries",
+      "title": "Invoice from time entries",
+      "text": "The page at /bill/invoices/from-time is titled Invoice from Time Entries with the subtitle \"Generate an invoice from Bam time tracking data.\" This page is currently a non-functional placeholder. It shows an amber banner (\"This wizard requires Bam time entries integration. Currently, you can create invoices manually with line items.\"), a Project text field, Date From and Date To date fields, a Preview Line Items button that is permanently disabled, and a Create Manually Instead button that sends you to the manual New Invoice form. The page makes no API call, so you cannot generate a time-based invoice from this screen. The underlying capability does exist and works from the API and from an AI agent. To bill tracked time today, use the billcreateinvoicefromtime MCP tool (see \"Working with AI agents\") or call POST /bill/api/v1/invoices/from-time-entries directly with a project, a client, and the specific time entry IDs to bill. The service joins those time entries to their tasks, resolves a rate per user-and-task group, and builds one line item per group."
+    },
+    {
+      "anchor": "invoice-detail",
+      "title": "Invoice detail",
+      "text": "The detail page at /bill/invoices/:id shows everything about one invoice: header with number, client, and a status badge; From and To panels; Invoice Date, Due Date, Total, and Amount Due tiles; the read-only line items with a Subtotal / Tax / Discount / Total footer; the payments section; and an inline PDF preview iframe once a PDF exists. The header actions vary by status: - Edit appears on drafts and opens the edit form. - Finalize appears on drafts; it assigns the number and locks the invoice. - Re-send appears on sent or viewed invoices; it marks the invoice sent again and queues an email if email is configured. - Void appears on any non-draft, non-void invoice; it cancels the invoice. - Duplicate is always available; it clones the invoice (and its line items) into a new draft and opens that draft. - Request approval opens an inline form that posts to Bam's approval queue, the same flow as the list view. - PDF opens the invoice PDF. To record a payment from the detail page: 1. Open the invoice. The Record Payment control appears when the status is not draft, void, or paid. 2. Enter the Amount (cents). 3. Choose a Method (Bank Transfer, Credit Card, Check, Cash, Stripe, PayPal, or Other). 4. Click Save Payment. 5. The payment appears in the list (Date, Method, Amount). When recorded payments reach the total, the invoice flips to paid; a partial payment shows partiallypaid. Bill rejects a payment that would exceed the remaining balance. To void an invoice: 1. Open a sent, viewed, or paid invoice (void is blocked on drafts; delete a draft instead). 2. Click Void in the header. 3. The invoice moves to void and drops out of revenue reports. To duplicate an invoice: 1. Click Duplicate in the header. 2. Bill creates a new draft with the same line items and opens it for editing."
+    },
+    {
+      "anchor": "edit-an-invoice",
+      "title": "Edit an invoice",
+      "text": "The edit form at /bill/invoices/:id/edit is titled Edit Invoice {number} and is available only for drafts. A non-draft shows \"Only draft invoices can be edited.\" with a \"Back to Invoice\" link. The editable fields are Tax Rate (%), Internal Notes, Footer Text (on invoice), and Terms & Conditions (on invoice). The edit form cannot add or remove line items and cannot change the client. To change line items, do it on the New Invoice form before creating, or duplicate the invoice and rebuild it. To edit a draft: 1. On the invoice detail page, click Edit. 2. Adjust Tax Rate (%), Internal Notes, Footer Text (on invoice), or Terms & Conditions (on invoice). 3. Click Save Changes (or Cancel to discard)."
+    },
+    {
+      "anchor": "clients",
+      "title": "Clients",
+      "text": "The Clients list at /bill/clients is titled Clients with the subtitle \"Manage billing clients.\" Columns are Name, Email, Phone, and Terms (shown as \"{n} days\"). To add a client: 1. Open Clients in the sidebar. 2. Click New Client to reveal the inline form. 3. Enter Name and Email. 4. Click Create Client. To open and edit a client: 1. Click a client row to open /bill/clients/:id. 2. Click Edit to enable inline editing of Contact Information (Name, Email, Phone) and Address & Tax (Address Line 1, Address Line 2, City, State, ZIP, Tax ID) plus Notes. 3. Click Save (or Cancel). The client detail page also shows Total Billed, Total Paid, and Outstanding Balance summary cards computed from this client's invoices, the read-only address, tax ID, payment terms, and notes, and an Invoices table (Invoice , Date, Status, Total, Paid, Due). The + New Invoice link opens the New Invoice form; note that it does not pre-select this client, so choose the client again on the form."
+    },
+    {
+      "anchor": "expenses",
+      "title": "Expenses",
+      "text": "The Expenses list at /bill/expenses is titled Expenses with the subtitle \"Track project expenses and receipts.\" Columns are Description, Category, Vendor, Date, Amount, Status, and Actions. A row of status pills filters the list: All (empty), pending, approved, rejected, and reimbursed. Note that nothing in Bill sets an expense to reimbursed, so the reimbursed pill returns no rows. To log an expense: 1. Open Expenses and click New Expense to go to /bill/expenses/new (titled New Expense). 2. Fill in Description, Amount (cents), and Date. 3. Choose a Category (Software, Travel, Hardware, Contractor, Office, Meals, or Other) and optionally a Vendor. 4. Tick Billable to client if the cost should be invoiceable. 5. Click Submit Expense. The expense is created as pending. To approve or reject an expense: 1. On the Expenses list, find a pending row. 2. Click Approve or Reject in its Actions cell. 3. The status changes to approved or rejected. Only pending expenses can be approved or rejected; once approved, an expense is locked. Editing an expense, deleting one, and attaching a receipt are supported by the API but have no button in the current UI. To attach a receipt or edit an expense, use the API (POST /bill/api/v1/expenses/:id/receipt, PATCH /bill/api/v1/expenses/:id)."
+    },
+    {
+      "anchor": "rates",
+      "title": "Rates",
+      "text": "The Rates list at /bill/rates is titled Billing Rates with the subtitle \"Configure hourly, daily, or fixed rates per org/project/user.\" Columns are Rate, Type, Scope (derived as User + Project, User, Project, or Organization), Effective From, and Actions. To add a rate: 1. Open Rates and click New Rate to reveal the inline form. 2. Enter Rate (cents) (the form defaults to 15000) and choose a Type (Hourly, Daily, or Fixed). 3. Click Create Rate. To delete a rate, click Delete in its Actions cell. The inline form only sets amount and type, so rates created in the UI are organization-scoped. Project-specific, user-specific, and date-bounded rates are supported by the data model and the resolver but must be created through the API (POST /bill/api/v1/rates with projectid, userid, effectivefrom, or effectiveto). When Bill bills time, it resolves the most specific rate that applies, preferring a user-and-project rate, then a user rate, then a project rate, then the organization rate, restricted to rates whose date range covers the work date."
+    },
+    {
+      "anchor": "reports",
+      "title": "Reports",
+      "text": "The Reports view at /bill/reports is titled Financial Reports. It renders four tables: - Revenue by Month (Month, Invoiced, Collected, Count). - Outstanding Aging (Client, with 0-30, 31-60, 61-90, and 90+ day buckets). - Project Profitability (Project, Revenue, Expenses, Profit, Margin). Only approved expenses count against profit. - Overdue Invoices (Invoice, Client, Amount Due, Days Overdue). Each row links to the invoice. This is the authoritative overdue list; it computes overdue from each invoice's due date rather than a stored status. Revenue and profitability exclude draft, void, and written-off invoices. Outstanding and overdue also exclude paid invoices. To read your reports: 1. Open Reports in the sidebar. 2. Review the four tables in place. 3. Click any Overdue Invoices row to jump to that invoice."
+    },
+    {
+      "anchor": "settings",
+      "title": "Settings",
+      "text": "The Settings view at /bill/settings is titled Billing Settings. It has two sections. Company Information holds Company Name, Email, Phone, Tax ID, and Address. These are snapshotted onto each invoice's \"from\" side at creation time. Invoice Defaults holds Invoice Prefix, Default Tax Rate (%), Payment Terms (days), Default Payment Instructions, Default Footer Text, and Default Terms & Conditions. New invoices inherit these defaults. To update your billing identity and defaults: 1. Open Bill Settings in the sidebar. 2. Edit any field under Company Information or Invoice Defaults. 3. Click Save Settings. The button shows \"Saved!\" on success."
+    },
+    {
+      "anchor": "pdf-generation",
+      "title": "PDF generation",
+      "text": "Every invoice can be downloaded as a PDF. The PDF action on the list, the PDF action in the detail header, and the inline PDF preview iframe all render the invoice through Bill's PDF service (GET /bill/api/v1/invoices/:id/pdf). A draft's PDF is named DRAFT.pdf; a finalized invoice's PDF is named after its number. When you finalize an invoice, Bill enqueues a background PDF job; when you send one, it enqueues an email job. While those run, the detail page can show a \"PDF generating...\" state. You do not need to trigger PDF generation manually; the PDF action always renders on demand."
+    },
+    {
+      "anchor": "public-invoice-view",
+      "title": "Public invoice view",
+      "text": "Each invoice carries a public view token. Anyone with the token URL can read a safe subset of the invoice and fetch its PDF without logging in, through GET /bill/api/v1/invoice/:token and GET /bill/api/v1/invoice/:token/pdf. The first open of the token URL marks a sent invoice as viewed. The public response omits internal fields such as the organization ID, the creator, the linked Bond deal, and tax IDs. There is no Bill SPA page for the public view and no client-facing payment action on it. The client cannot pay through this page; you record payments yourself from the invoice detail page. The token URL is intended to be shared with a client, typically from a sent-invoice email."
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "text": "Bill exposes 16 MCP tools (catalogued in apps/mcp-server/src/tools/bill-tools.ts), enough for an agent to drive most of the invoicing lifecycle from chat or a Bolt automation rule. The tools resolve fuzzy identifiers: a client can be named by name or email, and a Bam project by name, and the tool resolves it to an ID. What agents commonly do: - List and inspect: billlistinvoices, billgetinvoice, billlistclients, billlistexpenses. - Build a draft: billcreateinvoice (blank draft for a client), then billaddlineitem per line. For a Bond-deal handoff, billcreateinvoicefromdeal pulls the deal value into one line item; in a Bolt rule the deal ID is passed as {{ event.deal.id }} from a deal. event, and it must be a UUID. - Finish and collect: billfinalizeinvoice to assign the number and lock the invoice, billsendinvoice to mark it sent, and billrecordpayment to log receipts. - Expenses and rates: billcreateexpense to log a cost, billresolverate to look up the effective rate for a project, user, and date. - Reporting: billgetoverdue, billgetrevenuesummary, and billgetprofitability back the Reports view's data. Two cautions for agent-driven invoicing: - billcreateinvoicefromtime is the only working path to bill tracked time today, because the in-app wizard is a stub. However, this tool sends datefrom and dateto, while the API route it calls (POST /invoices/from-time-entries) requires an explicit list of timeentryids and ignores dates. As written, the tool call is expected to fail validation. Until the tool is fixed to pass timeentryids, drive time-based invoicing by calling the API directly with the entry IDs. - The tools cover creation through payment but not voiding, duplicating, editing, deleting, approving or rejecting expenses, updating rates, or changing settings. Those actions remain human-driven in the UI (or direct API calls). When an agent surfaces Bill data into a shared surface in another app, it should run the platform canaccess visibility check per docs/reference/agent-conventions.md. For the full tool catalog, see the MCP-tools reference in docs/apps/bill/."
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "text": ""
+    },
+    {
+      "anchor": "story-set-up-your-billing-identity",
+      "title": "Story: Set up your billing identity",
+      "text": "Who: An org admin setting up Bill for the first time. Goal: Make new invoices carry your company details and sensible defaults. Before you start: You are logged in to BigBlueBam and have Bill settings permission. Steps 1. Open Bill at /bill/ and click Bill Settings in the sidebar. 2. Under Company Information, fill in Company Name, Email, Phone, Tax ID, and Address. 3. Under Invoice Defaults, set the Invoice Prefix, Default Tax Rate (%), Payment Terms (days), Default Payment Instructions, Default Footer Text, and Default Terms & Conditions. 4. Click Save Settings and wait for the \"Saved!\" confirmation. Result: Your company identity is stored. Every new invoice snapshots these details onto its \"from\" side and inherits the defaults you set. Related: Add your first client next (Story: Add a client and send your first invoice)."
+    },
+    {
+      "anchor": "story-add-a-client-and-send-your-first-invoice",
+      "title": "Story: Add a client and send your first invoice",
+      "text": "Who: Anyone who bills clients. Goal: Create a client, invoice them, and send it. Before you start: Billing identity is set in Bill Settings. You have permission to create clients and invoices. Steps 1. Click Clients in the sidebar, then New Client. 2. Enter the client Name and Email and click Create Client. 3. Click New Invoice (sidebar or Invoices list). 4. Choose your new client in the Client select. 5. In Line Items, enter a Description, Qty, and Unit Price (in cents) for each row, using + Add line item for more rows. 6. Set the Tax Rate if needed and review Subtotal, Tax, and Total. 7. Click Create Draft Invoice. You land on the draft's detail page. 8. Click Finalize in the header. The invoice gets its number and locks. 9. Click Re-send to dispatch it (this queues an email if email is configured). Result: The client has a finalized, sent invoice with a permanent number. It appears in the Invoices list as sent. Related: Record the payment when it arrives (Story: Record a payment to closeout). An agent can do the same with billcreateinvoice, billaddlineitem, billfinalizeinvoice, and billsendinvoice."
+    },
+    {
+      "anchor": "story-record-a-payment-to-closeout",
+      "title": "Story: Record a payment to closeout",
+      "text": "Who: Anyone tracking receivables. Goal: Log payments against an invoice and watch it reach paid. Before you start: The invoice is finalized (status is sent, viewed, or partiallypaid). Steps 1. Open Invoices and click the invoice row. 2. In the payments section, find Record Payment. 3. Enter the Amount (cents) received. 4. Choose a Method (for example, Bank Transfer). 5. Click Save Payment. 6. Repeat for additional payments until the recorded total reaches the invoice total. Result: A partial payment shows the invoice as partiallypaid; when payments reach the total it becomes paid. The Dashboard Paid and Outstanding tiles reflect the change. Related: Bill rejects a payment larger than the remaining balance. An agent can record payments with billrecordpayment."
+    },
+    {
+      "anchor": "story-capture-and-approve-an-expense",
+      "title": "Story: Capture and approve an expense",
+      "text": "Who: A team member logging a project cost, and a reviewer approving it. Goal: Record an expense and move it through approval. Before you start: You have permission to create expenses; the reviewer has permission to approve. Steps 1. Click Expenses in the sidebar, then New Expense. 2. Fill in Description, Amount (cents), and Date. 3. Choose a Category and optionally a Vendor. 4. Tick Billable to client if it should be invoiceable, then click Submit Expense. The expense is pending. 5. The reviewer opens the Expenses list, finds the pending row, and clicks Approve (or Reject). Result: The expense moves to approved (or rejected). Approved expenses count against project profit in the Project Profitability report and can no longer be edited. Related: Receipt upload and expense edits are API-only today. An agent can log expenses with billcreateexpense and list them with billlistexpenses."
+    },
+    {
+      "anchor": "story-send-an-invoice-for-approval-before-billing",
+      "title": "Story: Send an invoice for approval before billing",
+      "text": "Who: Someone who needs sign-off before an invoice goes out. Goal: Route an invoice to a colleague for approval. Before you start: The invoice exists. You know which Bam user should approve it. Steps 1. On the Invoices list, click Request approval on the invoice row (or use Request approval on the invoice detail page). 2. In the Request approval for {number} dialog, pick an Approver from the select. 3. Optionally type a Message (optional). 4. Click Send request. Result: A request is posted to Bam's approval queue (subject type bill.invoice) and a Banter DM goes to the approver via Bolt. The approver reviews and decides inside Bam. Related: After approval, finalize and send the invoice (Story: Add a client and send your first invoice)."
+    },
+    {
+      "anchor": "story-turn-a-won-bond-deal-into-an-invoice",
+      "title": "Story: Turn a won Bond deal into an invoice",
+      "text": "Who: An account owner, or a Bolt rule, converting closed-won revenue into a bill. Goal: Generate a draft invoice from a Bond deal with the deal value as a line item. Before you start: The deal exists in Bond and you have its UUID. A matching Bill client exists (or you know its name/email). Steps 1. Have an agent call billcreateinvoicefromdeal with the deal's UUID and the billing client. In a Bolt rule, pass {{ event.deal.id }} from the triggering deal. event. 2. The tool creates a draft invoice with the deal value as one line item and opens it for review. 3. In Bill, open the new draft, adjust line items or tax if needed, and click Finalize. 4. Click Re-send to send it. Result: A draft invoice tied to the deal becomes a finalized, sent invoice. A human stays in control of finalize and send. Related: This is the canonical Bond-to-Bill handoff. See \"Working with AI agents\" for the tool details."
+    },
+    {
+      "anchor": "story-bill-tracked-time-from-a-project",
+      "title": "Story: Bill tracked time from a project",
+      "text": "Who: An agent or API caller billing logged hours (the in-app wizard does not work). Goal: Generate an invoice from specific Bam time entries. Before you start: A rate exists that covers the work (set one under Rates, or via the API for project/user scope). You have the project, the client, and the time entry IDs to bill. Steps 1. Confirm a rate applies by checking Rates, or have an agent call billresolverate for the project, user, and date. 2. Call POST /bill/api/v1/invoices/from-time-entries with projectid, clientid, and the array of timeentryids to bill. (The billcreateinvoicefromtime MCP tool currently sends date ranges instead of entry IDs and is expected to fail validation, so use the API or pass the entry IDs explicitly.) 3. The service groups the entries by user and task, resolves a rate per group, and builds one line item per group on a new draft. 4. In Bill, open the draft, review the generated line items, click Finalize, then Re-send. Result: A draft invoice built from real tracked time, ready to finalize and send. The in-app Invoice from Time Entries page remains a placeholder and cannot do this. Related: Configure rates first (the Rates feature). Resolve a rate with billresolverate."
+    },
+    {
+      "anchor": "story-close-out-a-billing-period",
+      "title": "Story: Close out a billing period",
+      "text": "Who: A finance owner reviewing the month. Goal: See revenue, aging, profitability, and what is overdue. Before you start: You have Bill report permissions. Steps 1. Click Reports in the sidebar. 2. Read Revenue by Month for invoiced and collected totals. 3. Read Outstanding Aging to see balances by client and age bucket. 4. Read Project Profitability to compare revenue against approved expenses per project. 5. Read Overdue Invoices, and click any row to open and chase that invoice. Result: A complete financial snapshot for the period, with overdue invoices computed from due dates rather than a stored status. Related: An agent can pull the same data with billgetrevenuesummary, billgetprofitability, and billgetoverdue. The Dashboard's Overdue tile does not reflect this; use the Reports table."
+    },
+    {
+      "anchor": "story-chase-overdue-invoices-automatically",
+      "title": "Story: Chase overdue invoices automatically",
+      "text": "Who: A finance owner who wants overdue reminders to send themselves. Goal: Have Bill email clients whose invoices are past due, and let automation escalate. Before you start: Invoices have due dates; SMTP is configured for real email (otherwise reminders are logged). Steps 1. Finalize and send invoices as usual so they have due dates. 2. Each day at 09:00 UTC, Bill's reminder sweep finds invoices past their due date that are not paid or void, and that were not reminded in the last 7 days. 3. The sweep emails the client (or logs the reminder if SMTP is not set), records the reminder timestamp and count, and emits an invoice.overdue event on the bill source. 4. Build a Bolt rule on invoice.overdue to escalate or notify the account owner. Result: Overdue clients get periodic reminders without manual effort, and downstream automation can react to the invoice.overdue event. Related: Bill also emits invoice.created, invoice.finalized, invoice.sent, invoice.paid, and payment.recorded, all on the bill source, for Bolt rules to consume."
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "text": "- Bam (/b3/) - Projects, tasks, and time entries feed time-based invoicing and rate resolution; invoice approvals route through Bam's approval queue. - Bond (/bond/) - Won deals convert into draft invoices via billcreateinvoicefromdeal; a Bill client can link to a Bond company. - Bolt (/bolt/) - Automation rules consume Bill events such as invoice.paid, invoice.overdue, and payment.recorded, and can trigger billcreateinvoicefromdeal. - Banter (/banter/) - Approval requests reach the approver as a Banter DM. - Bill's own docs in docs/apps/bill/: the MCP-tools reference (the full 16-tool catalog) and guide.md."
+    }
+  ],
+  "labels": {
+    "+ Add line item": "create-an-invoice",
+    "+ New Invoice": "create-an-invoice",
+    "All": "invoice-list",
+    "Amount (cents)": "invoice-detail",
+    "Approve": "expenses",
+    "Approver": "invoice-list",
+    "Bam": "related",
+    "Banter": "related",
+    "Bill Settings": "where-to-find-it",
+    "Billable to client": "expenses",
+    "Billing Rates": "rates",
+    "Billing Settings": "settings",
+    "Bolt": "related",
+    "Bond": "related",
+    "Build a draft:": "working-with-ai-agents",
+    "Cancel": "create-an-invoice",
+    "Category": "expenses",
+    "Client": "key-concepts",
+    "Clients": "where-to-find-it",
+    "Company Information": "settings",
+    "Create Client": "clients",
+    "Create Draft Invoice": "create-an-invoice",
+    "Create Manually Instead": "invoice-from-time-entries",
+    "Create Rate": "rates",
+    "Dashboard": "where-to-find-it",
+    "Date": "expenses",
+    "Date From": "invoice-from-time-entries",
+    "Date To": "invoice-from-time-entries",
+    "Delete": "rates",
+    "Description": "expenses",
+    "Draft": "invoice-list",
+    "Drafts": "dashboard",
+    "Duplicate": "invoice-detail",
+    "Edit": "invoice-detail",
+    "Edit Invoice {number}": "edit-an-invoice",
+    "Email": "clients",
+    "Expense": "key-concepts",
+    "Expenses": "where-to-find-it",
+    "Expenses and rates:": "working-with-ai-agents",
+    "Finalize": "invoice-list",
+    "Financial Reports": "reports",
+    "Finish and collect:": "working-with-ai-agents",
+    "Footer Text (on invoice)": "edit-an-invoice",
+    "From Time Entries": "invoice-list",
+    "Internal Notes": "edit-an-invoice",
+    "Invoice": "key-concepts",
+    "Invoice Defaults": "settings",
+    "Invoice from Time Entries": "invoice-from-time-entries",
+    "Invoice status": "key-concepts",
+    "Invoices": "where-to-find-it",
+    "Line Items": "create-an-invoice",
+    "Line item": "key-concepts",
+    "List and inspect:": "working-with-ai-agents",
+    "Message (optional)": "invoice-list",
+    "Method": "invoice-detail",
+    "Name": "clients",
+    "New Client": "clients",
+    "New Expense": "expenses",
+    "New Invoice": "where-to-find-it",
+    "New Rate": "rates",
+    "Notes (internal)": "create-an-invoice",
+    "Outstanding": "dashboard",
+    "Outstanding Aging": "reports",
+    "Outstanding Balance": "clients",
+    "Overdue": "key-concepts",
+    "Overdue Invoices": "reports",
+    "PDF": "invoice-list",
+    "PDF preview": "invoice-detail",
+    "Paid": "dashboard",
+    "Payment": "key-concepts",
+    "Preview Line Items": "invoice-from-time-entries",
+    "Project": "invoice-from-time-entries",
+    "Project Profitability": "reports",
+    "Public view token": "key-concepts",
+    "Rate": "key-concepts",
+    "Rate (cents)": "rates",
+    "Rates": "where-to-find-it",
+    "Re-send": "invoice-detail",
+    "Recent activity": "dashboard",
+    "Record Payment": "invoice-detail",
+    "Reject": "expenses",
+    "Reporting:": "working-with-ai-agents",
+    "Reports": "where-to-find-it",
+    "Request approval": "invoice-list",
+    "Request approval for {number}": "invoice-list",
+    "Revenue by Month": "reports",
+    "Save": "clients",
+    "Save Changes": "edit-an-invoice",
+    "Save Payment": "invoice-detail",
+    "Save Settings": "settings",
+    "Send request": "invoice-list",
+    "Sent": "invoice-list",
+    "Settings": "key-concepts",
+    "Submit Expense": "expenses",
+    "Subtotal": "create-an-invoice",
+    "Tax": "create-an-invoice",
+    "Tax Rate": "create-an-invoice",
+    "Tax Rate (%)": "edit-an-invoice",
+    "Terms & Conditions (on invoice)": "edit-an-invoice",
+    "Total": "create-an-invoice",
+    "Total Billed": "clients",
+    "Total Paid": "clients",
+    "Type": "rates",
+    "Vendor": "expenses",
+    "View all invoices": "dashboard",
+    "Void": "invoice-detail",
+    "approved": "expenses",
+    "client": "overview",
+    "expenses": "overview",
+    "integer cents": "overview",
+    "invoice": "overview",
+    "line items": "overview",
+    "payments": "overview",
+    "pending": "expenses",
+    "rates": "overview",
+    "reimbursed": "expenses",
+    "rejected": "expenses",
+    "reports": "overview"
+  },
+  "crossrefs": [
+    {
+      "app": "bam",
+      "title": "Bam"
+    },
+    {
+      "app": "bond",
+      "title": "Bond"
+    },
+    {
+      "app": "bolt",
+      "title": "Bolt"
+    },
+    {
+      "app": "banter",
+      "title": "Banter"
+    }
+  ]
+}

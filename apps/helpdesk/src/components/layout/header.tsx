@@ -1,6 +1,7 @@
 import { useAuthStore } from '@/stores/auth.store';
 import { useTenantStore } from '@/stores/tenant.store';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { LifeBuoy } from 'lucide-react';
 
 interface HeaderProps {
@@ -43,8 +44,11 @@ export function Header({ onNavigate }: HeaderProps) {
           </button>
         </nav>
 
-        {/* Right: User menu */}
-        <UserMenu user={user} />
+        {/* Right: Help + User menu */}
+        <div className="flex items-center gap-1">
+          <HelpTrigger app="helpdesk" />
+          <UserMenu user={user} />
+        </div>
       </div>
     </header>
   );

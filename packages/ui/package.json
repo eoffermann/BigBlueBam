@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./help-center": {
+      "types": "./help-center.tsx",
+      "default": "./help-center.tsx"
+    },
     "./help-viewer": {
       "types": "./help-viewer.tsx",
       "default": "./help-viewer.tsx"

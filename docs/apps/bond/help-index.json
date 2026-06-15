@@ -1,0 +1,517 @@
+{
+  "app": "bond",
+  "title": "Bond",
+  "toc": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "level": 2
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "level": 3
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "level": 3
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "level": 2
+    },
+    {
+      "anchor": "choosing-the-active-pipeline",
+      "title": "Choosing the active pipeline",
+      "level": 3
+    },
+    {
+      "anchor": "pipeline-board",
+      "title": "Pipeline Board",
+      "level": 3
+    },
+    {
+      "anchor": "creating-a-deal",
+      "title": "Creating a deal",
+      "level": 3
+    },
+    {
+      "anchor": "deal-detail-and-outcomes",
+      "title": "Deal detail and outcomes",
+      "level": 3
+    },
+    {
+      "anchor": "stage-history-and-related-items",
+      "title": "Stage History and Related items",
+      "level": 3
+    },
+    {
+      "anchor": "contacts-list",
+      "title": "Contacts list",
+      "level": 3
+    },
+    {
+      "anchor": "creating-a-contact",
+      "title": "Creating a contact",
+      "level": 3
+    },
+    {
+      "anchor": "contact-detail",
+      "title": "Contact detail",
+      "level": 3
+    },
+    {
+      "anchor": "companies-list",
+      "title": "Companies list",
+      "level": 3
+    },
+    {
+      "anchor": "creating-a-company",
+      "title": "Creating a company",
+      "level": 3
+    },
+    {
+      "anchor": "company-detail",
+      "title": "Company detail",
+      "level": 3
+    },
+    {
+      "anchor": "logging-activity",
+      "title": "Logging activity",
+      "level": 3
+    },
+    {
+      "anchor": "analytics",
+      "title": "Analytics",
+      "level": 3
+    },
+    {
+      "anchor": "bond-settings-pipelines",
+      "title": "Bond Settings: Pipelines",
+      "level": 3
+    },
+    {
+      "anchor": "bond-settings-custom-fields",
+      "title": "Bond Settings: Custom Fields",
+      "level": 3
+    },
+    {
+      "anchor": "bond-settings-lead-scoring",
+      "title": "Bond Settings: Lead Scoring",
+      "level": 3
+    },
+    {
+      "anchor": "restoring-deleted-records",
+      "title": "Restoring deleted records",
+      "level": 3
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "level": 3
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "level": 2
+    },
+    {
+      "anchor": "story-set-up-your-first-sales-pipeline",
+      "title": "Story: Set up your first sales pipeline",
+      "level": 3
+    },
+    {
+      "anchor": "story-add-and-qualify-a-contact",
+      "title": "Story: Add and qualify a contact",
+      "level": 3
+    },
+    {
+      "anchor": "story-create-a-deal-and-move-it-to-close",
+      "title": "Story: Create a deal and move it to close",
+      "level": 3
+    },
+    {
+      "anchor": "story-work-the-board-with-swimlanes",
+      "title": "Story: Work the board with swimlanes",
+      "level": 3
+    },
+    {
+      "anchor": "story-triage-stale-deals",
+      "title": "Story: Triage stale deals",
+      "level": 3
+    },
+    {
+      "anchor": "story-forecast-revenue",
+      "title": "Story: Forecast revenue",
+      "level": 3
+    },
+    {
+      "anchor": "story-manage-companies",
+      "title": "Story: Manage companies",
+      "level": 3
+    },
+    {
+      "anchor": "story-configure-lead-scoring",
+      "title": "Story: Configure lead scoring",
+      "level": 3
+    },
+    {
+      "anchor": "story-extend-the-schema-with-custom-fields",
+      "title": "Story: Extend the schema with custom fields",
+      "level": 3
+    },
+    {
+      "anchor": "story-restore-a-deleted-record",
+      "title": "Story: Restore a deleted record",
+      "level": 3
+    },
+    {
+      "anchor": "story-deduplicate-contacts-agent-assisted",
+      "title": "Story: Deduplicate contacts (agent-assisted)",
+      "level": 3
+    },
+    {
+      "anchor": "story-hand-a-deal-off-across-the-suite",
+      "title": "Story: Hand a deal off across the suite",
+      "level": 3
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "level": 2
+    }
+  ],
+  "sections": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "text": "Bond organizes your sales work around four core objects: contacts (people), companies (organizations), deals (revenue opportunities), and pipelines (the ordered stages a deal passes through). You log activities against any of these, score leads with rules you define, and watch deals age so nothing rots unattended. The pipeline board is the daily working surface. Each deal is a card in a stage column; you drag cards between columns to move a deal forward, mark it Won or Lost, and group cards into swimlanes by owner or close month. The Contacts and Companies lists are your address book, and the Analytics page rolls everything up into forecast, velocity, and win/loss numbers. Bond is org-scoped and connects to the rest of the suite. A deal's Related panel surfaces Bill invoices, Book events, and Bam tasks tied to that deal. Bond also emits events (deal won, deal lost, deal rotting, contact created) that Bolt automation rules and other apps can react to, and its contacts feed Blast email segments and Bench reports. This document describes what the Bond web app actually does today. Where an action exists only through the API or an MCP tool (not the in-app UI), that is called out explicitly so you do not go looking for a button that is not wired up yet."
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "text": "- Contact - a person you track. Holds name, email, phone, job title, avatar, lifecycle stage, lead source, lead score, address, custom fields, and an owner. - Company - an organization. Holds name, domain, industry, company size bucket, annual revenue, phone, website, logo, address, custom fields, and an owner. Contacts and deals can be linked to a company. - Deal - a revenue opportunity in a pipeline. Holds a name, value, currency, expected close date, probability, and a computed weighted value (value times probability). A deal is Open until it is closed Won or Lost. - Lifecycle stage - where a contact sits in your funnel: Lead, Subscriber, MQL (marketing qualified), SQL (sales qualified), Opportunity, Customer, Evangelist, or Other. New contacts default to Lead. - Lead score - a number from 0 to 100 cached on each contact. Scoring rules add or subtract points based on contact attributes. - Pipeline - an ordered set of stages plus a currency. One pipeline can be the default. The active pipeline is chosen from the sidebar scope selector. - Stage - a column on the board. Has a name, a type (Active, Won, or Lost), a probability percentage, an optional rotting threshold in days, and a color. - Activity - a timeline entry logged against a contact, company, and/or deal. Types include Note, Email Sent, Email Received, Call, Meeting, and Task, plus system-generated entries like stage changes and deal created/won/lost. - Rotting (stale) deal - an open deal whose days in its current stage exceed that stage's rotting threshold. The card turns orange, and red when it is more than 1.5 times over. - Custom field - an extra field you define per entity type (Contact, Company, or Deal). These are org-wide for that entity type, not per pipeline. - Lead scoring rule - a condition (field, operator, value) plus a point delta. Rules are org-wide and evaluated together to compute each contact's score. - Soft delete - contacts, companies, and deals are not erased when deleted. They are hidden and can be restored from their list with Include deleted."
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "text": "Bond lives at /bond/. Open it from the Launchpad app switcher in the top-left chrome, or go straight to the URL. Prerequisites: - You must be signed in to BigBlueBam. If you are not, Bond shows \"Please log in to BigBlueBam first to access Bond.\" with a \"Go to BigBlueBam Login\" button that sends you to /b3/. - At least one pipeline must exist before you can create deals. With no pipeline, the board shows \"No pipeline selected\" and a Create Pipeline button. - Bond is org-scoped. Use the OrgSwitcher in the header to change which organization's data you see. Roles and visibility: - Members and viewers see only the deals and contacts they own. Admins and owners see everything in the org. This \"own only\" filtering applies to deal and contact lists, deal detail, stage history, duplicates, and related lookups. - Most create and edit actions require read/write access. Administering pipelines, stages, scoring rules, custom fields, and import mappings requires admin access. Bulk contact import requires admin access. The sidebar nav has five items: Pipeline Board, Contacts, Companies, Analytics, and Bond Settings. A pipeline scope selector sits at the top of the sidebar (showing the active pipeline name, or \"Default Pipeline\"); it sets the active pipeline used across the board and Analytics. Press the ? key anywhere in Bond to open the in-app Help viewer."
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "text": ""
+    },
+    {
+      "anchor": "choosing-the-active-pipeline",
+      "title": "Choosing the active pipeline",
+      "text": "The pipeline scope selector at the top of the sidebar sets which pipeline the board and Analytics use. To switch pipelines: 1. Click the scope selector at the top of the sidebar (it shows the current pipeline name, or \"Default Pipeline\"). 2. Pick a pipeline from the dropdown. The active one is marked with a check. 3. The Pipeline Board and Analytics now reflect that pipeline. If no pipelines exist yet, the dropdown reads \"No pipelines found\"."
+    },
+    {
+      "anchor": "pipeline-board",
+      "title": "Pipeline Board",
+      "text": "The board (/) shows every deal in the active pipeline as a card in a stage column. The header shows the pipeline name and a summary: \"N deals\", \"Total: $X\", and \"Weighted: $Y\". To read the board: 1. Open Pipeline Board from the sidebar. 2. Each column is a stage, with a color dot, the stage name, a deal count, and the stage's total value. 3. Each card shows the deal name, company, value, close date, days in stage, and the owner's avatar. Orange cards are rotting; red cards are severely overdue (more than 1.5 times the rotting threshold). To move a deal to another stage: 1. Drag the deal card from its current column and drop it on the target stage column. 2. The deal's stage updates, the move is recorded in stage history, and a stage-changed event is emitted. To search the board: 1. Type into the \"Search deals...\" box in the board header. 2. The board filters to deals whose name or company name matches. To group deals into swimlanes: 1. In the board header, find the Group control. 2. Click None, Owner, or Close month. 3. Owner groups deals into a lane per owner name, with \"Unassigned\" last. Close month groups by close date (YYYY-MM), with \"No close date\" for deals lacking one."
+    },
+    {
+      "anchor": "creating-a-deal",
+      "title": "Creating a deal",
+      "text": "Deals are created from the board. The Create Deal dialog collects a name, an optional value, and an optional expected close date. It does not collect company, owner, probability, currency, or linked contacts; set those through an MCP tool or the REST API (see Working with AI agents). To add a deal at the first stage: 1. On the Pipeline Board, click Add Deal in the top-right. 2. In the \"Create Deal\" dialog, type a Deal Name (required), for example \"Acme Corp - Enterprise Plan\". 3. Optionally enter a Value ($) and an Expected Close Date. 4. Click Create Deal. The deal appears in the first stage of the pipeline. To add a deal directly to a specific stage: 1. Hover the stage column header and click the + button (\"Add deal to <stage\"). 2. Fill in the same fields and click Create Deal. The deal lands in that stage."
+    },
+    {
+      "anchor": "deal-detail-and-outcomes",
+      "title": "Deal detail and outcomes",
+      "text": "Open a deal card to see its full record at /deals/:id: the header with the deal name and a status badge (Open, Won, or Lost), value, company link, close date, days in stage, and owner. The left side shows the description, an inline Log Activity form, and the Activity timeline. The right side shows Details (Probability, Weighted Value, Created, Closed, Close Reason, Lost To), the Related panel, and Stage History. To close a deal as won: 1. Open the deal. 2. Click Won (the trophy button). The deal moves to a Won-type stage, its probability is set to 100, and a deal-won event is emitted. To close a deal as lost: 1. Open the deal. 2. Click Lost (the X-circle button). The deal moves to a Lost-type stage and its probability is set to 0. Note: the in-app Lost button records the loss without a reason or competitor. To capture a close reason or the competitor you lost to, use the REST endpoint or MCP tool (see Working with AI agents). To delete a deal: 1. Open the deal and click the overflow menu (the \"...\" button). 2. Choose Delete Deal. The deal is soft-deleted and you return to the board. It can be restored later through the API or MCP. Editing a deal in place is not available in the app yet. The overflow menu lists Edit Deal, but it does no work; there is no edit dialog. To change a deal's fields, use an MCP tool or the REST API."
+    },
+    {
+      "anchor": "stage-history-and-related-items",
+      "title": "Stage History and Related items",
+      "text": "On a deal's detail page: - Stage History lists each transition (from stage to stage), when it happened, who made it, and how long the deal spent in the prior stage. - Related surfaces cross-app links: Bill invoices (by number and status), Book events, and Bam tasks (by their human-readable ID). Each source is best-effort and simply shows nothing if it is unavailable. If there are no links, the panel reads \"No related items\"."
+    },
+    {
+      "anchor": "contacts-list",
+      "title": "Contacts list",
+      "text": "The Contacts list (/contacts) is your people directory. The header shows \"Contacts\", an \"N total\" count, a \"Search contacts...\" box, an Include deleted checkbox, and an Add Contact button. To browse and filter contacts: 1. Open Contacts from the sidebar. 2. Click a lifecycle pill to filter: All, Lead, Subscriber, MQL, SQL, Opportunity, Customer, or Evangelist. 3. Type into \"Search contacts...\" to match by name, email, or phone. 4. Each row shows Name (with avatar and title), Email, Company, the lifecycle Stage badge, Score (star and number), Owner, and Last Contact. To see deleted contacts and restore one: 1. Check Include deleted. Deleted rows appear struck through. 2. Click Restore on a deleted row to bring it back."
+    },
+    {
+      "anchor": "creating-a-contact",
+      "title": "Creating a contact",
+      "text": "To add a contact: 1. On the Contacts list, click Add Contact (also available from the empty-state \"No contacts found\"). 2. In the \"Create Contact\" dialog, fill in any of First Name, Last Name, Email, Phone, and Job Title. At least one of first name, last name, or email is required. 3. Choose a Lifecycle Stage (Lead, Subscriber, MQL, SQL, Opportunity, Customer, Evangelist, or Other). It defaults to Lead. 4. Click Create Contact. The contact is added and you land on its detail page."
+    },
+    {
+      "anchor": "contact-detail",
+      "title": "Contact detail",
+      "text": "A contact's page (/contacts/:id) shows the avatar, name, title, a link to the company, the lifecycle badge, and the lead score. Below are the email (mailto), phone (tel), and deal count. Three tabs organize the body: activity, details, and deals. To work a contact: 1. Open the contact. 2. Click Log Activity to record a note, call, meeting, or email (see Logging activity). 3. Use the details tab to read Lead Source, Owner, City, State/Region, Country, Created, and Last Contacted. 4. The deals tab shows a text summary of the contact's deals. To delete a contact: 1. Click the overflow menu (\"...\") and choose Delete Contact. The contact is soft-deleted; restore it from the Contacts list with Include deleted. The contact overflow menu also lists Edit Contact and Create Deal, but neither is wired up in the app yet; selecting them does nothing. To edit a contact (including its lifecycle stage) or to create a deal tied to a contact, use an MCP tool or the REST API."
+    },
+    {
+      "anchor": "companies-list",
+      "title": "Companies list",
+      "text": "The Companies list (/companies) holds the organizations you work with. The header shows \"Companies\", an \"N total\" count, a \"Search companies...\" box, an Include deleted checkbox, and an Add Company button. To browse companies: 1. Open Companies from the sidebar. 2. Type into \"Search companies...\" to match by name or domain. 3. Each row shows the Company (logo and name), Domain, Industry, Size, Revenue, Contacts count, Deals count, and Owner. 4. Check Include deleted to see soft-deleted companies, each with a Restore action."
+    },
+    {
+      "anchor": "creating-a-company",
+      "title": "Creating a company",
+      "text": "To add a company: 1. On the Companies list, click Add Company (also on the empty-state \"No companies found\"). 2. In the \"Create Company\" dialog, type a Company Name (required). 3. Optionally fill in Domain, Industry, Company Size (a bucket: 1-10, 11-50, 51-200, 201-1000, 1001-5000, 5000+), and Website. 4. Click Create Company. The company is added and you land on its detail page."
+    },
+    {
+      "anchor": "company-detail",
+      "title": "Company detail",
+      "text": "A company's page (/companies/:id) shows the logo, name, industry badge, and employee count, plus the domain link, phone, location, contact count, deal count, and revenue. Four tabs organize the body: activity, details, contacts, and deals. To work a company: 1. Open the company. 2. Click Log Activity to record an activity against it. 3. Use the details tab to read Website, Owner, Address, and Created. 4. The contacts and deals tabs show text summaries. To delete a company: 1. Click the overflow menu (\"...\") and choose Delete Company. The company is soft-deleted; restore it from the Companies list with Include deleted. The company overflow menu also lists Edit Company, but it is not wired up yet; selecting it does nothing. To edit a company's fields, use an MCP tool or the REST API."
+    },
+    {
+      "anchor": "logging-activity",
+      "title": "Logging activity",
+      "text": "The Log Activity form appears on contact, company, and deal detail pages. Use it to keep a running timeline of your touches. To log an activity: 1. On a contact, company, or deal detail page, click Log Activity. 2. Choose a type: Note, Email Sent, Email Received, Call, Meeting, or Task. 3. Enter a Subject and optional details in the \"Add details...\" box. 4. Click Log Activity. The entry appears in the Activity timeline with an icon and label for its type."
+    },
+    {
+      "anchor": "analytics",
+      "title": "Analytics",
+      "text": "The Analytics page (/analytics) reports on the effective pipeline (the active one, falling back to the default, then the first). The header reads \"Analytics\" with \"<pipeline overview\". To read your numbers: 1. Open Analytics from the sidebar. 2. The top stat cards show Total Pipeline, Weighted Forecast, Win Rate (a percent with won and lost counts), and Stale Deals (\"Needs attention\" or \"All healthy\"). 3. Pipeline Stages shows a bar per active stage with deal count and value. 4. Average Deal Velocity (days per stage) shows cards with average days in each stage and the sample size. 5. Stage Transitions shows from-stage to to-stage with a count badge. 6. Revenue Forecast (weighted) breaks the weighted total into Next 30 days, Next 60 days, Next 90 days, Beyond 90 days, and No close date (only non-zero buckets show). 7. Stale Deals (N) lists clickable rows (name, stage, an X-of-Y days badge, value). Click a row to open that deal. 8. Top Loss Reasons and Top Competitors summarize why deals were lost and to whom."
+    },
+    {
+      "anchor": "bond-settings-pipelines",
+      "title": "Bond Settings: Pipelines",
+      "text": "Settings opens at /settings/pipelines. The Pipelines tab lists your pipelines; expand one to see and edit its stages. To create a pipeline: 1. Open Bond Settings, then the Pipelines tab. 2. Click New Pipeline. 3. In the \"Create Pipeline\" dialog, type a Pipeline Name and click Create. 4. The new pipeline is seeded with six default stages: Prospect (10%), Qualified (25%), Proposal (50%), Negotiation (75%), Closed Won (100%, Won), and Closed Lost (0%, Lost). To inspect and manage stages: 1. Click a pipeline row to expand it. 2. Each stage row shows a color dot, the stage name, a type badge (Active, Won, or Lost), the probability percent, and \"Nd rot\" if a rotting threshold is set. 3. To add a stage, use the inline Add stage form: type a name, pick a type (Active, Won, or Lost), and click Add. 4. To delete a stage, hover the row and click the trash icon. Note: each stage row shows a drag handle, but reordering stages is not wired in the Settings UI. Stage reordering, and editing a stage's probability, rotting days, or color, are available only through the REST API. The Add stage form sets only the name and type."
+    },
+    {
+      "anchor": "bond-settings-custom-fields",
+      "title": "Bond Settings: Custom Fields",
+      "text": "Custom fields extend contacts, companies, or deals with extra data. They are defined per entity type and apply org-wide for that type (not per pipeline). To add a custom field: 1. Open Bond Settings, then the Custom Fields tab. 2. Optionally narrow the list with the entity filter (All Types, Contact, Company, or Deal). 3. Click New Field. 4. In the \"Create Custom Field\" dialog, choose an Entity Type (Contact, Company, or Deal) and a Field Type (Text, Number, Date, Select, Multi Select, URL, Email, Phone, or Boolean). 5. Enter a Label; the Field Key is generated from it automatically (you can adjust it). 6. Check Required field if the field is mandatory. 7. For Select or Multi Select, build the Options list by entering a Value and Label and clicking Add for each option. 8. Click Create Field. Fields are grouped by entity type, each showing its label, key, type badge, and option count. To delete a custom field: 1. Hover its row and click the trash icon."
+    },
+    {
+      "anchor": "bond-settings-lead-scoring",
+      "title": "Bond Settings: Lead Scoring",
+      "text": "Lead scoring rules adjust each contact's lead score. Rules are org-wide and evaluated together; each matching enabled rule adds or subtracts its delta, and the final score is clamped to 0-100. To create a scoring rule: 1. Open Bond Settings, then the Lead Scoring tab. 2. Click New Rule. 3. In the \"Create Scoring Rule\" dialog, enter a Rule Name and an optional Description. 4. Build the Condition: pick a Field (for example Lifecycle Stage, Lead Source, Job Title, City, Country, Current Score, or a custom field), an Operator (Equals, Not Equals, Contains, Greater Than, Less Than, Greater or Equal, Less or Equal, Exists, Not Exists), and a Value (the Value box hides for Exists and Not Exists). 5. Set a Score Delta (from -100 to 100) and leave Enabled checked to make the rule active. 6. Click Create Rule. Each rule row reads as a plain sentence, shows its +/- point delta, and offers edit and delete. To edit a scoring rule: 1. Hover a rule row and click the edit (pencil) icon. 2. Adjust fields in the \"Edit Scoring Rule\" dialog and click Save Changes. Note: there is no in-app button to recalculate scores. Recalculation runs through the REST endpoint or the bondscorelead MCP tool (see Working with AI agents)."
+    },
+    {
+      "anchor": "restoring-deleted-records",
+      "title": "Restoring deleted records",
+      "text": "Contacts, companies, and deals are soft-deleted, so a delete is recoverable. To restore a deleted contact or company: 1. Open the Contacts or Companies list. 2. Check Include deleted. 3. Find the struck-through row and click Restore. Deleted deals are restored through the REST API or MCP, not from the board UI."
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "text": "Bond exposes 22 MCP tools in its catalog (plus the cross-cutting bondfindduplicates), so an AI agent can do most of what a salesperson does, and several things the current UI does not expose. Most write tools accept a name or a UUID (a pipeline or stage name, a contact email or name, a company name or domain, a deal title fragment, an owner email); an ambiguous or missing match returns a clean error instead of mutating data. What agents commonly drive: - Contacts: bondcreatecontact, bondupdatecontact, bondlistcontacts, bondgetcontact, bondsearchcontacts, and bondmergecontacts. Editing a contact (including lifecycle stage), which the app cannot do in place, runs through bondupdatecontact. - Idempotent contact ingestion: bondupsertcontact upserts by email. It is part of the platform's idempotent write plane and returns a created flag and an idempotency key, so repeated ingestion does not create duplicates. It also resurrects a soft-deleted contact with the same email. - Companies: bondcreatecompany, bondupdatecompany, bondlistcompanies, bondgetcompany. Editing a company, which the app cannot do in place, runs through bondupdatecompany. - Deals: bondcreatedeal (collects fields the in-app dialog omits, such as company, owner, and probability), bondupdatedeal (the in-place edit the UI lacks), bondlistdeals, bondgetdeal, bondmovedealstage, bondclosedealwon, and bondclosedeallost (the lost tool can record a close reason and the competitor you lost to). - Activities: bondlogactivity mirrors the Log Activity form. - Lead scoring: bondscorelead recalculates a contact's score, the action the Settings UI has no button for. - Reporting: bondgetpipelinesummary, bondgetstaledeals, and bondgetforecast return the same data the Analytics page renders. - Deduplication: bondfindduplicates returns ranked likely-duplicate contacts with confidence and signals, and pairs with the platform deduperecorddecision and dedupelistpending tools (entity type bond.contact) plus bondmergecontacts to resolve them. There is no in-app dedupe screen; this loop is API and tool only. What agents cannot do through Bond MCP tools: there are no tools for pipeline or stage CRUD, custom-field CRUD, scoring-rule CRUD, company delete, or contact/deal delete and restore. Those remain UI or REST actions. Event-driven automation: Bond emits Bolt events on the bond source for deal.created, deal.updated, deal.stagechanged, deal.won, deal.lost, contact.created, contact.upserted, activity.logged, and deal.rotting. A daily worker job emits deal.rotting for open deals that have aged past their stage's rotting threshold, so downstream Bolt rules can nudge an owner or hand off to another app. Reviewing agent work: own-only visibility is enforced server-side, so a member or viewer service account only sees and acts on records it owns. Agents posting cross-app results should preflight visibility before citing Bond entities. For the full tool catalog and schemas, see the Bond MCP-tools reference and guide in docs/apps/bond/."
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "text": ""
+    },
+    {
+      "anchor": "story-set-up-your-first-sales-pipeline",
+      "title": "Story: Set up your first sales pipeline",
+      "text": "Who: An org admin or owner setting up Bond. Goal: Have a working pipeline with the stages your team sells through. Before you start: You need admin access to Bond. A fresh org has no pipeline, so the board shows \"No pipeline selected\". Steps 1. Open Bond Settings from the sidebar (or click Create Pipeline on the empty board, which takes you there). 2. On the Pipelines tab, click New Pipeline. 3. In the \"Create Pipeline\" dialog, type a Pipeline Name such as \"Enterprise Sales\" and click Create. 4. The pipeline is seeded with six stages: Prospect, Qualified, Proposal, Negotiation, Closed Won, and Closed Lost. Click the pipeline row to expand it. 5. Add any stages your team needs with the inline Add stage form (name plus type), and delete any you do not want with the trash icon on a stage row. Result: A pipeline exists with its stages. The Pipeline Board now renders columns instead of the \"No pipeline selected\" message, and you can start adding deals. Related: Tune stage probability, rotting days, color, or order through the REST API; the Settings UI sets only stage name and type. See ."
+    },
+    {
+      "anchor": "story-add-and-qualify-a-contact",
+      "title": "Story: Add and qualify a contact",
+      "text": "Who: A salesperson or SDR capturing a new lead. Goal: Get a person into Bond, classify them, and start a history of touches. Before you start: You need read/write access. You are on the Contacts list. Steps 1. Click Add Contact. 2. In the \"Create Contact\" dialog, fill in First Name, Last Name, Email, Phone, and Job Title (at least one of first name, last name, or email is required). 3. Choose a Lifecycle Stage, for example Lead or MQL, then click Create Contact. 4. On the contact's detail page, click Log Activity, pick Call or Note, write a subject and details, and click Log Activity. Result: The contact exists with a lifecycle stage and a first activity in its timeline. Related: Changing the contact's lifecycle stage later is not available in the app; use the bondupdatecontact MCP tool or the REST API. See ."
+    },
+    {
+      "anchor": "story-create-a-deal-and-move-it-to-close",
+      "title": "Story: Create a deal and move it to close",
+      "text": "Who: A salesperson working an opportunity. Goal: Track a deal from creation through Won or Lost. Before you start: You need read/write access and at least one pipeline. You are on the Pipeline Board. Steps 1. Click Add Deal (or the + on a specific stage column). 2. In the \"Create Deal\" dialog, type a Deal Name, an optional Value ($), and an optional Expected Close Date, then click Create Deal. 3. As the deal progresses, drag its card from one stage column to the next. Each move is recorded in Stage History. 4. Open the deal and use Log Activity to record calls and meetings along the way. 5. When the deal closes, open it and click Won or Lost. Result: The deal shows an Open, Won, or Lost badge, its probability is set (100 for won, 0 for lost), and the board reflects its final stage. Related: To set a company, owner, probability, or linked contacts at creation, or to record a close reason or competitor on a loss, use bondcreatedeal / bondclosedeallost or the REST API. See ."
+    },
+    {
+      "anchor": "story-work-the-board-with-swimlanes",
+      "title": "Story: Work the board with swimlanes",
+      "text": "Who: A sales manager scanning the pipeline. Goal: See deals grouped by who owns them or when they close, and spot the ones going stale. Before you start: You are on the Pipeline Board with deals in the active pipeline. Steps 1. In the board header, use the Group control and click Owner to lane deals by owner, or Close month to lane them by close date. 2. Type into \"Search deals...\" to narrow to a name or company. 3. Scan for orange cards (rotting) and red cards (severely overdue, more than 1.5 times past the rotting threshold). 4. Click None to return to the flat board. Result: The board is reorganized into swimlanes and you can see, at a glance, which owner or month is loaded and which deals are aging. Related: Triage stale deals (next story) for a focused list."
+    },
+    {
+      "anchor": "story-triage-stale-deals",
+      "title": "Story: Triage stale deals",
+      "text": "Who: A sales manager or rep keeping deals from rotting. Goal: Find deals stuck too long in a stage and re-engage them. Before you start: You are signed in with access to the pipeline's deals. Steps 1. Open Analytics from the sidebar. 2. Read the Stale Deals stat card (\"Needs attention\" or \"All healthy\"). 3. Scroll to the Stale Deals (N) section and click a row to open that deal. 4. On the deal, click Log Activity and record a follow-up call or note to re-engage it. Result: Each stale deal is reviewed and gets a fresh touch, which resets its activity history. Related: Agents can pull the same list with bondgetstaledeals. A daily worker also emits deal.rotting to Bolt so automation rules can nudge owners. See ."
+    },
+    {
+      "anchor": "story-forecast-revenue",
+      "title": "Story: Forecast revenue",
+      "text": "Who: A sales leader planning the quarter. Goal: Understand expected revenue and where deals are being lost. Before you start: You have a pipeline with open and closed deals. Steps 1. Open Analytics from the sidebar. 2. Read Weighted Forecast and Win Rate at the top. 3. Review the Revenue Forecast (weighted) buckets: Next 30 days, Next 60 days, Next 90 days, Beyond 90 days, and No close date. 4. Read Average Deal Velocity (days per stage) to see where deals slow down, and Top Loss Reasons and Top Competitors to see why and to whom you lose. Result: You have a weighted forecast, a win rate, velocity per stage, and a breakdown of losses. Related: Agents can fetch the same figures with bondgetforecast and bondgetpipelinesummary."
+    },
+    {
+      "anchor": "story-manage-companies",
+      "title": "Story: Manage companies",
+      "text": "Who: An account manager organizing accounts. Goal: Create a company and tie contacts and deals to it. Before you start: You need read/write access. You are on the Companies list. Steps 1. Click Add Company. 2. In the \"Create Company\" dialog, type a Company Name, and optionally a Domain, Industry, Company Size, and Website, then click Create Company. 3. On the company's detail page, use the contacts and deals tabs to see linked records (shown as summaries), and Log Activity to record touches against the account. Result: The company exists with its linked contact and deal counts, and its activity timeline is started. Related: Editing a company in place is not available in the app; use bondupdatecompany or the REST API. See ."
+    },
+    {
+      "anchor": "story-configure-lead-scoring",
+      "title": "Story: Configure lead scoring",
+      "text": "Who: A marketing or sales ops admin. Goal: Automatically prioritize contacts by scoring their attributes. Before you start: You need admin access to Bond. Steps 1. Open Bond Settings, then the Lead Scoring tab. 2. Click New Rule. 3. Enter a Rule Name, build the Condition (Field, Operator, Value), set a Score Delta between -100 and 100, and keep Enabled checked. 4. Click Create Rule. Repeat for each scoring signal you want. 5. To change a rule later, hover its row, click the edit icon, adjust it, and click Save Changes. Result: Enabled rules combine to produce each contact's lead score, clamped to 0-100. The score shows as a star and number on contact rows and detail pages. Related: There is no recalculate button in the app; trigger recalculation with the bondscorelead MCP tool or the /scoring/recalculate REST endpoint."
+    },
+    {
+      "anchor": "story-extend-the-schema-with-custom-fields",
+      "title": "Story: Extend the schema with custom fields",
+      "text": "Who: An admin who needs to capture data Bond does not have a built-in field for. Goal: Add a custom field to contacts, companies, or deals. Before you start: You need admin access to Bond. Steps 1. Open Bond Settings, then the Custom Fields tab. 2. Click New Field. 3. Choose the Entity Type and Field Type, enter a Label (the Field Key auto-fills), and check Required field if needed. 4. For Select or Multi Select fields, add Options by entering a Value and Label and clicking Add for each. 5. Click Create Field. Result: The new field appears grouped under its entity type. Custom fields are org-wide for that entity type, not tied to a single pipeline. Related: Custom-field definitions are managed only in the UI and REST API; there is no MCP tool for custom-field CRUD."
+    },
+    {
+      "anchor": "story-restore-a-deleted-record",
+      "title": "Story: Restore a deleted record",
+      "text": "Who: Anyone who deleted a contact or company by mistake. Goal: Bring back a soft-deleted record. Before you start: You are on the Contacts or Companies list. Steps 1. Check Include deleted in the list header. 2. Find the struck-through row for the record you deleted. 3. Click Restore on that row. Result: The record returns to the active list. (Deleted deals are restored through the REST API or MCP rather than the board.)"
+    },
+    {
+      "anchor": "story-deduplicate-contacts-agent-assisted",
+      "title": "Story: Deduplicate contacts (agent-assisted)",
+      "text": "Who: An ops admin or an AI agent cleaning the contact database. Goal: Find and merge duplicate contacts. Before you start: This flow runs through MCP tools and the REST API; there is no in-app dedupe screen. Steps 1. Run bondfindduplicates (or call GET /contacts/:id/duplicates) to get ranked likely duplicates with confidence and signals. 2. Review the candidates and record a decision with the platform deduperecorddecision tool. 3. When two records are truly the same person, merge them with bondmergecontacts (or POST /contacts/:id/merge). The target absorbs the source's deals, activities, and company links, and the source is soft-deleted. Result: Duplicate contacts are consolidated into a single record, and your decision is recorded so the pair is not re-flagged. Related: This is the §7 dedup loop for entity type bond.contact."
+    },
+    {
+      "anchor": "story-hand-a-deal-off-across-the-suite",
+      "title": "Story: Hand a deal off across the suite",
+      "text": "Who: A rep coordinating delivery after a win. Goal: See and follow the invoices, events, and tasks tied to a deal. Before you start: You are on a deal's detail page, and related records exist in Bill, Book, or Bam. Steps 1. Open the deal. 2. In the right-side Related panel, review linked Bill invoices (with number and status), Book events, and Bam tasks (with their human-readable IDs). 3. Click any related item to jump to it in the other app. Result: You can move from the deal straight to the invoice, meeting, or task that continues the work, without searching for it. Related: Bond contacts also feed Blast email segments, and Bond data is queryable in Bench reports."
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "text": "- Bill - invoices linked to a deal appear in its Related panel. - Book - scheduled events linked to a deal appear in its Related panel. - Bam - project tasks linked to a deal appear in its Related panel, by human-readable ID. - Blast - pulls Bond contacts into email segments. - Bench - reports and dashboards can query Bond data. - Bolt - reacts to Bond events (deal.created, deal.updated, deal.stagechanged, deal.won, deal.lost, contact.created, contact.upserted, activity.logged, deal.rotting) on the bond source. - Bond MCP-tools reference and guide in docs/apps/bond/."
+    }
+  ],
+  "labels": {
+    "Activities:": "working-with-ai-agents",
+    "Activity": "key-concepts",
+    "Add": "bond-settings-pipelines",
+    "Add Company": "companies-list",
+    "Add Contact": "contacts-list",
+    "Add Deal": "creating-a-deal",
+    "Add stage": "bond-settings-pipelines",
+    "All": "contacts-list",
+    "Analytics": "where-to-find-it",
+    "Average Deal Velocity (days per stage)": "analytics",
+    "Bam": "related",
+    "Bench": "related",
+    "Bill": "related",
+    "Blast": "related",
+    "Bolt": "related",
+    "Bond Settings": "where-to-find-it",
+    "Book": "related",
+    "Call": "logging-activity",
+    "Close month": "pipeline-board",
+    "Companies": "where-to-find-it",
+    "Companies:": "working-with-ai-agents",
+    "Company": "key-concepts",
+    "Company Name": "creating-a-company",
+    "Company Size": "creating-a-company",
+    "Condition": "bond-settings-lead-scoring",
+    "Contact": "key-concepts",
+    "Contacts": "where-to-find-it",
+    "Contacts:": "working-with-ai-agents",
+    "Create": "bond-settings-pipelines",
+    "Create Company": "creating-a-company",
+    "Create Contact": "creating-a-contact",
+    "Create Deal": "creating-a-deal",
+    "Create Field": "bond-settings-custom-fields",
+    "Create Pipeline": "story-set-up-your-first-sales-pipeline",
+    "Create Rule": "bond-settings-lead-scoring",
+    "Custom Fields": "bond-settings-custom-fields",
+    "Custom field": "key-concepts",
+    "Customer": "contacts-list",
+    "Deal": "key-concepts",
+    "Deal Name": "creating-a-deal",
+    "Deals:": "working-with-ai-agents",
+    "Deduplication:": "working-with-ai-agents",
+    "Delete Company": "company-detail",
+    "Delete Contact": "contact-detail",
+    "Delete Deal": "deal-detail-and-outcomes",
+    "Description": "bond-settings-lead-scoring",
+    "Domain": "creating-a-company",
+    "Edit Company": "company-detail",
+    "Edit Contact": "contact-detail",
+    "Edit Deal": "deal-detail-and-outcomes",
+    "Email": "creating-a-contact",
+    "Email Received": "logging-activity",
+    "Email Sent": "logging-activity",
+    "Enabled": "bond-settings-lead-scoring",
+    "Entity Type": "bond-settings-custom-fields",
+    "Evangelist": "contacts-list",
+    "Expected Close Date": "creating-a-deal",
+    "Field Key": "bond-settings-custom-fields",
+    "Field Type": "bond-settings-custom-fields",
+    "First Name": "creating-a-contact",
+    "Group": "pipeline-board",
+    "Idempotent contact ingestion:": "working-with-ai-agents",
+    "Include deleted": "contacts-list",
+    "Industry": "creating-a-company",
+    "Job Title": "creating-a-contact",
+    "Label": "bond-settings-custom-fields",
+    "Last Name": "creating-a-contact",
+    "Lead": "contacts-list",
+    "Lead Scoring": "bond-settings-lead-scoring",
+    "Lead score": "key-concepts",
+    "Lead scoring rule": "key-concepts",
+    "Lead scoring:": "working-with-ai-agents",
+    "Lifecycle Stage": "creating-a-contact",
+    "Lifecycle stage": "key-concepts",
+    "Log Activity": "contact-detail",
+    "Lost": "deal-detail-and-outcomes",
+    "MQL": "contacts-list",
+    "Meeting": "logging-activity",
+    "New Field": "bond-settings-custom-fields",
+    "New Pipeline": "bond-settings-pipelines",
+    "New Rule": "bond-settings-lead-scoring",
+    "None": "pipeline-board",
+    "Open": "deal-detail-and-outcomes",
+    "Opportunity": "contacts-list",
+    "Options": "bond-settings-custom-fields",
+    "Owner": "pipeline-board",
+    "Phone": "creating-a-contact",
+    "Pipeline": "key-concepts",
+    "Pipeline Board": "where-to-find-it",
+    "Pipeline Name": "bond-settings-pipelines",
+    "Pipeline Stages": "analytics",
+    "Pipelines": "bond-settings-pipelines",
+    "Reporting:": "working-with-ai-agents",
+    "Required field": "bond-settings-custom-fields",
+    "Restore": "contacts-list",
+    "Revenue Forecast (weighted)": "analytics",
+    "Rotting (stale) deal": "key-concepts",
+    "Rule Name": "bond-settings-lead-scoring",
+    "SQL": "contacts-list",
+    "Save Changes": "bond-settings-lead-scoring",
+    "Score Delta": "bond-settings-lead-scoring",
+    "Soft delete": "key-concepts",
+    "Stage": "key-concepts",
+    "Stage History": "stage-history-and-related-items",
+    "Stage Transitions": "analytics",
+    "Stale Deals": "analytics",
+    "Stale Deals (N)": "analytics",
+    "Subscriber": "contacts-list",
+    "Task": "logging-activity",
+    "Top Competitors": "analytics",
+    "Top Loss Reasons": "analytics",
+    "Total Pipeline": "analytics",
+    "Value ($)": "creating-a-deal",
+    "Website": "creating-a-company",
+    "Weighted Forecast": "analytics",
+    "Win Rate": "analytics",
+    "Won": "deal-detail-and-outcomes",
+    "activity": "contact-detail",
+    "contacts": "company-detail",
+    "deals": "contact-detail",
+    "details": "contact-detail"
+  },
+  "crossrefs": [
+    {
+      "app": "bill",
+      "title": "Bill"
+    },
+    {
+      "app": "book",
+      "title": "Book"
+    },
+    {
+      "app": "bam",
+      "title": "Bam"
+    },
+    {
+      "app": "blast",
+      "title": "Blast"
+    },
+    {
+      "app": "bench",
+      "title": "Bench"
+    },
+    {
+      "app": "bolt",
+      "title": "Bolt"
+    }
+  ]
+}

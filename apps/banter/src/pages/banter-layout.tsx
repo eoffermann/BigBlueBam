@@ -6,6 +6,7 @@ import { BanterSidebar } from '@/components/sidebar/banter-sidebar';
 import { ThreadPanel } from '@/components/threads/thread-panel';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
 import { usePresence } from '@/hooks/use-presence';
@@ -152,6 +153,7 @@ export function BanterLayout({
                 />
               </div>
               <NotificationsBell inAppPrefix="/banter/" onNavigate={onNavigate} />
+              <HelpTrigger app="banter" />
               <UserMenu user={user} />
             </div>
           </header>

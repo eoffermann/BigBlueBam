@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BoardSidebar } from '@/components/layout/board-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -97,6 +98,7 @@ export function BoardLayout({ children, onNavigate, activeRoute }: BoardLayoutPr
             <div className="flex items-center gap-4">
               <OrgSwitcher />
               <NotificationsBell inAppPrefix="/board/" onNavigate={onNavigate} />
+              <HelpTrigger app="board" />
               <UserMenu user={user} />
             </div>
           </header>

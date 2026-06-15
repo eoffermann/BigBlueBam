@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BoltSidebar } from '@/components/layout/bolt-sidebar';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
@@ -108,6 +109,7 @@ export function BoltLayout({ children, onNavigate, activeRoute }: BoltLayoutProp
             <div className="flex items-center gap-4">
               <OrgSwitcher />
               <NotificationsBell inAppPrefix="/bolt/" onNavigate={onNavigate} />
+              <HelpTrigger app="bolt" />
               <UserMenu user={user} />
             </div>
           </header>

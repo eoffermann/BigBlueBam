@@ -1,0 +1,433 @@
+{
+  "app": "bolt",
+  "title": "Bolt",
+  "toc": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "level": 2
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "level": 3
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "level": 3
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "level": 2
+    },
+    {
+      "anchor": "automations-home",
+      "title": "Automations home",
+      "level": 3
+    },
+    {
+      "anchor": "enabling-and-disabling-an-automation",
+      "title": "Enabling and disabling an automation",
+      "level": 3
+    },
+    {
+      "anchor": "creating-and-editing-an-automation",
+      "title": "Creating and editing an automation",
+      "level": 3
+    },
+    {
+      "anchor": "simple-mode",
+      "title": "Simple mode",
+      "level": 4
+    },
+    {
+      "anchor": "visual-mode",
+      "title": "Visual mode",
+      "level": 4
+    },
+    {
+      "anchor": "settings-sidebar",
+      "title": "Settings sidebar",
+      "level": 4
+    },
+    {
+      "anchor": "test-run",
+      "title": "Test Run",
+      "level": 3
+    },
+    {
+      "anchor": "duplicating-an-automation",
+      "title": "Duplicating an automation",
+      "level": 3
+    },
+    {
+      "anchor": "deleting-an-automation",
+      "title": "Deleting an automation",
+      "level": 3
+    },
+    {
+      "anchor": "per-automation-executions",
+      "title": "Per-automation executions",
+      "level": 3
+    },
+    {
+      "anchor": "execution-log-organization-wide",
+      "title": "Execution Log (organization-wide)",
+      "level": 3
+    },
+    {
+      "anchor": "execution-detail",
+      "title": "Execution detail",
+      "level": 3
+    },
+    {
+      "anchor": "retrying-a-failed-run",
+      "title": "Retrying a failed run",
+      "level": 3
+    },
+    {
+      "anchor": "templates",
+      "title": "Templates",
+      "level": 3
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "level": 3
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "level": 2
+    },
+    {
+      "anchor": "story-create-your-first-automation-from-a-template",
+      "title": "Story: Create your first automation from a template",
+      "level": 3
+    },
+    {
+      "anchor": "story-create-an-automation-by-hand",
+      "title": "Story: Create an automation by hand",
+      "level": 3
+    },
+    {
+      "anchor": "story-auto-create-a-bam-task-when-a-bond-deal-goes-stale",
+      "title": "Story: Auto-create a Bam task when a Bond deal goes stale",
+      "level": 3
+    },
+    {
+      "anchor": "story-turn-an-automation-off-and-back-on",
+      "title": "Story: Turn an automation off and back on",
+      "level": 3
+    },
+    {
+      "anchor": "story-watch-a-run-and-read-its-detail",
+      "title": "Story: Watch a run and read its detail",
+      "level": 3
+    },
+    {
+      "anchor": "story-retry-a-failed-run",
+      "title": "Story: Retry a failed run",
+      "level": 3
+    },
+    {
+      "anchor": "story-schedule-a-recurring-automation",
+      "title": "Story: Schedule a recurring automation",
+      "level": 3
+    },
+    {
+      "anchor": "story-operate-bolt-from-an-ai-agent",
+      "title": "Story: Operate Bolt from an AI agent",
+      "level": 3
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "level": 2
+    }
+  ],
+  "sections": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "text": "Bolt is the suite's event-driven automation engine. You build an automation (also called a rule) out of three parts: a trigger (the event to watch for), optional conditions (extra tests the event must pass), and an ordered list of actions (what to do when it fires). The shape is \"WHEN this happens, IF these conditions hold, THEN run these steps.\" Other BigBlueBam apps publish events as people work: Bam emits task and sprint events, Bond emits deal events, Helpdesk emits ticket events, and so on. Bolt receives those events, matches them against your enabled automations, and runs the matching rules. Each action is an MCP tool call (for example \"create a task in Bam\" or \"send a webhook\"), so Bolt can act inside any app in the suite without you wiring up integrations by hand. Every run is recorded as an execution with per-action steps, so you can see exactly what fired, what passed, what failed, and why. You can browse runs for a single automation or across the whole organization in the Execution Log. Bolt is currently marked BETA (a yellow \"beta\" pill sits next to the brand in the sidebar). This document describes what the Bolt web app actually does today. Where a capability exists only through the API or an MCP tool and is not wired into the in-app UI, that is called out so you do not go looking for a button that is not there."
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "text": "- Automation (rule) - the top-level object: a trigger, optional conditions, an ordered list of actions, and limit settings. The UI calls these \"Automations\". - Trigger - what starts an automation. It has a Trigger Source (the app that emits the event, such as Bam or Bond) and an Event Type (the bare event name, such as task.created). A trigger can also carry an optional filter. - Trigger Source - the emitting app. The trigger dropdowns offer 14 sources: Bam, Banter, Beacon, Brief, Helpdesk, Schedule, Bond, Blast, Board, Bench, Bearing, Bill, Book, and Blank. - Trigger filter - an optional set of equality rules (key matches value) checked against the raw event payload before the automation fires. - Condition - an extra test on the event: a field, an operator, and a value, grouped with AND or OR logic. Conditions gate the whole automation; if they are not met, the run is skipped. There are 13 operators (equals, notequals, contains, notcontains, startswith, endswith, greaterthan, lessthan, isempty, isnotempty, in, notin, matchesregex). Fields that read the event body must be prefixed event. (for example event.task.priority). - Action - one step Bolt runs when the automation fires. Each action calls an allowlisted MCP tool with parameters you supply. Actions run in order; this is a linear list, not a branching flow (see the note under Actions). - On Error - per-action behavior when a step fails: Stop (halt the run), Continue (run the rest anyway), or Retry (retry up to the Retry Count). - Templating - action parameters can interpolate values from the event with {{ event. }}, the actor with {{ actor.id }} / {{ actor.type }}, automation metadata with {{ automation. }}, the current time with {{ now }}, and a prior step's result with {{ step[N].result. }}. There is no {{ actor.name }} and no top-level {{ org. }}. - Execution - one run of one automation against one event. Its status is one of: Running, Success, Partial (some steps failed but all ran), Failed (halted early), or Skipped (a guard or condition prevented it). A skipped run records a reason such as cooldown active, rate limited, or conditions not met. - Execution step - one action attempt inside an execution, with its own status: success, failed, or skipped. - Template - a pre-built automation blueprint you can instantiate and customize. Bolt ships 16 templates. - Schedule trigger - the Schedule source fires automations on a cron schedule (cron.fired) rather than off another app's event. - Limits - per-automation guards: Max Executions / Hour (1 to 1000 in the UI, default 60) and Cooldown (seconds) (0 to 3600, default 0). There is also an internal max chain depth that prevents automations from triggering each other in an endless loop."
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "text": "Bolt lives at /bolt/. Open it from the suite app switcher, or go straight to the URL. Prerequisites: - You must be signed in to BigBlueBam. Bolt has no login of its own. If you are not signed in, it shows \"Please log in to BigBlueBam first to access Bolt.\" with a \"Go to BigBlueBam Login\" link that sends you to /b3/. - Bolt is org-scoped. The automations, templates, and executions you see belong to your active organization. - For an automation to actually fire, the originating app must publish its events, and the background worker and MCP server must be running. Building and saving rules works on its own, but live execution depends on those services. The sidebar nav has three items: Automations (the home list), Executions (the org-wide Execution Log), and Templates (the template gallery). A project scope selector sits in the chrome and defaults to All Projects; it scopes the automation list and the stat cards. Press the ? key anywhere in Bolt to open the in-app Help viewer."
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "text": ""
+    },
+    {
+      "anchor": "automations-home",
+      "title": "Automations home",
+      "text": "The home page (/) lists your automations and summarizes them. The heading reads \"Automations\" with the subtitle \"Create trigger-condition-action workflows to automate your work.\" To browse and filter automations: 1. Open Automations from the sidebar (the lightning / Zap icon). 2. Read the three stat cards at the top: Total Automations, Enabled, and Disabled. 3. Use the \"Search automations...\" box to filter by name. 4. Click a source chip (\"All\", then Bam, Banter, Beacon, Brief, Helpdesk, Schedule, Bond, Blast, Board, Bench, Bearing, Bill, Book, Blank) to show only automations on that trigger source. 5. Use the Enabled and Disabled toggles to filter by state. 6. Each automation card shows its name, a source badge, the trigger event, the description, \"Last run\", and an \"Actions\" count. If you have none yet, the list reads \"No automations found\". The home list, stats, and filters are shown in the screenshot below."
+    },
+    {
+      "anchor": "enabling-and-disabling-an-automation",
+      "title": "Enabling and disabling an automation",
+      "text": "Each card carries a power toggle so you can turn a rule on or off without opening it. Disabled automations never fire. To toggle an automation from the home list: 1. On the automation's card, click the power toggle (its tooltip reads \"Enable\" when off and \"Disable\" when on). 2. The card updates in place and the Enabled / Disabled stat cards adjust. You can also set the state from inside the editor with the Enabled toggle in the Settings sidebar, or save directly to enabled with Save & Enable (see the editor below)."
+    },
+    {
+      "anchor": "creating-and-editing-an-automation",
+      "title": "Creating and editing an automation",
+      "text": "The editor (/new for a new rule, /automations/:id for an existing one) is where you define the trigger, conditions, actions, and limits. It has two modes, Simple and Visual, switched with the toggle near the top. To start a new automation: 1. On the Automations home page, click New Automation (the Plus button). You land in the editor in Simple mode. 2. Type a name into the \"Automation name...\" field at the top, and optionally a description in \"Add a description...\". The editor with its WHEN / IF / THEN sections and the Settings sidebar is shown below."
+    },
+    {
+      "anchor": "simple-mode",
+      "title": "Simple mode",
+      "text": "Simple mode lays the rule out as three stacked sections: WHEN - Trigger (blue), IF - Conditions (amber, optional), and THEN - Actions (green). To set the trigger: 1. In the WHEN - Trigger section, choose a Trigger Source from the dropdown. 2. Choose an Event Type. Each option shows the event name and a short description. 3. If you picked the Schedule source, a Schedule editor appears. Use its Presets, Custom, or Advanced tabs (11 presets, a day-of-week picker, and a timezone) to build the cron schedule; the editor shows a plain-English description of when it will run. 4. To narrow which events match, click \"Add trigger filter\" and add equality rules. The link then reads \"Filter (N rules)\". To add conditions (optional): 1. In the IF - Conditions section, click Add Condition. With no conditions the section reads \"Always run\". 2. For each row, set the logic toggle (the first reads \"Where\", later rows toggle AND / OR), pick a field, choose an operator (the operator list is filtered to the field's type and uses friendly labels), and enter a value. 3. Remove a condition with its remove control. Conditions gate the whole automation: if they fail, the run is skipped. To add actions: 1. In the THEN - Actions section, click Add Action. You must add at least one (\"Add at least one action...\"). 2. For each action (numbered N), pick a tool from the action select. Tools are grouped by source and each option shows the tool's description. 3. Fill in the Parameters. Required parameters are marked with \"\". Some are enum or boolean selects; text parameters accept {{ }} templates. Click \"Add optional parameter (N available)\" to expose optional ones. 4. To control failure handling, click \"Show advanced\" and set On Error (Stop, Continue, or Retry) and a Retry Count. 5. Actions run top to bottom in the order listed. Note on flow: Bolt runs actions as a single linear ordered list. Conditions decide whether the whole automation runs; they do not branch to different actions. Despite any \"branching\" language in marketing, there are no per-edge branches. Variable interpolation between steps is real: a later action can reference an earlier one with {{ step[N].result. }}."
+    },
+    {
+      "anchor": "visual-mode",
+      "title": "Visual mode",
+      "text": "Visual mode shows the same automation as a node graph on a canvas. Switching from Simple to Visual builds a graph from your current form state (or loads the saved graph if one exists). To use Visual mode: 1. Click Visual on the mode toggle. 2. Add nodes from the palette: Trigger, Condition, and Action. Only one trigger is allowed. 3. Select a node to configure it in the Node inspector on the side. With nothing selected it reads \"Select a node on the canvas to configure it.\" 4. Press ? on the canvas to see the shortcuts: Delete or Backspace to remove, Escape to deselect, Ctrl+A to select all, scroll to zoom, and drag to pan. 5. Switch back to Simple at any time. If you have unsaved graph changes, Bolt warns \"Unsaved graph changes may be lost. Switch to Simple mode?\" before discarding them. Note: Bolt compiles the graph down to the same linear ordered action list as Simple mode when it saves, so non-linear arrangements are flattened."
+    },
+    {
+      "anchor": "settings-sidebar",
+      "title": "Settings sidebar",
+      "text": "The right sidebar holds the rule's limits and the save controls. 1. Enabled - toggle whether the automation is active. 2. Max Executions / Hour - cap how many times this rule may run per hour (default 60; 1 to 1000). 3. Cooldown (seconds) - minimum gap between runs (default 0; 0 to 3600). 4. The Summary card restates the configured trigger, condition count, and action count. 5. Save Draft saves without enabling. Save & Enable saves and turns the rule on. If the form has problems, a banner reads \"Please fix the following errors before saving:\" and lists each issue; fix them and save again."
+    },
+    {
+      "anchor": "test-run",
+      "title": "Test Run",
+      "text": "The editor shows a Test Run button in the Settings sidebar for an already-saved automation (it does not appear while creating a new one). It is meant to evaluate the automation's conditions against a sample event without running any actions. Known issue: Test Run does not work reliably in the current build. The button sends the request without the event body that the test endpoint requires, so the call is rejected as a validation error, and the success message reads a field (executionid) that the test endpoint never returns. Do not rely on Test Run to verify a rule today. To confirm an automation behaves as intended, enable it and inspect the resulting runs in the Execution Log, or use the bolttest MCP tool with a simulated event (see Working with AI agents). Note that even when it works, a test only evaluates conditions; it never executes actions."
+    },
+    {
+      "anchor": "duplicating-an-automation",
+      "title": "Duplicating an automation",
+      "text": "Duplicating clones a rule so you can adapt it without touching the original. To duplicate from the home list: 1. On the automation's card, open the more-menu (the three-dot menu). 2. Click Duplicate. Bolt creates a copy named \"<name (copy)\" that starts disabled, so it cannot fire until you review and enable it."
+    },
+    {
+      "anchor": "deleting-an-automation",
+      "title": "Deleting an automation",
+      "text": "To delete a rule: 1. On its card, open the more-menu and click Delete. 2. Confirm in the browser prompt. Deleting removes the automation and its conditions, actions, executions, and version history."
+    },
+    {
+      "anchor": "per-automation-executions",
+      "title": "Per-automation executions",
+      "text": "Each automation has its own run history. To view one automation's runs: 1. On its card, open the more-menu and click View Executions (or open it from the editor). 2. The page heading reads \"<name - Executions\" with a \"Back to <name\" link. 3. Filter with the status chips: All, Success, Failed, Partial, Running, Skipped. 4. The table lists Status, Duration, Conditions Met, Error, and Started. Click a row to open the execution detail."
+    },
+    {
+      "anchor": "execution-log-organization-wide",
+      "title": "Execution Log (organization-wide)",
+      "text": "The Execution Log (/executions) shows every automation run across your organization. To monitor all runs: 1. Open Executions from the sidebar (the Activity icon). The heading reads \"Execution Log\" with the subtitle \"History of all automation runs across your organization.\" 2. Filter with the status chips. When more than one automation has run, an \"All automations\" dropdown lets you narrow to a single rule. 3. The table lists Automation, Status, Duration, Conditions Met, and Started. Click a row to open the execution detail. The org-wide log is shown below."
+    },
+    {
+      "anchor": "execution-detail",
+      "title": "Execution detail",
+      "text": "The execution detail page (/executions/:id) shows everything about a single run: what triggered it, whether its conditions passed, and what each step did. To inspect a run: 1. Click any row in the Execution Log or a per-automation execution list. 2. The page heading is the automation's name, with a \"Back to Executions\" link and a status badge. 3. The summary cards show Duration, Conditions Met, Steps, and Completed. 4. If the run failed, an Error block explains why. 5. The \"Trigger Event\" panel shows the raw event JSON, and \"Condition Evaluation\" shows how each condition was scored. 6. The \"Execution Steps\" timeline lists each action attempt in order with its result. This page is shown in the screenshot below (the file is named for an automation detail view, but it shows the execution-detail page; Bolt has no separate automation-detail page, since the editor doubles as it)."
+    },
+    {
+      "anchor": "retrying-a-failed-run",
+      "title": "Retrying a failed run",
+      "text": "A failed or partial run can be re-queued from its detail page. To retry: 1. Open the run's execution detail. 2. Click Retry (it appears only for runs whose status is Failed or Partial). 3. Bolt queues a fresh run. Retries count against the automation's hourly limit, so if you are over the cap the retry is rejected as rate limited."
+    },
+    {
+      "anchor": "templates",
+      "title": "Templates",
+      "text": "Templates are pre-built automations you can instantiate and then customize. Bolt ships 16 of them. To start from a template: 1. Open Templates from the sidebar (the LayoutTemplate icon). The heading reads \"Templates\" with the subtitle \"Start with a pre-built automation template and customize it.\" 2. Each card shows a source badge, the template name, a description, and the trigger event. 3. Click Use Template. Bolt instantiates the template and drops you into the editor to adjust and save it. The template gallery is shown below. Note that some templates are starting points rather than turnkey rules. A few are labeled \"(requires agent)\" and wire a working notify step but leave the cross-app part (for example creating an invoice from a closed deal) for an AI agent to complete. Others need a value only you can supply (a cron schedule, a project and phase for a created task). Read each template's actions after instantiating and fill in anything marked required before you enable it."
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "text": "Bolt is built so an AI agent can author and operate automations the same way a person does, and so agents can serve as the execution substrate for the rules themselves. Bolt exposes 15 MCP tools: 13 core tools plus 2 observability tools. - Authoring and operating: boltcreate, boltupdate, boltget, boltgetautomationbyname, boltlist, boltenable, boltdisable, and boltdelete. Mutating tools accept a name as well as a UUID and resolve it through boltgetautomationbyname, returning a clean \"Automation not found\" on a miss. This lets an agent run meta-automation tasks like \"disable the Nightly Deploys rule\" by name. - Inspecting and testing: boltexecutions (runs for an automation), boltexecutiondetail (one run with its steps), and bolttest (evaluate an automation's conditions against a simulated event). As in the UI, bolttest only evaluates conditions; it does not execute actions. - Catalogs: boltevents (the trigger event catalog) and boltactions (the action allowlist with parameter schemas). - Observability: bolteventtrace returns the full evaluation trail for one ingested event id (every automation it matched and what happened), and boltrecentevents lists recent ingested events that matched at least one automation, filtered by source, event, since, and limit. Agents are also the execution substrate. Every action Bolt runs is an MCP tool call the background worker makes on the automation's behalf, so the same authority that lets an agent build a rule also powers the rule's steps. There is no MCP tool for duplicating an automation, for version history and restore, or for AI generation. Those capabilities are either UI-only (duplicate) or API-only (versions, AI authoring), as noted below. Two capabilities exist in the backend but have no in-app UI today, so do not look for them in the web app or present them to users as in-app features: - AI authoring - the API can generate an automation from a natural-language prompt and explain an existing automation in plain English, but no screen in the Bolt web app calls these. AI authoring is backend and agent only right now. - Versioning - every save snapshots a restorable version, and the API can list and restore them, but the web app does not surface version history or a restore button. For the full tool catalog and parameter schemas, see the MCP-tools reference and guide in docs/apps/bolt/."
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "text": ""
+    },
+    {
+      "anchor": "story-create-your-first-automation-from-a-template",
+      "title": "Story: Create your first automation from a template",
+      "text": "Who: A new Bolt user who wants automation running quickly without building from scratch. Goal: Stand up a working rule and turn it on. Before you start: Be signed in to BigBlueBam with your target organization active. Pick a template whose action does not need values you cannot supply yet. Steps 1. Open Bolt at /bolt/ and click Templates in the sidebar. 2. Browse the gallery. Each card shows the source, name, description, and trigger event. Click Use Template on one you want, for example \"Alert on high-priority task creation\". 3. You land in the editor with the trigger, conditions, and actions pre-filled. Review each action's Parameters and fill in anything marked required (some templates need a project and phase, a cron schedule, or a notification target). 4. Open the Settings sidebar and check Max Executions / Hour and Cooldown (seconds); adjust if needed. 5. Click Save & Enable. Result: The rule appears on the Automations home page as Enabled and will run the next time a matching event is published. Related: Build a rule by hand with \"Create an automation by hand\". An agent can do the same with boltcreate followed by boltenable."
+    },
+    {
+      "anchor": "story-create-an-automation-by-hand",
+      "title": "Story: Create an automation by hand",
+      "text": "Who: A team lead who wants a specific rule the templates do not cover. Goal: Define a trigger, optional conditions, and actions, then enable the rule. Before you start: Be signed in with the right organization active. Know which event should start the rule and what you want it to do. Steps 1. On the Automations home page, click New Automation. 2. Type a name into \"Automation name...\", and optionally a description. 3. In WHEN - Trigger, pick a Trigger Source and an Event Type. For a scheduled rule, pick Schedule and build the cron schedule in the Schedule editor. 4. In IF - Conditions (optional), click Add Condition and build each row: a field, an operator, and a value. Remember that fields reading the event body start with event. (for example event.task.priority). 5. In THEN - Actions, click Add Action, pick a tool, and fill in its Parameters. Use {{ event. }} and {{ step[N].result. }} templates where you need values from the event or a previous step. Use \"Show advanced\" to set On Error and Retry Count. 6. In the Settings sidebar, set Max Executions / Hour and Cooldown (seconds). 7. Click Save Draft to keep it off for now, or Save & Enable to turn it on. Result: The automation is saved. If you used Save & Enable, it will fire on the next matching event; if you saved a draft, enable it later from the home list power toggle. Related: Confirm runs with \"Watch a run and read its detail\". An agent can author the same rule with boltcreate."
+    },
+    {
+      "anchor": "story-auto-create-a-bam-task-when-a-bond-deal-goes-stale",
+      "title": "Story: Auto-create a Bam task when a Bond deal goes stale",
+      "text": "Who: A sales operations owner who wants neglected deals to become follow-up tasks automatically. Goal: When Bond flags a deal as rotting, Bolt creates a Bam task so someone follows up. Before you start: Be signed in with the organization that owns the Bond pipeline active. Bond's stale-deal detection runs as a daily background job that emits a deal.rotting event for deals past their stage's rotting threshold. Know the Bam project and phase the new task should land in. Steps 1. On the Automations home page, click New Automation and name it, for example, \"Follow up on rotting deals\". 2. In WHEN - Trigger, set Trigger Source to Bond and Event Type to deal.rotting. 3. Leave IF - Conditions empty to act on every rotting deal, or add a condition such as event.deal.value greaterthan a threshold to only chase larger deals. 4. In THEN - Actions, click Add Action and choose the Bam \"create task\" action. Fill in the required project and phase, and template the task title and body from the event, for example a title using {{ event.deal.name }}. 5. In the Settings sidebar, leave a sensible Cooldown (seconds) so the same deal does not generate repeated tasks within a short window. 6. Click Save & Enable. Result: The next time the daily stale-deal job emits deal.rotting, Bolt creates a Bam task for that deal. Each run shows up in the Execution Log; open one to see the trigger event and the created-task step. Related: This is the canonical cross-app chain (Bond to Bolt to Bam). To verify it, see \"Watch a run and read its detail\". An agent can build the same rule with boltcreate and audit firings with bolteventtrace and boltrecentevents."
+    },
+    {
+      "anchor": "story-turn-an-automation-off-and-back-on",
+      "title": "Story: Turn an automation off and back on",
+      "text": "Who: Anyone who needs to pause a rule temporarily (during a migration, a noisy period, or maintenance). Goal: Stop a rule from firing without deleting it, then resume it later. Before you start: The automation already exists. Steps 1. Open the Automations home page. 2. Find the automation's card and click its power toggle. The tooltip reads \"Disable\" when the rule is on. 3. The card switches to Disabled and the Disabled stat card increments. The rule no longer fires. 4. When you are ready, click the toggle again (now reading \"Enable\") to resume it. Result: The automation is paused or resumed immediately. While disabled, no events match it. Related: An agent can do the same with boltdisable and boltenable, addressing the rule by name."
+    },
+    {
+      "anchor": "story-watch-a-run-and-read-its-detail",
+      "title": "Story: Watch a run and read its detail",
+      "text": "Who: A user who wants to confirm an automation behaved correctly, or diagnose why it did not. Goal: Find a specific run and understand what triggered it, whether conditions passed, and what each step did. Before you start: The automation has fired at least once (or you have just enabled it and triggered the event). Steps 1. Open Executions from the sidebar to see the org-wide Execution Log. 2. Narrow the list with the status chips (All, Success, Failed, Partial, Running, Skipped) and, if more than one rule has run, the \"All automations\" dropdown. 3. Click the run you want. The detail page opens with the automation name, a status badge, and summary cards for Duration, Conditions Met, Steps, and Completed. 4. Read the \"Trigger Event\" panel for the raw event, \"Condition Evaluation\" for how conditions scored, and the \"Execution Steps\" timeline for each action's result. If it failed, read the Error block. Result: You can see exactly why a run succeeded, ran partially, failed, or was skipped. Related: For one automation only, use View Executions from its card. An agent can pull the same data with boltexecutions, boltexecutiondetail, and bolteventtrace."
+    },
+    {
+      "anchor": "story-retry-a-failed-run",
+      "title": "Story: Retry a failed run",
+      "text": "Who: A user whose automation failed because of a transient problem (a downstream app was briefly unavailable). Goal: Re-run the failed execution without rebuilding anything. Before you start: Open the run's execution detail; its status must be Failed or Partial. Steps 1. On the execution detail page, confirm the status badge reads Failed or Partial. 2. Click Retry. 3. Bolt queues a fresh run. If the automation is already at its hourly cap, the retry is rejected as rate limited; wait for the window to reset or raise Max Executions / Hour on the rule. Result: A new run is queued and appears in the Execution Log. Open it to confirm it succeeded this time. Related: Adjust the rule's limits in the editor's Settings sidebar if retries are being throttled."
+    },
+    {
+      "anchor": "story-schedule-a-recurring-automation",
+      "title": "Story: Schedule a recurring automation",
+      "text": "Who: Someone who wants a rule to run on a clock (a daily standup reminder, a weekly status nudge) rather than off another app's event. Goal: Build an automation that fires on a cron schedule. Before you start: Be signed in with the right organization active. Decide the cadence and timezone. Steps 1. Click New Automation and name it. 2. In WHEN - Trigger, set Trigger Source to Schedule. The Event Type is the scheduled fire (cron.fired), and a Schedule editor appears. 3. In the Schedule editor, pick a preset (there are 11), or use the Custom or Advanced tabs to set the exact cadence and day-of-week. Set the timezone. The editor shows a plain-English description of when it will run. 4. In THEN - Actions, add the action to run on each tick (for example, post a reminder). 5. Click Save & Enable. Result: The automation runs on the schedule you defined. Confirm fires in the Execution Log. Related: Several schedule-based templates (\"Daily standup reminder\", \"Weekly status reminder\") give you a head start; instantiate one from Templates and just supply the cron."
+    },
+    {
+      "anchor": "story-operate-bolt-from-an-ai-agent",
+      "title": "Story: Operate Bolt from an AI agent",
+      "text": "Who: An operator running an AI agent that needs to build, toggle, or audit automations programmatically. Goal: Manage rules and inspect firings through MCP tools instead of the web UI. Before you start: The agent runs with a service account that passes Bolt's policy allowlist. Know the automation by name or id. Steps 1. List or find the rule with boltlist or boltgetautomationbyname. 2. Create or modify rules with boltcreate and boltupdate, discovering valid triggers and actions through boltevents and boltactions. 3. Turn rules on or off with boltenable and boltdisable, addressing them by name. 4. Dry-check a rule's conditions against a simulated event with bolttest (no actions run). 5. Audit behavior with boltexecutions, boltexecutiondetail, bolteventtrace (one event's full trail), and boltrecentevents (recent matched events). Result: The agent manages and observes automations end to end without touching the UI. There is no MCP tool for duplicate, versions, or AI generation; use the UI to duplicate and the REST API for version history. Related: See the MCP-tools reference in docs/apps/bolt/ for parameter schemas."
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "text": "- Bam - the most common action target. Bolt creates and moves Bam tasks (for example the deal.rotting to task chain) and reacts to Bam events like task.created, task.overdue, task.moved, and sprint.completed. - Bond - emits deal events (deal.rotting, deal.won) that drive sales automations. - Helpdesk - emits ticket events (ticket.created, ticket.slabreach) for support escalations. - Banter - a frequent notification target for \"post a message\" actions, and the source of channel events. - Beacon and Brief - knowledge and document events (publish, expire) that can promote or mirror content. - Bench, Bearing, Bill, Book, Blast, Blank, Board - additional trigger sources and action targets across the suite. - The in-app Help viewer (press ?) mirrors this content inside Bolt. - For the full MCP tool catalog and schemas, see the MCP-tools reference and guide in docs/apps/bolt/."
+    }
+  ],
+  "labels": {
+    "AI authoring": "working-with-ai-agents",
+    "Action": "key-concepts",
+    "Add Action": "simple-mode",
+    "Add Condition": "simple-mode",
+    "All Projects": "where-to-find-it",
+    "Authoring and operating:": "working-with-ai-agents",
+    "Automation (rule)": "key-concepts",
+    "Automations": "where-to-find-it",
+    "Bam": "related",
+    "Banter": "related",
+    "Beacon": "related",
+    "Bearing": "related",
+    "Bench": "related",
+    "Bill": "related",
+    "Blank": "related",
+    "Blast": "related",
+    "Board": "related",
+    "Bond": "story-auto-create-a-bam-task-when-a-bond-deal-goes-stale",
+    "Book": "related",
+    "Brief": "related",
+    "Catalogs:": "working-with-ai-agents",
+    "Condition": "key-concepts",
+    "Continue": "key-concepts",
+    "Cooldown (seconds)": "key-concepts",
+    "Delete": "deleting-an-automation",
+    "Disabled": "automations-home",
+    "Duplicate": "duplicating-an-automation",
+    "Enabled": "automations-home",
+    "Event Type": "key-concepts",
+    "Execution": "key-concepts",
+    "Execution step": "key-concepts",
+    "Executions": "where-to-find-it",
+    "Failed": "key-concepts",
+    "Helpdesk": "related",
+    "IF - Conditions": "simple-mode",
+    "Inspecting and testing:": "working-with-ai-agents",
+    "Limits": "key-concepts",
+    "Max Executions / Hour": "key-concepts",
+    "New Automation": "creating-and-editing-an-automation",
+    "Observability:": "working-with-ai-agents",
+    "On Error": "key-concepts",
+    "Parameters": "simple-mode",
+    "Partial": "key-concepts",
+    "Retry": "key-concepts",
+    "Retry Count": "simple-mode",
+    "Running": "key-concepts",
+    "Save & Enable": "enabling-and-disabling-an-automation",
+    "Save Draft": "settings-sidebar",
+    "Schedule": "simple-mode",
+    "Schedule trigger": "key-concepts",
+    "Settings": "story-create-your-first-automation-from-a-template",
+    "Simple": "creating-and-editing-an-automation",
+    "Skipped": "key-concepts",
+    "Stop": "key-concepts",
+    "Success": "key-concepts",
+    "Summary": "settings-sidebar",
+    "THEN - Actions": "simple-mode",
+    "Template": "key-concepts",
+    "Templates": "where-to-find-it",
+    "Templating": "key-concepts",
+    "Test Run": "test-run",
+    "Total Automations": "automations-home",
+    "Trigger": "key-concepts",
+    "Trigger Source": "key-concepts",
+    "Trigger filter": "key-concepts",
+    "Use Template": "templates",
+    "Versioning": "working-with-ai-agents",
+    "View Executions": "per-automation-executions",
+    "Visual": "creating-and-editing-an-automation",
+    "WHEN - Trigger": "simple-mode",
+    "actions": "overview",
+    "automation": "overview",
+    "conditions": "overview",
+    "disabled": "duplicating-an-automation",
+    "execution": "overview",
+    "field": "simple-mode",
+    "operator": "simple-mode",
+    "trigger": "overview",
+    "value": "simple-mode"
+  },
+  "crossrefs": [
+    {
+      "app": "bam",
+      "title": "Bam"
+    },
+    {
+      "app": "bond",
+      "title": "Bond"
+    },
+    {
+      "app": "helpdesk",
+      "title": "Helpdesk"
+    },
+    {
+      "app": "banter",
+      "title": "Banter"
+    },
+    {
+      "app": "beacon",
+      "title": "Beacon"
+    },
+    {
+      "app": "brief",
+      "title": "Brief"
+    },
+    {
+      "app": "bench",
+      "title": "Bench"
+    },
+    {
+      "app": "bearing",
+      "title": "Bearing"
+    },
+    {
+      "app": "bill",
+      "title": "Bill"
+    },
+    {
+      "app": "book",
+      "title": "Book"
+    },
+    {
+      "app": "blast",
+      "title": "Blast"
+    },
+    {
+      "app": "blank",
+      "title": "Blank"
+    },
+    {
+      "app": "board",
+      "title": "Board"
+    }
+  ]
+}

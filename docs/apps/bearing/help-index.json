@@ -1,0 +1,410 @@
+{
+  "app": "bearing",
+  "title": "Bearing",
+  "toc": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "level": 2
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "level": 3
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "level": 3
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "level": 2
+    },
+    {
+      "anchor": "goals-dashboard",
+      "title": "Goals Dashboard",
+      "level": 3
+    },
+    {
+      "anchor": "my-goals",
+      "title": "My Goals",
+      "level": 3
+    },
+    {
+      "anchor": "at-risk",
+      "title": "At Risk",
+      "level": 3
+    },
+    {
+      "anchor": "periods",
+      "title": "Periods",
+      "level": 3
+    },
+    {
+      "anchor": "goal-detail",
+      "title": "Goal Detail",
+      "level": 3
+    },
+    {
+      "anchor": "create-a-goal",
+      "title": "Create a Goal",
+      "level": 3
+    },
+    {
+      "anchor": "add-and-edit-key-results",
+      "title": "Add and edit Key Results",
+      "level": 3
+    },
+    {
+      "anchor": "record-progress-on-a-key-result",
+      "title": "Record progress on a Key Result",
+      "level": 3
+    },
+    {
+      "anchor": "post-a-status-update",
+      "title": "Post a status update",
+      "level": 3
+    },
+    {
+      "anchor": "watch-a-goal",
+      "title": "Watch a goal",
+      "level": 3
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "level": 3
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "level": 2
+    },
+    {
+      "anchor": "story-set-up-your-first-quarter",
+      "title": "Story: Set up your first quarter",
+      "level": 3
+    },
+    {
+      "anchor": "story-create-your-first-objective",
+      "title": "Story: Create your first objective",
+      "level": 3
+    },
+    {
+      "anchor": "story-break-a-goal-into-key-results",
+      "title": "Story: Break a goal into key results",
+      "level": 3
+    },
+    {
+      "anchor": "story-record-weekly-progress",
+      "title": "Story: Record weekly progress",
+      "level": 3
+    },
+    {
+      "anchor": "story-post-a-status-update-for-the-team",
+      "title": "Story: Post a status update for the team",
+      "level": 3
+    },
+    {
+      "anchor": "story-triage-the-goals-that-are-behind",
+      "title": "Story: Triage the goals that are behind",
+      "level": 3
+    },
+    {
+      "anchor": "story-review-your-own-goals-across-periods",
+      "title": "Story: Review your own goals across periods",
+      "level": 3
+    },
+    {
+      "anchor": "story-watch-a-goal-you-care-about",
+      "title": "Story: Watch a goal you care about",
+      "level": 3
+    },
+    {
+      "anchor": "story-close-out-the-quarter",
+      "title": "Story: Close out the quarter",
+      "level": 3
+    },
+    {
+      "anchor": "story-set-up-a-quarter-with-an-agent",
+      "title": "Story: Set up a quarter with an agent",
+      "level": 3
+    },
+    {
+      "anchor": "story-wire-key-results-to-real-delivery-agent",
+      "title": "Story: Wire key results to real delivery (agent)",
+      "level": 3
+    },
+    {
+      "anchor": "story-run-a-weekly-status-sweep-agent",
+      "title": "Story: Run a weekly status sweep (agent)",
+      "level": 3
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "level": 2
+    }
+  ],
+  "sections": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "text": "Bearing organizes work around objectives. You create a Period (a named time box such as a quarter), add Goals inside it, and break each goal into Key Results that carry a start value, a target value, and a current value. As you record progress on the key results, Bearing rolls those numbers up into a single goal progress percentage and compares it against where you should be by now, so a goal that is drifting becomes visible before the period ends. The product is built for small to medium teams running a regular OKR cadence: set goals at the start of a period, check in weekly with status updates, triage the goals that are at risk, and close the period out at the end. Goals can be scoped to the whole organization, a team, a project, or an individual, so the same period can hold company objectives next to team objectives. Bearing reads progress from your real work when an agent or API caller links a key result to a Bam epic, project, or sprint. As linked Bam tasks reach a done state, a background job recomputes the key result and its goal automatically. That linking is available through the MCP tools and REST, not through a human screen in this build. Bearing is in beta. It signs you in with your existing BigBlueBam (Bam) session, so you reach it the same way you reach the other apps in the suite."
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "text": "- Period - A named time box that goals live inside, for example \"Q2 2026\". A period has a type, a start date, an end date, and a status. The whole Bearing UI is scoped to one selected period at a time. - Period status - The lifecycle of a period. The Bearing UI shows these as draft, active, completed, and archived. You activate a period to make it the working scope and complete it when the period is over. - Goal - An objective owned by one user inside a period. A goal has a title, an optional description, a scope, a status, and a cached progress percentage that is the average of its key results. - Scope - Who a goal is for: Organization, Team, Project, or Individual. The dashboard can filter and group goals by scope. - Goal status - Where a goal stands: draft, ontrack, atrisk, behind, achieved, missed, or cancelled. Bearing derives status automatically from how actual progress compares to expected progress, unless someone overrides it. - Key Result (KR) - A measurable outcome under a goal. Each KR has a metric type (Number, Percentage, Currency, or Yes/No), a start value, a target value, a current value, and an optional unit. KR progress is clamped between 0 and 100 percent. - Update (check-in) - A status post against a goal. It records a status tag, an optional body, and a snapshot of the goal's status and progress at the time it was posted. - Watcher - A user subscribed to a goal who is emailed when the goal's status changes. - Expected progress - Where a goal should be based on how much of the period has elapsed. Bearing compares actual against expected to decide whether a goal is on track, at risk, or behind. - At Risk - The view that lists goals whose status is atrisk or behind, sorted by how far they have fallen behind expected progress."
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "text": "Bearing is served at /bearing/. Reach it from the BigBlueBam app switcher the same way you reach the other apps. Before Bearing is usable: - You must be logged in to BigBlueBam. If you are not, Bearing shows a \"Please log in to BigBlueBam first\" screen with a link to /b3/. - You work inside your active organization. Bearing scopes everything to that org. - At least one Period must exist and be selected. The dashboard and the at-risk view are gated on a selected period. A fresh org has no periods, so the first thing to do is create one on the Periods page and select it in the sidebar. Press ? anywhere outside a text field to open the in-app help viewer."
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "text": "The Bearing sidebar carries a brand mark with a beta pill, a period scope selector dropdown, and four navigation items with these exact labels: Dashboard, My Goals, At Risk, and Periods. The period scope selector sets the one period that the whole UI is scoped to; your choice is remembered between visits, and Bearing auto-selects the first active period if you have not chosen one."
+    },
+    {
+      "anchor": "goals-dashboard",
+      "title": "Goals Dashboard",
+      "text": "The Dashboard is the home view at /. It shows the goals in the selected period, with filters and a search box. What you see, top to bottom: - The header \"Goals Dashboard\" with the subtitle \"Track objectives and key results across your organization.\" and a New Goal button. - A period selector card showing the selected period's name, date range, and time remaining. - A stats row with four cards: Total Goals, Avg Progress, At Risk, and Achieved. - Scope tabs: All, Organization, Team, Project, Individual. - A search box with placeholder \"Search goals...\". - A grid of goal cards. With the All tab selected, cards are grouped by scope. Each card shows the goal's title, scope badge, project or team, a progress bar (actual against expected), the owner avatar, and the key result count. To open a goal, click its card. To browse a different period, change the selection in the sidebar period selector. If no period is selected you see a \"Select a period\" prompt. If the period has no goals you see \"No goals found\" with a Create First Goal button. Known limitation: the four stat cards at the top of the Dashboard are wired to a data source that does not exist in this build, so they may not populate. The goal grid, the scope tabs, and the search box work and are the reliable way to read the state of a period. To get accurate period totals, use the AI agent tool bearingperiodget or bearingreport described under Working with AI agents."
+    },
+    {
+      "anchor": "my-goals",
+      "title": "My Goals",
+      "text": "My Goals at /my-goals lists every goal you own across all periods, not just the selected one. - The header reads \"My Goals\" with the subtitle \"All goals owned by you across all periods.\" and a New Goal button that takes you to the Dashboard to create one. - Goals are split into Active and Completed sections, where completed means a goal that is achieved or missed. - Each row shows the goal icon, title, status badge, progress bar, period and scope badges, and the key result count. Click a row to open the goal. If you own no goals you see \"No goals assigned to you\" with a Go to Dashboard button."
+    },
+    {
+      "anchor": "at-risk",
+      "title": "At Risk",
+      "text": "At Risk at /at-risk is the triage view. It lists the goals in the selected period whose status is atrisk or behind, sorted so the goals that have fallen furthest behind appear first. - The header reads \"At Risk Goals\" with the subtitle \"Goals that are behind expected progress and need attention.\". - Each row shows a red alert badge, the goal title, its status badge, a progress bar, an \"actual vs expected\" readout, a color-coded Gap, and the owner avatar. Click a row to open the goal. If nothing is behind you see \"All goals are on track\". See the at-risk view in screenshots/light/04-at-risk.png."
+    },
+    {
+      "anchor": "periods",
+      "title": "Periods",
+      "text": "The Periods page at /periods is where you create and manage the time boxes that hold goals. - The header reads \"Periods\" with the subtitle \"Manage time periods for organizing goals and OKRs.\" and a New Period button. - A table with columns Name, Type, Date Range, Status, and Goals, plus a row menu. - Each row has a \"...\" menu with Edit, an Activate item (shown only when the period's status is draft), a Complete item (shown only when the period is active), and Delete. To create a period: 1. Click New Period. The Period Form dialog opens with the title \"Create Period\" and the description \"Define a new time period for goals.\". 2. Type a Name, for example \"Q2 2026\". 3. Choose a Type: Quarter, Half Year, Year, or Custom. 4. Set the Start Date and End Date. 5. Click Create Period. To edit a period, choose Edit from the row menu. The same dialog opens with the title \"Edit Period\" and a Save Changes button. To complete a period when it is over, choose Complete from the row menu (available only while the period is active). To delete a period, choose Delete and confirm. Deleting is blocked if the period still has goals. See the period list in screenshots/light/03-periods.png. Known limitation: a newly created period is saved with a status that the row menu's Activate guard does not match, so the Activate item may not appear for a brand-new period in the UI. If you cannot activate a period from the menu, an AI agent or REST caller can activate it through the API. The sidebar period selector still lets you select any period regardless of status."
+    },
+    {
+      "anchor": "goal-detail",
+      "title": "Goal Detail",
+      "text": "Open a goal from any list to reach its detail page at /goals/:id. This is where most day-to-day work happens. The page has a Back to Dashboard link, the goal title and description, a status badge, and a \"...\" menu with Edit and Delete Goal. To edit a goal's title or description: 1. Open the \"...\" menu and choose Edit. 2. Change the Title input and the description box. 3. Click Save, or Cancel to discard. Below the header is a meta row with the owner avatar and name, the scope badge, the period-name badge, and the project-name badge, followed by a progress bar reading \"{n}% (expected: {m}%)\". See the goal detail layout in screenshots/light/02-goal-detail.png. Known limitation: the right sidebar Progress Over Time chart reads from the same missing data source as the Dashboard stat cards and may not render data. The Period Timeline card shows the goal's creation date but its time-remaining badge is inert in this build. The Watchers card works as described below."
+    },
+    {
+      "anchor": "create-a-goal",
+      "title": "Create a Goal",
+      "text": "Goals are created from the Dashboard. 1. On the Dashboard, click New Goal. The dialog opens with the title \"Create Goal\" and the description \"Set a new objective for this period.\". 2. Type a Title, for example \"Increase customer retention by 15%\". 3. Optionally fill in Description (optional) with why the goal matters. 4. Choose a Scope: Organization, Team, or Project (the dialog defaults to Team). 5. Click Create Goal. Bearing creates the goal in the selected period, assigns you as the owner, and opens the new goal's detail page. Note that the Create Goal dialog does not offer an Individual scope or an owner field; new goals are owned by you. Reassigning a goal to another owner is done through the AI agent tool bearinggoalupdate or REST, not the human UI."
+    },
+    {
+      "anchor": "add-and-edit-key-results",
+      "title": "Add and edit Key Results",
+      "text": "Key Results live in the Key Results (n) section of the goal detail page. To add a key result: 1. On the goal detail page, click Add Key Result (or Add First Key Result if there are none yet). The dialog opens with the title \"Add Key Result\" and the description \"Define a measurable outcome for this goal.\". 2. Type a Title, for example \"Increase monthly active users\". 3. Choose a Metric Type: Number, Percentage, Currency, or Yes/No. 4. Set the Start Value and the Target Value. 5. For Number or Currency metrics, optionally set a Unit (optional), for example \"users\", \"$\", or \"EUR\". 6. Click Add Key Result. To edit a key result, hover its row, open the \"...\" menu, and choose Edit. The same dialog opens with the title \"Edit Key Result\" and a Save Changes button. To delete one, open the \"...\" menu and choose Delete, then confirm. Each key result row shows a metric icon, the title, a progress bar, a sparkline of recent values, and a \"current / target\" readout. The goal's overall progress is the average of its key results' progress."
+    },
+    {
+      "anchor": "record-progress-on-a-key-result",
+      "title": "Record progress on a Key Result",
+      "text": "You record progress by setting a key result's current value. 1. On the goal detail page, hover the key result's row. 2. Click Update. 3. Type the new current value in the inline number field. 4. Click Save, or Cancel to back out. Pressing Enter saves and Escape cancels. Known limitation: in this build the inline Update action posts to an endpoint path that the backend does not expose, so the check-in may fail to record. Until that path is corrected, the reliable way to record a key result value is the AI agent tool bearingkrupdate, which performs the value check-in through the working backend route. Editing the key result's start or target value through the Edit dialog works normally."
+    },
+    {
+      "anchor": "post-a-status-update",
+      "title": "Post a status update",
+      "text": "Status updates are the weekly check-in narrative on a goal. 1. On the goal detail page, in the Status Updates section, click Post Update. The dialog opens with the title \"Post Status Update\" and the description \"Share progress with your team.\". 2. Choose a status chip: On Track, At Risk, Behind, or Achieved. 3. Type your note in the Update box, for example what changed and any blockers. 4. Click Post Update. Your update appears in the feed with your name, a relative timestamp, the body, a status badge for the status you chose, and the goal's progress at the time you posted. Posting an update snapshots the goal's status and progress."
+    },
+    {
+      "anchor": "watch-a-goal",
+      "title": "Watch a goal",
+      "text": "The Watchers card on the goal detail page subscribes people to status-change emails. 1. On the goal detail page, find the Watchers (n) card in the right sidebar. 2. Click the add (person-plus) icon to reveal the input. 3. Click the + button to add yourself, or press Enter. 4. To stop watching, hover your watcher chip and click the X. Note: the add form accepts an arbitrary \"User ID or email\", but the backend always adds the calling user, so this control subscribes you to the goal regardless of what you type. To remove a watcher who is not you, you must be the goal's owner or an org admin or owner. When a watched goal's status changes, a background job emails the watchers (using real email when SMTP is configured for the deployment)."
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "text": "Bearing exposes 12 MCP tools so AI agents can drive the same goals and key results you manage in the UI, and reach a few capabilities the human UI does not surface. Agents forward your bearer token and org context, and several tools accept human labels (a period name, a goal or key result title, an owner's email) in place of UUIDs. Read tools: - bearingperiods - list periods, optionally filtered by status or year. - bearingperiodget - one period plus its stats (goal count, average progress, at-risk count). Use this to get accurate period totals that the Dashboard stat cards do not currently show. - bearinggoals - list goals filtered by period, scope, owner, or status. - bearinggoalget - one goal with its key results. Write tools: - bearinggoalcreate - create a goal, naming the period by label and the owner by email. - bearinggoalupdate - update a goal, including reassigning the owner. This is the only way to change a goal's owner, since the UI has no owner picker. - bearingkrcreate - add a key result to a goal. - bearingkrupdate - update a key result's definition and/or record a value check-in. This is the reliable way to record progress while the inline Update control's endpoint path is broken. - bearingkrlink - link a key result to a Bam epic, project, sprint, or task so its progress tracks real delivery. There is no human screen for this in the current build; it is agent and REST only. - bearingupdatepost - post a goal status update, the same as the Post Update dialog. Reporting tools: - bearingreport - generate a period, at-risk, or owner report as markdown. There is no human reports screen; this and bearingatrisk are how reports are produced. - bearingatrisk - return the org-wide list of at-risk and behind goals. When an agent links a key result to Bam work with bearingkrlink, a background recompute job keeps that key result and its goal current as the linked Bam tasks reach a done state. Bearing also emits events (goal created, status changed, achieved, key result value updated, period activated or completed, and more) that Bolt automations can react to. For reviewers: agent-created goals and updates show up in the same lists and feeds as human ones, attributed to the agent. Service-account tool calls pass the platform agent-policy allowlist before they run, so an agent only reaches the Bearing tools its policy permits. See the Bearing MCP-tools reference under docs/apps/bearing/ for the full catalog and parameters."
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "text": ""
+    },
+    {
+      "anchor": "story-set-up-your-first-quarter",
+      "title": "Story: Set up your first quarter",
+      "text": "Who: A team lead standing up OKRs in a fresh org. Goal: Have an active period selected so goals can be created. Before you start: You are logged in to BigBlueBam and Bearing is open. No period exists yet. Steps 1. In the sidebar, click Periods. 2. Click New Period. 3. In the Name field type your period name, for example \"Q2 2026\". 4. Choose a Type of Quarter. 5. Set the Start Date and End Date to cover the quarter. 6. Click Create Period. 7. In the sidebar period scope selector at the top, select the period you just created. Result: The period is selected and scopes the whole UI. The Dashboard now shows this period and is ready for goals. Related: If the row menu's Activate item does not appear for your new period, an agent can activate it through the API; selecting the period in the sidebar is enough to start working in it. See \"Set up a quarter with an agent\" below."
+    },
+    {
+      "anchor": "story-create-your-first-objective",
+      "title": "Story: Create your first objective",
+      "text": "Who: A goal owner setting an objective for the quarter. Goal: Create a goal in the current period and open it. Before you start: A period exists and is selected in the sidebar. Steps 1. In the sidebar, click Dashboard. 2. Click New Goal. 3. Type a Title, for example \"Increase customer retention by 15%\". 4. Optionally fill in Description (optional). 5. Choose a Scope of Organization, Team, or Project. 6. Click Create Goal. Result: The goal is created in the selected period with you as the owner, and Bearing opens its detail page. Related: Add Key Results next. To set a different owner, use the agent tool bearinggoalcreate with an owner email, or bearinggoalupdate afterward."
+    },
+    {
+      "anchor": "story-break-a-goal-into-key-results",
+      "title": "Story: Break a goal into key results",
+      "text": "Who: A goal owner who wants measurable outcomes. Goal: Add the key results that define what success means for the goal. Before you start: You are on the goal's detail page. Steps 1. In the Key Results section, click Add Key Result (or Add First Key Result). 2. Type a Title, for example \"Increase monthly active users\". 3. Choose a Metric Type: Number, Percentage, Currency, or Yes/No. 4. Set the Start Value and Target Value. 5. For a Number or Currency metric, optionally set a Unit (optional). 6. Click Add Key Result. 7. Repeat for each measurable outcome. Result: Each key result appears as a row with a progress bar and a \"current / target\" readout. The goal's progress is the average of its key results. Related: Record progress on a key result next. To wire a key result to real Bam delivery, an agent can use bearingkrlink."
+    },
+    {
+      "anchor": "story-record-weekly-progress",
+      "title": "Story: Record weekly progress",
+      "text": "Who: A goal owner doing a weekly check-in. Goal: Update a key result's current value so the goal's progress and status recompute. Before you start: The goal has at least one key result. Steps 1. Open the goal's detail page. 2. Hover the key result row and click Update. 3. Type the new current value in the inline field. 4. Click Save. Result: The key result's value and progress update, and the goal's overall progress and status recompute from the average. Related: If the inline Update does not save in your build, record the value with the agent tool bearingkrupdate, which writes the check-in through the working backend route."
+    },
+    {
+      "anchor": "story-post-a-status-update-for-the-team",
+      "title": "Story: Post a status update for the team",
+      "text": "Who: A goal owner sharing progress. Goal: Leave a check-in note and a status on the goal. Before you start: You are on the goal's detail page. Steps 1. In the Status Updates section, click Post Update. 2. Choose a status chip: On Track, At Risk, Behind, or Achieved. 3. Type your note in the Update box. 4. Click Post Update. Result: The update appears in the feed with your name, the time, the status badge, and the goal's progress at the time you posted. Watchers are notified when the status changes. Related: Watch a goal to receive its status-change emails. An agent can post the same update with bearingupdatepost."
+    },
+    {
+      "anchor": "story-triage-the-goals-that-are-behind",
+      "title": "Story: Triage the goals that are behind",
+      "text": "Who: A team lead reviewing where the quarter is slipping. Goal: Find the goals that are at risk or behind and act on the worst ones. Before you start: A period is selected and has goals with recorded progress. Steps 1. In the sidebar, click At Risk. 2. Review the list, which is sorted by how far each goal has fallen behind expected progress, with the worst at the top. 3. Read each row's \"actual vs expected\" readout and Gap. 4. Click the goal that needs the most attention to open it. 5. On the goal, record updated key result values and post a status update explaining the plan. Result: You have identified the goals that need attention and refreshed their progress and narrative. Related: An agent can pull the same list anytime with bearingatrisk, or generate a markdown at-risk report with bearingreport."
+    },
+    {
+      "anchor": "story-review-your-own-goals-across-periods",
+      "title": "Story: Review your own goals across periods",
+      "text": "Who: Any individual contributor or lead who owns goals. Goal: See every goal you own, current and finished, in one place. Before you start: You own at least one goal in any period. Steps 1. In the sidebar, click My Goals. 2. Read the Active section for goals still in flight. 3. Read the Completed section for goals that are achieved or missed. 4. Click any row to open that goal. Result: You see all of your goals across every period, grouped by whether they are still active."
+    },
+    {
+      "anchor": "story-watch-a-goal-you-care-about",
+      "title": "Story: Watch a goal you care about",
+      "text": "Who: A stakeholder who wants to be told when a goal's status changes. Goal: Subscribe yourself to a goal's status-change emails. Before you start: You are on the goal's detail page. Steps 1. In the right sidebar, find the Watchers card. 2. Click the add (person-plus) icon. 3. Click the + button (or press Enter) to add yourself. Result: Your avatar appears as a watcher. When the goal's status changes, a background job emails you. Related: The add control always subscribes you, the calling user, even though it shows a \"User ID or email\" field."
+    },
+    {
+      "anchor": "story-close-out-the-quarter",
+      "title": "Story: Close out the quarter",
+      "text": "Who: A team lead wrapping up a period. Goal: Mark the period complete and produce a retrospective report. Before you start: The period is active and its goals are up to date. Steps 1. In the sidebar, click Periods. 2. Find the period's row and open its \"...\" menu. 3. Choose Complete. Result: The period is marked completed and a period.completed event fires for any Bolt automations watching it. Related: For a retrospective, an agent can run bearingreport with a period type to produce a markdown summary table with per-goal and per-key-result detail."
+    },
+    {
+      "anchor": "story-set-up-a-quarter-with-an-agent",
+      "title": "Story: Set up a quarter with an agent",
+      "text": "Who: An AI agent provisioning OKRs from a brief. Goal: Create a period, goals, and key results in one pass without manual UI work. Before you start: The agent has a Bearing-scoped policy and the org context. Steps 1. The agent lists or fetches the period with bearingperiods or bearingperiodget, creating it through the API if needed. 2. For each objective, the agent calls bearinggoalcreate, naming the period by label and the owner by email. 3. For each measurable outcome, the agent calls bearingkrcreate against the goal title. 4. The agent records starting values with bearingkrupdate. Result: A fully populated period with owned goals and key results, ready for the team. The same goals appear in the human Dashboard and My Goals views. Related: This is the agent counterpart to the first four human stories above."
+    },
+    {
+      "anchor": "story-wire-key-results-to-real-delivery-agent",
+      "title": "Story: Wire key results to real delivery (agent)",
+      "text": "Who: An AI agent connecting OKRs to Bam work. Goal: Make a key result's progress track actual task completion automatically. Before you start: The goal and key result exist, and the Bam epic, project, or sprint to track is known. Steps 1. The agent calls bearingkrlink to bind the key result to a Bam epic, project, sprint, or task. 2. As linked Bam tasks reach a done state, the recompute background job updates the key result's progress and rolls it up to the goal. Result: The key result and its goal move on their own as delivery progresses, with no manual check-ins. This linking is available only through agents or REST in the current build. Related: There is no human linking screen, so this story has no UI equivalent."
+    },
+    {
+      "anchor": "story-run-a-weekly-status-sweep-agent",
+      "title": "Story: Run a weekly status sweep (agent)",
+      "text": "Who: An AI agent producing a weekly OKR digest. Goal: Summarize at-risk goals and period progress for the team. Before you start: Periods and goals exist with recorded progress. Steps 1. The agent calls bearingatrisk for the org-wide list of at-risk and behind goals. 2. The agent calls bearingreport with the period or owner type for a markdown summary. 3. The agent relays the summary into the channel the team reads, for example a Banter post or a Brief document. Result: The team gets a current OKR status summary without anyone opening the Bearing UI. Related: Humans can read the same at-risk list on the At Risk page."
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "text": "- Bam (/b3/) - the project planning tool whose epics, projects, sprints, and tasks a key result can be linked to so its progress tracks real delivery. Bearing requires a Bam session to sign in. - Bolt (/bolt/) - the automation engine. Bearing emits goal, key result, and period events (goal created, status changed, achieved, key result value updated, period activated and completed, and more) that Bolt rules can react to. - Banter (/banter/) and Brief (/brief/) - common destinations for agent-generated OKR digests produced by bearingreport and bearingatrisk. - See the Bearing MCP-tools reference and guide under docs/apps/bearing/ for the full tool catalog and parameter details."
+    }
+  ],
+  "labels": {
+    "Achieved": "goals-dashboard",
+    "Activate": "periods",
+    "Active": "my-goals",
+    "Add First Key Result": "add-and-edit-key-results",
+    "Add Key Result": "add-and-edit-key-results",
+    "All": "goals-dashboard",
+    "At Risk": "key-concepts",
+    "At Risk Goals": "at-risk",
+    "Avg Progress": "goals-dashboard",
+    "Back to Dashboard": "goal-detail",
+    "Bam": "related",
+    "Banter": "related",
+    "Behind": "post-a-status-update",
+    "Bolt": "related",
+    "Brief": "related",
+    "Cancel": "goal-detail",
+    "Complete": "periods",
+    "Completed": "my-goals",
+    "Create First Goal": "goals-dashboard",
+    "Create Goal": "create-a-goal",
+    "Create Period": "periods",
+    "Currency": "key-concepts",
+    "Custom": "periods",
+    "Dashboard": "feature-reference",
+    "Date Range": "periods",
+    "Delete": "periods",
+    "Delete Goal": "goal-detail",
+    "Description (optional)": "create-a-goal",
+    "Edit": "periods",
+    "End Date": "periods",
+    "Expected progress": "key-concepts",
+    "Gap": "at-risk",
+    "Go to Dashboard": "my-goals",
+    "Goal status": "key-concepts",
+    "Goals": "overview",
+    "Goals Dashboard": "goals-dashboard",
+    "Half Year": "periods",
+    "Individual": "key-concepts",
+    "Key Result (KR)": "key-concepts",
+    "Key Results": "overview",
+    "Key Results (n)": "add-and-edit-key-results",
+    "Metric Type": "add-and-edit-key-results",
+    "My Goals": "feature-reference",
+    "Name": "periods",
+    "New Goal": "goals-dashboard",
+    "New Period": "periods",
+    "Number": "key-concepts",
+    "On Track": "post-a-status-update",
+    "Organization": "key-concepts",
+    "Percentage": "key-concepts",
+    "Period": "overview",
+    "Period Timeline": "goal-detail",
+    "Period status": "key-concepts",
+    "Periods": "where-to-find-it",
+    "Post Update": "post-a-status-update",
+    "Progress Over Time": "goal-detail",
+    "Project": "key-concepts",
+    "Quarter": "periods",
+    "Save": "goal-detail",
+    "Save Changes": "periods",
+    "Scope": "key-concepts",
+    "Start Date": "periods",
+    "Start Value": "add-and-edit-key-results",
+    "Status": "periods",
+    "Status Updates": "post-a-status-update",
+    "Target Value": "add-and-edit-key-results",
+    "Team": "key-concepts",
+    "Title": "goal-detail",
+    "Total Goals": "goals-dashboard",
+    "Type": "periods",
+    "Unit (optional)": "add-and-edit-key-results",
+    "Update": "record-progress-on-a-key-result",
+    "Update (check-in)": "key-concepts",
+    "Watcher": "key-concepts",
+    "Watchers": "goal-detail",
+    "Watchers (n)": "watch-a-goal",
+    "Year": "periods",
+    "Yes/No": "key-concepts",
+    "achieved": "key-concepts",
+    "active": "key-concepts",
+    "archived": "key-concepts",
+    "at_risk": "key-concepts",
+    "behind": "key-concepts",
+    "beta": "overview",
+    "calling user": "watch-a-goal",
+    "cancelled": "key-concepts",
+    "completed": "key-concepts",
+    "draft": "key-concepts",
+    "missed": "key-concepts",
+    "on_track": "key-concepts",
+    "period scope selector": "feature-reference",
+    "you": "watch-a-goal"
+  },
+  "crossrefs": [
+    {
+      "app": "bam",
+      "title": "Bam"
+    },
+    {
+      "app": "bolt",
+      "title": "Bolt"
+    },
+    {
+      "app": "banter",
+      "title": "Banter"
+    },
+    {
+      "app": "brief",
+      "title": "Brief"
+    }
+  ]
+}

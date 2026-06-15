@@ -23,11 +23,12 @@ Do exactly this, and nothing to feature components:
    satellites = `apps/<app>/src/components/layout/<app>-layout.tsx`), import
    `HelpTrigger` and render `<HelpTrigger app="<app>" />` in the header control
    group, next to NotificationsBell / OrgSwitcher / UserMenu. Match the surrounding
-   JSX and spacing.
-3. Mount the right-click help augmentation once at the layout root (the shared hook
-   or `<HelpContextRoot app="<app>">` wrapper from the Help Center module), so a
-   `contextmenu` on a documented element resolves its label against the index.
-4. Only if a key element has no resolvable label, add `data-help-label="<exact doc
+   JSX and spacing. This is the ENTIRE wiring: `HelpTrigger` installs its own
+   document-level right-click `contextmenu` listener, so there is NO `HelpContextRoot`
+   or hook to mount at the layout root. Do not import anything named `HelpContextRoot`
+   or `useElementHelp` - they do not exist; the only exports are `HelpTrigger`,
+   `HelpCenter`, `openHelpCenter`, and `slugify`.
+3. Only if a key element has no resolvable label, add `data-help-label="<exact doc
    label>"` to that one element. Do not refactor feature components.
 
 Verify: `pnpm --filter @bigbluebam/<app> run typecheck` passes. Do not rebuild

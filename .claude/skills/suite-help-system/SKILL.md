@@ -29,7 +29,10 @@ docs/apps/<app>/help-index.json          <- DERIVED: toc, sections, label->ancho
 packages/ui/help-center.tsx              <- ONE shared Help Center component (overlay)
         │  fetches help.md + help-index.json, renders markdown, TOC, search, index
         ├── HelpTrigger ("(?)" icon, tooltip "Help")   -> wired 1 line into each app top bar
-        └── useElementHelp / contextmenu hook          -> right-click "Help: <label>" deep-link
+        │     └── installs a document-level contextmenu listener itself, so
+        │         right-click "Help: <label>" needs NO separate mount
+        ├── HelpCenter (controlled overlay)            -> for apps that own open state
+        └── openHelpCenter(app, anchor?) / slugify     -> programmatic open + canonical anchor slug
 ```
 
 Four pieces, in dependency order:
@@ -67,13 +70,16 @@ Four pieces, in dependency order:
    - opens to a given anchor (deep-link) and supports in-doc + cross-app navigation,
    - is a styled overlay (does not navigate away from the app).
    `HelpTrigger` is the "(?)" button (tooltip **Help**) that opens it.
-4. **Right-click element help** - a shared mechanism (a `contextmenu` augmentation in
-   the app layout, or a `useElementHelp` hook) that, on right-click, walks up from the
-   event target to find a label (visible button text, `aria-label`, or an explicit
+4. **Right-click element help** - built INTO `HelpTrigger`. On mount it installs a
+   single `document`-level `contextmenu` listener that walks up from the event target
+   to find a label (visible button text, `aria-label`, `title`, or an explicit
    `data-help-label` attribute), looks it up in the app's `labels` map, and - only if
-   found - adds a **"Help: <label>"** item that opens the Help Center to that anchor.
-   Coverage is driven entirely by the docs: a label gets right-click help iff the doc
-   documents it. Improving coverage = improving `help.md`, not editing components.
+   found - shows a floating **"Help: <label>"** item that opens the Help Center to that
+   anchor. Right-clicking an undocumented element calls no preventDefault, so the native
+   menu is untouched. There is NO separate `HelpContextRoot` / `useElementHelp` to mount:
+   rendering `<HelpTrigger app="<app>" />` is the entire wiring. Coverage is driven
+   entirely by the docs: a label gets right-click help iff the doc documents it.
+   Improving coverage = improving `help.md`, not editing components.
 
 ## Per-app integration (what "wiring an app" means)
 
@@ -83,10 +89,10 @@ For one app, the `help-ui-integrator` does exactly this and no more:
    (same as the bell alias).
 3. Render `<HelpTrigger app="<app>" />` in the app's top bar, next to the other
    header controls (Launchpad / OrgSwitcher / NotificationsBell / UserMenu) - the
-   established header slot. Bam = `apps/frontend`; satellites = `apps/<app>`.
-4. Mount the right-click help augmentation once at the layout root (or wrap the main
-   content) so `contextmenu` resolves element labels against the index.
-5. Do not touch feature components. Right-click coverage comes from the index; if a
+   established header slot. Bam = `apps/frontend`; satellites = `apps/<app>`. This is
+   the WHOLE wiring: right-click element help is installed by HelpTrigger itself, so
+   there is nothing else to mount at the layout root.
+4. Do not touch feature components. Right-click coverage comes from the index; if a
    key element has no usable label, add a `data-help-label="<exact doc label>"` to
    that element only.
 
