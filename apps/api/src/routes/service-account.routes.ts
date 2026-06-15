@@ -13,6 +13,7 @@ import { getOrgPermissions, isOrgPrivileged } from '../services/org-permissions.
 import { setUserOrgRole } from '../services/role-resolver.js';
 import * as orgService from '../services/org.service.js';
 import { shadowOnly } from '../middleware/dual-read.js';
+import { env } from '../env.js';
 
 /**
  * Service-account REST routes.
@@ -36,17 +37,6 @@ import { shadowOnly } from '../middleware/dual-read.js';
  */
 
 const SCOPE_HIERARCHY = ['read', 'read_write', 'admin'] as const;
-
-// Rotation grace window (ms) the predecessor key stays valid after rotation.
-// Mirrors the helper in api-key.routes.ts. (#39 proposes folding both into the
-// validated env schema; once that lands this should read env.API_KEY_ROTATION_GRACE_MS.)
-const DEFAULT_ROTATION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-function getRotationGraceMs(): number {
-  const raw = process.env.API_KEY_ROTATION_GRACE_MS;
-  if (!raw) return DEFAULT_ROTATION_GRACE_MS;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ROTATION_GRACE_MS;
-}
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -410,7 +400,7 @@ export default async function serviceAccountRoutes(fastify: FastifyInstance) {
       const prefix = fullToken.slice(0, 8);
       const keyHash = await argon2.hash(fullToken);
       const now = new Date();
-      const graceExpires = new Date(now.getTime() + getRotationGraceMs());
+      const graceExpires = new Date(now.getTime() + env.API_KEY_ROTATION_GRACE_MS);
 
       // Transactional swap: insert the successor, then stamp the predecessor
       // rotated_at + grace expiry so it keeps working during the grace window.
