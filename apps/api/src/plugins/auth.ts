@@ -7,6 +7,7 @@ import { sessions } from '../db/schema/sessions.js';
 import { users } from '../db/schema/users.js';
 import { apiKeys } from '../db/schema/api-keys.js';
 import { organizationMemberships } from '../db/schema/organization-memberships.js';
+import { organizations } from '../db/schema/organizations.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
 import { resolveUserOrgRoles } from '../services/role-resolver.js';
 
@@ -113,7 +114,11 @@ async function resolveOrgContext(
         joined_at: organizationMemberships.joined_at,
       })
       .from(organizationMemberships)
-      .where(eq(organizationMemberships.user_id, userId)),
+      // Exclude memberships to soft-deleted orgs (migration 0191). The delete
+      // route drops these rows, but the join keeps auth correct even if one
+      // lingers — a member can never resolve into a deleted org.
+      .innerJoin(organizations, eq(organizations.id, organizationMemberships.org_id))
+      .where(and(eq(organizationMemberships.user_id, userId), isNull(organizations.deleted_at))),
     resolveUserOrgRoles(userId),
   ]);
 
@@ -122,6 +127,16 @@ async function resolveOrgContext(
     // If users.org_id is also NULL/empty, the user has no valid org context.
     if (!fallbackOrgId) {
       throw new OrgMembershipError('User has no organization memberships and no fallback org_id');
+    }
+    // Don't fall back into a soft-deleted org (single-org member of a deleted
+    // org → orgless, not silently re-resolved into the dead org).
+    const [fallbackOrg] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.id, fallbackOrgId), isNull(organizations.deleted_at)))
+      .limit(1);
+    if (!fallbackOrg) {
+      throw new OrgMembershipError('User has no active organization memberships');
     }
     const fallbackRole = rolesByOrg.get(fallbackOrgId) ?? 'member';
     return {

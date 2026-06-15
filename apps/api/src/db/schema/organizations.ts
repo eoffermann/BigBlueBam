@@ -49,4 +49,9 @@ export const organizations = pgTable('organizations', {
   settings: jsonb('settings').$type<OrganizationSettings>().default({}).notNull(),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  // Soft-delete marker (migration 0191). platform_delete_org sets these instead
+  // of a hard DELETE (which the NO ACTION/RESTRICT FK web rejects). Reads filter
+  // `deleted_at IS NULL`; the row + authored content survive for audit.
+  deleted_at: timestamp('deleted_at', { withTimezone: true }),
+  deleted_by: uuid('deleted_by'),
 });

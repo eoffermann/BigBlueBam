@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { registerSchema, bootstrapSchema, loginSchema, updateProfileSchema } from '@bigbluebam/shared';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import * as authService from '../services/auth.service.js';
 import * as orgService from '../services/org.service.js';
@@ -411,7 +411,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
         ),
       )
       .leftJoin(permissionGroups, eq(permissionGroups.id, accountGroupMemberships.group_id))
-      .where(eq(organizationMemberships.user_id, userId));
+      // Hide soft-deleted orgs (migration 0191) from the org switcher.
+      .where(and(eq(organizationMemberships.user_id, userId), isNull(organizations.deleted_at)));
 
     return reply.send({
       data: {
@@ -483,6 +484,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         and(
           eq(organizationMemberships.user_id, userId),
           eq(organizationMemberships.org_id, org_id),
+          isNull(organizations.deleted_at),
         ),
       )
       .limit(1);

@@ -6,6 +6,7 @@ import { db } from '../db/index.js';
 import { escapeLike } from '../lib/escape-like.js';
 import { organizations } from '../db/schema/organizations.js';
 import { users } from '../db/schema/users.js';
+import { organizationMemberships } from '../db/schema/organization-memberships.js';
 import { superuserAuditLog } from '../db/schema/superuser-audit-log.js';
 import { notifications } from '../db/schema/notifications.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
@@ -70,21 +71,22 @@ export default async function platformRoutes(fastify: FastifyInstance) {
       const limit = Math.min(Number.parseInt(query.limit || '50', 10), 100);
       const offset = Number.parseInt(query.offset || '0', 10);
 
-      let q = db
+      // Soft-deleted orgs (migration 0191) never appear in the SuperUser list.
+      const conds = [isNull(organizations.deleted_at)];
+      if (query.search) {
+        conds.push(ilike(organizations.name, `%${escapeLike(query.search)}%`));
+      }
+
+      const orgs = await db
         .select({
           org: organizations,
           member_count: sql<number>`(SELECT count(*)::int FROM users WHERE org_id = ${organizations.id} AND is_active = true)`,
         })
         .from(organizations)
+        .where(and(...conds))
         .orderBy(desc(organizations.created_at))
         .limit(limit)
         .offset(offset);
-
-      if (query.search) {
-        q = q.where(ilike(organizations.name, `%${escapeLike(query.search)}%`)) as typeof q;
-      }
-
-      const orgs = await q;
 
       return reply.send({
         data: orgs.map((r) => ({ ...r.org, member_count: r.member_count })),
@@ -131,7 +133,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
       const [org] = await db
         .select()
         .from(organizations)
-        .where(eq(organizations.id, id))
+        .where(and(eq(organizations.id, id), isNull(organizations.deleted_at)))
         .limit(1);
 
       if (!org) {
@@ -186,7 +188,15 @@ export default async function platformRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // DELETE /v1/platform/orgs/:id — delete organization and all data
+  // DELETE /v1/platform/orgs/:id — soft-delete the organization
+  // A hard DELETE here used to rely on ON DELETE CASCADE, but ~77 FKs into
+  // users.id (and several org-scoped tables) are NO ACTION/RESTRICT, so it
+  // raised Postgres 23503 and was masked as a generic INTERNAL_ERROR — no org
+  // with real data could ever be deleted. Soft-delete instead (migration 0191):
+  // stamp deleted_at, drop every membership so members lose access (multi-org
+  // members keep their other orgs and resolveOrgContext can't resolve this one),
+  // and revoke sessions. The org row + all authored content survive for audit
+  // and are filtered out of every read path by `deleted_at IS NULL`.
   fastify.delete(
     '/v1/platform/orgs/:id',
     { preHandler: [requireAuth, fastify.requireCan('bam.platform_org.delete')] },
@@ -197,7 +207,7 @@ export default async function platformRoutes(fastify: FastifyInstance) {
       const [org] = await db
         .select()
         .from(organizations)
-        .where(eq(organizations.id, id))
+        .where(and(eq(organizations.id, id), isNull(organizations.deleted_at)))
         .limit(1);
 
       if (!org) {
@@ -206,20 +216,31 @@ export default async function platformRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // P2-24: Invalidate all active sessions for users in this org BEFORE
-      // the CASCADE delete runs. Otherwise, a user who is currently logged
-      // in would continue to have a valid session cookie pointing at a
-      // deleted user row until the session naturally expires.
-      await db.execute(
-        sql`DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE org_id = ${id})`,
-      );
+      await db.transaction(async (tx) => {
+        // Revoke every session belonging to a member of this org so no one
+        // stays logged into a context that's about to disappear.
+        await tx.execute(
+          sql`DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE org_id = ${id})`,
+        );
 
-      // CASCADE delete handles users, projects, etc.
-      await db.delete(organizations).where(eq(organizations.id, id));
+        // Drop org memberships — members can no longer resolve or switch into
+        // this org. Multi-org members keep their other memberships; single-org
+        // members become orgless (the resolveOrgContext fallback rejects a
+        // soft-deleted users.org_id, so they cannot land back in this org).
+        await tx
+          .delete(organizationMemberships)
+          .where(eq(organizationMemberships.org_id, id));
+
+        await tx
+          .update(organizations)
+          .set({ deleted_at: new Date(), deleted_by: user.id, updated_at: new Date() })
+          .where(eq(organizations.id, id));
+      });
 
       await logSuperuserAction(user.id, 'org.deleted', request.ip, {
         org_name: org.name,
         org_slug: org.slug,
+        soft_delete: true,
       }, id);
 
       return reply.send({ data: { success: true } });

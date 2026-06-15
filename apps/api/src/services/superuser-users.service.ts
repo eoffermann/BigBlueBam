@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/users.js';
 import { escapeLike } from '../lib/escape-like.js';
@@ -341,7 +341,7 @@ export async function orgExists(orgId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: organizations.id })
     .from(organizations)
-    .where(eq(organizations.id, orgId))
+    .where(and(eq(organizations.id, orgId), isNull(organizations.deleted_at)))
     .limit(1);
   return Boolean(row);
 }

@@ -1,4 +1,4 @@
-import { eq, and, sql, inArray, desc, lt, or } from 'drizzle-orm';
+import { eq, and, sql, inArray, desc, lt, or, isNull } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
 import type Redis from 'ioredis';
@@ -20,7 +20,8 @@ export async function getOrganization(orgId: string) {
   const [org] = await db
     .select()
     .from(organizations)
-    .where(eq(organizations.id, orgId))
+    // Soft-deleted orgs (migration 0191) are invisible to every read path.
+    .where(and(eq(organizations.id, orgId), isNull(organizations.deleted_at)))
     .limit(1);
 
   return org ?? null;

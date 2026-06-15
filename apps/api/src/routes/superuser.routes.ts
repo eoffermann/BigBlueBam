@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import {
   superuserListOrgsQuerySchema,
   superuserSwitchContextSchema,
@@ -116,7 +116,8 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
       const limit = parsed.data.limit ?? 50;
       const search = parsed.data.search?.trim();
 
-      const conditions = [] as ReturnType<typeof eq>[];
+      // Soft-deleted orgs (migration 0191) never appear in the SuperUser list.
+      const conditions = [isNull(organizations.deleted_at)] as ReturnType<typeof eq>[];
       if (search) {
         conditions.push(
           // Match either name or slug
@@ -228,7 +229,7 @@ export default async function superuserRoutes(fastify: FastifyInstance) {
       const [org] = await db
         .select()
         .from(organizations)
-        .where(eq(organizations.id, id))
+        .where(and(eq(organizations.id, id), isNull(organizations.deleted_at)))
         .limit(1);
 
       if (!org) {
