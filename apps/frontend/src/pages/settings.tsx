@@ -122,6 +122,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
   const [newAgentAllowedTools, setNewAgentAllowedTools] = useState('');
   const [createdAgentKey, setCreatedAgentKey] = useState<{ key: string; name: string } | null>(null);
   const [rotatedAgentKey, setRotatedAgentKey] = useState<{ key: string; name: string } | null>(null);
+  const [agentMutationError, setAgentMutationError] = useState<string | null>(null);
 
   const [showAddWebhook, setShowAddWebhook] = useState<string | null>(null); // project id
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -220,6 +221,9 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
       setNewAgentAllowedTools('');
       setShowCreateAgent(false);
     },
+    onError: (err) => {
+      setAgentMutationError((err as Error).message);
+    },
   });
 
   const revokeAgent = useMutation({
@@ -227,14 +231,24 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-accounts'] });
     },
+    onError: (err) => {
+      setAgentMutationError((err as Error).message);
+    },
   });
 
+  // #24: rotate is service-account-aware. The key is owned by the service
+  // user, so the old user-scoped /auth/api-keys/:id/rotate matched zero rows
+  // and 404'd silently (no onError). Point at the new endpoint with the agent
+  // *user* id, and surface failures in the banner below.
   const rotateAgentKey = useMutation({
-    mutationFn: (keyId: string) =>
-      api.post<{ data: { key: string; name: string } }>(`/auth/api-keys/${keyId}/rotate`),
+    mutationFn: (agentId: string) =>
+      api.post<{ data: { key: string; name: string } }>(`/auth/service-accounts/${agentId}/rotate`),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['service-accounts'] });
       setRotatedAgentKey({ key: res.data.key, name: res.data.name });
+    },
+    onError: (err) => {
+      setAgentMutationError((err as Error).message);
     },
   });
 
@@ -1004,10 +1018,24 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                     </div>
                   )}
 
+                  {agentMutationError && (
+                    <div className="p-4 rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950 space-y-1">
+                      <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                        Action failed: {agentMutationError}
+                      </p>
+                      <button
+                        onClick={() => setAgentMutationError(null)}
+                        className="text-xs text-red-700 dark:text-red-300 underline"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
                   {rotatedAgentKey && (
                     <div className="p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 space-y-2">
                       <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                        Rotated key for "{rotatedAgentKey.name}". The old key works during the 7-day grace window.
+                        Rotated key for "{rotatedAgentKey.name}". Copy it now — a new token will not be shown again. The old key works for 7 more days while you migrate.
                       </p>
                       <div className="flex items-center gap-2">
                         <code className="flex-1 text-xs bg-white dark:bg-zinc-900 rounded px-3 py-2 font-mono border border-blue-200 dark:border-blue-800 break-all">
@@ -1210,11 +1238,12 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                                         size="sm"
                                         variant="secondary"
                                         onClick={() => {
-                                          if (window.confirm(`Rotate key for "${agent.name}"? The old key works during the 7-day grace window.`)) {
-                                            rotateAgentKey.mutate(agent.api_key!.id);
+                                          if (window.confirm(`Rotate key for "${agent.name}"? A new token will be displayed once. The old key continues to work for 7 days while you migrate.`)) {
+                                            setAgentMutationError(null);
+                                            rotateAgentKey.mutate(agent.id);
                                           }
                                         }}
-                                        loading={rotateAgentKey.isPending && rotateAgentKey.variables === agent.api_key.id}
+                                        loading={rotateAgentKey.isPending && rotateAgentKey.variables === agent.id}
                                       >
                                         <RefreshCw className="h-3.5 w-3.5" />
                                         Rotate
@@ -1226,6 +1255,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                                         variant="danger"
                                         onClick={() => {
                                           if (window.confirm(`Revoke agent "${agent.name}"? Its key is deleted and the policy is disabled.`)) {
+                                            setAgentMutationError(null);
                                             revokeAgent.mutate(agent.id);
                                           }
                                         }}
