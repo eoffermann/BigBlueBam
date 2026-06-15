@@ -572,7 +572,14 @@ async function main() {
   console.log(`Generating ${TOTAL_BEACONS} beacons...`);
   const beacons = [];
   const beaconTags = [];
-  const usedSlugs = new Set();
+  // beacon_entries.slug is GLOBALLY unique (UNIQUE(slug), not per-org), so the
+  // dedupe set must start from every slug already in the DB — not just the ones
+  // we generate this run. Otherwise seeding a second org collides with the first
+  // org's slugs (e.g. "useful-shell-aliases-and-scripts-part-2") and the bulk
+  // INSERT dies on beacon_entries_slug_key. Pre-loading lets the existing
+  // suffix-on-collision loop below resolve cross-org clashes too.
+  const existingSlugRows = await sql`SELECT slug FROM beacon_entries`;
+  const usedSlugs = new Set(existingSlugRows.map((r) => r.slug));
 
   for (let i = 0; i < TOTAL_BEACONS; i++) {
     const cat = CATEGORIES[i % CATEGORIES.length]; // round-robin for even distribution
