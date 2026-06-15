@@ -50,8 +50,14 @@ createRoot(rootElement).render(
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/bolt')) return undefined;
+  // Include the query string so the reported location carries deep-link state
+  // like `?node=<id>` (the open node inspector in the visual editor). Bureau
+  // Invite/Bring/summon sends this url verbatim and the receiving navigate()
+  // preserves the search, so a teammate followed/pulled in lands on the exact
+  // node being edited, not the bare automation. The label stays the bare path
+  // (the automation name is layered in via useBureauLocationLabel).
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'bolt',
     label: path,
   };
@@ -60,7 +66,7 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -72,7 +78,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

@@ -91,6 +91,49 @@ export function AutomationEditorPage({ id, onNavigate }: AutomationEditorPagePro
     }
   }, [existing]);
 
+  // Make the selected node URL-addressable (`?node=<id>`) so opening the node
+  // inspector is a deep link a Bureau Bring/Invite/summon can carry — the same
+  // mechanism as Bam's `?task=`. Without this, node selection lived only in the
+  // Zustand store, so a follower brought to the visual editor never saw which
+  // node the leader had open.
+  const selectedNodeId = useGraphEditorStore((s) => s.selectedNodeId);
+  // Write: reflect the current selection into the URL (replaceState — no
+  // history spam, and it does NOT fire popstate, so it can't loop with the
+  // reader below).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('node');
+    if (selectedNodeId) {
+      if (current === selectedNodeId) return;
+      url.searchParams.set('node', selectedNodeId);
+    } else {
+      if (!current) return;
+      url.searchParams.delete('node');
+    }
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }, [selectedNodeId]);
+  // Read: apply `?node=` to the store after the graph loads (re-runs on
+  // `existing`, since loadFromGraph clears the selection) and on every
+  // in-session popstate — which is exactly what Bring/Invite/summon dispatch
+  // when they navigate the follower. Only selects a node that exists in the
+  // loaded graph; clears when the param is gone.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const selectFromUrl = () => {
+      const nodeId = new URLSearchParams(window.location.search).get('node');
+      const store = useGraphEditorStore.getState();
+      if (nodeId && store.nodes.some((n) => n.id === nodeId)) {
+        if (store.selectedNodeId !== nodeId) store.selectNode(nodeId);
+      } else if (!nodeId && store.selectedNodeId) {
+        store.selectNode(null);
+      }
+    };
+    selectFromUrl();
+    window.addEventListener('popstate', selectFromUrl);
+    return () => window.removeEventListener('popstate', selectFromUrl);
+  }, [existing]);
+
   const validationErrors = useMemo(
     () =>
       validateAutomationForm({
