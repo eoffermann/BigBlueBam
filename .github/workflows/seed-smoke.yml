@@ -1,0 +1,116 @@
+name: Seed Smoke
+
+# Why: nothing in CI exercised the seed sidecar, so raw-SQL drift in the
+# scripts/seed-*.mjs seeders shipped green (issue #38 — e.g. migration 0159
+# dropping users.role broke seed-platform.mjs undetected). This job stands up a
+# throwaway postgres, applies every migration, mints an admin/org, and runs the
+# full seed orchestrator — asserting it both exits 0 AND reports `failed: 0`
+# (the orchestrator only treats Phase A as fatal and otherwise exits 0 even when
+# a Phase B/C/D seeder fails, so the log assertion is what actually catches
+# later-phase drift).
+on:
+  pull_request:
+    paths:
+      - 'scripts/seed-*.mjs'
+      - 'scripts/seed-beacons.js'
+      - 'infra/postgres/migrations/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/seed-smoke.yml'
+  push:
+    branches: [main, stable]
+    paths:
+      - 'scripts/seed-*.mjs'
+      - 'scripts/seed-beacons.js'
+      - 'infra/postgres/migrations/**'
+
+jobs:
+  seed-smoke:
+    name: Run the seed orchestrator on a fresh DB
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: bigbluebam
+          POSTGRES_USER: bigbluebam
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bigbluebam -d bigbluebam"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://bigbluebam:postgres@localhost:5432/bigbluebam
+      PGPASSWORD: postgres
+      # env.ts (loaded by the api CLI) requires these to be present/long enough.
+      SESSION_SECRET: ci-seed-smoke-session-secret-0123456789
+      INTERNAL_HELPDESK_SECRET: ci-seed-smoke-helpdesk-secret-0123456789
+      SEED_ORG_SLUG: ci-seed-smoke
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared + api packages
+        run: |
+          pnpm --filter @bigbluebam/shared build
+          pnpm --filter @bigbluebam/api build
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432 -U bigbluebam -d bigbluebam; then exit 0; fi
+            sleep 1
+          done
+          echo "postgres never became ready" >&2
+          exit 1
+
+      - name: Apply all migrations
+        env:
+          MIGRATIONS_DIR: ${{ github.workspace }}/infra/postgres/migrations
+        run: node apps/api/dist/migrate.js
+
+      - name: Create the seed org + admin
+        run: |
+          node apps/api/dist/cli.js create-admin \
+            --email ci-seed@bigbluebam.test \
+            --password 'CiSeedSmoke!Pass123' \
+            --name 'CI Seed Admin' \
+            --org 'CI Seed Smoke'
+
+      - name: Run the seed orchestrator (must exit 0 AND report failed:0)
+        run: |
+          set -o pipefail
+          node scripts/seed-all.mjs 2>&1 | tee seed.log
+          # The orchestrator exits 0 even when a Phase B/C/D seeder fails, so the
+          # exit code alone is not enough — assert the run summary reports zero
+          # failures. A single failed seeder (raw-SQL drift, schema mismatch,
+          # non-idempotent insert) fails the job here.
+          if grep -qE '^[[:space:]]*failed:[[:space:]]*[1-9]' seed.log; then
+            echo "::error::A seeder failed — see the 'failed:' line in the seed log above." >&2
+            grep -E '^[[:space:]]*(ok|skipped|failed):' seed.log >&2
+            exit 1
+          fi
+          if ! grep -qE '^[[:space:]]*failed:[[:space:]]*0' seed.log; then
+            echo "::error::Could not find a 'failed: 0' line — the orchestrator did not finish cleanly." >&2
+            exit 1
+          fi
+          echo "Seed orchestrator completed with failed: 0."
