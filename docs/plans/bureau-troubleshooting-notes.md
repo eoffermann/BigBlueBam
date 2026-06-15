@@ -241,3 +241,57 @@ Rebuild + restart `bureau-api` and `worker`; rebuild any SPA that vendors `@bigb
 7. **Concurrent summon responses:** summon a room with 3+ recipients; have two accept near-simultaneously; `GET /v1/summons/:id` must show both `joined` (previously one could be clobbered back to `pending`).
 8. **DND knock fallback:** knock on a DND'd office → the 423 body's `leave_a_note_endpoint` is `/v1/knocks/leave-note` and posting there delivers the Banter DM.
 9. **Smoke script:** `node scripts/bureau-smoke-test.mjs` against the seeded stack (9 steps) as the regression backstop.
+
+## "Bring" mode: consent + reconnect-survival + Bam deep links (2026-06-15)
+
+Three defects in the just-landed Bring (follow-the-leader) feature, fixed in
+`apps/bureau-api/src/routes/ws.routes.ts`, `apps/bureau-api/src/lib/bring-state.ts`,
+and `apps/frontend/src/main.tsx`. No schema changes.
+
+1. **Follow stopped after one hop.** A Bring leads people *across apps*, and a
+   cross-app navigation is a full page reload that closes + reopens the WS. The
+   socket-close `cleanup()` ran the last-tab teardown (`endLeaderBrings` /
+   `stopFollow`), detaching the follower on the very first hop — and the
+   reloaded page booted with a fresh `role: 'idle'`, so even surviving
+   `bring_navigate` frames were ignored. Fix: the follow relationship now lives
+   on short-TTL Redis leases (`bureau:bring:*`, 90s) that the 15s heartbeat
+   re-extends (`touchBring`); socket-close no longer tears anything down;
+   `getFollowers()` reconciles the leader's follower SET on every read (dropping
+   members whose lease lapsed or repointed); and the WS **connect** handler
+   resumes a returning user — replaying `bring_begin` to a follower (and
+   catching them up to the leader's live location, mirrored into
+   `bureau:bring:target:*`) and `bring_started` to a leader. A follower whose
+   leader has vanished (target lease gone) self-ejects on its next heartbeat.
+
+2. **Admin always force-grabbed.** The server ignored the `force` flag the
+   client already sent and auto-granted for *any* admin. Now a plain "Bring…"
+   always sends a request the target accepts/declines (Invite semantics, even
+   for admins); only the right-click force path auto-grants, and only for an
+   admin/owner/SuperUser (`autoGrant = isAdmin && force`).
+
+3. **Bam task deep links weren't carried.** Bam's `describeLocation` already
+   reports `?task=<id>`, but the route reactor keyed on
+   `window.location.pathname` only, so opening a task drawer (query-only change)
+   never re-ran the location relay → the open task was never reported and
+   Invite/Bring/summon sent the bare board URL. Fixed by keying the reactor
+   (`initialRoute` + `onChange`) on `pathname + search`.
+
+### Deferred / sharp edges
+
+- **Sibling apps still report pathname-only locations.** Only `apps/frontend`
+  (Bam) includes `window.location.search` in its `describeLocation`; bond,
+  board, brief, banter, beacon, … report the bare pathname. Their own
+  deep-link state (`?deal=`, `?doc=`, a selected sticky, …) is therefore *not*
+  carried by Invite/Bring/summon — a follower lands on the list/board, not the
+  open record. Fixing each requires (a) adding `search` to that app's
+  `describeLocation` and (b) the same `pathname + search` reactor change made
+  in Bam. Deferred because reporting the query also makes `presence/here`
+  co-location (exact-URL match) and the "X others here" chip narrow to the
+  exact record — a per-app product call (`deriveUrlSurfaceId` already strips
+  the query, so the *huddle room* stays path-keyed regardless, i.e. no audio
+  re-homing). Do it app-by-app as each one's deep-link UX warrants.
+- **Coarser disconnect notifications.** Because socket-close no longer tears
+  the bring down, a follower who truly closes their tab (vs. navigating) is
+  reaped by TTL within ~90s rather than instantly, and the leader's count
+  corrects on the next read/move rather than via an immediate `bring_progress`.
+  Acceptable trade for surviving navigation; revisit only if the lag is felt.

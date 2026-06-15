@@ -494,7 +494,9 @@ export interface BringRequestEvent {
   app: string;
   label?: string;
 }
-/** You are now following `leaderName`; navigate to `url` and enter follow mode. */
+/** You are now following `leaderName`; navigate to `url` and enter follow mode.
+ *  `resumed` is set when the server is re-attaching us to a bring that survived
+ *  a reconnect (e.g. a cross-app navigation reload), rather than a fresh start. */
 export interface BringBeginEvent {
   type: 'bring_begin';
   leaderId: string;
@@ -503,6 +505,7 @@ export interface BringBeginEvent {
   app: string;
   label?: string;
   forced?: boolean;
+  resumed?: boolean;
 }
 /** The leader moved; navigate along. */
 export interface BringNavigateEvent {

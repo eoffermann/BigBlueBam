@@ -91,6 +91,10 @@ import {
   endLeaderBrings,
   createRequest,
   takeRequest,
+  setBringTarget,
+  getBringTarget,
+  touchBring,
+  isBringLeaderAlive,
 } from '../lib/bring-state.js';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -330,6 +334,47 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       socket,
       frame('connected', { user_id: userId, session_id: client.sessionId }),
     );
+
+    // ── Bring resume ──
+    // A Bring leads people across apps, and a cross-app navigation is a full
+    // page reload that closes and reopens this socket. Re-attach the user to
+    // any bring they were in before the reload so the follow survives every
+    // hop, not just the first: re-extend their leases, then replay the role
+    // frame so the freshly-booted client restores its leading/following UI
+    // (and a follower catches up to wherever the leader is now).
+    try {
+      await touchBring(fastify.redis, orgId, userId);
+      const resumeLeader = await getLeader(fastify.redis, orgId, userId);
+      if (resumeLeader) {
+        const tgt = await getBringTarget(fastify.redis, orgId, resumeLeader);
+        if (tgt) {
+          safeSend(
+            socket,
+            frame('bring_begin', {
+              leaderId: resumeLeader,
+              leaderName: tgt.leaderName,
+              url: tgt.url,
+              app: tgt.app,
+              label: tgt.label,
+              resumed: true,
+            }),
+          );
+        }
+      }
+      const resumeFollowers = await getFollowers(fastify.redis, orgId, userId);
+      if (resumeFollowers.length > 0) {
+        safeSend(
+          socket,
+          frame('bring_started', {
+            granted: [],
+            requested: [],
+            following: resumeFollowers.length,
+          }),
+        );
+      }
+    } catch (err) {
+      fastify.log.warn({ err, userId }, 'Bureau WS bring resume failed');
+    }
 
     // ── Helpers that are closures over `client` / `ctx` ──
 
@@ -748,6 +793,25 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           // ──────────────────────────────────────────────
           case 'heartbeat': {
             await presence.heartbeat(fastify.redis, client.sessionId);
+            // Bring: re-extend my follow/leader leases so the session survives
+            // brief reconnects, and self-eject if the leader I follow has
+            // vanished (their target lease lapsed → they stopped heartbeating).
+            try {
+              await touchBring(fastify.redis, orgId, userId);
+              const hbLeader = await getLeader(fastify.redis, orgId, userId);
+              if (
+                hbLeader &&
+                !(await isBringLeaderAlive(fastify.redis, orgId, hbLeader))
+              ) {
+                await stopFollow(fastify.redis, orgId, hbLeader, userId);
+                safeSend(
+                  socket,
+                  frame('bring_end', { reason: 'leader_disconnected' }),
+                );
+              }
+            } catch (err) {
+              fastify.log.warn({ err, userId }, 'Bureau WS bring heartbeat failed');
+            }
             break;
           }
 
@@ -1195,9 +1259,18 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               );
             }
             // Bring: if this user is leading a follow-along, push the new
-            // location to every active follower so they navigate along.
+            // location to every active follower so they navigate along, and
+            // mirror it into the resume target so a follower who reconnects
+            // mid-tour (a cross-app reload) catches up to where the leader is
+            // now rather than where the bring started.
             const bringFollowers = await getFollowers(fastify.redis, orgId, userId);
             if (bringFollowers.length > 0) {
+              await setBringTarget(fastify.redis, orgId, userId, {
+                url,
+                app,
+                label: label ?? undefined,
+                leaderName: displayName,
+              });
               const navPayload = frame('bring_navigate', {
                 leaderId: userId,
                 url,
@@ -1626,13 +1699,27 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               safeSend(socket, frame('bring_started', { granted: [], requested: [], following: 0 }));
               break;
             }
+            // Consent model (§ Bring): a plain "Bring…" always *asks* — even for
+            // an admin — exactly like Invite, so people can decline. Only the
+            // right-click "force" path auto-grants, and only for an admin/owner/
+            // SuperUser (the client sends `force`; the server is the authority).
+            const force = msg.force === true;
             const isAdmin =
               isSuperuser || userRole === 'owner' || userRole === 'admin';
+            const autoGrant = isAdmin && force;
+            // Seed the resume target up front so a follower who accepts (or who
+            // reconnects mid-tour) can be caught up to the leader's location.
+            await setBringTarget(fastify.redis, orgId, userId, {
+              url,
+              app,
+              label: label ?? undefined,
+              leaderName: displayName,
+            });
             const granted: string[] = [];
             const requested: string[] = [];
             for (const followerId of followerIds) {
               if (followerId === userId) continue;
-              if (isAdmin) {
+              if (autoGrant) {
                 await startFollow(fastify.redis, orgId, userId, followerId);
                 await publishUser(
                   followerId,
@@ -1694,16 +1781,19 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             if (!req || req.followerId !== userId || req.orgId !== orgId) break;
             if (decision === 'accept') {
               const count = await startFollow(fastify.redis, orgId, req.leaderId, userId);
-              // Navigate to the leader's location captured at request time; the
-              // next bring_navigate catches the follower up if the leader moved.
+              // Prefer the leader's LIVE location — they may have moved during
+              // the (up to 90s) the request was pending — and fall back to the
+              // snapshot captured at request time. Either way the next
+              // bring_navigate catches the follower up if the leader moves again.
+              const live = await getBringTarget(fastify.redis, orgId, req.leaderId);
               await publishUser(
                 userId,
                 frame('bring_begin', {
                   leaderId: req.leaderId,
-                  leaderName: req.leaderName,
-                  url: req.url,
-                  app: req.app,
-                  label: req.label,
+                  leaderName: live?.leaderName ?? req.leaderName,
+                  url: live?.url ?? req.url,
+                  app: live?.app ?? req.app,
+                  label: live?.label ?? req.label,
                 }),
               );
               await publishUser(
@@ -1864,36 +1954,17 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           orgId,
           roomId: null,
         });
-        // Bring: only tear down on the user's LAST tab (the per-user state must
-        // survive a single tab closing while another stays connected).
-        const remainingSessions = await fastify.redis.scard(
-          `bureau:user:${userId}:sessions`,
-        );
-        if (remainingSessions === 0) {
-          const myFollowers = await endLeaderBrings(fastify.redis, orgId, userId);
-          await Promise.all(
-            myFollowers.map((f) =>
-              publishUser(
-                f,
-                frame('bring_end', {
-                  reason: 'leader_disconnected',
-                  leaderName: displayName,
-                }),
-              ).catch(() => {}),
-            ),
-          );
-          const myLeader = await getLeader(fastify.redis, orgId, userId);
-          if (myLeader) {
-            const count = await stopFollow(fastify.redis, orgId, myLeader, userId);
-            await publishUser(
-              myLeader,
-              frame('bring_progress', {
-                following: count,
-                left: { id: userId, name: displayName },
-              }),
-            ).catch(() => {});
-          }
-        }
+        // Bring: do NOT tear down the follow on socket close. A cross-app
+        // navigation (the whole point of Bring) is a full page reload that
+        // closes this socket and reopens a new one ~1-2s later — and a socket
+        // close is indistinguishable from a real departure at this layer.
+        // Tearing down here detached the follower on the very first hop. The
+        // follow leases instead carry a short TTL that the owner's heartbeat
+        // re-extends (touchBring): a reconnecting user resumes (see the connect
+        // handler), while a genuinely-gone user stops heartbeating and is
+        // reaped when the lease lapses — getFollowers() reconciles the leader
+        // set on read, and a follower whose leader vanished self-ejects on its
+        // next heartbeat.
       } catch (err) {
         fastify.log.warn({ err, userId }, 'Bureau WS cleanup partial failure');
       } finally {

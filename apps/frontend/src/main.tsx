@@ -66,7 +66,13 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    // Include the search string in the route trigger: opening a task drawer
+    // changes only `?task=<id>` (same pathname), and describeLocation already
+    // reports the query. Keying the reactor on pathname alone meant the
+    // location relay never re-ran on a query-only change, so the open task was
+    // never reported and Invite/Bring/summon sent the bare board URL. Keying on
+    // pathname+search makes a drawer open/close re-announce the exact deep link.
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -78,7 +84,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);
