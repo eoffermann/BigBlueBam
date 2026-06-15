@@ -176,6 +176,15 @@ export default async function icalRoutes(fastify: FastifyInstance) {
         const token = request.query.token;
         const prefix = token.slice(0, 8);
 
+        // #40 sibling: service-account tokens are `bbam_svc_<random>`, so
+        // token.slice(0,8) is the literal 'bbam_svc' for every svc key — a
+        // degenerate bucket. This path has no DoS cap (it verifies every
+        // fetched candidate), so the only risk is the fetch window truncating
+        // the bucket and excluding a valid svc key past the 10th row; raise the
+        // limit for that known bucket to match the auth-plugin fix. (Mirrors
+        // SVC_BUCKET_MAX in plugins/auth.ts; svc tokens as iCal feed tokens are
+        // rare, but the root cause is shared.)
+        const SVC_KEY_PREFIX = 'bbam_svc';
         const candidates = await db
           .select({
             apiKey: apiKeys,
@@ -184,7 +193,7 @@ export default async function icalRoutes(fastify: FastifyInstance) {
           .from(apiKeys)
           .innerJoin(users, eq(apiKeys.user_id, users.id))
           .where(eq(apiKeys.key_prefix, prefix))
-          .limit(10);
+          .limit(prefix === SVC_KEY_PREFIX ? 64 : 10);
 
         for (const candidate of candidates) {
           if (candidate.apiKey.expires_at && new Date(candidate.apiKey.expires_at) < new Date()) {
