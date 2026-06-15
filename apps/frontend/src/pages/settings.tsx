@@ -123,6 +123,10 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
   const [createdAgentKey, setCreatedAgentKey] = useState<{ key: string; name: string } | null>(null);
   const [rotatedAgentKey, setRotatedAgentKey] = useState<{ key: string; name: string } | null>(null);
   const [agentMutationError, setAgentMutationError] = useState<string | null>(null);
+  // #25: revoked agents stay in the list for audit but are hidden by default;
+  // a "Show revoked" toggle reveals them rather than leaving dead rows cluttering
+  // the table with no operator path.
+  const [showRevokedAgents, setShowRevokedAgents] = useState(false);
 
   const [showAddWebhook, setShowAddWebhook] = useState<string | null>(null); // project id
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -1176,6 +1180,24 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
 
                   {agentsData.length > 0 ? (
                     <div className="overflow-x-auto">
+                      {(() => {
+                        const isRevoked = (a: (typeof agentsData)[number]) =>
+                          a.disabled_at !== null || a.policy?.enabled === false;
+                        const revokedCount = agentsData.filter(isRevoked).length;
+                        return revokedCount > 0 ? (
+                          <div className="flex justify-end mb-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowRevokedAgents((v) => !v)}
+                              className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline"
+                            >
+                              {showRevokedAgents
+                                ? `Hide revoked (${revokedCount})`
+                                : `Show revoked (${revokedCount})`}
+                            </button>
+                          </div>
+                        ) : null;
+                      })()}
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-zinc-200 dark:border-zinc-700 text-left">
@@ -1188,7 +1210,13 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                           </tr>
                         </thead>
                         <tbody>
-                          {agentsData.map((agent) => {
+                          {agentsData
+                            .filter(
+                              (agent) =>
+                                showRevokedAgents ||
+                                !(agent.disabled_at !== null || agent.policy?.enabled === false),
+                            )
+                            .map((agent) => {
                             const isDisabled = agent.disabled_at !== null || agent.policy?.enabled === false;
                             const projectNames = (agent.api_key?.project_ids ?? []).map(
                               (id) => projects.find((p) => p.id === id)?.name ?? id.slice(0, 8),
