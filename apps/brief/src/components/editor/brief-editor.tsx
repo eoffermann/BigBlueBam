@@ -53,6 +53,10 @@ function buildExtensions(options?: {
   ydoc?: Y.Doc;
   provider?: WebsocketProvider | null;
   fieldName?: string;
+  /** Cursor identity broadcast to peers (name + color). MUST be passed so
+   *  CollaborationCursor's plugin init seeds the awareness with the real name
+   *  instead of its `{ name: null }` default (which renders as "User: <id>"). */
+  cursorUser?: { name: string; color: string } | null;
 }) {
   const extensions = [
     StarterKit.configure({
@@ -143,6 +147,61 @@ function buildExtensions(options?: {
       extensions.push(
         CollaborationCursor.configure({
           provider: options.provider,
+          // Seed the extension's awareness `user` with the real identity; its
+          // plugin init writes this.options.user into awareness, clobbering any
+          // earlier setLocalStateField, so without this every peer is "User: <id>".
+          ...(options.cursorUser ? { user: options.cursorUser } : {}),
+          // Self-contained render: a thin insert caret at the peer's position
+          // plus a small name pill. The default render emits a bare
+          // `.collaboration-cursor__label` <div> that, with no CSS shipped here,
+          // lays out as a full-width block bar, and falls back to "User: <id>"
+          // when the awareness name is missing. We inline the styles (so it
+          // never depends on a stylesheet) and show the peer's name.
+          render: (user: { name?: string; color?: string }) => {
+            const color = user.color || '#6366f1';
+            const name =
+              typeof user.name === 'string' && user.name.trim()
+                ? user.name.trim()
+                : 'Someone';
+            const caret = document.createElement('span');
+            caret.classList.add('collaboration-cursor__caret');
+            caret.setAttribute(
+              'style',
+              [
+                `border-left: 1px solid ${color}`,
+                `border-right: 1px solid ${color}`,
+                'margin-left: -1px',
+                'margin-right: -1px',
+                'position: relative',
+                'box-sizing: border-box',
+                'word-break: normal',
+                'pointer-events: none',
+              ].join(';'),
+            );
+            const label = document.createElement('div');
+            label.classList.add('collaboration-cursor__label');
+            label.textContent = name;
+            label.setAttribute(
+              'style',
+              [
+                'position: absolute',
+                'top: -1.3em',
+                'left: -1px',
+                'white-space: nowrap',
+                'font-size: 11px',
+                'line-height: 1.4',
+                'font-weight: 600',
+                'border-radius: 6px',
+                'padding: 1px 6px',
+                'color: #fff',
+                `background: ${color}`,
+                'user-select: none',
+                'pointer-events: none',
+              ].join(';'),
+            );
+            caret.appendChild(label);
+            return caret;
+          },
         }) as any,
       );
     }
@@ -193,17 +252,19 @@ export function useCollaborativeEditor({
   onUpdate,
   editable = true,
   fieldName,
+  cursorUser,
 }: {
   ydoc: Y.Doc | undefined;
   provider: WebsocketProvider | null | undefined;
   onUpdate: (html: string) => void;
   editable?: boolean;
   fieldName?: string;
+  cursorUser?: { name: string; color: string } | null;
 }) {
   const editor = useEditor(
     {
       extensions: buildExtensions(
-        ydoc ? { ydoc, provider: provider ?? null, fieldName } : undefined,
+        ydoc ? { ydoc, provider: provider ?? null, fieldName, cursorUser } : undefined,
       ),
       // When collaborative, the content comes from Yjs. Passing empty string
       // avoids overwriting the shared document with stale HTML.

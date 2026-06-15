@@ -2,18 +2,31 @@ import type { BriefDocument } from '@/hooks/use-documents';
 import { StatusBadge } from '@/components/document/status-badge';
 import { Avatar } from '@/components/common/avatar';
 import { formatRelativeTime } from '@/lib/utils';
-import { Star, FileText } from 'lucide-react';
+import { Star, FileText, Trash2 } from 'lucide-react';
 
 interface DocumentCardProps {
   document: BriefDocument;
   onClick: () => void;
+  /** Archive (soft-delete) this document from the list. Omitted hides the control. */
+  onDelete?: () => void;
+  deleting?: boolean;
 }
 
-export function DocumentCard({ document, onClick }: DocumentCardProps) {
+export function DocumentCard({ document, onClick, onDelete, deleting }: DocumentCardProps) {
   return (
-    <button
+    // A div (not a button) so the Delete control can be a real nested button —
+    // a button inside a button is invalid and swallows the inner click.
+    <div
       onClick={onClick}
-      className="w-full text-left rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 hover:border-primary-300 hover:bg-primary-50/30 dark:hover:border-primary-700 dark:hover:bg-primary-900/10 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      className="group w-full cursor-pointer text-left rounded-xl border border-zinc-200 dark:border-zinc-700 p-4 hover:border-primary-300 hover:bg-primary-50/30 dark:hover:border-primary-700 dark:hover:bg-primary-900/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -46,8 +59,26 @@ export function DocumentCard({ document, onClick }: DocumentCardProps) {
             </div>
           </div>
         </div>
-        <StatusBadge status={document.status} />
+        <div className="flex items-center gap-2 shrink-0">
+          <StatusBadge status={document.status} />
+          {onDelete && document.status !== 'archived' && (
+            <button
+              type="button"
+              data-document-delete
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              disabled={deleting}
+              title="Delete document"
+              aria-label={`Delete ${document.title}`}
+              className="rounded-md p-1.5 text-zinc-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
-    </button>
+    </div>
   );
 }

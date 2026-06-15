@@ -42,7 +42,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
 
   // Real-time collaboration via Yjs when editing an existing document
   const docIdForCollab = isEditMode && existing ? existing.id : null;
-  const { ydoc, provider, isSynced } = useCollaboration(docIdForCollab);
+  const { ydoc, provider, isSynced, cursorUser } = useCollaboration(docIdForCollab);
 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
@@ -139,6 +139,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
   const collabEditor = useCollaborativeEditor({
     ydoc: docIdForCollab ? ydoc : undefined,
     provider: docIdForCollab ? provider : undefined,
+    cursorUser: docIdForCollab ? cursorUser : undefined,
     onUpdate: handleEditorUpdate,
     editable: true,
   });

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Search, Loader2, FolderOpen, X } from 'lucide-react';
-import { useDocumentList, type DocumentStatus, type DocumentListFilters } from '@/hooks/use-documents';
+import { useDocumentList, useArchiveDocument, type DocumentStatus, type DocumentListFilters } from '@/hooks/use-documents';
 import { useFolders } from '@/hooks/use-folders';
 import { DocumentCard } from '@/components/document/document-card';
 import { Button } from '@/components/common/button';
@@ -46,7 +46,13 @@ export function DocumentListPage({ onNavigate, folderId }: DocumentListPageProps
     fetchNextPage,
   } = useDocumentList(filters);
 
-  const documents = data?.pages.flatMap((p) => p.data) ?? [];
+  const allDocs = data?.pages.flatMap((p) => p.data) ?? [];
+  // Archived docs are the "trash": shown only under the Archived filter, never
+  // in the active views — so deleting (archiving) a doc removes it from the
+  // list the user is looking at instead of lingering with an "Archived" badge.
+  const documents =
+    statusFilter === 'archived' ? allDocs : allDocs.filter((d) => d.status !== 'archived');
+  const archiveDoc = useArchiveDocument();
 
   return (
     <div className="flex flex-col h-full">
@@ -136,6 +142,12 @@ export function DocumentListPage({ onNavigate, folderId }: DocumentListPageProps
                   key={doc.id}
                   document={doc}
                   onClick={() => onNavigate(`/documents/${doc.slug ?? doc.id}`)}
+                  onDelete={() => {
+                    if (window.confirm(`Delete "${doc.title}"? You can restore it from the Archived filter.`)) {
+                      archiveDoc.mutate(doc.id);
+                    }
+                  }}
+                  deleting={archiveDoc.isPending && archiveDoc.variables === doc.id}
                 />
               ))}
             </div>

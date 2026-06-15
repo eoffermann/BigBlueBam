@@ -86,7 +86,9 @@ export function useCollaboration(docId: string | null | undefined) {
 
     // Set awareness local state so other users see cursor info
     p.awareness.setLocalStateField('user', {
-      name: user.display_name,
+      // Never null — a missing display_name otherwise renders as the cursor
+      // extension's "User: <clientId>" fallback for everyone else in the doc.
+      name: user.display_name || user.email || 'Someone',
       color: pickColor(user.id),
       userId: user.id,
     });
@@ -113,9 +115,23 @@ export function useCollaboration(docId: string | null | undefined) {
     };
   }, []);
 
+  // The cursor identity broadcast to peers. CollaborationCursor's plugin init
+  // OVERWRITES the awareness `user` field with its own `user` option, so the
+  // setLocalStateField above is not enough on its own — the editor must be
+  // configured with this same object (see brief-editor.tsx) or every peer sees
+  // the extension's "User: <clientId>" fallback.
+  const cursorUser = useMemo(
+    () =>
+      user
+        ? { name: user.display_name || user.email || 'Someone', color: pickColor(user.id) }
+        : null,
+    [user],
+  );
+
   return {
     ydoc,
     provider,
     isSynced,
+    cursorUser,
   };
 }
