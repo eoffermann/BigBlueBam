@@ -1,7 +1,7 @@
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { db } from '../db/index.js';
+import { db, connection } from '../db/index.js';
 import { env } from '../env.js';
 import {
   blastCampaigns,
@@ -116,6 +116,22 @@ export async function createCampaign(
   orgId: string,
   userId: string,
 ) {
+  // When the campaign doesn't set its own reply-to, fall back to the creator's
+  // Bond per-user reply-to (bond_user_settings, migration 0189) so client
+  // replies land in their monitored inbox instead of an unmonitored address.
+  // Best-effort cross-app read: if Bond isn't deployed (table absent) we skip.
+  let replyToEmail = input.reply_to_email;
+  if (!replyToEmail) {
+    try {
+      const rows = await connection<{ reply_to_email: string | null }[]>`
+        SELECT reply_to_email FROM bond_user_settings WHERE user_id = ${userId} LIMIT 1
+      `;
+      if (rows[0]?.reply_to_email) replyToEmail = rows[0].reply_to_email;
+    } catch {
+      // bond_user_settings not present in this deployment — skip the default.
+    }
+  }
+
   const [campaign] = await db
     .insert(blastCampaigns)
     .values({
@@ -128,7 +144,7 @@ export async function createCampaign(
       segment_id: input.segment_id,
       from_name: input.from_name,
       from_email: input.from_email,
-      reply_to_email: input.reply_to_email,
+      reply_to_email: replyToEmail,
       status: 'draft',
       created_by: userId,
     })

@@ -22,7 +22,7 @@ type Route =
   | { page: 'companies' }
   | { page: 'company-detail'; id: string }
   | { page: 'analytics' }
-  | { page: 'settings'; tab: 'pipelines' | 'fields' | 'scoring' }
+  | { page: 'settings'; tab: 'pipelines' | 'fields' | 'scoring' | 'email' }
   | { page: 'help' };
 
 const BASE_PATH = '/bond';
@@ -44,9 +44,12 @@ function parseRoute(path: string): Route {
   if (p === '/analytics') return { page: 'analytics' };
 
   // /settings/:tab
-  const settingsMatch = p.match(/^\/settings\/(pipelines|fields|scoring)$/);
+  const settingsMatch = p.match(/^\/settings\/(pipelines|fields|scoring|email)$/);
   if (settingsMatch) {
-    return { page: 'settings', tab: settingsMatch[1] as 'pipelines' | 'fields' | 'scoring' };
+    return {
+      page: 'settings',
+      tab: settingsMatch[1] as 'pipelines' | 'fields' | 'scoring' | 'email',
+    };
   }
   if (p.startsWith('/settings')) {
     return { page: 'settings', tab: 'pipelines' };

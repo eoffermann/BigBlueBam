@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Layers, FormInput, Star, Plus, Trash2, GripVertical, Edit2, X } from 'lucide-react';
+import { Layers, FormInput, Star, Plus, Trash2, GripVertical, Edit2, X, Mail } from 'lucide-react';
 import { Button } from '@/components/common/button';
 import { Input } from '@/components/common/input';
 import { Badge } from '@/components/common/badge';
@@ -22,10 +22,11 @@ import {
   type CustomFieldOption,
 } from '@/hooks/use-custom-fields';
 import { Loader2 } from 'lucide-react';
+import { useUserSettings, useUpdateUserSettings } from '@/hooks/use-user-settings';
 
 interface SettingsPageProps {
   onNavigate: (path: string) => void;
-  activeTab?: 'pipelines' | 'fields' | 'scoring';
+  activeTab?: 'pipelines' | 'fields' | 'scoring' | 'email';
 }
 
 /* ------------------------------------------------------------------ */
@@ -1000,6 +1001,86 @@ function EditScoringRuleDialog({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Email settings (per-user reply-to)                                 */
+/* ------------------------------------------------------------------ */
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function EmailSettings() {
+  const { data, isLoading } = useUserSettings();
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+      </div>
+    );
+  }
+  // Remount (and re-seed the form) whenever the stored value changes.
+  const initial = data?.data.reply_to_email ?? '';
+  return <EmailSettingsForm key={initial} initial={initial} />;
+}
+
+function EmailSettingsForm({ initial }: { initial: string }) {
+  const update = useUpdateUserSettings();
+  const [value, setValue] = useState(initial);
+
+  const trimmed = value.trim();
+  const invalid = trimmed.length > 0 && !EMAIL_RE.test(trimmed);
+  const dirty = trimmed !== initial.trim();
+
+  const handleSave = () => {
+    if (invalid) return;
+    update.mutate({ reply_to_email: trimmed || null });
+  };
+
+  return (
+    <div className="max-w-xl">
+      <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Email</h1>
+      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        Set a reply-to address for outreach sent on your behalf. When Bond reaches
+        out to a client (for example, an email campaign you create), client replies
+        go here instead of your personal inbox — so nothing lands in an unmonitored
+        address.
+      </p>
+
+      <div className="mt-6">
+        <label
+          htmlFor="bond-reply-to"
+          className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
+        >
+          Reply-to address
+        </label>
+        <Input
+          id="bond-reply-to"
+          type="email"
+          placeholder="team-inbox@yourcompany.com"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        {invalid ? (
+          <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">
+            Enter a valid email address, or leave it blank to clear.
+          </p>
+        ) : (
+          <p className="mt-1.5 text-xs text-zinc-400">
+            Leave blank to use the default from address. Applies to new campaigns.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 flex items-center gap-3">
+        <Button onClick={handleSave} loading={update.isPending} disabled={invalid || !dirty}>
+          Save
+        </Button>
+        {update.isSuccess && !dirty && (
+          <span className="text-sm text-green-600 dark:text-green-400">Saved</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Settings page container                                            */
 /* ------------------------------------------------------------------ */
 
@@ -1007,6 +1088,7 @@ const TABS = [
   { id: 'pipelines' as const, label: 'Pipelines', icon: Layers },
   { id: 'fields' as const, label: 'Custom Fields', icon: FormInput },
   { id: 'scoring' as const, label: 'Lead Scoring', icon: Star },
+  { id: 'email' as const, label: 'Email', icon: Mail },
 ];
 
 export function SettingsPage({ onNavigate, activeTab = 'pipelines' }: SettingsPageProps) {
@@ -1045,6 +1127,7 @@ export function SettingsPage({ onNavigate, activeTab = 'pipelines' }: SettingsPa
         {activeTab === 'pipelines' && <PipelinesSettings />}
         {activeTab === 'fields' && <FieldsSettings />}
         {activeTab === 'scoring' && <ScoringSettings />}
+        {activeTab === 'email' && <EmailSettings />}
       </div>
     </div>
   );

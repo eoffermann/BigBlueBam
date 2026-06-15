@@ -12,7 +12,7 @@ import {
 // this SPA forwards to the SuperUser Log Analysis tab. Initialised as
 // the first thing after imports so errors during boot are caught.
 initSystemErrorReporter({ service: 'bond' });
-import { App } from './app';
+import { App } from './App';
 import './styles/globals.css';
 
 const queryClient = new QueryClient({

@@ -22,6 +22,7 @@ export { bondDealStageHistory } from './bond-deal-stage-history.js';
 export { bondLeadScoringRules } from './bond-lead-scoring-rules.js';
 export { bondCustomFieldDefinitions } from './bond-custom-field-definitions.js';
 export { bondImportMappings } from './bond-import-mappings.js';
+export { bondUserSettings } from './bond-user-settings.js';
 
 // Shared cross-app dedupe-decisions table (migration 0136, Wave 5 §7)
 export { dedupeDecisions } from './dedupe-decisions.js';
