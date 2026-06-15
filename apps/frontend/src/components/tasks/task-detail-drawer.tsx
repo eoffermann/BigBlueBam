@@ -541,6 +541,28 @@ export function TaskDetailDrawer({
   const doneSubtasks = subtasks.filter((s) => s.completed_at != null);
   const subtaskProgress = subtasks.length > 0 ? Math.round((doneSubtasks.length / subtasks.length) * 100) : 0;
 
+  // The Bureau widget (a persistent floating tool, z-index ~max) overlaps this
+  // drawer. Because the drawer is a MODAL Radix dialog, a pointer-down anywhere
+  // outside its content dismisses it — so clicking "Invite"/"Hunt" on the Bureau
+  // widget would close the task before the action runs (and break invite-to-the-
+  // open-task, since the task closes before the invite captures the URL). Keep
+  // the drawer open when the interaction originates from any Bureau element
+  // (everything in the widget carries a data-bureau-* attribute).
+  const isBureauTarget = (node: EventTarget | null): boolean => {
+    let el = node instanceof Element ? node : null;
+    while (el) {
+      const ds = (el as HTMLElement).dataset;
+      if (ds) {
+        for (const key in ds) if (key.startsWith('bureau')) return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  };
+  const keepOpenForBureau = (event: { detail?: { originalEvent?: Event }; preventDefault: () => void }) => {
+    if (isBureauTarget(event.detail?.originalEvent?.target ?? null)) event.preventDefault();
+  };
+
   return (
     <RadixDialog.Root open={open} onOpenChange={handleOpenChange}>
       <AnimatePresence>
@@ -554,7 +576,11 @@ export function TaskDetailDrawer({
                 exit={{ opacity: 0 }}
               />
             </RadixDialog.Overlay>
-            <RadixDialog.Content asChild>
+            <RadixDialog.Content
+              asChild
+              onPointerDownOutside={keepOpenForBureau}
+              onInteractOutside={keepOpenForBureau}
+            >
               <motion.div
                 className="fixed top-0 right-0 h-full w-full max-w-3xl bg-white dark:bg-zinc-900 shadow-2xl z-50 flex flex-col"
                 initial={{ x: '100%' }}

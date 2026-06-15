@@ -845,6 +845,13 @@ const boxContainerStyle: CSSProperties = {
   bottom: 16,
   right: 16,
   zIndex: 2147483640,
+  // The docked box is a persistent floating tool and must stay clickable even
+  // when the host app opens a modal Radix dialog — which sets
+  // `pointer-events: none` on <body>, that the box would otherwise inherit,
+  // leaving it visually on top but click-transparent (clicks fall through to
+  // the modal behind it). Explicit `auto` re-enables interaction. (collapsedBarStyle
+  // spreads this, so both expanded + collapsed states are covered.)
+  pointerEvents: 'auto',
   minWidth: 220,
   maxWidth: 280,
   background: 'rgba(24, 24, 27, 0.96)',
