@@ -59,7 +59,13 @@ function describeLocation(): LocationDescriptor | undefined {
   const surface_id =
     eventMatch && UUID_RE.test(eventMatch[1]!) ? eventMatch[1]! : undefined;
   return {
-    url: window.location.origin + path,
+    // Include the query string so the reported location carries any deep-link
+    // state (e.g. a future ?tab=/?drawer= param) along with the path. Bureau
+    // invite/summon sends this url verbatim and the receiving navigate()
+    // preserves the search, so a teammate you bring lands on the exact record
+    // you have open. surface_id stays path-derived — the event id lives in the
+    // path, not the query.
+    url: window.location.origin + path + window.location.search,
     app: 'book',
     label: path,
     surface_id,
@@ -69,7 +75,10 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    // Key the route trigger on pathname+search so a query-only change still
+    // re-announces the deep link (matches describeLocation, which reports the
+    // search).
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -81,7 +90,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

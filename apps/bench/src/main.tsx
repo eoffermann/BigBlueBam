@@ -50,8 +50,14 @@ createRoot(rootElement).render(
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/bench')) return undefined;
+  // Include the query string so the reported location carries deep-link state.
+  // Bureau invite/summon sends this url verbatim and the receiving navigate()
+  // preserves the search, so a teammate you bring in lands on the exact
+  // dashboard you have open — not the bare Bench home. The dashboard itself is
+  // path-addressable (/bench/dashboards/:id), so the path already carries the
+  // record; the search is included for any future query-borne deep-link state.
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'bench',
     label: path,
   };
@@ -60,7 +66,11 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    // Key the route reactor on pathname+search so a query-only change still
+    // re-announces the deep link (matches describeLocation, which reports the
+    // query). Bench records are path-borne today, but this keeps the relay
+    // consistent with Bam and correct if a query-borne deep link is added.
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -72,7 +82,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

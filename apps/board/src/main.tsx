@@ -61,7 +61,12 @@ function describeLocation(): LocationDescriptor | undefined {
     surface_id = m[1]!;
   }
   return {
-    url: window.location.origin + path,
+    // Include the query string so the reported location carries any deep-link
+    // state. The board id itself lives in the path (/board/:id), and Board's
+    // top-level router is already popstate-reactive, so a brought teammate
+    // lands on the exact canvas; carrying `search` keeps the reported url the
+    // full URL rather than the bare path.
+    url: window.location.origin + path + window.location.search,
     app: 'board',
     label: path,
     surface_id,
@@ -71,7 +76,9 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    // Key the route trigger on pathname+search so a query-only change still
+    // re-announces the deep link, matching what describeLocation reports.
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -83,7 +90,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

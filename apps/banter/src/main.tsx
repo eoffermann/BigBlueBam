@@ -70,7 +70,7 @@ function describeLocation(): LocationDescriptor | undefined {
     const channelId = window.__banterChannelIndex?.[slug];
     if (channelId) {
       return {
-        url: window.location.origin + path,
+        url: window.location.origin + path + window.location.search,
         app: 'banter',
         label: `#${slug}`,
         surface_id: channelId,
@@ -80,7 +80,7 @@ function describeLocation(): LocationDescriptor | undefined {
     // so summon still works. The huddle target backfills on the next
     // setRoute() call after the channels query resolves.
     return {
-      url: window.location.origin + path,
+      url: window.location.origin + path + window.location.search,
       app: 'banter',
       label: `#${slug}`,
     };
@@ -90,7 +90,7 @@ function describeLocation(): LocationDescriptor | undefined {
   const dmMatch = path.match(/^\/banter\/dm\/([^/]+)$/);
   if (dmMatch) {
     return {
-      url: window.location.origin + path,
+      url: window.location.origin + path + window.location.search,
       app: 'banter',
       label: 'DM',
       surface_id: dmMatch[1]!,
@@ -98,7 +98,7 @@ function describeLocation(): LocationDescriptor | undefined {
   }
 
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'banter',
     label: path,
   };
@@ -107,7 +107,7 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -119,7 +119,7 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () => mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   // When the channels query resolves, re-evaluate describeLocation()
   // so a fresh page load that lands on /banter/channels/:slug picks up

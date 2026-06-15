@@ -50,8 +50,13 @@ createRoot(rootElement).render(
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/blueprint')) return undefined;
+  // Include the query string so the reported location carries deep-link state
+  // like `?node=<id>` (the selected graph node). Bureau invite/summon sends
+  // this url verbatim, and the receiving navigate() preserves the search, so a
+  // teammate you pull in lands on the exact diagram (and node) you have open —
+  // not the bare diagram. The label stays the bare path.
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'blueprint',
     label: path,
   };
@@ -60,7 +65,13 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    // Include the search string in the route trigger: selecting a node changes
+    // only `?node=<id>` (same pathname), and describeLocation already reports
+    // the query. Keying the reactor on pathname alone meant a query-only change
+    // never re-ran the location relay, so the selected node was never reported
+    // and Invite/Bring/summon sent the bare diagram URL. Keying on
+    // pathname+search makes a selection change re-announce the exact deep link.
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -72,7 +83,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

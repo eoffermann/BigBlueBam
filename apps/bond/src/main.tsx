@@ -50,8 +50,13 @@ createRoot(rootElement).render(
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/bond')) return undefined;
+  // Include the query string so the reported location carries any deep-link
+  // state. Bond's record views are path-based (/bond/deals/:id etc.), so the
+  // pathname already pins the record; carrying the search too keeps parity with
+  // Bam and means a teammate you Bring/Invite/summon lands on the exact record
+  // you have open — not the bare pipeline/list.
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'bond',
     label: path,
   };
@@ -60,7 +65,7 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -72,7 +77,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

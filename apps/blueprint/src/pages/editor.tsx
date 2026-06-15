@@ -199,7 +199,17 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   // This avoids round-trip latency on every node-drag tick.
   const [rfNodes, setRfNodes] = useState<Node[]>([]);
   const [rfEdges, setRfEdges] = useState<Edge[]>([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  // Seed the selection from the `?node=` deep link at mount. Without this the
+  // state starts null, and the write-effect below fires on its first run
+  // (before the graph has loaded, so the read-effect can't apply the param yet)
+  // sees `selectedNodeId === null` next to an existing `?node=`, and STRIPS the
+  // param — so a brought/invited follower never lands on the leader's node. The
+  // read-effect validates this id against the loaded graph and clears it if the
+  // node turns out not to exist. (Same mount-order trap as Bam's ?task= drawer.)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('node');
+  });
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
@@ -282,6 +292,82 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   useEffect(() => {
     setSelectedAlgo(diagram?.layout_algorithm ?? 'layered');
   }, [diagram?.layout_algorithm]);
+
+  /* ------------------------------------------------------------------ */
+  /*  Selected-node deep link (`?node=<id>`)                             */
+  /* ------------------------------------------------------------------ */
+
+  // Make the selected node URL-addressable so opening a node's inspector is a
+  // deep link a Bureau Bring/Invite/summon can carry — the same mechanism as
+  // Bam's `?task=`. Without this, node selection lived only in component state,
+  // so a follower brought to a diagram never saw which node the leader had open.
+  //
+  // Write: reflect the current selection into the URL (replaceState — no history
+  // spam, and it does NOT fire popstate, so it can't loop with the reader
+  // below). The diagram route lives in the pathname (`/blueprint/d/:id`), which
+  // this never touches, so the query-only rewrite can't disturb routing.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('node');
+    if (selectedNodeId) {
+      if (current === selectedNodeId) return;
+      url.searchParams.set('node', selectedNodeId);
+    } else {
+      if (!current) return;
+      url.searchParams.delete('node');
+    }
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }, [selectedNodeId]);
+
+  // Read: apply `?node=` to the selection after the graph loads (re-runs on
+  // `graph`) and on every in-session popstate — which is exactly what
+  // Bring/Invite/summon dispatch when they navigate the follower. Only selects
+  // a node that exists in the loaded graph; clears when the param is gone. The
+  // `graph` guard keeps mount-time from clobbering a deep link before the nodes
+  // are known.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const selectFromUrl = () => {
+      const nodeId = new URLSearchParams(window.location.search).get('node');
+      if (nodeId && (graph?.nodes.some((n) => n.id === nodeId) ?? false)) {
+        setSelectedNodeId((prev) => (prev === nodeId ? prev : nodeId));
+        setSelectedEdgeId(null);
+      } else if (!nodeId) {
+        setSelectedNodeId((prev) => (prev === null ? prev : null));
+      } else if (graph) {
+        // Param points to a node that isn't in the loaded graph (stale link, or
+        // the seed value from the mount initializer for a deleted node). Now
+        // that the graph IS known, clear the phantom selection.
+        setSelectedNodeId((prev) => (prev === null ? prev : null));
+      }
+    };
+    selectFromUrl();
+    window.addEventListener('popstate', selectFromUrl);
+    return () => window.removeEventListener('popstate', selectFromUrl);
+  }, [graph]);
+
+  // Mirror a *programmatic* node selection (the `?node=` deep link, or the live
+  // popstate a Bring/Invite/summon dispatches) onto React Flow's `selected`
+  // flag, so the followed node is visibly highlighted on the canvas — not just
+  // opened in the inspector. Click-driven selection already keeps the two in
+  // sync (React Flow sets `selected` and fires onSelectionChange together); this
+  // covers the case where selectedNodeId changes without a canvas click, AND the
+  // graph-rebuild above (which wipes selection) running on the same load tick.
+  // The `changed` guard returns the same array reference when nothing differs,
+  // so React bails the re-render and this can't loop with onSelectionChange.
+  useEffect(() => {
+    setRfNodes((prev) => {
+      let changed = false;
+      const next = prev.map((n) => {
+        const shouldSelect = n.id === selectedNodeId;
+        if (n.selected === shouldSelect) return n;
+        changed = true;
+        return { ...n, selected: shouldSelect };
+      });
+      return changed ? next : prev;
+    });
+  }, [selectedNodeId, rfNodes]);
 
   /* ------------------------------------------------------------------ */
   /*  Delete-confirmation chokepoint (declared before onNodesChange so   */
@@ -1047,7 +1133,7 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
         {/* Snapshot + export + archive */}
         <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-200 dark:border-zinc-700">
           <PresenceChipStrip
-            url={`${window.location.origin}${window.location.pathname}`}
+            url={`${window.location.origin}${window.location.pathname}${window.location.search}`}
             surfaceApp="blueprint"
             surfaceId={diagramId}
             surfaceLabel={diagram.name}

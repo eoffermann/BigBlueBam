@@ -59,7 +59,11 @@ function describeLocation(): LocationDescriptor | undefined {
   const m = tail.match(/^\/documents\/([^/]+)(?:\/edit)?$/);
   const surface_id = m ? m[1] : undefined;
   return {
-    url: window.location.origin + path,
+    // Include the query string so the reported location carries deep-link
+    // state. Bureau invite/summon sends this url verbatim and the receiving
+    // navigate() preserves the search, so a teammate brought in lands on the
+    // exact document — not the bare list. The label stays the bare path.
+    url: window.location.origin + path + window.location.search,
     app: 'brief',
     label: path,
     surface_id,
@@ -69,7 +73,9 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    // Key the route reactor on pathname+search so a query-only change still
+    // re-announces the deep link (describeLocation already reports the query).
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -81,7 +87,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

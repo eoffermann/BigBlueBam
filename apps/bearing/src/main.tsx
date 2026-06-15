@@ -50,8 +50,12 @@ createRoot(rootElement).render(
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/bearing')) return undefined;
+  // Include the query string so the reported location carries deep-link state.
+  // Goal detail is path-based (/bearing/goals/:id), but mirroring Bam's pattern
+  // keeps the reported url faithful to any query-only state and lets Bureau
+  // invite/summon send the exact url verbatim. The label stays the bare path.
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'bearing',
     label: path,
   };
@@ -60,7 +64,7 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -72,7 +76,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);

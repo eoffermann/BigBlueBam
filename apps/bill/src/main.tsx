@@ -50,8 +50,15 @@ createRoot(rootElement).render(
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/bill')) return undefined;
+  // Include the query string so the reported location carries any deep-link
+  // state. Bill records are path-addressable (/bill/invoices/:id etc.), so the
+  // path already pins the open record; the search is appended for parity with
+  // Bam and so any future query-carried state (filters, tabs) survives an
+  // Invite/Bring/summon. Bureau sends this url verbatim and the receiving
+  // navigate() preserves pathname+search, so a teammate you pull in lands on
+  // the exact record you have open — not the bare list.
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'bill',
     label: path,
   };
@@ -60,7 +67,10 @@ function describeLocation(): LocationDescriptor | undefined {
 try {
   const mount = mountBureauClient({
     describeLocation,
-    initialRoute: window.location.pathname,
+    // Key the route reactor on pathname+search so describeLocation's reported
+    // location stays in sync with any query-only navigation as well as path
+    // changes (the router itself is path-based and already popstate-reactive).
+    initialRoute: window.location.pathname + window.location.search,
     navigate: (url: string) => {
       try {
         const u = new URL(url, window.location.origin);
@@ -72,7 +82,8 @@ try {
       }
     },
   });
-  const onChange = () => mount.setRoute(window.location.pathname);
+  const onChange = () =>
+    mount.setRoute(window.location.pathname + window.location.search);
   window.addEventListener('popstate', onChange);
   const origPush = window.history.pushState.bind(window.history);
   const origReplace = window.history.replaceState.bind(window.history);
