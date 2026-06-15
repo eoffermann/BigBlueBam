@@ -36,7 +36,7 @@ import {
   History,
 } from 'lucide-react';
 import type { Task, Priority, ApiResponse, PaginatedResponse, TaskLink, TaskLinkInput } from '@bigbluebam/shared';
-import { PRIORITIES } from '@bigbluebam/shared';
+import { usePriorityMap } from '@/hooks/use-priorities';
 import { cn, formatDate, formatRelativeTime, isOverdue } from '@/lib/utils';
 import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
 import { useAuthStore } from '@/stores/auth.store';
@@ -504,9 +504,12 @@ export function TaskDetailDrawer({
     }
   };
 
-  const priorityOptions = PRIORITIES.map((p) => ({
-    value: p,
-    label: p.charAt(0).toUpperCase() + p.slice(1),
+  // Configured per-org priorities (respects custom names like P0–P4), not the
+  // hardcoded legacy "Critical/High/…" labels.
+  const { ordered: priorityRows } = usePriorityMap();
+  const priorityOptions = priorityRows.map((p) => ({
+    value: p.value,
+    label: p.name,
   }));
 
   const phaseOptions = phases.map((p) => ({ value: p.id, label: p.name }));

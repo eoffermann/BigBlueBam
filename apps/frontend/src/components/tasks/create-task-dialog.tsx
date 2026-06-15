@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { PRIORITIES } from '@bigbluebam/shared';
+import { usePriorityMap } from '@/hooks/use-priorities';
 import type { Phase } from '@bigbluebam/shared';
 import { Dialog } from '@/components/common/dialog';
 import { Input } from '@/components/common/input';
@@ -82,9 +83,10 @@ export function CreateTaskDialog({
   }, [defaultPhaseId, open, setValue]);
 
   const phaseOptions = phases.map((p) => ({ value: p.id, label: p.name }));
-  const priorityOptions = PRIORITIES.map((p) => ({
-    value: p,
-    label: p.charAt(0).toUpperCase() + p.slice(1),
+  const { ordered: priorityRows } = usePriorityMap();
+  const priorityOptions = priorityRows.map((p) => ({
+    value: p.value,
+    label: p.name,
   }));
 
   const memberOptions = [

@@ -21,6 +21,7 @@
  *   - Delete (with confirm)
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePriorityMap } from '@/hooks/use-priorities';
 import type { Task, Priority } from '@bigbluebam/shared';
 import {
   Check,
@@ -53,14 +54,6 @@ interface StateRef {
   name: string;
   category?: string;
 }
-
-const PRIORITIES: { value: Priority; label: string; color: string }[] = [
-  { value: 'critical', label: 'Critical', color: 'text-red-600' },
-  { value: 'high', label: 'High', color: 'text-orange-500' },
-  { value: 'medium', label: 'Medium', color: 'text-yellow-500' },
-  { value: 'low', label: 'Low', color: 'text-blue-400' },
-  { value: 'none', label: 'None', color: 'text-zinc-400' },
-];
 
 export interface TaskContextMenuProps {
   /** Task under the cursor. */
@@ -112,6 +105,9 @@ export function TaskContextMenu({
   const [submenu, setSubmenu] = useState<Submenu>(null);
   const [parentQuery, setParentQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  // Configured per-org priorities (custom names like P0–P4 + chosen colors),
+  // not the hardcoded legacy "Critical/High/…" set.
+  const { ordered: priorityRows } = usePriorityMap();
 
   // Re-anchor the menu so it never opens past the viewport edge.
   const { left, top } = useMemo(() => {
@@ -214,13 +210,13 @@ export function TaskContextMenu({
         </MenuItem>
         {submenu === 'priority' && (
           <SubmenuPanel>
-            {PRIORITIES.map((p) => (
+            {priorityRows.map((p) => (
               <MenuItem
                 key={p.value}
-                onClick={runAndClose(() => onUpdate(task.id, { priority: p.value }))}
+                onClick={runAndClose(() => onUpdate(task.id, { priority: p.value as Priority }))}
                 trailing={task.priority === p.value ? <Check className="h-3 w-3 text-primary-600" /> : null}
               >
-                <span className={p.color}>•</span> {p.label}
+                <span style={{ color: p.color }}>•</span> {p.name}
               </MenuItem>
             ))}
           </SubmenuPanel>

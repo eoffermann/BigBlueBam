@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { ArrowUp, ArrowDown, ArrowUpDown, CornerDownRight, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Task, Phase, Priority } from '@bigbluebam/shared';
-import { PRIORITIES } from '@bigbluebam/shared';
 import { cn, formatDate, isOverdue } from '@/lib/utils';
 import { Badge } from '@/components/common/badge';
 import { Select } from '@/components/common/select';
@@ -189,9 +188,9 @@ export function ListView({ phases, onTaskClick, onUpdateTask, onEpicClick }: Lis
       : <ArrowDown className="h-3 w-3 text-primary-500" />;
   };
 
-  const priorityOptions = PRIORITIES.map((p) => ({
-    value: p,
-    label: p.charAt(0).toUpperCase() + p.slice(1),
+  const priorityOptions = priorityRows.map((p) => ({
+    value: p.value,
+    label: p.name,
   }));
 
   const columns: { field: SortField; label: string; className: string }[] = [

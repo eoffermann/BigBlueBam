@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, X, ChevronDown, Check } from 'lucide-react';
-import { PRIORITIES } from '@bigbluebam/shared';
+import { usePriorityMap } from '@/hooks/use-priorities';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/common/button';
 
@@ -143,10 +143,10 @@ export function FilterBar({ filters, onFilterChange, assignees = [], states = []
     };
   }, []);
 
-  const priorityOptions = PRIORITIES.filter((p) => p !== 'none').map((p) => ({
-    value: p,
-    label: p.charAt(0).toUpperCase() + p.slice(1),
-  }));
+  const { ordered: priorityRows } = usePriorityMap();
+  const priorityOptions = priorityRows
+    .filter((p) => p.value !== 'none')
+    .map((p) => ({ value: p.value, label: p.name }));
 
   const assigneeOptions = assignees.map((a) => ({ value: a.id, label: a.display_name }));
   const stateOptions = states.map((s) => ({ value: s.id, label: s.name }));
