@@ -49,7 +49,12 @@ BEGIN
     (v_u1, 2, '09:00', '17:00', 'America/Chicago', true),
     (v_u1, 3, '09:00', '17:00', 'America/Chicago', true),
     (v_u1, 4, '09:00', '17:00', 'America/Chicago', true),
-    (v_u1, 5, '09:00', '17:00', 'America/Chicago', true);
+    (v_u1, 5, '09:00', '17:00', 'America/Chicago', true)
+  -- Seed users (alice@…, etc.) are shared across orgs (email is globally
+  -- unique), so re-seeding their working hours collides on
+  -- book_working_hours_user_day_unique. Idempotent skip keeps the seeder
+  -- re-runnable and multi-org safe.
+  ON CONFLICT (user_id, day_of_week) DO NOTHING;
 
   -- Sarah: Mon-Fri 8am-4pm
   INSERT INTO book_working_hours (user_id, day_of_week, start_time, end_time, timezone, enabled) VALUES
@@ -57,7 +62,8 @@ BEGIN
     (v_u2, 2, '08:00', '16:00', 'America/Chicago', true),
     (v_u2, 3, '08:00', '16:00', 'America/Chicago', true),
     (v_u2, 4, '08:00', '16:00', 'America/Chicago', true),
-    (v_u2, 5, '08:00', '16:00', 'America/Chicago', true);
+    (v_u2, 5, '08:00', '16:00', 'America/Chicago', true)
+  ON CONFLICT (user_id, day_of_week) DO NOTHING;
 
   -- ══════════════════════════════════════════════════════════════
   -- 3. BOOKING PAGE (1)
