@@ -19,8 +19,11 @@ interface ListResponse {
   meta: { next_cursor: string | null; has_more: boolean };
 }
 
+// The instantiate route returns the freshly-created automation row, so the new
+// id is at `data.id` (NOT `data.automation_id` — that field never existed, which
+// sent the browser to /automations/undefined and rendered an empty editor).
 interface InstantiateResponse {
-  data: { automation_id: string };
+  data: { id: string };
 }
 
 // ─── Hooks ───

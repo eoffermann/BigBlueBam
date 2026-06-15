@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Zap, Activity, Power, PowerOff, Plus, Search, MoreVertical, Copy, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { useAutomationList, useAutomationStats, useEnableAutomation, useDisableAutomation, useDeleteAutomation, useDuplicateAutomation, type TriggerSource, type BoltAutomation } from '@/hooks/use-automations';
 import { Badge } from '@/components/common/badge';
@@ -64,6 +64,25 @@ function AutomationCard({ automation, onNavigate }: { automation: BoltAutomation
   const deleteMutation = useDeleteAutomation();
   const duplicateMutation = useDuplicateAutomation();
 
+  // Radix closes the menu synchronously when an item is selected, so the
+  // trailing `click` retargets onto this card (the item it landed on just
+  // unmounted) and fires the card's open-navigation — which, after Delete, opens
+  // the automation we just deleted. Arm a brief window after any menu action and
+  // ignore the card click that lands inside it. (Menu items that DO navigate call
+  // onNavigate themselves, so suppressing the redundant card click is harmless.)
+  const suppressNavUntilRef = useRef(0);
+  const runMenuAction = (fn: () => void) => {
+    try {
+      fn();
+    } finally {
+      suppressNavUntilRef.current = Date.now() + 500;
+    }
+  };
+  const openAutomation = () => {
+    if (Date.now() < suppressNavUntilRef.current) return;
+    onNavigate(`/automations/${automation.id}`);
+  };
+
   const toggleEnabled = () => {
     if (automation.enabled) {
       disableMutation.mutate(automation.id);
@@ -75,7 +94,7 @@ function AutomationCard({ automation, onNavigate }: { automation: BoltAutomation
   return (
     <div
       className="flex items-center gap-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 p-4 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors cursor-pointer"
-      onClick={() => onNavigate(`/automations/${automation.id}`)}
+      onClick={openAutomation}
     >
       {/* Enabled indicator */}
       <button
@@ -131,26 +150,28 @@ function AutomationCard({ automation, onNavigate }: { automation: BoltAutomation
             </button>
           }
         >
-          <DropdownMenuItem onSelect={() => onNavigate(`/automations/${automation.id}`)}>
+          <DropdownMenuItem onSelect={() => runMenuAction(() => onNavigate(`/automations/${automation.id}`))}>
             <Zap className="h-4 w-4" />
             Edit
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onNavigate(`/automations/${automation.id}/executions`)}>
+          <DropdownMenuItem onSelect={() => runMenuAction(() => onNavigate(`/automations/${automation.id}/executions`))}>
             <Activity className="h-4 w-4" />
             View Executions
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => duplicateMutation.mutate(automation.id)}>
+          <DropdownMenuItem onSelect={() => runMenuAction(() => duplicateMutation.mutate(automation.id))}>
             <Copy className="h-4 w-4" />
             Duplicate
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             destructive
-            onSelect={() => {
-              if (window.confirm(`Delete "${automation.name}"?`)) {
-                deleteMutation.mutate(automation.id);
-              }
-            }}
+            onSelect={() =>
+              runMenuAction(() => {
+                if (window.confirm(`Delete "${automation.name}"?`)) {
+                  deleteMutation.mutate(automation.id);
+                }
+              })
+            }
           >
             <Trash2 className="h-4 w-4" />
             Delete

@@ -71,7 +71,7 @@ export function TemplateBrowserPage({ onNavigate }: TemplateBrowserPageProps) {
 
   const handleInstantiate = async (templateId: string) => {
     const result = await instantiate.mutateAsync(templateId);
-    onNavigate(`/automations/${result.data.automation_id}`);
+    onNavigate(`/automations/${result.data.id}`);
   };
 
   return (
