@@ -44,7 +44,7 @@ export default async function viewRoutes(fastify: FastifyInstance) {
         name: z.string().min(1).max(255),
         filters: z.record(z.unknown()).optional().default({}),
         sort: z.string().max(100).optional(),
-        view_type: z.enum(['board', 'list', 'timeline', 'calendar']).optional().default('board'),
+        view_type: z.enum(['board', 'list', 'timeline', 'calendar', 'workload']).optional().default('board'),
         swimlane: z.string().max(50).optional(),
         is_shared: z.boolean().optional().default(false),
       });
@@ -78,7 +78,7 @@ export default async function viewRoutes(fastify: FastifyInstance) {
         name: z.string().min(1).max(255).optional(),
         filters: z.record(z.unknown()).optional(),
         sort: z.string().max(100).nullable().optional(),
-        view_type: z.enum(['board', 'list', 'timeline', 'calendar']).optional(),
+        view_type: z.enum(['board', 'list', 'timeline', 'calendar', 'workload']).optional(),
         swimlane: z.string().max(50).nullable().optional(),
         is_shared: z.boolean().optional(),
       });

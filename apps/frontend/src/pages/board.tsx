@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, Import, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download } from 'lucide-react';
+import { Loader2, Import, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download, RotateCcw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Task, PaginatedResponse } from '@bigbluebam/shared';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -32,6 +32,7 @@ import { useProject, useProjects, useDeleteProject } from '@/hooks/use-projects'
 import { useBoardStore } from '@/stores/board.store';
 import { useRealtime } from '@/hooks/use-realtime';
 import { api, ApiError } from '@/lib/api';
+import { loadBoardPrefs, saveBoardPrefs, resetBoardFilters } from '@/lib/board-prefs';
 import type { ApiResponse } from '@bigbluebam/shared';
 import { TaskContextMenu } from '@/components/board/task-context-menu';
 import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
@@ -66,14 +67,26 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
     const taskParam = new URLSearchParams(window.location.search).get('task');
     return taskParam && /^[0-9a-f]{8}-/i.test(taskParam) ? taskParam : null;
   });
+  // Keep the open task reflected in the URL (?task=<id>) so the address bar
+  // always points at exactly what's on screen. Bureau invite/summon captures
+  // window.location (describeLocation in main.tsx now includes the query
+  // string), so a teammate you pull in lands on the same task drawer rather
+  // than the bare board. replaceState (not push) avoids spamming browser
+  // history as the user clicks through tasks; the selectedTaskId initializer
+  // above already consumed any incoming ?task= on first load.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    if (url.searchParams.has('task')) {
+    const current = url.searchParams.get('task');
+    if (selectedTaskId) {
+      if (current === selectedTaskId) return;
+      url.searchParams.set('task', selectedTaskId);
+    } else {
+      if (!current) return;
       url.searchParams.delete('task');
-      window.history.replaceState(null, '', url.toString());
     }
-  }, []);
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }, [selectedTaskId]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createDialogPhaseId, setCreateDialogPhaseId] = useState<string | undefined>();
   const [filters, setFilters] = useState<{ assignee_id?: string; priority?: string; state_id?: string; epic_id?: string; search?: string }>({});
@@ -203,10 +216,18 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   // active task drawer) would otherwise persist and point at rows that
   // do not belong to the new project. Reset the project-scoped bits
   // whenever projectId changes so the active sprint resolves freshly.
+  // On project switch (and first mount) restore THIS project's last-used view,
+  // filters, swimlane grouping, and lane sort from localStorage instead of
+  // blanking them. They persist per project until the user clicks "Reset
+  // Filters". Sprint/task selection still reset so they resolve fresh.
   useEffect(() => {
     setSelectedSprintId(undefined);
     setSelectedTaskId(null);
-    setFilters({});
+    const prefs = loadBoardPrefs(projectId);
+    setFilters(prefs.filters as typeof filters);
+    setViewMode(prefs.viewMode as ViewMode);
+    setSwimlaneGroupBy(prefs.swimlane as SwimlanGroupBy);
+    setLaneSort(prefs.laneSort as LaneSort);
   }, [projectId]);
 
   useEffect(() => {
@@ -220,6 +241,50 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
       }
     }
   }, [boardData, setBoardState, selectedSprintId]);
+
+  // Persisting wrappers: every user-driven change to the filters, view,
+  // swimlane grouping, or lane sort is mirrored to localStorage (keyed by
+  // project) so it survives navigation. The load effect above reads it back.
+  const handleFilterChange = useCallback(
+    (next: typeof filters) => {
+      setFilters(next);
+      saveBoardPrefs(projectId, { filters: next });
+    },
+    [projectId],
+  );
+
+  const handleViewChange = useCallback(
+    (next: ViewMode) => {
+      setViewMode(next);
+      saveBoardPrefs(projectId, { viewMode: next });
+    },
+    [projectId],
+  );
+
+  const handleSwimlaneChange = useCallback(
+    (next: SwimlanGroupBy) => {
+      setSwimlaneGroupBy(next);
+      saveBoardPrefs(projectId, { swimlane: next });
+    },
+    [projectId],
+  );
+
+  const handleLaneSortChange = useCallback(
+    (next: LaneSort) => {
+      setLaneSort(next);
+      saveBoardPrefs(projectId, { laneSort: next });
+    },
+    [projectId],
+  );
+
+  // "Reset Filters" button: clear the filter set and the swimlane/sort grouping
+  // back to defaults (and clear the persisted copy). Leaves the chosen view.
+  const handleResetFilters = useCallback(() => {
+    setFilters({});
+    setSwimlaneGroupBy('none');
+    setLaneSort('priority-desc');
+    resetBoardFilters(projectId);
+  }, [projectId]);
 
   const project = projectRes?.data;
   // Bureau widget context: "[Bam] Frndo Board" instead of a path breadcrumb.
@@ -497,10 +562,10 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
             projectId={projectId}
             onFilterByUser={(userId) => {
               if (userId === 'unassigned') return;
-              setFilters((prev) => ({
-                ...prev,
-                assignee_id: prev.assignee_id === userId ? undefined : userId,
-              }));
+              handleFilterChange({
+                ...filters,
+                assignee_id: filters.assignee_id === userId ? undefined : userId,
+              });
             }}
           />
         );
@@ -541,7 +606,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
             <div className="flex items-center gap-3 flex-wrap">
               <FilterBar
                 filters={filters}
-                onFilterChange={setFilters}
+                onFilterChange={handleFilterChange}
                 assignees={members.map((m) => ({ id: m.id, display_name: m.display_name }))}
                 states={projectStates.map((s) => ({ id: s.id, name: s.name }))}
                 epics={projectEpics.map((e) => ({ id: e.id, name: e.name }))}
@@ -551,7 +616,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                 <Select
                   options={SWIMLANE_OPTIONS}
                   value={swimlaneGroupBy}
-                  onValueChange={(val) => setSwimlaneGroupBy(val as SwimlanGroupBy)}
+                  onValueChange={(val) => handleSwimlaneChange(val as SwimlanGroupBy)}
                   placeholder="Swimlanes"
                   className="w-40"
                 />
@@ -562,13 +627,28 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                 <Select
                   options={LANE_SORT_OPTIONS}
                   value={laneSort}
-                  onValueChange={(val) => setLaneSort(val as LaneSort)}
+                  onValueChange={(val) => handleLaneSortChange(val as LaneSort)}
                   placeholder="Sort epics"
                   className="w-48"
                 />
               )}
 
-              <ViewSwitcher activeView={viewMode} onViewChange={setViewMode} />
+              <ViewSwitcher activeView={viewMode} onViewChange={handleViewChange} />
+
+              {/* Reset everything filter-related (filters + swimlane + sort) back
+                  to defaults; the view otherwise persists across navigation. */}
+              {(!!(filters.priority || filters.assignee_id || filters.state_id || filters.epic_id || filters.search) ||
+                swimlaneGroupBy !== 'none') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetFilters}
+                  title="Reset filters, swimlanes, and sort to defaults"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reset Filters
+                </Button>
+              )}
 
               <div className="flex items-center gap-1.5 border-l border-zinc-200 dark:border-zinc-700 pl-3">
                 <Button
@@ -689,9 +769,27 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
                 projectId={projectId}
                 currentFilters={filters}
                 currentViewType={viewMode}
+                currentSwimlane={swimlaneGroupBy}
+                currentSort={laneSort}
                 onApplyView={(view) => {
-                  setFilters(view.filters as typeof filters);
-                  setViewMode(view.view_type as ViewMode);
+                  // Restore the FULL saved view: filters, view mode, swimlane
+                  // grouping, and lane sort (the old handler dropped swimlane +
+                  // sort, so a saved "board by epic" view looked like it did
+                  // nothing). Persist it so it survives the next navigation.
+                  const nextFilters = (view.filters ?? {}) as typeof filters;
+                  const nextView = (view.view_type as ViewMode) ?? 'board';
+                  const nextSwimlane = (view.swimlane as SwimlanGroupBy) ?? 'none';
+                  const nextLaneSort = (view.sort as LaneSort) ?? 'priority-desc';
+                  setFilters(nextFilters);
+                  setViewMode(nextView);
+                  setSwimlaneGroupBy(nextSwimlane);
+                  setLaneSort(nextLaneSort);
+                  saveBoardPrefs(projectId, {
+                    filters: nextFilters,
+                    viewMode: nextView,
+                    swimlane: nextSwimlane,
+                    laneSort: nextLaneSort,
+                  });
                   setShowSavedViews(false);
                 }}
               />

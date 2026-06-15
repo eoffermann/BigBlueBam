@@ -50,8 +50,14 @@ createRoot(rootElement).render(
 function describeLocation(): LocationDescriptor | undefined {
   const path = window.location.pathname;
   if (!path.startsWith('/b3')) return undefined;
+  // Include the query string so the reported location carries deep-link state
+  // like `?task=<id>` (the open task drawer). Bureau invite/summon sends this
+  // url verbatim, and the receiving navigate() preserves the search, so a
+  // teammate you pull in lands on the exact task you have open — not the bare
+  // board. The label stays the bare path (task-drawer labels are layered in
+  // separately via useBureauLocationLabel).
   return {
-    url: window.location.origin + path,
+    url: window.location.origin + path + window.location.search,
     app: 'b3',
     label: path,
   };

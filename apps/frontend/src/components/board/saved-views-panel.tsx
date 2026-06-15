@@ -10,8 +10,10 @@ interface SavedView {
   name: string;
   filters: Record<string, string | undefined>;
   view_type: string;
-  sort_by?: string;
-  sort_dir?: string;
+  // The board persists swimlane grouping and lane sort as part of a view, so a
+  // saved view round-trips them too (matches saved_views.swimlane / .sort).
+  swimlane?: string | null;
+  sort?: string | null;
   created_at: string;
 }
 
@@ -19,6 +21,8 @@ interface SavedViewsPanelProps {
   projectId: string;
   currentFilters: Record<string, string | undefined>;
   currentViewType: string;
+  currentSwimlane: string;
+  currentSort: string;
   onApplyView: (view: SavedView) => void;
 }
 
@@ -26,6 +30,8 @@ export function SavedViewsPanel({
   projectId,
   currentFilters,
   currentViewType,
+  currentSwimlane,
+  currentSort,
   onApplyView,
 }: SavedViewsPanelProps) {
   const queryClient = useQueryClient();
@@ -40,8 +46,13 @@ export function SavedViewsPanel({
   const views = viewsRes?.data ?? [];
 
   const createView = useMutation({
-    mutationFn: (data: { name: string; filters: Record<string, string | undefined>; view_type: string }) =>
-      api.post(`/projects/${projectId}/views`, data),
+    mutationFn: (data: {
+      name: string;
+      filters: Record<string, string | undefined>;
+      view_type: string;
+      swimlane?: string;
+      sort?: string;
+    }) => api.post(`/projects/${projectId}/views`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['saved-views', projectId] });
       setShowSaveForm(false);
@@ -49,8 +60,10 @@ export function SavedViewsPanel({
     },
   });
 
+  // The DELETE route is /views/:id (NOT project-scoped like GET/POST). The old
+  // /projects/:id/views/:viewId path 404'd, so the delete silently did nothing.
   const deleteView = useMutation({
-    mutationFn: (viewId: string) => api.delete(`/projects/${projectId}/views/${viewId}`),
+    mutationFn: (viewId: string) => api.delete(`/views/${viewId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['saved-views', projectId] });
     },
@@ -62,6 +75,9 @@ export function SavedViewsPanel({
       name: viewName.trim(),
       filters: currentFilters,
       view_type: currentViewType,
+      // Persist the full view so applying it later restores grouping + sort.
+      swimlane: currentSwimlane,
+      sort: currentSort,
     });
   };
 

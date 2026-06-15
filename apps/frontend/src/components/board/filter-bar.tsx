@@ -119,6 +119,16 @@ export function FilterBar({ filters, onFilterChange, assignees = [], states = []
   const [searchValue, setSearchValue] = useState(filters.search ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Keep the search box in sync when filters change EXTERNALLY (Reset Filters,
+  // applying a saved view, restoring persisted filters on load). Without this
+  // the input is seeded only on mount, so a reset/apply updates the filter
+  // state but leaves stale text in the box. Setting state to the value the user
+  // just typed (after the debounce round-trips) is a no-op, so this never
+  // disrupts active typing.
+  useEffect(() => {
+    setSearchValue(filters.search ?? '');
+  }, [filters.search]);
+
   const handleSearchChange = (value: string) => {
     setSearchValue(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
