@@ -219,7 +219,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
 
   registerTool(server, {
     name: 'platform_delete_org',
-    description: 'SuperUser only. Permanently delete an organization and CASCADE every user, project, task, ticket, and membership inside it. Active sessions for the org are revoked before the DELETE runs. Destructive — requires confirm_action=true to actually proceed.',
+    description: 'SuperUser only. Soft-delete an organization: it is stamped deleted and hidden from every read path (list, get, the org switcher), its memberships are dropped and member sessions revoked so no one can access it, but the org row and all authored content are kept for audit (a hard delete is impossible — the FK web into users.id is NO ACTION/RESTRICT). Requires confirm_action=true to proceed.',
     input: {
       org_id: z.string().uuid().describe('Organization id to delete.'),
       confirm_action: z.boolean().describe('Must be true to actually delete. Call once with false (or omit) to preview the action, then call again with true.'),
@@ -230,7 +230,7 @@ export function registerPlatformTools(server: McpServer, api: ApiClient): void {
         return {
           content: [{
             type: 'text' as const,
-            text: `Are you sure you want to delete organization ${org_id}? This CASCADE-deletes every user, project, task, and ticket in it. Call platform_delete_org again with confirm_action: true to proceed.`,
+            text: `Are you sure you want to delete organization ${org_id}? This soft-deletes it — hidden everywhere and members lose access, but the data is retained for audit. Call platform_delete_org again with confirm_action: true to proceed.`,
           }],
         };
       }
