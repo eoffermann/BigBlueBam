@@ -378,6 +378,22 @@ async function authPlugin(fastify: FastifyInstance) {
       const token = authHeader.slice(7);
       const prefix = token.slice(0, 8);
 
+      // #40: Service-account tokens are `bbam_svc_<random>` — a 9-char literal
+      // lead — so token.slice(0, 8) is the constant 'bbam_svc' for EVERY
+      // service-account key. The prefix index is degenerate for this one key
+      // kind (user keys slice to a ~48-bit base64 or ~18-bit `bbam_`+random
+      // prefix and stay selective). An org with several service accounts thus
+      // has many rows sharing this single prefix bucket, and the DoS cap below
+      // — designed for random-prefix forgery — would wrongly collapse the
+      // lookup to one arbitrary row, breaking auth for every other svc-acct
+      // key once the org has 4+ of them. Treat the known literal bucket as
+      // expected: raise the fetch limit and verify all candidates (bounded by
+      // SVC_BUCKET_MAX), while keeping the strict cap for random user-key
+      // prefixes where >3 collisions really do signal a forced-Argon2 attempt.
+      const SVC_KEY_PREFIX = 'bbam_svc';
+      const SVC_BUCKET_MAX = 64;
+      const isSvcBucket = prefix === SVC_KEY_PREFIX;
+
       const candidates = await db
         .select({
           apiKey: apiKeys,
@@ -396,22 +412,31 @@ async function authPlugin(fastify: FastifyInstance) {
         .from(apiKeys)
         .innerJoin(users, eq(apiKeys.user_id, users.id))
         .where(eq(apiKeys.key_prefix, prefix))
-        .limit(10);
+        .limit(isSvcBucket ? SVC_BUCKET_MAX : 10);
 
-      // P2-11: An 8-char random prefix has ~2.8 x 10^14 combinations, so
-      // natural collisions are vanishingly rare. Combined with the
-      // candidate cap below, the 8-char prefix is sufficient — we will
-      // never verify more than a handful of Argon2 hashes per request.
-      //
-      // DoS mitigation: seeing >3 candidates for a single prefix is a
-      // strong signal of an attacker trying to force multiple Argon2
-      // verifications per request. In that case, log a warning and only
-      // verify the first candidate.
-      const verifyCandidates = candidates.length > 3 ? candidates.slice(0, 1) : candidates;
-      if (candidates.length > 3) {
+      // P2-11: A random prefix has a huge key space, so natural collisions are
+      // vanishingly rare. DoS mitigation: >3 candidates for a *random* prefix
+      // is a strong signal of an attacker forcing multiple Argon2 verifications
+      // per request, so collapse to the first candidate. The service-account
+      // bucket legitimately shares the 'bbam_svc' literal, so it is exempt — we
+      // verify every fetched candidate (already bounded by SVC_BUCKET_MAX, ~a
+      // few seconds of Argon2 worst-case and itself bounded by the org's real
+      // svc-key count; the auth route is rate-limited). The selective-prefix
+      // lengthening for new svc keys is the longer-term fix tracked in #40.
+      const verifyCandidates =
+        !isSvcBucket && candidates.length > 3 ? candidates.slice(0, 1) : candidates;
+      if (!isSvcBucket && candidates.length > 3) {
         request.log.warn(
           { prefix, candidate_count: candidates.length },
           'Suspicious number of API key candidates for prefix; limiting to first candidate',
+        );
+      } else if (isSvcBucket && candidates.length >= SVC_BUCKET_MAX) {
+        // At the ceiling a valid key could fall outside the fetched window;
+        // this is the signal that the degenerate bucket needs the prefix-
+        // lengthening follow-up rather than a higher limit.
+        request.log.warn(
+          { prefix, candidate_count: candidates.length },
+          'Service-account prefix bucket hit SVC_BUCKET_MAX; some keys may not authenticate until prefixes are lengthened (#40 follow-up)',
         );
       }
 
