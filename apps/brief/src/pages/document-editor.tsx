@@ -181,6 +181,53 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
     }
   }, [docIdForCollab, editor, isSynced, initialContent, ydoc]);
 
+  // Title + summary are collaborative metadata. Mirror them into the shared
+  // Y.Doc's `meta` map so edits sync live across all open editors (like the
+  // body) instead of only reaching others on a refresh. Seed the map once from
+  // the loaded document, then let the map drive local state. The server's Yjs
+  // persistence flush reads the same map back into the title/summary columns,
+  // so lists/search/GET stay current without an explicit Save.
+  const metaSeededRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!docIdForCollab || !isSynced) return;
+    const meta = ydoc.getMap('meta');
+    if (metaSeededRef.current !== docIdForCollab) {
+      metaSeededRef.current = docIdForCollab;
+      if (typeof meta.get('title') !== 'string' && existing?.title) {
+        meta.set('title', existing.title);
+      }
+      if (typeof meta.get('summary') !== 'string') {
+        meta.set('summary', existing?.summary ?? '');
+      }
+    }
+    const apply = () => {
+      const t = meta.get('title');
+      const s = meta.get('summary');
+      if (typeof t === 'string') setTitle((prev) => (prev === t ? prev : t));
+      if (typeof s === 'string') setSummary((prev) => (prev === s ? prev : s));
+    };
+    apply();
+    meta.observe(apply);
+    return () => meta.unobserve(apply);
+  }, [docIdForCollab, isSynced, ydoc, existing]);
+
+  // Write a title/summary edit to React state AND (in collab mode) the shared
+  // meta map. Local input stays instant; the map broadcasts to other editors.
+  const handleTitleChange = useCallback(
+    (value: string) => {
+      setTitle(value);
+      if (docIdForCollab) ydoc.getMap('meta').set('title', value);
+    },
+    [docIdForCollab, ydoc],
+  );
+  const handleSummaryChange = useCallback(
+    (value: string) => {
+      setSummary(value);
+      if (docIdForCollab) ydoc.getMap('meta').set('summary', value);
+    },
+    [docIdForCollab, ydoc],
+  );
+
   if (isEditMode && (loadingExisting || !contentReady)) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -209,7 +256,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
             title,
             plain_text: bodyMarkdown,
             html_snapshot: editorHtml,
-            summary: summary || undefined,
+            summary,
             icon: iconEmoji || undefined,
             visibility,
             status: 'draft' as DocumentStatus,
@@ -221,7 +268,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
           title,
           plain_text: bodyMarkdown,
           html_snapshot: editorHtml,
-          summary: summary || undefined,
+          summary,
           icon: iconEmoji || undefined,
           project_id: projectId || undefined,
           template_id: selectedTemplateId || undefined,
@@ -246,7 +293,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
             title,
             plain_text: bodyMarkdown,
             html_snapshot: editorHtml,
-            summary: summary || undefined,
+            summary,
             icon: iconEmoji || undefined,
             visibility,
             status: 'approved' as DocumentStatus,
@@ -258,7 +305,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
           title,
           plain_text: bodyMarkdown,
           html_snapshot: editorHtml,
-          summary: summary || undefined,
+          summary,
           icon: iconEmoji || undefined,
           project_id: projectId || undefined,
           template_id: selectedTemplateId || undefined,
@@ -293,7 +340,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
             type="text"
             placeholder="Document title..."
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => handleTitleChange(e.target.value)}
             className="flex-1 text-lg font-semibold bg-transparent border-0 outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 min-w-0"
           />
         </div>
@@ -342,7 +389,7 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
               type="text"
               placeholder="Brief summary (optional)..."
               value={summary}
-              onChange={(e) => setSummary(e.target.value)}
+              onChange={(e) => handleSummaryChange(e.target.value)}
               className="w-full max-w-3xl text-sm bg-transparent border-0 outline-none text-zinc-500 dark:text-zinc-400 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
             />
           </div>

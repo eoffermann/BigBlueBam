@@ -111,11 +111,43 @@ export function yjsStateToPlainText(state: Buffer | Uint8Array): string | null {
 }
 
 /**
+ * Extracts collaborative metadata (title, summary) from a Yjs state snapshot.
+ * The Brief editor mirrors the title + summary inputs into a shared `meta`
+ * Y.Map so they sync live like the body; persisting them here keeps the
+ * canonical columns (used by document lists, search, GET, and the static
+ * viewer) current without requiring an explicit Save. Only keys that are
+ * actually present and string-typed are returned — a legacy doc with no `meta`
+ * map yields `{}`, so a column is never clobbered with junk. `title` is omitted
+ * when blank (a document title must never become empty); `summary` round-trips
+ * an empty string so a user can clear it.
+ */
+export function yjsStateToMeta(state: Buffer | Uint8Array): {
+  title?: string;
+  summary?: string;
+} {
+  const doc = new Y.Doc();
+  try {
+    Y.applyUpdate(doc, state instanceof Buffer ? new Uint8Array(state) : state);
+    const meta = doc.getMap('meta');
+    const out: { title?: string; summary?: string } = {};
+    const t = meta.get('title');
+    if (typeof t === 'string' && t.trim().length > 0) out.title = t.slice(0, 512);
+    const s = meta.get('summary');
+    if (typeof s === 'string') out.summary = s.slice(0, 2000);
+    return out;
+  } catch {
+    return {};
+  } finally {
+    doc.destroy();
+  }
+}
+
+/**
  * Writes a Yjs binary state immediately, updating yjs_last_saved_at and emitting
  * a `document.yjs_saved` Bolt event on the 6+1 canonical signature. Plain text
- * is re-derived from the state in the same write so search, embeds, and the
- * static viewer fallback never lag the collaborative content by more than one
- * debounce window.
+ * AND the collaborative title/summary are re-derived from the state in the same
+ * write so search, embeds, lists, and the static viewer fallback never lag the
+ * collaborative content by more than one debounce window.
  *
  * Returns `true` when a row was updated, `false` when the document is missing
  * or belongs to a different org.
@@ -128,6 +160,7 @@ export async function saveYjsStateImmediate(
 ): Promise<boolean> {
   const now = new Date();
   const plainText = yjsStateToPlainText(state);
+  const meta = yjsStateToMeta(state);
   const [row] = await db
     .update(briefDocuments)
     .set({
@@ -136,6 +169,8 @@ export async function saveYjsStateImmediate(
       updated_at: now,
       updated_by: userId,
       ...(plainText !== null ? { plain_text: plainText } : {}),
+      ...(meta.title !== undefined ? { title: meta.title } : {}),
+      ...(meta.summary !== undefined ? { summary: meta.summary } : {}),
     })
     .where(and(eq(briefDocuments.id, docId), eq(briefDocuments.org_id, orgId)))
     .returning({ id: briefDocuments.id });

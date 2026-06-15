@@ -124,6 +124,7 @@ export async function documentVisibilityPredicate(userId: string) {
 
 export interface CreateDocumentInput {
   title?: string;
+  summary?: string | null;
   plain_text?: string | null;
   project_id?: string | null;
   folder_id?: string | null;
@@ -168,6 +169,7 @@ export async function createDocument(
       folder_id: data.folder_id ?? null,
       title,
       slug,
+      summary: data.summary ?? null,
       plain_text: plainText,
       html_snapshot: templateContent ? sanitizeHtml(templateContent) : null,
       word_count: wordCount,
@@ -301,6 +303,7 @@ export async function listDocuments(filters: ListDocumentsFilters) {
 
 export interface UpdateDocumentInput {
   title?: string;
+  summary?: string | null;
   folder_id?: string | null;
   icon?: string | null;
   cover_image_url?: string | null;
@@ -329,6 +332,7 @@ export async function updateDocument(
   };
 
   if (data.title !== undefined) updateValues.title = data.title;
+  if (data.summary !== undefined) updateValues.summary = data.summary;
   if (data.folder_id !== undefined) updateValues.folder_id = data.folder_id;
   if (data.icon !== undefined) updateValues.icon = data.icon;
   if (data.cover_image_url !== undefined) updateValues.cover_image_url = data.cover_image_url;

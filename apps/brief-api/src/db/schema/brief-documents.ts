@@ -47,6 +47,9 @@ export const briefDocuments = pgTable(
     yjs_state: bytea('yjs_state'),
     plain_text: text('plain_text'),
     html_snapshot: text('html_snapshot'),
+    // Short editor-supplied abstract shown above the body. Kept current by the
+    // collaborative meta-sync (yjs-persistence) and the PATCH/create routes.
+    summary: text('summary'),
     icon: varchar('icon', { length: 100 }),
     cover_image_url: text('cover_image_url'),
     template_id: uuid('template_id').references(() => briefTemplates.id, { onDelete: 'set null' }),

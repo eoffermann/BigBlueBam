@@ -13,6 +13,7 @@ import { invalidateDocumentEmbedding } from '../services/embedding.service.js';
 
 const createDocumentSchema = z.object({
   title: z.string().min(1).max(512).optional(),
+  summary: z.string().max(2000).nullable().optional(),
   project_id: z.string().uuid().nullable().optional(),
   folder_id: z.string().uuid().nullable().optional(),
   template_id: z.string().uuid().nullable().optional(),
@@ -22,6 +23,7 @@ const createDocumentSchema = z.object({
 
 const updateDocumentSchema = z.object({
   title: z.string().min(1).max(512).optional(),
+  summary: z.string().max(2000).nullable().optional(),
   folder_id: z.string().uuid().nullable().optional(),
   icon: z.string().max(100).nullable().optional(),
   cover_image_url: z.string().max(2000).nullable().optional().refine(
