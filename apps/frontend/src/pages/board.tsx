@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Loader2, Import, BarChart3, Bookmark, FileText, Layers, Trash2, MoreVertical, Download, RotateCcw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Task, PaginatedResponse } from '@bigbluebam/shared';
@@ -236,9 +236,17 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   // filters, swimlane grouping, and lane sort from localStorage instead of
   // blanking them. They persist per project until the user clicks "Reset
   // Filters". Sprint/task selection still reset so they resolve fresh.
+  const prevProjectIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    setSelectedSprintId(undefined);
-    setSelectedTaskId(null);
+    // Reset transient sprint/task selection only when the project actually
+    // CHANGES — never on the initial mount, where it would clobber the `?task=`
+    // deep link the selectedTaskId initializer just read (a shared link, or a
+    // Bureau Bring/Invite/summon that full-loads the board straight onto a task).
+    if (prevProjectIdRef.current !== undefined && prevProjectIdRef.current !== projectId) {
+      setSelectedSprintId(undefined);
+      setSelectedTaskId(null);
+    }
+    prevProjectIdRef.current = projectId;
     const prefs = loadBoardPrefs(projectId);
     setFilters(prefs.filters as typeof filters);
     setViewMode(prefs.viewMode as ViewMode);
