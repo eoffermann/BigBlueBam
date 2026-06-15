@@ -1141,7 +1141,6 @@ export function registerCompositeTools(
         beaconOutcome,
         contributorsOutcome,
       ];
-      const missing = arms.filter((o) => o.failed).map((o) => o.name);
       const allFailed = arms.every((o) => o.failed);
       if (allFailed) {
         return errEnvelope(
@@ -1151,16 +1150,20 @@ export function registerCompositeTools(
         );
       }
 
-      // If the project arm itself failed, we can't surface a project block;
-      // fall back to a stub with just the id. `partial: true` is already set
-      // via `missing`.
-      const project: ProjectInfo = projectOutcome.value ?? {
-        id: project_id,
-        name: '',
-        slug: null,
-        org_id: '',
-      };
+      // Stance A (#28): hide existence on no-access. The project arm hits the
+      // same /projects/:id gate as get_project (404 when the caller isn't a
+      // project member). If it failed while sibling arms on the same api base
+      // succeeded, the caller can't see this project — return NOT_FOUND rather
+      // than echoing a stub with the id intact (which leaked existence and let
+      // a caller probe the inconsistency vs get_project/list_members). This
+      // also means the `missing` array — which could distinguish "denied" from
+      // "empty" — is never returned to a denied caller.
+      if (projectOutcome.failed) {
+        return errEnvelope('NOT_FOUND', 'Project not found', 404);
+      }
+      const project: ProjectInfo = projectOutcome.value!;
 
+      const missing = arms.filter((o) => o.failed).map((o) => o.name);
       return ok({
         project,
         open_tasks_count: openTasksOutcome.value ?? 0,
@@ -1266,7 +1269,6 @@ export function registerCompositeTools(
       }> = [];
 
       const arms = [userOutcome, dealsOutcome, ticketsOutcome, goalsOutcome, activityOutcome];
-      const missing = arms.filter((o) => o.failed).map((o) => o.name);
       const allFailed = arms.every((o) => o.failed);
       if (allFailed) {
         return errEnvelope(
@@ -1276,14 +1278,16 @@ export function registerCompositeTools(
         );
       }
 
-      const user: UserInfo = userOutcome.value ?? {
-        id: user_id,
-        email: '',
-        display_name: '',
-        kind: 'human',
-        role: '',
-      };
+      // Stance A (#28): if the user arm itself failed (caller can't see this
+      // user) while sibling arms succeeded, return NOT_FOUND rather than
+      // echoing a stub with the id — same existence-hiding posture as the
+      // per-entity reads. Denied callers never receive the `missing` array.
+      if (userOutcome.failed) {
+        return errEnvelope('NOT_FOUND', 'User not found', 404);
+      }
+      const user: UserInfo = userOutcome.value!;
 
+      const missing = arms.filter((o) => o.failed).map((o) => o.name);
       return ok({
         user,
         owned_deals: dealsOutcome.value ?? [],

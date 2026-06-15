@@ -627,6 +627,31 @@ describe('project_view', () => {
     expect(parsed.recent_beacon_entries).toEqual([]);
   });
 
+  it('returns NOT_FOUND (no stub echo) when the project arm itself is denied (#28 Stance A)', async () => {
+    const router = routerOf([
+      // The project read is denied (a non-member sees 404, same as get_project)…
+      [(u) => u.endsWith(`/projects/${PROJECT_ID}`), { ok: false, status: 404 }],
+      // …while sibling arms on the same api base happen to succeed.
+      [(u) => u.includes(`/projects/${PROJECT_ID}/tasks`), { ok: true, json: { data: [] } }],
+      [(u) => u.endsWith(`/projects/${PROJECT_ID}/sprints`), { ok: true, json: { data: [] } }],
+      [(u) => u.includes('/goals?'), { ok: true, json: { data: [] } }],
+      [(u) => u.includes('/documents?'), { ok: true, json: { data: [] } }],
+      [(u) => u.includes('/beacons?'), { ok: true, json: { data: [] } }],
+      [(u) => u.includes('/v1/activity/unified'), { ok: true, json: { data: [], meta: {} } }],
+    ]);
+    installFetch(router);
+
+    const tools = buildTools();
+    const result = await tools.get('project_view')!.handler({ project_id: PROJECT_ID });
+    const parsed = JSON.parse(result.content[0]!.text);
+    // Hide existence: NOT_FOUND, and crucially NO stub echoing the project id
+    // and NO `missing` array that could distinguish denied-vs-empty.
+    expect(parsed.error?.code).toBe('NOT_FOUND');
+    expect(parsed.project).toBeUndefined();
+    expect(parsed.missing).toBeUndefined();
+    expect(JSON.stringify(parsed)).not.toContain(PROJECT_ID);
+  });
+
   it('hits the 5s AbortController when an arm stalls', async () => {
     vi.useFakeTimers();
     const router = routerOf([
