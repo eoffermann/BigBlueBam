@@ -65,6 +65,43 @@ interface HelpIndex {
 
 // ── Canonical heading slug (keep identical to build-help-index.mjs) ──────────
 
+// Self-contained content styles. The repo does NOT ship @tailwindcss/typography,
+// so `prose` is a no-op, and the per-app `.rich-text-*` CSS is scoped to a
+// different class (`.rich-text-content`) and only exists in some apps. We scope
+// our own styles to `.help-center-content` so headings, lists, code, quotes, and
+// images render with a real documentation hierarchy in all 16 apps regardless of
+// their CSS. Dark mode rides the host app's `.dark` class on <html>.
+const HELP_CONTENT_CSS = `
+.help-center-content { font-size: 0.95rem; line-height: 1.7; color: #3f3f46; }
+.dark .help-center-content { color: #d4d4d8; }
+.help-center-content h1, .help-center-content h2, .help-center-content h3,
+.help-center-content h4, .help-center-content h5, .help-center-content h6 {
+  color: #18181b; font-weight: 700; line-height: 1.25; }
+.dark .help-center-content h1, .dark .help-center-content h2, .dark .help-center-content h3,
+.dark .help-center-content h4, .dark .help-center-content h5, .dark .help-center-content h6 { color: #fafafa; }
+.help-center-content h1 { font-size: 1.65rem; margin: 0.2rem 0 0.9rem; }
+.help-center-content h2 { font-size: 1.3rem; margin: 1.9rem 0 0.7rem; padding-bottom: 0.3rem; border-bottom: 1px solid #e4e4e7; }
+.dark .help-center-content h2 { border-bottom-color: #27272a; }
+.help-center-content h3 { font-size: 1.1rem; font-weight: 650; margin: 1.4rem 0 0.5rem; }
+.help-center-content h4 { font-size: 0.98rem; font-weight: 650; margin: 1.1rem 0 0.4rem; color: #52525b; }
+.dark .help-center-content h4 { color: #a1a1aa; }
+.help-center-content strong { font-weight: 650; color: #18181b; }
+.dark .help-center-content strong { color: #f4f4f5; }
+.help-center-content a, .help-center-content .rich-text-link { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; }
+.help-center-content a:hover { color: #1d4ed8; }
+.dark .help-center-content a, .dark .help-center-content .rich-text-link { color: #60a5fa; }
+.help-center-content ul, .help-center-content .rich-text-list { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
+.help-center-content li { margin: 0.3rem 0; }
+.help-center-content .rich-text-inline-code { background: #f4f4f5; border-radius: 0.25rem; padding: 0.1rem 0.35rem; font-size: 0.85em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dark .help-center-content .rich-text-inline-code { background: #27272a; }
+.help-center-content .rich-text-code-block { background: #f4f4f5; border-radius: 0.5rem; padding: 0.85rem 1rem; overflow-x: auto; font-size: 0.82rem; margin: 0.75rem 0; }
+.dark .help-center-content .rich-text-code-block { background: #18181b; border: 1px solid #27272a; }
+.help-center-content .rich-text-blockquote { border-left: 3px solid #d4d4d8; padding: 0.1rem 0 0.1rem 1rem; margin: 0.9rem 0; color: #52525b; }
+.dark .help-center-content .rich-text-blockquote { border-left-color: #3f3f46; color: #a1a1aa; }
+.help-center-content img, .help-center-content .rich-text-image { max-width: 100%; height: auto; border-radius: 0.5rem; border: 1px solid #e4e4e7; margin: 0.75rem 0; }
+.dark .help-center-content img, .dark .help-center-content .rich-text-image { border-color: #27272a; }
+`;
+
 /** GitHub-style heading slug. MUST match scripts/help/build-help-index.mjs. */
 export function slugify(text: string): string {
   return text
@@ -339,6 +376,7 @@ function HelpCenterOverlay({
         aria-label={`${title} help`}
         className="m-auto flex h-[90vh] w-[min(1100px,95vw)] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"
       >
+        <style>{HELP_CONTENT_CSS}</style>
         {/* Header: title, search, close */}
         <div className="flex items-center gap-3 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           {isCrossApp && (
@@ -490,7 +528,7 @@ function HelpCenterOverlay({
                 <div
                   ref={contentRef}
                   onClick={onContentClick}
-                  className="help-center-content prose prose-zinc max-w-none dark:prose-invert"
+                  className="help-center-content max-w-none"
                   // Content is sanitized by sanitizeHtml(markdownToHtml(...)).
                   dangerouslySetInnerHTML={{ __html: html }}
                 />
