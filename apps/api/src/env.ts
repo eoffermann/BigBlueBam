@@ -37,6 +37,19 @@ const envSchema = z.object({
   LOGIN_LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_LOCKOUT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
 
+  // #39: API-key rotation grace window (ms) — how long a rotated-out
+  // predecessor key keeps authenticating. Validated at boot like every other
+  // knob (was previously read raw from process.env with no upper bound, so a
+  // typo like 7000000000 ≈ 81 days extended the window silently). Capped at
+  // 30 days — anything longer is a typo or a compromise-recovery plan that
+  // deserves its own discussion, not a silent env knob.
+  API_KEY_ROTATION_GRACE_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(30 * 24 * 60 * 60 * 1000)
+    .default(7 * 24 * 60 * 60 * 1000),
+
   UPLOAD_MAX_FILE_SIZE: z.coerce.number().int().positive().default(26214400), // 25MB
   UPLOAD_ALLOWED_TYPES: z.string().default('image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt'),
 

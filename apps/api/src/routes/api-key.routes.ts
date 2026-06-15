@@ -8,16 +8,7 @@ import { apiKeys } from '../db/schema/api-keys.js';
 import { requireAuth } from '../plugins/auth.js';
 import * as orgService from '../services/org.service.js';
 import { getOrgPermissions, isOrgPrivileged } from '../services/org-permissions.js';
-
-// Wave 1.A: rotation grace period in milliseconds (7 days by default).
-// Override with API_KEY_ROTATION_GRACE_MS for shorter windows in tests.
-const DEFAULT_ROTATION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-function getRotationGraceMs(): number {
-  const raw = process.env.API_KEY_ROTATION_GRACE_MS;
-  if (!raw) return DEFAULT_ROTATION_GRACE_MS;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_ROTATION_GRACE_MS;
-}
+import { env } from '../env.js';
 
 export default async function apiKeyRoutes(fastify: FastifyInstance) {
   fastify.get(
@@ -209,7 +200,7 @@ export default async function apiKeyRoutes(fastify: FastifyInstance) {
       const prefix = fullToken.slice(0, 8);
       const keyHash = await argon2.hash(fullToken);
       const now = new Date();
-      const graceExpires = new Date(now.getTime() + getRotationGraceMs());
+      const graceExpires = new Date(now.getTime() + env.API_KEY_ROTATION_GRACE_MS);
 
       // Transactional swap: insert the successor, then mark the predecessor.
       // Postgres-js driver autocommits per statement, so we wrap in a db
