@@ -70,6 +70,7 @@ import {
 import { useActiveCall } from './use-active-call.js';
 import { InvitePopover } from './invite-popover.js';
 import { HuntPopover } from './hunt-popover.js';
+import { BringPopover } from './bring-popover.js';
 import { PeopleHereButton } from './people-here.js';
 import { VideoTilesWindow } from './video-tiles.js';
 import { AudioUnblockChip } from './audio-unblock-chip.js';
@@ -253,9 +254,33 @@ const initialState: PresenceState = {
   chatUnread: 0,
 };
 
+/** A pending incoming bring request (non-admin leader) awaiting accept/decline. */
+export interface BringPrompt {
+  requestId: string;
+  leaderId: string;
+  leaderName: string;
+  url: string;
+  app: string;
+  label?: string;
+}
+
+/** Bring (follow-the-leader) UI state. `idle` shows Invite/Hunt/Bring; `leading`
+ *  and `following` each replace those with a single Cancel/Leave button. */
+export interface BringSlice {
+  role: 'idle' | 'leading' | 'following';
+  /** When following: who is leading us. */
+  leaderName: string | null;
+  /** When leading: how many followers are currently being brought. */
+  followingCount: number;
+  /** Pending incoming requests (we were asked to follow by a non-admin). */
+  prompts: BringPrompt[];
+}
+
 interface BureauContextValue {
   client: BureauWsClient;
   state: PresenceState;
+  /** Bring (follow-the-leader) UI state. */
+  bring: BringSlice;
   /** Imperative actions exposed by the SDK. */
   actions: {
     enterRoom: (roomId: string) => void;
@@ -274,6 +299,14 @@ interface BureauContextValue {
     chatSend: (body: string) => void;
     /** Reset the unread counter (panel opened). */
     chatMarkRead: () => void;
+    /** Start bringing co-located users along; force = admin grant-without-ask. */
+    startBring: (followerIds: string[], force: boolean) => void;
+    /** Leader: end the bring for everyone. */
+    cancelBring: () => void;
+    /** Follower: stop being led. */
+    leaveBring: () => void;
+    /** Follower: answer a pending bring request. */
+    respondBring: (requestId: string, decision: 'accept' | 'decline') => void;
   };
 }
 
@@ -358,6 +391,18 @@ function BureauProvider({
   const [state, setState] = useState<PresenceState>(initialState);
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // Bring (follow-the-leader) UI state. Lives here (the provider) so both the
+  // docked box (button area) and the follower navigation effect below share one
+  // source of truth.
+  const [bring, setBring] = useState<BringSlice>({
+    role: 'idle',
+    leaderName: null,
+    followingCount: 0,
+    prompts: [],
+  });
+  const bringRef = useRef(bring);
+  bringRef.current = bring;
 
   // Last descriptor pushed over the wire (declared here, used by both the
   // connected handler below and the location-relay effect further down).
@@ -740,9 +785,128 @@ function BureauProvider({
       chatMarkRead: () => {
         setState((s) => (s.chatUnread === 0 ? s : { ...s, chatUnread: 0 }));
       },
+      startBring: (followerIds: string[], force: boolean) => {
+        const loc = stateRef.current.location;
+        if (!loc || followerIds.length === 0) return;
+        client.send({
+          type: 'bring_start',
+          followerIds,
+          force,
+          url: loc.url,
+          app: loc.app,
+          label: loc.label,
+        });
+        // Optimistically enter leading mode; bring_started confirms the count.
+        setBring((b) => ({ ...b, role: 'leading', followingCount: b.followingCount }));
+      },
+      cancelBring: () => {
+        client.send({ type: 'bring_cancel' });
+        setBring((b) => ({ ...b, role: 'idle', followingCount: 0 }));
+      },
+      leaveBring: () => {
+        client.send({ type: 'bring_leave' });
+        setBring((b) => ({ ...b, role: 'idle', leaderName: null }));
+      },
+      respondBring: (requestId: string, decision: 'accept' | 'decline') => {
+        client.send({ type: 'bring_respond', requestId, decision });
+        setBring((b) => ({
+          ...b,
+          prompts: b.prompts.filter((p) => p.requestId !== requestId),
+        }));
+      },
     }),
     [client, navigate],
   );
+
+  // ── Bring (follow-the-leader): WS handling + follower navigation ──
+  // The leader's navigation arrives as bring_navigate; we route it through the
+  // same cross-app navigate() the summon/Hunt flows use. m.url is a full URL
+  // (describeLocation reports origin+path+search), which crossAppNavigate
+  // resolves against the current location.
+  useEffect(() => {
+    const offs: Array<() => void> = [];
+    // ── Follower side ──
+    offs.push(
+      client.on('bring_request', (m) => {
+        setBring((b) =>
+          b.prompts.some((p) => p.requestId === m.requestId)
+            ? b
+            : {
+                ...b,
+                prompts: [
+                  ...b.prompts,
+                  {
+                    requestId: m.requestId,
+                    leaderId: m.leaderId,
+                    leaderName: m.leaderName,
+                    url: m.url,
+                    app: m.app,
+                    label: m.label,
+                  },
+                ],
+              },
+        );
+      }),
+    );
+    offs.push(
+      client.on('bring_begin', (m) => {
+        setBring((b) => ({
+          ...b,
+          role: 'following',
+          leaderName: m.leaderName,
+          prompts: b.prompts.filter((p) => p.leaderId !== m.leaderId),
+        }));
+        try {
+          navigate(m.url);
+        } catch {
+          /* host adapter rejected the navigation */
+        }
+      }),
+    );
+    offs.push(
+      client.on('bring_navigate', (m) => {
+        if (bringRef.current.role !== 'following') return;
+        try {
+          navigate(m.url);
+        } catch {
+          /* ignore */
+        }
+      }),
+    );
+    offs.push(
+      client.on('bring_end', () => {
+        setBring((b) =>
+          b.role === 'following' ? { ...b, role: 'idle', leaderName: null } : b,
+        );
+      }),
+    );
+    // ── Leader side ──
+    offs.push(
+      client.on('bring_started', (m) => {
+        setBring((b) => ({ ...b, role: 'leading', followingCount: m.following }));
+      }),
+    );
+    offs.push(
+      client.on('bring_progress', (m) => {
+        setBring((b) =>
+          b.role === 'leading' ? { ...b, followingCount: m.following } : b,
+        );
+      }),
+    );
+    offs.push(
+      client.on('bring_ended', () => {
+        setBring((b) => ({
+          ...b,
+          role: 'idle',
+          followingCount: 0,
+          leaderName: null,
+        }));
+      }),
+    );
+    return () => {
+      for (const off of offs) off();
+    };
+  }, [client, navigate]);
 
   // ── Room text chat: keep the socket joined to wherever the user is ──
   // The chat room identity is the spatial room when in one, else the
@@ -829,8 +993,8 @@ function BureauProvider({
   }, [client]);
 
   const value = useMemo<BureauContextValue>(
-    () => ({ client, state, actions }),
-    [client, state, actions],
+    () => ({ client, state, bring, actions }),
+    [client, state, bring, actions],
   );
 
   return <BureauContext.Provider value={value}>{children}</BureauContext.Provider>;
@@ -1239,6 +1403,43 @@ const inviteBtnStyle: CSSProperties = {
   fontWeight: 500,
 };
 
+// Bring-mode "Cancel / Leave" button — replaces Invite/Hunt/Bring while a
+// follow-the-leader session is active. Warm/amber so it reads as "active mode".
+const bringActiveBtnStyle: CSSProperties = {
+  ...summonBtnStyle,
+  width: '100%',
+  background: 'rgba(245, 158, 11, 0.18)',
+  border: '1px solid rgba(245, 158, 11, 0.5)',
+  color: '#fde68a',
+  fontWeight: 600,
+};
+
+// Incoming bring request prompt (a non-admin asked to lead us).
+const bringPromptStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  marginTop: 6,
+  padding: '5px 8px',
+  borderRadius: 8,
+  background: 'rgba(245, 158, 11, 0.14)',
+  border: '1px solid rgba(245, 158, 11, 0.35)',
+  fontSize: 11.5,
+};
+const bringPromptAcceptStyle: CSSProperties = {
+  ...summonBtnStyle,
+  padding: '3px 8px',
+  background: 'rgba(34, 197, 94, 0.25)',
+  border: '1px solid rgba(34, 197, 94, 0.5)',
+  fontWeight: 600,
+};
+const bringPromptDeclineStyle: CSSProperties = {
+  ...summonBtnStyle,
+  padding: '3px 8px',
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.12)',
+};
+
 // location.app → ring-API surface_app. Mirrors SURFACE_APPS in
 // apps/bureau-api/src/routes/ring.routes.ts; apps absent here (bureau,
 // bolt, …) don't get an Invite button because the ring endpoint would
@@ -1279,6 +1480,9 @@ function BureauDockedBoxInner({
   // the server rejects non-admins, the popover shows "not allowed".
   const [inviteMode, setInviteMode] = useState<'ask' | 'force'>('ask');
   const [huntOpen, setHuntOpen] = useState(false);
+  // Bring (follow-the-leader). bringForce = admin right-click (grant without ask).
+  const [bringOpen, setBringOpen] = useState(false);
+  const [bringForce, setBringForce] = useState(false);
   // Room text chat panel. Message state lives in the provider (so blips
   // and unread counting work while this panel is closed); this is pure
   // open/closed UI state plus the anchor the panel positions against.
@@ -1290,7 +1494,10 @@ function BureauDockedBoxInner({
     if (chatOpen && chatUnreadCount > 0) chatMarkRead?.();
   }, [chatOpen, chatUnreadCount, chatMarkRead]);
   if (!ctx) return null;
-  const { state, actions } = ctx;
+  const { state, actions, bring } = ctx;
+  // You can lead a Bring whenever you're somewhere with a reportable location;
+  // the popover lists who is co-located (same surface/room) to bring along.
+  const canBring = !!state.location?.url;
 
   const inRoom = !!state.roomId;
   // Spatial rooms have their display name mirrored through the location
@@ -1680,63 +1887,155 @@ function BureauDockedBoxInner({
           Bring everyone here
         </button>
       ) : null}
-      <div style={{ display: 'flex', gap: 6 }}>
-        {canInvite ? (
+      {/* Incoming bring requests (a non-admin asked to lead us). */}
+      {bring.prompts.map((p) => (
+        <div key={p.requestId} style={bringPromptStyle} data-bureau-bring-prompt>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <strong>{p.leaderName}</strong> wants to bring you along
+          </span>
           <button
             type="button"
-            style={{ ...inviteBtnStyle, flex: 1, minWidth: 0 }}
-            data-bureau-invite-button
-            onClick={() => {
-              setHuntOpen(false);
-              setInviteMode('ask');
-              setInviteOpen((v) => !(v && inviteMode === 'ask'));
-            }}
-            onContextMenu={(e) => {
-              // Right-click = Force Invite (admin/owner/SuperUser; the
-              // server enforces — others see "not allowed" per row).
-              e.preventDefault();
-              setHuntOpen(false);
-              setInviteMode('force');
-              setInviteOpen(true);
-            }}
-            title="Ring people to join you here (right-click: force invite — admin only)"
-            aria-expanded={inviteOpen}
+            style={bringPromptAcceptStyle}
+            onClick={() => actions.respondBring(p.requestId, 'accept')}
           >
-            Invite…
+            Join
           </button>
-        ) : null}
+          <button
+            type="button"
+            style={bringPromptDeclineStyle}
+            onClick={() => actions.respondBring(p.requestId, 'decline')}
+          >
+            No
+          </button>
+        </div>
+      ))}
+
+      {/* Bring mode replaces Invite/Hunt/Bring with a single Cancel/Leave. */}
+      {bring.role === 'leading' ? (
         <button
           type="button"
-          style={{ ...inviteBtnStyle, flex: 1, minWidth: 0 }}
-          data-bureau-hunt-button
-          onClick={() => {
-            setInviteOpen(false);
-            setHuntOpen((v) => !v);
-          }}
-          title="Find an org member and jump to wherever they are"
-          aria-expanded={huntOpen}
+          style={bringActiveBtnStyle}
+          data-bureau-bring-cancel
+          onClick={() => actions.cancelBring()}
+          title="Stop leading and release everyone you're bringing"
         >
-          Hunt…
+          {bring.followingCount > 0
+            ? `End Bring · leading ${bring.followingCount}`
+            : 'End Bring · waiting'}
         </button>
-      </div>
-      {inviteOpen && canInvite && ringSurfaceApp && inviteSurfaceId ? (
-        <InvitePopover
-          surfaceApp={ringSurfaceApp}
-          surfaceId={inviteSurfaceId}
-          surfaceLabel={state.location?.label ?? null}
-          surfaceUrl={state.location?.url ?? null}
-          force={inviteMode === 'force'}
-          selfUserId={state.selfUserId}
-          onClose={() => setInviteOpen(false)}
-        />
-      ) : null}
-      {huntOpen ? (
-        <HuntPopover
-          selfUserId={state.selfUserId}
-          navigate={actions.navigate}
-          onClose={() => setHuntOpen(false)}
-        />
-      ) : null}
+      ) : bring.role === 'following' ? (
+        <button
+          type="button"
+          style={bringActiveBtnStyle}
+          data-bureau-bring-leave
+          onClick={() => actions.leaveBring()}
+          title="Stop following the leader"
+        >
+          {bring.leaderName ? `Leave · following ${bring.leaderName}` : 'Leave Bring'}
+        </button>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {canInvite ? (
+              <button
+                type="button"
+                style={{ ...inviteBtnStyle, flex: 1, minWidth: 0 }}
+                data-bureau-invite-button
+                onClick={() => {
+                  setHuntOpen(false);
+                  setBringOpen(false);
+                  setInviteMode('ask');
+                  setInviteOpen((v) => !(v && inviteMode === 'ask'));
+                }}
+                onContextMenu={(e) => {
+                  // Right-click = Force Invite (admin/owner/SuperUser; the
+                  // server enforces — others see "not allowed" per row).
+                  e.preventDefault();
+                  setHuntOpen(false);
+                  setBringOpen(false);
+                  setInviteMode('force');
+                  setInviteOpen(true);
+                }}
+                title="Ring people to join you here (right-click: force invite — admin only)"
+                aria-expanded={inviteOpen}
+              >
+                Invite…
+              </button>
+            ) : null}
+            <button
+              type="button"
+              style={{ ...inviteBtnStyle, flex: 1, minWidth: 0 }}
+              data-bureau-hunt-button
+              onClick={() => {
+                setInviteOpen(false);
+                setBringOpen(false);
+                setHuntOpen((v) => !v);
+              }}
+              title="Find an org member and jump to wherever they are"
+              aria-expanded={huntOpen}
+            >
+              Hunt…
+            </button>
+            {canBring ? (
+              <button
+                type="button"
+                style={{ ...inviteBtnStyle, flex: 1, minWidth: 0 }}
+                data-bureau-bring-button
+                onClick={() => {
+                  setInviteOpen(false);
+                  setHuntOpen(false);
+                  setBringForce(false);
+                  setBringOpen((v) => !(v && !bringForce));
+                }}
+                onContextMenu={(e) => {
+                  // Right-click = force (admin/owner/SuperUser auto-grant;
+                  // the server enforces — non-admins fall back to a request).
+                  e.preventDefault();
+                  setInviteOpen(false);
+                  setHuntOpen(false);
+                  setBringForce(true);
+                  setBringOpen(true);
+                }}
+                title="Lead co-located people around the suite until you cancel (right-click: force — admin only)"
+                aria-expanded={bringOpen}
+              >
+                Bring…
+              </button>
+            ) : null}
+          </div>
+          {inviteOpen && canInvite && ringSurfaceApp && inviteSurfaceId ? (
+            <InvitePopover
+              surfaceApp={ringSurfaceApp}
+              surfaceId={inviteSurfaceId}
+              surfaceLabel={state.location?.label ?? null}
+              surfaceUrl={state.location?.url ?? null}
+              force={inviteMode === 'force'}
+              selfUserId={state.selfUserId}
+              onClose={() => setInviteOpen(false)}
+            />
+          ) : null}
+          {huntOpen ? (
+            <HuntPopover
+              selfUserId={state.selfUserId}
+              navigate={actions.navigate}
+              onClose={() => setHuntOpen(false)}
+            />
+          ) : null}
+          {bringOpen && canBring ? (
+            <BringPopover
+              surfaceUrl={state.location?.url ?? null}
+              occupants={state.occupants}
+              selfUserId={state.selfUserId}
+              force={bringForce}
+              onStart={(ids) => {
+                actions.startBring(ids, bringForce);
+                setBringOpen(false);
+              }}
+              onClose={() => setBringOpen(false)}
+            />
+          ) : null}
+        </>
+      )}
 
       {/* Active-call strip — what LiveKit room the docked box is in. */}
       <div

@@ -192,6 +192,34 @@ export interface ChatSendMessage {
   body: string;
 }
 
+/** Start a "Bring" (follow-the-leader): pull co-located users along as you
+ *  navigate. `force` (admin/owner) skips the request and grants immediately. */
+export interface BringStartMessage {
+  type: 'bring_start';
+  followerIds: string[];
+  force?: boolean;
+  url?: string;
+  app?: string;
+  label?: string;
+}
+
+/** Follower's answer to a pending bring request. */
+export interface BringRespondMessage {
+  type: 'bring_respond';
+  requestId: string;
+  decision: 'accept' | 'decline';
+}
+
+/** Leader ends the whole bring session for everyone. */
+export interface BringCancelMessage {
+  type: 'bring_cancel';
+}
+
+/** Follower opts out of being led. */
+export interface BringLeaveMessage {
+  type: 'bring_leave';
+}
+
 export type ClientMessage =
   | SubscribeFloorMessage
   | EnterRoomMessage
@@ -209,7 +237,11 @@ export type ClientMessage =
   | RingRespondMessage
   | ChatJoinMessage
   | ChatLeaveMessage
-  | ChatSendMessage;
+  | ChatSendMessage
+  | BringStartMessage
+  | BringRespondMessage
+  | BringCancelMessage
+  | BringLeaveMessage;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Server → client messages (§8, "Server to client" table) plus the
@@ -451,6 +483,67 @@ export interface ChatMessageEvent {
   message: BureauChatMessage;
 }
 
+// ── Bring (follow-the-leader) ────────────────────────────────────────────
+/** A non-admin leader is requesting to bring you along; show accept/decline. */
+export interface BringRequestEvent {
+  type: 'bring_request';
+  requestId: string;
+  leaderId: string;
+  leaderName: string;
+  url: string;
+  app: string;
+  label?: string;
+}
+/** You are now following `leaderName`; navigate to `url` and enter follow mode. */
+export interface BringBeginEvent {
+  type: 'bring_begin';
+  leaderId: string;
+  leaderName: string;
+  url: string;
+  app: string;
+  label?: string;
+  forced?: boolean;
+}
+/** The leader moved; navigate along. */
+export interface BringNavigateEvent {
+  type: 'bring_navigate';
+  leaderId: string;
+  url: string;
+  app: string;
+  label?: string | null;
+}
+/** The bring ended (leader cancelled/disconnected); leave follow mode. */
+export interface BringEndEvent {
+  type: 'bring_end';
+  reason: string;
+  leaderName?: string;
+}
+/** Ack to the leader that a bring started, with grant/request split + count. */
+export interface BringStartedEvent {
+  type: 'bring_started';
+  granted: string[];
+  requested: string[];
+  following: number;
+}
+/** Live follower-count update to the leader (someone joined or left). */
+export interface BringProgressEvent {
+  type: 'bring_progress';
+  following: number;
+  joined?: { id: string; name: string };
+  left?: { id: string; name: string };
+}
+/** Ack to whoever cancelled/left that their bring role is now idle. */
+export interface BringEndedEvent {
+  type: 'bring_ended';
+  reason: string;
+}
+/** A requested follower declined the bring (leader side). */
+export interface BringDeclinedEvent {
+  type: 'bring_declined';
+  followerId: string;
+  followerName: string;
+}
+
 export type ServerMessage =
   | ConnectedEvent
   | PresenceSnapshotEvent
@@ -473,6 +566,14 @@ export type ServerMessage =
   | RingRespondedEvent
   | ChatJoinedEvent
   | ChatMessageEvent
+  | BringRequestEvent
+  | BringBeginEvent
+  | BringNavigateEvent
+  | BringEndEvent
+  | BringStartedEvent
+  | BringProgressEvent
+  | BringEndedEvent
+  | BringDeclinedEvent
   | ErrorEvent;
 
 export type ServerMessageType = ServerMessage['type'];

@@ -83,6 +83,15 @@ import {
   reportDenials,
 } from '../services/summon.service.js';
 import { scheduleKnockTimeout } from '../services/knock-queue.service.js';
+import {
+  startFollow,
+  stopFollow,
+  getFollowers,
+  getLeader,
+  endLeaderBrings,
+  createRequest,
+  takeRequest,
+} from '../lib/bring-state.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Per-socket connection record
@@ -1185,6 +1194,20 @@ export default async function wsRoutes(fastify: FastifyInstance) {
                 }),
               );
             }
+            // Bring: if this user is leading a follow-along, push the new
+            // location to every active follower so they navigate along.
+            const bringFollowers = await getFollowers(fastify.redis, orgId, userId);
+            if (bringFollowers.length > 0) {
+              const navPayload = frame('bring_navigate', {
+                leaderId: userId,
+                url,
+                app,
+                label: label ?? null,
+              });
+              await Promise.all(
+                bringFollowers.map((f) => publishUser(f, navPayload)),
+              );
+            }
             break;
           }
 
@@ -1585,6 +1608,159 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }
 
           // ──────────────────────────────────────────────
+          // Bring (follow-the-leader). The leader pulls co-located users along
+          // as they navigate, until either side cancels. Org admins/owners (and
+          // SuperUsers) auto-grant; everyone else sends a request the follower
+          // accepts. Live state in Redis (lib/bring-state.ts); navigation is
+          // fanned out from the leader's location_update above.
+          // ──────────────────────────────────────────────
+          case 'bring_start': {
+            const followerIds = Array.isArray(msg.followerIds)
+              ? (msg.followerIds.filter((x) => typeof x === 'string') as string[]).slice(0, 50)
+              : [];
+            const url = typeof msg.url === 'string' ? msg.url : client.locationUrl;
+            const app = typeof msg.app === 'string' ? msg.app : client.locationApp;
+            const label =
+              typeof msg.label === 'string' ? msg.label : client.locationLabel ?? undefined;
+            if (followerIds.length === 0 || !url || !app) {
+              safeSend(socket, frame('bring_started', { granted: [], requested: [], following: 0 }));
+              break;
+            }
+            const isAdmin =
+              isSuperuser || userRole === 'owner' || userRole === 'admin';
+            const granted: string[] = [];
+            const requested: string[] = [];
+            for (const followerId of followerIds) {
+              if (followerId === userId) continue;
+              if (isAdmin) {
+                await startFollow(fastify.redis, orgId, userId, followerId);
+                await publishUser(
+                  followerId,
+                  frame('bring_begin', {
+                    leaderId: userId,
+                    leaderName: displayName,
+                    url,
+                    app,
+                    label,
+                    forced: true,
+                  }),
+                );
+                granted.push(followerId);
+              } else {
+                const requestId = nanoid(16);
+                await createRequest(fastify.redis, {
+                  requestId,
+                  orgId,
+                  leaderId: userId,
+                  leaderName: displayName,
+                  followerId,
+                  url,
+                  app,
+                  label: label ?? undefined,
+                });
+                await publishUser(
+                  followerId,
+                  frame('bring_request', {
+                    requestId,
+                    leaderId: userId,
+                    leaderName: displayName,
+                    url,
+                    app,
+                    label,
+                  }),
+                );
+                requested.push(followerId);
+              }
+            }
+            const following = await getFollowers(fastify.redis, orgId, userId);
+            safeSend(
+              socket,
+              frame('bring_started', {
+                granted,
+                requested,
+                following: following.length,
+              }),
+            );
+            break;
+          }
+
+          case 'bring_respond': {
+            const requestId = typeof msg.requestId === 'string' ? msg.requestId : null;
+            const decision =
+              msg.decision === 'accept' || msg.decision === 'decline' ? msg.decision : null;
+            if (!requestId || !decision) break;
+            const req = await takeRequest(fastify.redis, requestId);
+            // Expired, already consumed, or addressed to someone else.
+            if (!req || req.followerId !== userId || req.orgId !== orgId) break;
+            if (decision === 'accept') {
+              const count = await startFollow(fastify.redis, orgId, req.leaderId, userId);
+              // Navigate to the leader's location captured at request time; the
+              // next bring_navigate catches the follower up if the leader moved.
+              await publishUser(
+                userId,
+                frame('bring_begin', {
+                  leaderId: req.leaderId,
+                  leaderName: req.leaderName,
+                  url: req.url,
+                  app: req.app,
+                  label: req.label,
+                }),
+              );
+              await publishUser(
+                req.leaderId,
+                frame('bring_progress', {
+                  following: count,
+                  joined: { id: userId, name: displayName },
+                }),
+              );
+            } else {
+              await publishUser(
+                req.leaderId,
+                frame('bring_declined', {
+                  followerId: userId,
+                  followerName: displayName,
+                }),
+              );
+            }
+            break;
+          }
+
+          case 'bring_cancel': {
+            // Leader ends the whole session for everyone.
+            const followers = await endLeaderBrings(fastify.redis, orgId, userId);
+            await Promise.all(
+              followers.map((f) =>
+                publishUser(
+                  f,
+                  frame('bring_end', {
+                    reason: 'leader_cancelled',
+                    leaderName: displayName,
+                  }),
+                ),
+              ),
+            );
+            safeSend(socket, frame('bring_ended', { reason: 'self' }));
+            break;
+          }
+
+          case 'bring_leave': {
+            // Follower opts out of being led.
+            const leaderId = await getLeader(fastify.redis, orgId, userId);
+            if (leaderId) {
+              const count = await stopFollow(fastify.redis, orgId, leaderId, userId);
+              await publishUser(
+                leaderId,
+                frame('bring_progress', {
+                  following: count,
+                  left: { id: userId, name: displayName },
+                }),
+              );
+            }
+            safeSend(socket, frame('bring_ended', { reason: 'self' }));
+            break;
+          }
+
+          // ──────────────────────────────────────────────
           default: {
             safeSend(
               socket,
@@ -1688,6 +1864,36 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           orgId,
           roomId: null,
         });
+        // Bring: only tear down on the user's LAST tab (the per-user state must
+        // survive a single tab closing while another stays connected).
+        const remainingSessions = await fastify.redis.scard(
+          `bureau:user:${userId}:sessions`,
+        );
+        if (remainingSessions === 0) {
+          const myFollowers = await endLeaderBrings(fastify.redis, orgId, userId);
+          await Promise.all(
+            myFollowers.map((f) =>
+              publishUser(
+                f,
+                frame('bring_end', {
+                  reason: 'leader_disconnected',
+                  leaderName: displayName,
+                }),
+              ).catch(() => {}),
+            ),
+          );
+          const myLeader = await getLeader(fastify.redis, orgId, userId);
+          if (myLeader) {
+            const count = await stopFollow(fastify.redis, orgId, myLeader, userId);
+            await publishUser(
+              myLeader,
+              frame('bring_progress', {
+                following: count,
+                left: { id: userId, name: displayName },
+              }),
+            ).catch(() => {});
+          }
+        }
       } catch (err) {
         fastify.log.warn({ err, userId }, 'Bureau WS cleanup partial failure');
       } finally {
