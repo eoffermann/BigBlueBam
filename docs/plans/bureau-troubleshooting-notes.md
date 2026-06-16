@@ -295,3 +295,19 @@ and `apps/frontend/src/main.tsx`. No schema changes.
   reaped by TTL within ~90s rather than instantly, and the leader's count
   corrects on the next read/move rather than via an immediate `bring_progress`.
   Acceptable trade for surviving navigation; revisit only if the lag is felt.
+- **TODO — surface-huddle 403 reconnect race (band-aided 2026-06-15).** The
+  REST mint `POST /surface-huddle/token` races the WS `location_update`: after a
+  Railway edge WS recycle a fresh presence session boots with an empty
+  `locationUrl`, so for ~1-2s the server has no matching session and returns
+  `403 NOT_ON_SURFACE` (the gate is *correct* — it fails closed). Prod showed a
+  user-visible `BUREAU_MINT_FAILED` 403 on a join the user was entitled to.
+  **Shipped:** the client retry budget in `packages/bureau-client/src/active-room.ts`
+  (`mintToken`) was widened from 2×500ms to 4 attempts with escalating
+  backoff+jitter (~3.5-5s), and the thrown error now carries `.status` so
+  telemetry's `error_status` is populated. That out-waits the handshake but
+  doesn't eliminate the race. **Durable fix (do this next time bureau-client
+  /active-room.ts or ws.routes.ts is touched):** stop racing — have the SDK
+  await a server `location_ack` confirming the CURRENT session's
+  `location_update` was registered before driving the first surface mint, so
+  the mint can't fire before the server can see the user on the surface. There
+  is a matching `TODO(bureau):` line comment at the retry loop.

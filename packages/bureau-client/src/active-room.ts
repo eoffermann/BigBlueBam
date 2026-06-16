@@ -763,11 +763,24 @@ export class ActiveCallManager {
       // session for this surface. That update travels over the WS connection,
       // which can still be (re)connecting when this REST mint fires on a
       // fresh navigation. The server already grace-polls for ~0.6s; we retry
-      // a couple more times here so a slow WS handshake beyond that window
-      // still recovers instead of dead-ending the call in 'error'. Only 403
-      // is retried — every other status is a real failure surfaced at once.
-      const SURFACE_MINT_RETRIES = 2;
-      const SURFACE_MINT_BACKOFF_MS = 500;
+      // here so a slow WS handshake beyond that window still recovers instead
+      // of dead-ending the call in 'error'. Only 403 is retried — every other
+      // status is a real failure surfaced at once.
+      //
+      // TODO(bureau): this is the band-aid for the surface-huddle 403
+      //   reconnect race. The durable fix is to stop racing the REST mint
+      //   against the WS `location_update`: have the SDK await a server
+      //   `location_ack` for the CURRENT session before the first mint (see
+      //   docs/plans/bureau-troubleshooting-notes.md). Do that next time this
+      //   code is touched. Until then we just out-wait the handshake below.
+      //
+      // Widened from 2×500ms to 4 attempts with escalating backoff + jitter
+      // (~3.5-5s total) because Railway edge WS recycles occasionally pushed
+      // the first `location_update` past the old ~1s budget, producing a
+      // user-visible BUREAU_MINT_FAILED 403 on a join the user was entitled to.
+      const SURFACE_MINT_RETRIES = 4;
+      const SURFACE_MINT_BACKOFF_MS = 400;
+      const SURFACE_MINT_JITTER_MS = 300;
       for (let attempt = 0; ; attempt++) {
         const res = await fetch(url, {
           method: 'POST',
@@ -780,12 +793,20 @@ export class ActiveCallManager {
           return parseTokenEnvelope(body);
         }
         if (res.status === 403 && attempt < SURFACE_MINT_RETRIES) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, SURFACE_MINT_BACKOFF_MS),
-          );
+          const backoff =
+            SURFACE_MINT_BACKOFF_MS * (attempt + 1) +
+            Math.floor(Math.random() * SURFACE_MINT_JITTER_MS);
+          await new Promise((resolve) => setTimeout(resolve, backoff));
           continue;
         }
-        throw new Error(`surface-huddle/token returned ${res.status}`);
+        // Carry the HTTP status onto the thrown error so BUREAU_MINT_FAILED
+        // telemetry populates `error_status` and a 403-race is distinguishable
+        // from a 401/500 next time (the reporter reads `err.status`).
+        const err = new Error(`surface-huddle/token returned ${res.status}`) as Error & {
+          status?: number;
+        };
+        err.status = res.status;
+        throw err;
       }
     }
     throw new Error(`Cannot mint token for target kind=${target.kind}`);
