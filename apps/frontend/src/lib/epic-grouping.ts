@@ -7,13 +7,37 @@
 import type { Task } from '@bigbluebam/shared';
 import type { Priority } from '@/hooks/use-priorities';
 
-export type LaneSort = 'priority-desc' | 'priority-asc' | 'alpha-asc' | 'alpha-desc';
+export type LaneSort =
+  | 'priority-desc'
+  | 'priority-asc'
+  | 'alpha-asc'
+  | 'alpha-desc'
+  | 'start-asc'
+  | 'start-desc'
+  | 'end-asc'
+  | 'end-desc';
 
+/** Sort options offered on the board swimlanes and list view. */
 export const LANE_SORT_OPTIONS: { value: LaneSort; label: string }[] = [
   { value: 'priority-desc', label: 'Priority (high → low)' },
   { value: 'priority-asc', label: 'Priority (low → high)' },
   { value: 'alpha-asc', label: 'Name (A → Z)' },
   { value: 'alpha-desc', label: 'Name (Z → A)' },
+];
+
+/** Date-range sorts — only meaningful where groups carry date bounds (the
+ *  timeline), so they live in a separate list rather than LANE_SORT_OPTIONS. */
+const DATE_SORT_OPTIONS: { value: LaneSort; label: string }[] = [
+  { value: 'start-asc', label: 'Start date (earliest → latest)' },
+  { value: 'start-desc', label: 'Start date (latest → earliest)' },
+  { value: 'end-asc', label: 'End date (earliest → latest)' },
+  { value: 'end-desc', label: 'End date (latest → earliest)' },
+];
+
+/** The timeline offers the standard sorts plus the start/end-date sorts. */
+export const TIMELINE_SORT_OPTIONS: { value: LaneSort; label: string }[] = [
+  ...LANE_SORT_OPTIONS,
+  ...DATE_SORT_OPTIONS,
 ];
 
 /** Sentinel group keys that always sort to the bottom regardless of mode. */
@@ -54,6 +78,42 @@ export interface SortableGroup {
   key: string;
   label: string;
   topPriorityPos: number;
+  /**
+   * Epoch ms of the group's earliest task start / latest task end, for the
+   * date sorts. Null when no task in the group carries a date. Optional so the
+   * board/list callers (which only offer priority/name sorts) need not compute
+   * them — those callers never pass a date mode, so the fields go unused there.
+   */
+  startMs?: number | null;
+  endMs?: number | null;
+}
+
+/**
+ * Earliest task start and latest task end across a group, as epoch ms — used
+ * for the timeline's start/end-date sorts and its collapsed summary bar. A
+ * task's effective start is its start_date (falling back to due_date); its
+ * effective end is its due_date (falling back to start_date), mirroring the
+ * range the timeline draws for each bar. Returns null bounds when no task in
+ * the group carries a date.
+ */
+export function groupDateBounds(tasks: Task[]): { startMs: number | null; endMs: number | null } {
+  let startMs: number | null = null;
+  let endMs: number | null = null;
+  for (const t of tasks) {
+    const s = (t as Task & { start_date?: string | null }).start_date ?? null;
+    const e = t.due_date ?? null;
+    const startStr = s ?? e;
+    const endStr = e ?? s;
+    if (startStr) {
+      const ms = Date.parse(startStr);
+      if (!Number.isNaN(ms) && (startMs === null || ms < startMs)) startMs = ms;
+    }
+    if (endStr) {
+      const ms = Date.parse(endStr);
+      if (!Number.isNaN(ms) && (endMs === null || ms > endMs)) endMs = ms;
+    }
+  }
+  return { startMs, endMs };
 }
 
 /**
@@ -63,6 +123,16 @@ export interface SortableGroup {
  */
 export function sortGroups<T extends SortableGroup>(groups: T[], mode: LaneSort): T[] {
   const alpha = (a: T, b: T) => a.label.localeCompare(b.label);
+  // Compare two nullable epoch-ms values. Groups with no date (null) always
+  // sort LAST regardless of direction; real dates break ties alphabetically.
+  const byDate = (a: T, b: T, pick: (g: T) => number | null | undefined, dir: 1 | -1) => {
+    const av = pick(a) ?? null;
+    const bv = pick(b) ?? null;
+    if (av === null && bv === null) return alpha(a, b);
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    return (av - bv) * dir || alpha(a, b);
+  };
   return groups.slice().sort((a, b) => {
     const aTrail = TRAILING_KEYS.has(a.key);
     const bTrail = TRAILING_KEYS.has(b.key);
@@ -72,6 +142,14 @@ export function sortGroups<T extends SortableGroup>(groups: T[], mode: LaneSort)
         return alpha(a, b);
       case 'alpha-desc':
         return -alpha(a, b);
+      case 'start-asc':
+        return byDate(a, b, (g) => g.startMs, 1);
+      case 'start-desc':
+        return byDate(a, b, (g) => g.startMs, -1);
+      case 'end-asc':
+        return byDate(a, b, (g) => g.endMs, 1);
+      case 'end-desc':
+        return byDate(a, b, (g) => g.endMs, -1);
       // Catalog position 0 is the HIGHEST priority, so "high → low" is
       // position ascending and "low → high" is position descending.
       case 'priority-asc':
