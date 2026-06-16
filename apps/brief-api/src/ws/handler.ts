@@ -42,7 +42,9 @@ const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
 const MSG_AUTH = 2;
 
-const AUTH_OK = 0;
+// y-protocols/auth message-type-2 payload: 0 = permission-denied. We never
+// send an "OK" frame (see the connect handler) — success is the absence of a
+// denial. AUTH_DENIED below is the legacy status byte kept for the denial path.
 const AUTH_DENIED = 1;
 
 interface ConnectedClient {
@@ -307,8 +309,15 @@ export default async function websocketHandler(fastify: FastifyInstance) {
       return;
     }
 
-    // Send auth OK
-    sendAuthMessage(socket, AUTH_OK);
+    // Auth OK — deliberately send NOTHING. The y-websocket client has no
+    // "auth OK" message type: in y-protocols/auth, message-type-2 means
+    // permission-DENIED, and the standard client treats the *absence* of such
+    // a frame as success. Sending [MSG_AUTH, 0] here was decoded by the client
+    // as "permission denied, now read the reason string" — but there was no
+    // reason, so lib0's decoder threw "Unexpected end of array" uncaught in
+    // onmessage on every single connect/reconnect, flooding window.onerror
+    // telemetry. The sync-step-1 sent just below is what actually confirms the
+    // connection. (Denials still work: they socket.close() with a 40xx code.)
 
     const client: ConnectedClient = {
       ws: socket,
