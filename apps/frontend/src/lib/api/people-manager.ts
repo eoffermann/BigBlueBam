@@ -379,6 +379,26 @@ export const peopleManagerApi = {
     );
   },
 
+  /**
+   * Soft-delete (tombstone) the account. The server's delete-account endpoint
+   * is cross-org; `orgId` (X-Org-Id) just needs to be an org where the caller
+   * has rights. Gate the UI on `caps.delete_account`, which M1 already computes
+   * as full eligibility (admin in EVERY org the target belongs to, not self,
+   * not a SuperUser). The server re-checks.
+   */
+  deleteAccount(
+    orgId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<{ data: { success: boolean; id: string; previous_email: string } }> {
+    return orgScopedRequest(
+      'POST',
+      `/org/members/${userId}/delete-account`,
+      orgId,
+      reason ? { reason } : {},
+    );
+  },
+
   updateRole(
     orgId: string,
     userId: string,

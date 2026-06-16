@@ -158,6 +158,9 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
   const showActivityTab = memberships.some(
     (m) => m.caps.manage_projects || m.caps.manage_role,
   );
+  // Soft-delete is account-level; caps.delete_account already encodes full
+  // eligibility (admin in every org the target is in, not self, not a SU).
+  const deletableMembership = memberships.find((m) => m.caps.delete_account);
 
   const resetLabel = u.display_name || u.email;
 
@@ -273,6 +276,15 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
         {tab === 'activity' && showActivityTab && (
           <ActivityTab userId={userId} memberships={memberships} />
         )}
+
+        {deletableMembership && (
+          <DangerZone
+            userId={userId}
+            orgId={deletableMembership.org_id}
+            label={u.display_name || u.email}
+            onDeleted={() => onNavigate('/people-manager')}
+          />
+        )}
       </div>
 
       {resetCtx && (
@@ -289,6 +301,70 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
         />
       )}
     </AppLayout>
+  );
+}
+
+// ─── Danger zone: soft-delete the account (plan §1) ──────────────────────────
+
+function DangerZone({
+  userId,
+  orgId,
+  label,
+  onDeleted,
+}: {
+  userId: string;
+  orgId: string;
+  label: string;
+  onDeleted: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const [reason, setReason] = useState('');
+  const del = useMutation({
+    mutationFn: () => peopleManagerApi.deleteAccount(orgId, userId, reason.trim() || undefined),
+    onSuccess: () => {
+      setConfirm(false);
+      onDeleted();
+    },
+  });
+  return (
+    <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20 p-4">
+      <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">Danger zone</h3>
+      <p className="mt-1 max-w-2xl text-xs text-red-700/80 dark:text-red-400/80">
+        Soft-delete this account: removed from every organization, sessions and API keys revoked,
+        and the email tombstoned (freeing it for a fresh invite). Authored content is preserved.
+        This cannot be undone.
+      </p>
+      <Button variant="danger" size="sm" className="mt-3" onClick={() => setConfirm(true)}>
+        <Trash2 className="h-4 w-4" /> Delete account
+      </Button>
+      <Dialog
+        open={confirm}
+        onOpenChange={(o) => {
+          if (!o) setConfirm(false);
+        }}
+        title={`Delete ${label}?`}
+        description="This soft-deletes the account across all orgs and frees the email for re-invite. It cannot be undone."
+      >
+        <div className="space-y-3">
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            placeholder="Reason (optional — recorded in the audit log)"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white px-2.5 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-zinc-950 dark:border-zinc-700 dark:text-zinc-100"
+          />
+          {del.isError && <p className="text-xs text-red-600">{(del.error as Error).message}</p>}
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirm(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={del.isPending} onClick={() => del.mutate()}>
+              Delete account
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </div>
   );
 }
 

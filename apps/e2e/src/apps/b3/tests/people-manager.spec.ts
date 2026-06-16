@@ -17,6 +17,10 @@ test.describe('People Manager v2', () => {
     await expect(view).toBeVisible({ timeout: 15_000 });
     await view.click();
     await expect(page).toHaveURL(/\/people-manager\/[0-9a-f-]{8}/);
+    // The only roster person here is the admin themselves; you cannot delete
+    // your own account, so the Danger-zone "Delete account" must NOT appear
+    // (caps.delete_account is false for self).
+    await expect(page.getByRole('button', { name: 'Delete account' })).toHaveCount(0);
   });
 
   test('bulk bar appears on select and membership verbs are USABLE (M5 dead-by-default fix)', async ({
