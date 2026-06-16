@@ -10,6 +10,7 @@ import { organizationMemberships } from '../db/schema/organization-memberships.j
 import { organizations } from '../db/schema/organizations.js';
 import { impersonationSessions } from '../db/schema/impersonation-sessions.js';
 import { resolveUserOrgRoles } from '../services/role-resolver.js';
+import { resolveEffectiveOrg } from './org-context.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -230,46 +231,22 @@ export async function buildAuthUser(
     keyScopedRole = keyMembership?.role ?? 'viewer';
   }
 
-  // Session-level active_org_id. Set by /auth/switch-org (regular users) and
-  // /superuser/context/switch (SuperUsers). We honor it here so both flows
-  // pin the request's org context to whatever the user last selected.
-  //
-  //   - For a regular user: only honor if they are STILL a member of that
-  //     org (membership may have been revoked since the switch). Otherwise
-  //     silently fall back to the membership-resolved default — the switch
-  //     effectively expires.
-  //   - For a SuperUser: honor ANY active_org_id, even an org they aren't
-  //     a member of (that's the point of SuperUser cross-org visibility).
-  //     Their membership role in the target, if any, is preserved; if they
-  //     aren't a member we mark them as 'owner' for the switched context
-  //     and flip the is_superuser_viewing banner flag.
-  let finalOrgId = keyScopedOrgId ?? activeOrgId;
-  let finalRole = keyScopedRole ?? activeRole;
-  let isSuperuserViewing = false;
-  // An explicit `X-Org-Id` header is a deliberate PER-REQUEST org override and
-  // must take precedence over the session's sticky `active_org_id` (set by
-  // /auth/switch-org or /superuser/context/switch). Multi-org tools (e.g. the
-  // People Manager) target a specific org per request via `X-Org-Id`; without
-  // this guard the sticky session org silently clobbers the header, so every
-  // per-org request resolves back to the session's active org. When the header
-  // is present, resolveOrgContext has already validated membership and set
-  // activeOrgId === requestedOrgId, so honoring activeOrgId is correct.
-  const explicitOrgHeader = requestedOrgId !== undefined;
-  if (!explicitOrgHeader && sessionActiveOrgId && sessionActiveOrgId !== activeOrgId) {
-    const existingMembership = memberships.find((m) => m.org_id === sessionActiveOrgId);
-    if (row.is_superuser) {
-      finalOrgId = sessionActiveOrgId;
-      finalRole = existingMembership?.role ?? 'owner';
-      // Only light the cross-org banner when the SU is viewing an org they
-      // are NOT a native member of — normal multi-org members who use the
-      // switcher shouldn't see the "viewing as SuperUser" banner.
-      isSuperuserViewing = !existingMembership;
-    } else if (existingMembership) {
-      finalOrgId = sessionActiveOrgId;
-      finalRole = existingMembership.role;
-    }
-    // non-SU with no matching membership: leave finalOrgId on the default.
-  }
+  // Resolve the effective org/role + SuperUser-viewing banner. The precedence
+  // (API-key pin > explicit X-Org-Id header > sticky session active_org_id >
+  // membership default) lives in the pure `resolveEffectiveOrg` so it stays
+  // unit-tested in isolation (apps/api/test/auth-org-precedence.test.ts) — that
+  // is where the e6c9b731 regression (sticky session org clobbering an explicit
+  // X-Org-Id header) is pinned.
+  const { orgId: finalOrgId, role: finalRole, isSuperuserViewing } = resolveEffectiveOrg({
+    keyScopedOrgId,
+    keyScopedRole,
+    activeOrgId,
+    activeRole,
+    requestedOrgId,
+    sessionActiveOrgId,
+    memberships,
+    isSuperuser: row.is_superuser,
+  });
 
   return {
     id: row.id,
