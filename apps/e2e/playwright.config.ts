@@ -30,6 +30,10 @@ export default defineConfig({
   ],
   use: {
     baseURL: BASE_URL,
+    // Local dev serves behind nginx with a self-signed cert and redirects
+    // HTTP→HTTPS; without this, chromium rejects every navigation with
+    // ERR_CERT_AUTHORITY_INVALID. Harmless in CI (real/no cert).
+    ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
     video: 'retain-on-failure',
     actionTimeout: 15_000,

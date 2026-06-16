@@ -101,6 +101,9 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
     (p) => p.user.display_name || p.user.email,
   );
   const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
+  // Explicit in-bar org pick, used only when the selection spans several orgs
+  // and the roster isn't already filtered to one.
+  const [bulkOrgPick, setBulkOrgPick] = useState<string>('');
 
   const [showInvite, setShowInvite] = useState(false);
 
@@ -194,6 +197,34 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
     [people, selectedIds],
   );
 
+  // Org context for the bulk membership verbs. Resolve in order: the roster's
+  // pinned Org filter → the single org common to the whole selection → an
+  // explicit in-bar pick (shown when the selection spans several orgs). '' when
+  // none resolves yet. This makes the verbs usable for the common single-org
+  // case WITHOUT first pinning the roster filter (the M5 dead-by-default bug).
+  const bulkOrgCandidates = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const p of selectedPeople) {
+      for (const m of p.memberships) {
+        if (!byId.has(m.org_id)) byId.set(m.org_id, m.org_name || m.org_id);
+      }
+    }
+    return Array.from(byId, ([value, label]) => ({ value, label })).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [selectedPeople]);
+  const effectiveBulkOrg: string =
+    singleOrgId ??
+    (bulkOrgCandidates.length === 1
+      ? (bulkOrgCandidates[0]?.value ?? '')
+      : bulkOrgCandidates.some((c) => c.value === bulkOrgPick)
+        ? bulkOrgPick
+        : '');
+  const effectiveBulkOrgName =
+    bulkOrgCandidates.find((c) => c.value === effectiveBulkOrg)?.label ??
+    singleOrgName ??
+    effectiveBulkOrg;
+
   const clearSelection = () => setSelectedIds(new Set());
 
   const invalidate = () =>
@@ -206,7 +237,7 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
    * here and is skipped ('no-membership').
    */
   const membershipInOrg = (p: ScopedPerson): PersonMembership | undefined =>
-    singleOrgId == null ? undefined : p.memberships.find((m) => m.org_id === singleOrgId);
+    !effectiveBulkOrg ? undefined : p.memberships.find((m) => m.org_id === effectiveBulkOrg);
 
   /**
    * Fan a membership mutation out across the selected people, scoped to the
@@ -226,8 +257,8 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
     },
     onSettled?: () => void,
   ) => {
-    const orgId = singleOrgId;
-    if (orgId == null) return Promise.resolve();
+    const orgId = effectiveBulkOrg || null;
+    if (!orgId) return Promise.resolve();
     return bulk.runBulk(
       {
         label,
@@ -519,15 +550,25 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
         onDismissProgress={bulk.dismiss}
       >
         {(() => {
-          // Membership-edit verbs need an unambiguous X-Org-Id, so they are
-          // enabled ONLY when the roster is filtered to a single org. When it
-          // isn't, render them disabled with an explanatory tooltip.
-          const membershipDisabled = singleOrgId == null;
+          // Membership-edit verbs act in ONE org (unambiguous X-Org-Id). The
+          // org is resolved from the roster filter, a single common org, or the
+          // explicit in-bar pick below. Only genuinely-ambiguous multi-org
+          // selections leave the verbs disabled until the operator picks.
+          const membershipDisabled = !effectiveBulkOrg;
+          const needsPick = !singleOrgId && bulkOrgCandidates.length > 1;
           const membershipTooltip = membershipDisabled
-            ? 'Pick a single org to bulk-edit memberships.'
-            : undefined;
+            ? 'Choose which org these membership changes apply to.'
+            : `Applies in ${effectiveBulkOrgName}`;
           return (
             <>
+              {needsPick && (
+                <Select
+                  options={[{ value: '', label: 'Apply in org…' }, ...bulkOrgCandidates]}
+                  value={bulkOrgPick}
+                  onValueChange={setBulkOrgPick}
+                  className="w-44"
+                />
+              )}
               <DropdownMenu
                 trigger={
                   <button
@@ -601,18 +642,18 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
         }}
         title="Remove from organization"
         description={
-          singleOrgName
+          effectiveBulkOrg
             ? `Remove ${selectedPeople.length} ${
                 selectedPeople.length === 1 ? 'person' : 'people'
-              } from ${singleOrgName}? People you can't remove (no permission, or not a member of this org) are skipped.`
-            : 'Pick a single org to bulk-edit memberships.'
+              } from ${effectiveBulkOrgName}? People you can't remove (no permission, or not a member of this org) are skipped.`
+            : 'Choose which org to remove these people from.'
         }
       >
         <div className="flex items-center justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={() => setConfirmBulkRemove(false)}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={bulkRemove} disabled={singleOrgId == null}>
+          <Button variant="danger" onClick={bulkRemove} disabled={!effectiveBulkOrg}>
             Remove
           </Button>
         </div>
