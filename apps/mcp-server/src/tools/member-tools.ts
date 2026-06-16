@@ -180,6 +180,97 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
     },
   });
 
+  // ─── People Manager v2: scoped multi-org people list (M1) ───────────────
+  //
+  // Wraps GET /people. Unlike `list_members` (single active org), this
+  // returns people across EVERY org the caller belongs to (SuperUsers see
+  // all non-deleted orgs), deduped, with per-(person, org) capability flags
+  // computed server-side. A caller never sees a person who shares no org
+  // with them.
+  const peopleCapsShape = z.object({
+    manage_role: z.boolean(),
+    disable: z.boolean(),
+    remove: z.boolean(),
+    reset_password: z.boolean(),
+    manage_projects: z.boolean(),
+    manage_keys: z.boolean(),
+    transfer_ownership: z.boolean(),
+    delete_account: z.boolean(),
+  });
+  const personShape = z.object({
+    user: z.object({
+      id: z.string().uuid(),
+      email: z.string(),
+      display_name: z.string().optional(),
+      avatar_url: z.string().nullable().optional(),
+      is_active: z.boolean(),
+      last_seen_at: z.string().nullable().optional(),
+    }).passthrough(),
+    memberships: z.array(
+      z.object({
+        org_id: z.string().uuid(),
+        org_name: z.string(),
+        role: z.string(),
+        caps: peopleCapsShape,
+      }).passthrough(),
+    ),
+  }).passthrough();
+
+  registerTool(server, {
+    name: 'bam_list_people',
+    description:
+      "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface — broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person — use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
+    input: {
+      search: z
+        .string()
+        .max(255)
+        .optional()
+        .describe('Case-insensitive substring matched against email and display name.'),
+      is_active: z
+        .boolean()
+        .optional()
+        .describe('Filter to active (true) or disabled (false) people only.'),
+      role: z
+        .enum(['owner', 'admin', 'member', 'viewer', 'guest'])
+        .optional()
+        .describe('Keep only people who hold this role in at least one in-scope org.'),
+      org_id: z
+        .string()
+        .uuid()
+        .optional()
+        .describe('Restrict the scan to a single org the caller can see.'),
+      cursor: z.string().optional().describe('Opaque pagination cursor from a prior response.'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(200)
+        .optional()
+        .describe('Page size (default 50, max 200).'),
+    },
+    returns: z.object({ data: z.array(personShape), next_cursor: z.string().nullable().optional() }),
+    handler: async ({ search, is_active, role, org_id, cursor, limit }) => {
+      const params = new URLSearchParams();
+      if (search !== undefined) params.set('search', search);
+      if (is_active !== undefined) params.set('is_active', String(is_active));
+      if (role !== undefined) params.set('role', role);
+      if (org_id !== undefined) params.set('org_id', org_id);
+      if (cursor !== undefined) params.set('cursor', cursor);
+      if (limit !== undefined) params.set('limit', String(limit));
+      const qs = params.toString();
+      const result = await api.get(`/people${qs ? `?${qs}` : ''}`);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error listing people: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
   // ─── Org admin: invite + password ops (B3 Frndo Launch) ─────────────────
   //
   // Caller must already have org-admin scope on the active org (or be a

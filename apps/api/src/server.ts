@@ -26,6 +26,8 @@ import sprintRoutes from './routes/sprint.routes.js';
 import taskRoutes from './routes/task.routes.js';
 import commentRoutes from './routes/comment.routes.js';
 import orgRoutes from './routes/org.routes.js';
+// People Manager v2 (M1): scoped, permission-graded, multi-org people list
+import peopleRoutes from './routes/people.routes.js';
 import launchpadRoutes from './routes/launchpad.routes.js';
 import activityRoutes from './routes/activity.routes.js';
 import activityUnifiedRoutes from './routes/activity-unified.routes.js';
@@ -246,6 +248,8 @@ await fastify.register(sprintRoutes);
 await fastify.register(taskRoutes);
 await fastify.register(commentRoutes);
 await fastify.register(orgRoutes);
+// People Manager v2 (M1): GET /people scoped multi-org people list
+await fastify.register(peopleRoutes);
 await fastify.register(launchpadRoutes);
 await fastify.register(activityRoutes);
 await fastify.register(activityUnifiedRoutes);

@@ -1638,6 +1638,8 @@ describe('MCP Integration Tests', () => {
         'list_comments', 'add_comment',
         // member
         'list_members', 'get_my_tasks', 'bam_find_user', 'bam_find_user_by_email',
+        // People Manager v2 (M1): scoped multi-org people list
+        'bam_list_people',
         // org admin (B3 Frndo Launch)
         'bam_invite_member', 'bam_admin_reset_password', 'bam_send_password_reset_link',
         // report
