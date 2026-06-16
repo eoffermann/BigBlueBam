@@ -246,7 +246,16 @@ export async function buildAuthUser(
   let finalOrgId = keyScopedOrgId ?? activeOrgId;
   let finalRole = keyScopedRole ?? activeRole;
   let isSuperuserViewing = false;
-  if (sessionActiveOrgId && sessionActiveOrgId !== activeOrgId) {
+  // An explicit `X-Org-Id` header is a deliberate PER-REQUEST org override and
+  // must take precedence over the session's sticky `active_org_id` (set by
+  // /auth/switch-org or /superuser/context/switch). Multi-org tools (e.g. the
+  // People Manager) target a specific org per request via `X-Org-Id`; without
+  // this guard the sticky session org silently clobbers the header, so every
+  // per-org request resolves back to the session's active org. When the header
+  // is present, resolveOrgContext has already validated membership and set
+  // activeOrgId === requestedOrgId, so honoring activeOrgId is correct.
+  const explicitOrgHeader = requestedOrgId !== undefined;
+  if (!explicitOrgHeader && sessionActiveOrgId && sessionActiveOrgId !== activeOrgId) {
     const existingMembership = memberships.find((m) => m.org_id === sessionActiveOrgId);
     if (row.is_superuser) {
       finalOrgId = sessionActiveOrgId;
