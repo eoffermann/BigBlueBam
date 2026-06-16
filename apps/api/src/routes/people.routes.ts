@@ -27,6 +27,7 @@ export default async function peopleRoutes(fastify: FastifyInstance) {
           .optional(),
         role: z.enum(['owner', 'admin', 'member', 'viewer', 'guest']).optional(),
         org_id: z.string().uuid().optional(),
+        user_id: z.string().uuid().optional(),
         cursor: z.string().max(2048).optional(),
         limit: z.coerce.number().int().positive().max(200).optional(),
       });
@@ -46,6 +47,7 @@ export default async function peopleRoutes(fastify: FastifyInstance) {
           isActive: q.is_active,
           role: q.role,
           orgId: q.org_id,
+          userId: q.user_id,
           cursor: q.cursor,
           limit: q.limit,
         },

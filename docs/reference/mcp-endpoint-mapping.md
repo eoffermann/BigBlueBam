@@ -308,7 +308,7 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /people` | `bam_list_people` | Scoped multi-org people list with per-(person,org) capability flags (search / is_active / role / org_id filters, cursor pagination) | — (People Manager v2 frontend lands in M2) |
+| `GET /people` | `bam_list_people` | Scoped multi-org people list with per-(person,org) capability flags (search / is_active / role / org_id filters, cursor pagination). Pass `user_id` to fetch a single in-scope person (out-of-scope `user_id` → empty) | People Manager v2 roster (`/b3/people-manager`) + detail page (`/b3/people-manager/:userId`, via `user_id`) |
 
 
 ## Bam — Auth & Sessions

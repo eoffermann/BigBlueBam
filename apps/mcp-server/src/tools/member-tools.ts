@@ -219,7 +219,7 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
   registerTool(server, {
     name: 'bam_list_people',
     description:
-      "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface — broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person — use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
+      "List people across EVERY org the caller belongs to (a SuperUser sees all non-deleted orgs), deduped, with per-(person, org) capability flags. This is the People Manager v2 surface — broader than `list_members`, which is limited to the caller's single active org. Visibility is scoped: a caller never sees a person who shares no org with them. Each membership row carries `caps` (manage_role, disable, remove, reset_password, manage_projects, manage_keys, transfer_ownership, delete_account) computed server-side from the caller's role in that org and rank vs. the person — use them to decide which follow-up mutation tools (e.g. bam_admin_reset_password) will be permitted. Pass `user_id` to fetch a single person (with their in-scope memberships + caps); a `user_id` outside the caller's visible scope returns an empty list. Supports search (email + display name, case-insensitive), is_active / role / org_id filters, and opaque cursor pagination (limit default 50, max 200).",
     input: {
       search: z
         .string()
@@ -239,6 +239,13 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
         .uuid()
         .optional()
         .describe('Restrict the scan to a single org the caller can see.'),
+      user_id: z
+        .string()
+        .uuid()
+        .optional()
+        .describe(
+          'Fetch a single person by user id. Returns at most that one person, and only if they share an org with the caller (a user_id outside scope returns an empty list).',
+        ),
       cursor: z.string().optional().describe('Opaque pagination cursor from a prior response.'),
       limit: z
         .number()
@@ -249,12 +256,13 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
         .describe('Page size (default 50, max 200).'),
     },
     returns: z.object({ data: z.array(personShape), next_cursor: z.string().nullable().optional() }),
-    handler: async ({ search, is_active, role, org_id, cursor, limit }) => {
+    handler: async ({ search, is_active, role, org_id, user_id, cursor, limit }) => {
       const params = new URLSearchParams();
       if (search !== undefined) params.set('search', search);
       if (is_active !== undefined) params.set('is_active', String(is_active));
       if (role !== undefined) params.set('role', role);
       if (org_id !== undefined) params.set('org_id', org_id);
+      if (user_id !== undefined) params.set('user_id', user_id);
       if (cursor !== undefined) params.set('cursor', cursor);
       if (limit !== undefined) params.set('limit', String(limit));
       const qs = params.toString();

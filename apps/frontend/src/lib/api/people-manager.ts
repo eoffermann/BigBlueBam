@@ -64,6 +64,8 @@ export interface ListPeopleParams {
   is_active?: boolean;
   role?: string;
   org_id?: string;
+  /** Fetch a single person by user id (narrowing only; never widens scope). */
+  user_id?: string;
   cursor?: string;
   limit?: number;
 }
@@ -83,9 +85,20 @@ export function listPeople(params: ListPeopleParams = {}): Promise<ListPeopleRes
     is_active: params.is_active,
     role: params.role,
     org_id: params.org_id,
+    user_id: params.user_id,
     cursor: params.cursor,
     limit: params.limit,
   });
+}
+
+/**
+ * Fetch a single person (with their in-scope memberships + per-org caps) via
+ * the M3 `user_id` filter on `GET /people`. Returns `null` when the person is
+ * not in the caller's visible scope (the server returns an empty list).
+ */
+export async function getPerson(userId: string): Promise<ScopedPerson | null> {
+  const res = await listPeople({ user_id: userId, limit: 1 });
+  return res.data[0] ?? null;
 }
 
 // --- X-Org-Id-aware fetch helpers ---
@@ -281,3 +294,242 @@ export async function inviteBulkToOrg(
   );
   return res.data;
 }
+
+// ─── X-Org-Id-scoped member ops (M3 detail page) ────────────────────────────
+//
+// Every mutation below reuses an existing `/org/members/*` endpoint with the
+// `X-Org-Id` header set to the org the action targets (plan §6 "linchpin").
+// The server resolves the caller's role in THAT org and re-checks rank, so a
+// single admin can act across several orgs they administer with no new
+// backend. These mirror `peopleApi` (`@/lib/api/people`) one-for-one but carry
+// the org scope explicitly.
+
+export type ProjectMemberRole = 'admin' | 'member' | 'viewer';
+export type ApiKeyScope = 'read' | 'read_write' | 'admin';
+
+export interface MemberDetail {
+  id: string;
+  email: string;
+  display_name: string;
+  avatar_url: string | null;
+  timezone: string | null;
+  role: string;
+  is_active: boolean;
+  disabled_at: string | null;
+  disabled_by: { id: string; email: string; display_name: string } | null;
+  joined_at: string;
+  is_default_org: boolean;
+  version: number;
+  created_at: string;
+  last_seen_at: string | null;
+}
+
+export interface ProjectMembership {
+  project_id: string;
+  project_name: string;
+  project_slug: string;
+  role: ProjectMemberRole | string;
+  joined_at: string;
+  is_archived: boolean;
+}
+
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scope: ApiKeyScope | string;
+  project_ids: string[];
+  expires_at: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface ActivityEntry {
+  id: string;
+  project_id: string | null;
+  project_name: string | null;
+  task_id: string | null;
+  action: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+  impersonator_id: string | null;
+}
+
+/**
+ * All member ops scoped to a specific org via `X-Org-Id`. The first argument
+ * of every call is the org the action is happening IN — the org whose
+ * membership row the operator clicked in the detail page.
+ */
+export const peopleManagerApi = {
+  // --- Memberships ---
+  getMemberInOrg(orgId: string, userId: string): Promise<{ data: MemberDetail }> {
+    return orgScopedRequest<{ data: MemberDetail }>('GET', `/org/members/${userId}`, orgId);
+  },
+
+  updateProfile(
+    orgId: string,
+    userId: string,
+    body: { display_name?: string; timezone?: string },
+  ): Promise<{ data: MemberDetail }> {
+    return orgScopedRequest<{ data: MemberDetail }>(
+      'PATCH',
+      `/org/members/${userId}/profile`,
+      orgId,
+      body,
+    );
+  },
+
+  updateRole(
+    orgId: string,
+    userId: string,
+    role: string,
+    version?: number,
+  ): Promise<{ data: { membership_version: number } }> {
+    return orgScopedRequest('PATCH', `/org/members/${userId}`, orgId, {
+      role,
+      ...(version !== undefined ? { version } : {}),
+    });
+  },
+
+  setActive(
+    orgId: string,
+    userId: string,
+    isActive: boolean,
+    version?: number,
+  ): Promise<{ data: { user_id: string; is_active: boolean; membership_version: number } }> {
+    return orgScopedRequest('PATCH', `/org/members/${userId}/active`, orgId, {
+      is_active: isActive,
+      ...(version !== undefined ? { version } : {}),
+    });
+  },
+
+  removeFromOrg(orgId: string, userId: string): Promise<void> {
+    return orgScopedRequest<void>('DELETE', `/org/members/${userId}`, orgId);
+  },
+
+  // --- Projects ---
+  listMemberProjects(orgId: string, userId: string): Promise<{ data: ProjectMembership[] }> {
+    return orgScopedRequest<{ data: ProjectMembership[] }>(
+      'GET',
+      `/org/members/${userId}/projects`,
+      orgId,
+    );
+  },
+
+  addMemberToProjects(
+    orgId: string,
+    userId: string,
+    assignments: { project_id: string; role: ProjectMemberRole }[],
+  ): Promise<{ data: { added: string[]; skipped: string[] } }> {
+    return orgScopedRequest('POST', `/org/members/${userId}/projects`, orgId, { assignments });
+  },
+
+  updateMemberProjectRole(
+    orgId: string,
+    userId: string,
+    projectId: string,
+    role: ProjectMemberRole,
+  ): Promise<{ data: ProjectMembership }> {
+    return orgScopedRequest(
+      'PATCH',
+      `/org/members/${userId}/projects/${projectId}`,
+      orgId,
+      { role },
+    );
+  },
+
+  removeMemberFromProject(
+    orgId: string,
+    userId: string,
+    projectId: string,
+  ): Promise<{ data: { removed: true } }> {
+    return orgScopedRequest(
+      'DELETE',
+      `/org/members/${userId}/projects/${projectId}`,
+      orgId,
+    );
+  },
+
+  // --- Access: password / sessions ---
+  resetPassword(
+    orgId: string,
+    userId: string,
+    password?: string,
+  ): Promise<{ data: { user_id: string; email: string; password: string; generated: boolean } }> {
+    return orgScopedRequest(
+      'POST',
+      `/org/members/${userId}/reset-password`,
+      orgId,
+      password ? { password } : {},
+    );
+  },
+
+  sendResetLink(
+    orgId: string,
+    userId: string,
+  ): Promise<{
+    data: {
+      user_id: string;
+      email: string;
+      email_sent: boolean;
+      smtp_configured: boolean;
+      expires_in_minutes: number;
+      message: string;
+    };
+  }> {
+    return orgScopedRequest('POST', `/org/members/${userId}/send-password-reset`, orgId);
+  },
+
+  forcePasswordChange(
+    orgId: string,
+    userId: string,
+  ): Promise<{ data: { user_id: string; force_password_change: true } }> {
+    return orgScopedRequest('POST', `/org/members/${userId}/force-password-change`, orgId);
+  },
+
+  signOutEverywhere(orgId: string, userId: string): Promise<{ data: { revoked: number } }> {
+    return orgScopedRequest('POST', `/org/members/${userId}/sign-out-everywhere`, orgId);
+  },
+
+  // --- Access: API keys ---
+  listApiKeys(orgId: string, userId: string): Promise<{ data: ApiKeyRecord[] }> {
+    return orgScopedRequest<{ data: ApiKeyRecord[] }>(
+      'GET',
+      `/org/members/${userId}/api-keys`,
+      orgId,
+    );
+  },
+
+  createApiKey(
+    orgId: string,
+    userId: string,
+    body: { name: string; scope: ApiKeyScope; project_ids?: string[]; expires_days?: number },
+  ): Promise<{ data: ApiKeyRecord & { token: string } }> {
+    return orgScopedRequest('POST', `/org/members/${userId}/api-keys`, orgId, body);
+  },
+
+  revokeApiKey(orgId: string, userId: string, keyId: string): Promise<void> {
+    return orgScopedRequest<void>(
+      'DELETE',
+      `/org/members/${userId}/api-keys/${keyId}`,
+      orgId,
+    );
+  },
+
+  // --- Activity ---
+  getActivity(
+    orgId: string,
+    userId: string,
+    opts?: { limit?: number; cursor?: string },
+  ): Promise<{ data: ActivityEntry[]; next_cursor: string | null }> {
+    const params = new URLSearchParams();
+    if (opts?.limit != null) params.set('limit', String(opts.limit));
+    if (opts?.cursor) params.set('cursor', opts.cursor);
+    const qs = params.toString();
+    return orgScopedRequest(
+      'GET',
+      `/org/members/${userId}/activity${qs ? `?${qs}` : ''}`,
+      orgId,
+    );
+  },
+};

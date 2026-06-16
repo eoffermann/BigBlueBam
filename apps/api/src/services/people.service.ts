@@ -49,6 +49,14 @@ export interface ListScopedPeopleOptions {
   role?: string;
   /** Restrict the scan to a single org (must be one the caller can see). */
   orgId?: string;
+  /**
+   * Fetch a single person by user id. When set, the result contains at most
+   * that one person — and only if they fall within the caller's visible scope
+   * (the membership-union). A `userId` outside scope yields an empty list, so
+   * this never widens visibility; it is purely a narrowing filter applied
+   * after the scope union is computed (plan §6 / M3 detail-page fetch).
+   */
+  userId?: string;
   cursor?: string;
   /** Default 50, hard max 200. */
   limit?: number;
@@ -332,7 +340,14 @@ export async function listScopedPeople(
   //    (potentially expensive) delete_account eligibility probe.
   const search = opts.search?.trim().toLowerCase();
   const roleFilter = opts.role;
+  const userIdFilter = opts.userId;
   let people = Array.from(byUser.values()).filter((acc) => {
+    // user_id is a narrowing filter applied INSIDE the visible-scope union, so
+    // a target outside the caller's orgs is simply not present in `byUser` and
+    // this returns nothing — visibility is never widened.
+    if (userIdFilter && acc.user.id !== userIdFilter) {
+      return false;
+    }
     if (typeof opts.isActive === 'boolean' && acc.user.is_active !== opts.isActive) {
       return false;
     }

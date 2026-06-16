@@ -445,6 +445,57 @@ describe('listScopedPeople — cursor pagination', () => {
   });
 });
 
+// ─── (f) user_id single-person fetch (Part A / M3 detail) ─────────────────────
+
+describe('listScopedPeople — user_id filter', () => {
+  const fixture: FixturePerson[] = [
+    { id: CALLER, email: 'caller@x.com', display_name: 'Caller', orgs: { [ORG_A]: 'admin' } },
+    { id: ALICE, email: 'alice@x.com', display_name: 'Alice', orgs: { [ORG_A]: 'member' } },
+    { id: BOB, email: 'bob@x.com', display_name: 'Bob', orgs: { [ORG_B]: 'member' } },
+  ];
+  const caller = {
+    id: CALLER,
+    isSuperuser: false,
+    orgMemberships: [{ org_id: ORG_A, role: 'admin' }],
+  };
+
+  it('returns just that one person when the user_id is in scope', async () => {
+    const da = buildDataAccess(fixture);
+    const result = await listScopedPeople(caller, { userId: ALICE }, da);
+    expect(result.data.map((p) => p.user.id)).toEqual([ALICE]);
+    expect(result.next_cursor).toBeNull();
+    // Caps are still computed for the single person.
+    expect(result.data[0]!.memberships[0]!.caps.disable).toBe(true);
+  });
+
+  it('returns empty for a user_id OUTSIDE the caller’s visible scope', async () => {
+    const da = buildDataAccess(fixture);
+    // Bob is only in org B; the caller is not in B, so Bob is invisible.
+    const result = await listScopedPeople(caller, { userId: BOB }, da);
+    expect(result.data).toEqual([]);
+  });
+
+  it('returns empty for a user_id that does not exist', async () => {
+    const da = buildDataAccess(fixture);
+    const result = await listScopedPeople(
+      caller,
+      { userId: 'ffffffff-0000-4000-8000-00000000ffff' },
+      da,
+    );
+    expect(result.data).toEqual([]);
+  });
+
+  it('a SuperUser can fetch any single person by user_id across all orgs', async () => {
+    const da = buildDataAccess(fixture);
+    const result = await listScopedPeople(
+      { id: SU, isSuperuser: true, orgMemberships: [] },
+      { userId: BOB },
+      da,
+    );
+    expect(result.data.map((p) => p.user.id)).toEqual([BOB]);
+  });
+});
+
 // ─── computeOrgCaps — direct unit coverage of the pure rule ───────────────────
 
 describe('computeOrgCaps (pure)', () => {
