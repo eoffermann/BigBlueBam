@@ -17,6 +17,7 @@ import authPlugin from './plugins/auth.js';
 import rlsPlugin from './plugins/rls.js';
 import { permissionsApiPlugin } from './plugins/permissions.js';
 import { rlsBoot } from './boot/rls-boot.js';
+import { waitForSchemaReady } from './boot/schema-wait.js';
 import authRoutes from './routes/auth.routes.js';
 import projectRoutes from './routes/project.routes.js';
 import phaseRoutes from './routes/phase.routes.js';
@@ -328,6 +329,14 @@ for (const signal of signals) {
     process.exit(0);
   });
 }
+
+// Don't start accepting traffic until the DB schema matches this build. On
+// Railway the api deploys in parallel with the one-shot migrate job (no compose
+// depends_on), so without this the new code can serve requests against the old
+// schema for a few seconds and emit 42703s until migrate catches up. Blocking
+// here keeps the new instance un-healthy until then, so the rolling deploy keeps
+// the old instance serving — no error window. See boot/schema-wait.ts.
+await waitForSchemaReady(fastify.log as unknown as Parameters<typeof waitForSchemaReady>[0]);
 
 // Start server
 try {
