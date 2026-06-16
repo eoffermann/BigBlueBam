@@ -17,7 +17,7 @@
  * route - this component only surfaces user-level concerns.
  */
 
-import { LogOut, Settings as SettingsIcon, Shield, Users, HelpCircle } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, Shield, Users, UsersRound, HelpCircle } from 'lucide-react';
 import * as RadixDropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Avatar from '@radix-ui/react-avatar';
 
@@ -133,6 +133,18 @@ export function UserMenu({ user, logoutRedirect = '/b3/login', onHelp }: UserMen
             >
               <Users className="h-4 w-4" />
               People
+            </RadixDropdownMenu.Item>
+          )}
+
+          {canSeePeople && (
+            <RadixDropdownMenu.Item
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm cursor-pointer outline-none text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 focus:bg-zinc-100 dark:focus:bg-zinc-800"
+              onSelect={() => {
+                window.location.href = '/b3/people-manager';
+              }}
+            >
+              <UsersRound className="h-4 w-4" />
+              People Manager
             </RadixDropdownMenu.Item>
           )}
 

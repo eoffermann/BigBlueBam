@@ -108,6 +108,18 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
   // permission for listing org members (GET /org/members → bam.org_member.list).
   const canManageOwners = useCan('bam.org_member.list');
 
+  // People Manager v2 (M2): gate the command-palette entry. Mirror the plan
+  // §5 "can the caller manage anyone?" gate. `org_memberships` is not on the
+  // frontend User payload today, so the role-based clause folds into the
+  // `useCan` clause (members carry bam.org_member.list); SuperUsers always
+  // pass.
+  const canManagePeople =
+    user?.is_superuser === true ||
+    (
+      user as { org_memberships?: { role: string }[] } | null | undefined
+    )?.org_memberships?.some((m) => ['admin', 'owner'].includes(m.role)) === true ||
+    canManageOwners;
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       <UpdateBanner />
@@ -225,6 +237,7 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
         onOpenChange={setShowCommandPalette}
         onNavigate={onNavigate}
         projects={projects}
+        canManagePeople={canManagePeople}
       />
     </div>
   );

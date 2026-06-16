@@ -8,6 +8,7 @@ import {
   Settings,
   FolderKanban,
   User,
+  UsersRound,
   ArrowRight,
 } from 'lucide-react';
 import type { Project } from '@bigbluebam/shared';
@@ -27,6 +28,8 @@ interface CommandPaletteProps {
   onNavigate: (path: string) => void;
   onCreateTask?: () => void;
   projects?: Project[];
+  /** When true, surface a "Go to People Manager" navigation entry. */
+  canManagePeople?: boolean;
 }
 
 function fuzzyMatch(text: string, query: string): boolean {
@@ -49,6 +52,7 @@ export function CommandPalette({
   onNavigate,
   onCreateTask,
   projects = [],
+  canManagePeople = false,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -97,6 +101,20 @@ export function CommandPalette({
           onNavigate('/settings');
         },
       },
+      ...(canManagePeople
+        ? [
+            {
+              id: 'go-people-manager',
+              label: 'Go to People Manager',
+              icon: <UsersRound className="h-4 w-4" />,
+              category: 'Navigation',
+              onSelect: () => {
+                onOpenChange(false);
+                onNavigate('/people-manager');
+              },
+            },
+          ]
+        : []),
       ...projects.map((project) => ({
         id: `project-${project.id}`,
         label: `Switch Project: ${project.name}`,
@@ -109,7 +127,7 @@ export function CommandPalette({
       })),
     ];
     return items;
-  }, [onOpenChange, onNavigate, onCreateTask, projects]);
+  }, [onOpenChange, onNavigate, onCreateTask, projects, canManagePeople]);
 
   const filteredActions = useMemo(
     () => actions.filter((a) => fuzzyMatch(a.label, query)),

@@ -20,6 +20,8 @@ import { PermissionsGroupDetailPage } from '@/pages/superuser/permissions/group-
 import { Shield, ArrowLeft } from 'lucide-react';
 import { PeoplePage } from '@/pages/people';
 import { PersonDetailPage } from '@/pages/people/detail';
+import { PeopleManagerPage } from '@/pages/people-manager';
+import { PeopleManagerDetailPage } from '@/pages/people-manager/detail';
 import { GuestAcceptPage } from '@/pages/guest-accept';
 import { PasswordChangePage } from '@/pages/password-change';
 import { PasswordResetPage } from '@/pages/password-reset';
@@ -54,6 +56,8 @@ type Route =
   | { page: 'superuser-permissions-group-detail'; groupId: string }
   | { page: 'people' }
   | { page: 'person-detail'; userId: string }
+  | { page: 'people-manager' }
+  | { page: 'people-manager-detail'; userId: string }
   | { page: 'guest-accept'; token: string }
   | { page: 'task-ref'; ref: string }
   | { page: 'helpdesk-queue' }
@@ -121,6 +125,13 @@ function parseRoute(path: string): Route {
   const superuserPermGroupMatch = p.match(/^\/superuser\/permissions\/groups\/([^/]+)$/);
   if (superuserPermGroupMatch) {
     return { page: 'superuser-permissions-group-detail', groupId: superuserPermGroupMatch[1]! };
+  }
+  const peopleManagerDetailMatch = p.match(/^\/people-manager\/([^/]+)$/);
+  if (peopleManagerDetailMatch) {
+    return { page: 'people-manager-detail', userId: peopleManagerDetailMatch[1]! };
+  }
+  if (p === '/people-manager' || p === '/people-manager/') {
+    return { page: 'people-manager' };
   }
   const personDetailMatch = p.match(/^\/people\/([^/]+)$/);
   if (personDetailMatch) {
@@ -330,6 +341,10 @@ export function App() {
       return <PeoplePage onNavigate={navigate} />;
     case 'person-detail':
       return <PersonDetailPage userId={route.userId} onNavigate={navigate} />;
+    case 'people-manager':
+      return <PeopleManagerPage onNavigate={navigate} />;
+    case 'people-manager-detail':
+      return <PeopleManagerDetailPage userId={route.userId} onNavigate={navigate} />;
     case 'helpdesk-queue':
       return <HelpdeskAgentQueuePage onNavigate={navigate} />;
     case 'task-ref':
