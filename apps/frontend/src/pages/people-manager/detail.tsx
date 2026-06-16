@@ -23,6 +23,13 @@ import { Badge } from '@/components/common/badge';
 import { ResetPasswordDialog } from '@/components/people/reset-password-dialog';
 import { RevealOnceSecret } from '@/components/people/reveal-once-secret';
 import { ApiError } from '@/lib/api';
+import { useAuthStore } from '@/stores/auth.store';
+import { UserPermissionsTab } from '@/components/superuser/user-permissions-tab';
+import {
+  superuserPermissionsApi,
+  type ScopeType,
+  type PermissionGroupListItem,
+} from '@/lib/api/superuser-permissions';
 import {
   getPerson,
   listOrgProjects,
@@ -41,7 +48,7 @@ interface PeopleManagerDetailPageProps {
   onNavigate: (path: string) => void;
 }
 
-type DetailTab = 'overview' | 'memberships' | 'projects' | 'access' | 'activity';
+type DetailTab = 'overview' | 'memberships' | 'projects' | 'permissions' | 'access' | 'activity';
 
 const ORG_ROLE_OPTIONS = [
   { value: 'owner', label: 'Owner' },
@@ -80,6 +87,10 @@ const API_KEY_SCOPE_OPTIONS: { value: ApiKeyScope; label: string }[] = [
 export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDetailPageProps) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<DetailTab>('overview');
+  // The Permissions tab mounts the SuperUser-only permission matrix; its
+  // backing endpoints (/superuser/permissions/*) are SU-gated, so the tab is
+  // only ever shown to SuperUsers (plan §7 / §11.3, milestone M4).
+  const isSuperuser = useAuthStore((s) => s.user?.is_superuser === true);
 
   const { data: person, isLoading } = useQuery({
     queryKey: ['people-manager', 'person', userId],
@@ -209,6 +220,11 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
               Projects
             </TabButton>
           )}
+          {isSuperuser && (
+            <TabButton active={tab === 'permissions'} onClick={() => setTab('permissions')}>
+              Permissions
+            </TabButton>
+          )}
           {showAccessTab && (
             <TabButton active={tab === 'access'} onClick={() => setTab('access')}>
               Access
@@ -240,6 +256,10 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
 
         {tab === 'projects' && canManageProjectsAnywhere && (
           <ProjectsTab userId={userId} memberships={memberships} />
+        )}
+
+        {tab === 'permissions' && isSuperuser && (
+          <PermissionsTab userId={userId} memberships={memberships} />
         )}
 
         {tab === 'access' && showAccessTab && (
@@ -921,6 +941,218 @@ function AddProjectsDialog({
           </Button>
           <Button onClick={() => add.mutate()} loading={add.isPending} disabled={selectedCount === 0}>
             Add selected
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+// ─── Permissions (SuperUser-only matrix + Add-membership) ─────────────────────
+//
+// Mounts the existing SU permission matrix (`UserPermissionsTab`) AS-IS (plan
+// §7 / §11.3, milestone M4). The matrix can reassign or reattach a membership
+// at a scope, but has no way to ADD one at a scope where the person has no
+// membership yet. We add that affordance in this wrapper (NOT inside
+// `UserPermissionsTab`, so the SU `/superuser/people/:id` page that also mounts
+// it is untouched). On success we invalidate the exact query key the matrix
+// reads from, so it refetches and shows the new membership row.
+
+function PermissionsTab({
+  userId,
+  memberships,
+}: {
+  userId: string;
+  memberships: PersonMembership[];
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-zinc-500">
+          SuperUser permission matrix: group memberships, explicit overrides, and the
+          effective permission set per scope.
+        </p>
+        <Button size="sm" onClick={() => setShowAdd(true)}>
+          <Plus className="h-4 w-4" /> Add membership
+        </Button>
+      </div>
+
+      <UserPermissionsTab userId={userId} />
+
+      {showAdd && (
+        <AddMembershipDialog
+          userId={userId}
+          memberships={memberships}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+const SCOPE_TYPE_LABEL: Record<ScopeType, string> = {
+  global: 'Global',
+  org: 'Org',
+  project: 'Project',
+};
+
+function AddMembershipDialog({
+  userId,
+  memberships,
+  onClose,
+}: {
+  userId: string;
+  memberships: PersonMembership[];
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  // Scope choices: Global, plus each org the person belongs to (within the
+  // accessor's visible scope). Encoded as `scope_type:scope_id` so a single
+  // <Select> can carry both. Project scope is out of scope for v1 (the matrix
+  // itself only writes overrides at org/global; per-project membership is
+  // managed via the Projects tab).
+  const scopeOptions = useMemo(() => {
+    const opts: { value: string; label: string; scope_type: ScopeType; scope_id: string | null }[] = [
+      { value: 'global:', label: 'Global', scope_type: 'global', scope_id: null },
+    ];
+    for (const m of memberships) {
+      opts.push({
+        value: `org:${m.org_id}`,
+        label: `Org: ${m.org_name || m.org_id}`,
+        scope_type: 'org',
+        scope_id: m.org_id,
+      });
+    }
+    return opts;
+  }, [memberships]);
+
+  const [scopeValue, setScopeValue] = useState<string>(scopeOptions[0]?.value ?? 'global:');
+  const [groupId, setGroupId] = useState<string>('');
+
+  const selectedScope = useMemo(
+    () => scopeOptions.find((o) => o.value === scopeValue) ?? scopeOptions[0],
+    [scopeOptions, scopeValue],
+  );
+
+  const { data: groupsData, isLoading: groupsLoading } = useQuery({
+    queryKey: ['superuser', 'permissions', 'groups'],
+    queryFn: () => superuserPermissionsApi.listGroups(),
+  });
+  const allGroups: PermissionGroupListItem[] = groupsData?.data ?? [];
+
+  // Filter groups to those matching the chosen scope_type and (when the group
+  // is scope-bound) scope_id — same rule `UserPermissionsTab`'s MembershipRow
+  // uses. A group with a null scope_id applies to any scope of its type.
+  const availableGroups = useMemo(() => {
+    if (!selectedScope) return [];
+    return allGroups.filter((g) => {
+      if (g.deleted_at !== null) return false;
+      if (g.scope_type !== selectedScope.scope_type) return false;
+      if (g.scope_id !== null && g.scope_id !== selectedScope.scope_id) return false;
+      return true;
+    });
+  }, [allGroups, selectedScope]);
+
+  const groupOptions = availableGroups.map((g) => ({ value: g.id, label: g.name }));
+
+  // Reset the group choice whenever the scope changes (the prior group may not
+  // be valid for the new scope) — pick the first available group, if any.
+  useEffect(() => {
+    const first = availableGroups[0]?.id ?? '';
+    setGroupId((prev) => (availableGroups.some((g) => g.id === prev) ? prev : first));
+  }, [availableGroups]);
+
+  const add = useMutation({
+    mutationFn: () => {
+      if (!selectedScope) {
+        return Promise.reject(new Error('Pick a scope'));
+      }
+      if (!groupId) {
+        return Promise.reject(new Error('Pick a group'));
+      }
+      return superuserPermissionsApi.setUserMembership(userId, {
+        scope_type: selectedScope.scope_type,
+        scope_id: selectedScope.scope_id,
+        group_id: groupId,
+      });
+    },
+    onSuccess: () => {
+      // Refetch the matrix the wrapper mounts (same key UserPermissionsTab reads).
+      queryClient.invalidateQueries({
+        queryKey: ['superuser', 'permissions', 'user', userId],
+      });
+      onClose();
+    },
+  });
+
+  const err = add.error as Error | null;
+
+  return (
+    <Dialog
+      open={true}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Add membership"
+      description="Assign this person to a permission group at a scope. Reassign an existing scope from the matrix below."
+    >
+      <div className="space-y-4">
+        <div>
+          <Select
+            label="Scope"
+            options={scopeOptions.map((o) => ({ value: o.value, label: o.label }))}
+            value={scopeValue}
+            onValueChange={setScopeValue}
+          />
+          {selectedScope && (
+            <p className="mt-1 text-[11px] text-zinc-400">
+              {SCOPE_TYPE_LABEL[selectedScope.scope_type]} scope
+              {selectedScope.scope_id ? ` · ${selectedScope.scope_id.slice(0, 8)}` : ''}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <span className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+            Group
+          </span>
+          {groupsLoading ? (
+            <div className="flex items-center gap-2 py-2 text-sm text-zinc-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading groups…
+            </div>
+          ) : groupOptions.length === 0 ? (
+            <p className="text-sm text-zinc-500 py-2">
+              No permission groups exist for this scope.
+            </p>
+          ) : (
+            <Select
+              options={groupOptions}
+              value={groupId}
+              onValueChange={setGroupId}
+              placeholder="Select a group"
+            />
+          )}
+        </div>
+
+        {err && (
+          <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 dark:bg-red-950 dark:border-red-900 dark:text-red-300">
+            {err.message}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            <XIcon className="h-4 w-4" /> Cancel
+          </Button>
+          <Button
+            onClick={() => add.mutate()}
+            loading={add.isPending}
+            disabled={!groupId || groupOptions.length === 0}
+          >
+            Add membership
           </Button>
         </div>
       </div>
