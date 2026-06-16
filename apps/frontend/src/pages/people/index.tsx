@@ -11,6 +11,7 @@ import {
   Trash2,
   Eye,
   Download,
+  Upload,
   ChevronDown,
   X,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/common/dropdown-menu';
 import { useAuthStore } from '@/stores/auth.store';
 import { api, ApiError } from '@/lib/api';
@@ -39,6 +41,7 @@ import { formatRelativeTime } from '@/lib/utils';
 import { useOrgSummary } from '@/hooks/use-org-summary';
 import { exportCsv, todayStamp, type CsvColumn } from '@/lib/csv';
 import { BulkInviteDialog } from './bulk-invite-dialog';
+import { ImportMembersDialog, IMPORT_FORMATS, type ImportFormat } from './import-members-dialog';
 
 interface PeoplePageProps {
   onNavigate: (path: string) => void;
@@ -103,6 +106,8 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
   // Invite modal state
   const [showInvite, setShowInvite] = useState(false);
   const [showBulkInvite, setShowBulkInvite] = useState(false);
+  // Import dialog — null when closed, otherwise the chosen source format.
+  const [importFormat, setImportFormat] = useState<ImportFormat | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteDisplayName, setInviteDisplayName] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
@@ -437,6 +442,26 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <DropdownMenu
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                >
+                  <Upload className="h-4 w-4" />
+                  Import
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              }
+            >
+              <DropdownMenuLabel>Import members from</DropdownMenuLabel>
+              {(Object.keys(IMPORT_FORMATS) as ImportFormat[]).map((key) => (
+                <DropdownMenuItem key={key} onSelect={() => setImportFormat(key)}>
+                  <Upload className="h-4 w-4" />
+                  {IMPORT_FORMATS[key].label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenu>
             <Button variant="ghost" onClick={() => setShowBulkInvite(true)}>
               <UserPlus className="h-4 w-4" />
               Invite more
@@ -449,6 +474,13 @@ export function PeoplePage({ onNavigate }: PeoplePageProps) {
         </div>
 
         <BulkInviteDialog open={showBulkInvite} onOpenChange={setShowBulkInvite} />
+        <ImportMembersDialog
+          open={importFormat !== null}
+          format={importFormat ?? 'generic'}
+          onOpenChange={(o) => {
+            if (!o) setImportFormat(null);
+          }}
+        />
 
         {versionConflictMsg && (
           <div

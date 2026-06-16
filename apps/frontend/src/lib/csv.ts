@@ -68,6 +68,65 @@ export function exportCsv<T>(
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+/**
+ * Minimal RFC 4180 CSV parser. No dependencies. Returns a 2-D array of string
+ * cells (row 0 is whatever the file's first line is — usually the header).
+ *
+ * - Honors quoted fields, embedded commas/newlines, and doubled-quote escapes.
+ * - Accepts CRLF, LF, or lone-CR line endings.
+ * - Strips a leading UTF-8 BOM.
+ * - A trailing newline does NOT produce a spurious empty final row.
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let field = '';
+  let row: string[] = [];
+  let inQuotes = false;
+  let i = text.charCodeAt(0) === 0xfeff ? 1 : 0; // skip BOM
+
+  const endField = () => {
+    row.push(field);
+    field = '';
+  };
+  const endRow = () => {
+    endField();
+    rows.push(row);
+    row = [];
+  };
+
+  for (; i < text.length; i++) {
+    const c = text[i]!;
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      endField();
+    } else if (c === '\n') {
+      endRow();
+    } else if (c === '\r') {
+      // CRLF: let the following \n end the row; lone CR ends it here.
+      if (text[i + 1] !== '\n') endRow();
+    } else {
+      field += c;
+    }
+  }
+  // Flush the final field/row unless the file ended exactly on a row break.
+  if (field.length > 0 || row.length > 0) endRow();
+  return rows;
+}
+
 /** Format today's date as YYYY-MM-DD in local time, for filenames. */
 export function todayStamp(): string {
   const d = new Date();
