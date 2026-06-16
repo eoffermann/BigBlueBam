@@ -19,6 +19,7 @@ import {
   type PersonMembership,
 } from '@/lib/api/people-manager';
 import { BulkActionBar, useBulkRun } from '@/components/people/bulk-action-bar';
+import { DeleteAccountDialog } from '@/components/people/delete-account-dialog';
 import { formatRelativeTime } from '@/lib/utils';
 import { exportCsv, todayStamp, type CsvColumn } from '@/lib/csv';
 import { InviteDialog } from './invite-dialog';
@@ -106,6 +107,12 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
   const [bulkOrgPick, setBulkOrgPick] = useState<string>('');
 
   const [showInvite, setShowInvite] = useState(false);
+
+  // Per-row account soft-delete. The target carries its own org (the first
+  // membership whose caps grant delete_account); the shared dialog gates the
+  // action behind typing the account email.
+  const [deleteTarget, setDeleteTarget] = useState<ScopedPerson | null>(null);
+  const deleteOrgId = deleteTarget?.memberships.find((m) => m.caps.delete_account)?.org_id;
 
   const queryParams = useMemo(
     () => ({
@@ -510,14 +517,25 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
                         {p.user.last_seen_at ? formatRelativeTime(p.user.last_seen_at) : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => onNavigate(`/people-manager/${p.user.id}`)}
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onNavigate(`/people-manager/${p.user.id}`)}
+                            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View
+                          </button>
+                          {p.memberships.some((m) => m.caps.delete_account) && (
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => setDeleteTarget(p)}
+                            >
+                              <Trash2 className="h-4 w-4" /> Delete account
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -658,6 +676,31 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
           </Button>
         </div>
       </Dialog>
+
+      {/* Per-row account soft-delete, gated behind typing the account email. */}
+      {deleteTarget && deleteOrgId && (
+        <DeleteAccountDialog
+          open={true}
+          onOpenChange={(o) => {
+            if (!o) setDeleteTarget(null);
+          }}
+          userLabel={deleteTarget.user.display_name || deleteTarget.user.email}
+          confirmPhrase={deleteTarget.user.email}
+          onConfirm={(reason) =>
+            peopleManagerApi.deleteAccount(deleteOrgId, deleteTarget.user.id, reason)
+          }
+          onDeleted={() => {
+            const removedId = deleteTarget.user.id;
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(removedId);
+              return next;
+            });
+            setDeleteTarget(null);
+            invalidate();
+          }}
+        />
+      )}
     </AppLayout>
   );
 }

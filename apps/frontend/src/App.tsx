@@ -12,7 +12,12 @@ import { AuditLogPage } from '@/pages/audit-log';
 import { SprintReportPage } from '@/pages/sprint-report';
 import { ProjectReportsPage } from '@/pages/project-reports';
 import { SuperuserPage } from '@/pages/superuser';
-import { SuperuserPeopleListPage } from '@/pages/superuser/people-list';
+// The SuperUser people LIST was retired in favor of /people-manager (the legacy
+// URL is redirected below). The DETAIL page stays live: it still hosts
+// SuperUser-only powers (impersonate, grant/revoke SuperUser, session
+// inventory, change email, arbitrary cross-org membership) not yet in People
+// Manager, reachable via the "SuperUser tools" link on the People Manager
+// detail page.
 import { SuperuserPeopleDetailPage } from '@/pages/superuser/people-detail';
 import { SuperuserAgentsListPage } from '@/pages/superuser/agents-list';
 import { PlatformCallingSettingsPage } from '@/pages/superuser/platform-calling-settings';
@@ -49,7 +54,6 @@ type Route =
   | { page: 'settings' }
   | { page: 'my-work' }
   | { page: 'superuser' }
-  | { page: 'superuser-people' }
   | { page: 'superuser-person-detail'; userId: string }
   | { page: 'superuser-agents' }
   | { page: 'superuser-platform-calling' }
@@ -113,8 +117,10 @@ function parseRoute(path: string): Route {
   if (superuserPersonMatch) {
     return { page: 'superuser-person-detail', userId: superuserPersonMatch[1]! };
   }
+  // The SuperUser people LIST is retired; route the legacy path straight to the
+  // unified People Manager (the URL is canonicalized via replaceState below).
   if (p === '/superuser/people' || p === '/superuser/people/') {
-    return { page: 'superuser-people' };
+    return { page: 'people-manager' };
   }
   if (p === '/superuser/agents' || p === '/superuser/agents/') {
     return { page: 'superuser-agents' };
@@ -185,6 +191,16 @@ export function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Canonicalize the retired SuperUser people LIST path to /people-manager.
+  // parseRoute already renders People Manager for the legacy URL; this rewrites
+  // the address bar (replaceState, so Back doesn't bounce through the old path).
+  useEffect(() => {
+    const stripped = stripBase(window.location.pathname);
+    if (stripped === '/superuser/people' || stripped === '/superuser/people/') {
+      window.history.replaceState(null, '', `${BASE_PATH}/people-manager`);
+    }
+  }, [route]);
 
   const navigate = useCallback((path: string) => {
     const fullPath = `${BASE_PATH}${path}`;
@@ -325,8 +341,6 @@ export function App() {
       return <MyWorkPage onNavigate={navigate} />;
     case 'superuser':
       return <SuperuserPage onNavigate={navigate} />;
-    case 'superuser-people':
-      return <SuperuserPeopleListPage onNavigate={navigate} />;
     case 'superuser-person-detail':
       return <SuperuserPeopleDetailPage userId={route.userId} onNavigate={navigate} />;
     case 'superuser-agents':

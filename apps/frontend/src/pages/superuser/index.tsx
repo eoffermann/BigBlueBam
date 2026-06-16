@@ -249,7 +249,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (path: string) => void }) {
             icon={Users}
             title="All users"
             description="Search, disable, or promote any user on the server."
-            onClick={() => onNavigate('/superuser/people')}
+            onClick={() => onNavigate('/people-manager')}
           />
           <AdminToolCard
             icon={Bot}

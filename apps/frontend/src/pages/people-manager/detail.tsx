@@ -8,6 +8,7 @@ import {
   Mail,
   Plus,
   Loader2,
+  Shield,
   Trash2,
   UserCheck,
   UserX,
@@ -21,7 +22,9 @@ import { Dialog } from '@/components/common/dialog';
 import { Avatar } from '@/components/common/avatar';
 import { Badge } from '@/components/common/badge';
 import { ResetPasswordDialog } from '@/components/people/reset-password-dialog';
+import { DeleteAccountDialog } from '@/components/people/delete-account-dialog';
 import { RevealOnceSecret } from '@/components/people/reveal-once-secret';
+import { timezoneSelectOptions } from '@/lib/timezones';
 import { ApiError } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
 import { UserPermissionsTab } from '@/components/superuser/user-permissions-tab';
@@ -33,7 +36,10 @@ import {
 import {
   getPerson,
   listOrgProjects,
+  listMyAdminOrgs,
+  inviteBulkToOrg,
   peopleManagerApi,
+  type AdminOrg,
   type PersonMembership,
   type ProjectMembership,
   type ProjectMemberRole,
@@ -205,9 +211,20 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
               </div>
             </div>
           </div>
-          <Button variant="secondary" onClick={() => onNavigate('/people-manager')}>
-            <ArrowLeft className="h-4 w-4" /> Back
-          </Button>
+          <div className="flex items-center gap-2">
+            {isSuperuser && (
+              <Button
+                variant="secondary"
+                onClick={() => onNavigate(`/superuser/people/${userId}`)}
+                title="Impersonate, grant/revoke SuperUser, session inventory, change email, set default org"
+              >
+                <Shield className="h-4 w-4" /> SuperUser tools
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => onNavigate('/people-manager')}>
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -251,6 +268,7 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
         {tab === 'memberships' && (
           <MembershipsTab
             userId={userId}
+            email={u.email}
             memberships={memberships}
             onChanged={invalidatePerson}
             onRemovedLast={() => onNavigate('/people-manager')}
@@ -282,6 +300,7 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
             userId={userId}
             orgId={deletableMembership.org_id}
             label={u.display_name || u.email}
+            email={u.email}
             onDeleted={() => onNavigate('/people-manager')}
           />
         )}
@@ -310,22 +329,16 @@ function DangerZone({
   userId,
   orgId,
   label,
+  email,
   onDeleted,
 }: {
   userId: string;
   orgId: string;
   label: string;
+  email: string;
   onDeleted: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
-  const [reason, setReason] = useState('');
-  const del = useMutation({
-    mutationFn: () => peopleManagerApi.deleteAccount(orgId, userId, reason.trim() || undefined),
-    onSuccess: () => {
-      setConfirm(false);
-      onDeleted();
-    },
-  });
   return (
     <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20 p-4">
       <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">Danger zone</h3>
@@ -337,33 +350,14 @@ function DangerZone({
       <Button variant="danger" size="sm" className="mt-3" onClick={() => setConfirm(true)}>
         <Trash2 className="h-4 w-4" /> Delete account
       </Button>
-      <Dialog
+      <DeleteAccountDialog
         open={confirm}
-        onOpenChange={(o) => {
-          if (!o) setConfirm(false);
-        }}
-        title={`Delete ${label}?`}
-        description="This soft-deletes the account across all orgs and frees the email for re-invite. It cannot be undone."
-      >
-        <div className="space-y-3">
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={2}
-            placeholder="Reason (optional — recorded in the audit log)"
-            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white px-2.5 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-zinc-950 dark:border-zinc-700 dark:text-zinc-100"
-          />
-          {del.isError && <p className="text-xs text-red-600">{(del.error as Error).message}</p>}
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" onClick={() => setConfirm(false)}>
-              Cancel
-            </Button>
-            <Button variant="danger" loading={del.isPending} onClick={() => del.mutate()}>
-              Delete account
-            </Button>
-          </div>
-        </div>
-      </Dialog>
+        onOpenChange={setConfirm}
+        userLabel={label}
+        confirmPhrase={email}
+        onConfirm={(reason) => peopleManagerApi.deleteAccount(orgId, userId, reason)}
+        onDeleted={onDeleted}
+      />
     </div>
   );
 }
@@ -457,6 +451,12 @@ function OverviewTab({
     },
   });
 
+  // Timezone picker options — curated global list, with the stored value
+  // injected if it isn't one of the curated zones (legacy free-text stays
+  // visible/editable). `tzLabel` is the human label for the read-only view.
+  const tzOptions = useMemo(() => timezoneSelectOptions(timezone), [timezone]);
+  const tzLabel = tzOptions.find((o) => o.value === (timezone || 'UTC'))?.label ?? timezone ?? 'UTC';
+
   return (
     <div className="space-y-5">
       <Card title="Identity">
@@ -477,17 +477,25 @@ function OverviewTab({
             }}
             disabled={!canEdit}
           />
-          <Input
-            id="pm-detail-timezone"
-            label="Timezone"
-            value={timezone}
-            onChange={(e) => {
-              setTimezone(e.target.value);
-              setDirty(true);
-            }}
-            disabled={!canEdit}
-            placeholder="UTC"
-          />
+          {canEdit ? (
+            <Select
+              label="Timezone"
+              options={tzOptions}
+              value={timezone || 'UTC'}
+              onValueChange={(v) => {
+                setTimezone(v);
+                setDirty(true);
+              }}
+              className="w-full"
+            />
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Timezone</span>
+              <span className="text-sm text-zinc-900 dark:text-zinc-100 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
+                {tzLabel}
+              </span>
+            </div>
+          )}
         </div>
         {canEdit && membership && (
           <p className="text-xs text-zinc-500 mt-3">
@@ -557,39 +565,186 @@ function OverviewTab({
 
 function MembershipsTab({
   userId,
+  email,
   memberships,
   onChanged,
   onRemovedLast,
 }: {
   userId: string;
+  email: string;
   memberships: PersonMembership[];
   onChanged: () => void;
   onRemovedLast: () => void;
 }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const currentOrgIds = useMemo(
+    () => new Set(memberships.map((m) => m.org_id)),
+    [memberships],
+  );
+
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-      <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Organization memberships
-        </h3>
-        <p className="text-xs text-zinc-500 mt-0.5">
-          This person's memberships across the orgs you can see. Actions are scoped to
-          each org and gated by your rank there.
+      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            Organization memberships
+          </h3>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            This person's memberships across the orgs you can see. Actions are scoped to
+            each org and gated by your rank there.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setShowAdd(true)}>
+          <Plus className="h-4 w-4" /> Add to organization
+        </Button>
+      </div>
+      {memberships.length === 0 ? (
+        <p className="px-6 py-10 text-center text-sm text-zinc-400">
+          No memberships you can see. Use “Add to organization” to add this person to an org
+          you administer.
         </p>
-      </div>
-      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-        {memberships.map((m) => (
-          <MembershipRow
-            key={m.org_id}
-            userId={userId}
-            membership={m}
-            isOnlyMembership={memberships.length === 1}
-            onChanged={onChanged}
-            onRemovedLast={onRemovedLast}
-          />
-        ))}
-      </div>
+      ) : (
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {memberships.map((m) => (
+            <MembershipRow
+              key={m.org_id}
+              userId={userId}
+              membership={m}
+              isOnlyMembership={memberships.length === 1}
+              onChanged={onChanged}
+              onRemovedLast={onRemovedLast}
+            />
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <AddOrgMembershipDialog
+          email={email}
+          currentOrgIds={currentOrgIds}
+          onClose={() => setShowAdd(false)}
+          onAdded={onChanged}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Add an EXISTING person to an organization the operator administers (plan §7).
+ *
+ * Reuses the invite/attach flow (`inviteBulkToOrg` → `/org/members/invite/bulk`
+ * with `X-Org-Id`): inviting an already-existing account's email attaches it to
+ * the org (the server just announces the new access rather than onboarding).
+ * The org list is the operator's admin/owner orgs (`listMyAdminOrgs`) minus the
+ * orgs this person already belongs to in the operator's visible scope. Role at
+ * attach is member/admin (the invite flow's range); finer roles are set from
+ * the membership row afterward. The server re-checks the operator's rank.
+ */
+function AddOrgMembershipDialog({
+  email,
+  currentOrgIds,
+  onClose,
+  onAdded,
+}: {
+  email: string;
+  currentOrgIds: Set<string>;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const { data: adminOrgs, isLoading } = useQuery({
+    queryKey: ['people-manager', 'my-admin-orgs'],
+    queryFn: () => listMyAdminOrgs(),
+  });
+
+  const available = useMemo<AdminOrg[]>(
+    () => (adminOrgs ?? []).filter((o) => !currentOrgIds.has(o.org_id)),
+    [adminOrgs, currentOrgIds],
+  );
+
+  const [orgId, setOrgId] = useState<string>('');
+  const [role, setRole] = useState<'member' | 'admin'>('member');
+
+  useEffect(() => {
+    if (!orgId && available.length > 0) setOrgId(available[0]!.org_id);
+  }, [available, orgId]);
+
+  const add = useMutation({
+    // The bulk-invite endpoint returns 200 with per-row results, so a rejected
+    // attach (e.g. rank check) lands in `failed` rather than throwing. Surface
+    // that as an error instead of reporting a phantom success.
+    mutationFn: async () => {
+      const res = await inviteBulkToOrg(orgId, { invites: [{ email, role }] });
+      if (res.total_failed > 0) {
+        throw new Error(res.failed[0]?.message || 'Could not add this person to the organization.');
+      }
+      return res;
+    },
+    onSuccess: () => {
+      onAdded();
+      onClose();
+    },
+  });
+
+  const orgOptions = available.map((o) => ({ value: o.org_id, label: `${o.name} (${o.slug})` }));
+
+  return (
+    <Dialog
+      open={true}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Add to organization"
+      description="Add this person to an organization you administer. They keep their existing account; only the new org membership is added."
+    >
+      {isLoading ? (
+        <div className="py-8 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-primary-500" />
+        </div>
+      ) : available.length === 0 ? (
+        <p className="text-sm text-zinc-500 py-4">
+          There's no organization you administer that this person isn't already in.
+        </p>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (orgId) add.mutate();
+          }}
+          className="space-y-4"
+        >
+          <Select
+            label="Organization"
+            options={orgOptions}
+            value={orgId}
+            onValueChange={setOrgId}
+            placeholder="Select an organization"
+          />
+          <Select
+            label="Role"
+            options={[
+              { value: 'member', label: 'Member' },
+              { value: 'admin', label: 'Admin' },
+            ]}
+            value={role}
+            onValueChange={(v) => setRole(v as 'member' | 'admin')}
+          />
+          {add.isError && (
+            <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 dark:bg-red-950 dark:border-red-900 dark:text-red-300">
+              {(add.error as Error)?.message ?? 'Add failed'}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              <XIcon className="h-4 w-4" /> Cancel
+            </Button>
+            <Button type="submit" loading={add.isPending} disabled={!orgId}>
+              Add to org
+            </Button>
+          </div>
+        </form>
+      )}
+    </Dialog>
   );
 }
 
