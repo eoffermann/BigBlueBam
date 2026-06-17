@@ -25,6 +25,19 @@ test.describe('People Manager v2', () => {
     await expect(page.getByRole('button', { name: 'Delete account', exact: true })).toHaveCount(0);
   });
 
+  test('detail Overview exposes a Reset FTUE control', async ({ page }) => {
+    await page.goto('/b3/people-manager');
+    const view = page.getByRole('button', { name: 'View' }).first();
+    await expect(view).toBeVisible({ timeout: 15_000 });
+    await view.click();
+    await expect(page).toHaveURL(/\/people-manager\/[0-9a-f-]{8}/);
+    // The Onboarding card's "Reset FTUE" button is present for an operator with
+    // admin authority over the target. (Not clicked here — a self-reset would
+    // clear the admin's own flag and race the other b3 specs; the endpoint
+    // itself is covered by a live API smoke.)
+    await expect(page.getByRole('button', { name: 'Reset FTUE' })).toBeVisible();
+  });
+
   test('detail Overview timezone is a global dropdown, not a raw text field', async ({ page }) => {
     await page.goto('/b3/people-manager');
     const view = page.getByRole('button', { name: 'View' }).first();

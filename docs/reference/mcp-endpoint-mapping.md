@@ -285,6 +285,7 @@ MCP tool modules in scope: `me-tools`, `member-tools`, `user-resolver-tools`, `p
 | `GET /org/members/:userId/deletion-eligibility` | — | Probe admin account-deletion eligibility | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/:userId/delete-account` | — | Cross-org soft-delete of an account | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/:userId/force-password-change` | — | Force password change on next login | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/reset-ftue` | — | Reset a member's welcome tour (FTUE) so it re-fires on next login | `apps/frontend/src/pages/people-manager/detail.tsx` |
 | `GET /org/members/:userId/projects` | — | List member's projects in org | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/:userId/projects` | — | Add member to projects | `apps/frontend/src/pages/people/detail.tsx` |
 | `PATCH /org/members/:userId/projects/:projectId` | — | Update member's project role | `apps/frontend/src/pages/people/detail.tsx` |

@@ -507,6 +507,18 @@ export const peopleManagerApi = {
     return orgScopedRequest('POST', `/org/members/${userId}/force-password-change`, orgId);
   },
 
+  /**
+   * Clear the target's FTUE flag so they re-run the welcome tour on their next
+   * sign-in. Cross-org-safe via X-Org-Id; the server re-checks rank (self is
+   * allowed, otherwise the caller must outrank the target).
+   */
+  resetFtue(
+    orgId: string,
+    userId: string,
+  ): Promise<{ data: { user_id: string; ftue_completed: false } }> {
+    return orgScopedRequest('POST', `/org/members/${userId}/reset-ftue`, orgId);
+  },
+
   signOutEverywhere(orgId: string, userId: string): Promise<{ data: { revoked: number } }> {
     return orgScopedRequest('POST', `/org/members/${userId}/sign-out-everywhere`, orgId);
   },

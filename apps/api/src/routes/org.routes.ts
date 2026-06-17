@@ -545,6 +545,47 @@ export default async function orgRoutes(fastify: FastifyInstance) {
   );
 
   fastify.post<{ Params: { userId: string } }>(
+    '/org/members/:userId/reset-ftue',
+    { preHandler: [requireAuth, requireScope('admin')] },
+    async (request, reply) => {
+      try {
+        const result = await orgService.resetMemberFtue(
+          request.user!.org_id,
+          request.params.userId,
+          {
+            callerId: request.user!.id,
+            callerRole: request.user!.role,
+            callerIsSuperuser: request.user!.is_superuser,
+          },
+        );
+        if (!result) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Member not found',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        request.log.info(
+          {
+            event: 'admin.reset_ftue',
+            caller_id: request.user!.id,
+            target_id: request.params.userId,
+            org_id: request.user!.org_id,
+          },
+          'Admin reset the welcome tour (FTUE) for member',
+        );
+        return reply.send({ data: result });
+      } catch (err) {
+        if (handleRankError(request, reply, err)) return;
+        throw err;
+      }
+    },
+  );
+
+  fastify.post<{ Params: { userId: string } }>(
     '/org/members/:userId/sign-out-everywhere',
     { preHandler: [requireAuth, fastify.requireCan('bam.org_member_sign_out_everywhere.create'), requireScope('admin')] },
     async (request, reply) => {

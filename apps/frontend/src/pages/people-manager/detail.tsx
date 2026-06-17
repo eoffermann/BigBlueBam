@@ -457,6 +457,12 @@ function OverviewTab({
   const tzOptions = useMemo(() => timezoneSelectOptions(timezone), [timezone]);
   const tzLabel = tzOptions.find((o) => o.value === (timezone || 'UTC'))?.label ?? timezone ?? 'UTC';
 
+  // Reset the welcome tour (FTUE) for this person — clears their
+  // notification_prefs.ftue_completed so the tour fires on their next sign-in.
+  const resetFtue = useMutation({
+    mutationFn: () => peopleManagerApi.resetFtue(orgId ?? '', user.id),
+  });
+
   return (
     <div className="space-y-5">
       <Card title="Identity">
@@ -557,6 +563,34 @@ function OverviewTab({
           )}
         </dl>
       </Card>
+
+      {canEdit && orgId && (
+        <Card title="Onboarding">
+          <p className="text-sm text-zinc-500 mb-3">
+            Re-run the welcome tour for this person. They'll be guided through Settings the next
+            time they sign in.
+          </p>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => resetFtue.mutate()}
+              loading={resetFtue.isPending}
+            >
+              Reset FTUE
+            </Button>
+            {resetFtue.isSuccess && (
+              <span className="text-sm text-green-600">
+                Done — they'll see the welcome tour on next sign-in.
+              </span>
+            )}
+            {resetFtue.isError && (
+              <span className="text-sm text-red-600">
+                {(resetFtue.error as Error)?.message ?? 'Reset failed'}
+              </span>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -1109,6 +1109,45 @@ export async function forcePasswordChange(
   return { user_id: updated.id, force_password_change: true };
 }
 
+/**
+ * Clear the target's first-time-user flag (`notification_prefs.ftue_completed`)
+ * so they re-run the welcome tour on their next sign-in. The rest of the
+ * target's notification prefs are preserved (we drop only that one key). An
+ * admin may reset themselves (innocuous) or any member they outrank.
+ */
+export async function resetMemberFtue(
+  orgId: string,
+  targetUserId: string,
+  opts: { callerId: string; callerRole: string; callerIsSuperuser: boolean },
+): Promise<{ user_id: string; ftue_completed: false } | null> {
+  if (targetUserId !== opts.callerId) {
+    const check = await assertRankOverMember(orgId, targetUserId, opts);
+    if (!check.ok) return null;
+  } else {
+    // Self-reset: no rank gate, but the caller must still belong to the org.
+    const role = await getMembershipRole(orgId, targetUserId);
+    if (role === null) return null;
+  }
+
+  const [target] = await db
+    .select({ prefs: users.notification_prefs })
+    .from(users)
+    .where(eq(users.id, targetUserId));
+  if (!target) return null;
+
+  const prefs = { ...((target.prefs as Record<string, unknown> | null) ?? {}) };
+  delete prefs.ftue_completed;
+
+  const [updated] = await db
+    .update(users)
+    .set({ notification_prefs: prefs, updated_at: new Date() })
+    .where(eq(users.id, targetUserId))
+    .returning({ id: users.id });
+
+  if (!updated) return null;
+  return { user_id: updated.id, ftue_completed: false };
+}
+
 /** Delete every session owned by the target user. */
 export async function signOutMemberEverywhere(
   orgId: string,
