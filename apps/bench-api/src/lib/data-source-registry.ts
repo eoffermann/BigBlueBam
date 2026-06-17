@@ -66,22 +66,27 @@ const DATA_SOURCES: BenchDataSource[] = [
     label: 'Tasks',
     description: 'Bam project tasks with state, priority, and story points',
     baseTable: 'tasks',
+    // The tasks table isolates by `org_id` (not the default `organization_id`),
+    // and uses `state_id` (FK to task_states), not a `state` enum column. There
+    // is no `task_type` column. The prior declaration 500'd every bam.tasks
+    // query (PostgresError 42703) — see fix in this commit.
+    orgColumn: 'org_id',
     measures: [
       { field: 'id', label: 'Task Count', aggregations: ['count'], type: 'integer' },
       { field: 'story_points', label: 'Story Points', aggregations: ['sum', 'avg', 'min', 'max'], type: 'integer' },
     ],
     dimensions: [
-      { field: 'state', label: 'State', type: 'categorical' },
+      { field: 'state_id', label: 'State', type: 'categorical' },
       { field: 'priority', label: 'Priority', type: 'categorical' },
-      { field: 'task_type', label: 'Type', type: 'categorical' },
+      { field: 'phase_id', label: 'Phase', type: 'categorical' },
       { field: 'created_at', label: 'Created', type: 'temporal' },
       { field: 'updated_at', label: 'Updated', type: 'temporal' },
       { field: 'project_id', label: 'Project', type: 'categorical' },
       { field: 'assignee_id', label: 'Assignee', type: 'categorical' },
     ],
     filters: [
-      { field: 'state', label: 'State', operators: ['eq', 'neq', 'in'], type: 'enum', enumValues: ['open', 'in_progress', 'review', 'done', 'closed'] },
-      { field: 'priority', label: 'Priority', operators: ['eq', 'neq', 'in'], type: 'enum', enumValues: ['critical', 'high', 'medium', 'low', 'none'] },
+      { field: 'state_id', label: 'State', operators: ['eq', 'neq', 'in'], type: 'string' },
+      { field: 'priority', label: 'Priority', operators: ['eq', 'neq', 'in'], type: 'enum', enumValues: ['critical', 'urgent', 'high', 'medium', 'low', 'none'] },
       { field: 'created_at', label: 'Created', operators: ['gte', 'lte', 'between'], type: 'date' },
       { field: 'project_id', label: 'Project', operators: ['eq', 'in'], type: 'string' },
     ],
