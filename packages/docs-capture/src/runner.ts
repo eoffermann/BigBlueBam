@@ -57,7 +57,9 @@ async function authenticate(
 ): Promise<Record<string, unknown>> {
   // Fast path: reuse the E2E suite's maintained storageState (no cred needed).
   // Only for local/raw — never trust a checked-in session against production.
-  if (env.name !== 'production') {
+  // SHOTS_FRESH_LOGIN=1 forces a UI login with the configured creds instead
+  // (used to capture a curated demo org, e.g. the Gilligan workspace).
+  if (env.name !== 'production' && process.env.SHOTS_FRESH_LOGIN !== '1') {
     const stateFile = path.join(REPO_ROOT, 'apps/e2e/.auth', `${identity}.json`);
     if (fs.existsSync(stateFile)) {
       try {

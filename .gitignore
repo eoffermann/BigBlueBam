@@ -57,3 +57,4 @@ docs/.help-build/
 /screenshots/
 screenshots.config.json
 packages/docs-capture/_probe.mjs
+scripts/.gilligan-keys.env
