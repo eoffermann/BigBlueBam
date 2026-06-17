@@ -150,7 +150,12 @@ export function SettingsFtueTour({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-label="Getting started" aria-modal="true">
+    // pointer-events-none so the overlay is purely visual — the user can still
+    // click the highlighted control (fill in their name, pick a timezone, etc.)
+    // and the rest of the page underneath. Only the tooltip card re-enables
+    // pointer events for its Back/Next/Skip buttons. (This is a coachmark, not a
+    // blocking modal — hence no aria-modal.)
+    <div className="pointer-events-none fixed inset-0 z-[100]" role="dialog" aria-label="Getting started">
       {/* Spotlight: a box over the target with a huge shadow dimming the rest. */}
       {rect && (
         <div
@@ -167,9 +172,9 @@ export function SettingsFtueTour({
       {/* Backdrop fallback when there's no target rect yet (keeps it modal). */}
       {!rect && <div className="fixed inset-0 bg-black/55" />}
 
-      {/* Tooltip card */}
+      {/* Tooltip card — re-enables pointer events so its buttons are clickable. */}
       <div
-        className="fixed rounded-xl border border-zinc-200 bg-white p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="pointer-events-auto fixed rounded-xl border border-zinc-200 bg-white p-4 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
         style={{ top: tipTop, left: tipLeft, width: TOOLTIP_W }}
       >
         <div className="flex items-center justify-between gap-2">
