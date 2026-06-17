@@ -70,7 +70,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     // Strip leading '#' and validate it's a positive integer
     const stripped = idOrNumber.trim().replace(/^#/, '');
     if (!/^\d+$/.test(stripped)) return null;
-    const result = await helpdeskRequest('GET', `/helpdesk/tickets/by-number/${encodeURIComponent(stripped)}`);
+    const result = await helpdeskRequest('GET', `/helpdesk/agents/tickets/by-number/${encodeURIComponent(stripped)}`);
     if (!result.ok) return null;
     const envelope = result.data as { data?: { id?: string } | null } | null;
     return envelope?.data?.id ?? null;
@@ -141,7 +141,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     handler: async ({ number }) => {
       const stripped = String(number).trim().replace(/^#/, '');
       const encoded = encodeURIComponent(stripped);
-      const result = await helpdeskRequest('GET', `/helpdesk/tickets/by-number/${encoded}`);
+      const result = await helpdeskRequest('GET', `/helpdesk/agents/tickets/by-number/${encoded}`);
 
       if (!result.ok) {
         return {

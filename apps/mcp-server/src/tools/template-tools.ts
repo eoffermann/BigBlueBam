@@ -94,7 +94,11 @@ export function registerTemplateTools(server: McpServer, api: ApiClient): void {
 
       const result = await api.post(
         `/projects/${resolvedProjectId}/task-templates/${resolvedTemplateId}/apply`,
-        { overrides: overrides ?? {} },
+        // The apply route parses request.body directly against its override
+        // schema (flat fields: { title, assignee_id, priority, ... }), NOT a
+        // nested { overrides } envelope — send the fields at top level or they
+        // are silently dropped.
+        overrides ?? {},
       );
 
       if (!result.ok) {

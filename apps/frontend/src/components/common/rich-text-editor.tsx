@@ -257,6 +257,7 @@ export function RichTextEditor({
         <div
           className="rich-text-content p-3 min-h-[80px] text-sm text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 cursor-text"
           title="Click to edit"
+          role="button"
           tabIndex={0}
           onClick={(e) => {
             if ((e.target as HTMLElement).closest('a')) return;

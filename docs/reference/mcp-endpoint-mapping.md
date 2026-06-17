@@ -1496,13 +1496,17 @@ or `/helpdesk/agents`) segment in-code.
 (nginx rewrites `/helpdesk/api/*` → `/helpdesk/*`; the in-code `/helpdesk` segment below is what
 the upstream registers, so external path = `/helpdesk/api/` + the part after `/helpdesk/`.)
 
-> **Helpdesk agent-route deferral.** The `/helpdesk/api/agents/*` mutation routes (queue, agent
-> ticket detail, close, merge, post-message, status/priority/category update) authenticate with a
-> per-agent `X-Agent-Key` (`hdag_`-prefixed), not the caller's Bearer token + `X-Org-Id` that the
-> parity wrappers forward. Wrapping them as MCP tools means resolving and threading that separate
-> credential, so they are **intentionally deferred** in this pass and left `—`. The existing
-> helpdesk tools that read via the customer routes or already target an agent read-route (search,
-> by-number, similar) are unaffected.
+> **Helpdesk auth coupling (whole surface).** helpdesk-api authenticates against its OWN credential
+> system — a `helpdesk_session` cookie (customer/admin) or a per-agent `X-Agent-Key` (`hdag_`-prefixed)
+> on `/helpdesk/api/agents/*` — NOT the Bam Bearer token + `X-Org-Id` that the MCP wrappers forward.
+> A Bam service-account Bearer is rejected by both `requireAdminAuth` and `requireAgentAuth` (verified
+> by local smoke: even `helpdesk_get_settings` returns `UNAUTHORIZED`). So the `/helpdesk/api/agents/*`
+> mutation routes are left `—`, and the helpdesk MCP tools are only reachable when the forwarded
+> credential maps to a valid helpdesk session/agent key. Giving the MCP service account first-class
+> helpdesk access (mint + thread an `X-Agent-Key`, or have helpdesk-api trust a Bam service token) is a
+> tracked cross-service auth follow-up. Fixed this pass: the `by-number` resolver path now targets the
+> real agent route (`/helpdesk/agents/tickets/by-number/:number`) — it reaches the route (then gates on
+> the agent key) instead of 404-ing on a path that never existed.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
