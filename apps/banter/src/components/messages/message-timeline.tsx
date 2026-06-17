@@ -24,13 +24,15 @@ export function MessageTimeline({ channelId, onNavigate }: MessageTimelineProps)
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
 
-  // Flatten pages into a single list (oldest first)
-  const allMessages: Message[] = [];
-  if (data?.pages) {
-    for (let i = data.pages.length - 1; i >= 0; i--) {
-      allMessages.push(...data.pages[i]!.data);
-    }
-  }
+  // The API returns messages newest-first (created_at DESC) for cursor
+  // pagination. Flatten every loaded page and sort chronologically so the
+  // timeline renders oldest at the top and newest at the bottom — standard chat
+  // order. (The previous code reversed page order but not within-page order, so
+  // a single page rendered fully backwards and a new reply jumped to the top.)
+  // Sorting (rather than a bare reverse) is robust to the API's ordering.
+  const allMessages: Message[] = (data?.pages ?? [])
+    .flatMap((p) => p.data)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

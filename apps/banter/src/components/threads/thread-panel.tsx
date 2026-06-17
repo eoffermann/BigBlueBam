@@ -125,16 +125,21 @@ export function ThreadPanel({ messageId, channelId, onNavigate }: ThreadPanelPro
           </div>
         )}
 
-        {/* Thread replies */}
-        {replies?.map((reply) => (
-          <MessageItem
-            key={reply.id}
-            message={reply}
-            channelId={channelId}
-            grouped={false}
-            onNavigate={onNavigate}
-          />
-        ))}
+        {/* Thread replies — the API returns these newest-first by default, so
+            sort chronologically to show oldest at the top and newest at the
+            bottom (matching the channel timeline). */}
+        {(replies ?? [])
+          .slice()
+          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          .map((reply) => (
+            <MessageItem
+              key={reply.id}
+              message={reply}
+              channelId={channelId}
+              grouped={false}
+              onNavigate={onNavigate}
+            />
+          ))}
 
         <div ref={bottomRef} />
       </div>
