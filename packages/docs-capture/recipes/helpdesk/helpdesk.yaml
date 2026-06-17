@@ -98,6 +98,10 @@
     - { action: click, selector: "button[type=submit]", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
     - { action: waitForNetworkIdle, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
     - { action: click, selector: "button:has-text('New Ticket')", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL, optional: true }
-    - { action: wait, ms: 1500, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: wait, ms: 1200, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    # Prefill the subject so the New Ticket form reads as in-progress, not blank.
+    # (Category is a native <select>; an OS dropdown can't be screenshotted open.)
+    - { action: fill, selector: "input[placeholder='Brief summary of your issue']", value: "The bamboo cabana door won't latch in the wind", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL, optional: true }
+    - { action: wait, ms: 800, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
   expectNot: ["input#password"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }

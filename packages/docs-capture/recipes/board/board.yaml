@@ -21,9 +21,11 @@
   route: /board/
   identity: admin
   interactions:
-    - { action: waitFor, selector: "div.group.cursor-pointer" }
-    - { action: click, selector: "div.group.cursor-pointer", optional: true }
-    - { action: wait, ms: 2500 }
+    # Open the Howell Luau layout board (labeled shapes), and give the canvas
+    # time to render + fit its elements rather than capturing an empty viewport.
+    - { action: waitFor, selector: "div.group.cursor-pointer:has-text('Howell Luau')" }
+    - { action: click, selector: "div.group.cursor-pointer:has-text('Howell Luau')", optional: true }
+    - { action: wait, ms: 4000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
     - "[data-testid='presence-avatars']"

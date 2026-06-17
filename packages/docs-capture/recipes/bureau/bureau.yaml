@@ -93,10 +93,9 @@
   interactions:
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1000 }
+  # No masks: the only timestamps are deterministic under the frozen clock, and the
+  # prior mask selector matched the "Recent chats" header icon (covered the title).
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
-  masks:
-    # Last-message timestamps are relative/clock-driven.
-    - "div:has(> svg.lucide-message-square-text)"
 
 # --- Admin · Floors --------------------------------------------------------
 - id: bureau-admin-floors

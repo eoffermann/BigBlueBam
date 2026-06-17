@@ -134,7 +134,7 @@ async function runStep(
         await page.locator(step.selector!).first().scrollIntoViewIfNeeded();
         break;
       case 'waitFor':
-        await page.locator(step.selector!).first().waitFor({ state: 'visible', timeout: 15_000 });
+        await page.locator(step.selector!).first().waitFor({ state: 'visible', timeout: 30_000 });
         break;
       case 'waitForNetworkIdle':
         await page.waitForLoadState('networkidle', { timeout: 15_000 });

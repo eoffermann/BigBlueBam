@@ -59,9 +59,11 @@
   route: /bond/
   identity: admin
   interactions:
-    - { action: waitFor, selector: "div.group.cursor-pointer, main", optional: true }
+    # The pipeline now auto-selects on load, so deal cards render — wait for a
+    # card, then open it (was capturing the empty "No pipeline selected" board).
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
     - { action: click, selector: "div.group.cursor-pointer", optional: true }
-    - { action: wait, ms: 2000 }
+    - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
     - "time"

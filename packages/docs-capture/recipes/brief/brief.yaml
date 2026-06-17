@@ -73,12 +73,18 @@
 
 - id: brief-editor
   app: brief
-  demonstrates: "The blank document editor: title field, formatting toolbar, body, and the Settings sidebar (icon, visibility, project, template)"
-  route: /brief/new
+  demonstrates: "A real document open in the editor: title, formatting toolbar, body content, and the Settings sidebar"
+  route: /brief/documents
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: wait, ms: 1200 }
+    # Open a real seeded brief (not the blank /new editor), then enter edit mode.
+    - { action: click, selector: "button:has-text('Operation Coconut'), [class*='cursor-pointer']:has-text('Operation Coconut'), a:has-text('Operation Coconut')", optional: true }
     - { action: wait, ms: 1500 }
+    - { action: click, selector: "button:has-text('Edit')", optional: true }
+    - { action: wait, ms: 2000 }
+  expect: "Operation Coconut"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
 
 - id: brief-templates
@@ -98,7 +104,8 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
-    - { action: fill, selector: "input[placeholder*='search' i], input[placeholder*='Type to' i]", value: "spec", optional: true }
+    - { action: fill, selector: "input[placeholder*='search' i], input[placeholder*='Type to' i], input[type='search']", value: "rescue", optional: true }
+    - { action: press, selector: "input[placeholder*='search' i], input[placeholder*='Type to' i], input[type='search']", value: "Enter", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
