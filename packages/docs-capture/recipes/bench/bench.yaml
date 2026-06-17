@@ -1,0 +1,103 @@
+# Bench — analytics dashboards and ad-hoc queries across the suite.
+# Recipes mined from docs/apps/bench/help.md (Feature reference + User Stories)
+# and the known-working routes/selectors in src/apps/bench.scenes.ts.
+# Content is omitted everywhere: the local stack is already seeded with the
+# Engineering Overview and other dashboards, so these capture existing data.
+# Live timestamps ("last updated"/"last sent") and chart tooltips are masked.
+# The dashboard-view click setup is optional so a missing card never fails a run.
+
+- id: bench-dashboard-list
+  app: bench
+  demonstrates: "The Dashboards landing grid: dashboard cards with visibility pills, widget counts, and last-updated times"
+  route: /bench/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "time"
+    - "[datetime]"
+
+- id: bench-dashboard-view
+  app: bench
+  demonstrates: "A single dashboard opened in the read view, with its widget grid (charts, KPI cards, query timings) and toolbar"
+  route: /bench/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: '[class*="rounded-xl"][class*="cursor-pointer"]' }
+    - { action: click, selector: '[class*="rounded-xl"][class*="cursor-pointer"]', optional: true }
+    - { action: wait, ms: 2500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "time"
+    - "[datetime]"
+    - ".recharts-tooltip-wrapper"
+
+- id: bench-dashboard-view-dark
+  app: bench
+  demonstrates: "The dashboard read view in dark theme (marketing/retina)"
+  route: /bench/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: '[class*="rounded-xl"][class*="cursor-pointer"]' }
+    - { action: click, selector: '[class*="rounded-xl"][class*="cursor-pointer"]', optional: true }
+    - { action: wait, ms: 2500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  masks:
+    - "time"
+    - "[datetime]"
+    - ".recharts-tooltip-wrapper"
+
+- id: bench-explorer
+  app: bench
+  demonstrates: "The Ad-Hoc Explorer: a data-source picker with read-only measures/dimensions and a results table"
+  route: /bench/explorer
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "time"
+    - "[datetime]"
+
+- id: bench-reports
+  app: bench
+  demonstrates: "The Scheduled Reports list: report rows with delivery-method icons, cron schedules, and Active/Paused pills"
+  route: /bench/reports
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "time"
+    - "[datetime]"
+
+- id: bench-saved-queries
+  app: bench
+  demonstrates: "The Saved Queries list: reusable query definitions with their data source, created date, and Run/Edit/Delete actions"
+  route: /bench/saved-queries
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "time"
+    - "[datetime]"
+
+- id: bench-settings
+  app: bench
+  demonstrates: "Bench Settings: the read-only Data Source Registry grouped by product, plus the cache TTL and statement timeout"
+  route: /bench/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bench-widget-wizard
+  app: bench
+  demonstrates: "The Widget Wizard at its first step (Data Source), where a custom widget is built from registered sources in four steps"
+  route: /bench/widgets/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }

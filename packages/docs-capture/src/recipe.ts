@@ -56,6 +56,14 @@ export const InteractionStepSchema = z.object({
   ms: z.number().int().positive().optional(),
   /** Don't fail the run if this step can't complete (best-effort setup). */
   optional: z.boolean().optional(),
+  /**
+   * Skip this step entirely when the named env var is unset/empty. Lets a
+   * recipe carry an optional credentialed leg (e.g. a separate-portal login)
+   * that simply no-ops — degrading to a clean public capture — until an
+   * operator supplies the secret. `value`/`url` support `${ENV_VAR}`
+   * interpolation, so credentials are never hardcoded in recipes.
+   */
+  skipIfEnvUnset: z.string().optional(),
 }).strict();
 
 export type InteractionStep = z.infer<typeof InteractionStepSchema>;
@@ -113,6 +121,21 @@ export const RecipeSchema = z.object({
   /** Ordered interaction steps after navigation. */
   interactions: z.array(InteractionStepSchema).default([]),
   capture: CaptureSchema.default({}),
+  /**
+   * Verification BEFORE capture — proves the recipe actually reached the
+   * intended view. Each entry is a selector (or `text=…`) that MUST be visible;
+   * if any is missing the recipe FAILS and no (misleading) image is written.
+   * Strongly recommended on every recipe, and required on any that depend on
+   * auth / interactions / seeded data.
+   */
+  expect: z.union([z.string(), z.array(z.string())]).optional(),
+  /**
+   * Selectors/text that must NOT be present at capture time (e.g. an error
+   * banner, or the login form on a view that should be authenticated). If any
+   * is present the recipe FAILS. A built-in guard already fails on common
+   * error states (invalid-credentials, page-not-found, error boundary).
+   */
+  expectNot: z.union([z.string(), z.array(z.string())]).optional(),
   /** Selectors whose contents are redacted/frozen before capture. */
   masks: z.array(z.string()).default([]),
   /** Optional output path override (relative to the shared screenshots root). */

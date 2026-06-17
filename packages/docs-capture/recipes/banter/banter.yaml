@@ -1,0 +1,184 @@
+# Banter — team messaging (channels, DMs, threads, reactions, pins).
+# Recipes mined from docs/apps/banter/help.md (Feature reference + User Stories)
+# and packages/docs-capture/src/apps/banter.scenes.ts (known-working routes).
+# Banter is served at /banter/; the default landing channel is #general, and the
+# router (apps/banter/src/App.tsx parseRoute) bounces /banter/ -> #general, so a
+# bare /banter/ visit always renders a fully-populated channel. Content is
+# omitted throughout — the local stack is already seeded with channels, messages,
+# threads, and DMs.
+#
+# Selector notes (verified against apps/banter/src):
+#   * The sidebar is the <aside class="w-[260px]"> in banter-layout.tsx. Channel
+#     and DM rows are <button> elements (NOT <a href>), so the scenes-file
+#     `aside button:has-text("#")` cannot match — the leading "#" is a <Hash>
+#     SVG icon, not literal text. Channel rows render the channel name in a
+#     <span>, so we target the guaranteed #general row by its visible name; DM
+#     rows are matched by their wrapper. No stable data-testid exists yet on the
+#     sidebar — tracked as a test-id gap.
+#   * Message rows are `div.group.relative.flex.gap-3`; the hover action bar
+#     (title="Add reaction" / "Reply in thread" / "Pin message" / "Bookmark")
+#     reveals on CSS group-hover, so hovering a row surfaces reactions/pin.
+#   * The "N replies" thread link is a <button> whose text contains "reply"/
+#     "replies" and opens the right-hand Thread panel.
+# All setup clicks/hovers are optional:true so a best-effort step can't fail the
+# run; if a click no-ops, the bare /banter/ #general view is still a valid
+# populated screenshot.
+#
+# Masks cover live/volatile chrome: presence dots/status, typing indicators, and
+# relative timestamps. These have no stable data-testid yet, so the masks are
+# best-effort testid selectors (harmless no-ops if absent) — listed so they
+# activate the moment the hooks land. The suite-wide Bureau docked box is hidden
+# globally by the capture engine, so it is not masked here.
+
+- id: banter-channel-list
+  app: banter
+  demonstrates: "The Banter sidebar (channels + DMs) and the default #general channel on first load"
+  route: /banter/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-indicator']"
+    - "[data-testid='presence-dot']"
+    - "[data-testid='relative-timestamp']"
+    - "[data-testid='typing-indicator']"
+
+- id: banter-channel-view
+  app: banter
+  demonstrates: "A populated channel conversation with the message timeline and compose box"
+  route: /banter/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has(span:text-is('general'))", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-indicator']"
+    - "[data-testid='presence-dot']"
+    - "[data-testid='relative-timestamp']"
+    - "[data-testid='typing-indicator']"
+
+- id: banter-channel-view-dark
+  app: banter
+  demonstrates: "A populated channel conversation in dark theme (marketing/retina)"
+  route: /banter/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has(span:text-is('general'))", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  masks:
+    - "[data-testid='presence-indicator']"
+    - "[data-testid='presence-dot']"
+    - "[data-testid='relative-timestamp']"
+    - "[data-testid='typing-indicator']"
+
+- id: banter-thread
+  app: banter
+  demonstrates: "The right-hand Thread panel opened off a parent message's replies"
+  route: /banter/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+    # Prefer the visible "N replies" link; fall back to the hover action bar.
+    - { action: click, selector: "main button:has-text('repl')", optional: true }
+    - { action: hover, selector: "main div.group.relative.flex.gap-3", optional: true }
+    - { action: click, selector: "main [title='Reply in thread']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-indicator']"
+    - "[data-testid='presence-dot']"
+    - "[data-testid='relative-timestamp']"
+    - "[data-testid='typing-indicator']"
+
+- id: banter-reactions-pins
+  app: banter
+  demonstrates: "A message's hover action bar — Add reaction, Reply in thread, Pin, Bookmark"
+  route: /banter/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+    - { action: hover, selector: "main div.group.relative.flex.gap-3", optional: true }
+    - { action: wait, ms: 600 }
+    - { action: click, selector: "main [title='Add reaction']", optional: true }
+    - { action: wait, ms: 600 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-indicator']"
+    - "[data-testid='presence-dot']"
+    - "[data-testid='relative-timestamp']"
+    - "[data-testid='typing-indicator']"
+
+# No DM-list route exists in the SPA router (parseRoute has channel/dm/browse/
+# bookmarks/search/settings/admin, no /dms). A DM is its own route
+# /banter/dm/:id, opened from the Direct Messages section in the sidebar. We land
+# on #general and click the first DM row to open a one-to-one conversation
+# without hardcoding a seeded DM id. DM rows carry a counterparty avatar (initials
+# in an h-5 w-5 box) rather than a Hash icon.
+- id: banter-dms
+  app: banter
+  demonstrates: "A direct-message conversation opened from the sidebar Direct Messages section"
+  route: /banter/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has(div.h-5.w-5.rounded-md)", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-indicator']"
+    - "[data-testid='presence-dot']"
+    - "[data-testid='relative-timestamp']"
+    - "[data-testid='typing-indicator']"
+
+- id: banter-browse-channels
+  app: banter
+  demonstrates: "The Browse Channels page used to discover and join public channels"
+  route: /banter/browse
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+- id: banter-bookmarks
+  app: banter
+  demonstrates: "The Bookmarks page listing privately saved messages"
+  route: /banter/bookmarks
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-indicator']"
+    - "[data-testid='presence-dot']"
+    - "[data-testid='relative-timestamp']"
+
+- id: banter-search
+  app: banter
+  demonstrates: "The Search page with the query box and channel/author/date filters"
+  route: /banter/search
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+# Preferences live at /banter/settings ({ page: 'settings' } in parseRoute),
+# not /banter/preferences.
+- id: banter-preferences
+  app: banter
+  demonstrates: "The Preferences page (Profile, Theme, Notifications, Messaging)"
+  route: /banter/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }

@@ -1,0 +1,100 @@
+# Helpdesk — customer support portal.
+#
+# AUTH: Helpdesk has its OWN customer auth, separate from the Bam session the
+# engine logs in as. So:
+#   - Public views (portal entry = the "Welcome back" sign-in screen) need NO
+#     portal login and `expect` the login form.
+#   - Authed views (ticket list/detail/new) log in through `interactions` using
+#     env-supplied portal creds — NEVER hardcoded:
+#       SHOTS_HELPDESK_ORG    (default route org below; override the route per env)
+#       SHOTS_HELPDESK_EMAIL  customer email for the seeded portal
+#       SHOTS_HELPDESK_PASSWORD
+#     Each login step carries `skipIfEnvUnset: SHOTS_HELPDESK_EMAIL`, so when no
+#     creds are configured the login simply no-ops (no broken submit, no error
+#     banner). The authed recipes then `expectNot: input#password` — i.e. the
+#     capture only succeeds if we are genuinely past the sign-in screen. Without
+#     valid creds these recipes FAIL verification (and write no image) rather
+#     than mislabel a login screen as a ticket list.
+#
+# The org-scoped route default is /helpdesk/mage-inc/ (seeded by seed-mage.js).
+# Point SHOTS_HELPDESK_EMAIL/PASSWORD at a customer that exists in THAT org.
+
+- id: helpdesk-portal-entry
+  app: helpdesk
+  demonstrates: "The org support portal sign-in — the first screen a customer sees at /helpdesk/<org>/"
+  route: /helpdesk/mage-inc/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "input#email", optional: true }
+  expect: ["input#email", "input#password"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: helpdesk-portal-entry-dark
+  app: helpdesk
+  demonstrates: "The org support portal sign-in in dark theme (marketing/retina)"
+  route: /helpdesk/mage-inc/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "input#email", optional: true }
+  expect: ["input#email"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+
+- id: helpdesk-login
+  app: helpdesk
+  demonstrates: "The 'Welcome back' customer sign-in screen with Email + Password fields"
+  route: /helpdesk/mage-inc/login
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "input#email", optional: true }
+  expect: ["input#email", "input#password"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: helpdesk-ticket-list
+  app: helpdesk
+  demonstrates: "The 'My Tickets' list after portal login — search box, status filter chips, and ticket rows"
+  route: /helpdesk/mage-inc/
+  identity: admin
+  interactions:
+    - { action: fill, selector: "input#email", value: "${SHOTS_HELPDESK_EMAIL}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: fill, selector: "input#password", value: "${SHOTS_HELPDESK_PASSWORD}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: click, selector: "button[type=submit]", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: waitForNetworkIdle, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: wait, ms: 1500, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+  # Capture only succeeds if we are genuinely authenticated (no login form).
+  expectNot: ["input#password"]
+  expect: ["button:has-text('New Ticket')"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-relative-time], time"
+
+- id: helpdesk-ticket-detail
+  app: helpdesk
+  demonstrates: "A ticket's detail conversation — status/priority badges, description, and message timeline"
+  route: /helpdesk/mage-inc/
+  identity: admin
+  interactions:
+    - { action: fill, selector: "input#email", value: "${SHOTS_HELPDESK_EMAIL}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: fill, selector: "input#password", value: "${SHOTS_HELPDESK_PASSWORD}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: click, selector: "button[type=submit]", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: waitForNetworkIdle, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: click, selector: "button.w-full.text-left", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL, optional: true }
+    - { action: wait, ms: 2000, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+  expectNot: ["input#password"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-relative-time], time"
+
+- id: helpdesk-new-ticket
+  app: helpdesk
+  demonstrates: "The New Ticket form — Subject, Priority, and the rich-text Description editor"
+  route: /helpdesk/mage-inc/
+  identity: admin
+  interactions:
+    - { action: fill, selector: "input#email", value: "${SHOTS_HELPDESK_EMAIL}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: fill, selector: "input#password", value: "${SHOTS_HELPDESK_PASSWORD}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: click, selector: "button[type=submit]", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: waitForNetworkIdle, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+    - { action: click, selector: "button:has-text('New Ticket')", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL, optional: true }
+    - { action: wait, ms: 1500, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
+  expectNot: ["input#password"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }

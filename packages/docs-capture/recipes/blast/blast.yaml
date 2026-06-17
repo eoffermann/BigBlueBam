@@ -1,0 +1,129 @@
+# Blast — email campaigns.
+# Recipes mined from docs/apps/blast/help.md (Feature reference + User Stories)
+# and verified against apps/blast/src/App.tsx parseRoute (routes below are the
+# exact strings parseRoute accepts: '/', '/campaigns/new', '/templates',
+# '/templates/new', '/segments', '/segments/new', '/analytics',
+# '/settings/domains', '/settings/smtp'). The scenes file routes were already
+# correct — no scene-route corrections needed.
+#
+# Content is OMITTED everywhere: the local stack is broadly seeded (campaigns,
+# templates, segments, analytics), and the create/builder/editor views render
+# fully populated from defaults with no seeding. Masks cover live relative
+# timestamps, send dates, and analytics rollup numbers so re-runs stay stable.
+# The Bureau presence widget is hidden globally by the capture engine.
+
+- id: blast-campaigns
+  app: blast
+  demonstrates: "The Campaigns list — every campaign with status, sent count, open/click rates"
+  route: /blast/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "h1:has-text('Campaigns')", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # Date column (live sent/scheduled/created dates)
+    - "table tbody td:last-child"
+
+- id: blast-campaigns-dark
+  app: blast
+  demonstrates: "The Campaigns list in dark theme (marketing/retina)"
+  route: /blast/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "h1:has-text('Campaigns')", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  masks:
+    - "table tbody td:last-child"
+
+- id: blast-campaign-new
+  app: blast
+  demonstrates: "The New Campaign form — name, subject, From, segment, and the Visual Builder content mode"
+  route: /blast/campaigns/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "h1:has-text('New Campaign')", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: blast-campaign-new-html
+  app: blast
+  demonstrates: "The New Campaign form in HTML mode — raw HTML body with a live iframe preview"
+  route: /blast/campaigns/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('HTML')", optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: blast-templates
+  app: blast
+  demonstrates: "The Templates gallery — reusable email designs with version badges"
+  route: /blast/templates
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "h1:has-text('Templates')", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # "updated N ago" relative time on each card
+    - "div.group span.text-zinc-400"
+
+- id: blast-template-editor
+  app: blast
+  demonstrates: "The template editor with the drag-and-drop Visual block builder open"
+  route: /blast/templates/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1200 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: blast-segments
+  app: blast
+  demonstrates: "The Segments list — saved Bond-contact filters with cached match counts"
+  route: /blast/segments
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "h1:has-text('Segments')", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # "Last Updated" relative-time column (4th body cell)
+    - "table tbody td:nth-child(4)"
+
+- id: blast-segment-builder
+  app: blast
+  demonstrates: "The segment builder — match mode plus field/operator/value condition rows"
+  route: /blast/segments/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "h1:has-text('New Segment')", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: blast-analytics
+  app: blast
+  demonstrates: "The Email Analytics dashboard — org-wide rollups and the weekly engagement trend"
+  route: /blast/analytics
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "h1:has-text('Email Analytics')", optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # Stat-card values + sub-values (Total Sent / Delivered / open / click / bounce)
+    - "p.text-2xl"
+    # "Campaigns Sent" + "Unsubscribes" tile numbers
+    - "p.text-3xl"
+    # Weekly engagement trend table body (live periods + numbers)
+    - "table tbody"

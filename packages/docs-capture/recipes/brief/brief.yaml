@@ -1,0 +1,117 @@
+# Brief — collaborative documents with real-time editing.
+# Recipes mined from docs/apps/brief/help.md (Feature reference + User Stories)
+# and verified against apps/brief/src/App.tsx parseRoute.
+#
+# Route notes (confirmed against parseRoute):
+#   /brief/                       -> home
+#   /brief/documents              -> document list (also reachable via query ?folder=)
+#   /brief/documents/:idOrSlug    -> detail (needs a real doc id; reached by clicking a card)
+#   /brief/documents/:idOrSlug/edit -> editor for an existing doc
+#   /brief/new                    -> blank editor (create)
+#   /brief/templates              -> template browser
+#   /brief/search                 -> search
+#   /brief/starred                -> starred
+# The scenes file routes documents/detail through /brief/ + a sidebar click, but
+# /brief/documents, /brief/templates and /brief/starred are all valid direct
+# routes per parseRoute, so we navigate to them directly. Detail still needs a
+# real document id, so it's reached by clicking a card from the list.
+#
+# Content is omitted everywhere (the local stack is broadly seeded). The Bureau
+# presence widget is hidden globally by the engine. Masks cover live relative
+# timestamps and live-collaboration presence cursors/chips.
+
+- id: brief-home
+  app: brief
+  demonstrates: "The Brief home screen with stat cards, quick actions, and recent/starred document lists"
+  route: /brief/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+- id: brief-home-dark
+  app: brief
+  demonstrates: "The Brief home screen in dark theme (marketing/retina)"
+  route: /brief/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+- id: brief-documents
+  app: brief
+  demonstrates: "The Documents list with the search box, status filter chips, and document cards"
+  route: /brief/documents
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+- id: brief-detail
+  app: brief
+  demonstrates: "A document detail/reader page: body, action bar, and the metadata + comments sidebar"
+  route: /brief/documents
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+    - { action: click, selector: "button.w-full.text-left", optional: true }
+    - { action: click, selector: "main button[class*='rounded-xl']", optional: true }
+    - { action: click, selector: "button:has(h3)", optional: true }
+    - { action: wait, ms: 2500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "[data-testid='presence-avatars']"
+
+- id: brief-editor
+  app: brief
+  demonstrates: "The blank document editor: title field, formatting toolbar, body, and the Settings sidebar (icon, visibility, project, template)"
+  route: /brief/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: brief-templates
+  app: brief
+  demonstrates: "The Templates browser used to start a new document from a pre-built starting point"
+  route: /brief/templates
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: brief-search
+  app: brief
+  demonstrates: "The Search screen with results matching a query by title, body, or author"
+  route: /brief/search
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: fill, selector: "input[placeholder*='search' i], input[placeholder*='Type to' i]", value: "spec", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+- id: brief-starred
+  app: brief
+  demonstrates: "The Starred screen listing documents the user has bookmarked"
+  route: /brief/starred
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='relative-timestamp']"

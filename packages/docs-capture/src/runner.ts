@@ -19,6 +19,7 @@ import type { ResolvedEnvironment } from './environment.js';
 import { ManifestWriter, resolveGitSha } from './manifest.js';
 import { type InteractionStep, type LoadedRecipe, type Recipe, VIEWPORTS } from './recipe.js';
 import { ensureContent, type SeedContext } from './seeding.js';
+import { toArray, verifyBeforeCapture } from './verify.js';
 
 const SETTLE_MS = 1200;
 
@@ -101,10 +102,16 @@ async function runStep(
   step: InteractionStep,
   baseUrl: string,
 ): Promise<void> {
+  // Skip a credentialed/optional leg when its required env var is unset.
+  if (step.skipIfEnvUnset && !process.env[step.skipIfEnvUnset]) return;
+  // ${ENV_VAR} interpolation so credentials are never hardcoded in recipes.
+  const interp = (s: string | undefined): string =>
+    (s ?? '').replace(/\$\{(\w+)\}/g, (_, k: string) => process.env[k] ?? '');
+
   const run = async () => {
     switch (step.action) {
       case 'navigate':
-        await page.goto(`${baseUrl}${step.url ?? ''}`, { waitUntil: 'domcontentloaded', timeout: 25_000 });
+        await page.goto(`${baseUrl}${interp(step.url)}`, { waitUntil: 'domcontentloaded', timeout: 25_000 });
         break;
       case 'click':
         await page.locator(step.selector!).first().click({ timeout: 15_000 });
@@ -113,13 +120,13 @@ async function runStep(
         await page.locator(step.selector!).first().hover({ timeout: 15_000 });
         break;
       case 'fill':
-        await page.locator(step.selector!).first().fill(step.value ?? '');
+        await page.locator(step.selector!).first().fill(interp(step.value));
         break;
       case 'press':
-        await page.locator(step.selector!).first().press(step.value ?? 'Enter');
+        await page.locator(step.selector!).first().press(interp(step.value) || 'Enter');
         break;
       case 'select':
-        await page.locator(step.selector!).first().selectOption(step.value ?? '');
+        await page.locator(step.selector!).first().selectOption(interp(step.value));
         break;
       case 'scrollTo':
         await page.locator(step.selector!).first().scrollIntoViewIfNeeded();
@@ -220,6 +227,16 @@ async function captureRecipe(
     await hideVolatileOverlays(page); // drop the floating Bureau presence widget etc.
 
     const file = outputFileFor(recipe, outRoot);
+
+    // VERIFY we reached the intended view before snapping. A failure here means
+    // the recipe must NOT produce a (misleading) image — fail loudly and delete
+    // any stale asset from a prior run so it can't linger as a wrong capture.
+    const verdict = await verifyBeforeCapture(page, toArray(recipe.expect), toArray(recipe.expectNot));
+    if (!verdict.ok) {
+      if (fs.existsSync(file)) fs.rmSync(file);
+      throw new Error(`pre-capture verification failed — ${verdict.reason}`);
+    }
+
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const mask = resolveMasks(page, recipe.masks);
     const target = recipe.capture.target;

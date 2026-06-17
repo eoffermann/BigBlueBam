@@ -76,7 +76,37 @@ The directory name must equal each recipe's `app`. Schema (`recipe.ts`, Zod-vali
 
 Interaction `action`s: `navigate`, `click`, `hover`, `fill`, `press`, `select`,
 `scrollTo`, `waitFor`, `waitForNetworkIdle`, `wait`. Add `optional: true` so a
-best-effort setup step can't fail the run.
+best-effort setup step can't fail the run. A step may carry
+`skipIfEnvUnset: SOME_ENV_VAR` to no-op when a secret isn't configured, and
+`fill`/`navigate` values support `${ENV_VAR}` interpolation — so credentialed
+legs (e.g. a separate-portal login) never hardcode secrets and simply skip when
+unset.
+
+## Verification before capture (mandatory)
+
+The skill must never snap a view it didn't actually reach (e.g. a login error
+mislabeled as a ticket list). Before every screenshot the runner:
+
+1. Runs a built-in **error-state guard** (always on) that fails the recipe on
+   common failure pages — invalid credentials, "page not found", error
+   boundaries, "access denied", etc.
+2. Enforces the recipe's **`expect`** (selectors/`text=` that MUST be visible)
+   and **`expectNot`** (must be absent — e.g. `input#password` on a view that
+   should be authenticated).
+
+On any verification failure the recipe FAILS loudly and **no image is written**
+(a stale asset from a prior run is deleted). Declare `expect` on every recipe
+that depends on auth, interactions, or seeded data:
+
+```yaml
+  expect: ["button:has-text('New Board')"]   # proves we reached the Boards view
+  expectNot: ["input#password"]              # proves we're past the sign-in screen
+```
+
+Helpdesk authed recipes use this: their portal login is `skipIfEnvUnset`-gated
+on `SHOTS_HELPDESK_EMAIL`, and they `expectNot: input#password` — so without
+`SHOTS_HELPDESK_EMAIL`/`SHOTS_HELPDESK_PASSWORD` they fail verification (no
+misleading capture) instead of shooting the sign-in screen.
 
 ## Seeding (three-tier precedence)
 

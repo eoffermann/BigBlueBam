@@ -11,6 +11,8 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+  # Verify we actually reached the Boards view before capturing.
+  expect: ["button:has-text('New Board')"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
 
 - id: board-canvas-populated

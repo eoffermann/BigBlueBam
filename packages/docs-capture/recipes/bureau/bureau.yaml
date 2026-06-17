@@ -1,0 +1,124 @@
+# Bureau — virtual office, presence, and live floor maps.
+# Recipes mined from docs/apps/bureau/help.md (Feature reference + User Stories)
+# and verified against apps/bureau/src/App.tsx parseRoute. Known-good routes
+# also confirmed against the inline `bureau:` scenes in scripts/docs/capture.mjs.
+#
+# Route notes (parseRoute in App.tsx):
+#   /bureau/                       → Floors landing (floor directory)
+#   /bureau/floors/:id             → live floor view (Canvas2D presence map)
+#   /bureau/chats                  → Recent chats
+#   /bureau/admin/floors           → Admin · Floors list
+#   /bureau/admin/offices          → Admin · Offices
+# Every page is wrapped in <main> by BureauLayout, so `waitFor main` is a
+# reliable readiness gate. The live floor view renders a <canvas class="floor-canvas">
+# — wait for that plus a short paint pause for the room rectangles to draw.
+#
+# IMPORTANT: bureau IS the source of the floating presence widget that the
+# capture engine hides globally on OTHER apps. Here the floor canvas IS the
+# content, so we do NOT rely on that hiding — we capture the real floor/office UI.
+#
+# Live-presence caveat: occupant dots on the floor view are PAINTED ON THE CANVAS,
+# so they cannot be element-masked. What we can mask is DOM that varies with live
+# presence: the per-floor occupancy counts on the directory and the connection
+# status chip on the floor view. Those masks are best-effort (no data-testid yet
+# in this app — tracked as a test-id gap).
+
+# --- Floor directory -------------------------------------------------------
+- id: bureau-floor-directory
+  app: bureau
+  demonstrates: "The Floors landing — pick a floor to drop in, with live occupancy counts and the Default pill"
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # "N people here now" occupancy row — varies with live presence.
+    - "div:has(> svg.lucide-users)"
+
+# Required dark + retina variant for the floor directory (marketing/retina).
+- id: bureau-floor-directory-dark
+  app: bureau
+  demonstrates: "The Floors landing in dark theme (marketing/retina)"
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  masks:
+    - "div:has(> svg.lucide-users)"
+
+# --- Live floor view (presence canvas) -------------------------------------
+- id: bureau-live-floor
+  app: bureau
+  demonstrates: "The live floor view — the spatial map drawing one rectangle per room with occupant dots and the Live connection chip"
+  route: /bureau/floors/a0000000-0000-4000-8000-bbb00000f100
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: body }
+    # The canvas is the floor map; wait for it, then let the room rectangles paint.
+    - { action: waitFor, selector: "canvas.floor-canvas", optional: true }
+    - { action: wait, ms: 3500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # Connection status chip ("Live" / connecting / reconnecting) varies with the WS link.
+    - "span.text-emerald-600"
+    - "span.text-amber-600"
+
+# Reaching a live floor by clicking a directory card (the user click-through),
+# as a fallback in case the seeded floor id ever changes. Best-effort throughout.
+- id: bureau-live-floor-from-directory
+  app: bureau
+  demonstrates: "Entering a floor's live view by clicking a floor card from the directory"
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "canvas.floor-canvas", optional: true }
+    - { action: wait, ms: 3500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "span.text-emerald-600"
+    - "span.text-amber-600"
+
+# --- Recent chats ----------------------------------------------------------
+- id: bureau-recent-chats
+  app: bureau
+  demonstrates: "Recent chats — recover ephemeral room chat threads, searchable by room or message text, with admin retention controls"
+  route: /bureau/chats
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # Last-message timestamps are relative/clock-driven.
+    - "div:has(> svg.lucide-message-square-text)"
+
+# --- Admin · Floors --------------------------------------------------------
+- id: bureau-admin-floors
+  app: bureau
+  demonstrates: "Admin · Floors — manage live and archived floors with Edit, Preview as member, Archive, and New floor"
+  route: /bureau/admin/floors
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    # Per-floor live occupancy counts vary with presence.
+    - "div:has(> svg.lucide-users)"
+
+# --- Admin · Offices -------------------------------------------------------
+- id: bureau-admin-offices
+  app: bureau
+  demonstrates: "Admin · Offices — the Floor/Office, Owner, and Actions table for assigning who owns each personal office"
+  route: /bureau/admin/offices
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
