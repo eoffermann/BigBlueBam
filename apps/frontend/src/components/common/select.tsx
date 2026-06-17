@@ -52,11 +52,13 @@ export function Select({ options, value, onValueChange, placeholder, label, erro
         </RadixSelect.Trigger>
         <RadixSelect.Portal>
           <RadixSelect.Content
-            className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:bg-zinc-900 dark:border-zinc-700 z-50"
+            className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:bg-zinc-900 dark:border-zinc-700 z-50 max-h-[var(--radix-select-content-available-height)]"
             position="popper"
             sideOffset={4}
           >
-            <RadixSelect.Viewport className="p-1">
+            {/* Cap height + native scroll so long lists (e.g. the timezone
+                picker) don't run off the screen. */}
+            <RadixSelect.Viewport className="p-1 max-h-72 overflow-y-auto">
               {realOptions.map((option) => (
                 <RadixSelect.Item
                   key={option.value}
