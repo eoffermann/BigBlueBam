@@ -30,27 +30,27 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 
 | Surface | REST endpoints | …with an MCP tool | …without a tool | MCP-only tools (no endpoint) |
 |---|--:|--:|--:|--:|
-| Bam — Work management | 88 | 49 | 39 | 2 |
-| Bam — Org, auth, admin & integrations | 153 | 25 | 128 | 0 |
-| Banter | 99 | 46 | 53 | 0 |
-| Beacon | 29 | 22 | 7 | 0 |
-| Brief | 52 | 15 | 37 | 0 |
-| Bond | 68 | 18 | 50 | 0 |
-| Bolt | 28 | 14 | 14 | 0 |
-| Bearing | 35 | 14 | 21 | 0 |
-| Board | 42 | 10 | 32 | 1 |
-| Blast | 40 | 11 | 29 | 2 |
-| Bench | 29 | 8 | 21 | 3 |
-| Blueprint | 38 | 19 | 19 | 1 |
-| Book | 27 | 8 | 19 | 1 |
-| Blank | 21 | 9 | 12 | 1 |
-| Bill | 43 | 12 | 31 | 0 |
-| Bureau | 37 | 13 | 24 | 3 |
-| Helpdesk | 37 | 11 | 26 | 0 |
-| Cross-app platform | 41 | 30 | 11 | 6 |
-| **Total** | **907** | **334** | **573** | **20** |
+| Bam — Work management | 89 | 82 | 7 | 2 |
+| Bam — Org, auth, admin & integrations | 156 | 37 | 119 | 0 |
+| Banter | 99 | 66 | 33 | 0 |
+| Beacon | 40 | 38 | 2 | 0 |
+| Brief | 53 | 48 | 5 | 0 |
+| Bond | 72 | 69 | 3 | 0 |
+| Bolt | 28 | 27 | 1 | 0 |
+| Bearing | 35 | 33 | 2 | 0 |
+| Board | 45 | 39 | 6 | 1 |
+| Blast | 40 | 26 | 14 | 2 |
+| Bench | 29 | 29 | 0 | 3 |
+| Blueprint | 38 | 35 | 3 | 1 |
+| Book | 31 | 24 | 7 | 0 |
+| Blank | 22 | 18 | 4 | 1 |
+| Bill | 43 | 39 | 4 | 0 |
+| Bureau | 38 | 33 | 5 | 3 |
+| Helpdesk | 38 | 15 | 23 | 0 |
+| Cross-app platform | 41 | 32 | 9 | 6 |
+| **Total** | **937** | **690** | **247** | **19** |
 
-_Counts are summed from the per-section tables. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The biggest agent-coverage gaps are in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — intentionally UI/CLI-only) and the per-app long tails (collaborators, versions, templates, settings)._
+_Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
 ---
 
@@ -80,6 +80,21 @@ stay terse:
   scope/`requireCan`/RLS authorization, and the §15 agent-policy tool-name
   allowlist. Adding granular `TOOL_TO_PERMISSION` entries for the new tools is a
   tracked follow-up.
+- **Helpdesk agent routes deferred.** The `/helpdesk/api/agents/*` mutation
+  routes (queue, agent ticket detail, close, merge, post-message,
+  status/priority/category update) authenticate with a per-agent `X-Agent-Key`
+  (`hdag_`-prefixed) rather than the Bearer token + `X-Org-Id` the wrappers
+  forward. Wrapping them requires threading that separate credential, so they
+  are intentionally left `—` this pass and annotated accordingly in the Helpdesk
+  table. The customer/agent read tools (search, by-number, similar) are
+  unaffected.
+- **Bam org/admin held to a conservative scope.** Bam member/account-lifecycle,
+  guest, OAuth/SSO, SuperUser, permissions-admin, integration (GitHub / Slack /
+  webhooks), iCal, LLM-provider, and credential (API-key / service-account)
+  endpoints were deliberately NOT wrapped — those stay UI/CLI-only and are
+  annotated `— _(skip: … — conservative scope)_`. The org/member tools that did
+  land are read/inspect plus invite, role change, project membership, password
+  reset/reset-link, and org read — see the Bam — Org & Members table.
 - **Verification.** Each app's new tools are smoke-tested on the local Docker
   stack via the internal `POST /tools/call` route (service-account harness),
   exercising tool → REST → response, with self-cleaning test data. The
@@ -115,10 +130,10 @@ Notes:
 | `GET /projects` | `list_projects` | List accessible projects | `apps/frontend/src/pages/dashboard.tsx` |
 | `POST /projects` | `create_project` | Create a project | `apps/frontend/src/pages/dashboard.tsx` |
 | `GET /projects/:id` | `get_project` | Get one project | `apps/frontend/src/hooks/use-projects.ts` |
-| `PATCH /projects/:id` | — | Update project (admin) | `apps/frontend/src/pages/settings.tsx` |
-| `DELETE /projects/:id` | — | Archive project (admin) | `apps/frontend/src/pages/settings.tsx` |
-| `GET /projects/:id/members` | — | List project members | `apps/frontend/src/pages/board.tsx` |
-| `POST /projects/:id/members` | — | Add a project member | `apps/frontend/src/pages/settings.tsx` |
+| `PATCH /projects/:id` | `update_project` | Update project (admin) | `apps/frontend/src/pages/settings.tsx` |
+| `DELETE /projects/:id` | `archive_project` | Archive project (admin) | `apps/frontend/src/pages/settings.tsx` |
+| `GET /projects/:id/members` | `list_project_members` | List project members | `apps/frontend/src/pages/board.tsx` |
+| `POST /projects/:id/members` | `add_project_member` | Add a project member | `apps/frontend/src/pages/settings.tsx` |
 | `POST /projects/:id/slack-integration/test` | `test_slack_webhook` | Send a test Slack webhook message | `apps/frontend/src/pages/settings.tsx` |
 | `DELETE /projects/:id/github-integration` | `disconnect_github_integration` | Remove project GitHub integration | `apps/frontend/src/pages/settings.tsx` |
 
@@ -128,7 +143,7 @@ Notes:
 
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
-| `GET /projects/:id/board` | — | Board state (phases + tasks + sprint) | `apps/frontend/src/stores/board.store.ts` |
+| `GET /projects/:id/board` | `get_board` | Board state (phases + tasks + sprint) | `apps/frontend/src/stores/board.store.ts` |
 | `POST /projects/:id/tasks` | `create_task` | Create a task (name resolvers) | `apps/frontend/src/hooks/use-tasks.ts` |
 | `GET /projects/:id/tasks` | `search_tasks` | List/filter tasks in a project | `apps/frontend/src/hooks/use-tasks.ts` |
 | `GET /tasks/:id` | `get_task` | Get one task | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
@@ -153,11 +168,11 @@ Notes:
 |---|---|---|---|
 | `GET /projects/:id/sprints` | `list_sprints` | List a project's sprints | `apps/frontend/src/hooks/use-sprints.ts` |
 | `POST /projects/:id/sprints` | `create_sprint` | Create a sprint | `apps/frontend/src/hooks/use-sprints.ts` |
-| `GET /sprints/:id` | — | Get one sprint | `apps/frontend/src/hooks/use-sprints.ts` |
-| `PATCH /sprints/:id` | — | Update sprint fields | `apps/frontend/src/hooks/use-sprints.ts` |
+| `GET /sprints/:id` | `get_sprint` | Get one sprint | `apps/frontend/src/hooks/use-sprints.ts` |
+| `PATCH /sprints/:id` | `update_sprint` | Update sprint fields | `apps/frontend/src/hooks/use-sprints.ts` |
 | `POST /sprints/:id/start` | `start_sprint` | Start a planned sprint | `apps/frontend/src/hooks/use-sprints.ts` |
 | `POST /sprints/:id/complete` | `complete_sprint` | Complete sprint + carry-forward | `apps/frontend/src/components/board/carry-forward-dialog.tsx` |
-| `POST /sprints/:id/cancel` | — | Cancel sprint, dump tasks to backlog | `apps/frontend/src/hooks/use-sprints.ts` |
+| `POST /sprints/:id/cancel` | `cancel_sprint` | Cancel sprint, dump tasks to backlog | `apps/frontend/src/hooks/use-sprints.ts` |
 | `GET /sprints/:id/report` | `get_sprint_report` / `get_burndown` | Sprint summary + burndown | `apps/frontend/src/pages/sprint-report.tsx` |
 
 
@@ -169,9 +184,9 @@ Notes:
 | `GET /projects/:id/epics` | `bam_list_epics` | List epics with task counts | `apps/frontend/src/components/board/epic-manager.tsx` |
 | `POST /projects/:id/epics` | `bam_create_epic` | Create an epic | `apps/frontend/src/components/board/epic-manager.tsx` |
 | `GET /epics/:id` | `bam_get_epic` | Get epic + rollup | `apps/frontend/src/pages/epic-detail.tsx` |
-| `GET /epics/:id/tasks` | — | List tasks linked to epic | `apps/frontend/src/pages/epic-detail.tsx` |
+| `GET /epics/:id/tasks` | `bam_list_epic_tasks` | List tasks linked to epic | `apps/frontend/src/pages/epic-detail.tsx` |
 | `PATCH /epics/:id` | `bam_update_epic` | Update/close an epic | `apps/frontend/src/pages/epic-detail.tsx` |
-| `DELETE /epics/:id` | — | Delete an epic | `apps/frontend/src/components/board/epic-manager.tsx` |
+| `DELETE /epics/:id` | `bam_delete_epic` | Delete an epic | `apps/frontend/src/components/board/epic-manager.tsx` |
 
 
 ## Bam — Comments & Reactions
@@ -181,11 +196,11 @@ Notes:
 |---|---|---|---|
 | `GET /tasks/:id/comments` | `list_comments` | List comments on a task | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 | `POST /tasks/:id/comments` | `add_comment` | Add a comment (accepts human_id) | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `PATCH /comments/:id` | — | Edit own comment (revisioned) | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `GET /comments/:id/revisions` | — | Comment edit history | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `DELETE /comments/:id` | — | Delete own comment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `POST /comments/:id/reactions` | — | Toggle an emoji reaction | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `GET /comments/:id/reactions` | — | List reactions grouped by emoji | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `PATCH /comments/:id` | `edit_comment` | Edit own comment (revisioned) | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `GET /comments/:id/revisions` | `list_comment_revisions` | Comment edit history | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `DELETE /comments/:id` | `delete_comment` | Delete own comment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `POST /comments/:id/reactions` | `toggle_comment_reaction` | Toggle an emoji reaction | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `GET /comments/:id/reactions` | `list_comment_reactions` | List reactions grouped by emoji | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
 
 
 ## Bam — Time tracking
@@ -194,8 +209,8 @@ Notes:
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
 | `POST /tasks/:id/time-entries` | `log_time` | Log time on a task | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `GET /tasks/:id/time-entries` | — | List a task's time entries | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `GET /me/time-entries` | — | List own time entries (date range) | — |
+| `GET /tasks/:id/time-entries` | `list_task_time_entries` | List a task's time entries | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `GET /me/time-entries` | `get_my_time_entries` | List own time entries (date range) | — |
 | `GET /projects/:id/reports/time-tracking` | `get_time_tracking_report` | Per-user time aggregation | `apps/frontend/src/pages/project-reports.tsx` |
 
 
@@ -205,9 +220,9 @@ Notes:
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
 | `GET /projects/:id/task-templates` | `list_templates` | List project task templates | `apps/frontend/src/components/tasks/template-manager.tsx` |
-| `POST /projects/:id/task-templates` | — | Create a task template | `apps/frontend/src/components/tasks/template-manager.tsx` |
+| `POST /projects/:id/task-templates` | `create_template` | Create a task template | `apps/frontend/src/components/tasks/template-manager.tsx` |
 | `POST /projects/:id/task-templates/:templateId/apply` | `create_from_template` | Create a task from a template | `apps/frontend/src/components/tasks/template-picker.tsx` |
-| `DELETE /task-templates/:id` | — | Delete a task template | `apps/frontend/src/components/tasks/template-manager.tsx` |
+| `DELETE /task-templates/:id` | `delete_template` | Delete a task template | `apps/frontend/src/components/tasks/template-manager.tsx` |
 
 
 ## Bam — Custom fields / Labels / Phases / States
@@ -215,20 +230,20 @@ Notes:
 
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
-| `GET /projects/:id/custom-fields` | — | List project custom-field defs | `apps/frontend/src/components/board/custom-field-manager.tsx` |
-| `POST /projects/:id/custom-fields` | — | Create a custom-field def | `apps/frontend/src/components/board/custom-field-manager.tsx` |
-| `PATCH /custom-fields/:id` | — | Update a custom-field def | `apps/frontend/src/components/board/custom-field-manager.tsx` |
-| `DELETE /custom-fields/:id` | — | Delete a custom-field def | `apps/frontend/src/components/board/custom-field-manager.tsx` |
+| `GET /projects/:id/custom-fields` | `list_custom_fields` | List project custom-field defs | `apps/frontend/src/components/board/custom-field-manager.tsx` |
+| `POST /projects/:id/custom-fields` | `create_custom_field` | Create a custom-field def | `apps/frontend/src/components/board/custom-field-manager.tsx` |
+| `PATCH /custom-fields/:id` | `update_custom_field` | Update a custom-field def | `apps/frontend/src/components/board/custom-field-manager.tsx` |
+| `DELETE /custom-fields/:id` | `delete_custom_field` | Delete a custom-field def | `apps/frontend/src/components/board/custom-field-manager.tsx` |
 | `GET /labels` | `bam_list_labels` | Org-wide label list (no project_id) | — |
 | `GET /projects/:id/labels` | `bam_list_labels` | Project label list | `apps/frontend/src/pages/board.tsx` |
-| `POST /projects/:id/labels` | — | Create a label | `apps/frontend/src/pages/board.tsx` |
-| `PATCH /labels/:id` | — | Update a label | `apps/frontend/src/pages/board.tsx` |
-| `DELETE /labels/:id` | — | Delete a label | `apps/frontend/src/pages/board.tsx` |
+| `POST /projects/:id/labels` | `create_label` | Create a label | `apps/frontend/src/pages/board.tsx` |
+| `PATCH /labels/:id` | `update_label` | Update a label | `apps/frontend/src/pages/board.tsx` |
+| `DELETE /labels/:id` | `delete_label` | Delete a label | `apps/frontend/src/pages/board.tsx` |
 | `GET /projects/:id/phases` | `bam_list_phases` | List phases (board columns) | `apps/frontend/src/components/board/phase-manager.tsx` |
-| `POST /projects/:id/phases` | — | Create a phase | `apps/frontend/src/components/board/phase-manager.tsx` |
-| `POST /projects/:id/phases/reorder` | — | Reorder phases | `apps/frontend/src/components/board/phase-manager.tsx` |
-| `PATCH /phases/:id` | — | Update a phase | `apps/frontend/src/components/board/phase-manager.tsx` |
-| `DELETE /phases/:id` | — | Delete phase (optional migrate) | `apps/frontend/src/components/board/phase-manager.tsx` |
+| `POST /projects/:id/phases` | `create_phase` | Create a phase | `apps/frontend/src/components/board/phase-manager.tsx` |
+| `POST /projects/:id/phases/reorder` | `reorder_phases` | Reorder phases | `apps/frontend/src/components/board/phase-manager.tsx` |
+| `PATCH /phases/:id` | `update_phase` | Update a phase | `apps/frontend/src/components/board/phase-manager.tsx` |
+| `DELETE /phases/:id` | `delete_phase` | Delete phase (optional migrate) | `apps/frontend/src/components/board/phase-manager.tsx` |
 | `GET /projects/:id/states` | `bam_list_states` | List task states | `apps/frontend/src/pages/board.tsx` |
 
 
@@ -253,13 +268,13 @@ Notes:
 
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
-| `POST /tasks/:id/attachments` | — | Attach a file record to a task | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `GET /tasks/:id/attachments` | — | List a task's attachments | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `DELETE /attachments/:id` | — | Delete an attachment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
-| `POST /upload` | — | Multipart upload to MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
-| `GET /files/*` | — | Proxy file download from MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
-| `GET /version` | — | Public version info | `apps/frontend/src/hooks/use-version.ts` |
-| `POST /version/check` | — | Force version check (SuperUser) | — |
+| `POST /tasks/:id/attachments` | — _(skip: multipart upload)_ | Attach a file record to a task | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `GET /tasks/:id/attachments` | — _(skip: covered by cross-app `attachment_list`)_ | List a task's attachments | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `DELETE /attachments/:id` | — _(skip: binary/attachment lifecycle)_ | Delete an attachment | `apps/frontend/src/components/tasks/task-detail-drawer.tsx` |
+| `POST /upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
+| `GET /files/*` | — _(skip: binary download proxy)_ | Proxy file download from MinIO | `apps/frontend/src/components/common/image-upload.tsx` |
+| `GET /version` | — _(skip: build/version probe, not agent surface)_ | Public version info | `apps/frontend/src/hooks/use-version.ts` |
+| `POST /version/check` | — _(skip: SuperUser break-glass)_ | Force version check (SuperUser) | — |
 
 
 ## Bam — Import
@@ -270,8 +285,8 @@ Notes:
 | `POST /projects/:id/import/csv` | `import_csv` / `bam_import_csv` | Commit CSV import | `apps/frontend/src/components/import/import-dialog.tsx` |
 | `POST /projects/:id/import/csv/preview` | `bam_import_csv` *(dry_run)* | Dry-run CSV import (writes nothing) | `apps/frontend/src/components/import/import-dialog.tsx` |
 | `POST /projects/:id/import/github` | `import_github_issues` | Import GitHub issues as tasks | `apps/frontend/src/components/import/import-dialog.tsx` |
-| `POST /projects/:id/import/jira` | — | Import Jira export rows | `apps/frontend/src/components/import/import-dialog.tsx` |
-| `POST /projects/:id/import/trello` | — | Import Trello board JSON | `apps/frontend/src/components/import/import-dialog.tsx` |
+| `POST /projects/:id/import/jira` | `import_jira` | Import Jira export rows | `apps/frontend/src/components/import/import-dialog.tsx` |
+| `POST /projects/:id/import/trello` | `import_trello` | Import Trello board JSON | `apps/frontend/src/components/import/import-dialog.tsx` |
 | — *(composite)* | `suggest_branch_name` | Fetches `/tasks/:id`, slugifies a branch name | — |
 
 
@@ -303,34 +318,34 @@ MCP tool modules in scope: `me-tools`, `member-tools`, `user-resolver-tools`, `p
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /org` | — | Get current org + member/owner counts | `apps/frontend/src/lib/api/people.ts` |
-| `PATCH /org` | — | Update org name/logo/settings | `apps/frontend/src/pages/settings.tsx` |
-| `GET /org/launchpad-apps` | — | Get org Launchpad override + platform default | `apps/frontend/src/pages/settings.tsx` |
+| `GET /org` | `get_my_org` | Get current org + member/owner counts | `apps/frontend/src/lib/api/people.ts` |
+| `PATCH /org` | — _(skip: org settings/branding admin — conservative scope)_ | Update org name/logo/settings | `apps/frontend/src/pages/settings.tsx` |
+| `GET /org/launchpad-apps` | — _(skip: resolver; `set_org_launchpad_apps` covers the override)_ | Get org Launchpad override + platform default | `apps/frontend/src/pages/settings.tsx` |
 | `PUT /org/launchpad-apps` | `set_org_launchpad_apps` | Set/clear org Launchpad override | `apps/frontend/src/pages/settings.tsx` |
 | `GET /org/members` | `list_members` | List org members (guest-scoped subset) | `apps/frontend/src/pages/people/index.tsx` |
-| `PATCH /org/members/:userId` | — | Update member org role | `apps/frontend/src/pages/people/detail.tsx` |
-| `DELETE /org/members/:userId` | — | Remove member from org | `apps/frontend/src/pages/people/detail.tsx` |
-| `GET /org/members/:userId` | — | Get member detail | `apps/frontend/src/pages/people/detail.tsx` |
-| `GET /org/members/:userId/activity` | — | Member activity feed (paginated) | `apps/frontend/src/pages/people/detail.tsx` |
-| `GET /org/members/:userId/api-keys` | — | List a member's API keys | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /org/members/:userId/api-keys` | — | Create API key for a member | `apps/frontend/src/pages/people/detail.tsx` |
-| `DELETE /org/members/:userId/api-keys/:keyId` | — | Revoke a member's API key | `apps/frontend/src/pages/people/detail.tsx` |
-| `GET /org/members/:userId/deletion-eligibility` | — | Probe admin account-deletion eligibility | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /org/members/:userId/delete-account` | — | Cross-org soft-delete of an account | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /org/members/:userId/force-password-change` | — | Force password change on next login | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /org/members/:userId/reset-ftue` | — | Reset a member's welcome tour (FTUE) so it re-fires on next login | `apps/frontend/src/pages/people-manager/detail.tsx` |
-| `GET /org/members/:userId/projects` | — | List member's projects in org | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /org/members/:userId/projects` | — | Add member to projects | `apps/frontend/src/pages/people/detail.tsx` |
-| `PATCH /org/members/:userId/projects/:projectId` | — | Update member's project role | `apps/frontend/src/pages/people/detail.tsx` |
-| `DELETE /org/members/:userId/projects/:projectId` | — | Remove member from a project | `apps/frontend/src/pages/people/detail.tsx` |
-| `PATCH /org/members/:userId/active` | — | Enable/disable a member | `apps/frontend/src/pages/people/detail.tsx` |
-| `PATCH /org/members/:userId/profile` | — | Update member display name/timezone | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /org/members/:userId` | `bam_update_member_role` | Update member org role | `apps/frontend/src/pages/people/detail.tsx` |
+| `DELETE /org/members/:userId` | `bam_remove_member_from_org` | Remove member from org | `apps/frontend/src/pages/people/detail.tsx` |
+| `GET /org/members/:userId` | `bam_get_org_member` | Get member detail | `apps/frontend/src/pages/people/detail.tsx` |
+| `GET /org/members/:userId/activity` | `bam_get_member_activity` | Member activity feed (paginated) | `apps/frontend/src/pages/people/detail.tsx` |
+| `GET /org/members/:userId/api-keys` | — _(skip: raw credential/API-key admin)_ | List a member's API keys | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/api-keys` | — _(skip: raw credential/API-key admin)_ | Create API key for a member | `apps/frontend/src/pages/people/detail.tsx` |
+| `DELETE /org/members/:userId/api-keys/:keyId` | — _(skip: raw credential/API-key admin)_ | Revoke a member's API key | `apps/frontend/src/pages/people/detail.tsx` |
+| `GET /org/members/:userId/deletion-eligibility` | — _(skip: SuperUser/account-deletion admin — conservative scope)_ | Probe admin account-deletion eligibility | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/delete-account` | — _(skip: SuperUser/account-deletion admin — conservative scope)_ | Cross-org soft-delete of an account | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/force-password-change` | — _(skip: credential/permission admin — conservative scope)_ | Force password change on next login | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/reset-ftue` | — _(skip: permission/account admin — conservative scope)_ | Reset a member's welcome tour (FTUE) so it re-fires on next login | `apps/frontend/src/pages/people-manager/detail.tsx` |
+| `GET /org/members/:userId/projects` | `bam_list_member_projects` | List member's projects in org | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/projects` | `bam_add_member_to_projects` | Add member to projects | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /org/members/:userId/projects/:projectId` | — _(skip: member/project-role admin — conservative scope)_ | Update member's project role | `apps/frontend/src/pages/people/detail.tsx` |
+| `DELETE /org/members/:userId/projects/:projectId` | — _(skip: member/project-role admin — conservative scope)_ | Remove member from a project | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /org/members/:userId/active` | — _(skip: account enable/disable admin — conservative scope)_ | Enable/disable a member | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /org/members/:userId/profile` | — _(skip: member-profile admin — conservative scope)_ | Update member display name/timezone | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/:userId/reset-password` | `bam_admin_reset_password` | Reset member password, return new value | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/:userId/send-password-reset` | `bam_send_password_reset_link` | Email member a reset link | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /org/members/:userId/sign-out-everywhere` | — | Revoke all member sessions | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /org/members/:userId/transfer-ownership` | — | Transfer org ownership to member | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/sign-out-everywhere` | — _(skip: session/credential admin — conservative scope)_ | Revoke all member sessions | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /org/members/:userId/transfer-ownership` | — _(skip: ownership/permission admin — conservative scope)_ | Transfer org ownership to member | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/invite` | `bam_invite_member` | Invite/add a member to the org | `apps/frontend/src/pages/people/index.tsx` |
-| `POST /org/members/invite/bulk` | — | Bulk-invite up to 100 members | `apps/frontend/src/pages/people/import-members-dialog.tsx` |
+| `POST /org/members/invite/bulk` | — _(skip: bulk member admin — conservative scope)_ | Bulk-invite up to 100 members | `apps/frontend/src/pages/people/import-members-dialog.tsx` |
 | `GET /users` | `list_users` | List active users in active org | `apps/frontend/src/lib/api/people.ts` |
 | `GET /users/by-email` | `find_user_by_email` · `bam_find_user_by_email` | Find user by exact email | — |
 | `GET /users/search` | `find_user_by_name` · `bam_find_user` | Fuzzy-search users by name/email | `apps/frontend/src/pages/people/index.tsx` |
@@ -353,15 +368,15 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 | `GET /auth/me` | `get_me` | Current user + permission matrix | `apps/frontend/src/lib/api/*` (auth) |
 | `PATCH /auth/me` | `update_me` | Update own profile fields | `apps/frontend/src/pages/settings.tsx` |
 | `GET /auth/orgs` | `list_my_orgs` | List caller's org memberships | `apps/frontend/src/components/layout/org-switcher.tsx` |
-| `POST /auth/bootstrap` | — | First-run SuperUser/org bootstrap | `apps/frontend/src/pages/*bootstrap*` |
+| `POST /auth/bootstrap` | — _(skip: first-run auth bootstrap)_ | First-run SuperUser/org bootstrap | `apps/frontend/src/pages/*bootstrap*` |
 | `POST /auth/change-password` | `change_my_password` | Change own password | `apps/frontend/src/pages/settings.tsx` |
-| `POST /auth/login` | — | Password (+TOTP) login, sets cookie | `apps/frontend/src/pages/login.tsx` |
+| `POST /auth/login` | — _(skip: auth/session)_ | Password (+TOTP) login, sets cookie | `apps/frontend/src/pages/login.tsx` |
 | `POST /auth/logout` | `logout` | Invalidate cookie session | `apps/frontend/src/components/layout/app-layout.tsx` |
-| `POST /auth/password-reset/consume` | — | Consume reset token, set password | `apps/frontend/src/pages/password-reset.tsx` |
-| `POST /auth/password-reset/request` | — | Request self-serve reset email (opaque) | `apps/frontend/src/pages/login.tsx` |
-| `POST /auth/register` | — | Public signup (kill-switchable) | `apps/frontend/src/pages/login.tsx` |
+| `POST /auth/password-reset/consume` | — _(skip: auth/credential)_ | Consume reset token, set password | `apps/frontend/src/pages/password-reset.tsx` |
+| `POST /auth/password-reset/request` | — _(skip: auth/credential)_ | Request self-serve reset email (opaque) | `apps/frontend/src/pages/login.tsx` |
+| `POST /auth/register` | — _(skip: public-inbound signup)_ | Public signup (kill-switchable) | `apps/frontend/src/pages/login.tsx` |
 | `POST /auth/switch-org` | `switch_active_org` | Switch active org, rotate session | `apps/frontend/src/components/layout/org-switcher.tsx` |
-| `POST /auth/verify-email/:token` | — | Finalize email-change verification | `apps/frontend/src/pages/*verify*` |
+| `POST /auth/verify-email/:token` | — _(skip: auth/email verification)_ | Finalize email-change verification | `apps/frontend/src/pages/*verify*` |
 
 
 ## Bam — Notifications (me)
@@ -380,10 +395,10 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /auth/oauth/providers` | — | List enabled OAuth providers | `apps/frontend/src/pages/login.tsx` |
-| `GET /auth/oauth/:provider/authorize` | — | Build provider authorize URL + state | `apps/frontend/src/pages/login.tsx` |
-| `POST /auth/oauth/:provider/callback` | — | Exchange code, sign in or create user | `apps/frontend/src/pages/login.tsx` |
-| `POST /auth/oauth/:provider/link` | — | Link external account to current user | `apps/frontend/src/pages/settings.tsx` |
+| `GET /auth/oauth/providers` | — _(skip: OAuth/SSO)_ | List enabled OAuth providers | `apps/frontend/src/pages/login.tsx` |
+| `GET /auth/oauth/:provider/authorize` | — _(skip: OAuth/SSO)_ | Build provider authorize URL + state | `apps/frontend/src/pages/login.tsx` |
+| `POST /auth/oauth/:provider/callback` | — _(skip: OAuth/SSO callback)_ | Exchange code, sign in or create user | `apps/frontend/src/pages/login.tsx` |
+| `POST /auth/oauth/:provider/link` | — _(skip: OAuth/SSO link)_ | Link external account to current user | `apps/frontend/src/pages/settings.tsx` |
 
 
 ## Bam — Guests
@@ -391,14 +406,14 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /v1/guests` | — | List guest users in org | `apps/frontend/src/pages/people/index.tsx` |
-| `DELETE /v1/guests/:id` | — | Remove/deactivate a guest | `apps/frontend/src/pages/people/detail.tsx` |
-| `PATCH /v1/guests/:id/scope` | — | Update guest project/channel access | `apps/frontend/src/pages/people/detail.tsx` |
-| `POST /v1/guests/accept/:token` | — | Public: accept invitation, create guest | `apps/frontend/src/pages/guest-accept.tsx` |
-| `POST /v1/guests/invite` | — | Create a guest invitation | `apps/frontend/src/pages/people/index.tsx` |
-| `GET /v1/guests/invitations` | — | List pending guest invitations | `apps/frontend/src/pages/people/index.tsx` |
-| `DELETE /v1/guests/invitations/:id` | — | Revoke a guest invitation | `apps/frontend/src/pages/people/index.tsx` |
-| `POST /v1/guests/invitations/:id/resend` | — | Re-send guest invitation email | `apps/frontend/src/pages/people/index.tsx` |
+| `GET /v1/guests` | — _(skip: guest/access admin — conservative scope)_ | List guest users in org | `apps/frontend/src/pages/people/index.tsx` |
+| `DELETE /v1/guests/:id` | — _(skip: guest/access admin — conservative scope)_ | Remove/deactivate a guest | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /v1/guests/:id/scope` | — _(skip: guest/access admin — conservative scope)_ | Update guest project/channel access | `apps/frontend/src/pages/people/detail.tsx` |
+| `POST /v1/guests/accept/:token` | — _(skip: public-inbound invite accept)_ | Public: accept invitation, create guest | `apps/frontend/src/pages/guest-accept.tsx` |
+| `POST /v1/guests/invite` | — _(skip: guest/access admin — conservative scope)_ | Create a guest invitation | `apps/frontend/src/pages/people/index.tsx` |
+| `GET /v1/guests/invitations` | — _(skip: guest/access admin — conservative scope)_ | List pending guest invitations | `apps/frontend/src/pages/people/index.tsx` |
+| `DELETE /v1/guests/invitations/:id` | — _(skip: guest/access admin — conservative scope)_ | Revoke a guest invitation | `apps/frontend/src/pages/people/index.tsx` |
+| `POST /v1/guests/invitations/:id/resend` | — _(skip: guest/access admin — conservative scope)_ | Re-send guest invitation email | `apps/frontend/src/pages/people/index.tsx` |
 
 
 ## Bam — Platform / SuperUser org & user admin
@@ -602,11 +617,11 @@ External URL = `/banter/api/` + the path column. WebSocket realtime at `/banter/
 | `DELETE /v1/channels/:id` | `banter_delete_channel` | Soft-delete (archive) channel | `apps/banter/src/components/channels/channel-settings.tsx` |
 | `POST /v1/channels/:id/join` | `banter_join_channel` | Join a public channel | `apps/banter/src/hooks/use-channels.ts` |
 | `POST /v1/channels/:id/leave` | `banter_leave_channel` | Leave a channel | `apps/banter/src/hooks/use-channels.ts` |
-| `GET /v1/channels/:id/members` | — | List channel members | `apps/banter/src/hooks/use-channels.ts` |
+| `GET /v1/channels/:id/members` | `banter_list_channel_members` | List channel members | `apps/banter/src/hooks/use-channels.ts` |
 | `POST /v1/channels/:id/members` | `banter_add_channel_members` | Add members | `apps/banter/src/components/channels/channel-settings.tsx` |
 | `DELETE /v1/channels/:id/members/:userId` | `banter_remove_channel_member` | Remove a member | `apps/banter/src/components/channels/channel-settings.tsx` |
-| `PATCH /v1/channels/:id/members/:userId` | — | Update member role | `apps/banter/src/hooks/use-channels.ts` |
-| `POST /v1/channels/:id/mark-read` | — | Update last-read cursor | `apps/banter/src/hooks/use-unread.ts` |
+| `PATCH /v1/channels/:id/members/:userId` | — _(skip: member-role admin — not wrapped)_ | Update member role | `apps/banter/src/hooks/use-channels.ts` |
+| `POST /v1/channels/:id/mark-read` | `banter_mark_read` | Update last-read cursor | `apps/banter/src/hooks/use-unread.ts` |
 | `GET /v1/admin/channel-groups` | — | List sidebar channel groups | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
 | `POST /v1/admin/channel-groups` | — | Create a channel group | `apps/banter/src/pages/admin.tsx` |
 | `GET /v1/admin/channel-groups/:id` | — | Get a channel group | `apps/banter/src/pages/admin.tsx` |
@@ -627,21 +642,21 @@ External URL = `/banter/api/` + the path column. WebSocket realtime at `/banter/
 | `GET /v1/messages/:id/thread` | `banter_list_thread_replies` | List thread replies | `apps/banter/src/hooks/use-threads.ts` |
 | `POST /v1/messages/:id/thread` | `banter_reply_to_thread` | Post a thread reply | `apps/banter/src/components/threads/thread-panel.tsx` |
 | `POST /v1/messages/:id/reactions` | `banter_react` | Toggle an emoji reaction | `apps/banter/src/hooks/use-reactions.ts` |
-| `GET /v1/messages/:id/reactions` | — | List reactions grouped by emoji | `apps/banter/src/hooks/use-reactions.ts` |
-| `GET /v1/channels/:id/pins` | — | List pinned messages | `apps/banter/src/components/messages/message-timeline.tsx` |
+| `GET /v1/messages/:id/reactions` | `banter_list_reactions` | List reactions grouped by emoji | `apps/banter/src/hooks/use-reactions.ts` |
+| `GET /v1/channels/:id/pins` | `banter_list_pins` | List pinned messages | `apps/banter/src/components/messages/message-timeline.tsx` |
 | `POST /v1/channels/:id/pins` | `banter_pin_message` | Pin a message | `apps/banter/src/components/messages/message-item.tsx` |
 | `DELETE /v1/channels/:id/pins/:messageId` | `banter_unpin_message` | Unpin a message | `apps/banter/src/hooks/use-messages.ts` |
-| `GET /v1/bookmarks` | — | List caller's bookmarks | `apps/banter/src/pages/bookmarks.tsx` |
-| `POST /v1/bookmarks` | — | Create a bookmark | `apps/banter/src/components/messages/message-item.tsx` |
-| `DELETE /v1/bookmarks/by-message/:messageId` | — | Remove bookmark by message id | `apps/banter/src/hooks/use-messages.ts` |
-| `DELETE /v1/bookmarks/:id` | — | Remove bookmark by id | `apps/banter/src/pages/bookmarks.tsx` |
+| `GET /v1/bookmarks` | `banter_list_bookmarks` | List caller's bookmarks | `apps/banter/src/pages/bookmarks.tsx` |
+| `POST /v1/bookmarks` | `banter_create_bookmark` | Create a bookmark | `apps/banter/src/components/messages/message-item.tsx` |
+| `DELETE /v1/bookmarks/by-message/:messageId` | `banter_delete_bookmark` | Remove bookmark by message id | `apps/banter/src/hooks/use-messages.ts` |
+| `DELETE /v1/bookmarks/:id` | `banter_delete_bookmark` | Remove bookmark by id | `apps/banter/src/pages/bookmarks.tsx` |
 
 
 ### DMs
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /v1/dm` | — | List caller's DMs and group DMs | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
+| `GET /v1/dm` | `banter_list_dms` | List caller's DMs and group DMs | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
 | `POST /v1/dm` | `banter_send_dm` | Create/reuse a DM channel (then posts) | `apps/banter/src/components/common/user-profile-popover.tsx` |
 | `POST /v1/group-dm` | `banter_send_group_dm` | Create/reuse a group DM (then posts) | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
 
@@ -655,7 +670,7 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `POST /v1/channels/:id/calls` | `banter_start_call` | Gone (410); was start call | — |
 | `GET /v1/channels/:id/calls` | `banter_list_calls` | Call history for a channel | `apps/banter/src/hooks/use-call-history.ts` |
 | `GET /v1/calls/:id` | `banter_get_call`, `banter_get_active_huddle` | Call detail w/ participants | `apps/banter/src/pages/call-playback.tsx` |
-| `GET /v1/calls/:id/participants` | — | List call participants | `apps/banter/src/pages/call-playback.tsx` |
+| `GET /v1/calls/:id/participants` | `banter_list_call_participants` | List call participants | `apps/banter/src/pages/call-playback.tsx` |
 | `GET /v1/calls/:id/transcript` | `banter_get_transcript` | Historical transcript segments | `apps/banter/src/pages/call-playback.tsx` |
 | `PATCH /v1/calls/:id` | — | Gone (410); was recording toggles | — |
 | `POST /v1/calls/:id/join` | `banter_join_call` | Gone (410); was join call | — |
@@ -678,9 +693,9 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `POST /v1/user-groups` | `banter_create_user_group` | Create a user group | `apps/banter/src/pages/admin.tsx` |
 | `GET /v1/user-groups/by-handle/:handle` | `banter_get_user_group_by_handle` | Resolve group by handle | — |
 | `PATCH /v1/user-groups/:id` | `banter_update_user_group` | Update a user group | `apps/banter/src/pages/admin.tsx` |
-| `DELETE /v1/user-groups/:id` | — | Delete a user group | `apps/banter/src/pages/admin.tsx` |
+| `DELETE /v1/user-groups/:id` | `banter_delete_user_group` | Delete a user group | `apps/banter/src/pages/admin.tsx` |
 | `POST /v1/user-groups/:id/members` | `banter_add_group_members` | Add group members | `apps/banter/src/pages/admin.tsx` |
-| `GET /v1/user-groups/:id/members` | — | List group members | `apps/banter/src/pages/admin.tsx` |
+| `GET /v1/user-groups/:id/members` | `banter_list_group_members` | List group members | `apps/banter/src/pages/admin.tsx` |
 | `DELETE /v1/user-groups/:id/members/:userId` | `banter_remove_group_member` | Remove a group member | `apps/banter/src/pages/admin.tsx` |
 
 
@@ -691,27 +706,27 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `GET /v1/me/preferences` | `banter_get_preferences` | Get caller's preferences | `apps/banter/src/pages/preferences.tsx` |
 | `PATCH /v1/me/preferences` | `banter_update_preferences` | Update caller's preferences | `apps/banter/src/pages/preferences.tsx` |
 | `GET /v1/me/unread` | `banter_get_unread` | Unread summary across channels | `apps/banter/src/hooks/use-unread.ts` |
-| `GET /v1/me/presence` | — | Get caller's presence row | `apps/banter/src/hooks/use-presence.ts` |
+| `GET /v1/me/presence` | `banter_get_presence` | Get caller's presence row | `apps/banter/src/hooks/use-presence.ts` |
 | `POST /v1/me/presence` | `banter_set_presence` | Upsert caller's presence | `apps/banter/src/hooks/use-presence.ts` |
-| `GET /v1/channels/:id/presence` | — | List non-offline channel members | `apps/banter/src/hooks/use-presence.ts` |
+| `GET /v1/channels/:id/presence` | `banter_list_channel_presence` | List non-offline channel members | `apps/banter/src/hooks/use-presence.ts` |
 
 
 ### Search & link preview
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /v1/search/channels` | — | Full-text channel name/topic search | `apps/banter/src/pages/search.tsx` |
+| `GET /v1/search/channels` | `banter_search_channels` | Full-text channel name/topic search | `apps/banter/src/pages/search.tsx` |
 | `GET /v1/search/messages` | `banter_search_messages` | Full-text message search | `apps/banter/src/pages/search.tsx` |
 | `GET /v1/search/transcripts` | `banter_search_transcripts` | Full-text transcript search | `apps/banter/src/pages/search.tsx` |
-| `GET /v1/link-preview` | — | Fetch OG/Twitter card for a URL | `apps/banter/src/components/messages/link-preview.tsx` |
+| `GET /v1/link-preview` | — _(skip: outbound URL fetch, not an agent surface)_ | Fetch OG/Twitter card for a URL | `apps/banter/src/components/messages/link-preview.tsx` |
 
 
 ### Scheduling
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /v1/channels/:id/scheduled-messages` | — | List pending scheduled posts | — |
-| `DELETE /v1/scheduled-messages/:id` | — | Cancel a pending scheduled post | — |
+| `GET /v1/channels/:id/scheduled-messages` | `banter_list_scheduled_messages` | List pending scheduled posts | — |
+| `DELETE /v1/scheduled-messages/:id` | `banter_cancel_scheduled_message` | Cancel a pending scheduled post | — |
 
 
 ### Agent subscriptions
@@ -734,8 +749,8 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `POST /v1/admin/settings/test-stt` | — | Test STT provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
 | `POST /v1/admin/settings/test-tts` | — | Test TTS provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
 | `POST /v1/admin/settings/push-voice-config` | — | Push voice config to voice agent | `apps/banter/src/pages/admin-calling-settings.tsx` |
-| `POST /v1/files/upload` | — | Multipart upload to MinIO | `apps/banter/src/components/messages/message-compose.tsx` |
-| `POST /v1/files/presigned-upload` | — | Generate a presigned PUT URL | `apps/banter/src/components/messages/message-compose.tsx` |
+| `POST /v1/files/upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/banter/src/components/messages/message-compose.tsx` |
+| `POST /v1/files/presigned-upload` | — _(skip: binary upload presign)_ | Generate a presigned PUT URL | `apps/banter/src/components/messages/message-compose.tsx` |
 
 
 ### Slack import (admin)
@@ -775,7 +790,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/beacon
 |---|---|---|---|
 | `POST /beacons` | `beacon_create` | Create a new Beacon (Draft) | `apps/beacon/src/hooks/use-beacons.ts` |
 | `GET /beacons` | `beacon_list` | List Beacons with filters | `apps/beacon/src/hooks/use-beacons.ts` |
-| `GET /beacons/by-slug/:slug` | — | Resolve slug to Beacon (MCP resolver) | — |
+| `GET /beacons/by-slug/:slug` | — _(skip: slug resolver — done internally)_ | Resolve slug to Beacon (MCP resolver) | — |
 | `GET /beacons/stats` | `beacon_stats` | Org-wide Beacon statistics | `apps/beacon/src/hooks/use-beacons.ts` |
 | `GET /beacons/:id` | `beacon_get` | Get one Beacon by UUID or slug | `apps/beacon/src/hooks/use-beacons.ts` |
 | `PUT /beacons/:id` | `beacon_update` | Update Beacon, creates new version | `apps/beacon/src/hooks/use-beacons.ts` |
@@ -837,12 +852,12 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 |---|---|---|---|
 | `POST /documents` | `brief_create` | Create a new document | `apps/brief/src/hooks/use-documents.ts` |
 | `GET /documents` | `brief_list` | List documents with filters | `apps/brief/src/hooks/use-documents.ts` |
-| `GET /documents/recent` | — | Recently updated documents | `apps/brief/src/hooks/use-documents.ts` |
+| `GET /documents/recent` | `brief_recent` | Recently updated documents | `apps/brief/src/hooks/use-documents.ts` |
 | `GET /documents/search` | `brief_search` | Full-text document search | `apps/brief/src/hooks/use-search.ts` |
-| `GET /documents/semantic-search` | — | Qdrant vector search (text fallback) | `apps/brief/src/hooks/use-search.ts` |
-| `GET /documents/starred` | — | User's starred documents | `apps/brief/src/hooks/use-documents.ts` |
-| `GET /documents/stats` | — | Org-wide document statistics | `apps/brief/src/hooks/use-documents.ts` |
-| `GET /documents/by-slug/:slug` | — | Resolve slug to document (MCP resolver) | — |
+| `GET /documents/semantic-search` | `brief_semantic_search` | Qdrant vector search (text fallback) | `apps/brief/src/hooks/use-search.ts` |
+| `GET /documents/starred` | `brief_starred` | User's starred documents | `apps/brief/src/hooks/use-documents.ts` |
+| `GET /documents/stats` | `brief_stats` | Org-wide document statistics | `apps/brief/src/hooks/use-documents.ts` |
+| `GET /documents/by-slug/:slug` | — _(skip: slug resolver — done internally)_ | Resolve slug to document (MCP resolver) | — |
 | `GET /documents/:id` | `brief_get` | Get one document by UUID or slug | `apps/brief/src/hooks/use-documents.ts` |
 | `PATCH /documents/:id` | `brief_update` | Update document metadata | `apps/brief/src/hooks/use-documents.ts` |
 | `DELETE /documents/:id` | `brief_archive` | Archive document (soft-delete) | `apps/brief/src/hooks/use-documents.ts` |
@@ -850,10 +865,10 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `POST /documents/:id/duplicate` | `brief_duplicate` | Duplicate a document | `apps/brief/src/hooks/use-documents.ts` |
 | `POST /documents/:id/promote` | `brief_promote_to_beacon` | Graduate document to a Beacon | `apps/brief/src/hooks/use-documents.ts` |
 | `POST /documents/:id/restore` | `brief_restore` | Restore an archived document | `apps/brief/src/hooks/use-documents.ts` |
-| `POST /documents/:id/star` | — | Toggle document star | `apps/brief/src/hooks/use-documents.ts` |
+| `POST /documents/:id/star` | `brief_star` | Toggle document star | `apps/brief/src/hooks/use-documents.ts` |
 | `PUT /documents/:id/content` | `brief_update_content` | Replace entire document content | — |
-| `GET /documents/:id/yjs-state` | — | Fetch raw Yjs state (base64) | `apps/brief/src/hooks/use-collaboration.ts` |
-| `PUT /documents/:id/yjs-state` | — | Persist Yjs state snapshot | `apps/brief/src/hooks/use-collaboration.ts` |
+| `GET /documents/:id/yjs-state` | — _(skip: Yjs sync state)_ | Fetch raw Yjs state (base64) | `apps/brief/src/hooks/use-collaboration.ts` |
+| `PUT /documents/:id/yjs-state` | — _(skip: Yjs sync state)_ | Persist Yjs state snapshot | `apps/brief/src/hooks/use-collaboration.ts` |
 
 ### Comments, versions, links, collaborators, embeds, templates, folders, export
 
@@ -861,37 +876,37 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 |---|---|---|---|
 | `GET /documents/:id/comments` | `brief_comment_list` | List threaded comments | `apps/brief/src/hooks/use-comments.ts` |
 | `POST /documents/:id/comments` | `brief_comment_add` | Create a comment | `apps/brief/src/hooks/use-comments.ts` |
-| `PATCH /comments/:commentId` | — | Edit comment body | — |
-| `DELETE /comments/:commentId` | — | Delete a comment | `apps/brief/src/hooks/use-comments.ts` |
+| `PATCH /comments/:commentId` | `brief_comment_edit` | Edit comment body | — |
+| `DELETE /comments/:commentId` | `brief_comment_delete` | Delete a comment | `apps/brief/src/hooks/use-comments.ts` |
 | `POST /comments/:commentId/resolve` | `brief_comment_resolve` | Toggle comment resolved state | `apps/brief/src/hooks/use-comments.ts` |
-| `POST /comments/:commentId/reactions` | — | Add a comment reaction | — |
-| `DELETE /comments/:commentId/reactions/:emoji` | — | Remove a comment reaction | — |
+| `POST /comments/:commentId/reactions` | `brief_comment_react` | Add a comment reaction | — |
+| `DELETE /comments/:commentId/reactions/:emoji` | `brief_comment_unreact` | Remove a comment reaction | — |
 | `GET /documents/:id/versions` | `brief_versions` | List version history | `apps/brief/src/hooks/use-versions.ts` |
-| `POST /documents/:id/versions` | — | Create a named version snapshot | `apps/brief/src/hooks/use-versions.ts` |
+| `POST /documents/:id/versions` | `brief_version_create` | Create a named version snapshot | `apps/brief/src/hooks/use-versions.ts` |
 | `GET /documents/:id/versions/:versionId` | `brief_version_get` | Get a specific version | — |
 | `POST /documents/:id/versions/:versionId/restore` | `brief_version_restore` | Restore document to a version | `apps/brief/src/hooks/use-versions.ts` |
-| `GET /documents/:id/versions/:v1/diff/:v2` | — | Diff two versions (LCS line diff) | — |
-| `GET /documents/:id/links` | — | List task + beacon links | `apps/brief/src/hooks/use-links.ts` |
+| `GET /documents/:id/versions/:v1/diff/:v2` | `brief_version_diff` | Diff two versions (LCS line diff) | — |
+| `GET /documents/:id/links` | `brief_links_list` | List task + beacon links | `apps/brief/src/hooks/use-links.ts` |
 | `POST /documents/:id/links/task` | `brief_link_task` | Link document to a Bam task | — |
-| `POST /documents/:id/links/beacon` | — | Link document to a Beacon | — |
-| `DELETE /links/:linkId` | — | Delete a link (document_id query) | — |
-| `GET /documents/:id/collaborators` | — | List collaborators | — |
-| `POST /documents/:id/collaborators` | — | Add a collaborator | — |
-| `PATCH /collaborators/:collabId` | — | Update collaborator permission | — |
-| `DELETE /collaborators/:collabId` | — | Remove a collaborator | — |
-| `POST /documents/:id/embeds` | — | Record embed/upload metadata | — |
-| `GET /documents/:id/embeds` | — | List embeds for a document | — |
-| `DELETE /embeds/:embedId` | — | Delete an embed | — |
-| `GET /documents/:id/export/markdown` | — | Export document as Markdown | `apps/brief/src/components/document/export-menu.tsx` |
-| `GET /documents/:id/export/html` | — | Export document as styled HTML | `apps/brief/src/components/document/export-menu.tsx` |
-| `GET /templates` | — | List system + org templates | `apps/brief/src/hooks/use-templates.ts` |
-| `POST /templates` | — | Create an org template | `apps/brief/src/hooks/use-templates.ts` |
-| `PATCH /templates/:id` | — | Update a template | — |
-| `DELETE /templates/:id` | — | Delete a template | — |
-| `GET /folders` | — | List folder tree | `apps/brief/src/hooks/use-folders.ts` |
-| `POST /folders` | — | Create a folder | `apps/brief/src/hooks/use-folders.ts` |
-| `PATCH /folders/:id` | — | Update a folder | `apps/brief/src/hooks/use-folders.ts` |
-| `DELETE /folders/:id` | — | Delete a folder | `apps/brief/src/hooks/use-folders.ts` |
+| `POST /documents/:id/links/beacon` | `brief_link_beacon` | Link document to a Beacon | — |
+| `DELETE /links/:linkId` | `brief_link_remove` | Delete a link (document_id query) | — |
+| `GET /documents/:id/collaborators` | `brief_collaborators_list` | List collaborators | — |
+| `POST /documents/:id/collaborators` | `brief_collaborator_add` | Add a collaborator | — |
+| `PATCH /collaborators/:collabId` | `brief_collaborator_update` | Update collaborator permission | — |
+| `DELETE /collaborators/:collabId` | `brief_collaborator_remove` | Remove a collaborator | — |
+| `POST /documents/:id/embeds` | — _(skip: embed/upload metadata record)_ | Record embed/upload metadata | — |
+| `GET /documents/:id/embeds` | `brief_embeds_list` | List embeds for a document | — |
+| `DELETE /embeds/:embedId` | `brief_embed_delete` | Delete an embed | — |
+| `GET /documents/:id/export/markdown` | `brief_export_markdown` | Export document as Markdown | `apps/brief/src/components/document/export-menu.tsx` |
+| `GET /documents/:id/export/html` | `brief_export_html` | Export document as styled HTML | `apps/brief/src/components/document/export-menu.tsx` |
+| `GET /templates` | `brief_templates_list` | List system + org templates | `apps/brief/src/hooks/use-templates.ts` |
+| `POST /templates` | `brief_template_create` | Create an org template | `apps/brief/src/hooks/use-templates.ts` |
+| `PATCH /templates/:id` | `brief_template_update` | Update a template | — |
+| `DELETE /templates/:id` | `brief_template_delete` | Delete a template | — |
+| `GET /folders` | `brief_folders_list` | List folder tree | `apps/brief/src/hooks/use-folders.ts` |
+| `POST /folders` | `brief_folder_create` | Create a folder | `apps/brief/src/hooks/use-folders.ts` |
+| `PATCH /folders/:id` | `brief_folder_update` | Update a folder | `apps/brief/src/hooks/use-folders.ts` |
+| `DELETE /folders/:id` | `brief_folder_delete` | Delete a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `POST /internal/can-read` | — | Cross-app read preflight (Bureau summon) | — *(internal service-to-service)* |
 
 
@@ -903,76 +918,76 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | --- | --- | --- | --- |
 | `GET /activities` | — | List CRM activities (filterable) | `apps/bond/src/hooks/use-activities.ts` |
 | `POST /activities` | `bond_log_activity` | Log activity against contact/deal/company | `apps/bond/src/hooks/use-activities.ts` |
-| `GET /activities/:id` | — | Get activity detail | — |
-| `PATCH /activities/:id` | — | Update an activity | — |
-| `DELETE /activities/:id` | — | Delete an activity | `apps/bond/src/hooks/use-activities.ts` |
-| `GET /analytics/conversion-rates` | — | Stage-to-stage conversion rates | `apps/bond/src/hooks/use-analytics.ts` |
-| `GET /analytics/deal-velocity` | — | Average time in each stage | `apps/bond/src/hooks/use-analytics.ts` |
+| `GET /activities/:id` | `bond_get_activity` | Get activity detail | — |
+| `PATCH /activities/:id` | `bond_update_activity` | Update an activity | — |
+| `DELETE /activities/:id` | `bond_delete_activity` | Delete an activity | `apps/bond/src/hooks/use-activities.ts` |
+| `GET /analytics/conversion-rates` | `bond_get_conversion_rates` | Stage-to-stage conversion rates | `apps/bond/src/hooks/use-analytics.ts` |
+| `GET /analytics/deal-velocity` | `bond_get_deal_velocity` | Average time in each stage | `apps/bond/src/hooks/use-analytics.ts` |
 | `GET /analytics/forecast` | `bond_get_forecast` | Revenue forecast in 30/60/90 buckets | `apps/bond/src/hooks/use-analytics.ts` |
 | `GET /analytics/pipeline-summary` | `bond_get_pipeline_summary` | Pipeline value/count by stage | `apps/bond/src/hooks/use-analytics.ts` |
 | `GET /analytics/stale-deals` | `bond_get_stale_deals` | Deals exceeding rotting threshold | `apps/bond/src/hooks/use-analytics.ts` |
-| `GET /analytics/win-loss` | — | Win/loss ratio and analysis | `apps/bond/src/hooks/use-analytics.ts` |
+| `GET /analytics/win-loss` | `bond_get_win_loss` | Win/loss ratio and analysis | `apps/bond/src/hooks/use-analytics.ts` |
 | `GET /companies` | `bond_list_companies` | List/filter companies | `apps/bond/src/hooks/use-companies.ts` |
 | `POST /companies` | `bond_create_company` | Create company | `apps/bond/src/hooks/use-companies.ts` |
-| `GET /companies/search` | — | Search companies by name/domain | — |
+| `GET /companies/search` | `bond_search_companies` | Search companies by name/domain | — |
 | `GET /companies/:id` | `bond_get_company` | Get company detail | `apps/bond/src/hooks/use-companies.ts` |
 | `PATCH /companies/:id` | `bond_update_company` | Update company | `apps/bond/src/hooks/use-companies.ts` |
-| `DELETE /companies/:id` | — | Delete company | `apps/bond/src/hooks/use-companies.ts` |
-| `GET /companies/:id/contacts` | — | Contacts at this company | `apps/bond/src/pages/company-detail.tsx` |
-| `GET /companies/:id/deals` | — | Paginated deals at this company | `apps/bond/src/pages/company-detail.tsx` |
-| `POST /companies/:id/restore` | — | Undelete soft-deleted company | `apps/bond/src/hooks/use-companies.ts` |
+| `DELETE /companies/:id` | `bond_delete_company` | Delete company | `apps/bond/src/hooks/use-companies.ts` |
+| `GET /companies/:id/contacts` | `bond_list_company_contacts` | Contacts at this company | `apps/bond/src/pages/company-detail.tsx` |
+| `GET /companies/:id/deals` | `bond_list_company_deals` | Paginated deals at this company | `apps/bond/src/pages/company-detail.tsx` |
+| `POST /companies/:id/restore` | `bond_restore_company` | Undelete soft-deleted company | `apps/bond/src/hooks/use-companies.ts` |
 | `GET /contacts` | `bond_list_contacts` | List/filter contacts | `apps/bond/src/hooks/use-contacts.ts` |
 | `POST /contacts` | `bond_create_contact` | Create contact | `apps/bond/src/hooks/use-contacts.ts` |
-| `GET /contacts/export` | — | Export contacts | — |
-| `POST /contacts/import` | — | Bulk import contacts | — |
+| `GET /contacts/export` | — _(skip: binary/CSV export)_ | Export contacts | — |
+| `POST /contacts/import` | — _(skip: bulk import upload)_ | Bulk import contacts | — |
 | `GET /contacts/search` | `bond_search_contacts` | Full-text contact search | — |
 | `POST /contacts/upsert` | `bond_upsert_contact` | Idempotent create-or-update by email | — |
 | `GET /contacts/:id` | `bond_get_contact` | Get contact detail | `apps/bond/src/hooks/use-contacts.ts` |
 | `PATCH /contacts/:id` | `bond_update_contact` | Update contact | `apps/bond/src/hooks/use-contacts.ts` |
-| `DELETE /contacts/:id` | — | Delete contact | `apps/bond/src/hooks/use-contacts.ts` |
+| `DELETE /contacts/:id` | `bond_delete_contact` | Delete contact | `apps/bond/src/hooks/use-contacts.ts` |
 | `GET /contacts/:id/duplicates` | `bond_find_duplicates` | Ranked duplicate candidates for contact | — |
 | `POST /contacts/:id/merge` | `bond_merge_contacts` | Merge duplicate contacts | `apps/bond/src/hooks/use-contacts.ts` |
-| `POST /contacts/:id/restore` | — | Undelete soft-deleted contact | `apps/bond/src/hooks/use-contacts.ts` |
-| `GET /custom-field-definitions` | — | List custom field definitions | `apps/bond/src/hooks/use-custom-fields.ts` |
-| `POST /custom-field-definitions` | — | Create custom field definition | `apps/bond/src/hooks/use-custom-fields.ts` |
-| `GET /custom-field-definitions/:id` | — | Get custom field definition | — |
-| `PATCH /custom-field-definitions/:id` | — | Update custom field definition | `apps/bond/src/hooks/use-custom-fields.ts` |
-| `DELETE /custom-field-definitions/:id` | — | Delete custom field definition | `apps/bond/src/hooks/use-custom-fields.ts` |
+| `POST /contacts/:id/restore` | `bond_restore_contact` | Undelete soft-deleted contact | `apps/bond/src/hooks/use-contacts.ts` |
+| `GET /custom-field-definitions` | `bond_list_custom_fields` | List custom field definitions | `apps/bond/src/hooks/use-custom-fields.ts` |
+| `POST /custom-field-definitions` | `bond_create_custom_field` | Create custom field definition | `apps/bond/src/hooks/use-custom-fields.ts` |
+| `GET /custom-field-definitions/:id` | `bond_get_custom_field` | Get custom field definition | — |
+| `PATCH /custom-field-definitions/:id` | `bond_update_custom_field` | Update custom field definition | `apps/bond/src/hooks/use-custom-fields.ts` |
+| `DELETE /custom-field-definitions/:id` | `bond_delete_custom_field` | Delete custom field definition | `apps/bond/src/hooks/use-custom-fields.ts` |
 | `GET /deals` | `bond_list_deals` | List/filter deals | `apps/bond/src/hooks/use-deals.ts` |
 | `POST /deals` | `bond_create_deal` | Create deal | `apps/bond/src/hooks/use-deals.ts` |
 | `GET /deals/:id` | `bond_get_deal` | Get deal detail | `apps/bond/src/hooks/use-deals.ts` |
 | `PATCH /deals/:id` | `bond_update_deal` | Update deal | `apps/bond/src/hooks/use-deals.ts` |
-| `DELETE /deals/:id` | — | Soft-delete deal | `apps/bond/src/hooks/use-deals.ts` |
-| `POST /deals/:id/restore` | — | Undelete soft-deleted deal | `apps/bond/src/hooks/use-deals.ts` |
+| `DELETE /deals/:id` | `bond_delete_deal` | Soft-delete deal | `apps/bond/src/hooks/use-deals.ts` |
+| `POST /deals/:id/restore` | `bond_restore_deal` | Undelete soft-deleted deal | `apps/bond/src/hooks/use-deals.ts` |
 | `PATCH /deals/:id/stage` | `bond_move_deal_stage` | Move deal to new stage | `apps/bond/src/hooks/use-deals.ts` |
 | `POST /deals/:id/won` | `bond_close_deal_won` | Close deal as won | `apps/bond/src/hooks/use-deals.ts` |
 | `POST /deals/:id/lost` | `bond_close_deal_lost` | Close deal as lost | `apps/bond/src/hooks/use-deals.ts` |
-| `POST /deals/:id/duplicate` | — | Duplicate deal | — |
-| `GET /deals/:id/contacts` | — | List deal contacts | — |
-| `POST /deals/:id/contacts` | — | Add contact to deal | `apps/bond/src/hooks/use-deals.ts` |
-| `DELETE /deals/:id/contacts/:contactId` | — | Remove contact from deal | `apps/bond/src/hooks/use-deals.ts` |
-| `GET /deals/:id/stage-history` | — | Stage transition history | `apps/bond/src/hooks/use-deals.ts` |
-| `GET /deals/:id/activities` | — | Activity timeline for a deal | `apps/bond/src/hooks/use-activities.ts` |
-| `GET /deals/:id/related` | — | Cross-product links (Bill/Book/Bam) | `apps/bond/src/hooks/use-deals.ts` |
-| `POST /imports/mappings` | — | Upsert a single import mapping | — |
-| `GET /imports/mappings` | — | List import mappings | — |
-| `GET /pipelines` | — | List pipelines | `apps/bond/src/hooks/use-pipelines.ts` |
-| `POST /pipelines` | — | Create pipeline | `apps/bond/src/hooks/use-pipelines.ts` |
-| `GET /pipelines/:id` | — | Get pipeline detail | `apps/bond/src/hooks/use-pipelines.ts` |
-| `PATCH /pipelines/:id` | — | Update pipeline | `apps/bond/src/hooks/use-pipelines.ts` |
-| `DELETE /pipelines/:id` | — | Delete pipeline | — |
-| `GET /pipelines/:id/stages` | — | List pipeline stages | — |
-| `POST /pipelines/:id/stages` | — | Create stage | `apps/bond/src/hooks/use-pipelines.ts` |
-| `PATCH /pipelines/:id/stages/:stageId` | — | Update stage | `apps/bond/src/hooks/use-pipelines.ts` |
-| `DELETE /pipelines/:id/stages/:stageId` | — | Delete stage | `apps/bond/src/hooks/use-pipelines.ts` |
-| `POST /pipelines/:id/stages/reorder` | — | Reorder stages | `apps/bond/src/hooks/use-pipelines.ts` |
-| `GET /scoring-rules` | — | List lead-scoring rules | `apps/bond/src/hooks/use-scoring.ts` |
-| `POST /scoring-rules` | — | Create scoring rule | `apps/bond/src/hooks/use-scoring.ts` |
-| `PATCH /scoring-rules/:id` | — | Update scoring rule | `apps/bond/src/hooks/use-scoring.ts` |
-| `DELETE /scoring-rules/:id` | — | Delete scoring rule | `apps/bond/src/hooks/use-scoring.ts` |
+| `POST /deals/:id/duplicate` | `bond_duplicate_deal` | Duplicate deal | — |
+| `GET /deals/:id/contacts` | `bond_list_deal_contacts` | List deal contacts | — |
+| `POST /deals/:id/contacts` | `bond_add_deal_contact` | Add contact to deal | `apps/bond/src/hooks/use-deals.ts` |
+| `DELETE /deals/:id/contacts/:contactId` | `bond_remove_deal_contact` | Remove contact from deal | `apps/bond/src/hooks/use-deals.ts` |
+| `GET /deals/:id/stage-history` | `bond_get_deal_stage_history` | Stage transition history | `apps/bond/src/hooks/use-deals.ts` |
+| `GET /deals/:id/activities` | `bond_list_deal_activities` | Activity timeline for a deal | `apps/bond/src/hooks/use-activities.ts` |
+| `GET /deals/:id/related` | `bond_get_deal_related` | Cross-product links (Bill/Book/Bam) | `apps/bond/src/hooks/use-deals.ts` |
+| `POST /imports/mappings` | `bond_create_import_mapping` | Upsert a single import mapping | — |
+| `GET /imports/mappings` | `bond_list_import_mappings` | List import mappings | — |
+| `GET /pipelines` | `bond_list_pipelines` | List pipelines | `apps/bond/src/hooks/use-pipelines.ts` |
+| `POST /pipelines` | `bond_create_pipeline` | Create pipeline | `apps/bond/src/hooks/use-pipelines.ts` |
+| `GET /pipelines/:id` | `bond_get_pipeline` | Get pipeline detail | `apps/bond/src/hooks/use-pipelines.ts` |
+| `PATCH /pipelines/:id` | `bond_update_pipeline` | Update pipeline | `apps/bond/src/hooks/use-pipelines.ts` |
+| `DELETE /pipelines/:id` | `bond_delete_pipeline` | Delete pipeline | — |
+| `GET /pipelines/:id/stages` | `bond_list_stages` | List pipeline stages | — |
+| `POST /pipelines/:id/stages` | `bond_create_stage` | Create stage | `apps/bond/src/hooks/use-pipelines.ts` |
+| `PATCH /pipelines/:id/stages/:stageId` | `bond_update_stage` | Update stage | `apps/bond/src/hooks/use-pipelines.ts` |
+| `DELETE /pipelines/:id/stages/:stageId` | `bond_delete_stage` | Delete stage | `apps/bond/src/hooks/use-pipelines.ts` |
+| `POST /pipelines/:id/stages/reorder` | `bond_reorder_stages` | Reorder stages | `apps/bond/src/hooks/use-pipelines.ts` |
+| `GET /scoring-rules` | `bond_list_scoring_rules` | List lead-scoring rules | `apps/bond/src/hooks/use-scoring.ts` |
+| `POST /scoring-rules` | `bond_create_scoring_rule` | Create scoring rule | `apps/bond/src/hooks/use-scoring.ts` |
+| `PATCH /scoring-rules/:id` | `bond_update_scoring_rule` | Update scoring rule | `apps/bond/src/hooks/use-scoring.ts` |
+| `DELETE /scoring-rules/:id` | `bond_delete_scoring_rule` | Delete scoring rule | `apps/bond/src/hooks/use-scoring.ts` |
 | `POST /scoring/recalculate` | `bond_score_lead` | Recalculate a contact's lead score | `apps/bond/src/hooks/use-scoring.ts` |
-| `GET /user-settings` | — | Current user's Bond settings | `apps/bond/src/hooks/use-user-settings.ts` |
-| `PATCH /user-settings` | — | Set/clear reply-to address | `apps/bond/src/hooks/use-user-settings.ts` |
+| `GET /user-settings` | `bond_get_user_settings` | Current user's Bond settings | `apps/bond/src/hooks/use-user-settings.ts` |
+| `PATCH /user-settings` | `bond_update_user_settings` | Set/clear reply-to address | `apps/bond/src/hooks/use-user-settings.ts` |
 
 
 ## Bolt (app)
@@ -982,33 +997,33 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /actions` | `bolt_actions` | List MCP tools usable as actions | `apps/bolt/src/hooks/use-event-catalog.ts` |
-| `POST /ai/explain` | — | Explain an automation in natural language | — |
-| `POST /ai/generate` | — | Generate automation from NL prompt | — |
+| `POST /ai/explain` | `bolt_explain` | Explain an automation in natural language | — |
+| `POST /ai/generate` | `bolt_generate` | Generate automation from NL prompt | — |
 | `GET /automations` | `bolt_list` | List automations (filterable) | `apps/bolt/src/hooks/use-automations.ts` |
 | `POST /automations` | `bolt_create` | Create automation | `apps/bolt/src/hooks/use-automations.ts` |
-| `GET /automations/stats` | — | Automation statistics | `apps/bolt/src/hooks/use-automations.ts` |
+| `GET /automations/stats` | `bolt_stats` | Automation statistics | `apps/bolt/src/hooks/use-automations.ts` |
 | `GET /automations/by-name/:name` | `bolt_get_automation_by_name` | Resolve automation by name | — |
 | `GET /automations/:id` | `bolt_get` | Get automation with conditions/actions | `apps/bolt/src/hooks/use-automations.ts` |
 | `PUT /automations/:id` | `bolt_update` | Full update of automation | `apps/bolt/src/hooks/use-automations.ts` |
-| `PATCH /automations/:id` | — | Partial metadata update | — |
+| `PATCH /automations/:id` | `bolt_patch` | Partial metadata update | — |
 | `DELETE /automations/:id` | `bolt_delete` | Delete automation | `apps/bolt/src/hooks/use-automations.ts` |
 | `POST /automations/:id/enable` | `bolt_enable` | Enable automation | `apps/bolt/src/hooks/use-automations.ts` |
 | `POST /automations/:id/disable` | `bolt_disable` | Disable automation | `apps/bolt/src/hooks/use-automations.ts` |
-| `POST /automations/:id/duplicate` | — | Duplicate automation | `apps/bolt/src/hooks/use-automations.ts` |
+| `POST /automations/:id/duplicate` | `bolt_duplicate` | Duplicate automation | `apps/bolt/src/hooks/use-automations.ts` |
 | `POST /automations/:id/test` | `bolt_test` | Test-fire with simulated event | `apps/bolt/src/hooks/use-automations.ts` |
-| `GET /automations/:id/versions` | — | List automation versions | — |
-| `POST /automations/:id/versions/:vid/restore` | — | Restore an automation version | — |
+| `GET /automations/:id/versions` | `bolt_list_versions` | List automation versions | — |
+| `POST /automations/:id/versions/:vid/restore` | `bolt_restore_version` | Restore an automation version | — |
 | `GET /automations/:id/executions` | `bolt_executions` | List executions for automation | `apps/bolt/src/hooks/use-executions.ts` |
 | `GET /events` | `bolt_events` | Full trigger-event catalog | `apps/bolt/src/hooks/use-event-catalog.ts` |
 | `GET /events/:source` | `bolt_events` | Events for a specific source | `apps/bolt/src/hooks/use-event-catalog.ts` |
 | `GET /events/:event_id/trace` | `bolt_event_trace` | Full evaluation trail for an event | — |
 | `GET /events/recent` | `bolt_recent_events` | Recent matched ingest events | — |
-| `POST /events/ingest` | — | Internal event ingestion (service-secret) | — |
-| `GET /executions` | — | Org-wide execution list | `apps/bolt/src/hooks/use-executions.ts` |
+| `POST /events/ingest` | — _(skip: internal/service-secret ingest)_ | Internal event ingestion (service-secret) | — |
+| `GET /executions` | `bolt_list_executions` | Org-wide execution list | `apps/bolt/src/hooks/use-executions.ts` |
 | `GET /executions/:id` | `bolt_execution_detail` | Execution detail with steps | `apps/bolt/src/hooks/use-executions.ts` |
-| `POST /executions/:id/retry` | — | Retry a failed execution | `apps/bolt/src/hooks/use-executions.ts` |
-| `GET /templates` | — | List pre-built automation templates | `apps/bolt/src/hooks/use-templates.ts` |
-| `POST /templates/:id/instantiate` | — | Create automation from template | `apps/bolt/src/hooks/use-templates.ts` |
+| `POST /executions/:id/retry` | `bolt_retry_execution` | Retry a failed execution | `apps/bolt/src/hooks/use-executions.ts` |
+| `GET /templates` | `bolt_list_templates` | List pre-built automation templates | `apps/bolt/src/hooks/use-templates.ts` |
+| `POST /templates/:id/instantiate` | `bolt_instantiate_template` | Create automation from template | `apps/bolt/src/hooks/use-templates.ts` |
 
 
 ## Bearing (app)
@@ -1019,35 +1034,35 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | --- | --- | --- | --- |
 | `GET /goals` | `bearing_goals` | List goals (filterable) | `apps/bearing/src/hooks/useGoals.ts` |
 | `POST /goals` | `bearing_goal_create` | Create goal | `apps/bearing/src/hooks/useGoals.ts` |
-| `GET /goals/export` | — | Export goals as CSV | — |
+| `GET /goals/export` | — _(skip: binary/CSV export)_ | Export goals as CSV | — |
 | `GET /goals/:id` | `bearing_goal_get` | Get goal with key results | `apps/bearing/src/hooks/useGoals.ts` |
 | `PATCH /goals/:id` | `bearing_goal_update` | Update goal | `apps/bearing/src/hooks/useGoals.ts` |
-| `DELETE /goals/:id` | — | Delete goal | `apps/bearing/src/hooks/useGoals.ts` |
-| `POST /goals/:id/status` | — | Override goal status | `apps/bearing/src/hooks/useGoals.ts` |
-| `GET /goals/:id/updates` | — | List goal updates | `apps/bearing/src/hooks/useGoals.ts` |
+| `DELETE /goals/:id` | `bearing_goal_delete` | Delete goal | `apps/bearing/src/hooks/useGoals.ts` |
+| `POST /goals/:id/status` | `bearing_goal_status_override` | Override goal status | `apps/bearing/src/hooks/useGoals.ts` |
+| `GET /goals/:id/updates` | `bearing_goal_updates` | List goal updates | `apps/bearing/src/hooks/useGoals.ts` |
 | `POST /goals/:id/updates` | `bearing_update_post` | Post a status update | `apps/bearing/src/hooks/useGoals.ts` |
-| `GET /goals/:id/watchers` | — | List goal watchers | `apps/bearing/src/hooks/useGoals.ts` |
-| `POST /goals/:id/watchers` | — | Add watcher | `apps/bearing/src/hooks/useGoals.ts` |
-| `DELETE /goals/:id/watchers/:userId` | — | Remove watcher | `apps/bearing/src/hooks/useGoals.ts` |
-| `GET /goals/:id/history` | — | Goal progress history | `apps/bearing/src/hooks/useGoals.ts` |
-| `GET /goals/:id/key-results` | — | List key results for goal | `apps/bearing/src/hooks/useKeyResults.ts` |
+| `GET /goals/:id/watchers` | `bearing_goal_watchers` | List goal watchers | `apps/bearing/src/hooks/useGoals.ts` |
+| `POST /goals/:id/watchers` | `bearing_goal_watch` | Add watcher | `apps/bearing/src/hooks/useGoals.ts` |
+| `DELETE /goals/:id/watchers/:userId` | `bearing_goal_unwatch` | Remove watcher | `apps/bearing/src/hooks/useGoals.ts` |
+| `GET /goals/:id/history` | `bearing_goal_history` | Goal progress history | `apps/bearing/src/hooks/useGoals.ts` |
+| `GET /goals/:id/key-results` | `bearing_kr_list` | List key results for goal | `apps/bearing/src/hooks/useKeyResults.ts` |
 | `POST /goals/:id/key-results` | `bearing_kr_create` | Create key result | `apps/bearing/src/hooks/useKeyResults.ts` |
-| `GET /key-results/:id` | — | Get key result | `apps/bearing/src/hooks/useKeyResults.ts` |
+| `GET /key-results/:id` | `bearing_kr_get` | Get key result | `apps/bearing/src/hooks/useKeyResults.ts` |
 | `PATCH /key-results/:id` | `bearing_kr_update` | Update key result | `apps/bearing/src/hooks/useKeyResults.ts` |
-| `DELETE /key-results/:id` | — | Delete key result | `apps/bearing/src/hooks/useKeyResults.ts` |
+| `DELETE /key-results/:id` | `bearing_kr_delete` | Delete key result | `apps/bearing/src/hooks/useKeyResults.ts` |
 | `POST /key-results/:id/value` | `bearing_kr_update` | Set current value (check-in) | `apps/bearing/src/hooks/useKeyResults.ts` |
-| `GET /key-results/:id/links` | — | List key-result links | `apps/bearing/src/hooks/useKeyResults.ts` |
+| `GET /key-results/:id/links` | `bearing_kr_links` | List key-result links | `apps/bearing/src/hooks/useKeyResults.ts` |
 | `POST /key-results/:id/links` | `bearing_kr_link` | Add link to Bam entity | `apps/bearing/src/hooks/useKeyResults.ts` |
-| `DELETE /key-results/:id/links/:linkId` | — | Remove key-result link | `apps/bearing/src/hooks/useKeyResults.ts` |
-| `GET /key-results/:id/history` | — | Key-result snapshot history | `apps/bearing/src/hooks/useKeyResults.ts` |
-| `GET /key-results/export` | — | Export key results as CSV | — |
+| `DELETE /key-results/:id/links/:linkId` | `bearing_kr_unlink` | Remove key-result link | `apps/bearing/src/hooks/useKeyResults.ts` |
+| `GET /key-results/:id/history` | `bearing_kr_history` | Key-result snapshot history | `apps/bearing/src/hooks/useKeyResults.ts` |
+| `GET /key-results/export` | — _(skip: binary/CSV export)_ | Export key results as CSV | — |
 | `GET /periods` | `bearing_periods` | List OKR periods | `apps/bearing/src/hooks/usePeriods.ts` |
-| `POST /periods` | — | Create period | `apps/bearing/src/hooks/usePeriods.ts` |
+| `POST /periods` | `bearing_period_create` | Create period | `apps/bearing/src/hooks/usePeriods.ts` |
 | `GET /periods/:id` | `bearing_period_get` | Get period with stats | `apps/bearing/src/hooks/usePeriods.ts` |
-| `PATCH /periods/:id` | — | Update period | `apps/bearing/src/hooks/usePeriods.ts` |
-| `DELETE /periods/:id` | — | Delete period | `apps/bearing/src/hooks/usePeriods.ts` |
-| `POST /periods/:id/activate` | — | Activate period | `apps/bearing/src/hooks/usePeriods.ts` |
-| `POST /periods/:id/complete` | — | Complete period | `apps/bearing/src/hooks/usePeriods.ts` |
+| `PATCH /periods/:id` | `bearing_period_update` | Update period | `apps/bearing/src/hooks/usePeriods.ts` |
+| `DELETE /periods/:id` | `bearing_period_delete` | Delete period | `apps/bearing/src/hooks/usePeriods.ts` |
+| `POST /periods/:id/activate` | `bearing_period_activate` | Activate period | `apps/bearing/src/hooks/usePeriods.ts` |
+| `POST /periods/:id/complete` | `bearing_period_complete` | Complete period | `apps/bearing/src/hooks/usePeriods.ts` |
 | `GET /reports/period/:periodId` | `bearing_report` | Period summary report | `apps/bearing/src/hooks/useProgress.ts` |
 | `GET /reports/at-risk` | `bearing_at_risk` | At-risk goals report | — |
 | `GET /reports/owner/:userId` | `bearing_report` | A user's goals report | — |
@@ -1065,23 +1080,23 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `DELETE /collaborators/:collabId` | — | Remove a board collaborator | — |
-| `PATCH /collaborators/:collabId` | — | Update collaborator permission | — |
-| `DELETE /links/:linkId` | — | Delete element-task link | — |
+| `DELETE /collaborators/:collabId` | `board_remove_collaborator` | Remove a board collaborator | — |
+| `PATCH /collaborators/:collabId` | `board_update_collaborator` | Update collaborator permission | — |
+| `DELETE /links/:linkId` | `board_delete_link` | Delete element-task link | — |
 | `GET /boards` | `board_list` | List boards with filters/pagination | `apps/board/src/hooks/use-boards.ts` |
 | `POST /boards` | `board_create` | Create a board | `apps/board/src/hooks/use-boards.ts` |
-| `GET /boards/recent` | — | Recently updated boards | `apps/board/src/hooks/use-boards.ts` |
+| `GET /boards/recent` | `board_list_recent` | Recently updated boards | `apps/board/src/hooks/use-boards.ts` |
 | `GET /boards/search` | `board_search` | Search board element text | — |
-| `GET /boards/starred` | — | User's starred boards | `apps/board/src/hooks/use-boards.ts` |
-| `GET /boards/stats` | — | Org-level board statistics | `apps/board/src/hooks/use-boards.ts` |
+| `GET /boards/starred` | `board_list_starred` | User's starred boards | `apps/board/src/hooks/use-boards.ts` |
+| `GET /boards/stats` | `board_org_stats` | Org-level board statistics | `apps/board/src/hooks/use-boards.ts` |
 | `GET /boards/:id` | `board_get` | Get board metadata | `apps/board/src/hooks/use-boards.ts` |
 | `PATCH /boards/:id` | `board_update` | Update board metadata | `apps/board/src/hooks/use-boards.ts` |
 | `DELETE /boards/:id` | `board_archive` | Archive (soft-delete) board | `apps/board/src/hooks/use-boards.ts` |
-| `GET /boards/:id/chat` | — | List recent chat messages | `apps/board/src/hooks/use-chat.ts` |
-| `POST /boards/:id/chat` | — | Send a chat message | `apps/board/src/hooks/use-chat.ts` |
-| `GET /boards/:id/collaborators` | — | List collaborators | — |
-| `POST /boards/:id/collaborators` | — | Add a collaborator | — |
-| `POST /boards/:id/duplicate` | — | Duplicate board with elements | `apps/board/src/hooks/use-boards.ts` |
+| `GET /boards/:id/chat` | `board_read_chat` | List recent chat messages | `apps/board/src/hooks/use-chat.ts` |
+| `POST /boards/:id/chat` | `board_post_chat` | Send a chat message | `apps/board/src/hooks/use-chat.ts` |
+| `GET /boards/:id/collaborators` | `board_list_collaborators` | List collaborators | — |
+| `POST /boards/:id/collaborators` | `board_add_collaborator` | Add a collaborator | — |
+| `POST /boards/:id/duplicate` | `board_duplicate` | Duplicate board with elements | `apps/board/src/hooks/use-boards.ts` |
 | `GET /boards/:id/elements` | `board_read_elements` | Read all canvas elements | `apps/board/src/hooks/use-elements.ts` |
 | `GET /boards/:id/elements/frames` | `board_read_frames` | Read frames + contained elements | `apps/board/src/hooks/use-elements.ts` |
 | `POST /boards/:id/elements/promote` | `board_promote_to_tasks` | Promote stickies to Bam tasks | — |
@@ -1089,27 +1104,27 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `POST /boards/:id/elements/sticky` | `board_add_sticky` | Create a sticky note | — |
 | `POST /boards/:id/elements/text` | `board_add_text` | Create a text element | — |
 | `POST /boards/:id/export` | `board_export` | Export scene (json/svg/png) | `apps/blueprint`/agent only |
-| `GET /boards/:id/export/:format` | — | Server-side svg/png render | — |
-| `GET /boards/:id/integrity` | — | Per-board integrity check | `apps/board/src/hooks/use-boards.ts` |
-| `GET /boards/:id/links` | — | List element-task links | — |
+| `GET /boards/:id/export/:format` | — _(skip: binary svg/png render)_ | Server-side svg/png render | — |
+| `GET /boards/:id/integrity` | `board_check_integrity` | Per-board integrity check | `apps/board/src/hooks/use-boards.ts` |
+| `GET /boards/:id/links` | `board_list_links` | List element-task links | — |
 | `POST /boards/:id/lock` | — *(via `board_update locked`)* | Toggle board lock | `apps/board/src/hooks/use-boards.ts` |
-| `DELETE /boards/:id/permanent` | — | Hard-delete board (cascade) | `apps/board/src/hooks/use-boards.ts` |
-| `POST /boards/:id/remediate` | — | Apply integrity fix (detach/reassign) | `apps/board/src/hooks/use-boards.ts` |
-| `POST /boards/:id/restore` | — | Restore archived board | `apps/board/src/hooks/use-boards.ts` |
-| `GET /boards/:id/scene` | — | Load saved Excalidraw scene | `apps/board/src/hooks/use-collaboration.ts` |
-| `PUT /boards/:id/scene` | — | Full scene save | `apps/board/src/hooks/use-collaboration.ts` |
-| `POST /boards/:id/scene/beacon` | — | sendBeacon scene flush on unload | `apps/board/src/pages/board-canvas.tsx` |
-| `POST /boards/:id/star` | — | Toggle star on board | `apps/board/src/hooks/use-boards.ts` |
-| `GET /boards/:id/stats` | — | Single-board statistics | — |
-| `GET /boards/:id/versions` | — | List board versions | `apps/board/src/hooks/use-versions.ts` |
-| `POST /boards/:id/versions` | — | Create named snapshot | `apps/board/src/hooks/use-versions.ts` |
-| `POST /boards/:id/versions/:versionId/restore` | — | Restore a version | `apps/board/src/hooks/use-versions.ts` |
+| `DELETE /boards/:id/permanent` | `board_delete_permanent` | Hard-delete board (cascade) | `apps/board/src/hooks/use-boards.ts` |
+| `POST /boards/:id/remediate` | `board_remediate_integrity` | Apply integrity fix (detach/reassign) | `apps/board/src/hooks/use-boards.ts` |
+| `POST /boards/:id/restore` | `board_restore` | Restore archived board | `apps/board/src/hooks/use-boards.ts` |
+| `GET /boards/:id/scene` | — _(skip: Excalidraw/Yjs scene sync)_ | Load saved Excalidraw scene | `apps/board/src/hooks/use-collaboration.ts` |
+| `PUT /boards/:id/scene` | — _(skip: Excalidraw/Yjs scene sync)_ | Full scene save | `apps/board/src/hooks/use-collaboration.ts` |
+| `POST /boards/:id/scene/beacon` | — _(skip: Excalidraw/Yjs scene sync)_ | sendBeacon scene flush on unload | `apps/board/src/pages/board-canvas.tsx` |
+| `POST /boards/:id/star` | `board_star_toggle` | Toggle star on board | `apps/board/src/hooks/use-boards.ts` |
+| `GET /boards/:id/stats` | `board_stats` | Single-board statistics | — |
+| `GET /boards/:id/versions` | `board_list_versions` | List board versions | `apps/board/src/hooks/use-versions.ts` |
+| `POST /boards/:id/versions` | `board_create_version` | Create named snapshot | `apps/board/src/hooks/use-versions.ts` |
+| `POST /boards/:id/versions/:versionId/restore` | `board_restore_version` | Restore a version | `apps/board/src/hooks/use-versions.ts` |
 | `GET /internal/can-read` (`POST`) | — *(internal)* | Bureau cross-app read preflight | — |
-| `GET /templates` | — | List board templates | `apps/board/src/hooks/use-templates.ts` |
-| `POST /templates` | — | Create a template | — |
-| `PATCH /templates/:id` | — | Update a template | — |
-| `DELETE /templates/:id` | — | Delete a template | — |
-| `POST /templates/:id/instantiate` | — | Create a board from template | `apps/board/src/hooks/use-templates.ts` |
+| `GET /templates` | `board_list_templates` | List board templates | `apps/board/src/hooks/use-templates.ts` |
+| `POST /templates` | `board_create_template` | Create a template | — |
+| `PATCH /templates/:id` | `board_update_template` | Update a template | — |
+| `DELETE /templates/:id` | `board_delete_template` | Delete a template | — |
+| `POST /templates/:id/instantiate` | `board_instantiate_template` | Create a board from template | `apps/board/src/hooks/use-templates.ts` |
 | `— *(client-side)*` | `board_summarize` | Frame-grouped summary (reuses `/frames`) | — |
 
 
@@ -1119,29 +1134,29 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /analytics/engagement-trend` | — | Org engagement trend over time | `apps/blast/src/hooks/use-analytics.ts` |
+| `GET /analytics/engagement-trend` | `blast_get_engagement_trend` | Org engagement trend over time | `apps/blast/src/hooks/use-analytics.ts` |
 | `GET /analytics/overview` | `blast_get_engagement_summary` | Org-level engagement metrics | `apps/blast/src/hooks/use-analytics.ts` |
 | `GET /analytics/unsubscribe-check` | `blast_check_unsubscribed` | Check email unsubscribe status | — |
 | `GET /campaigns` | — | List campaigns | `apps/blast/src/hooks/use-campaigns.ts` |
 | `POST /campaigns` | `blast_draft_campaign` | Create draft campaign | `apps/blast/src/hooks/use-campaigns.ts` |
 | `GET /campaigns/:id` | `blast_get_campaign` | Campaign detail + stats | `apps/blast/src/hooks/use-campaigns.ts` |
-| `PATCH /campaigns/:id` | — | Update campaign | `apps/blast/src/hooks/use-campaigns.ts` |
+| `PATCH /campaigns/:id` | `blast_update_campaign` | Update campaign | `apps/blast/src/hooks/use-campaigns.ts` |
 | `DELETE /campaigns/:id` | — | Delete campaign | `apps/blast/src/hooks/use-campaigns.ts` |
 | `GET /campaigns/:id/analytics` | `blast_get_campaign_analytics` | Engagement metrics for campaign | `apps/blast/src/hooks/use-campaigns.ts` |
-| `GET /campaigns/:id/analytics/devices` | — | Device-breakdown analytics | — |
-| `POST /campaigns/:id/cancel` | — | Cancel a campaign | — |
-| `POST /campaigns/:id/pause` | — | Pause a campaign | — |
-| `GET /campaigns/:id/recipients` | — | List campaign recipients | `apps/blast/src/hooks/use-campaigns.ts` |
+| `GET /campaigns/:id/analytics/devices` | `blast_get_campaign_device_analytics` | Device-breakdown analytics | — |
+| `POST /campaigns/:id/cancel` | `blast_cancel_campaign` | Cancel a campaign | — |
+| `POST /campaigns/:id/pause` | `blast_pause_campaign` | Pause a campaign | — |
+| `GET /campaigns/:id/recipients` | `blast_list_campaign_recipients` | List campaign recipients | `apps/blast/src/hooks/use-campaigns.ts` |
 | `POST /campaigns/:id/schedule` | `blast_send_campaign` *(approval path)* | Schedule campaign send | `apps/blast/src/hooks/use-campaigns.ts` |
 | `POST /campaigns/:id/send` | `blast_send_campaign` | Send campaign immediately | `apps/blast/src/hooks/use-campaigns.ts` |
 | `GET /segments` | `blast_list_segments` | List contact segments | `apps/blast/src/hooks/use-segments.ts` |
 | `POST /segments` | `blast_create_segment` | Create a segment | `apps/blast/src/hooks/use-segments.ts` |
-| `GET /segments/:id` | — | Get a segment | `apps/blast/src/hooks/use-segments.ts` |
-| `PATCH /segments/:id` | — | Update a segment | `apps/blast/src/hooks/use-segments.ts` |
+| `GET /segments/:id` | `blast_get_segment` | Get a segment | `apps/blast/src/hooks/use-segments.ts` |
+| `PATCH /segments/:id` | `blast_update_segment` | Update a segment | `apps/blast/src/hooks/use-segments.ts` |
 | `DELETE /segments/:id` | — | Delete a segment | `apps/blast/src/hooks/use-segments.ts` |
-| `POST /segments/:id/count` | — | Recalculate recipient count | `apps/blast/src/hooks/use-segments.ts` |
+| `POST /segments/:id/count` | `blast_recalculate_segment_count` | Recalculate recipient count | `apps/blast/src/hooks/use-segments.ts` |
 | `GET /segments/:id/preview` | `blast_preview_segment` | Preview matching contacts | — |
-| `POST /segments/:id/evaluate` | — | Full recipient evaluation for send | — |
+| `POST /segments/:id/evaluate` | `blast_evaluate_segment` | Full recipient evaluation for send | — |
 | `GET /sender-domains` | — | List sender domains | `apps/blast/src/pages/domain-settings.tsx` |
 | `POST /sender-domains` | — | Add sender domain | `apps/blast/src/pages/domain-settings.tsx` |
 | `POST /sender-domains/:id/verify` | — | Verify sender domain | `apps/blast/src/pages/domain-settings.tsx` |
@@ -1149,10 +1164,10 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `GET /templates` | `blast_list_templates` | List email templates | `apps/blast/src/hooks/use-templates.ts` |
 | `POST /templates` | `blast_create_template` | Create email template | `apps/blast/src/hooks/use-templates.ts` |
 | `GET /templates/:id` | `blast_get_template` | Get template content | `apps/blast/src/hooks/use-templates.ts` |
-| `PATCH /templates/:id` | — | Update template | `apps/blast/src/hooks/use-templates.ts` |
+| `PATCH /templates/:id` | `blast_update_template` | Update template | `apps/blast/src/hooks/use-templates.ts` |
 | `DELETE /templates/:id` | — | Delete template | `apps/blast/src/hooks/use-templates.ts` |
-| `POST /templates/:id/duplicate` | — | Duplicate template | `apps/blast/src/hooks/use-templates.ts` |
-| `POST /templates/:id/preview` | — | Render template with merge data | — |
+| `POST /templates/:id/duplicate` | `blast_duplicate_template` | Duplicate template | `apps/blast/src/hooks/use-templates.ts` |
+| `POST /templates/:id/preview` | `blast_preview_template` | Render template with merge data | — |
 | `GET /t/o/:token` | — *(public tracking)* | Open-tracking pixel | email client |
 | `GET /t/c/:token` | — *(public tracking)* | Click-tracking redirect | email client |
 | `GET /unsub/:token` | — *(public)* | Unsubscribe confirmation page | email client |
@@ -1170,34 +1185,34 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /dashboards` | `bench_list_dashboards` | List dashboards | `apps/bench/src/hooks/use-dashboards.ts` |
-| `POST /dashboards` | — | Create dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
+| `POST /dashboards` | `bench_create_dashboard` | Create dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
 | `GET /dashboards/:id` | `bench_get_dashboard` | Get dashboard with widgets | `apps/bench/src/hooks/use-dashboards.ts` |
-| `PATCH /dashboards/:id` | — | Update dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
-| `DELETE /dashboards/:id` | — | Delete dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
-| `POST /dashboards/:id/duplicate` | — | Clone dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
-| `POST /dashboards/:id/export` | — | Export dashboard (stub/queued) | — |
-| `POST /dashboards/:id/widgets` | — | Add widget to dashboard | `apps/bench/src/hooks/use-widgets.ts` |
+| `PATCH /dashboards/:id` | `bench_update_dashboard` | Update dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
+| `DELETE /dashboards/:id` | `bench_delete_dashboard` | Delete dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
+| `POST /dashboards/:id/duplicate` | `bench_duplicate_dashboard` | Clone dashboard | `apps/bench/src/hooks/use-dashboards.ts` |
+| `POST /dashboards/:id/export` | `bench_export_dashboard` | Export dashboard (stub/queued) | — |
+| `POST /dashboards/:id/widgets` | `bench_add_widget` | Add widget to dashboard | `apps/bench/src/hooks/use-widgets.ts` |
 | `GET /data-sources` | `bench_list_data_sources` | List data sources + schemas | `apps/bench/src/hooks/use-data-sources.ts` |
-| `GET /data-sources/:product/:entity` | — | Data-source detail | `apps/bench/src/hooks/use-data-sources.ts` |
-| `GET /materialized-views` | — | List materialized views | — |
-| `POST /materialized-views/:viewName/refresh` | — | Refresh a materialized view | — |
+| `GET /data-sources/:product/:entity` | `bench_get_data_source` | Data-source detail | `apps/bench/src/hooks/use-data-sources.ts` |
+| `GET /materialized-views` | `bench_list_materialized_views` | List materialized views | — |
+| `POST /materialized-views/:viewName/refresh` | `bench_refresh_materialized_view` | Refresh a materialized view | — |
 | `POST /query/preview` | `bench_query_ad_hoc` | Ad-hoc structured query | `apps/bench/src/pages/explorer.tsx` |
 | `GET /reports` | `bench_list_scheduled_reports` | List scheduled reports | `apps/bench/src/hooks/use-reports.ts` |
-| `POST /reports` | — | Create scheduled report | `apps/bench/src/hooks/use-reports.ts` |
-| `PATCH /reports/:id` | — | Update report | — |
-| `DELETE /reports/:id` | — | Delete report | `apps/bench/src/hooks/use-reports.ts` |
+| `POST /reports` | `bench_create_scheduled_report` | Create scheduled report | `apps/bench/src/hooks/use-reports.ts` |
+| `PATCH /reports/:id` | `bench_update_scheduled_report` | Update report | — |
+| `DELETE /reports/:id` | `bench_delete_scheduled_report` | Delete report | `apps/bench/src/hooks/use-reports.ts` |
 | `POST /reports/:id/send-now` | `bench_generate_report` | Trigger immediate report | `apps/bench/src/hooks/use-reports.ts` |
-| `GET /saved-queries` | — | List saved queries | `apps/bench/src/hooks/use-saved-queries.ts` |
-| `POST /saved-queries` | — | Create saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
-| `GET /saved-queries/:id` | — | Get saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
-| `PATCH /saved-queries/:id` | — | Update saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
-| `DELETE /saved-queries/:id` | — | Delete saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
+| `GET /saved-queries` | `bench_list_saved_queries` | List saved queries | `apps/bench/src/hooks/use-saved-queries.ts` |
+| `POST /saved-queries` | `bench_create_saved_query` | Create saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
+| `GET /saved-queries/:id` | `bench_get_saved_query` | Get saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
+| `PATCH /saved-queries/:id` | `bench_update_saved_query` | Update saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
+| `DELETE /saved-queries/:id` | `bench_delete_saved_query` | Delete saved query | `apps/bench/src/hooks/use-saved-queries.ts` |
 | `GET /widgets` | `bench_list_widgets` | List widgets across org | — |
-| `GET /widgets/:id` | — | Get widget | `apps/bench/src/hooks/use-widgets.ts` |
-| `PATCH /widgets/:id` | — | Update widget | `apps/bench/src/hooks/use-widgets.ts` |
-| `DELETE /widgets/:id` | — | Delete widget | `apps/bench/src/hooks/use-widgets.ts` |
+| `GET /widgets/:id` | `bench_get_widget` | Get widget | `apps/bench/src/hooks/use-widgets.ts` |
+| `PATCH /widgets/:id` | `bench_update_widget` | Update widget | `apps/bench/src/hooks/use-widgets.ts` |
+| `DELETE /widgets/:id` | `bench_delete_widget` | Delete widget | `apps/bench/src/hooks/use-widgets.ts` |
 | `POST /widgets/:id/query` | `bench_query_widget` | Execute widget query | `apps/bench/src/hooks/use-widgets.ts` |
-| `POST /widgets/:id/refresh` | — | Force cache refresh + re-query | `apps/bench/src/hooks/use-widgets.ts` |
+| `POST /widgets/:id/refresh` | `bench_refresh_widget` | Force cache refresh + re-query | `apps/bench/src/hooks/use-widgets.ts` |
 | `— *(composite)*` | `bench_summarize_dashboard` | Fan-out all widget queries for AI | — |
 | `— *(composite)*` | `bench_detect_anomalies` | Compare last vs prior period (2× preview) | — |
 | `— *(composite)*` | `bench_compare_periods` | Compare two time periods (2× preview) | — |
@@ -1215,12 +1230,12 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `GET /diagrams/:id` | `blueprint_get` | Get diagram metadata | `apps/blueprint/src/hooks/use-diagrams.ts` |
 | `PATCH /diagrams/:id` | `blueprint_update` | Update diagram metadata | `apps/blueprint/src/hooks/use-diagrams.ts` |
 | `POST /diagrams/:id/archive` | `blueprint_archive` | Archive diagram (soft delete) | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `GET /diagrams/:id/collaborators` | — | List diagram collaborators | — |
-| `POST /diagrams/:id/collaborators` | — | Add collaborator | — |
-| `DELETE /diagrams/:id/collaborators/:userId` | — | Remove collaborator | — |
-| `GET /diagrams/:id/comments` | — | List anchored comments | — |
-| `POST /diagrams/:id/comments` | — | Add a comment | — |
-| `PATCH /diagrams/:id/comments/:cid` | — | Edit/resolve a comment | — |
+| `GET /diagrams/:id/collaborators` | `blueprint_list_collaborators` | List diagram collaborators | — |
+| `POST /diagrams/:id/collaborators` | `blueprint_add_collaborator` | Add collaborator | — |
+| `DELETE /diagrams/:id/collaborators/:userId` | `blueprint_remove_collaborator` | Remove collaborator | — |
+| `GET /diagrams/:id/comments` | `blueprint_list_comments` | List anchored comments | — |
+| `POST /diagrams/:id/comments` | `blueprint_add_comment` | Add a comment | — |
+| `PATCH /diagrams/:id/comments/:cid` | `blueprint_update_comment` | Edit/resolve a comment | — |
 | `GET /diagrams/:id/edges` | `blueprint_read_edges` | Read all edges | (via `/graph`) |
 | `POST /diagrams/:id/edges` | `blueprint_add_edge` | Create an edge | `apps/blueprint/src/hooks/use-graph.ts` |
 | `PATCH /diagrams/:id/edges/:edgeId` | `blueprint_update_edge` | Update an edge | `apps/blueprint/src/hooks/use-graph.ts` |
@@ -1228,7 +1243,7 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `GET /diagrams/:id/export` | `blueprint_export` | Export json/mermaid/svg/png | `apps/blueprint/src/hooks/use-graph.ts` |
 | `POST /diagrams/:id/generate` | `blueprint_generate` | Build graph from node/edge spec | — |
 | `GET /diagrams/:id/graph` | — *(use read_nodes + read_edges)* | Full graph payload | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `POST /diagrams/:id/import` | — | Import Mermaid source | `apps/blueprint/src/hooks/use-graph.ts` |
+| `POST /diagrams/:id/import` | `blueprint_import_mermaid` | Import Mermaid source | `apps/blueprint/src/hooks/use-graph.ts` |
 | `POST /diagrams/:id/layout` | `blueprint_apply_layout` | Run ELK auto-layout | `apps/blueprint/src/hooks/use-graph.ts` |
 | `GET /diagrams/:id/nodes` | `blueprint_read_nodes` | Read all nodes | (via `/graph`) |
 | `POST /diagrams/:id/nodes` | `blueprint_add_node` | Add a node | `apps/blueprint/src/hooks/use-graph.ts` |
@@ -1239,13 +1254,13 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `POST /diagrams/:id/nodes/:nodeId/move` | `blueprint_move_node` | Reposition a node | `apps/blueprint/src/hooks/use-graph.ts` |
 | `POST /diagrams/:id/nodes/:nodeId/promote-to-task` | `blueprint_promote_node_to_task` | Build task payload from node | `apps/blueprint/src/pages/editor.tsx` |
 | `POST /diagrams/:id/promote-to-tasks` | `blueprint_promote_graph_to_tasks` | Compile graph into task plan | `apps/blueprint/src/hooks/use-graph.ts` |
-| `POST /diagrams/:id/star` | — | Star a diagram | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `DELETE /diagrams/:id/star` | — | Unstar a diagram | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `GET /diagrams/:id/versions` | — | List versions | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `POST /diagrams/:id/versions` | — | Snapshot a version | `apps/blueprint/src/hooks/use-diagrams.ts` |
-| `POST /diagrams/:id/versions/:n/restore` | — | Restore a version | `apps/blueprint/src/hooks/use-diagrams.ts` |
+| `POST /diagrams/:id/star` | `blueprint_star` | Star a diagram | `apps/blueprint/src/hooks/use-diagrams.ts` |
+| `DELETE /diagrams/:id/star` | `blueprint_unstar` | Unstar a diagram | `apps/blueprint/src/hooks/use-diagrams.ts` |
+| `GET /diagrams/:id/versions` | `blueprint_list_versions` | List versions | `apps/blueprint/src/hooks/use-diagrams.ts` |
+| `POST /diagrams/:id/versions` | `blueprint_snapshot_version` | Snapshot a version | `apps/blueprint/src/hooks/use-diagrams.ts` |
+| `POST /diagrams/:id/versions/:n/restore` | `blueprint_restore_version` | Restore a version | `apps/blueprint/src/hooks/use-diagrams.ts` |
 | `POST /internal/sync-from-task` | — *(internal)* | Propagate Bam task edit into nodes | — |
-| `GET /templates` | — | List diagram templates | — |
+| `GET /templates` | `blueprint_list_templates` | List diagram templates | — |
 | `GET /ws` | — *(WebSocket)* | Realtime diagram subscription | `apps/blueprint/src/hooks/use-graph.ts` |
 | `— *(client-side)*` | `blueprint_search` | Client-side name/description filter | — |
 
@@ -1269,33 +1284,33 @@ or `/helpdesk/agents`) segment in-code.
 | `GET /book/api/v1/availability/:userId` | `book_get_availability` | Free/busy slots for one user | `apps/book/src/pages/event-form.tsx` |
 | `POST /book/api/v1/availability/meeting-time-mixed` | `book_find_meeting_time_for_users` | Mixed human/agent meeting-slot finder | — |
 | `GET /book/api/v1/availability/team` | `book_get_team_availability` | Common free slots across users | `apps/book/src/pages/event-form.tsx` |
-| `GET /book/api/v1/booking-pages` | — | List public booking pages | `apps/book/src/hooks/use-booking-pages.ts` |
+| `GET /book/api/v1/booking-pages` | `book_list_booking_pages` | List public booking pages | `apps/book/src/hooks/use-booking-pages.ts` |
 | `POST /book/api/v1/booking-pages` | `book_create_booking_page` | Create a scheduling link page | `apps/book/src/hooks/use-booking-pages.ts` |
-| `PATCH /book/api/v1/booking-pages/:id` | — | Update a booking page | `apps/book/src/pages/booking-page-editor.tsx` |
-| `DELETE /book/api/v1/booking-pages/:id` | — | Delete a booking page | `apps/book/src/hooks/use-booking-pages.ts` |
-| `GET /book/api/v1/calendars` | — | List caller's calendars (resolver source) | `apps/book/src/hooks/use-calendars.ts` |
-| `POST /book/api/v1/calendars` | — | Create a calendar | `apps/book/src/hooks/use-calendars.ts` |
-| `PATCH /book/api/v1/calendars/:id` | — | Update a calendar | `apps/book/src/hooks/use-calendars.ts` |
-| `DELETE /book/api/v1/calendars/:id` | — | Delete a calendar | `apps/book/src/hooks/use-calendars.ts` |
-| `POST /book/api/v1/calendars/:id/ical` | — | Mint an iCal feed token | `apps/book/src/pages/connections.tsx` |
-| `GET /book/api/v1/calendars/:id/ical` | — | Public token-auth `.ics` feed | — (external calendar client) |
-| `GET /book/api/v1/connections` | — | List external calendar connections | `apps/book/src/pages/connections.tsx` |
-| `POST /book/api/v1/connections/google` | — | Connect a Google calendar | `apps/book/src/pages/connections.tsx` |
-| `POST /book/api/v1/connections/microsoft` | — | Connect a Microsoft calendar | `apps/book/src/pages/connections.tsx` |
-| `DELETE /book/api/v1/connections/:id` | — | Remove a calendar connection | `apps/book/src/pages/connections.tsx` |
-| `POST /book/api/v1/connections/:id/sync` | — | Force-sync a connection | `apps/book/src/pages/connections.tsx` |
+| `PATCH /book/api/v1/booking-pages/:id` | `book_update_booking_page` | Update a booking page | `apps/book/src/pages/booking-page-editor.tsx` |
+| `DELETE /book/api/v1/booking-pages/:id` | `book_delete_booking_page` | Delete a booking page | `apps/book/src/hooks/use-booking-pages.ts` |
+| `GET /book/api/v1/calendars` | `book_list_calendars` | List caller's calendars (resolver source) | `apps/book/src/hooks/use-calendars.ts` |
+| `POST /book/api/v1/calendars` | `book_create_calendar` | Create a calendar | `apps/book/src/hooks/use-calendars.ts` |
+| `PATCH /book/api/v1/calendars/:id` | `book_update_calendar` | Update a calendar | `apps/book/src/hooks/use-calendars.ts` |
+| `DELETE /book/api/v1/calendars/:id` | `book_delete_calendar` | Delete a calendar | `apps/book/src/hooks/use-calendars.ts` |
+| `POST /book/api/v1/calendars/:id/ical` | — _(skip: iCal feed token mint)_ | Mint an iCal feed token | `apps/book/src/pages/connections.tsx` |
+| `GET /book/api/v1/calendars/:id/ical` | — _(skip: public token-auth .ics feed)_ | Public token-auth `.ics` feed | — (external calendar client) |
+| `GET /book/api/v1/connections` | `book_list_connections` | List external calendar connections | `apps/book/src/pages/connections.tsx` |
+| `POST /book/api/v1/connections/google` | — _(skip: OAuth calendar connect)_ | Connect a Google calendar | `apps/book/src/pages/connections.tsx` |
+| `POST /book/api/v1/connections/microsoft` | — _(skip: OAuth calendar connect)_ | Connect a Microsoft calendar | `apps/book/src/pages/connections.tsx` |
+| `DELETE /book/api/v1/connections/:id` | `book_delete_connection` | Remove a calendar connection | `apps/book/src/pages/connections.tsx` |
+| `POST /book/api/v1/connections/:id/sync` | `book_sync_connection` | Force-sync a connection | `apps/book/src/pages/connections.tsx` |
 | `GET /book/api/v1/events` | `book_list_events` | List events in a date range | `apps/book/src/hooks/use-events.ts` |
 | `POST /book/api/v1/events` | `book_create_event` | Create an event with attendees | `apps/book/src/hooks/use-events.ts` |
-| `GET /book/api/v1/events/:id` | — | Get one event | `apps/book/src/pages/event-detail.tsx` |
+| `GET /book/api/v1/events/:id` | `book_get_event` | Get one event | `apps/book/src/pages/event-detail.tsx` |
 | `PATCH /book/api/v1/events/:id` | `book_update_event` | Update an event | `apps/book/src/hooks/use-events.ts` |
 | `DELETE /book/api/v1/events/:id` | `book_cancel_event` | Soft-cancel an event | `apps/book/src/hooks/use-events.ts` |
 | `POST /book/api/v1/events/:id/rsvp` | `book_rsvp_event` | Accept/decline/tentative RSVP | `apps/book/src/pages/event-detail.tsx` |
 | `GET /book/api/v1/timeline` | `book_get_timeline` | Cross-product aggregated timeline | `apps/book/src/pages/timeline.tsx` |
-| `GET /book/api/v1/working-hours` | — | Get caller's working hours | `apps/book/src/pages/connections.tsx` |
-| `PUT /book/api/v1/working-hours` | — | Set caller's working hours | `apps/book/src/pages/connections.tsx` |
-| `GET /book/api/meet/:slug` | — | Public booking-page info | `apps/book/src/pages/meet.tsx` |
-| `GET /book/api/meet/:slug/slots` | — | Public available slots | `apps/book/src/pages/meet.tsx` |
-| `POST /book/api/meet/:slug/book` | — | Public slot booking | `apps/book/src/pages/meet.tsx` |
+| `GET /book/api/v1/working-hours` | `book_get_working_hours` | Get caller's working hours | `apps/book/src/pages/connections.tsx` |
+| `PUT /book/api/v1/working-hours` | `book_set_working_hours` | Set caller's working hours | `apps/book/src/pages/connections.tsx` |
+| `GET /book/api/meet/:slug` | — _(skip: public-inbound booking page)_ | Public booking-page info | `apps/book/src/pages/meet.tsx` |
+| `GET /book/api/meet/:slug/slots` | — _(skip: public-inbound booking page)_ | Public available slots | `apps/book/src/pages/meet.tsx` |
+| `POST /book/api/meet/:slug/book` | — _(skip: public-inbound booking intake)_ | Public slot booking | `apps/book/src/pages/meet.tsx` |
 | `GET /book/api/v1/availability/team` *(reused)* | `book_find_meeting_time` | AI: top-3 common slots (client-side intersect) | — |
 
 
@@ -1306,27 +1321,27 @@ or `/helpdesk/agents`) segment in-code.
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /blank/api/v1/fields/:id` *(none)* | — | *(no field GET; see PATCH/DELETE)* | — |
-| `PATCH /blank/api/v1/fields/:id` | — | Update a form field | `apps/blank/src/pages/form-builder.tsx` |
-| `DELETE /blank/api/v1/fields/:id` | — | Delete a form field | `apps/blank/src/pages/form-builder.tsx` |
+| `PATCH /blank/api/v1/fields/:id` | `blank_update_field` | Update a form field | `apps/blank/src/pages/form-builder.tsx` |
+| `DELETE /blank/api/v1/fields/:id` | `blank_delete_field` | Delete a form field | `apps/blank/src/pages/form-builder.tsx` |
 | `GET /blank/api/v1/forms` | `blank_list_forms` | List forms (status/project filters) | `apps/blank/src/hooks/use-forms.ts` |
 | `POST /blank/api/v1/forms` | `blank_create_form` | Create a form with inline fields | `apps/blank/src/hooks/use-forms.ts` |
 | `GET /blank/api/v1/forms/:id` | `blank_get_form` | Get a form with its fields | `apps/blank/src/hooks/use-forms.ts` |
 | `PATCH /blank/api/v1/forms/:id` | `blank_update_form` | Update form metadata/settings | `apps/blank/src/pages/form-settings.tsx` |
-| `DELETE /blank/api/v1/forms/:id` | — | Delete a form | `apps/blank/src/hooks/use-forms.ts` |
+| `DELETE /blank/api/v1/forms/:id` | `blank_delete_form` | Delete a form | `apps/blank/src/hooks/use-forms.ts` |
 | `GET /blank/api/v1/forms/:id/analytics` | `blank_summarize_responses` · `blank_get_form_analytics` | Per-field response aggregation | `apps/blank/src/pages/form-analytics.tsx` |
-| `POST /blank/api/v1/forms/:id/close` | — | Close a form to submissions | `apps/blank/src/pages/form-settings.tsx` |
-| `POST /blank/api/v1/forms/:id/duplicate` | — | Clone a form | `apps/blank/src/hooks/use-forms.ts` |
-| `GET /blank/api/v1/forms/:id/embed-code` | — | Get embed snippet | `apps/blank/src/pages/form-settings.tsx` |
-| `POST /blank/api/v1/forms/:id/fields` | — | Add a field to a form | `apps/blank/src/pages/form-builder.tsx` |
-| `POST /blank/api/v1/forms/:id/fields/reorder` | — | Bulk reorder fields | `apps/blank/src/pages/form-builder.tsx` |
+| `POST /blank/api/v1/forms/:id/close` | `blank_close_form` | Close a form to submissions | `apps/blank/src/pages/form-settings.tsx` |
+| `POST /blank/api/v1/forms/:id/duplicate` | `blank_duplicate_form` | Clone a form | `apps/blank/src/hooks/use-forms.ts` |
+| `GET /blank/api/v1/forms/:id/embed-code` | `blank_get_embed_code` | Get embed snippet | `apps/blank/src/pages/form-settings.tsx` |
+| `POST /blank/api/v1/forms/:id/fields` | `blank_add_field` | Add a field to a form | `apps/blank/src/pages/form-builder.tsx` |
+| `POST /blank/api/v1/forms/:id/fields/reorder` | `blank_reorder_fields` | Bulk reorder fields | `apps/blank/src/pages/form-builder.tsx` |
 | `POST /blank/api/v1/forms/:id/publish` | `blank_publish_form` | Publish a draft form | `apps/blank/src/pages/form-settings.tsx` |
 | `GET /blank/api/v1/forms/:id/submissions` | `blank_list_submissions` | List a form's submissions | `apps/blank/src/pages/form-responses.tsx` |
 | `GET /blank/api/v1/forms/:id/submissions/export` | `blank_export_submissions` | Export submissions as CSV | `apps/blank/src/pages/form-responses.tsx` |
 | `GET /blank/api/v1/submissions/:id` | `blank_get_submission` | Get one submission's data | `apps/blank/src/pages/form-responses.tsx` |
-| `DELETE /blank/api/v1/submissions/:id` | — | Delete a submission | `apps/blank/src/pages/form-responses.tsx` |
-| `GET /blank/api/forms/:slug` | — | Public rendered form HTML | `apps/blank/src/pages/public-form.tsx` |
-| `GET /blank/api/forms/:slug/definition` | — | Public form field definitions | `apps/blank/src/pages/public-form.tsx` |
-| `POST /blank/api/forms/:slug/submit` | — | Public submit a response | `apps/blank/src/pages/public-form.tsx` |
+| `DELETE /blank/api/v1/submissions/:id` | `blank_delete_submission` | Delete a submission | `apps/blank/src/pages/form-responses.tsx` |
+| `GET /blank/api/forms/:slug` | — _(skip: public-inbound form render)_ | Public rendered form HTML | `apps/blank/src/pages/public-form.tsx` |
+| `GET /blank/api/forms/:slug/definition` | — _(skip: public-inbound form definition)_ | Public form field definitions | `apps/blank/src/pages/public-form.tsx` |
+| `POST /blank/api/forms/:slug/submit` | — _(skip: public-inbound form intake)_ | Public submit a response | `apps/blank/src/pages/public-form.tsx` |
 | `— *(client-side)*` | `blank_generate_form` | AI builds a form spec from NL description | — |
 
 
@@ -1337,48 +1352,48 @@ or `/helpdesk/agents`) segment in-code.
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /bill/api/v1/clients` | `bill_list_clients` | List/search billing clients | `apps/bill/src/hooks/use-clients.ts` |
-| `POST /bill/api/v1/clients` | — | Create a billing client | `apps/bill/src/hooks/use-clients.ts` |
-| `GET /bill/api/v1/clients/:id` | — | Get one client | `apps/bill/src/pages/client-detail.tsx` |
-| `PATCH /bill/api/v1/clients/:id` | — | Update a client | `apps/bill/src/hooks/use-clients.ts` |
-| `DELETE /bill/api/v1/clients/:id` | — | Delete a client | `apps/bill/src/hooks/use-clients.ts` |
+| `POST /bill/api/v1/clients` | `bill_create_client` | Create a billing client | `apps/bill/src/hooks/use-clients.ts` |
+| `GET /bill/api/v1/clients/:id` | `bill_get_client` | Get one client | `apps/bill/src/pages/client-detail.tsx` |
+| `PATCH /bill/api/v1/clients/:id` | `bill_update_client` | Update a client | `apps/bill/src/hooks/use-clients.ts` |
+| `DELETE /bill/api/v1/clients/:id` | `bill_delete_client` | Delete a client | `apps/bill/src/hooks/use-clients.ts` |
 | `GET /bill/api/v1/expenses` | `bill_list_expenses` | List expenses (filters) | `apps/bill/src/hooks/use-expenses.ts` |
 | `POST /bill/api/v1/expenses` | `bill_create_expense` | Log an expense | `apps/bill/src/hooks/use-expenses.ts` |
-| `PATCH /bill/api/v1/expenses/:id` | — | Update an expense | `apps/bill/src/hooks/use-expenses.ts` |
-| `DELETE /bill/api/v1/expenses/:id` | — | Delete an expense | `apps/bill/src/hooks/use-expenses.ts` |
-| `POST /bill/api/v1/expenses/:id/approve` | — | Approve an expense | `apps/bill/src/pages/expense-list.tsx` |
-| `POST /bill/api/v1/expenses/:id/reject` | — | Reject an expense | `apps/bill/src/pages/expense-list.tsx` |
-| `POST /bill/api/v1/expenses/:id/receipt` | — | Upload a receipt file | `apps/bill/src/pages/expense-new.tsx` |
+| `PATCH /bill/api/v1/expenses/:id` | `bill_update_expense` | Update an expense | `apps/bill/src/hooks/use-expenses.ts` |
+| `DELETE /bill/api/v1/expenses/:id` | `bill_delete_expense` | Delete an expense | `apps/bill/src/hooks/use-expenses.ts` |
+| `POST /bill/api/v1/expenses/:id/approve` | `bill_approve_expense` | Approve an expense | `apps/bill/src/pages/expense-list.tsx` |
+| `POST /bill/api/v1/expenses/:id/reject` | `bill_reject_expense` | Reject an expense | `apps/bill/src/pages/expense-list.tsx` |
+| `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart receipt upload)_ | Upload a receipt file | `apps/bill/src/pages/expense-new.tsx` |
 | `GET /bill/api/v1/invoices` | `bill_list_invoices` | List invoices (filters) | `apps/bill/src/hooks/use-invoices.ts` |
 | `POST /bill/api/v1/invoices` | `bill_create_invoice` | Create a draft invoice | `apps/bill/src/hooks/use-invoices.ts` |
 | `GET /bill/api/v1/invoices/:id` | `bill_get_invoice` | Get invoice detail | `apps/bill/src/pages/invoice-detail.tsx` |
-| `PATCH /bill/api/v1/invoices/:id` | — | Update an invoice | `apps/bill/src/pages/invoice-edit.tsx` |
-| `DELETE /bill/api/v1/invoices/:id` | — | Delete an invoice | `apps/bill/src/hooks/use-invoices.ts` |
-| `POST /bill/api/v1/invoices/:id/duplicate` | — | Duplicate an invoice | `apps/bill/src/pages/invoice-detail.tsx` |
+| `PATCH /bill/api/v1/invoices/:id` | `bill_update_invoice` | Update an invoice | `apps/bill/src/pages/invoice-edit.tsx` |
+| `DELETE /bill/api/v1/invoices/:id` | `bill_delete_invoice` | Delete an invoice | `apps/bill/src/hooks/use-invoices.ts` |
+| `POST /bill/api/v1/invoices/:id/duplicate` | `bill_duplicate_invoice` | Duplicate an invoice | `apps/bill/src/pages/invoice-detail.tsx` |
 | `POST /bill/api/v1/invoices/:id/finalize` | `bill_finalize_invoice` | Finalize, assign number, lock | `apps/bill/src/pages/invoice-detail.tsx` |
-| `GET /bill/api/v1/invoices/:id/jobs` | — | Latest PDF/email job state | `apps/bill/src/pages/invoice-detail.tsx` |
+| `GET /bill/api/v1/invoices/:id/jobs` | `bill_get_invoice_jobs` | Latest PDF/email job state | `apps/bill/src/pages/invoice-detail.tsx` |
 | `POST /bill/api/v1/invoices/:id/line-items` | `bill_add_line_item` | Add a line item | `apps/bill/src/pages/invoice-edit.tsx` |
-| `PATCH /bill/api/v1/invoices/:id/line-items/:itemId` | — | Update a line item | `apps/bill/src/pages/invoice-edit.tsx` |
-| `DELETE /bill/api/v1/invoices/:id/line-items/:itemId` | — | Delete a line item | `apps/bill/src/pages/invoice-edit.tsx` |
+| `PATCH /bill/api/v1/invoices/:id/line-items/:itemId` | `bill_update_line_item` | Update a line item | `apps/bill/src/pages/invoice-edit.tsx` |
+| `DELETE /bill/api/v1/invoices/:id/line-items/:itemId` | `bill_delete_line_item` | Delete a line item | `apps/bill/src/pages/invoice-edit.tsx` |
 | `POST /bill/api/v1/invoices/:id/payments` | `bill_record_payment` | Record a payment | `apps/bill/src/pages/invoice-detail.tsx` |
-| `GET /bill/api/v1/invoices/:id/pdf` | — | Generate/return invoice PDF | `apps/bill/src/pages/invoice-detail.tsx` |
+| `GET /bill/api/v1/invoices/:id/pdf` | — _(skip: binary PDF export)_ | Generate/return invoice PDF | `apps/bill/src/pages/invoice-detail.tsx` |
 | `POST /bill/api/v1/invoices/:id/send` | `bill_send_invoice` | Mark sent, queue email | `apps/bill/src/pages/invoice-detail.tsx` |
-| `POST /bill/api/v1/invoices/:id/void` | — | Void an invoice | `apps/bill/src/pages/invoice-detail.tsx` |
+| `POST /bill/api/v1/invoices/:id/void` | `bill_void_invoice` | Void an invoice | `apps/bill/src/pages/invoice-detail.tsx` |
 | `POST /bill/api/v1/invoices/from-deal` | `bill_create_invoice_from_deal` | Draft invoice from a Bond deal | — |
 | `POST /bill/api/v1/invoices/from-time-entries` | `bill_create_invoice_from_time` | Invoice from Bam time entries | `apps/bill/src/pages/invoice-from-time.tsx` |
-| `DELETE /bill/api/v1/payments/:id` | — | Delete a payment | `apps/bill/src/pages/invoice-detail.tsx` |
-| `GET /bill/api/v1/rates` | — | List billing rates | `apps/bill/src/hooks/use-rates.ts` |
-| `POST /bill/api/v1/rates` | — | Create a rate | `apps/bill/src/hooks/use-rates.ts` |
-| `PATCH /bill/api/v1/rates/:id` | — | Update a rate | `apps/bill/src/hooks/use-rates.ts` |
-| `DELETE /bill/api/v1/rates/:id` | — | Delete a rate | `apps/bill/src/hooks/use-rates.ts` |
+| `DELETE /bill/api/v1/payments/:id` | `bill_delete_payment` | Delete a payment | `apps/bill/src/pages/invoice-detail.tsx` |
+| `GET /bill/api/v1/rates` | `bill_list_rates` | List billing rates | `apps/bill/src/hooks/use-rates.ts` |
+| `POST /bill/api/v1/rates` | `bill_create_rate` | Create a rate | `apps/bill/src/hooks/use-rates.ts` |
+| `PATCH /bill/api/v1/rates/:id` | `bill_update_rate` | Update a rate | `apps/bill/src/hooks/use-rates.ts` |
+| `DELETE /bill/api/v1/rates/:id` | `bill_delete_rate` | Delete a rate | `apps/bill/src/hooks/use-rates.ts` |
 | `GET /bill/api/v1/rates/resolve` | `bill_resolve_rate` | Resolve effective rate (project/user/date) | — |
-| `GET /bill/api/v1/reports/outstanding` | — | Outstanding-balance report | `apps/bill/src/hooks/use-reports.ts` |
+| `GET /bill/api/v1/reports/outstanding` | `bill_get_outstanding` | Outstanding-balance report | `apps/bill/src/hooks/use-reports.ts` |
 | `GET /bill/api/v1/reports/overdue` | `bill_get_overdue` | Overdue invoices report | `apps/bill/src/hooks/use-reports.ts` |
 | `GET /bill/api/v1/reports/profitability` | `bill_get_profitability` | Revenue-vs-expense per project | `apps/bill/src/hooks/use-reports.ts` |
 | `GET /bill/api/v1/reports/revenue` | `bill_get_revenue_summary` | Revenue summary by month | `apps/bill/src/hooks/use-reports.ts` |
-| `GET /bill/api/v1/settings` | — | Get org billing settings | `apps/bill/src/pages/settings.tsx` |
-| `PUT /bill/api/v1/settings` | — | Update org billing settings | `apps/bill/src/pages/settings.tsx` |
-| `GET /bill/api/invoice/:token` | — | Public token-auth invoice view | — (public link) |
-| `GET /bill/api/invoice/:token/pdf` | — | Public token-auth invoice PDF | — (public link) |
+| `GET /bill/api/v1/settings` | `bill_get_settings` | Get org billing settings | `apps/bill/src/pages/settings.tsx` |
+| `PUT /bill/api/v1/settings` | `bill_update_settings` | Update org billing settings | `apps/bill/src/pages/settings.tsx` |
+| `GET /bill/api/invoice/:token` | — _(skip: public token-auth invoice view)_ | Public token-auth invoice view | — (public link) |
+| `GET /bill/api/invoice/:token/pdf` | — _(skip: public binary PDF)_ | Public token-auth invoice PDF | — (public link) |
 
 
 ## Bureau (app)
@@ -1388,43 +1403,43 @@ or `/helpdesk/agents`) segment in-code.
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /bureau/api/v1/bookings/:id` *(none)* | — | *(no booking GET; PATCH/DELETE only)* | — |
-| `PATCH /bureau/api/v1/bookings/:id` | — | Update a room booking window | — |
+| `PATCH /bureau/api/v1/bookings/:id` | `bureau_update_booking` | Update a room booking window | — |
 | `DELETE /bureau/api/v1/bookings/:id` | `bureau_cancel_booking` | Soft-cancel a booking (confirm) | — |
-| `GET /bureau/api/v1/chat/rooms` | — | List caller's chat threads | `apps/bureau/src/pages/chats.tsx` |
-| `GET /bureau/api/v1/chat/rooms/:roomKey/messages` | — | Chat transcript recovery | `apps/bureau/src/pages/chats.tsx` |
-| `PATCH /bureau/api/v1/chat/rooms/:roomKey/retention` | — | Set chat retention (admin) | `apps/bureau/src/pages/chats.tsx` |
+| `GET /bureau/api/v1/chat/rooms` | `bureau_list_chats` | List caller's chat threads | `apps/bureau/src/pages/chats.tsx` |
+| `GET /bureau/api/v1/chat/rooms/:roomKey/messages` | `bureau_get_chat_messages` | Chat transcript recovery | `apps/bureau/src/pages/chats.tsx` |
+| `PATCH /bureau/api/v1/chat/rooms/:roomKey/retention` | `bureau_set_chat_retention` | Set chat retention (admin) | `apps/bureau/src/pages/chats.tsx` |
 | `GET /bureau/api/v1/floors` | `bureau_list_floors` | List floors with occupancy | `apps/bureau/src/hooks/use-floors.ts` |
 | `POST /bureau/api/v1/floors` | `bureau_create_floor` | Create a floor (admin) | `apps/bureau/src/pages/admin/floor-list.tsx` |
 | `GET /bureau/api/v1/floors/:id` | `bureau_get_floor` | Floor detail + rooms + occupancy | `apps/bureau/src/hooks/use-floors.ts` |
-| `PATCH /bureau/api/v1/floors/:id` | — | Update/unarchive a floor (admin) | `apps/bureau/src/pages/admin/floor-editor.tsx` |
-| `DELETE /bureau/api/v1/floors/:id` | — | Soft-delete a floor (admin) | `apps/bureau/src/pages/admin/floor-list.tsx` |
-| `POST /bureau/api/v1/floors/:id/background` | — | Set floor background URL (admin) | `apps/bureau/src/pages/admin/floor-editor.tsx` |
+| `PATCH /bureau/api/v1/floors/:id` | `bureau_update_floor` | Update/unarchive a floor (admin) | `apps/bureau/src/pages/admin/floor-editor.tsx` |
+| `DELETE /bureau/api/v1/floors/:id` | `bureau_delete_floor` | Soft-delete a floor (admin) | `apps/bureau/src/pages/admin/floor-list.tsx` |
+| `POST /bureau/api/v1/floors/:id/background` | `bureau_set_floor_background` | Set floor background URL (admin) | `apps/bureau/src/pages/admin/floor-editor.tsx` |
 | `POST /bureau/api/v1/knocks` | `bureau_knock` | Knock on an office door | `apps/bureau/src/stores/bureau-store.ts` |
 | `PATCH /bureau/api/v1/knocks/:id` | `bureau_respond_knock` | Owner admits/defers/declines | `apps/bureau/src/stores/bureau-store.ts` |
-| `GET /bureau/api/v1/knocks/inbox` | — | Pending knocks for the owner | `apps/bureau/src/stores/bureau-store.ts` |
-| `POST /bureau/api/v1/knocks/leave-note` | — | DND fallback: DM the owner | `apps/bureau/src/stores/bureau-store.ts` |
-| `GET /bureau/api/v1/offices` | — | All offices + owners (admin) | `apps/bureau/src/pages/admin/offices.tsx` |
-| `POST /bureau/api/v1/offices/assign` | — | Assign an office to a user (admin) | `apps/bureau/src/pages/admin/offices.tsx` |
-| `GET /bureau/api/v1/offices/mine` | — | Caller's owned office | `apps/bureau/src/pages/floor-list.tsx` |
-| `GET /bureau/api/v1/presence/here` | — | Co-presence by URL chip | `apps/bureau/src/hooks/use-bureau-ws.ts` |
-| `GET /bureau/api/v1/presence/where/:userId` | — | Locate a user ("Hunt") | `apps/bureau/src/hooks/use-bureau-ws.ts` |
-| `POST /bureau/api/v1/ring` | — | Ring a user on a surface | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `GET /bureau/api/v1/knocks/inbox` | `bureau_knock_inbox` | Pending knocks for the owner | `apps/bureau/src/stores/bureau-store.ts` |
+| `POST /bureau/api/v1/knocks/leave-note` | `bureau_leave_note` | DND fallback: DM the owner | `apps/bureau/src/stores/bureau-store.ts` |
+| `GET /bureau/api/v1/offices` | `bureau_list_offices` | All offices + owners (admin) | `apps/bureau/src/pages/admin/offices.tsx` |
+| `POST /bureau/api/v1/offices/assign` | `bureau_assign_office` | Assign an office to a user (admin) | `apps/bureau/src/pages/admin/offices.tsx` |
+| `GET /bureau/api/v1/offices/mine` | `bureau_my_office` | Caller's owned office | `apps/bureau/src/pages/floor-list.tsx` |
+| `GET /bureau/api/v1/presence/here` | `bureau_who_is_here` | Co-presence by URL chip | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `GET /bureau/api/v1/presence/where/:userId` | `bureau_where_is_user` | Locate a user ("Hunt") | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `POST /bureau/api/v1/ring` | — _(skip: realtime ring signal — not wrapped)_ | Ring a user on a surface | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `GET /bureau/api/v1/rooms/:id` | `bureau_who_is_in_room` | Room detail + live occupants | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
 | `POST /bureau/api/v1/rooms` | `bureau_create_room` | Create a room on a floor | `apps/bureau/src/pages/admin/floor-editor.tsx` |
 | `PATCH /bureau/api/v1/rooms/:id` | `bureau_update_room` | Update room fields | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
-| `DELETE /bureau/api/v1/rooms/:id` | — | Soft-delete a room (admin) | `apps/bureau/src/pages/admin/floor-editor.tsx` |
-| `POST /bureau/api/v1/rooms/:id/acl` | — | Upsert a room ACL entry | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
-| `DELETE /bureau/api/v1/rooms/:id/acl/:userId` | — | Remove a room ACL entry | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
+| `DELETE /bureau/api/v1/rooms/:id` | `bureau_delete_room` | Soft-delete a room (admin) | `apps/bureau/src/pages/admin/floor-editor.tsx` |
+| `POST /bureau/api/v1/rooms/:id/acl` | — _(skip: room ACL admin — not wrapped)_ | Upsert a room ACL entry | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
+| `DELETE /bureau/api/v1/rooms/:id/acl/:userId` | — _(skip: room ACL admin — not wrapped)_ | Remove a room ACL entry | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
 | `GET /bureau/api/v1/rooms/:id/bookings` | `bureau_list_bookings` | List room bookings in a window | — |
 | `POST /bureau/api/v1/rooms/:id/bookings` | `bureau_book_room` | Reserve a room (confirm) | — |
 | `PATCH /bureau/api/v1/rooms/:id/door` | `bureau_set_door_state` | Set room default privacy | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
 | `POST /bureau/api/v1/rooms/:id/token` | `bureau_move_self` | Mint LiveKit token / enter room | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `POST /bureau/api/v1/summon` | `bureau_summon` | Summon co-occupants to a URL (confirm) | `apps/bureau/src/stores/bureau-store.ts` |
-| `GET /bureau/api/v1/summons/:id` | — | Summon audit-row lookup | — |
-| `POST /bureau/api/v1/summons/:id/grant-access` | — | Grant-and-summon follow-up | `apps/bureau/src/stores/bureau-store.ts` |
-| `POST /bureau/api/v1/surface-huddle/token` | — | Mint surface-huddle LiveKit token | `apps/bureau/src/hooks/use-bureau-ws.ts` |
-| `GET /bureau/api/v1/settings` | — | Get org Bureau settings | `apps/bureau/src/pages/floor-list.tsx` |
-| `PATCH /bureau/api/v1/settings` | — | Update Bureau settings (admin) | `apps/bureau/src/pages/admin/floor-list.tsx` |
+| `GET /bureau/api/v1/summons/:id` | `bureau_get_summon` | Summon audit-row lookup | — |
+| `POST /bureau/api/v1/summons/:id/grant-access` | `bureau_summon_grant_access` | Grant-and-summon follow-up | `apps/bureau/src/stores/bureau-store.ts` |
+| `POST /bureau/api/v1/surface-huddle/token` | — _(skip: LiveKit token mint)_ | Mint surface-huddle LiveKit token | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `GET /bureau/api/v1/settings` | `bureau_get_settings` | Get org Bureau settings | `apps/bureau/src/pages/floor-list.tsx` |
+| `PATCH /bureau/api/v1/settings` | `bureau_update_settings` | Update Bureau settings (admin) | `apps/bureau/src/pages/admin/floor-list.tsx` |
 | `— *(stub; no endpoint)*` | `bureau_locate_user` | Locate user — stub (`/presence/locate` unimplemented) | — |
 | `— *(stub; no endpoint)*` | `bureau_get_presence` | Org presence map — stub (`/presence` unimplemented) | — |
 | `— *(stub; no endpoint)*` | `bureau_set_status` | Set DND/away — stub (`PATCH /me/status` unimplemented) | — |
@@ -1437,16 +1452,24 @@ or `/helpdesk/agents`) segment in-code.
 (nginx rewrites `/helpdesk/api/*` → `/helpdesk/*`; the in-code `/helpdesk` segment below is what
 the upstream registers, so external path = `/helpdesk/api/` + the part after `/helpdesk/`.)
 
+> **Helpdesk agent-route deferral.** The `/helpdesk/api/agents/*` mutation routes (queue, agent
+> ticket detail, close, merge, post-message, status/priority/category update) authenticate with a
+> per-agent `X-Agent-Key` (`hdag_`-prefixed), not the caller's Bearer token + `X-Org-Id` that the
+> parity wrappers forward. Wrapping them as MCP tools means resolving and threading that separate
+> credential, so they are **intentionally deferred** in this pass and left `—`. The existing
+> helpdesk tools that read via the customer routes or already target an agent read-route (search,
+> by-number, similar) are unaffected.
+
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /helpdesk/api/agents/agents/queue` | — | Agent SLA-aware ticket queue | — (agent console) |
+| `GET /helpdesk/api/agents/agents/queue` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent SLA-aware ticket queue | — (agent console) |
 | `GET /helpdesk/api/agents/tickets` | `list_tickets` *(via customer route)* | Agent: org-scoped ticket list | — |
-| `GET /helpdesk/api/agents/tickets/:id` | — | Agent: ticket detail + internal msgs | — |
+| `GET /helpdesk/api/agents/tickets/:id` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: ticket detail + internal msgs | — |
 | `GET /helpdesk/api/agents/tickets/:id/similar` | `helpdesk_find_similar_tickets` | Ranked similar/duplicate tickets | — |
-| `POST /helpdesk/api/agents/tickets/:id/close` | — | Agent: close a ticket | — |
-| `POST /helpdesk/api/agents/tickets/:id/merge` | — | Agent: true-merge into a primary | — |
-| `POST /helpdesk/api/agents/tickets/:id/messages` | — | Agent: post reply/internal note | — |
-| `PATCH /helpdesk/api/agents/tickets/:id` | — | Agent: update status/priority/category | — |
+| `POST /helpdesk/api/agents/tickets/:id/close` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: close a ticket | — |
+| `POST /helpdesk/api/agents/tickets/:id/merge` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: true-merge into a primary | — |
+| `POST /helpdesk/api/agents/tickets/:id/messages` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: post reply/internal note | — |
+| `PATCH /helpdesk/api/agents/tickets/:id` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: update status/priority/category | — |
 | `GET /helpdesk/api/agents/tickets/by-number/:number` | `helpdesk_get_ticket_by_number` | Resolve ticket by human number | — |
 | `GET /helpdesk/api/agents/tickets/search` | `helpdesk_search_tickets` | Fuzzy ticket search (agent, org-scoped) | — |
 | `GET /helpdesk/api/admin/projects` | — | List org projects for default picker | `apps/helpdesk/src/pages/org-picker.tsx` |
@@ -1489,7 +1512,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
-| `GET /v1/agents` | — | List agent runners in caller's active org | — |
+| `GET /v1/agents` | `agent_list` | List agent runners in caller's active org | — |
 | `GET /v1/agents/:agent_user_id/audit` | `agent_audit` | Paginated `activity_log` stream for one agent | — |
 | `POST /v1/agents/heartbeat` | `agent_heartbeat` | Service-account only; upsert `agent_runners` row | — |
 | `POST /v1/agents/self-report` | `agent_self_report` | Service-account only; append `agent.self_report` log | — |
@@ -1558,7 +1581,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 |---|---|---|---|
 | `GET /v1/attachments` | `attachment_list` | List attachments for a parent entity, preflighted | — |
 | `GET /v1/attachments/:id` | `attachment_get` | Get one attachment's metadata, visibility-gated | — |
-| `GET /v1/attachments/_meta` | — | Supported parent types and scan-status values | — |
+| `GET /v1/attachments/_meta` | `attachment_meta` | Supported parent types and scan-status values | — |
 
 
 ## Cross-app — Agent policies & outbound webhooks
