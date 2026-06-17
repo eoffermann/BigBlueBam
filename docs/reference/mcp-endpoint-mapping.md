@@ -53,11 +53,11 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Blueprint | 38 | 35 | 3 | 1 |
 | Book | 31 | 24 | 7 | 0 |
 | Blank | 24 | 18 | 6 | 1 |
-| Bill | 44 | 39 | 5 | 0 |
+| Bill | 52 | 47 | 5 | 0 |
 | Bureau | 38 | 33 | 5 | 3 |
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **942** | **697** | **245** | **19** |
+| **Total** | **950** | **705** | **245** | **19** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1434,6 +1434,14 @@ or `/helpdesk/agents`) segment in-code.
 | `POST /bill/api/v1/invoices/:id/void` | `bill_void_invoice` | Void an invoice | `apps/bill/src/pages/invoice-detail.tsx` |
 | `POST /bill/api/v1/invoices/from-deal` | `bill_create_invoice_from_deal` | Draft invoice from a Bond deal | — |
 | `POST /bill/api/v1/invoices/from-time-entries` | `bill_create_invoice_from_time` | Invoice from Bam time entries | `apps/bill/src/pages/invoice-from-time.tsx` |
+| `GET /bill/api/v1/recurring-invoices` | `bill_list_recurring_invoices` | List recurring/subscription schedules | `apps/bill/src/hooks/use-recurring.ts` |
+| `POST /bill/api/v1/recurring-invoices` | `bill_create_recurring_invoice` | Create a recurring schedule | `apps/bill/src/pages/recurring-list.tsx` |
+| `GET /bill/api/v1/recurring-invoices/:id` | `bill_get_recurring_invoice` | Get a schedule + line-item template | `apps/bill/src/hooks/use-recurring.ts` |
+| `PATCH /bill/api/v1/recurring-invoices/:id` | `bill_update_recurring_invoice` | Update a recurring schedule | `apps/bill/src/hooks/use-recurring.ts` |
+| `POST /bill/api/v1/recurring-invoices/:id/pause` | `bill_pause_recurring_invoice` | Pause generation | `apps/bill/src/pages/recurring-list.tsx` |
+| `POST /bill/api/v1/recurring-invoices/:id/resume` | `bill_resume_recurring_invoice` | Resume generation | `apps/bill/src/pages/recurring-list.tsx` |
+| `POST /bill/api/v1/recurring-invoices/:id/cancel` | `bill_cancel_recurring_invoice` | Cancel a schedule permanently | `apps/bill/src/pages/recurring-list.tsx` |
+| `POST /bill/api/v1/recurring-invoices/:id/generate-now` | `bill_generate_recurring_invoice_now` | Materialise an invoice immediately | `apps/bill/src/pages/recurring-list.tsx` |
 | `DELETE /bill/api/v1/payments/:id` | `bill_delete_payment` | Delete a payment | `apps/bill/src/pages/invoice-detail.tsx` |
 | `GET /bill/api/v1/rates` | `bill_list_rates` | List billing rates | `apps/bill/src/hooks/use-rates.ts` |
 | `POST /bill/api/v1/rates` | `bill_create_rate` | Create a rate | `apps/bill/src/hooks/use-rates.ts` |

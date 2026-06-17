@@ -32,6 +32,8 @@ function breadcrumbsFor(route: ActiveRoute): Crumb[] {
       return [{ label: 'Invoices', href: '/invoices' }, { label: 'Invoice Detail' }];
     case 'invoice-edit':
       return [{ label: 'Invoices', href: '/invoices' }, { label: 'Edit Invoice' }];
+    case 'recurring':
+      return [{ label: 'Recurring' }];
     case 'clients':
       return [{ label: 'Clients' }];
     case 'client-detail':

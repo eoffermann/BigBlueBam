@@ -40,6 +40,10 @@ import {
   type BillOverdueReminderJobData,
 } from './jobs/bill-overdue-reminder.job.js';
 import {
+  processBillRecurringGenerateJob,
+  type BillRecurringGenerateJobData,
+} from './jobs/bill-recurring-generate.job.js';
+import {
   processBlankConfirmationEmailJob,
   type BlankConfirmationEmailJobData,
 } from './jobs/blank-confirmation-email.job.js';
@@ -862,6 +866,39 @@ billOverdueReminderQueue
     { name: 'daily', data: {} },
   )
   .catch((err) => logger.error({ err }, 'Failed to register bill-overdue-reminder scheduler'));
+
+// Bill recurring-invoice generation sweep (daily at 06:00 UTC). Finds active
+// schedules due (next_run_at <= now), materialises a draft/finalized invoice
+// from each template, and advances next_run_at by the cadence.
+const billRecurringGenerateWorker = new Worker<BillRecurringGenerateJobData>(
+  'bill-recurring-generate',
+  async (job: Job<BillRecurringGenerateJobData>) => {
+    await processBillRecurringGenerateJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+billRecurringGenerateWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bill-recurring-generate' }, 'Job completed');
+});
+billRecurringGenerateWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bill-recurring-generate', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'bill-recurring-generate',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const billRecurringGenerateQueue = new Queue('bill-recurring-generate', { connection: redis });
+billRecurringGenerateQueue
+  .upsertJobScheduler(
+    'bill-recurring-generate-daily',
+    { pattern: '0 6 * * *' }, // 6 AM UTC daily
+    { name: 'daily-sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bill-recurring-generate scheduler'));
 
 // Blank confirmation-email worker.
 const blankConfirmationEmailWorker = new Worker<BlankConfirmationEmailJobData>(

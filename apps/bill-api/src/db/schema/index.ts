@@ -23,6 +23,14 @@ export { billPayments } from './bill-payments.js';
 export { billExpenses } from './bill-expenses.js';
 export { billSettings } from './bill-settings.js';
 export { billWorkerJobs } from './bill-worker-jobs.js';
+export {
+  billRecurringInvoices,
+  billRecurringLineItems,
+} from './bill-recurring-invoices.js';
+export type {
+  BillRecurringCadence,
+  BillRecurringStatus,
+} from './bill-recurring-invoices.js';
 export type {
   BillWorkerJobType,
   BillWorkerJobStatus,

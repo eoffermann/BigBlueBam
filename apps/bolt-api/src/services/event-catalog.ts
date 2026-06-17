@@ -1637,6 +1637,25 @@ const billEvents: EventDefinition[] = [
   },
   {
     source: 'bill',
+    event_type: 'recurring.invoice_generated',
+    description: 'Fired when a recurring/subscription schedule materialises an invoice — by the daily apps/worker/src/jobs/bill-recurring-generate.job.ts sweep (system actor) or by an on-demand generate-now call (user actor). Payload lets Bolt rules notify owners or chain follow-up automations on each new invoice.',
+    payload_schema: [
+      { name: 'schedule.id', type: 'uuid', description: 'Recurring schedule ID' },
+      { name: 'schedule.name', type: 'string', description: 'Recurring schedule name' },
+      { name: 'invoice.id', type: 'uuid', description: 'Generated invoice ID' },
+      { name: 'invoice.number', type: 'string', description: 'Invoice number ("DRAFT" unless the schedule auto-finalizes)' },
+      { name: 'invoice.status', type: 'string', description: 'Generated invoice status (draft or sent)' },
+      { name: 'invoice.customer_id', type: 'uuid', description: 'Bill client (customer) ID' },
+      { name: 'invoice.customer_name', type: 'string?', description: 'Customer display name' },
+      { name: 'invoice.customer_email', type: 'string?', description: 'Customer contact email' },
+      { name: 'invoice.url', type: 'string?', description: 'Deep link to the invoice in the Bill SPA (generate-now path only)' },
+      { name: 'next_run_at', type: 'datetime', description: 'Next scheduled generation time after advancing the cadence' },
+      { name: 'actor', type: 'object?', description: 'User who triggered generate-now (absent on the system sweep)' },
+      { name: 'org', type: 'object?', description: 'Organization context (generate-now path only)' },
+    ],
+  },
+  {
+    source: 'bill',
     event_type: 'invoice.overdue',
     description: 'Fired by apps/worker/src/jobs/bill-overdue-reminder.job.ts when the daily overdue sweep flags an unpaid invoice. Payload lets Bolt rules send escalating reminders or notify account owners.',
     payload_schema: [

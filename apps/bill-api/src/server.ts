@@ -98,6 +98,7 @@ await fastify.register(healthCheckPlugin, {
 // Routes
 import clientRoutes from './routes/clients.routes.js';
 import invoiceRoutes from './routes/invoices.routes.js';
+import recurringInvoiceRoutes from './routes/recurring-invoices.routes.js';
 import paymentRoutes from './routes/payments.routes.js';
 import expenseRoutes from './routes/expenses.routes.js';
 import rateRoutes from './routes/rates.routes.js';
@@ -107,6 +108,7 @@ import publicRoutes from './routes/public.routes.js';
 
 await fastify.register(clientRoutes, { prefix: '/v1' });
 await fastify.register(invoiceRoutes, { prefix: '/v1' });
+await fastify.register(recurringInvoiceRoutes, { prefix: '/v1' });
 await fastify.register(paymentRoutes, { prefix: '/v1' });
 await fastify.register(expenseRoutes, { prefix: '/v1' });
 await fastify.register(rateRoutes, { prefix: '/v1' });
