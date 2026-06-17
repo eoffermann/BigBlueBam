@@ -26,6 +26,21 @@ interface MessageComposeProps {
   channelName: string;
 }
 
+/**
+ * Shape returned by POST /v1/files/upload. There is NO `id` field — banter
+ * file uploads store the object in MinIO and hand back its storage key plus
+ * metadata; the per-message attachment row is created server-side at
+ * message-post time (banter_message_attachments). The compose flow therefore
+ * carries this descriptor (not a non-existent id) through to the post call.
+ */
+interface UploadedAttachment {
+  key: string;
+  url: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+}
+
 export function MessageCompose({ channelId, channelName }: MessageComposeProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +54,7 @@ export function MessageCompose({ channelId, channelName }: MessageComposeProps) 
   const [showEmoji, setShowEmoji] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
-  const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const { data: members } = useChannelMembers(channelId);
@@ -72,20 +87,24 @@ export function MessageCompose({ channelId, channelName }: MessageComposeProps) 
 
   const handleSubmit = useCallback(() => {
     const trimmed = content.trim();
-    if (!trimmed && attachmentIds.length === 0) return;
+    if (!trimmed && attachments.length === 0) return;
 
     postMessage.mutate(
-      { channelId, content: trimmed, attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined },
+      {
+        channelId,
+        content: trimmed,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      },
       {
         onSuccess: () => {
           setContent('');
           clearDraft(channelId);
-          setAttachmentIds([]);
+          setAttachments([]);
           textareaRef.current?.focus();
         },
       },
     );
-  }, [content, channelId, attachmentIds, postMessage, clearDraft]);
+  }, [content, channelId, attachments, postMessage, clearDraft]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -103,8 +122,11 @@ export function MessageCompose({ channelId, channelName }: MessageComposeProps) 
       for (const file of Array.from(files)) {
         const formData = new FormData();
         formData.append('file', file);
-        const result = await api.upload<{ data: { id: string } }>('/files/upload', formData);
-        setAttachmentIds((prev) => [...prev, result.data.id]);
+        const result = await api.upload<{ data: UploadedAttachment }>('/files/upload', formData);
+        // The upload response carries { key, url, filename, content_type,
+        // size_bytes } — NOT an id. Carry the whole descriptor; the message
+        // post turns each into a banter_message_attachments row.
+        setAttachments((prev) => [...prev, result.data]);
       }
     } catch (err) {
       console.error('Upload failed:', err);
@@ -238,13 +260,22 @@ export function MessageCompose({ channelId, channelName }: MessageComposeProps) 
         />
 
         {/* Attachment preview */}
-        {attachmentIds.length > 0 && (
-          <div className="px-3 pb-2 flex items-center gap-2">
+        {attachments.length > 0 && (
+          <div className="px-3 pb-2 flex items-center gap-2 flex-wrap">
             <span className="text-xs text-zinc-500">
-              {attachmentIds.length} file{attachmentIds.length > 1 ? 's' : ''} attached
+              {attachments.length} file{attachments.length > 1 ? 's' : ''} attached:
             </span>
+            {attachments.map((att) => (
+              <span
+                key={att.key}
+                className="text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700 rounded px-1.5 py-0.5 truncate max-w-[160px]"
+                title={att.filename}
+              >
+                {att.filename}
+              </span>
+            ))}
             <button
-              onClick={() => setAttachmentIds([])}
+              onClick={() => setAttachments([])}
               className="text-xs text-red-500 hover:underline"
             >
               Remove all
@@ -263,10 +294,10 @@ export function MessageCompose({ channelId, channelName }: MessageComposeProps) 
           </span>
           <button
             onClick={handleSubmit}
-            disabled={!content.trim() && attachmentIds.length === 0}
+            disabled={!content.trim() && attachments.length === 0}
             className={cn(
               'p-1.5 rounded-lg transition-colors',
-              content.trim() || attachmentIds.length > 0
+              content.trim() || attachments.length > 0
                 ? 'bg-primary-600 text-white hover:bg-primary-700'
                 : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-400 cursor-not-allowed',
             )}

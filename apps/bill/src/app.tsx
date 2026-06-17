@@ -43,7 +43,9 @@ function stripBase(path: string): string {
 }
 
 function parseRoute(path: string): Route {
-  const p = stripBase(path);
+  // Strip any query string / hash before matching — pages read it separately
+  // (e.g. the invoice list reads ?status=overdue from window.location.search).
+  const p = stripBase(path).split('?')[0]!.split('#')[0]!;
 
   if (p === '/' || p === '') return { page: 'dashboard' };
   if (p === '/invoices') return { page: 'invoices' };

@@ -154,6 +154,7 @@ export default async function internalHelpdeskRoutes(fastify: FastifyInstance) {
             .insert(tasks)
             .values({
               project_id: project.id,
+              org_id: project.org_id,
               human_id: humanId,
               title: data.title,
               description: data.description ?? null,

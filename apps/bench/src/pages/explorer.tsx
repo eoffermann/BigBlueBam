@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Play } from 'lucide-react';
 import { useDataSources } from '@/hooks/use-data-sources';
 import { api } from '@/lib/api';
@@ -6,6 +6,12 @@ import { api } from '@/lib/api';
 interface ExplorerPageProps {
   onNavigate: (path: string) => void;
 }
+
+/**
+ * The query_config a saved query persists (and that we run here). Falls back to
+ * a sensible auto-generated config when a source is picked manually.
+ */
+type QueryConfig = Record<string, unknown>;
 
 export function ExplorerPage({ onNavigate: _onNavigate }: ExplorerPageProps) {
   const { data: sourcesData } = useDataSources();
@@ -17,29 +23,40 @@ export function ExplorerPage({ onNavigate: _onNavigate }: ExplorerPageProps) {
   const [duration, setDuration] = useState<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When the page is opened from a saved query (?saved_query_id=...), this
+  // holds the loaded config so Run executes the saved definition rather than
+  // the default first-measure guess.
+  const [savedConfig, setSavedConfig] = useState<QueryConfig | null>(null);
+  const [savedQueryName, setSavedQueryName] = useState<string | null>(null);
+  const loadedQueryRef = useRef<string | null>(null);
 
   const currentSource = sources.find(
     (s) => `${s.product}:${s.entity}` === selectedSource,
   );
 
-  const handleRun = async () => {
-    if (!currentSource) return;
+  /** Build the config to run: the loaded saved config if present, else a default. */
+  const buildConfig = (source: NonNullable<typeof currentSource>): QueryConfig => {
+    if (savedConfig) return savedConfig;
+    return {
+      measures: source.measures.slice(0, 1).map((m) => ({
+        field: m.field,
+        agg: m.aggregations[0],
+      })),
+      dimensions: source.dimensions.slice(0, 2).map((d) => ({
+        field: d.field,
+      })),
+      limit: 50,
+    };
+  };
+
+  const runConfig = async (source: NonNullable<typeof currentSource>, config: QueryConfig) => {
     setIsRunning(true);
     setError(null);
     try {
       const res = await api.post<{ data: { rows: Record<string, unknown>[]; sql: string; duration_ms: number } }>('/v1/query/preview', {
-        data_source: currentSource.product,
-        entity: currentSource.entity,
-        query_config: {
-          measures: currentSource.measures.slice(0, 1).map((m) => ({
-            field: m.field,
-            agg: m.aggregations[0],
-          })),
-          dimensions: currentSource.dimensions.slice(0, 2).map((d) => ({
-            field: d.field,
-          })),
-          limit: 50,
-        },
+        data_source: source.product,
+        entity: source.entity,
+        query_config: config,
       });
       setResults(res.data.rows);
       setSqlText(res.data.sql);
@@ -51,6 +68,52 @@ export function ExplorerPage({ onNavigate: _onNavigate }: ExplorerPageProps) {
       setIsRunning(false);
     }
   };
+
+  const handleRun = async () => {
+    if (!currentSource) return;
+    await runConfig(currentSource, buildConfig(currentSource));
+  };
+
+  // On mount (or when sources load), honor a ?saved_query_id= handoff from the
+  // Saved Queries page: fetch the saved query, select its source, load its
+  // config, and auto-run it so the user lands on the result they saved.
+  useEffect(() => {
+    if (sources.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const savedQueryId = params.get('saved_query_id');
+    const sourceParam = params.get('source');
+
+    // Manual source preselect (no saved query) — e.g. ?source=bond:deals
+    if (!savedQueryId && sourceParam && !selectedSource) {
+      if (sources.some((s) => `${s.product}:${s.entity}` === sourceParam)) {
+        setSelectedSource(sourceParam);
+      }
+      return;
+    }
+
+    if (!savedQueryId || loadedQueryRef.current === savedQueryId) return;
+    loadedQueryRef.current = savedQueryId;
+
+    (async () => {
+      try {
+        const res = await api.get<{ data: { data_source: string; entity: string; name: string; query_config: QueryConfig } }>(
+          `/v1/saved-queries/${savedQueryId}`,
+        );
+        const sq = res.data;
+        const sourceKey = `${sq.data_source}:${sq.entity}`;
+        const source = sources.find((s) => `${s.product}:${s.entity}` === sourceKey);
+        setSelectedSource(sourceKey);
+        setSavedConfig(sq.query_config);
+        setSavedQueryName(sq.name);
+        if (source && sq.query_config && Object.keys(sq.query_config).length > 0) {
+          await runConfig(source, sq.query_config);
+        }
+      } catch (err: any) {
+        setError(err.message ?? 'Failed to load saved query');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources]);
 
   return (
     <div className="p-6">
@@ -65,9 +128,19 @@ export function ExplorerPage({ onNavigate: _onNavigate }: ExplorerPageProps) {
         {/* Left panel: source selection */}
         <div className="col-span-1 space-y-3">
           <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Data Source</h3>
+          {savedQueryName && (
+            <div className="text-xs text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/20 rounded-lg px-3 py-1.5">
+              Loaded saved query: <span className="font-medium">{savedQueryName}</span>
+            </div>
+          )}
           <select
             value={selectedSource}
-            onChange={(e) => setSelectedSource(e.target.value)}
+            onChange={(e) => {
+              setSelectedSource(e.target.value);
+              // Manually changing the source abandons the loaded saved config.
+              setSavedConfig(null);
+              setSavedQueryName(null);
+            }}
             className="w-full px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm"
           >
             <option value="">Select a data source...</option>

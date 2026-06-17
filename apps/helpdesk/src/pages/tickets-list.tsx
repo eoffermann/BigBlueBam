@@ -33,7 +33,21 @@ function isUnread(ticketId: string, updatedAt: string): boolean {
   return new Date(updatedAt).getTime() > new Date(viewedAt).getTime();
 }
 
-const STATUS_FILTERS = ['', 'open', 'awaiting_customer', 'in_progress', 'awaiting_internal', 'resolved', 'closed'] as const;
+// Canonical ticket statuses as stored in tickets.status. Must match the values
+// the API returns / the StatusBadge labels (open, in_progress,
+// waiting_on_customer, resolved, closed). The previous list used stale values
+// (awaiting_customer / awaiting_internal) that never matched any real ticket,
+// so every chip filtered the list down to zero rows.
+const STATUS_FILTERS = ['', 'open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'] as const;
+
+const STATUS_FILTER_LABELS: Record<string, string> = {
+  '': 'all',
+  open: 'open',
+  in_progress: 'in progress',
+  waiting_on_customer: 'waiting on customer',
+  resolved: 'resolved',
+  closed: 'closed',
+};
 
 export function TicketsListPage({ onNavigate }: TicketsListPageProps) {
   const { data: tickets, isLoading, error } = useTickets();
@@ -86,7 +100,7 @@ export function TicketsListPage({ onNavigate }: TicketsListPageProps) {
                   : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
               }`}
             >
-              {s ? s.replace('_', ' ') : 'all'}
+              {STATUS_FILTER_LABELS[s] ?? (s ? s.replace(/_/g, ' ') : 'all')}
             </button>
           ))}
         </div>

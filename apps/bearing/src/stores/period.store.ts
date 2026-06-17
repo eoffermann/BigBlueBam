@@ -6,7 +6,7 @@ export interface BearingPeriod {
   type: 'quarter' | 'half' | 'year' | 'custom';
   start_date: string;
   end_date: string;
-  status: 'draft' | 'active' | 'completed' | 'archived';
+  status: 'planning' | 'active' | 'completed' | 'archived';
   goal_count?: number;
   created_at: string;
   updated_at: string;

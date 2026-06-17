@@ -172,7 +172,7 @@ export function useOverrideStatus() {
 
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: GoalStatus }) =>
-      api.post<SingleResponse>(`/goals/${id}/override-status`, { status }),
+      api.post<SingleResponse>(`/goals/${id}/status`, { status }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['goals'] });
     },

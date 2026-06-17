@@ -98,6 +98,15 @@ function mockPositionQuery(maxPos: number) {
   mockDb.select.mockReturnValueOnce({ from: fromFn });
 }
 
+// Insert path resolves the project's org_id (tasks.org_id backfill fix) via
+// select projects.org_id between the first-phase fallback and the position query.
+function mockProjectOrg(orgId: string | null) {
+  const limitFn = vi.fn().mockResolvedValue(orgId ? [{ org_id: orgId }] : [{}]);
+  const whereFn = vi.fn().mockReturnValue({ limit: limitFn });
+  const fromFn = vi.fn().mockReturnValue({ where: whereFn });
+  mockDb.select.mockReturnValueOnce({ from: fromFn });
+}
+
 function mockProjectSequenceUpdate(prefix: string, seq: number) {
   const returningFn = vi.fn().mockResolvedValue([
     { task_id_prefix: prefix, task_id_sequence: seq },
@@ -200,6 +209,8 @@ describe('upsertTaskByExternalId — create path', () => {
     mockExistingRow(null);
     // First-phase fallback.
     mockFirstPhase({ id: 'phase-1', auto_state_on_enter: null });
+    // Project org lookup (tasks.org_id).
+    mockProjectOrg('org-1');
     // Position query.
     mockPositionQuery(0);
     // Project sequence update.
@@ -220,6 +231,7 @@ describe('upsertTaskByExternalId — create path', () => {
   it('returns created=false if the insert was raced and conflicted', async () => {
     mockExistingRow(null);
     mockFirstPhase({ id: 'phase-1', auto_state_on_enter: null });
+    mockProjectOrg('org-1');
     mockPositionQuery(0);
     mockProjectSequenceUpdate('TST', 1);
     // xmax != 0 → ON CONFLICT branch fired.

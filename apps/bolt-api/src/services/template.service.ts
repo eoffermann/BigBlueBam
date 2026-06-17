@@ -45,7 +45,7 @@ export interface AutomationTemplate {
 //        banter_post_message -> { channel_id, content }  (channel_id accepts
 //                               a bare channel name / #name, not only a UUID)
 //        update_ticket_status-> { ticket_id, status }    (status enum: open |
-//                               in_progress | waiting_on_client | resolved |
+//                               in_progress | waiting_on_customer | resolved |
 //                               closed)
 //        create_task         -> { project_id, phase_id (BOTH required), title,
 //                               description?, priority? }

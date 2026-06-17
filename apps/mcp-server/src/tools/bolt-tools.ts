@@ -264,12 +264,34 @@ export function registerBoltTools(server: McpServer, api: ApiClient, boltApiUrl:
 
   registerTool(server, {
     name: 'bolt_test',
-    description: 'Test-fire an automation with a simulated event payload.',
+    description:
+      'Dry-run an automation against a simulated event payload. This evaluates ONLY the automation\'s conditions against the event — it does NOT execute the actions. Use it to check whether a given event would (or would not) trigger the automation. Returns `passed` (would the actions run), a per-condition `log`, and a human-readable `message`. To actually run actions, the automation must fire on a real ingested event.',
     input: {
       id: z.string().min(1).describe('Automation UUID or exact automation name to test'),
       event: z.record(z.unknown()).describe('Simulated event payload object'),
     },
-    returns: z.object({ ok: z.boolean(), actions_executed: z.number().optional(), error: z.string().optional() }).passthrough(),
+    returns: z
+      .object({
+        ok: z.boolean(),
+        // Whether the conditions matched, i.e. the actions WOULD execute on a
+        // real event with this payload. Actions are not run by this tool.
+        passed: z.boolean().optional(),
+        // Per-condition evaluation detail (field/operator/expected/actual/result).
+        log: z
+          .array(
+            z.object({
+              field: z.string(),
+              operator: z.string(),
+              expected: z.unknown(),
+              actual: z.unknown(),
+              result: z.boolean(),
+            }),
+          )
+          .optional(),
+        message: z.string().optional(),
+        error: z.string().optional(),
+      })
+      .passthrough(),
     handler: async ({ id, event }) => {
       const resolvedId = await resolveAutomationId(id);
       if (!resolvedId) return automationNotFound(id);

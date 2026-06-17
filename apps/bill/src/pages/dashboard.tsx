@@ -1,5 +1,6 @@
 import { DollarSign, Clock, AlertCircle, FileText, TrendingUp } from 'lucide-react';
 import { useInvoices } from '@/hooks/use-invoices';
+import { useOverdue } from '@/hooks/use-reports';
 import { formatCents, formatDate, statusBadgeClass, cn } from '@/lib/utils';
 
 interface Props {
@@ -10,14 +11,12 @@ function summarize(invoices: any[] | undefined) {
   const list = invoices ?? [];
   let outstanding = 0;
   let paid = 0;
-  let overdueCount = 0;
   let draftCount = 0;
 
   for (const inv of list) {
     const total = Number(inv.total ?? 0);
     const amountPaid = Number(inv.amount_paid ?? 0);
     if (inv.status === 'draft') draftCount += 1;
-    if (inv.status === 'overdue') overdueCount += 1;
     if (inv.status === 'paid') {
       paid += total;
     } else if (inv.status !== 'void' && inv.status !== 'draft' && inv.status !== 'written_off') {
@@ -25,12 +24,16 @@ function summarize(invoices: any[] | undefined) {
     }
   }
 
-  return { outstanding, paid, overdueCount, draftCount };
+  return { outstanding, paid, draftCount };
 }
 
 export function DashboardPage({ onNavigate }: Props) {
   const { data: invoices, isLoading } = useInvoices();
+  // "Overdue" is not a stored status — it is computed server-side from a past
+  // due_date on an unpaid, finalized invoice (the /reports/overdue endpoint).
+  const { data: overdue } = useOverdue();
   const stats = summarize(invoices);
+  const overdueCount = (overdue ?? []).length;
 
   const recent = (invoices ?? []).slice(0, 8);
 
@@ -51,10 +54,10 @@ export function DashboardPage({ onNavigate }: Props) {
     },
     {
       label: 'Overdue',
-      value: `${stats.overdueCount}`,
+      value: `${overdueCount}`,
       icon: AlertCircle,
       accent: 'text-red-600 bg-red-100 dark:bg-red-900/30',
-      onClick: () => onNavigate('/'),
+      onClick: () => onNavigate('/invoices?status=overdue'),
     },
     {
       label: 'Drafts',

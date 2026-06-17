@@ -11,7 +11,10 @@ interface PreferencesPageProps {
 interface UserPreferences {
   notification_sound: boolean;
   desktop_notifications: boolean;
-  enter_to_send: boolean;
+  // Matches the banter_user_preferences.enter_sends_message column. The page
+  // previously sent `enter_to_send`, which the API silently dropped (no such
+  // column), so the toggle never persisted.
+  enter_sends_message: boolean;
   show_typing_indicators: boolean;
   compact_mode: boolean;
 }
@@ -22,7 +25,7 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
   const [prefs, setPrefs] = useState<UserPreferences>({
     notification_sound: true,
     desktop_notifications: true,
-    enter_to_send: true,
+    enter_sends_message: true,
     show_typing_indicators: true,
     compact_mode: false,
   });
@@ -32,11 +35,12 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
   // shared Bureau docked-box (the suite-wide LiveKit endpoint). Banter no
   // longer owns its own calling stack — see workstream Phase 2 cleanup.
 
-  // Load preferences from API
+  // Load preferences from API. Merge over current state so any field the
+  // server omits keeps a defined boolean (avoids an uncontrolled toggle).
   useEffect(() => {
     api
-      .get<{ data: UserPreferences }>('/me/preferences')
-      .then((res) => setPrefs(res.data))
+      .get<{ data: Partial<UserPreferences> }>('/me/preferences')
+      .then((res) => setPrefs((prev) => ({ ...prev, ...res.data })))
       .catch(() => {
         // Use defaults
       });
@@ -159,8 +163,8 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
               <ToggleRow
                 label="Enter to send"
                 description="Press Enter to send messages (Shift+Enter for newline)"
-                checked={prefs.enter_to_send}
-                onChange={(v) => updatePref('enter_to_send', v)}
+                checked={prefs.enter_sends_message}
+                onChange={(v) => updatePref('enter_sends_message', v)}
               />
               <ToggleRow
                 label="Show typing indicators"

@@ -173,9 +173,12 @@ describe('Query Builder', () => {
 
     it('isolates tenants on organization_id for organization_id-scoped sources', async () => {
       const { buildQuery } = await import('../src/services/query.service.js');
+      // bond:deals is a canonical organization_id-default source. (bam:tasks was
+      // previously used here but it correctly scopes on org_id now — see the
+      // orgColumn fix in data-source-registry.ts — so it would fail this case.)
       const pq = buildQuery(
-        'bam',
-        'tasks',
+        'bond',
+        'deals',
         { measures: [{ field: 'id', agg: 'count' }] },
         ORG_ID,
       );

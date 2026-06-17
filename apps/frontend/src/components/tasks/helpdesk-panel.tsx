@@ -106,7 +106,7 @@ export function HelpdeskPanel({ ticketId }: HelpdeskPanelProps) {
   const statusColors: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
     in_progress: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
-    waiting_on_client: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
+    waiting_on_customer: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
     resolved: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
     closed: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
   };

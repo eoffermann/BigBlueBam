@@ -71,6 +71,20 @@ export function useMessages(channelId: string) {
   });
 }
 
+/**
+ * Descriptor for a file already uploaded via POST /v1/files/upload. The upload
+ * endpoint returns { key, url, filename, content_type, size_bytes } — there is
+ * no pre-message attachment id. The message-post route turns each descriptor
+ * into a banter_message_attachments row keyed to the new message.
+ */
+export interface NewMessageAttachment {
+  key: string;
+  url: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+}
+
 /** Post a new message */
 export function usePostMessage() {
   const queryClient = useQueryClient();
@@ -78,16 +92,16 @@ export function usePostMessage() {
     mutationFn: ({
       channelId,
       content,
-      attachmentIds,
+      attachments,
     }: {
       channelId: string;
       content: string;
-      attachmentIds?: string[];
+      attachments?: NewMessageAttachment[];
     }) =>
       api
         .post<{ data: Message }>(`/channels/${channelId}/messages`, {
           content,
-          attachment_ids: attachmentIds,
+          attachments,
         })
         .then((r) => r.data),
     onSuccess: (msg) => {

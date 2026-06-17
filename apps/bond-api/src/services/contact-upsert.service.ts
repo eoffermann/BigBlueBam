@@ -15,7 +15,7 @@
 // and an idempotency_key string the caller can echo back into logs.
 // ---------------------------------------------------------------------------
 
-import { and, eq, sql, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bondContacts } from '../db/schema/index.js';
 import { badRequest } from '../lib/utils.js';
@@ -134,59 +134,43 @@ export async function upsertContactByEmail(
   // between our pre-check and this statement, the conflict branch produces
   // a deterministic row (we bump updated_at and overwrite email). The
   // `xmax = 0` projection tells us which branch fired.
-  const inserted = await db
-    .insert(bondContacts)
-    .values({
-      organization_id: orgId,
-      first_name: input.first_name ?? null,
-      last_name: input.last_name ?? null,
-      email: normalizedEmail,
-      phone: input.phone ?? null,
-      title: input.title ?? null,
-      avatar_url: input.avatar_url ?? null,
-      lifecycle_stage: input.lifecycle_stage ?? 'lead',
-      lead_source: input.lead_source ?? null,
-      address_line1: input.address_line1 ?? null,
-      address_line2: input.address_line2 ?? null,
-      city: input.city ?? null,
-      state_region: input.state_region ?? null,
-      postal_code: input.postal_code ?? null,
-      country: input.country ?? null,
-      custom_fields: input.custom_fields ?? {},
-      owner_id: input.owner_id ?? actingUserId,
-      created_by: actingUserId,
-    })
-    .onConflictDoUpdate({
-      // Postgres has a partial unique index on (organization_id, lower(email))
-      // but Drizzle's onConflictDoUpdate target type only accepts PgColumn
-      // references, not SQL expressions. Cast the sql`lower(...)` through
-      // unknown so tsc accepts it while the runtime SQL still references
-      // the lower(email) index.
-      target: [
-        bondContacts.organization_id,
-        sql`lower(${bondContacts.email})` as unknown as typeof bondContacts.email,
-      ],
-      targetWhere: and(
-        isNotNull(bondContacts.email),
-        isNull(bondContacts.deleted_at),
-      ),
-      set: {
-        email: normalizedEmail,
-        updated_at: new Date(),
-      },
-    })
-    .returning({
-      // Same table-as-field cast as beacon-api entry-upsert.
-      contact: bondContacts as unknown as import('drizzle-orm').SQL<typeof bondContacts.$inferSelect>,
-      created: sql<boolean>`(xmax = 0)`.as('created'),
-    });
+  //
+  // This is issued as raw SQL rather than Drizzle's `onConflictDoUpdate`
+  // builder: the builder's `target` only accepts column references, so the
+  // earlier `sql\`lower(email)\` as unknown as PgColumn` cast serialized the
+  // conflict target to the literal `"undefined"` and every upsert crashed
+  // with `column "undefined" does not exist`. Naming the partial index
+  // predicate verbatim here matches `bond_contacts_org_lower_email_uniq`.
+  const inserted = await db.execute(sql`
+    INSERT INTO bond_contacts (
+      organization_id, first_name, last_name, email, phone, title, avatar_url,
+      lifecycle_stage, lead_source, address_line1, address_line2, city,
+      state_region, postal_code, country, custom_fields, owner_id, created_by
+    ) VALUES (
+      ${orgId}, ${input.first_name ?? null}, ${input.last_name ?? null},
+      ${normalizedEmail}, ${input.phone ?? null}, ${input.title ?? null},
+      ${input.avatar_url ?? null}, ${input.lifecycle_stage ?? 'lead'},
+      ${input.lead_source ?? null}, ${input.address_line1 ?? null},
+      ${input.address_line2 ?? null}, ${input.city ?? null},
+      ${input.state_region ?? null}, ${input.postal_code ?? null},
+      ${input.country ?? null}, ${JSON.stringify(input.custom_fields ?? {})}::jsonb,
+      ${input.owner_id ?? actingUserId}, ${actingUserId}
+    )
+    ON CONFLICT (organization_id, lower(email)) WHERE email IS NOT NULL AND deleted_at IS NULL
+    DO UPDATE SET email = ${normalizedEmail}, updated_at = now()
+    RETURNING *, (xmax = 0) AS created
+  `);
 
-  const row = inserted[0];
+  const rows = inserted as unknown as Array<
+    typeof bondContacts.$inferSelect & { created: boolean }
+  >;
+  const row = rows[0];
   if (!row) {
     throw badRequest('upsert returned no row');
   }
-  const result = row.contact as typeof bondContacts.$inferSelect;
-  const created = row.created === true;
+  const { created: createdFlag, ...contactRow } = row;
+  const result = contactRow as typeof bondContacts.$inferSelect;
+  const created = createdFlag === true;
 
   void publishContactUpserted(result, actingUserId, orgId, created);
 

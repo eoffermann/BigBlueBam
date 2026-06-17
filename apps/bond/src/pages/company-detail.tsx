@@ -16,6 +16,7 @@ import { Badge } from '@/components/common/badge';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { ActivityTimeline } from '@/components/contacts/activity-timeline';
 import { LogActivityForm } from '@/components/contacts/log-activity-form';
+import { EditCompanyDialog } from '@/components/companies/edit-company-dialog';
 import { useCompany, useDeleteCompany } from '@/hooks/use-companies';
 import { useCompanyActivities } from '@/hooks/use-activities';
 import { cn, formatCurrencyCompact, formatDate } from '@/lib/utils';
@@ -35,6 +36,7 @@ export function CompanyDetailPage({ companyId, onNavigate }: CompanyDetailPagePr
 
   const deleteCompany = useDeleteCompany();
   const [showLogActivity, setShowLogActivity] = useState(false);
+  const [showEditCompany, setShowEditCompany] = useState(false);
   const [activeTab, setActiveTab] = useState<'activity' | 'details' | 'contacts' | 'deals'>('activity');
 
   if (isLoading) {
@@ -142,7 +144,7 @@ export function CompanyDetailPage({ companyId, onNavigate }: CompanyDetailPagePr
                 </button>
               }
             >
-              <DropdownMenuItem onSelect={() => {}}>
+              <DropdownMenuItem onSelect={() => setShowEditCompany(true)}>
                 <Edit2 className="h-4 w-4" />
                 Edit Company
               </DropdownMenuItem>
@@ -239,6 +241,8 @@ export function CompanyDetailPage({ companyId, onNavigate }: CompanyDetailPagePr
           </div>
         )}
       </div>
+
+      <EditCompanyDialog open={showEditCompany} onOpenChange={setShowEditCompany} company={company} />
     </div>
   );
 }

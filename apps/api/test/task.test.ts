@@ -139,12 +139,18 @@ describe('Task Service', () => {
       const phaseFrom = vi.fn().mockReturnValue({ where: phaseWhere });
       mockDb.select.mockReturnValueOnce({ from: phaseFrom });
 
-      // Step 3: select max position
+      // Step 3: getProjectOrgId -> select projects.org_id
+      const orgLimit = vi.fn().mockResolvedValue([{ org_id: 'org-1' }]);
+      const orgWhere = vi.fn().mockReturnValue({ limit: orgLimit });
+      const orgFrom = vi.fn().mockReturnValue({ where: orgWhere });
+      mockDb.select.mockReturnValueOnce({ from: orgFrom });
+
+      // Step 4: select max position
       const posWhere = vi.fn().mockResolvedValue([{ maxPos: 2048 }]);
       const posFrom = vi.fn().mockReturnValue({ where: posWhere });
       mockDb.select.mockReturnValueOnce({ from: posFrom });
 
-      // Step 4: insert task
+      // Step 5: insert task
       const createdTask = { ...fakeTask, human_id: 'TST-42', position: 3072 };
       const insertReturning = vi.fn().mockResolvedValue([createdTask]);
       const insertValues = vi.fn().mockReturnValue({ returning: insertReturning });
@@ -170,6 +176,12 @@ describe('Task Service', () => {
       const phaseWhere = vi.fn().mockReturnValue({ limit: phaseLimit });
       const phaseFrom = vi.fn().mockReturnValue({ where: phaseWhere });
       mockDb.select.mockReturnValueOnce({ from: phaseFrom });
+
+      // getProjectOrgId -> select projects.org_id
+      const orgLimit = vi.fn().mockResolvedValue([{ org_id: 'org-1' }]);
+      const orgWhere = vi.fn().mockReturnValue({ limit: orgLimit });
+      const orgFrom = vi.fn().mockReturnValue({ where: orgWhere });
+      mockDb.select.mockReturnValueOnce({ from: orgFrom });
 
       // select max position
       const posWhere = vi.fn().mockResolvedValue([{ maxPos: 0 }]);
@@ -204,6 +216,12 @@ describe('Task Service', () => {
       // phase lookup (state_id provided, so phase won't be queried for auto state)
       // Actually, the code still queries phase when no state_id. Let's provide state_id.
       // When state_id IS provided, the phase query is skipped.
+
+      // getProjectOrgId -> select projects.org_id (runs for every task now)
+      const orgLimit = vi.fn().mockResolvedValue([{ org_id: 'org-1' }]);
+      const orgWhere = vi.fn().mockReturnValue({ limit: orgLimit });
+      const orgFrom = vi.fn().mockReturnValue({ where: orgWhere });
+      mockDb.select.mockReturnValueOnce({ from: orgFrom });
 
       // select max position -> maxPos = 5120
       const posWhere = vi.fn().mockResolvedValue([{ maxPos: 5120 }]);
@@ -246,6 +264,12 @@ describe('Task Service', () => {
       const phaseWhere = vi.fn().mockReturnValue({ limit: phaseLimit });
       const phaseFrom = vi.fn().mockReturnValue({ where: phaseWhere });
       mockDb.select.mockReturnValueOnce({ from: phaseFrom });
+
+      // getProjectOrgId -> select projects.org_id
+      const orgLimit = vi.fn().mockResolvedValue([{ org_id: 'org-1' }]);
+      const orgWhere = vi.fn().mockReturnValue({ limit: orgLimit });
+      const orgFrom = vi.fn().mockReturnValue({ where: orgWhere });
+      mockDb.select.mockReturnValueOnce({ from: orgFrom });
 
       // max position
       const posWhere = vi.fn().mockResolvedValue([{ maxPos: 0 }]);

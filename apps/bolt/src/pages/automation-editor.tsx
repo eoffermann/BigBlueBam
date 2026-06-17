@@ -213,7 +213,11 @@ export function AutomationEditorPage({ id, onNavigate }: AutomationEditorPagePro
 
   const handleTest = async () => {
     if (id) {
-      await testMutation.mutateAsync(id);
+      // The /test route evaluates conditions against a simulated event. Seed
+      // the event with the trigger filter (the closest thing to a real
+      // matching payload the editor knows about) so the dry run is meaningful;
+      // the route still validates with an empty object if there's no filter.
+      await testMutation.mutateAsync({ id, event: triggerFilter ?? {} });
     }
   };
 
@@ -614,8 +618,20 @@ export function AutomationEditorPage({ id, onNavigate }: AutomationEditorPagePro
             )}
 
             {testMutation.data && (
-              <div className="text-xs p-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
-                Test execution started: {testMutation.data.data.execution_id.slice(0, 8)}...
+              <div
+                className={cn(
+                  'text-xs p-2 rounded-lg border',
+                  testMutation.data.data.passed
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800'
+                    : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+                )}
+              >
+                {testMutation.data.data.message}
+              </div>
+            )}
+            {testMutation.isError && (
+              <div className="text-xs p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
+                Test run failed. Check the trigger and conditions, then try again.
               </div>
             )}
 

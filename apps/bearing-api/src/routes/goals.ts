@@ -49,6 +49,12 @@ const updateGoalSchema = z.object({
   owner_id: z.string().uuid().nullable().optional(),
 });
 
+const addWatcherSchema = z.object({
+  // The Add-watcher UI accepts a user ID or an email; the service resolves it
+  // to an active org member.
+  user_id: z.string().min(1).max(320),
+});
+
 const listGoalsQuerySchema = z.object({
   period_id: z.string().uuid().optional(),
   scope: z.enum(GOAL_SCOPES).optional(),
@@ -546,16 +552,18 @@ export default async function goalRoutes(fastify: FastifyInstance) {
         owner_id: string | null;
         period_id: string;
       };
+      const { user_id: userRef } = addWatcherSchema.parse(request.body);
       const watcher = await goalService.addWatcher(
         goalRow.id,
-        request.user!.id,
+        userRef,
         request.user!.org_id,
       );
 
-      const [actor, org, period] = await Promise.all([
+      const [actor, org, period, watchedUser] = await Promise.all([
         loadActor(request.user!.id),
         loadOrg(request.user!.org_id),
         loadPeriod(goalRow.period_id),
+        loadActor(watcher.user_id),
       ]);
       publishBoltEvent(
         'goal.watcher_added',
@@ -570,16 +578,16 @@ export default async function goalRoutes(fastify: FastifyInstance) {
             url: buildGoalUrl(goalRow.id),
           },
           watcher: {
-            user_id: request.user!.id,
-            name: actor.name,
-            email: actor.email,
+            user_id: watcher.user_id,
+            name: watchedUser.name,
+            email: watchedUser.email,
           },
           period: { id: period.id, name: period.name },
           actor: { id: actor.id, name: actor.name, email: actor.email },
           org: { id: org.id, name: org.name, slug: org.slug },
           // Legacy flat fields
           id: goalRow.id,
-          user_id: request.user!.id,
+          user_id: watcher.user_id,
         },
         request.user!.org_id,
         request.user!.id,

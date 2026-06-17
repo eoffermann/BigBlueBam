@@ -10,10 +10,12 @@ import { cn, format, addWeeks, startOfWeek, endOfWeek, isSameDay } from '@/lib/u
 
 interface TimelineItem {
   id: string;
-  source: 'book' | 'bam' | 'bond';
+  // Source labels match timeline.service.ts: 'book', 'bam_task', 'bam_sprint',
+  // 'bearing_goal', 'bond_deal'. SOURCE_CONFIG keys on the same strings.
+  source: string;
   title: string;
-  date: string;          // ISO date/datetime
-  end_date?: string;     // optional end (events)
+  start_at: string;      // ISO date/datetime
+  end_at?: string | null; // optional end (events)
   subtitle?: string;
   url?: string;          // deep-link
   color?: string;
@@ -35,17 +37,29 @@ const SOURCE_CONFIG: Record<string, { icon: typeof Calendar; label: string; colo
     color: 'text-blue-600 dark:text-blue-400',
     bgColor: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800',
   },
-  bam: {
+  bam_task: {
     icon: CheckSquare,
     label: 'Task',
     color: 'text-orange-600 dark:text-orange-400',
     bgColor: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800',
   },
-  bond: {
+  bam_sprint: {
+    icon: CheckSquare,
+    label: 'Sprint',
+    color: 'text-orange-600 dark:text-orange-400',
+    bgColor: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800',
+  },
+  bond_deal: {
     icon: Handshake,
     label: 'Deal',
     color: 'text-teal-600 dark:text-teal-400',
     bgColor: 'bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800',
+  },
+  bearing_goal: {
+    icon: GanttChart,
+    label: 'Goal',
+    color: 'text-purple-600 dark:text-purple-400',
+    bgColor: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800',
   },
 };
 
@@ -71,16 +85,17 @@ export function TimelinePage({ onNavigate }: TimelinePageProps) {
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
 
-  // Fetch unified timeline
-  const startAfter = weekStart.toISOString();
-  const startBefore = new Date(weekEnd.getTime() + 86400000).toISOString();
+  // Fetch unified timeline. The GET /v1/timeline route validates
+  // start_date / end_date as full ISO datetimes (see timeline.routes.ts).
+  const startDate = weekStart.toISOString();
+  const endDate = new Date(weekEnd.getTime() + 86400000).toISOString();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['book', 'timeline', startAfter, startBefore],
+    queryKey: ['book', 'timeline', startDate, endDate],
     queryFn: () =>
       api.get<TimelineResponse>('/v1/timeline', {
-        start_after: startAfter,
-        start_before: startBefore,
+        start_date: startDate,
+        end_date: endDate,
       }),
     staleTime: 15_000,
   });
@@ -91,7 +106,7 @@ export function TimelinePage({ onNavigate }: TimelinePageProps) {
   const grouped = useMemo(() => {
     const map = new Map<string, TimelineItem[]>();
     for (const item of items) {
-      const dayKey = item.date.slice(0, 10); // YYYY-MM-DD
+      const dayKey = item.start_at.slice(0, 10); // YYYY-MM-DD
       const arr = map.get(dayKey) ?? [];
       arr.push(item);
       map.set(dayKey, arr);
@@ -206,8 +221,8 @@ export function TimelinePage({ onNavigate }: TimelinePageProps) {
                     {dayItems.map((item) => {
                       const cfg = SOURCE_CONFIG[item.source] ?? fallbackSourceConfig();
                       const Icon = cfg.icon;
-                      const time = item.date.length > 10
-                        ? new Date(item.date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                      const time = item.start_at.length > 10
+                        ? new Date(item.start_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
                         : null;
 
                       return (

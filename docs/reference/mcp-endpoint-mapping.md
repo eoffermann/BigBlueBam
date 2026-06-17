@@ -53,11 +53,11 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Blueprint | 38 | 35 | 3 | 1 |
 | Book | 31 | 24 | 7 | 0 |
 | Blank | 22 | 18 | 4 | 1 |
-| Bill | 43 | 39 | 4 | 0 |
+| Bill | 44 | 39 | 5 | 0 |
 | Bureau | 38 | 33 | 5 | 3 |
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **941** | **697** | **244** | **19** |
+| **Total** | **942** | **697** | **245** | **19** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -986,6 +986,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `POST /contacts/import` | — _(skip: bulk import upload)_ | Bulk import contacts | — |
 | `GET /contacts/search` | `bond_search_contacts` | Full-text contact search | — |
 | `POST /contacts/upsert` | `bond_upsert_contact` | Idempotent create-or-update by email | — |
+| `POST /internal/contacts` | — _(skip: internal service-to-service, INTERNAL_SERVICE_SECRET)_ | Internal upsert-by-email for anonymous public bookings (book-api) | `apps/book-api/src/routes/public-booking.routes.ts` |
 | `GET /contacts/:id` | `bond_get_contact` | Get contact detail | `apps/bond/src/hooks/use-contacts.ts` |
 | `PATCH /contacts/:id` | `bond_update_contact` | Update contact | `apps/bond/src/hooks/use-contacts.ts` |
 | `DELETE /contacts/:id` | `bond_delete_contact` | Delete contact | `apps/bond/src/hooks/use-contacts.ts` |
@@ -1107,7 +1108,8 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `DELETE /periods/:id` | `bearing_period_delete` | Delete period | `apps/bearing/src/hooks/usePeriods.ts` |
 | `POST /periods/:id/activate` | `bearing_period_activate` | Activate period | `apps/bearing/src/hooks/usePeriods.ts` |
 | `POST /periods/:id/complete` | `bearing_period_complete` | Complete period | `apps/bearing/src/hooks/usePeriods.ts` |
-| `GET /reports/period/:periodId` | `bearing_report` | Period summary report | `apps/bearing/src/hooks/useProgress.ts` |
+| `GET /periods/:id/report` | — _(skip: SPA-only structured dashboard report; markdown `bearing_report` serves agents)_ | Structured period report (dashboard stat cards + progress-over-time chart) | `apps/bearing/src/hooks/useProgress.ts` |
+| `GET /reports/period/:periodId` | `bearing_report` | Period summary report (markdown) | — |
 | `GET /reports/at-risk` | `bearing_at_risk` | At-risk goals report | — |
 | `GET /reports/owner/:userId` | `bearing_report` | A user's goals report | — |
 | `POST /reports/generate` | `bearing_report` | Generate formatted report | — |
@@ -1329,6 +1331,7 @@ or `/helpdesk/agents`) segment in-code.
 | `POST /book/api/v1/availability/meeting-time-mixed` | `book_find_meeting_time_for_users` | Mixed human/agent meeting-slot finder | — |
 | `GET /book/api/v1/availability/team` | `book_get_team_availability` | Common free slots across users | `apps/book/src/pages/event-form.tsx` |
 | `GET /book/api/v1/booking-pages` | `book_list_booking_pages` | List public booking pages | `apps/book/src/hooks/use-booking-pages.ts` |
+| `GET /book/api/v1/booking-pages/:id` | — _(skip: editor load; covered by list tool)_ | Load one booking page for the editor | `apps/book/src/hooks/use-booking-pages.ts` |
 | `POST /book/api/v1/booking-pages` | `book_create_booking_page` | Create a scheduling link page | `apps/book/src/hooks/use-booking-pages.ts` |
 | `PATCH /book/api/v1/booking-pages/:id` | `book_update_booking_page` | Update a booking page | `apps/book/src/pages/booking-page-editor.tsx` |
 | `DELETE /book/api/v1/booking-pages/:id` | `book_delete_booking_page` | Delete a booking page | `apps/book/src/hooks/use-booking-pages.ts` |
@@ -1406,6 +1409,7 @@ or `/helpdesk/agents`) segment in-code.
 | `DELETE /bill/api/v1/expenses/:id` | `bill_delete_expense` | Delete an expense | `apps/bill/src/hooks/use-expenses.ts` |
 | `POST /bill/api/v1/expenses/:id/approve` | `bill_approve_expense` | Approve an expense | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/reject` | `bill_reject_expense` | Reject an expense | `apps/bill/src/pages/expense-list.tsx` |
+| `POST /bill/api/v1/expenses/:id/reimburse` | — _(skip: deferred — UI-only terminal state transition, approved→reimbursed)_ | Mark an approved expense reimbursed | `apps/bill/src/pages/expense-list.tsx` |
 | `POST /bill/api/v1/expenses/:id/receipt` | — _(skip: multipart receipt upload)_ | Upload a receipt file | `apps/bill/src/pages/expense-new.tsx` |
 | `GET /bill/api/v1/invoices` | `bill_list_invoices` | List invoices (filters) | `apps/bill/src/hooks/use-invoices.ts` |
 | `POST /bill/api/v1/invoices` | `bill_create_invoice` | Create a draft invoice | `apps/bill/src/hooks/use-invoices.ts` |
@@ -1716,7 +1720,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 
 Noticed while mapping; **not fixed here** — flagging for follow-up:
 
-- **Bearing client/server path mismatches (likely live bugs):** the Bearing SPA calls `POST /goals/:id/override-status` (server route is `POST /goals/:id/status`), `POST /key-results/:id/set-value` (server is `POST /key-results/:id/value`), and `GET /periods/:id/report` (no such route — the report is at `/reports/period/:periodId`). These UI calls likely 404.
+- **Bearing client/server path mismatches:** `POST /key-results/:id/set-value` (FIXED 2026-06-17 — client now posts `/key-results/:id/value`) and `GET /periods/:id/report` (FIXED 2026-06-17 — a structured `/periods/:id/report` route now backs the dashboard stat cards + progress chart). **Still open:** the SPA calls `POST /goals/:id/override-status` while the server route is `POST /goals/:id/status` — the Override-status control still 404s. Same wrong-path family as the set-value bug; one-line fix in `apps/bearing/src/hooks/useGoals.ts`.
 - **Bureau presence tools unwired:** `bureau_locate_user`, `bureau_get_presence`, `bureau_set_status` target endpoints (`/presence/locate`, `/presence`, `PATCH /me/status`) that don't exist on bureau-api (presence lives at `/presence/where/:userId`); they fail soft with stub envelopes.
 - **Banter calling endpoints return HTTP 410 Gone:** `banter_start_call` / `join` / `leave` / `end` / `invite_agent` tools still exist, but calling moved to the Bureau docked-box and the endpoints are tombstoned.
 - **Board / Blueprint granular write endpoints are MCP/agent-only:** the SPAs persist via `PUT /boards/:id/scene` (Board) and read via the composite `/graph` endpoint (Blueprint); many element/node write endpoints are reachable only through MCP tools, not the UI.

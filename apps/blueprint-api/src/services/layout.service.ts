@@ -5,7 +5,11 @@
  * thread free.
  *
  * Algorithm names accepted on the API (`layout_algorithm`):
- *   layered | mrtree | force | radial | rectpacking | manual
+ *   layered | mrtree | tree | force | radial | rectpacking | grid | manual
+ *
+ * `tree` and `grid` are friendly aliases the SPA's layout dropdown sends:
+ *   - `tree` maps to ELK's `mrtree` (Eades–Mehlhorn tree layout)
+ *   - `grid` maps to ELK's `rectpacking` (packs nodes into a compact grid)
  *
  * `manual` skips ELK entirely and returns the existing positions
  * unchanged (used for free-form diagrams where the user lays out by hand).
@@ -22,9 +26,14 @@ const elk = new ELK();
 const ALGORITHM_MAP: Record<string, string> = {
   layered: 'layered',
   mrtree: 'mrtree',
+  // Friendly alias used by the SPA's layout dropdown.
+  tree: 'mrtree',
   force: 'force',
   radial: 'radial',
   rectpacking: 'rectpacking',
+  // Friendly alias used by the SPA's layout dropdown. rectpacking packs the
+  // nodes into a compact grid-like arrangement (no edge-aware layering).
+  grid: 'rectpacking',
 };
 
 export interface LayoutInput {

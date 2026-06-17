@@ -82,10 +82,71 @@ const updateChannelSchema = z.object({
   message_retention_days: z.number().int().min(0).nullable().optional(),
 });
 
-const addMembersSchema = z.object({
-  user_ids: z.array(z.string().uuid()).min(1).max(100),
-  role: z.enum(['admin', 'member', 'viewer']).optional(),
-});
+// Add members accepts EITHER an explicit list of user_ids (the canonical
+// machine contract used by MCP) OR a single human-friendly `identifier`
+// (email or username) typed in the channel-settings "Add member" box. The
+// identifier path resolves to a user_id server-side using the same email /
+// synthesized-handle matching as the /v1/users resolver routes. At least one
+// of the two must be present.
+const addMembersSchema = z
+  .object({
+    user_ids: z.array(z.string().uuid()).min(1).max(100).optional(),
+    identifier: z.string().trim().min(1).max(320).optional(),
+    role: z.enum(['admin', 'member', 'viewer']).optional(),
+  })
+  .refine((b) => (b.user_ids && b.user_ids.length > 0) || !!b.identifier, {
+    message: 'Provide either user_ids or an identifier (email or username)',
+  });
+
+/**
+ * Resolve a human-friendly identifier (email or synthesized handle) to a
+ * single user_id within the given org. Mirrors the matching used by
+ * user.routes.ts (/v1/users/by-email and /v1/users/by-handle): exact
+ * case-insensitive email first, then a slugified-display_name handle
+ * (lower(display_name), whitespace→'-', non-alnum/'-' stripped). A leading
+ * '@' on the identifier is tolerated for the handle path. Returns null when
+ * no active user in the org matches.
+ */
+async function resolveUserIdByIdentifier(
+  orgId: string,
+  identifier: string,
+): Promise<string | null> {
+  const raw = identifier.trim();
+  if (!raw) return null;
+
+  // Email path: only attempt when it looks like an email.
+  if (raw.includes('@') && raw.indexOf('@') > 0) {
+    const email = raw.toLowerCase();
+    const [byEmail] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          eq(users.org_id, orgId),
+          eq(users.is_active, true),
+          sql`lower(${users.email}) = ${email}`,
+        ),
+      )
+      .limit(1);
+    if (byEmail) return byEmail.id;
+  }
+
+  // Handle path: strip a leading '@', then match the slugified display_name.
+  const handle = raw.replace(/^@/, '').toLowerCase();
+  if (handle.length === 0) return null;
+  const [byHandle] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(users.org_id, orgId),
+        eq(users.is_active, true),
+        sql`regexp_replace(regexp_replace(lower(${users.display_name}), '\\s+', '-', 'g'), '[^a-z0-9-]', '', 'g') = ${handle}`,
+      ),
+    )
+    .limit(1);
+  return byHandle ? byHandle.id : null;
+}
 
 const markReadSchema = z.object({
   message_id: z.string().uuid(),
@@ -285,75 +346,54 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       const user = request.user!;
       const body = createChannelSchema.parse(request.body);
 
-      // Enforce org-level banter permissions for non-admin members.
+      // Enforce org-level banter channel-creation permission.
       //
-      // P2-23 (accepted staleness): There is a small TOCTOU window between
-      // reading banter_settings.allow_channel_creation here and performing
-      // the INSERT below. If an org admin flips the setting to 'admins_only'
-      // in that window (<10ms for a hot-path Postgres read + insert on the
-      // same connection), a member could still create a channel. We accept
-      // this — an admin who wants to lock this down can delete the stray
-      // channel afterwards, and wrapping check + insert in a serializable
-      // transaction would add contention without meaningful safety.
-      const isPrivileged = user.is_superuser || user.role === 'admin' || user.role === 'owner';
-      if (!isPrivileged) {
-        // Single code path for banter permission reads. Cached with 30s TTL
-        // and normalized into the OrgPermissions shape used by apps/api.
-        const perms = await getEffectiveBanterPermissions(user.org_id);
-
-        if (!perms.members_can_create_channels) {
-          return reply.status(403).send({
-            error: {
-              code: 'FORBIDDEN',
-              message: 'Your organization does not allow members to create channels',
-              details: [],
-              request_id: request.id,
-            },
-          });
-        }
-
-        // Private channel restriction: piggybacks on allow_channel_creation
-        // in the current banter_settings schema. Admins can always create
-        // private channels; members obey the mapped flag above.
-        if (body.type === 'private' && !perms.members_can_create_private_channels) {
-          return reply.status(403).send({
-            error: {
-              code: 'FORBIDDEN',
-              message: 'Your organization does not allow members to create private channels',
-              details: [],
-              request_id: request.id,
-            },
-          });
-        }
-      }
-
-      // P2-23 (closing the race): Re-read banter_settings directly from the
-      // DB (bypassing the 30s cache) right before we INSERT the channel. If
-      // an admin flipped `allow_channel_creation` to 'admins' after the
-      // initial cached check above, reject with SETTING_CHANGED so the
-      // in-flight request doesn't slip through on stale settings.
-      if (!isPrivileged) {
+      // allow_channel_creation has three meaningful values (the legacy
+      // 'members' is a synonym of 'everyone'):
+      //   everyone / members → any org member may create
+      //   admins             → org admins and owners only
+      //   org_owners         → org owners only
+      // SuperUsers always pass. We read the setting FRESH from the DB right
+      // before the INSERT (bypassing the 30s cache) so a permission flip
+      // can't slip through on stale settings — this is the single
+      // authoritative gate (P2-23: the prior cached pre-check was redundant).
+      if (!user.is_superuser) {
         const [freshSettings] = await db
           .select({ allow_channel_creation: banterSettings.allow_channel_creation })
           .from(banterSettings)
           .where(eq(banterSettings.org_id, user.org_id))
           .limit(1);
 
-        const membersCanCreate =
-          !freshSettings || (freshSettings.allow_channel_creation ?? 'members') === 'members';
+        // Default to 'everyone' when no settings row exists yet.
+        const policy = freshSettings?.allow_channel_creation ?? 'everyone';
+        const isOwner = user.role === 'owner';
+        const isAdmin = user.role === 'admin' || isOwner;
 
-        if (!membersCanCreate) {
+        let allowed: boolean;
+        let deniedMessage: string;
+        if (policy === 'org_owners') {
+          allowed = isOwner;
+          deniedMessage = 'Only organization owners may create channels';
+        } else if (policy === 'admins') {
+          allowed = isAdmin;
+          deniedMessage = 'Only organization admins may create channels';
+        } else {
+          // 'everyone' / 'members' / any unknown value → permissive.
+          allowed = true;
+          deniedMessage = 'Your organization does not allow members to create channels';
+        }
+
+        if (!allowed) {
           return reply.status(403).send({
             error: {
-              code: 'SETTING_CHANGED',
-              message:
-                'Channel creation permissions changed during this request. Your organization no longer allows members to create channels.',
+              code: 'FORBIDDEN',
+              message: deniedMessage,
               details: [],
               request_id: request.id,
             },
           });
         }
-        // Private-channel restriction piggybacks on the same flag today
+        // Private channels piggyback on the same policy today
         // (see org-permissions-bridge.ts), so no separate re-check needed.
       }
 
@@ -1233,12 +1273,32 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, requireScope('read_write'), requireChannelMember, requireChannelAdmin] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      const user = request.user!;
       const body = addMembersSchema.parse(request.body);
+
+      // Build the concrete list of user_ids to add. The explicit user_ids
+      // contract wins; otherwise resolve the single identifier (email/handle)
+      // typed in the UI to a user in this org.
+      let targetUserIds: string[] = body.user_ids ?? [];
+      if (targetUserIds.length === 0 && body.identifier) {
+        const resolved = await resolveUserIdByIdentifier(user.org_id, body.identifier);
+        if (!resolved) {
+          return reply.status(404).send({
+            error: {
+              code: 'USER_NOT_FOUND',
+              message: `No active user in this organization matches "${body.identifier}"`,
+              details: [{ field: 'identifier', issue: 'no_match' }],
+              request_id: request.id,
+            },
+          });
+        }
+        targetUserIds = [resolved];
+      }
 
       // Insert memberships (ignore conflicts) and recompute member_count atomically.
       const addedCount = await db.transaction(async (tx) => {
         let count = 0;
-        for (const userId of body.user_ids) {
+        for (const userId of targetUserIds) {
           try {
             const inserted = await tx
               .insert(banterChannelMemberships)

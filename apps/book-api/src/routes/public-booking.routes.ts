@@ -84,20 +84,31 @@ export default async function publicBookingRoutes(fastify: FastifyInstance) {
       // Auto-create Bond contact and/or Bam task based on booking page settings.
       // Both are best-effort: log and continue on failure.
       const page = await bookingPageService.getPublicBookingPage(request.params.slug);
+
+      // Internal service-to-service auth: the shared INTERNAL_SERVICE_SECRET,
+      // sent in the X-Internal-Service-Secret header. A public booking is
+      // anonymous (no session / API key to forward), so the secret IS the
+      // credential. The user-facing POST /v1/contacts is gated by requireAuth
+      // and ignores this header — we target the secret-guarded internal route
+      // instead, which carries explicit org + acting-user attribution.
       const internalHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
       };
       if (env.INTERNAL_SERVICE_SECRET) {
-        internalHeaders['x-internal-secret'] = env.INTERNAL_SERVICE_SECRET;
+        internalHeaders['x-internal-service-secret'] = env.INTERNAL_SERVICE_SECRET;
       }
 
       if (page.auto_create_bond_contact !== false) {
-        // Create or find a Bond contact by email
+        // Create or find a Bond contact by email (idempotent upsert). The
+        // booking-page owner is the acting user — they own the calendar the
+        // booking lands on.
         const bondBaseUrl = (env as unknown as Record<string, string | undefined>).BOND_API_INTERNAL_URL ?? 'http://bond-api:4009';
-        fetch(`${bondBaseUrl}/v1/contacts`, {
+        fetch(`${bondBaseUrl}/v1/internal/contacts`, {
           method: 'POST',
           headers: internalHeaders,
           body: JSON.stringify({
+            org_id: page.organization_id,
+            acting_user_id: page.owner_user_id,
             email: body.email,
             first_name: body.name.split(' ')[0] ?? body.name,
             last_name: body.name.split(' ').slice(1).join(' ') || undefined,

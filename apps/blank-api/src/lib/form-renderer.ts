@@ -131,6 +131,7 @@ body {
 .blank-radio-item input, .blank-checkbox-item input { accent-color: var(--theme); width: 16px; height: 16px; }
 .blank-section-header { font-size: 1.125rem; font-weight: 700; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid #e5e7eb; color: #111827; }
 .blank-paragraph { color: #6b7280; margin-bottom: 16px; font-size: 0.875rem; }
+.blank-page-break { border: none; border-top: 2px dashed #d1d5db; margin: 24px 0; }
 .blank-submit {
   display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem;
   font-weight: 600; color: #fff; background: var(--theme); cursor: pointer; margin-top: 8px;
@@ -169,6 +170,11 @@ function renderField(f: FormField): string {
 
     case 'paragraph':
       return `    <div class="blank-paragraph">${esc(f.label)}</div>`;
+
+    case 'page_break':
+      // Layout-only: this single-page renderer flattens pages, so a page
+      // break shows as a horizontal divider rather than a stray input.
+      return `    <hr class="blank-page-break" data-field-type="page_break">`;
 
     case 'short_text':
     case 'email':
@@ -452,7 +458,7 @@ function fisherYatesShuffle<T>(arr: T[]): T[] {
 function clientScript(form: FormData): string {
   // Build a minimal field-definition array for client-side validation
   const fieldDefs = form.fields
-    .filter((f) => !['section_header', 'paragraph', 'hidden'].includes(f.field_type))
+    .filter((f) => !['section_header', 'paragraph', 'hidden', 'page_break'].includes(f.field_type))
     .map((f) => ({
       key: f.field_key,
       type: f.field_type,

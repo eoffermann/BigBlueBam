@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
 import type { Env } from '../env.js';
@@ -29,7 +29,24 @@ const bondContacts = pgTable('bond_contacts', {
   first_name: varchar('first_name', { length: 100 }),
   last_name: varchar('last_name', { length: 100 }),
   email: varchar('email', { length: 255 }),
+  // Columns referenced by segment filter_criteria (kept in sync with the
+  // blast-api segment service's CONTACT_COLUMN_MAP).
+  lifecycle_stage: varchar('lifecycle_stage', { length: 30 }),
+  lead_source: varchar('lead_source', { length: 60 }),
+  lead_score: integer('lead_score'),
+  city: varchar('city', { length: 100 }),
+  country: varchar('country', { length: 2 }),
+  last_contacted_at: timestamp('last_contacted_at', { withTimezone: true }),
   custom_fields: jsonb('custom_fields').default({}).notNull(),
+});
+
+const blastSegments = pgTable('blast_segments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organization_id: uuid('organization_id').notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  filter_criteria: jsonb('filter_criteria').notNull(),
+  cached_count: integer('cached_count'),
+  cached_at: timestamp('cached_at', { withTimezone: true }),
 });
 
 const blastCampaigns = pgTable('blast_campaigns', {
@@ -76,6 +93,99 @@ const blastUnsubscribes = pgTable('blast_unsubscribes', {
   organization_id: uuid('organization_id').notNull(),
   email: varchar('email', { length: 255 }).notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Segment resolution — ported from
+// apps/blast-api/src/services/segment.service.ts (buildConditionSql /
+// buildFilterWhere). The worker uses Drizzle pgTable stubs and cannot import
+// the blast-api service module, so the filter translation lives here. Keep
+// the two in sync: any new operator/field must be added in both places.
+// ---------------------------------------------------------------------------
+
+function escapeLike(s: string): string {
+  return s.replace(/[%_\\]/g, '\\$&');
+}
+
+const CONTACT_COLUMN_MAP: Record<
+  string,
+  (typeof bondContacts)[keyof typeof bondContacts] | undefined
+> = {
+  lifecycle_stage: bondContacts.lifecycle_stage,
+  lead_source: bondContacts.lead_source,
+  lead_score: bondContacts.lead_score,
+  city: bondContacts.city,
+  country: bondContacts.country,
+  last_contacted_at: bondContacts.last_contacted_at,
+  email: bondContacts.email,
+  first_name: bondContacts.first_name,
+  last_name: bondContacts.last_name,
+};
+
+function buildConditionSql(condition: {
+  field: string;
+  op: string;
+  value: unknown;
+}): SQL | undefined {
+  const col = CONTACT_COLUMN_MAP[condition.field];
+  if (!col) return undefined;
+
+  switch (condition.op) {
+    case 'equals':
+      return sql`${col} = ${condition.value as string}`;
+    case 'not_equals':
+      return sql`${col} != ${condition.value as string}`;
+    case 'in': {
+      const values = condition.value as string[];
+      if (!values || values.length === 0) return undefined;
+      return sql`${col} = ANY(${values}::text[])`;
+    }
+    case 'contains': {
+      const pattern = `%${escapeLike(String(condition.value))}%`;
+      return sql`${col} ILIKE ${pattern}`;
+    }
+    case 'greater_than':
+      return sql`${col} > ${condition.value as string | number}`;
+    case 'less_than':
+      return sql`${col} < ${condition.value as string | number}`;
+    case 'older_than_days': {
+      const days = Number(condition.value);
+      if (Number.isNaN(days)) return undefined;
+      return sql`${col} < NOW() - INTERVAL '1 day' * ${days}`;
+    }
+    case 'is_set':
+      return sql`${col} IS NOT NULL`;
+    case 'is_not_set':
+      return sql`${col} IS NULL`;
+    default:
+      return undefined;
+  }
+}
+
+function buildSegmentFilterWhere(
+  orgId: string,
+  criteria: {
+    conditions: Array<{ field: string; op: string; value: unknown }>;
+    match: string;
+  },
+): SQL {
+  const orgCondition = eq(bondContacts.organization_id, orgId);
+
+  const filterConditions: SQL[] = [];
+  for (const condition of criteria.conditions ?? []) {
+    const fragment = buildConditionSql(condition);
+    if (fragment) filterConditions.push(fragment);
+  }
+
+  if (filterConditions.length === 0) return orgCondition;
+
+  const combined =
+    criteria.match === 'any'
+      ? or(...filterConditions)
+      : and(...filterConditions);
+  if (!combined) return orgCondition;
+
+  return and(orgCondition, combined) ?? orgCondition;
+}
 
 // ---------------------------------------------------------------------------
 // Job data interface
@@ -216,10 +326,57 @@ export async function processBlastSendJob(
 
   const unsubEmails = new Set(unsubRows.map((r) => r.email.toLowerCase()));
 
-  // 3. Load contacts — all org contacts, or filtered by segment
-  //    (Segment filter_criteria evaluation is a future enhancement;
-  //     for now we load all org contacts and rely on segment_id being
-  //     null = all contacts.)
+  // 3. Load contacts — when the campaign targets a segment, evaluate that
+  //    segment's filter_criteria against the contacts table so we send only
+  //    to the segment's members. With no segment_id, fall back to all org
+  //    contacts.
+  let recipientWhere: SQL = eq(bondContacts.organization_id, org_id);
+
+  if (campaign.segment_id) {
+    const [segment] = await db
+      .select({
+        id: blastSegments.id,
+        filter_criteria: blastSegments.filter_criteria,
+      })
+      .from(blastSegments)
+      .where(
+        and(
+          eq(blastSegments.id, campaign.segment_id),
+          eq(blastSegments.organization_id, org_id),
+        ),
+      )
+      .limit(1);
+
+    if (!segment) {
+      // Segment was deleted out from under the campaign (FK is SET NULL on
+      // delete, but the campaign row may not have been refreshed). Fail safe:
+      // send to nobody rather than blasting the whole org.
+      logger.warn(
+        { campaign_id, segment_id: campaign.segment_id },
+        'Campaign targets a segment that no longer exists — sending to no recipients',
+      );
+      recipientWhere = sql`false`;
+    } else {
+      const criteria = (segment.filter_criteria ?? {
+        conditions: [],
+        match: 'all',
+      }) as {
+        conditions: Array<{ field: string; op: string; value: unknown }>;
+        match: string;
+      };
+      recipientWhere = buildSegmentFilterWhere(org_id, criteria);
+      logger.info(
+        {
+          campaign_id,
+          segment_id: segment.id,
+          conditions: criteria.conditions?.length ?? 0,
+          match: criteria.match,
+        },
+        'Resolving recipients from campaign segment filter',
+      );
+    }
+  }
+
   const contacts = await db
     .select({
       id: bondContacts.id,
@@ -228,7 +385,7 @@ export async function processBlastSendJob(
       email: bondContacts.email,
     })
     .from(bondContacts)
-    .where(eq(bondContacts.organization_id, org_id));
+    .where(recipientWhere);
 
   // 4. Filter out contacts with no email or who are unsubscribed
   const eligibleContacts = contacts.filter(

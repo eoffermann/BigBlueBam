@@ -125,8 +125,10 @@ export function mapBanterSettingsToOrgPermissions(
   const s = banterSettings;
   if (!s) return { ...BRIDGE_DEFAULTS };
 
-  const allowCreation = s.allow_channel_creation ?? 'members';
-  const membersCanCreateChannels = allowCreation === 'members';
+  // 'everyone' (and the legacy synonym 'members') = any member can create.
+  // 'admins' and 'org_owners' both restrict creation away from plain members.
+  const allowCreation = s.allow_channel_creation ?? 'everyone';
+  const membersCanCreateChannels = allowCreation === 'everyone' || allowCreation === 'members';
 
   return {
     ...BRIDGE_DEFAULTS,

@@ -6,7 +6,9 @@ import { Avatar } from '@/components/common/avatar';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { ActivityTimeline } from '@/components/contacts/activity-timeline';
 import { LogActivityForm } from '@/components/contacts/log-activity-form';
-import { useDeal, useDealStageHistory, useCloseDealWon, useCloseDealLost, useDeleteDeal, useDealRelated } from '@/hooks/use-deals';
+import { EditDealDialog } from '@/components/pipeline/edit-deal-dialog';
+import { LoseDealDialog } from '@/components/pipeline/lose-deal-dialog';
+import { useDeal, useDealStageHistory, useCloseDealWon, useDeleteDeal, useDealRelated } from '@/hooks/use-deals';
 import { useDealActivities } from '@/hooks/use-activities';
 import { formatCurrency, formatDate, daysInStage, formatRelativeTime } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
@@ -29,10 +31,11 @@ export function DealDetailPage({ dealId, onNavigate }: DealDetailPageProps) {
   const activities = activitiesData?.data ?? [];
 
   const closeDealWon = useCloseDealWon();
-  const closeDealLost = useCloseDealLost();
   const deleteDeal = useDeleteDeal();
 
   const [showLogActivity, setShowLogActivity] = useState(false);
+  const [showEditDeal, setShowEditDeal] = useState(false);
+  const [showLoseDeal, setShowLoseDeal] = useState(false);
 
   if (isLoading) {
     return (
@@ -139,8 +142,7 @@ export function DealDetailPage({ dealId, onNavigate }: DealDetailPageProps) {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => closeDealLost.mutate({ dealId: deal.id })}
-                loading={closeDealLost.isPending}
+                onClick={() => setShowLoseDeal(true)}
               >
                 <XCircle className="h-4 w-4 text-red-500" />
                 Lost
@@ -157,7 +159,7 @@ export function DealDetailPage({ dealId, onNavigate }: DealDetailPageProps) {
               </button>
             }
           >
-            <DropdownMenuItem onSelect={() => {}}>
+            <DropdownMenuItem onSelect={() => setShowEditDeal(true)}>
               <Edit2 className="h-4 w-4" />
               Edit Deal
             </DropdownMenuItem>
@@ -334,6 +336,9 @@ export function DealDetailPage({ dealId, onNavigate }: DealDetailPageProps) {
           </div>
         </div>
       </div>
+
+      <EditDealDialog open={showEditDeal} onOpenChange={setShowEditDeal} deal={deal} />
+      <LoseDealDialog open={showLoseDeal} onOpenChange={setShowLoseDeal} dealId={deal.id} />
     </div>
   );
 }

@@ -103,6 +103,9 @@ import importRoutes from './routes/imports.routes.js';
 // §7 Wave 5 dedupe
 import dedupeRoutes from './routes/dedupe.routes.js';
 import userSettingsRoutes from './routes/user-settings.routes.js';
+// Internal cross-app routes (INTERNAL_SERVICE_SECRET-guarded; e.g. book-api
+// auto-creating a contact on a public booking).
+import internalRoutes from './routes/internal.routes.js';
 
 await fastify.register(contactRoutes, { prefix: '/v1' });
 await fastify.register(companyRoutes, { prefix: '/v1' });
@@ -116,6 +119,7 @@ await fastify.register(importRoutes, { prefix: '/v1' });
 // §7 Wave 5 dedupe
 await fastify.register(dedupeRoutes, { prefix: '/v1' });
 await fastify.register(userSettingsRoutes, { prefix: '/v1' });
+await fastify.register(internalRoutes, { prefix: '/v1' });
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

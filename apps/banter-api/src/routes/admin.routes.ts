@@ -11,7 +11,14 @@ import { invalidateBanterSettingsCache } from '../services/settings-cache.js';
 // ── Schemas ──────────────────────────────────────────────────────
 
 const updateSettingsSchema = z.object({
-  allow_channel_creation: z.enum(['members', 'admins']).optional(),
+  // Who may create channels. The Banter admin UI offers three options:
+  //   everyone    → any org member (the legacy 'members' value is an accepted
+  //                 synonym so existing rows / MCP callers keep working)
+  //   admins      → org admins and owners
+  //   org_owners  → org owners only
+  // Enforcement lives in channel.routes.ts; the read path normalizes the
+  // legacy 'members' to 'everyone' so the UI select renders correctly.
+  allow_channel_creation: z.enum(['everyone', 'admins', 'org_owners', 'members']).optional(),
   allow_dm: z.boolean().optional(),
   allow_group_dm: z.boolean().optional(),
   allow_guest_access: z.boolean().optional(),
@@ -137,11 +144,24 @@ function maskSecret(value: string | null | undefined): string | null {
 }
 
 /**
+ * Normalize the legacy `allow_channel_creation: 'members'` value to the UI's
+ * canonical 'everyone' on read, so the admin SelectField (whose options are
+ * everyone | admins | org_owners) renders the correct selection for rows that
+ * still hold the old default. Write accepts both (see updateSettingsSchema).
+ */
+function normalizeChannelCreation<T extends Record<string, unknown>>(settings: T): T {
+  if (settings.allow_channel_creation === 'members') {
+    return { ...settings, allow_channel_creation: 'everyone' };
+  }
+  return settings;
+}
+
+/**
  * Deep-clone settings and mask sensitive fields so they are never
  * returned in full to the client, even for admins.
  */
 function maskSensitiveFields<T extends Record<string, unknown>>(settings: T): T {
-  const masked = { ...settings };
+  const masked = normalizeChannelCreation({ ...settings });
 
   // Mask top-level secret fields
   if ('livekit_api_secret' in masked && typeof masked.livekit_api_secret === 'string') {

@@ -26,9 +26,9 @@ const WIDGET_PRESETS: WidgetPreset[] = [
     data_source: 'bam',
     entity: 'tasks',
     query_config: {
-      measures: [{ field: 'points', agg: 'sum', alias: 'total_points' }],
-      dimensions: [{ field: 'sprint_name', alias: 'sprint' }],
-      date_range: 'last_90_days',
+      measures: [{ field: 'story_points', agg: 'sum', alias: 'total_points' }],
+      dimensions: [{ field: 'sprint_id', alias: 'sprint' }],
+      date_range: { preset: 'last_90_days' },
     },
     viz_config: { stacked: false },
   },
@@ -42,7 +42,7 @@ const WIDGET_PRESETS: WidgetPreset[] = [
     entity: 'tasks',
     query_config: {
       measures: [{ field: 'id', agg: 'count', alias: 'count' }],
-      dimensions: [{ field: 'state_name', alias: 'state' }],
+      dimensions: [{ field: 'state_id', alias: 'state' }],
     },
     viz_config: {},
   },
@@ -102,7 +102,7 @@ const WIDGET_PRESETS: WidgetPreset[] = [
     entity: 'deals',
     query_config: {
       measures: [{ field: 'id', agg: 'count', alias: 'deal_count' }, { field: 'value', agg: 'sum', alias: 'total_value' }],
-      dimensions: [{ field: 'stage_name', alias: 'stage' }],
+      dimensions: [{ field: 'stage_id', alias: 'stage' }],
     },
     viz_config: {},
   },
@@ -116,7 +116,7 @@ const WIDGET_PRESETS: WidgetPreset[] = [
     entity: 'deals',
     query_config: {
       measures: [{ field: 'value', agg: 'sum', alias: 'value' }],
-      dimensions: [{ field: 'stage_name', alias: 'stage' }],
+      dimensions: [{ field: 'stage_id', alias: 'stage' }],
     },
     viz_config: {},
   },
@@ -124,34 +124,37 @@ const WIDGET_PRESETS: WidgetPreset[] = [
   // Blast email
   {
     id: 'blast_open_rate',
-    name: 'Avg Open Rate',
-    description: 'Average email open rate across all campaigns.',
+    name: 'Total Opens',
+    description: 'Total email opens across all campaigns.',
     category: 'Email Marketing',
     widget_type: 'kpi_card',
     data_source: 'blast',
     entity: 'campaigns',
+    // The blast.campaigns source exposes count totals (total_opened/total_clicked/
+    // total_sent), not pre-computed rate columns — open_rate/click_rate live only
+    // on the bench_mv_campaign_engagement MV, which this base-table source can't read.
     query_config: {
-      measures: [{ field: 'open_rate', agg: 'avg', alias: 'avg_open_rate' }],
+      measures: [{ field: 'total_opened', agg: 'sum', alias: 'total_opens' }],
       dimensions: [],
     },
     viz_config: {},
-    kpi_config: { format: 'percentage' },
+    kpi_config: { suffix: 'opens' },
   },
   {
     id: 'blast_engagement_trend',
     name: 'Engagement Trend',
-    description: 'Open and click rates over time for sent campaigns.',
+    description: 'Opens and clicks over time for sent campaigns.',
     category: 'Email Marketing',
     widget_type: 'line_chart',
     data_source: 'blast',
     entity: 'campaigns',
     query_config: {
       measures: [
-        { field: 'open_rate', agg: 'avg', alias: 'open_rate' },
-        { field: 'click_rate', agg: 'avg', alias: 'click_rate' },
+        { field: 'total_opened', agg: 'sum', alias: 'opens' },
+        { field: 'total_clicked', agg: 'sum', alias: 'clicks' },
       ],
       dimensions: [{ field: 'sent_at', alias: 'date' }],
-      date_range: 'last_90_days',
+      date_range: { preset: 'last_90_days' },
     },
     viz_config: {},
   },
@@ -187,19 +190,24 @@ const WIDGET_PRESETS: WidgetPreset[] = [
     viz_config: {},
   },
 
-  // Cross-product MVs
+  // Cross-product
   {
     id: 'mv_daily_throughput',
     name: 'Daily Task Throughput',
-    description: 'Tasks processed per day from the materialized view.',
+    description: 'Tasks created per day across projects, bucketed daily.',
     category: 'Cross-Product',
     widget_type: 'area_chart',
-    data_source: 'mv',
-    entity: 'daily_task_throughput',
+    // The bench:daily_task_throughput materialized-view source is not org-isolated
+    // (the MV has no organization_id column) and declares measure fields that do
+    // not exist on the view, so it cannot back a working widget. We instead query
+    // the live bam.tasks source with a daily time bucket, which preserves the
+    // "tasks per day" intent and instantiates cleanly.
+    data_source: 'bam',
+    entity: 'tasks',
     query_config: {
-      measures: [{ field: 'total_tasks', agg: 'sum', alias: 'tasks' }],
-      dimensions: [{ field: 'day', alias: 'date' }],
-      date_range: 'last_30_days',
+      measures: [{ field: 'id', agg: 'count', alias: 'tasks' }],
+      time_dimension: { field: 'created_at', granularity: 'day' },
+      date_range: { preset: 'last_30_days' },
     },
     viz_config: {},
   },

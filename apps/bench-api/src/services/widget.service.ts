@@ -193,11 +193,26 @@ export async function deleteWidget(id: string, orgId?: string) {
 // Execute widget query (with Redis cache)
 // ---------------------------------------------------------------------------
 
-export async function executeWidgetQuery(id: string, orgId: string) {
+export async function executeWidgetQuery(
+  id: string,
+  orgId: string,
+  dateRangeOverride?: queryService.DateRange,
+) {
   const widget = await getWidget(id);
 
-  // Check cache first
-  if (cacheService) {
+  const baseConfig = widget.query_config as QueryConfig;
+  // A per-request date range (from the dashboard date-range picker) overrides
+  // whatever range the widget was saved with. When one is supplied we must NOT
+  // use the widget-level cache (which is keyed by widget id only and would
+  // otherwise serve a result computed for a different range); the underlying
+  // query.service still applies its own date-range-aware ad-hoc cache.
+  const hasOverride = !!(dateRangeOverride && (dateRangeOverride.preset || dateRangeOverride.start || dateRangeOverride.end));
+  const config: QueryConfig = hasOverride
+    ? { ...baseConfig, date_range: dateRangeOverride }
+    : baseConfig;
+
+  // Check cache first (only when running the widget's own saved configuration)
+  if (cacheService && !hasOverride) {
     const cached = await cacheService.get(id);
     if (cached) {
       return { ...(cached as Record<string, unknown>), cached: true };
@@ -207,12 +222,12 @@ export async function executeWidgetQuery(id: string, orgId: string) {
   const result = await queryService.executeQuery(
     widget.data_source,
     widget.entity,
-    widget.query_config as QueryConfig,
+    config,
     orgId,
   );
 
-  // Store in cache using the widget's configured TTL
-  if (cacheService) {
+  // Store in cache using the widget's configured TTL (only the un-overridden run)
+  if (cacheService && !hasOverride) {
     const ttl = widget.cache_ttl_seconds ?? undefined;
     await cacheService.set(id, result, ttl);
   }

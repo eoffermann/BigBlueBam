@@ -442,8 +442,12 @@ export async function getInvoiceByToken(token: string) {
 
 export interface CreateFromTimeEntriesInput {
   project_id: string;
-  time_entry_ids: string[];
   client_id: string;
+  // Either an explicit list of entry IDs, or a date range to resolve against
+  // the project. The route enforces that at least one form is supplied.
+  time_entry_ids?: string[];
+  date_from?: string;
+  date_to?: string;
 }
 
 export async function createInvoiceFromTimeEntries(
@@ -451,27 +455,56 @@ export async function createInvoiceFromTimeEntries(
   orgId: string,
   userId: string,
 ) {
-  // 1. Fetch the requested time entries joined with tasks to verify project ownership
-  const entries = await db
-    .select({
-      id: timeEntries.id,
-      task_id: timeEntries.task_id,
-      user_id: timeEntries.user_id,
-      minutes: timeEntries.minutes,
-      date: timeEntries.date,
-      description: timeEntries.description,
-      task_title: tasks.title,
-      task_project_id: tasks.project_id,
-    })
-    .from(timeEntries)
-    .innerJoin(tasks, eq(tasks.id, timeEntries.task_id))
-    .where(inArray(timeEntries.id, input.time_entry_ids));
+  // 1. Fetch the candidate time entries joined with tasks to verify project
+  //    ownership. When explicit IDs are supplied we look those up; otherwise
+  //    we resolve all entries on the project's tasks within the date range.
+  const baseSelect = {
+    id: timeEntries.id,
+    task_id: timeEntries.task_id,
+    user_id: timeEntries.user_id,
+    minutes: timeEntries.minutes,
+    date: timeEntries.date,
+    description: timeEntries.description,
+    task_title: tasks.title,
+    task_project_id: tasks.project_id,
+  };
 
-  if (entries.length === 0) {
-    throw badRequest('No time entries found for the given IDs');
+  const useExplicitIds = !!(input.time_entry_ids && input.time_entry_ids.length > 0);
+
+  let entries;
+  if (useExplicitIds) {
+    entries = await db
+      .select(baseSelect)
+      .from(timeEntries)
+      .innerJoin(tasks, eq(tasks.id, timeEntries.task_id))
+      .where(inArray(timeEntries.id, input.time_entry_ids!));
+  } else {
+    if (!input.date_from || !input.date_to) {
+      throw badRequest('Provide either time_entry_ids or both date_from and date_to');
+    }
+    entries = await db
+      .select(baseSelect)
+      .from(timeEntries)
+      .innerJoin(tasks, eq(tasks.id, timeEntries.task_id))
+      .where(
+        and(
+          eq(tasks.project_id, input.project_id),
+          gte(timeEntries.date, input.date_from),
+          lte(timeEntries.date, input.date_to),
+        ),
+      );
   }
 
-  // Verify all entries belong to the specified project
+  if (entries.length === 0) {
+    throw badRequest(
+      useExplicitIds
+        ? 'No time entries found for the given IDs'
+        : 'No time entries found for the project in the given date range',
+    );
+  }
+
+  // Verify all entries belong to the specified project (explicit-ID path may
+  // include entries from other projects; the range path is already scoped).
   const wrongProject = entries.filter((e) => e.task_project_id !== input.project_id);
   if (wrongProject.length > 0) {
     throw badRequest(

@@ -48,3 +48,11 @@ export function useRejectExpense() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['expenses'] }),
   });
 }
+
+export function useReimburseExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/v1/expenses/${id}/reimburse`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}

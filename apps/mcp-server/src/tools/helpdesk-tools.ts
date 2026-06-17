@@ -80,7 +80,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     name: 'list_tickets',
     description: 'List helpdesk tickets with optional filters',
     input: {
-      status: z.enum(['open', 'in_progress', 'waiting_on_client', 'resolved', 'closed']).optional().describe('Filter by ticket status'),
+      status: z.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']).optional().describe('Filter by ticket status'),
       assignee_id: z.string().uuid().optional().describe('Filter by assigned agent'),
       client_id: z.string().uuid().optional().describe('Filter by client'),
       cursor: z.string().optional().describe('Pagination cursor'),
@@ -161,7 +161,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     description: 'Fuzzy search helpdesk tickets by subject and body within the caller\'s org. Returns up to 20 matches as a compact projection ({ id, number, subject, status, priority, requester_email, requester_name, assignee_id, assignee_name }), ordered by most recently updated. Optional filters narrow by status and by the linked task\'s assignee_id. Intended as a resolver for natural-language ticket lookups where only a fragment of the subject/body is known.',
     input: {
       query: z.string().min(1).max(500).describe('Search text — matched case-insensitively against ticket subject and body'),
-      status: z.enum(['open', 'in_progress', 'waiting_on_client', 'waiting_on_customer', 'resolved', 'closed']).optional().describe('Optional status filter'),
+      status: z.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']).optional().describe('Optional status filter'),
       assignee_id: z.string().uuid().optional().describe('Optional assignee filter (matches the linked task\'s assignee)'),
     },
     returns: z.object({
@@ -239,7 +239,7 @@ export function registerHelpdeskTools(server: McpServer, api: ApiClient, helpdes
     description: 'Update the status of a helpdesk ticket',
     input: {
       ticket_id: z.string().min(1).describe('The ticket UUID, ticket number ("1234"), or prefixed ticket number ("#1234")'),
-      status: z.enum(['open', 'in_progress', 'waiting_on_client', 'resolved', 'closed']).describe('The new status'),
+      status: z.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']).describe('The new status'),
     },
     returns: ticketShape,
     handler: async ({ ticket_id, status }) => {

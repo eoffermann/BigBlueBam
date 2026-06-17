@@ -222,7 +222,12 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   // ===== 4. bill_create_invoice_from_time =====
   registerTool(server, {
     name: 'bill_create_invoice_from_time',
-    description: 'Generate an invoice from Bam time entries for a project and date range.',
+    description:
+      'Generate a draft invoice from Bam time entries for a project over a date range. ' +
+      'The Bill API resolves every time entry on the project between date_from and date_to ' +
+      '(inclusive), groups them by user + task, prices each group via the resolved billing ' +
+      'rate, and writes one line item per group. Requires a billing rate configured for each ' +
+      'contributing user on the project.',
     input: {
       project_id: z
         .string()

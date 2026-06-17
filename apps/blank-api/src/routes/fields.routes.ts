@@ -14,7 +14,10 @@ const FIELD_TYPES = [
   'file_upload', 'image_upload',
   'rating', 'scale', 'nps',
   'checkbox', 'toggle',
-  'section_header', 'paragraph', 'hidden',
+  // Layout-only field types (no submitted answer). `page_break` is a
+  // first-class type in the form builder: it splits the form into pages
+  // and the renderer/validator treat it as non-input.
+  'section_header', 'paragraph', 'hidden', 'page_break',
 ] as const;
 
 const createFieldSchema = z.object({

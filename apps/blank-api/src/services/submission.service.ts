@@ -219,7 +219,7 @@ const URL_REGEX = /^https?:\/\/.+/;
 const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
 
 // Non-input field types that don't require validation
-const NON_INPUT_TYPES = ['section_header', 'paragraph', 'hidden'];
+const NON_INPUT_TYPES = ['section_header', 'paragraph', 'hidden', 'page_break'];
 
 function validateResponseData(
   data: Record<string, unknown>,

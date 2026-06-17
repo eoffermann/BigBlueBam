@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Save, ArrowLeft, Trash2, GripVertical, Sparkles } from 'lucide-react';
 import { useDashboard, useUpdateDashboard } from '@/hooks/use-dashboards';
 import { useDeleteWidget, useCreateWidget } from '@/hooks/use-widgets';
@@ -25,12 +25,42 @@ export function DashboardEditPage({ dashboardId, onNavigate }: DashboardEditPage
   const [initialized, setInitialized] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
 
+  // Local ordered widget list for drag-reorder. Kept in sync with the server
+  // copy (which is itself ordered by the persisted `layout`).
+  const [orderedWidgets, setOrderedWidgets] = useState<any[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const serverWidgets = dashboard?.widgets;
+
+  useEffect(() => {
+    setOrderedWidgets(serverWidgets ?? []);
+  }, [serverWidgets]);
+
   if (dashboard && !initialized) {
     setName(dashboard.name);
     setDescription(dashboard.description ?? '');
     setVisibility(dashboard.visibility);
     setInitialized(true);
   }
+
+  // Persist the new widget order into the dashboard's `layout` jsonb. The API
+  // returns widgets ordered by this layout, so the order survives reload.
+  const persistOrder = async (widgets: any[]) => {
+    const layout = widgets.map((w, i) => ({ widget_id: w.id, position: i }));
+    await updateMutation.mutateAsync({ layout });
+  };
+
+  const handleDrop = async (targetIndex: number) => {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      return;
+    }
+    const next = [...orderedWidgets];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    setOrderedWidgets(next); // optimistic
+    setDragIndex(null);
+    await persistOrder(next);
+  };
 
   const handleSave = async () => {
     await updateMutation.mutateAsync({ name, description, visibility });
@@ -145,14 +175,31 @@ export function DashboardEditPage({ dashboardId, onNavigate }: DashboardEditPage
         </div>
       )}
 
-      {dashboard.widgets && dashboard.widgets.length > 0 ? (
+      {orderedWidgets.length > 0 ? (
         <div className="space-y-2">
-          {dashboard.widgets.map((widget: any) => (
+          {orderedWidgets.map((widget: any, index: number) => (
             <div
               key={widget.id}
-              className="flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50"
+              onDragOver={(e) => {
+                if (dragIndex !== null) e.preventDefault();
+              }}
+              onDrop={() => handleDrop(index)}
+              className={`flex items-center gap-3 p-3 rounded-lg border bg-white dark:bg-zinc-800/50 transition-colors ${
+                dragIndex === index
+                  ? 'border-primary-400 opacity-60'
+                  : 'border-zinc-200 dark:border-zinc-700'
+              }`}
             >
-              <GripVertical className="h-4 w-4 text-zinc-300 dark:text-zinc-600 cursor-grab" />
+              <button
+                type="button"
+                draggable
+                onDragStart={() => setDragIndex(index)}
+                onDragEnd={() => setDragIndex(null)}
+                aria-label="Drag to reorder widget"
+                className="cursor-grab active:cursor-grabbing text-zinc-300 dark:text-zinc-600 hover:text-zinc-500"
+              >
+                <GripVertical className="h-4 w-4" />
+              </button>
               <div className="flex-1">
                 <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{widget.name}</div>
                 <div className="text-xs text-zinc-500">{widget.data_source} / {widget.entity} - {widget.widget_type.replace('_', ' ')}</div>

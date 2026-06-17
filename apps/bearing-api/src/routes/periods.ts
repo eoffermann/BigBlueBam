@@ -7,8 +7,11 @@ import {
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import * as periodService from '../services/period.service.js';
+import * as reportGenerator from '../services/report-generator.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { loadActor, loadOrg } from '../lib/bolt-event-enrich.js';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type PeriodRow = {
   id: string;
@@ -132,6 +135,32 @@ export default async function periodRoutes(fastify: FastifyInstance) {
         });
       }
       return reply.send({ data: period });
+    },
+  );
+
+  // GET /periods/:id/report — Structured period report (dashboard stats + chart)
+  fastify.get<{ Params: { id: string } }>(
+    '/periods/:id/report',
+    {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      preHandler: [requireAuth, shadowOnly('bearing.report_period.get')],
+    },
+    async (request, reply) => {
+      if (!UUID_REGEX.test(request.params.id)) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: 'Valid period id is required',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      const report = await reportGenerator.generatePeriodReportData(
+        request.params.id,
+        request.user!.org_id,
+      );
+      return reply.send({ data: report });
     },
   );
 

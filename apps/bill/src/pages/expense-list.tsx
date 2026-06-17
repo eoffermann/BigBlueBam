@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { useExpenses, useApproveExpense, useRejectExpense } from '@/hooks/use-expenses';
+import { useExpenses, useApproveExpense, useRejectExpense, useReimburseExpense } from '@/hooks/use-expenses';
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
 
 interface Props {
@@ -12,6 +12,7 @@ export function ExpenseListPage({ onNavigate }: Props) {
   const { data: expenses, isLoading } = useExpenses(statusFilter ? { status: statusFilter } : undefined);
   const approveExpense = useApproveExpense();
   const rejectExpense = useRejectExpense();
+  const reimburseExpense = useReimburseExpense();
 
   const statuses = ['', 'pending', 'approved', 'rejected', 'reimbursed'];
 
@@ -95,6 +96,15 @@ export function ExpenseListPage({ onNavigate }: Props) {
                           Reject
                         </button>
                       </div>
+                    )}
+                    {exp.status === 'approved' && (
+                      <button
+                        onClick={() => reimburseExpense.mutate(exp.id)}
+                        disabled={reimburseExpense.isPending}
+                        className="text-blue-600 hover:text-blue-700 text-xs font-medium disabled:opacity-50"
+                      >
+                        Mark reimbursed
+                      </button>
                     )}
                   </td>
                 </tr>

@@ -21,7 +21,7 @@ const periodTypes: Array<{ value: BearingPeriod['type']; label: string }> = [
 ];
 
 const statusBadgeVariant: Record<string, 'default' | 'success' | 'info' | 'primary' | 'warning'> = {
-  draft: 'default',
+  planning: 'default',
   active: 'success',
   completed: 'info',
   archived: 'default',
@@ -116,7 +116,7 @@ export function PeriodListPage({ onNavigate: _onNavigate }: PeriodListPageProps)
                         <Pencil className="h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
-                      {period.status === 'draft' && (
+                      {period.status === 'planning' && (
                         <DropdownMenuItem onSelect={() => activateMutation.mutate(period.id)}>
                           <Play className="h-4 w-4" />
                           Activate

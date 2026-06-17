@@ -162,6 +162,15 @@ export default async function templateRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Resolve the project's owning org so the created task (and its
+      // subtasks) carry org_id for Bench analytics + the RLS gate.
+      const [orgRow] = await db
+        .select({ org_id: projects.org_id })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+        .limit(1);
+      const templateOrgId = orgRow?.org_id ?? null;
+
       const humanId = await generateHumanId(projectId);
       const position = await getNextPosition(phaseId);
 
@@ -169,6 +178,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
         .insert(tasks)
         .values({
           project_id: projectId,
+          org_id: templateOrgId,
           human_id: humanId,
           title: overrides.title ?? template.title_pattern ?? template.name,
           description: overrides.description ?? template.description ?? null,
@@ -193,6 +203,7 @@ export default async function templateRoutes(fastify: FastifyInstance) {
 
           await db.insert(tasks).values({
             project_id: projectId,
+            org_id: templateOrgId,
             human_id: subHumanId,
             parent_task_id: task.id,
             title: subtaskTitle,

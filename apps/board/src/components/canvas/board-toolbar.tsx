@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   ArrowLeft,
   Share2,
+  Check,
   Lock,
   Unlock,
   History,
@@ -32,6 +33,8 @@ export function BoardToolbar({ boardId, onNavigate, onToggleChat, chatOpen }: Bo
 
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
+  const [exporting, setExporting] = useState<null | 'png' | 'svg'>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -40,6 +43,56 @@ export function BoardToolbar({ boardId, onNavigate, onToggleChat, chatOpen }: Bo
       nameInputRef.current.select();
     }
   }, [editingName]);
+
+  // Share = copy the canonical board URL to the clipboard. The board canvas
+  // is already gated by the same visibility checks the recipient will hit,
+  // so a copied link is a real shareable link (no separate share token).
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable (insecure context / permissions) — fall
+      // back to a prompt so the user can still copy the link by hand.
+      window.prompt('Copy this board link:', shareUrl);
+    }
+  };
+
+  // Export hits the server-side renderer (GET /boards/:id/export/:format),
+  // which produces a real SVG/PNG via the board-api export service. We fetch
+  // with credentials + X-Org-Id (the api client always parses JSON, so we
+  // can't reuse it for a binary body) and download the resulting blob.
+  const handleExport = async (format: 'png' | 'svg') => {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      const orgId = (globalThis as any).__boardAuthStore?.getState?.()?.user?.org_id as
+        | string
+        | undefined;
+      const headers: Record<string, string> = {};
+      if (orgId) headers['X-Org-Id'] = orgId;
+      const res = await fetch(`/board/api/v1/boards/${boardId}/export/${format}`, {
+        credentials: 'include',
+        headers,
+      });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(board?.name ?? 'board').replace(/[^a-zA-Z0-9-_]/g, '_')}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const handleNameSubmit = () => {
     if (nameValue.trim() && nameValue !== board?.name) {
@@ -136,9 +189,20 @@ export function BoardToolbar({ boardId, onNavigate, onToggleChat, chatOpen }: Bo
           variant="secondary"
           size="sm"
           className="h-8 bg-white/90 dark:bg-zinc-800/90 backdrop-blur shadow-sm"
+          onClick={handleShare}
+          title="Copy a shareable link to this board"
         >
-          <Share2 className="h-3.5 w-3.5" />
-          Share
+          {shareCopied ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-emerald-500" />
+              Link copied
+            </>
+          ) : (
+            <>
+              <Share2 className="h-3.5 w-3.5" />
+              Share
+            </>
+          )}
         </Button>
 
         <DropdownMenu
@@ -162,13 +226,13 @@ export function BoardToolbar({ boardId, onNavigate, onToggleChat, chatOpen }: Bo
             )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleExport('png')}>
             <ImageIcon className="h-4 w-4" />
-            Export as PNG
+            {exporting === 'png' ? 'Exporting…' : 'Export as PNG'}
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleExport('svg')}>
             <FileDown className="h-4 w-4" />
-            Export as SVG
+            {exporting === 'svg' ? 'Exporting…' : 'Export as SVG'}
           </DropdownMenuItem>
         </DropdownMenu>
       </div>
