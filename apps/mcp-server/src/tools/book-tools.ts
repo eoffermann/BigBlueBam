@@ -476,6 +476,227 @@ export function registerBookTools(server: McpServer, api: ApiClient, bookApiUrl:
       return result.ok ? ok(result.data) : err('finding meeting time for users', result.data);
     },
   });
+
+  // ===== 11. book_get_event =====
+  registerTool(server, {
+    name: 'book_get_event',
+    description: 'Get a single calendar event by ID, including attendees and linked-entity context.',
+    input: {
+      id: z.string().uuid().describe('Event UUID'),
+    },
+    returns: eventShape,
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/events/${id}`);
+      return result.ok ? ok(result.data) : err('getting event', result.data);
+    },
+  });
+
+  // ===== 12. book_list_calendars =====
+  registerTool(server, {
+    name: 'book_list_calendars',
+    description: "List the caller's calendars, optionally filtered by calendar type (personal, team, project, booking).",
+    input: {
+      calendar_type: z.enum(['personal', 'team', 'project', 'booking']).optional().describe('Filter by calendar type'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string(), calendar_type: z.string().optional() }).passthrough()) }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/calendars${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing calendars', result.data);
+    },
+  });
+
+  // ===== 13. book_create_calendar =====
+  registerTool(server, {
+    name: 'book_create_calendar',
+    description: 'Create a calendar in the caller\'s organization.',
+    input: {
+      name: z.string().min(1).max(255).describe('Calendar name'),
+      description: z.string().max(2000).optional().describe('Calendar description'),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Hex color (e.g. "#3b82f6")'),
+      calendar_type: z.enum(['personal', 'team', 'project', 'booking']).optional().describe('Calendar type (default personal)'),
+      timezone: z.string().max(50).optional().describe('IANA timezone'),
+      project_id: z.string().uuid().optional().describe('Project to scope the calendar to (when type is project)'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), name: z.string() }).passthrough() }),
+    handler: async (params) => {
+      const result = await client.request('POST', '/calendars', params);
+      return result.ok ? ok(result.data) : err('creating calendar', result.data);
+    },
+  });
+
+  // ===== 14. book_update_calendar =====
+  registerTool(server, {
+    name: 'book_update_calendar',
+    description: 'Update a calendar\'s metadata. `id` accepts either a UUID or a calendar name (case-insensitive exact match). Provide only the fields to change.',
+    input: {
+      id: z.string().describe('Calendar UUID or name'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      description: z.string().max(2000).optional().describe('Updated description'),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Updated hex color'),
+      timezone: z.string().max(50).optional().describe('Updated IANA timezone'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), name: z.string() }).passthrough() }),
+    handler: async ({ id, ...body }) => {
+      const resolvedId = await resolveCalendarId(client, id);
+      if (!resolvedId) {
+        return err('updating calendar', { error: `Calendar not found: ${id}` });
+      }
+      const result = await client.request('PATCH', `/calendars/${resolvedId}`, body);
+      return result.ok ? ok(result.data) : err('updating calendar', result.data);
+    },
+  });
+
+  // ===== 15. book_delete_calendar =====
+  registerTool(server, {
+    name: 'book_delete_calendar',
+    description: 'Delete a calendar. `id` accepts either a UUID or a calendar name (case-insensitive exact match).',
+    input: {
+      id: z.string().describe('Calendar UUID or name'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveCalendarId(client, id);
+      if (!resolvedId) {
+        return err('deleting calendar', { error: `Calendar not found: ${id}` });
+      }
+      const result = await client.request('DELETE', `/calendars/${resolvedId}`);
+      return result.ok ? ok(result.data) : err('deleting calendar', result.data);
+    },
+  });
+
+  // ===== 16. book_list_booking_pages =====
+  registerTool(server, {
+    name: 'book_list_booking_pages',
+    description: "List the caller's public booking pages (scheduling links).",
+    input: {},
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), slug: z.string(), title: z.string() }).passthrough()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/booking-pages');
+      return result.ok ? ok(result.data) : err('listing booking pages', result.data);
+    },
+  });
+
+  // ===== 17. book_update_booking_page =====
+  registerTool(server, {
+    name: 'book_update_booking_page',
+    description: 'Update a public booking page. Provide only the fields to change. Set `enabled: false` to take a page offline without deleting it.',
+    input: {
+      id: z.string().uuid().describe('Booking page UUID'),
+      slug: z.string().min(1).max(60).regex(/^[a-z0-9-]+$/).optional().describe('URL slug for /meet/:slug'),
+      title: z.string().min(1).max(255).optional().describe('Page title'),
+      description: z.string().max(2000).optional().describe('Page description'),
+      duration_minutes: z.number().int().min(5).max(480).optional().describe('Meeting duration'),
+      buffer_before_min: z.number().int().min(0).max(60).optional().describe('Buffer before each booking (minutes)'),
+      buffer_after_min: z.number().int().min(0).max(60).optional().describe('Buffer after each booking (minutes)'),
+      max_advance_days: z.number().int().min(1).max(365).optional().describe('How far ahead visitors may book (days)'),
+      min_notice_hours: z.number().int().min(0).max(168).optional().describe('Minimum notice before a booking (hours)'),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Hex accent color'),
+      logo_url: z.string().url().optional().describe('Logo URL'),
+      confirmation_message: z.string().max(2000).optional().describe('Confirmation message shown after booking'),
+      redirect_url: z.string().url().optional().describe('Redirect URL after booking'),
+      auto_create_bond_contact: z.boolean().optional().describe('Auto-create a Bond contact on booking'),
+      auto_create_bam_task: z.boolean().optional().describe('Auto-create a Bam task on booking'),
+      bam_project_id: z.string().uuid().optional().describe('Bam project for auto-created tasks'),
+      enabled: z.boolean().optional().describe('Whether the page accepts bookings'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), slug: z.string(), title: z.string() }).passthrough() }),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/booking-pages/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating booking page', result.data);
+    },
+  });
+
+  // ===== 18. book_delete_booking_page =====
+  registerTool(server, {
+    name: 'book_delete_booking_page',
+    description: 'Delete a public booking page (scheduling link).',
+    input: {
+      id: z.string().uuid().describe('Booking page UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/booking-pages/${id}`);
+      return result.ok ? ok(result.data) : err('deleting booking page', result.data);
+    },
+  });
+
+  // ===== 19. book_get_working_hours =====
+  registerTool(server, {
+    name: 'book_get_working_hours',
+    description: "Get the caller's weekly working-hours schedule (per day-of-week availability windows).",
+    input: {},
+    returns: z.object({ data: z.array(z.object({
+      day_of_week: z.number().int(),
+      start_time: z.string(),
+      end_time: z.string(),
+      timezone: z.string().optional(),
+      enabled: z.boolean().optional(),
+    }).passthrough()) }).passthrough(),
+    handler: async () => {
+      const result = await client.request('GET', '/working-hours');
+      return result.ok ? ok(result.data) : err('getting working hours', result.data);
+    },
+  });
+
+  // ===== 20. book_set_working_hours =====
+  registerTool(server, {
+    name: 'book_set_working_hours',
+    description: "Replace the caller's weekly working-hours schedule. `day_of_week` is 0 (Sunday) through 6 (Saturday); times are HH:MM or HH:MM:SS. This is a full replace — include every day you want available.",
+    input: {
+      hours: z.array(z.object({
+        day_of_week: z.number().int().min(0).max(6).describe('0 = Sunday … 6 = Saturday'),
+        start_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).describe('Window start, HH:MM or HH:MM:SS'),
+        end_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).describe('Window end, HH:MM or HH:MM:SS'),
+        timezone: z.string().max(50).optional().describe('IANA timezone for this window'),
+        enabled: z.boolean().optional().describe('Whether this window is active'),
+      })).describe('Full set of working-hours windows'),
+    },
+    returns: z.object({ data: z.array(z.object({}).passthrough()) }).passthrough(),
+    handler: async ({ hours }) => {
+      const result = await client.request('PUT', '/working-hours', hours);
+      return result.ok ? ok(result.data) : err('setting working hours', result.data);
+    },
+  });
+
+  // ===== 21. book_list_connections =====
+  registerTool(server, {
+    name: 'book_list_connections',
+    description: "List the caller's external calendar connections (Google/Microsoft) and their sync status. Does not expose access tokens.",
+    input: {},
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), provider: z.string().optional(), sync_direction: z.string().optional() }).passthrough()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/connections');
+      return result.ok ? ok(result.data) : err('listing connections', result.data);
+    },
+  });
+
+  // ===== 22. book_sync_connection =====
+  registerTool(server, {
+    name: 'book_sync_connection',
+    description: 'Force an immediate sync of an existing external calendar connection.',
+    input: {
+      id: z.string().uuid().describe('Connection UUID'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }),
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/connections/${id}/sync`);
+      return result.ok ? ok(result.data) : err('syncing connection', result.data);
+    },
+  });
+
+  // ===== 23. book_delete_connection =====
+  registerTool(server, {
+    name: 'book_delete_connection',
+    description: 'Remove an external calendar connection (Google/Microsoft).',
+    input: {
+      id: z.string().uuid().describe('Connection UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/connections/${id}`);
+      return result.ok ? ok(result.data) : err('deleting connection', result.data);
+    },
+  });
 }
 
 // Helper: intersect two lists of time slots

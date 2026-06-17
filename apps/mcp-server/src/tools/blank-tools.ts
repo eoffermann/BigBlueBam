@@ -305,4 +305,187 @@ export function registerBlankTools(server: McpServer, api: ApiClient, blankApiUr
       return result.ok ? ok(result.data) : err('getting form analytics', result.data);
     },
   });
+
+  // ===== blank_delete_form =====
+  registerTool(server, {
+    name: 'blank_delete_form',
+    description: 'Delete a form and all of its fields and submissions. This is destructive and cannot be undone.',
+    input: {
+      id: z.string().uuid().describe('Form ID to delete'),
+    },
+    returns: z.object({ deleted: z.boolean() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/forms/${id}`);
+      return result.ok ? ok(result.data) : err('deleting form', result.data);
+    },
+  });
+
+  // ===== blank_close_form =====
+  registerTool(server, {
+    name: 'blank_close_form',
+    description: 'Close a published form to new submissions. Existing submissions are retained; the form stops accepting responses.',
+    input: {
+      id: z.string().uuid().describe('Form ID to close'),
+    },
+    returns: formShape,
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/forms/${id}/close`);
+      return result.ok ? ok(result.data) : err('closing form', result.data);
+    },
+  });
+
+  // ===== blank_duplicate_form =====
+  registerTool(server, {
+    name: 'blank_duplicate_form',
+    description: 'Clone an existing form (including its fields) into a new draft form owned by the current user.',
+    input: {
+      id: z.string().uuid().describe('Form ID to duplicate'),
+    },
+    returns: formShape,
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/forms/${id}/duplicate`);
+      return result.ok ? ok(result.data) : err('duplicating form', result.data);
+    },
+  });
+
+  // ===== blank_get_embed_code =====
+  registerTool(server, {
+    name: 'blank_get_embed_code',
+    description: 'Get the HTML embed snippet (and public URL) for a published form, suitable for pasting into an external page.',
+    input: {
+      id: z.string().uuid().describe('Form ID'),
+    },
+    returns: z.object({ embed_code: z.string().optional(), url: z.string().optional() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/forms/${id}/embed-code`);
+      return result.ok ? ok(result.data) : err('getting embed code', result.data);
+    },
+  });
+
+  // ===== blank_add_field =====
+  registerTool(server, {
+    name: 'blank_add_field',
+    description: 'Add a single field to an existing form. `field_key` must be a safe identifier (letters, digits, underscores; starting with a letter or underscore).',
+    input: {
+      form_id: z.string().uuid().describe('Form ID to add the field to'),
+      field_key: z.string().describe('Stable identifier for the field (e.g. "email", "nps_score"); letters/digits/underscores only, must start with a letter or underscore'),
+      label: z.string().describe('Human-readable field label'),
+      field_type: z.enum([
+        'short_text', 'long_text', 'email', 'phone', 'url', 'number',
+        'single_select', 'multi_select', 'dropdown',
+        'date', 'time', 'datetime',
+        'file_upload', 'image_upload',
+        'rating', 'scale', 'nps',
+        'checkbox', 'toggle',
+        'section_header', 'paragraph', 'hidden',
+      ]).describe('Field input type'),
+      description: z.string().optional().describe('Help text shown under the field'),
+      placeholder: z.string().optional().describe('Placeholder text for the input'),
+      required: z.boolean().optional().describe('Whether a response is required'),
+      min_length: z.number().int().positive().optional().describe('Minimum text length'),
+      max_length: z.number().int().positive().optional().describe('Maximum text length'),
+      options: z.unknown().optional().describe('Choice options for select/dropdown fields (array of {value,label})'),
+      scale_min: z.number().int().optional().describe('Minimum value for scale/rating/nps fields'),
+      scale_max: z.number().int().optional().describe('Maximum value for scale/rating/nps fields'),
+      scale_min_label: z.string().optional().describe('Label for the low end of a scale'),
+      scale_max_label: z.string().optional().describe('Label for the high end of a scale'),
+      conditional_on_field_id: z.string().uuid().optional().describe('Show this field only when another field meets a condition'),
+      conditional_operator: z.enum(['equals', 'not_equals', 'contains', 'gt', 'lt', 'is_set', 'is_not_set']).optional().describe('Comparison operator for conditional visibility'),
+      conditional_value: z.string().optional().describe('Value compared against for conditional visibility'),
+      sort_order: z.number().int().optional().describe('Position of the field among siblings'),
+      page_number: z.number().int().positive().optional().describe('Page (for multi-page forms)'),
+      column_span: z.number().int().min(1).max(2).optional().describe('Layout column span (1 or 2)'),
+      default_value: z.string().optional().describe('Pre-filled default value'),
+    },
+    returns: z.object({ id: z.string().uuid(), form_id: z.string().uuid(), field_key: z.string(), label: z.string(), field_type: z.string() }).passthrough(),
+    handler: async ({ form_id, ...body }) => {
+      const result = await client.request('POST', `/forms/${form_id}/fields`, body);
+      return result.ok ? ok(result.data) : err('adding field', result.data);
+    },
+  });
+
+  // ===== blank_update_field =====
+  registerTool(server, {
+    name: 'blank_update_field',
+    description: 'Update a single form field. Provide only the fields you want to change.',
+    input: {
+      id: z.string().uuid().describe('Field ID to update'),
+      field_key: z.string().optional().describe('Updated stable identifier (letters/digits/underscores, must start with a letter or underscore)'),
+      label: z.string().optional().describe('Updated label'),
+      field_type: z.enum([
+        'short_text', 'long_text', 'email', 'phone', 'url', 'number',
+        'single_select', 'multi_select', 'dropdown',
+        'date', 'time', 'datetime',
+        'file_upload', 'image_upload',
+        'rating', 'scale', 'nps',
+        'checkbox', 'toggle',
+        'section_header', 'paragraph', 'hidden',
+      ]).optional().describe('Updated field type'),
+      description: z.string().nullable().optional().describe('Updated help text (null to clear)'),
+      placeholder: z.string().nullable().optional().describe('Updated placeholder (null to clear)'),
+      required: z.boolean().optional().describe('Whether a response is required'),
+      min_length: z.number().int().positive().nullable().optional().describe('Minimum text length (null to clear)'),
+      max_length: z.number().int().positive().nullable().optional().describe('Maximum text length (null to clear)'),
+      options: z.unknown().optional().describe('Updated choice options for select/dropdown fields'),
+      scale_min: z.number().int().optional().describe('Updated scale minimum'),
+      scale_max: z.number().int().optional().describe('Updated scale maximum'),
+      scale_min_label: z.string().nullable().optional().describe('Updated low-end scale label (null to clear)'),
+      scale_max_label: z.string().nullable().optional().describe('Updated high-end scale label (null to clear)'),
+      sort_order: z.number().int().optional().describe('Updated position among siblings'),
+      page_number: z.number().int().positive().optional().describe('Updated page number'),
+      column_span: z.number().int().min(1).max(2).optional().describe('Updated layout column span (1 or 2)'),
+      default_value: z.string().nullable().optional().describe('Updated default value (null to clear)'),
+    },
+    returns: z.object({ id: z.string().uuid(), field_key: z.string(), label: z.string(), field_type: z.string() }).passthrough(),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/fields/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating field', result.data);
+    },
+  });
+
+  // ===== blank_delete_field =====
+  registerTool(server, {
+    name: 'blank_delete_field',
+    description: 'Delete a single field from a form. This is destructive and removes the field definition.',
+    input: {
+      id: z.string().uuid().describe('Field ID to delete'),
+    },
+    returns: z.object({ deleted: z.boolean() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/fields/${id}`);
+      return result.ok ? ok(result.data) : err('deleting field', result.data);
+    },
+  });
+
+  // ===== blank_reorder_fields =====
+  registerTool(server, {
+    name: 'blank_reorder_fields',
+    description: 'Bulk reorder the fields of a form by assigning each field a new sort_order.',
+    input: {
+      form_id: z.string().uuid().describe('Form ID whose fields to reorder'),
+      fields: z.array(z.object({
+        id: z.string().uuid().describe('Field ID'),
+        sort_order: z.number().int().describe('New position for this field'),
+      })).describe('Ordered list of {id, sort_order} for the form fields'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), sort_order: z.number().int() }).passthrough()) }).passthrough(),
+    handler: async ({ form_id, fields }) => {
+      const result = await client.request('POST', `/forms/${form_id}/fields/reorder`, { fields });
+      return result.ok ? ok(result.data) : err('reordering fields', result.data);
+    },
+  });
+
+  // ===== blank_delete_submission =====
+  registerTool(server, {
+    name: 'blank_delete_submission',
+    description: 'Delete a single form submission. This is destructive and cannot be undone.',
+    input: {
+      id: z.string().uuid().describe('Submission ID to delete'),
+    },
+    returns: z.object({ deleted: z.boolean() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/submissions/${id}`);
+      return result.ok ? ok(result.data) : err('deleting submission', result.data);
+    },
+  });
 }

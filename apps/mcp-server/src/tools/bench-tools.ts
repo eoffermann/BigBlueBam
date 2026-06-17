@@ -62,6 +62,83 @@ const dashboardShape = z.object({
   updated_at: z.string(),
 }).passthrough();
 
+const widgetShape = z.object({
+  id: z.string().uuid(),
+  dashboard_id: z.string().uuid().nullable().optional(),
+  name: z.string(),
+  widget_type: z.string(),
+  data_source: z.string().optional(),
+  entity: z.string().optional(),
+  query_config: z.unknown().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+}).passthrough();
+
+const reportShape = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  dashboard_id: z.string().uuid().nullable().optional(),
+  cron_expression: z.string().optional(),
+  cron_timezone: z.string().optional(),
+  delivery_method: z.string().optional(),
+  delivery_target: z.string().optional(),
+  export_format: z.string().optional(),
+  enabled: z.boolean().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+}).passthrough();
+
+const savedQueryShape = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable().optional(),
+  data_source: z.string(),
+  entity: z.string(),
+  query_config: z.record(z.unknown()).optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+}).passthrough();
+
+// Shared query-config shape, mirrored from apps/bench-api widget/query routes.
+const measureSchema = z.object({
+  field: z.string(),
+  agg: z.enum(['count', 'sum', 'avg', 'min', 'max']),
+  alias: z.string().optional(),
+});
+const dimensionSchema = z.object({
+  field: z.string(),
+  alias: z.string().optional(),
+});
+const filterSchema = z.object({
+  field: z.string(),
+  op: z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'is_null', 'is_not_null', 'between', 'like']),
+  value: z.unknown(),
+});
+const queryConfigSchema = z.object({
+  measures: z.array(measureSchema).min(1),
+  dimensions: z.array(dimensionSchema).optional(),
+  filters: z.array(filterSchema).optional(),
+  sort: z.array(z.object({ field: z.string(), dir: z.enum(['asc', 'desc']) })).optional(),
+  limit: z.number().int().positive().max(10000).optional(),
+  time_dimension: z.object({
+    field: z.string(),
+    granularity: z.enum(['hour', 'day', 'week', 'month', 'quarter', 'year']),
+  }).optional(),
+  date_range: z.object({
+    preset: z.string().optional(),
+    start: z.string().optional(),
+    end: z.string().optional(),
+  }).optional(),
+});
+
+const widgetTypeEnum = z.enum([
+  'bar_chart', 'line_chart', 'area_chart', 'pie_chart', 'donut_chart',
+  'scatter_plot', 'heatmap', 'funnel',
+  'table', 'pivot_table',
+  'kpi_card', 'counter', 'gauge', 'progress_bar',
+  'text', 'markdown',
+]);
+
 export function registerBenchTools(server: McpServer, api: ApiClient, benchApiUrl: string): void {
   const client = createBenchClient(benchApiUrl, api);
 
@@ -404,6 +481,364 @@ export function registerBenchTools(server: McpServer, api: ApiClient, benchApiUr
         change_percent: Math.round(change * 10) / 10,
         direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
       });
+    },
+  });
+
+  // ===== DASHBOARDS — CRUD =====
+
+  // ===== bench_create_dashboard =====
+  registerTool(server, {
+    name: 'bench_create_dashboard',
+    description: 'Create a new analytics dashboard. Widgets are added separately via bench_add_widget.',
+    input: {
+      name: z.string().min(1).max(255).describe('Dashboard name'),
+      description: z.string().max(2000).optional().describe('Dashboard description'),
+      project_id: z.string().uuid().optional().describe('Project to scope the dashboard to'),
+      visibility: z.enum(['private', 'project', 'organization']).optional().describe('Who can see the dashboard (default private)'),
+      is_default: z.boolean().optional().describe('Mark as the default dashboard'),
+      auto_refresh_seconds: z.number().int().positive().optional().describe('Auto-refresh interval in seconds'),
+      layout: z.array(z.record(z.unknown())).optional().describe('Grid layout descriptors'),
+    },
+    returns: dashboardShape,
+    handler: async (params) => {
+      const result = await client.request('POST', '/dashboards', params);
+      return result.ok ? ok(result.data) : err('creating dashboard', result.data);
+    },
+  });
+
+  // ===== bench_update_dashboard =====
+  registerTool(server, {
+    name: 'bench_update_dashboard',
+    description: 'Update dashboard metadata (name, description, visibility, layout). Provide only the fields to change.',
+    input: {
+      id: z.string().uuid().describe('Dashboard ID'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      description: z.string().max(2000).optional().describe('Updated description'),
+      project_id: z.string().uuid().nullable().optional().describe('Updated project scope (null to clear)'),
+      visibility: z.enum(['private', 'project', 'organization']).optional().describe('Updated visibility'),
+      is_default: z.boolean().optional().describe('Updated default flag'),
+      auto_refresh_seconds: z.number().int().positive().nullable().optional().describe('Updated auto-refresh interval (null to clear)'),
+      layout: z.array(z.record(z.unknown())).optional().describe('Updated grid layout'),
+    },
+    returns: dashboardShape,
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/dashboards/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating dashboard', result.data);
+    },
+  });
+
+  // ===== bench_delete_dashboard =====
+  registerTool(server, {
+    name: 'bench_delete_dashboard',
+    description: 'Delete a dashboard and its widgets. This is permanent.',
+    input: {
+      id: z.string().uuid().describe('Dashboard ID to delete'),
+    },
+    returns: z.object({ deleted: z.boolean() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/dashboards/${id}`);
+      return result.ok ? ok(result.data) : err('deleting dashboard', result.data);
+    },
+  });
+
+  // ===== bench_duplicate_dashboard =====
+  registerTool(server, {
+    name: 'bench_duplicate_dashboard',
+    description: 'Clone a dashboard, including its widgets, into a new copy owned by the caller.',
+    input: {
+      id: z.string().uuid().describe('Dashboard ID to clone'),
+    },
+    returns: dashboardShape,
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/dashboards/${id}/duplicate`);
+      return result.ok ? ok(result.data) : err('duplicating dashboard', result.data);
+    },
+  });
+
+  // ===== bench_export_dashboard =====
+  registerTool(server, {
+    name: 'bench_export_dashboard',
+    description: 'Queue a dashboard export render (PDF). Returns the queued job descriptor; the rendered artifact is delivered out of band.',
+    input: {
+      id: z.string().uuid().describe('Dashboard ID to export'),
+    },
+    returns: z.object({ dashboard_id: z.string().uuid(), status: z.string(), format: z.string().optional(), queued_at: z.string().optional() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/dashboards/${id}/export`);
+      return result.ok ? ok(result.data) : err('exporting dashboard', result.data);
+    },
+  });
+
+  // ===== WIDGETS — CRUD =====
+
+  // ===== bench_add_widget =====
+  registerTool(server, {
+    name: 'bench_add_widget',
+    description: 'Add a widget to a dashboard. The widget binds a data source + entity to a query config and a visualization type. Use bench_list_data_sources to discover valid data_source/entity and field names.',
+    input: {
+      dashboard_id: z.string().uuid().describe('Dashboard ID to add the widget to'),
+      name: z.string().min(1).max(255).describe('Widget name'),
+      widget_type: widgetTypeEnum.describe('Visualization type'),
+      data_source: z.string().min(1).max(30).describe('Product name (e.g., "bam", "bond")'),
+      entity: z.string().min(1).max(60).describe('Entity name (e.g., "tasks", "deals")'),
+      query_config: queryConfigSchema.describe('Aggregation query config (measures required)'),
+      viz_config: z.record(z.unknown()).optional().describe('Visualization options'),
+      kpi_config: z.record(z.unknown()).optional().describe('KPI-card options'),
+      cache_ttl_seconds: z.number().int().positive().optional().describe('Result cache TTL in seconds'),
+    },
+    returns: widgetShape,
+    handler: async ({ dashboard_id, ...body }) => {
+      const result = await client.request('POST', `/dashboards/${dashboard_id}/widgets`, body);
+      return result.ok ? ok(result.data) : err('adding widget', result.data);
+    },
+  });
+
+  // ===== bench_get_widget =====
+  registerTool(server, {
+    name: 'bench_get_widget',
+    description: 'Get a single widget configuration by ID (data source, entity, query config, visualization).',
+    input: {
+      id: z.string().uuid().describe('Widget ID'),
+    },
+    returns: widgetShape,
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/widgets/${id}`);
+      return result.ok ? ok(result.data) : err('getting widget', result.data);
+    },
+  });
+
+  // ===== bench_update_widget =====
+  registerTool(server, {
+    name: 'bench_update_widget',
+    description: 'Update a widget configuration. Provide only the fields to change. Changing query_config replaces it wholesale.',
+    input: {
+      id: z.string().uuid().describe('Widget ID'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      widget_type: widgetTypeEnum.optional().describe('Updated visualization type'),
+      data_source: z.string().min(1).max(30).optional().describe('Updated data source'),
+      entity: z.string().min(1).max(60).optional().describe('Updated entity'),
+      query_config: queryConfigSchema.optional().describe('Replacement query config'),
+      viz_config: z.record(z.unknown()).optional().describe('Updated visualization options'),
+      kpi_config: z.record(z.unknown()).optional().describe('Updated KPI-card options'),
+      cache_ttl_seconds: z.number().int().positive().optional().describe('Updated cache TTL'),
+    },
+    returns: widgetShape,
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/widgets/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating widget', result.data);
+    },
+  });
+
+  // ===== bench_delete_widget =====
+  registerTool(server, {
+    name: 'bench_delete_widget',
+    description: 'Delete a widget from its dashboard. This is permanent.',
+    input: {
+      id: z.string().uuid().describe('Widget ID to delete'),
+    },
+    returns: z.object({ deleted: z.boolean() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/widgets/${id}`);
+      return result.ok ? ok(result.data) : err('deleting widget', result.data);
+    },
+  });
+
+  // ===== bench_refresh_widget =====
+  registerTool(server, {
+    name: 'bench_refresh_widget',
+    description: 'Force cache invalidation and re-execute a widget query, bypassing any cached result. Use bench_query_widget for a normal (cacheable) read.',
+    input: {
+      id: z.string().uuid().describe('Widget ID to refresh'),
+    },
+    returns: z.object({ rows: z.array(z.record(z.unknown())), sql: z.string().optional(), duration_ms: z.number().optional() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/widgets/${id}/refresh`);
+      return result.ok ? ok(result.data) : err('refreshing widget', result.data);
+    },
+  });
+
+  // ===== SCHEDULED REPORTS — CRUD =====
+
+  // ===== bench_create_scheduled_report =====
+  registerTool(server, {
+    name: 'bench_create_scheduled_report',
+    description: 'Create a scheduled report that periodically renders a dashboard and delivers it. delivery_target is an email address, Banter channel ID, or Brief document target depending on delivery_method.',
+    input: {
+      dashboard_id: z.string().uuid().describe('Dashboard to render and deliver'),
+      name: z.string().min(1).max(255).describe('Report name'),
+      cron_expression: z.string().min(1).max(100).describe('Cron schedule expression'),
+      cron_timezone: z.string().max(50).optional().describe('IANA timezone for the cron schedule'),
+      delivery_method: z.enum(['email', 'banter_channel', 'brief_document']).describe('How to deliver the rendered report'),
+      delivery_target: z.string().min(1).describe('Email address, Banter channel, or Brief document target'),
+      export_format: z.enum(['pdf', 'png', 'csv']).optional().describe('Rendered artifact format'),
+      enabled: z.boolean().optional().describe('Whether the schedule is active'),
+    },
+    returns: reportShape,
+    handler: async (params) => {
+      const result = await client.request('POST', '/reports', params);
+      return result.ok ? ok(result.data) : err('creating scheduled report', result.data);
+    },
+  });
+
+  // ===== bench_update_scheduled_report =====
+  registerTool(server, {
+    name: 'bench_update_scheduled_report',
+    description: 'Update a scheduled report (schedule, delivery, or enabled state). Provide only the fields to change.',
+    input: {
+      id: z.string().uuid().describe('Scheduled report ID'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      cron_expression: z.string().min(1).max(100).optional().describe('Updated cron schedule'),
+      cron_timezone: z.string().max(50).optional().describe('Updated timezone'),
+      delivery_method: z.enum(['email', 'banter_channel', 'brief_document']).optional().describe('Updated delivery method'),
+      delivery_target: z.string().min(1).optional().describe('Updated delivery target'),
+      export_format: z.enum(['pdf', 'png', 'csv']).optional().describe('Updated artifact format'),
+      enabled: z.boolean().optional().describe('Enable or disable the schedule'),
+    },
+    returns: reportShape,
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/reports/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating scheduled report', result.data);
+    },
+  });
+
+  // ===== bench_delete_scheduled_report =====
+  registerTool(server, {
+    name: 'bench_delete_scheduled_report',
+    description: 'Delete a scheduled report. This stops future deliveries and is permanent.',
+    input: {
+      id: z.string().uuid().describe('Scheduled report ID to delete'),
+    },
+    returns: z.object({ deleted: z.boolean() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/reports/${id}`);
+      return result.ok ? ok(result.data) : err('deleting scheduled report', result.data);
+    },
+  });
+
+  // ===== SAVED QUERIES — CRUD =====
+
+  // ===== bench_list_saved_queries =====
+  registerTool(server, {
+    name: 'bench_list_saved_queries',
+    description: 'List saved ad-hoc queries for the organization. Saved queries pair a data source + entity with a reusable query config.',
+    input: {},
+    returns: z.object({ data: z.array(savedQueryShape) }).passthrough(),
+    handler: async () => {
+      const result = await client.request('GET', '/saved-queries');
+      return result.ok ? ok(result.data) : err('listing saved queries', result.data);
+    },
+  });
+
+  // ===== bench_get_saved_query =====
+  registerTool(server, {
+    name: 'bench_get_saved_query',
+    description: 'Get a single saved query by ID, including its full query config.',
+    input: {
+      id: z.string().uuid().describe('Saved query ID'),
+    },
+    returns: savedQueryShape,
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/saved-queries/${id}`);
+      return result.ok ? ok(result.data) : err('getting saved query', result.data);
+    },
+  });
+
+  // ===== bench_create_saved_query =====
+  registerTool(server, {
+    name: 'bench_create_saved_query',
+    description: 'Save a reusable ad-hoc query. The query_config follows the same shape as bench_query_ad_hoc (measures, dimensions, filters).',
+    input: {
+      name: z.string().min(1).max(255).describe('Saved query name'),
+      description: z.string().max(2000).optional().describe('Description'),
+      data_source: z.string().min(1).max(30).describe('Product name (e.g., "bam", "bond")'),
+      entity: z.string().min(1).max(60).describe('Entity name (e.g., "tasks", "deals")'),
+      query_config: z.record(z.unknown()).describe('Query config (measures/dimensions/filters)'),
+    },
+    returns: savedQueryShape,
+    handler: async (params) => {
+      const result = await client.request('POST', '/saved-queries', params);
+      return result.ok ? ok(result.data) : err('creating saved query', result.data);
+    },
+  });
+
+  // ===== bench_update_saved_query =====
+  registerTool(server, {
+    name: 'bench_update_saved_query',
+    description: 'Update a saved query. Provide only the fields to change; query_config replaces the existing config wholesale.',
+    input: {
+      id: z.string().uuid().describe('Saved query ID'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      description: z.string().max(2000).optional().describe('Updated description'),
+      data_source: z.string().min(1).max(30).optional().describe('Updated data source'),
+      entity: z.string().min(1).max(60).optional().describe('Updated entity'),
+      query_config: z.record(z.unknown()).optional().describe('Replacement query config'),
+    },
+    returns: savedQueryShape,
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/saved-queries/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating saved query', result.data);
+    },
+  });
+
+  // ===== bench_delete_saved_query =====
+  registerTool(server, {
+    name: 'bench_delete_saved_query',
+    description: 'Delete a saved query. This is permanent.',
+    input: {
+      id: z.string().uuid().describe('Saved query ID to delete'),
+    },
+    returns: z.object({ deleted: z.boolean() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/saved-queries/${id}`);
+      return result.ok ? ok(result.data) : err('deleting saved query', result.data);
+    },
+  });
+
+  // ===== DATA SOURCES =====
+
+  // ===== bench_get_data_source =====
+  registerTool(server, {
+    name: 'bench_get_data_source',
+    description: 'Get the detailed schema for one data source entity — its available measures, dimensions, and filterable fields. Use this after bench_list_data_sources to learn valid field names for a query.',
+    input: {
+      product: z.string().describe('Product name (e.g., "bam", "bond", "blast")'),
+      entity: z.string().describe('Entity name (e.g., "tasks", "deals", "campaigns")'),
+    },
+    returns: z.object({ name: z.string().optional(), measures: z.array(z.unknown()).optional(), dimensions: z.array(z.unknown()).optional() }).passthrough(),
+    handler: async ({ product, entity }) => {
+      const result = await client.request(
+        'GET',
+        `/data-sources/${encodeURIComponent(product)}/${encodeURIComponent(entity)}`,
+      );
+      return result.ok ? ok(result.data) : err('getting data source', result.data);
+    },
+  });
+
+  // ===== MATERIALIZED VIEWS =====
+
+  // ===== bench_list_materialized_views =====
+  registerTool(server, {
+    name: 'bench_list_materialized_views',
+    description: 'List the Bench materialized views and their refresh state (last refreshed, row count, schedule).',
+    input: {},
+    returns: z.object({ data: z.array(z.object({ view_name: z.string().optional() }).passthrough()) }).passthrough(),
+    handler: async () => {
+      const result = await client.request('GET', '/materialized-views');
+      return result.ok ? ok(result.data) : err('listing materialized views', result.data);
+    },
+  });
+
+  // ===== bench_refresh_materialized_view =====
+  registerTool(server, {
+    name: 'bench_refresh_materialized_view',
+    description: 'Manually trigger a REFRESH of a Bench materialized view. This can be expensive; use bench_list_materialized_views to find valid view names.',
+    input: {
+      view_name: z.string().describe('Materialized view name to refresh'),
+    },
+    returns: z.object({}).passthrough().describe('Refresh result (view name, refreshed_at, row count)'),
+    handler: async ({ view_name }) => {
+      const result = await client.request('POST', `/materialized-views/${encodeURIComponent(view_name)}/refresh`);
+      return result.ok ? ok(result.data) : err('refreshing materialized view', result.data);
     },
   });
 }

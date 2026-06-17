@@ -326,4 +326,187 @@ export function registerBoltTools(server: McpServer, api: ApiClient, boltApiUrl:
       return result.ok ? ok(result.data) : err('listing actions', result.data);
     },
   });
+
+  // ===== STATS (1) =====
+
+  registerTool(server, {
+    name: 'bolt_stats',
+    description: 'Get aggregate automation statistics for the org (totals, enabled count, execution counts). Pass project_id to scope the numbers to a single project so they line up with a filtered list view.',
+    input: {
+      project_id: z.string().uuid().optional().describe('Scope stats to a single project'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('GET', `/automations/stats${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('getting automation stats', result.data);
+    },
+  });
+
+  // ===== PARTIAL UPDATE (1) =====
+
+  registerTool(server, {
+    name: 'bolt_patch',
+    description: 'Partial metadata update of an automation. Only touches name, description, and/or enabled — does not modify the trigger, conditions, or actions (use bolt_update for those). Provide only the fields to change.',
+    input: {
+      id: z.string().min(1).describe('Automation UUID or exact automation name'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      description: z.string().max(5000).nullable().optional().describe('Updated description (null to clear)'),
+      enabled: z.boolean().optional().describe('Enable or disable'),
+    },
+    returns: automationShape,
+    handler: async ({ id, ...body }) => {
+      const resolvedId = await resolveAutomationId(id);
+      if (!resolvedId) return automationNotFound(id);
+      const result = await client.request('PATCH', `/automations/${resolvedId}`, body);
+      return result.ok ? ok(result.data) : err('patching automation', result.data);
+    },
+  });
+
+  // ===== DUPLICATE (1) =====
+
+  registerTool(server, {
+    name: 'bolt_duplicate',
+    description: 'Duplicate an automation. Creates a disabled copy (with its conditions and actions) under a new name so you can safely modify it before enabling.',
+    input: {
+      id: z.string().min(1).describe('Automation UUID or exact automation name to duplicate'),
+    },
+    returns: automationShape,
+    handler: async ({ id }) => {
+      const resolvedId = await resolveAutomationId(id);
+      if (!resolvedId) return automationNotFound(id);
+      const result = await client.request('POST', `/automations/${resolvedId}/duplicate`);
+      return result.ok ? ok(result.data) : err('duplicating automation', result.data);
+    },
+  });
+
+  // ===== VERSIONS (2) =====
+
+  registerTool(server, {
+    name: 'bolt_list_versions',
+    description: 'List the saved version history for an automation. Each version is a point-in-time snapshot of the trigger, conditions, and actions captured on update/restore.',
+    input: {
+      id: z.string().min(1).describe('Automation UUID or exact automation name'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), automation_id: z.string().uuid(), created_at: z.string() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveAutomationId(id);
+      if (!resolvedId) return automationNotFound(id);
+      const result = await client.request('GET', `/automations/${resolvedId}/versions`);
+      return result.ok ? ok(result.data) : err('listing automation versions', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bolt_restore_version',
+    description: 'Restore an automation to a previously saved version. The current state is snapshotted first, then the named version becomes the live definition.',
+    input: {
+      id: z.string().min(1).describe('Automation UUID or exact automation name'),
+      version_id: z.string().uuid().describe('Version UUID to restore (from bolt_list_versions)'),
+    },
+    returns: automationShape,
+    handler: async ({ id, version_id }) => {
+      const resolvedId = await resolveAutomationId(id);
+      if (!resolvedId) return automationNotFound(id);
+      const result = await client.request('POST', `/automations/${resolvedId}/versions/${version_id}/restore`);
+      return result.ok ? ok(result.data) : err('restoring automation version', result.data);
+    },
+  });
+
+  // ===== ORG-WIDE EXECUTIONS (1) + RETRY (1) =====
+
+  registerTool(server, {
+    name: 'bolt_list_executions',
+    description: 'List execution history across all automations in the org (not scoped to a single automation — use bolt_executions for that). Org-admin scoped.',
+    input: {
+      status: z.enum(['running', 'success', 'partial', 'failed', 'skipped']).optional().describe('Filter by execution status'),
+      cursor: z.string().optional().describe('Pagination cursor'),
+      limit: z.number().int().positive().max(100).optional().describe('Page size (default per server, max 100)'),
+    },
+    returns: z.object({ data: z.array(executionShape), next_cursor: z.string().nullable().optional() }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/executions${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing org executions', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bolt_retry_execution',
+    description: 'Retry a failed (or partial) execution. Re-runs the automation against the original event payload and creates a new execution row.',
+    input: {
+      id: z.string().uuid().describe('Execution UUID to retry (from bolt_executions / bolt_list_executions)'),
+    },
+    returns: executionShape,
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/executions/${id}/retry`);
+      return result.ok ? ok(result.data) : err('retrying execution', result.data);
+    },
+  });
+
+  // ===== TEMPLATES (2) =====
+
+  registerTool(server, {
+    name: 'bolt_list_templates',
+    description: 'List the built-in automation templates available for instantiation (pre-built trigger/condition/action blueprints).',
+    input: {},
+    returns: z.object({ data: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/templates');
+      return result.ok ? ok(result.data) : err('listing templates', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bolt_instantiate_template',
+    description: 'Create a new automation from a built-in template (see bolt_list_templates for ids). Optional overrides let you set the name, description, project, and cron schedule on the new automation.',
+    input: {
+      template_id: z.string().min(1).describe('Template id from bolt_list_templates'),
+      name: z.string().min(1).max(255).optional().describe('Override the automation name'),
+      description: z.string().max(5000).nullable().optional().describe('Override the description'),
+      project_id: z.string().uuid().nullable().optional().describe('Scope the new automation to a project'),
+      cron_expression: z.string().max(100).nullable().optional().describe('Cron expression (for schedule-triggered templates)'),
+      cron_timezone: z.string().max(50).optional().describe('Cron timezone (e.g. "UTC", "America/New_York")'),
+    },
+    returns: automationShape,
+    handler: async ({ template_id, ...overrides }) => {
+      const result = await client.request('POST', `/templates/${encodeURIComponent(template_id)}/instantiate`, overrides);
+      return result.ok ? ok(result.data) : err('instantiating template', result.data);
+    },
+  });
+
+  // ===== AI ASSIST (2) =====
+
+  registerTool(server, {
+    name: 'bolt_generate',
+    description: 'Generate a draft automation definition from a natural-language prompt using the org\'s configured LLM provider. Returns a proposed automation object (name, trigger, conditions, actions) plus a confidence score; it does NOT persist anything — pass the result to bolt_create to save it. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).',
+    input: {
+      prompt: z.string().min(1).max(2000).describe('Natural-language description of the desired automation'),
+      context: z.record(z.unknown()).optional().describe('Optional context object to ground the generation'),
+      project_id: z.string().uuid().optional().describe('Project to resolve the LLM provider against and scope the draft'),
+    },
+    returns: z.object({ data: z.object({ automation: z.object({}).passthrough(), confidence: z.number().optional() }).passthrough() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('POST', '/ai/generate', params);
+      return result.ok ? ok(result.data) : err('generating automation', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bolt_explain',
+    description: 'Explain an automation definition in plain English using the org\'s configured LLM provider. Pass the automation shape (name, trigger_source, trigger_event, conditions, actions) — for an existing automation, fetch it with bolt_get first. Returns a natural-language explanation. Requires an LLM provider to be configured (returns AI_NOT_CONFIGURED otherwise).',
+    input: {
+      automation: z.object({
+        name: z.string().max(255).describe('Automation name'),
+        trigger_source: z.string().max(30).describe('Trigger source system'),
+        trigger_event: z.string().max(60).describe('Trigger event name'),
+        conditions: z.array(z.record(z.unknown())).optional().describe('Condition objects'),
+        actions: z.array(z.record(z.unknown())).optional().describe('Action objects'),
+      }).describe('The automation definition to explain'),
+      project_id: z.string().uuid().optional().describe('Project to resolve the LLM provider against'),
+    },
+    returns: z.object({ data: z.object({ explanation: z.string() }).passthrough() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('POST', '/ai/explain', params);
+      return result.ok ? ok(result.data) : err('explaining automation', result.data);
+    },
+  });
 }
