@@ -4,119 +4,69 @@
     "label": "Dashboard list",
     "theme": "light",
     "file": "docs\\apps\\bench\\screenshots\\light\\01-dashboard-list.png",
-    "sha256": "db72122a9883ea413006f937307a959ce9d72fea16f6c15cf617894e2db33cbf",
+    "sha256": "d16625ec4d477a1374d2d45c9d471cbbe9145e5fde710201e12618ea31b8d849",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:32:19.430Z"
-  },
-  {
-    "id": "02-dashboard-view",
-    "label": "Dashboard view",
-    "theme": "light",
-    "file": "docs\\apps\\bench\\screenshots\\light\\02-dashboard-view.png",
-    "sha256": "03aca15df800a5ab8b0ecf5c7f7c02860953a26e6405101f9efc4a6fd3256dde",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:24.170Z"
-  },
-  {
-    "id": "03-explorer",
-    "label": "Ad-hoc explorer",
-    "theme": "light",
-    "file": "docs\\apps\\bench\\screenshots\\light\\03-explorer.png",
-    "sha256": "785d4cfb7ed3ca380137306ca1b30c2a31e2ce08d0bfd01ac70e71076291b087",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:26.874Z"
-  },
-  {
-    "id": "04-reports",
-    "label": "Scheduled reports",
-    "theme": "light",
-    "file": "docs\\apps\\bench\\screenshots\\light\\04-reports.png",
-    "sha256": "739ec09c320525ea77142a9b6d83422b497f30716f03186de7589da48985a8ad",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:29.591Z"
-  },
-  {
-    "id": "05-settings",
-    "label": "Settings",
-    "theme": "light",
-    "file": "docs\\apps\\bench\\screenshots\\light\\05-settings.png",
-    "sha256": "40896a9b7c1254c68a650146d8bdd1e5d0fbfec7d0c9289beb4490bc362f68a8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:32.344Z"
-  },
-  {
-    "id": "06-saved-queries",
-    "label": "Saved queries",
-    "theme": "light",
-    "file": "docs\\apps\\bench\\screenshots\\light\\06-saved-queries.png",
-    "sha256": "60d3569a665683e1f1554d2a0b871d2f8c09aad825dafddf14935006f38a7b87",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:35.070Z"
-  },
-  {
-    "id": "01-dashboard-list",
-    "label": "Dashboard list",
-    "theme": "dark",
-    "file": "docs\\apps\\bench\\screenshots\\dark\\01-dashboard-list.png",
-    "sha256": "dedfb371f3b956b0976043ce85752de0c3c336c955d360664d12a419818dea7a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:42.624Z"
+    "captured_at": "2026-06-17T20:15:34.038Z"
   },
   {
     "id": "02-dashboard-view",
     "label": "Dashboard view",
     "theme": "dark",
     "file": "docs\\apps\\bench\\screenshots\\dark\\02-dashboard-view.png",
-    "sha256": "61782536178d2471c9f2d4fdec460bcf3c3614811024fff74759d072be5941ec",
+    "sha256": "6dac357ebcfe8a2ada7a88222106eecd90a19a5bd0ad9a3ab9b153a0b9923e52",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:15:43.264Z"
+  },
+  {
+    "id": "02-dashboard-view",
+    "label": "Dashboard view",
+    "theme": "light",
+    "file": "docs\\apps\\bench\\screenshots\\light\\02-dashboard-view.png",
+    "sha256": "4b888653f160029cf4b1b1c961f9a54d1f8078a981204966714a7ffb2e664923",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:32:47.372Z"
+    "captured_at": "2026-06-17T20:15:38.621Z"
   },
   {
     "id": "03-explorer",
     "label": "Ad-hoc explorer",
-    "theme": "dark",
-    "file": "docs\\apps\\bench\\screenshots\\dark\\03-explorer.png",
-    "sha256": "9c068727797337c3fc0e86e08ca3938b59a5347956781a2d823ca06abe40452e",
+    "theme": "light",
+    "file": "docs\\apps\\bench\\screenshots\\light\\03-explorer.png",
+    "sha256": "e77b5a387adc6ef6718dea6e340c492c7f0c501d411469804885efbd651cc4ca",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:32:50.066Z"
+    "captured_at": "2026-06-17T20:15:47.922Z"
   },
   {
-    "id": "04-reports",
+    "id": "04-widget-wizard",
+    "label": "Widget wizard",
+    "theme": "light",
+    "file": "docs\\apps\\bench\\screenshots\\light\\04-widget-wizard.png",
+    "sha256": "d16625ec4d477a1374d2d45c9d471cbbe9145e5fde710201e12618ea31b8d849",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-06-17T20:15:57.683Z"
+  },
+  {
+    "id": "05-reports",
     "label": "Scheduled reports",
-    "theme": "dark",
-    "file": "docs\\apps\\bench\\screenshots\\dark\\04-reports.png",
-    "sha256": "c4d10420d76ad1a7bb3babbf47e64274d26433f1edc1bf71d6a449ef51e6839e",
+    "theme": "light",
+    "file": "docs\\apps\\bench\\screenshots\\light\\05-reports.png",
+    "sha256": "37813bb80100fabbe732b07480e70c582635e53aadb28eeace8f724a4cd0a0a4",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:32:52.768Z"
+    "captured_at": "2026-06-17T20:15:50.334Z"
   },
   {
-    "id": "05-settings",
-    "label": "Settings",
-    "theme": "dark",
-    "file": "docs\\apps\\bench\\screenshots\\dark\\05-settings.png",
-    "sha256": "94c12a646c046f7aa87080f498d4f425b5f2110fb471593fb352274f312fedb5",
+    "id": "06-settings",
+    "label": "Bench settings",
+    "theme": "light",
+    "file": "docs\\apps\\bench\\screenshots\\light\\06-settings.png",
+    "sha256": "24e08d307bf916118d049cdede1478308915b0099ed6a0392144d16d52dae421",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:32:55.495Z"
-  },
-  {
-    "id": "06-saved-queries",
-    "label": "Saved queries",
-    "theme": "dark",
-    "file": "docs\\apps\\bench\\screenshots\\dark\\06-saved-queries.png",
-    "sha256": "a53f973eb457620a13178c765c7ef263b39062e9055a0b7c390b9949e6fb4874",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:58.226Z"
+    "captured_at": "2026-06-17T20:15:55.203Z"
   }
 ]

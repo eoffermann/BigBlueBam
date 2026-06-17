@@ -1,142 +1,72 @@
 [
   {
-    "id": "01-invoice-list",
+    "id": "01-dashboard",
+    "label": "Billing dashboard",
+    "theme": "light",
+    "file": "docs\\apps\\bill\\screenshots\\light\\01-dashboard.png",
+    "sha256": "09087c50e51088fc6070b3714acfd8533e9117fbea67374da03a9e15e56247c9",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-06-17T20:16:00.209Z"
+  },
+  {
+    "id": "02-invoice-list",
+    "label": "Invoice list",
+    "theme": "dark",
+    "file": "docs\\apps\\bill\\screenshots\\dark\\02-invoice-list.png",
+    "sha256": "fd2f9c87f0c672a9c8f31bd2451ea58e6a5c61b9fe6a7d7c3606c6a26a608300",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:16:34.292Z"
+  },
+  {
+    "id": "02-invoice-list",
     "label": "Invoice list",
     "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\01-invoice-list.png",
-    "sha256": "b48fefd74d13c8dee55ea76ca215487bc46bdebe21b15e3ffc712d381c56bdc3",
+    "file": "docs\\apps\\bill\\screenshots\\light\\02-invoice-list.png",
+    "sha256": "5b96dbbf875d85580de73cca93e647ab69a81df8372a59e254c5bb12a5443f88",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:33:05.690Z"
+    "captured_at": "2026-06-17T20:16:17.214Z"
   },
   {
-    "id": "02-invoice-new",
+    "id": "03-invoice-detail",
+    "label": "Invoice detail",
+    "theme": "light",
+    "file": "docs\\apps\\bill\\screenshots\\light\\03-invoice-detail.png",
+    "sha256": "de9f077a6fb460847fac0c36023f56cacb451185d8d251e93902198cba5b5659",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-06-17T20:17:10.668Z"
+  },
+  {
+    "id": "04-invoice-new",
     "label": "New invoice",
     "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\02-invoice-new.png",
-    "sha256": "9139f4f844e4e5cc219e716a29f5c3261d6ffc25b81ff66bfd2eccee2109b7db",
+    "file": "docs\\apps\\bill\\screenshots\\light\\04-invoice-new.png",
+    "sha256": "3b7f97ed7dd2dde098855e81da8b7aa8dfce33cfcccba1ff3df76fa492d8b5ce",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:33:08.348Z"
+    "captured_at": "2026-06-17T20:16:36.616Z"
   },
   {
-    "id": "03-clients",
-    "label": "Clients list",
+    "id": "05-expenses",
+    "label": "Expense list",
     "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\03-clients.png",
-    "sha256": "f92e94b3871c4d1e482c1d9b4735432c927e64d85508525d3c9cc8dfd22592e5",
+    "file": "docs\\apps\\bill\\screenshots\\light\\05-expenses.png",
+    "sha256": "f49021070983ec2bdd6a8c4ca70bff3e945c721d697fdb350ed89e82ec6bb0b9",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:33:11.009Z"
-  },
-  {
-    "id": "04-expenses",
-    "label": "Expenses list",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\04-expenses.png",
-    "sha256": "f914c02c3fde226660a7ec1edb1aae2066a0b166f49337a7042f7fe0e715675b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:13.726Z"
-  },
-  {
-    "id": "05-rates",
-    "label": "Billing rates",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\05-rates.png",
-    "sha256": "6906163af151bc041227a089c7d6e30f4d4f0fdea4c02b75cedc686d919ec332",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:16.406Z"
+    "captured_at": "2026-06-17T20:17:15.488Z"
   },
   {
     "id": "06-reports",
     "label": "Financial reports",
     "theme": "light",
     "file": "docs\\apps\\bill\\screenshots\\light\\06-reports.png",
-    "sha256": "3808e84cd3346a9a9b7af49e1528600149e71a0cca1e2b8fb9679c7e173e1140",
+    "sha256": "48819416c88797c9ad000c67aff11f9f29d723726a54b136e84988572ef5a97b",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:33:19.301Z"
-  },
-  {
-    "id": "07-settings",
-    "label": "Billing settings",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\07-settings.png",
-    "sha256": "83fe3bb55ce21ef5e9e04b3f43103e3cd8634322f22f6b8efd5930278c878c6e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:22.013Z"
-  },
-  {
-    "id": "01-invoice-list",
-    "label": "Invoice list",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\01-invoice-list.png",
-    "sha256": "3bb952fd3372b4b592811fcf5e2023c58a417e2d8ab0d67de3bbc3df9bd9cbca",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:29.440Z"
-  },
-  {
-    "id": "02-invoice-new",
-    "label": "New invoice",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\02-invoice-new.png",
-    "sha256": "003a2b0d2e942b50e2d75b71e4eb8c729a9eb73646197d7936b244893fc6e19e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:32.176Z"
-  },
-  {
-    "id": "03-clients",
-    "label": "Clients list",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\03-clients.png",
-    "sha256": "8a3d673a57f7a6e20e6b80bf6cbfe3d070afc59015199b21f42a31ae45e6f9f3",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:34.859Z"
-  },
-  {
-    "id": "04-expenses",
-    "label": "Expenses list",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\04-expenses.png",
-    "sha256": "a04b8f15200730c5d57e1f1b4686455807488df11ad229dde06211a6fb30e7b6",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:37.530Z"
-  },
-  {
-    "id": "05-rates",
-    "label": "Billing rates",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\05-rates.png",
-    "sha256": "664692930a43c44025530c9dbe03fe6d9e4bca7cb7b0ca85ba7a5eddeca195c3",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:40.184Z"
-  },
-  {
-    "id": "06-reports",
-    "label": "Financial reports",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\06-reports.png",
-    "sha256": "11bea212b14d58f42b739f32c9166e7eeedbcb9e2fcb6583092425764c7f78c9",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:42.868Z"
-  },
-  {
-    "id": "07-settings",
-    "label": "Billing settings",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\07-settings.png",
-    "sha256": "4b6b33e6de7dd79de70a5d2825eab52b316ac19b20278d6ce5372950dc110c8e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:45.560Z"
+    "captured_at": "2026-06-17T20:17:20.316Z"
   }
 ]

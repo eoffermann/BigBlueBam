@@ -1,122 +1,72 @@
 [
   {
     "id": "01-week-view",
-    "label": "Calendar week view",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\01-week-view.png",
-    "sha256": "26d21e9d9db8bf6748257df4bbdda0d9adefcd4c316ba55227e2d8dde5b6f278",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:38:10.006Z"
-  },
-  {
-    "id": "02-month-view",
-    "label": "Calendar month view",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\02-month-view.png",
-    "sha256": "93d67059be4bd77b23f1dbc348ae83eec3e7bd1ddf6cf8ecb0822b13f70ee77b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:38:12.694Z"
-  },
-  {
-    "id": "03-day-view",
-    "label": "Calendar day view",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\03-day-view.png",
-    "sha256": "194869dbb9447cecd69fae9374a508e827b2943b283e1ea5ceaf00af26d8ec7c",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:38:15.342Z"
-  },
-  {
-    "id": "04-timeline",
-    "label": "Aggregated timeline",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\04-timeline.png",
-    "sha256": "2869dad4beee9faaaeb68507202e636953b4e1d436d44bc150896a3429ff5be8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:38:18.097Z"
-  },
-  {
-    "id": "05-booking-pages",
-    "label": "Booking page management",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\05-booking-pages.png",
-    "sha256": "2e27833f066264568413912249fa724e5040d18a6bcdb8ffb76f153564a89242",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:38:20.775Z"
-  },
-  {
-    "id": "06-working-hours",
-    "label": "Working hours settings",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\06-working-hours.png",
-    "sha256": "fbdf6712ac38e1c966f4b89d9920ad09d20df4d7fb9c0c6e78b963b6fdc2e608",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:38:23.503Z"
+    "label": "Week view",
+    "theme": "dark",
+    "file": "docs\\apps\\book\\screenshots\\dark\\01-week-view.png",
+    "sha256": "8f4546d5f6d4b773a53ecf2a6fe00f5f83e88260a26b9a6be4f4e3dd669c77f4",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:22:00.540Z"
   },
   {
     "id": "01-week-view",
-    "label": "Calendar week view",
-    "theme": "dark",
-    "file": "docs\\apps\\book\\screenshots\\dark\\01-week-view.png",
-    "sha256": "9c964252575f291774a506058990087feb2b8000576f577cd2dcb97a2db50ebc",
+    "label": "Week view",
+    "theme": "light",
+    "file": "docs\\apps\\book\\screenshots\\light\\01-week-view.png",
+    "sha256": "d9b0e44a3a2b84000721f8bf46248f6a3d940b8ffffc145b04e62dd24f127094",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:38:30.934Z"
+    "captured_at": "2026-06-17T20:21:58.076Z"
   },
   {
     "id": "02-month-view",
-    "label": "Calendar month view",
-    "theme": "dark",
-    "file": "docs\\apps\\book\\screenshots\\dark\\02-month-view.png",
-    "sha256": "686ddb6c8ebc8e28397bcf7e1a8a7e4a17cad20f7b5179230ad208cbd90e598f",
+    "label": "Month view",
+    "theme": "light",
+    "file": "docs\\apps\\book\\screenshots\\light\\02-month-view.png",
+    "sha256": "8f2898c990e9e53717e35ae1111858ea1071bda87fa01b0aef1ae0b1e2284003",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:38:33.669Z"
+    "captured_at": "2026-06-17T20:22:02.870Z"
   },
   {
-    "id": "03-day-view",
-    "label": "Calendar day view",
-    "theme": "dark",
-    "file": "docs\\apps\\book\\screenshots\\dark\\03-day-view.png",
-    "sha256": "41e88663bdb58a94ed3b0961f99228449a4f2bbf66d1d17efba004f9d7410412",
+    "id": "03-timeline",
+    "label": "Cross-app timeline",
+    "theme": "light",
+    "file": "docs\\apps\\book\\screenshots\\light\\03-timeline.png",
+    "sha256": "71bbc6c776663eb3f4c59b1bfade26996c22be4b44a30f0b43610438d94c5fd9",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:38:36.353Z"
+    "captured_at": "2026-06-17T20:22:07.498Z"
   },
   {
-    "id": "04-timeline",
-    "label": "Aggregated timeline",
-    "theme": "dark",
-    "file": "docs\\apps\\book\\screenshots\\dark\\04-timeline.png",
-    "sha256": "e6758293147430c5a829cc746312ce4fe4fdafaaf1ca379ecbcba20f5f32a740",
+    "id": "04-booking-pages",
+    "label": "Booking pages",
+    "theme": "light",
+    "file": "docs\\apps\\book\\screenshots\\light\\04-booking-pages.png",
+    "sha256": "e1c4db9dc82b3933680cc3c206cd623ad2042e7ea9a7d2edb84c80dbad44ae7a",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:38:39.061Z"
+    "captured_at": "2026-06-17T20:22:09.850Z"
   },
   {
-    "id": "05-booking-pages",
-    "label": "Booking page management",
-    "theme": "dark",
-    "file": "docs\\apps\\book\\screenshots\\dark\\05-booking-pages.png",
-    "sha256": "b1d159580c0729a87bcb648aea28d4091a8f68bbba82ea694e3fedb48d2fed5d",
+    "id": "05-working-hours",
+    "label": "Working hours",
+    "theme": "light",
+    "file": "docs\\apps\\book\\screenshots\\light\\05-working-hours.png",
+    "sha256": "3abe001e69d161eed9aa598a62a4a36ecab464d8d842b66379036f7fa967413a",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:38:41.754Z"
+    "captured_at": "2026-06-17T20:22:12.235Z"
   },
   {
-    "id": "06-working-hours",
-    "label": "Working hours settings",
-    "theme": "dark",
-    "file": "docs\\apps\\book\\screenshots\\dark\\06-working-hours.png",
-    "sha256": "b8a5c768d0047d710c31ab25ee7b3eff5cc1c8e2ac3bdbd54ac0d197c827b31e",
+    "id": "06-calendars",
+    "label": "Calendars",
+    "theme": "light",
+    "file": "docs\\apps\\book\\screenshots\\light\\06-calendars.png",
+    "sha256": "60773111cc8d829f38fdc0711b317063ed913cc0e2f59250dc37120a3d6663d0",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:38:44.446Z"
+    "captured_at": "2026-06-17T20:22:14.570Z"
   }
 ]

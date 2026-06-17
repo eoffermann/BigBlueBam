@@ -1,62 +1,62 @@
 [
   {
-    "id": "01-floors",
-    "label": "Floor directory",
-    "theme": "light",
-    "file": "docs\\apps\\bureau\\screenshots\\light\\01-floors.png",
-    "sha256": "0f20979b9aa8e64b05e44b0402feb68168950de2655abbf40d6ce010bc08c2f4",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T23:38:16.761Z"
-  },
-  {
-    "id": "02-floor",
-    "label": "Live floor view",
-    "theme": "light",
-    "file": "docs\\apps\\bureau\\screenshots\\light\\02-floor.png",
-    "sha256": "9a681a083f09bbdb5d4a91a447bc95e7648b664baf11a0689385ad0c521f9422",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T23:38:22.368Z"
-  },
-  {
-    "id": "03-admin-floors",
-    "label": "Admin floor management",
-    "theme": "light",
-    "file": "docs\\apps\\bureau\\screenshots\\light\\03-admin-floors.png",
-    "sha256": "1919116f6d6be44d7766aae9791e877e959984659ecf34bae270f2282aa016f1",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T23:38:24.470Z"
-  },
-  {
-    "id": "01-floors",
+    "id": "01-floor-directory",
     "label": "Floor directory",
     "theme": "dark",
-    "file": "docs\\apps\\bureau\\screenshots\\dark\\01-floors.png",
-    "sha256": "21ddf1483e5d4452a055da23370cf362e3af47438d6eee76dbbbe081c66963f3",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T23:38:30.009Z"
+    "file": "docs\\apps\\bureau\\screenshots\\dark\\01-floor-directory.png",
+    "sha256": "0a0ac495b9fb0dfaf69c50f79e0d98e136a3f5248b26834e476bc557d6fff288",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:24:07.925Z"
   },
   {
-    "id": "02-floor",
-    "label": "Live floor view",
-    "theme": "dark",
-    "file": "docs\\apps\\bureau\\screenshots\\dark\\02-floor.png",
-    "sha256": "c89612cfbe9baf5e76d3df91fa509946e26ce94b045797ffee37547b995e18dd",
+    "id": "01-floor-directory",
+    "label": "Floor directory",
+    "theme": "light",
+    "file": "docs\\apps\\bureau\\screenshots\\light\\01-floor-directory.png",
+    "sha256": "283cf24bafded79ce4ef0ae9e7af58b501a46076ed9238223ff689d403e4ef20",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-06-14T23:38:35.604Z"
+    "captured_at": "2026-06-17T20:24:05.643Z"
   },
   {
-    "id": "03-admin-floors",
-    "label": "Admin floor management",
-    "theme": "dark",
-    "file": "docs\\apps\\bureau\\screenshots\\dark\\03-admin-floors.png",
-    "sha256": "d654d9490dd83599c6e3537ad0cf1bddd24211cb7c56a0eb53e4b5905e9b53ba",
+    "id": "02-live-floor",
+    "label": "Live floor",
+    "theme": "light",
+    "file": "docs\\apps\\bureau\\screenshots\\light\\02-live-floor.png",
+    "sha256": "5f3370a7e7c2084b50a0ee01cda4b512adbde660fc363dab12a7952b3667579e",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-06-14T23:38:37.717Z"
+    "captured_at": "2026-06-17T20:24:13.598Z"
+  },
+  {
+    "id": "03-recent-chats",
+    "label": "Recent chats",
+    "theme": "light",
+    "file": "docs\\apps\\bureau\\screenshots\\light\\03-recent-chats.png",
+    "sha256": "6abebb7d11449e1e93f369e214f227daf05343f4d0a8dabae63d3fdcd761fe49",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-06-17T20:24:22.183Z"
+  },
+  {
+    "id": "04-admin-floors",
+    "label": "Manage floors",
+    "theme": "light",
+    "file": "docs\\apps\\bureau\\screenshots\\light\\04-admin-floors.png",
+    "sha256": "e0d9ce94026904ff89d64df2ec2b476b0c647575b9bb473eeb47f71cc2219abd",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-06-17T20:24:25.174Z"
+  },
+  {
+    "id": "05-admin-offices",
+    "label": "Office assignments",
+    "theme": "light",
+    "file": "docs\\apps\\bureau\\screenshots\\light\\05-admin-offices.png",
+    "sha256": "1d20a890ddbde694a07342f8a077098fbf31fe79919e77139ade4965e5144f60",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-06-17T20:24:28.247Z"
   }
 ]

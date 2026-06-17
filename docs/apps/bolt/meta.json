@@ -1,102 +1,62 @@
 [
   {
     "id": "01-automations",
-    "label": "Automation list",
+    "label": "Automations home",
+    "theme": "dark",
+    "file": "docs\\apps\\bolt\\screenshots\\dark\\01-automations.png",
+    "sha256": "08dba4d9080fcc3b31938ec7ef32fa7d4ae8f726f112a3b5d42acfb7a7669d42",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:21:29.041Z"
+  },
+  {
+    "id": "01-automations",
+    "label": "Automations home",
     "theme": "light",
     "file": "docs\\apps\\bolt\\screenshots\\light\\01-automations.png",
-    "sha256": "91bcd9931889cc115de4f534bc3a3b27f0c899f2efd76d5b5c1b9a4b6ff3b73e",
+    "sha256": "00d5d27060cdedb1d03718ea5d86ee39069bbacfac974cb80713995e062e565c",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:36:18.174Z"
+    "captured_at": "2026-06-17T20:20:09.378Z"
   },
   {
     "id": "02-editor",
-    "label": "Automation builder",
+    "label": "Automation editor",
     "theme": "light",
     "file": "docs\\apps\\bolt\\screenshots\\light\\02-editor.png",
-    "sha256": "c64698bb47ae5672a96a33dc34108f8e399715283f15b6531f282a752c36108f",
+    "sha256": "b0affec73284b9c070ca180ce425afbfad457a8c9c549048bd435bff686a21ca",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:36:20.855Z"
+    "captured_at": "2026-06-17T20:20:11.727Z"
   },
   {
-    "id": "03-detail",
+    "id": "03-automation-detail",
     "label": "Automation detail",
     "theme": "light",
-    "file": "docs\\apps\\bolt\\screenshots\\light\\03-detail.png",
-    "sha256": "bf4c6040b9f83c8b1719de50df39af3b10d7a7c69b80dbec3022448531f867c6",
+    "file": "docs\\apps\\bolt\\screenshots\\light\\03-automation-detail.png",
+    "sha256": "d9812ba4d99b96fd6cafb00b72e195c867a7e2a6724d51fe2d6304d07a8e8266",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:36:25.638Z"
+    "captured_at": "2026-06-17T20:20:15.795Z"
   },
   {
     "id": "04-executions",
     "label": "Execution log",
     "theme": "light",
     "file": "docs\\apps\\bolt\\screenshots\\light\\04-executions.png",
-    "sha256": "c21d6afe2375752cd62ec2da42aab9da00c2e0a7f36cbcfde54f7b2a981b93dd",
+    "sha256": "78fa48d3155465974932f336b7e4d76f6ee3aaa34425cc7739225edf4b33ade6",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:36:28.337Z"
+    "captured_at": "2026-06-17T20:20:18.138Z"
   },
   {
-    "id": "05-templates",
-    "label": "Automation templates",
+    "id": "06-templates",
+    "label": "Template gallery",
     "theme": "light",
-    "file": "docs\\apps\\bolt\\screenshots\\light\\05-templates.png",
-    "sha256": "b5f98d8604adace36880f59009a7435ff2e916978d60302187dc6956653b6391",
+    "file": "docs\\apps\\bolt\\screenshots\\light\\06-templates.png",
+    "sha256": "beb077380109f68803a14fba4f6a4fa13ef30ceb75dead6e65b92f09c350d98e",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:36:31.014Z"
-  },
-  {
-    "id": "01-automations",
-    "label": "Automation list",
-    "theme": "dark",
-    "file": "docs\\apps\\bolt\\screenshots\\dark\\01-automations.png",
-    "sha256": "44713dc3ad20005cb1345d42c9c5d41d69cc043081062389fe3248da2889099b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:36:38.499Z"
-  },
-  {
-    "id": "02-editor",
-    "label": "Automation builder",
-    "theme": "dark",
-    "file": "docs\\apps\\bolt\\screenshots\\dark\\02-editor.png",
-    "sha256": "0981cae7e138a82c0a1aa86b93c7d3e8dce86a7899577a7083d440b58ec09e28",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:36:41.257Z"
-  },
-  {
-    "id": "03-detail",
-    "label": "Automation detail",
-    "theme": "dark",
-    "file": "docs\\apps\\bolt\\screenshots\\dark\\03-detail.png",
-    "sha256": "7e1843225d245064a4d09fcd7a7187158bf9b5e7e08eee3d85dcd14542816711",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:36:46.047Z"
-  },
-  {
-    "id": "04-executions",
-    "label": "Execution log",
-    "theme": "dark",
-    "file": "docs\\apps\\bolt\\screenshots\\dark\\04-executions.png",
-    "sha256": "469acb92adf98529fcdc0e068a583c8e806d23526a9d29998323bed2f7d7a844",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:36:48.750Z"
-  },
-  {
-    "id": "05-templates",
-    "label": "Automation templates",
-    "theme": "dark",
-    "file": "docs\\apps\\bolt\\screenshots\\dark\\05-templates.png",
-    "sha256": "e6f0eaa017348c9f7977567364e4cde5a2d8bd2c1038ab42d9d50f6211ae670d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:36:51.467Z"
+    "captured_at": "2026-06-17T20:21:26.526Z"
   }
 ]

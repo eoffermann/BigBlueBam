@@ -2,141 +2,81 @@
   {
     "id": "01-campaigns",
     "label": "Campaign list",
+    "theme": "dark",
+    "file": "docs\\apps\\blast\\screenshots\\dark\\01-campaigns.png",
+    "sha256": "3f7861c6cf2594b7f7cee9016ebb85b8edb91bb87fafef85575e5b68011c226b",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:19:01.917Z"
+  },
+  {
+    "id": "01-campaigns",
+    "label": "Campaign list",
     "theme": "light",
     "file": "docs\\apps\\blast\\screenshots\\light\\01-campaigns.png",
-    "sha256": "cc22e2f5858052a33bac75ed2e3e497716dae4fb58406ef5d366cb2bfa4d75f6",
+    "sha256": "e063c104af2b8d82b38367ab8c2ae2e8d23631ae318a4832e984cfc5ff6e2606",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:34:37.519Z"
+    "captured_at": "2026-06-17T20:18:59.046Z"
   },
   {
     "id": "02-campaign-new",
-    "label": "New campaign form",
+    "label": "New campaign",
     "theme": "light",
     "file": "docs\\apps\\blast\\screenshots\\light\\02-campaign-new.png",
-    "sha256": "7708670f19087721550456bd30c1c5c10ff469f2278ae47fbc6b8851b7cc2476",
+    "sha256": "9f9871cccf53ef2e0b4fee25c8067869a5cac0b4fa013eca915d61d0b789c632",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:34:40.260Z"
+    "captured_at": "2026-06-17T20:19:04.695Z"
   },
   {
     "id": "03-templates",
     "label": "Template gallery",
     "theme": "light",
     "file": "docs\\apps\\blast\\screenshots\\light\\03-templates.png",
-    "sha256": "f6242ec346ebb2186cb1aee9a9babf45e399e3a836014f5a7b448901f7f352be",
+    "sha256": "b953371de108d0a7967a32ef3eaf1257ceefbb01650724a407c9ff6cfefc91a4",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:34:42.991Z"
+    "captured_at": "2026-06-17T20:19:10.474Z"
   },
   {
     "id": "04-template-editor",
     "label": "Template editor",
     "theme": "light",
     "file": "docs\\apps\\blast\\screenshots\\light\\04-template-editor.png",
-    "sha256": "f85d0b4009e0e7d047403b9e00fc1b89345b9f040530d5923217d1c9e4ebe4d3",
+    "sha256": "f19ba6b644d23cfdc9a38664a2a1d7ff33b0b091be825f0c5a2d9f3eb908f072",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:34:45.732Z"
+    "captured_at": "2026-06-17T20:19:13.644Z"
   },
   {
     "id": "05-segments",
     "label": "Segment list",
     "theme": "light",
     "file": "docs\\apps\\blast\\screenshots\\light\\05-segments.png",
-    "sha256": "a2e1178a9079829b93199038f51a9eb7ad637c8b562a6154dfd8acefb2d2b669",
+    "sha256": "5b56d8585e9ea5f75b948af4786eb2ec2d2eb33745d0b5cef742393856cb12fd",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:34:48.435Z"
+    "captured_at": "2026-06-17T20:19:16.431Z"
   },
   {
     "id": "06-segment-builder",
     "label": "Segment builder",
     "theme": "light",
     "file": "docs\\apps\\blast\\screenshots\\light\\06-segment-builder.png",
-    "sha256": "3efdd7dd424a1cb684b08ddc958254c6706089517c76f11c390de7192270dbcf",
+    "sha256": "57da681574f83a83a0dbaca4e742c6379ec003b557e7c8cc8df105d8c9f3b604",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:34:51.122Z"
+    "captured_at": "2026-06-17T20:19:19.209Z"
   },
   {
     "id": "07-analytics",
-    "label": "Analytics dashboard",
+    "label": "Email analytics",
     "theme": "light",
     "file": "docs\\apps\\blast\\screenshots\\light\\07-analytics.png",
-    "sha256": "cb2dad139bb5ed1a3a335c6a4c054075fee6694c9b483b62f43fe4b6faa978ef",
+    "sha256": "e724d884c26500c708731b838102650769c3091d76dd5f5c3d18e26916592ddd",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:34:53.852Z"
-  },
-  {
-    "id": "01-campaigns",
-    "label": "Campaign list",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\01-campaigns.png",
-    "sha256": "855fd62edccb483f06b551a392d807f999cacf528d9d7c660a3b2eed2b687af0",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:01.570Z"
-  },
-  {
-    "id": "02-campaign-new",
-    "label": "New campaign form",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\02-campaign-new.png",
-    "sha256": "df9a5c4da6eb21236fd0b93b87ee0b44b193331a4acc15241107a20dae2b94c0",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:04.315Z"
-  },
-  {
-    "id": "03-templates",
-    "label": "Template gallery",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\03-templates.png",
-    "sha256": "6f63d42d52210065ef5aa4b7d17ca10eab7c225f2b89bf3af1e31b36ae3ef1b4",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:07.051Z"
-  },
-  {
-    "id": "04-template-editor",
-    "label": "Template editor",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\04-template-editor.png",
-    "sha256": "046a92d639feeed97b9dc1cdc9739f3313fea58b3e83c33273a825cadc50f9be",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:09.747Z"
-  },
-  {
-    "id": "05-segments",
-    "label": "Segment list",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\05-segments.png",
-    "sha256": "3f1b998162579edc4ec7e0c859fd7aa1241213f5082b082748d745d058236097",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:12.432Z"
-  },
-  {
-    "id": "06-segment-builder",
-    "label": "Segment builder",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\06-segment-builder.png",
-    "sha256": "c0d88a167a516d8ae902630c9d1b9e6231435d295f87dd1b3d1d25e31e5c7d06",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:15.120Z"
-  },
-  {
-    "id": "07-analytics",
-    "label": "Analytics dashboard",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\07-analytics.png",
-    "sha256": "68f752653456c6a088224f6a038197bdfea5f2b27d7a2a8839119825b9d7afe0",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:17.874Z"
+    "captured_at": "2026-06-17T20:19:22.156Z"
   }
 ]

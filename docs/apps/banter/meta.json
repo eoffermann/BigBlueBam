@@ -1,82 +1,72 @@
 [
   {
-    "id": "01-channels",
-    "label": "Channel list",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\01-channels.png",
-    "sha256": "8b7e8029faa2c110306298821b504d208e9b2ed5e32d38b906de4a7c941d6f7a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:29:44.090Z"
+    "id": "01-channel-view",
+    "label": "Channel conversation",
+    "theme": "dark",
+    "file": "docs\\apps\\banter\\screenshots\\dark\\01-channel-view.png",
+    "sha256": "59b242a1c03563a6166e2c053f3710f5059a5921a2223caaf5442001a66cb584",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:13:58.209Z"
   },
   {
-    "id": "02-channel-view",
+    "id": "01-channel-view",
     "label": "Channel conversation",
     "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\02-channel-view.png",
-    "sha256": "8b7e8029faa2c110306298821b504d208e9b2ed5e32d38b906de4a7c941d6f7a",
+    "file": "docs\\apps\\banter\\screenshots\\light\\01-channel-view.png",
+    "sha256": "6f22d96df18d378f1819016847efe8264c3cd8cf06befdf19447885f24cf287d",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:29:46.929Z"
+    "captured_at": "2026-06-17T20:13:54.030Z"
   },
   {
-    "id": "03-threads",
-    "label": "Thread view",
+    "id": "02-channel-list",
+    "label": "Channels & sidebar",
     "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\03-threads.png",
-    "sha256": "f1ec268a1f314bfc2d2a7e1288049891e78aebd9862cc907cd2a72917620e8ff",
+    "file": "docs\\apps\\banter\\screenshots\\light\\02-channel-list.png",
+    "sha256": "41aa35282e0b10f2fb6bf563b0b5e7201c2adaac83c1dc74a7c12564d83b8514",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:29:49.707Z"
+    "captured_at": "2026-06-17T20:27:28.383Z"
+  },
+  {
+    "id": "03-thread",
+    "label": "Threaded replies",
+    "theme": "light",
+    "file": "docs\\apps\\banter\\screenshots\\light\\03-thread.png",
+    "sha256": "095e07b98818395f9d014fe146df0b575ab09d02fc19bc90f6146a81369a51ec",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-06-17T20:14:03.333Z"
   },
   {
     "id": "04-dms",
     "label": "Direct messages",
     "theme": "light",
     "file": "docs\\apps\\banter\\screenshots\\light\\04-dms.png",
-    "sha256": "152ba670db703f8d96b4345d94042b084ed3742161f6306e280dadd07091ba70",
+    "sha256": "330cff858ef1a257fc3ba3439a3e6358e1b19414950f299c97ccfda39c47ccf8",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:29:54.576Z"
+    "captured_at": "2026-06-17T20:14:12.233Z"
   },
   {
-    "id": "01-channels",
-    "label": "Channel list",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\01-channels.png",
-    "sha256": "c8b8e356aa6211a163253e68dafbe321a99690f6faded59ccaa9063b497a2a7b",
+    "id": "05-search",
+    "label": "Message search",
+    "theme": "light",
+    "file": "docs\\apps\\banter\\screenshots\\light\\05-search.png",
+    "sha256": "d2d0767ef86c781c8a792c7e73efb097cc265bb6ae7fef974258d86f3d54a90f",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:30:02.198Z"
+    "captured_at": "2026-06-17T20:14:21.198Z"
   },
   {
-    "id": "02-channel-view",
-    "label": "Channel conversation",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\02-channel-view.png",
-    "sha256": "11105ff48699c044184765c43702b921da4de4e312cb6a28569143207948916e",
+    "id": "06-preferences",
+    "label": "Preferences",
+    "theme": "light",
+    "file": "docs\\apps\\banter\\screenshots\\light\\06-preferences.png",
+    "sha256": "742062a0db6ead0a5ed6f091885ea95c364c49bfe7d2356972e09268e8a0cc2f",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:30:04.966Z"
-  },
-  {
-    "id": "03-threads",
-    "label": "Thread view",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\03-threads.png",
-    "sha256": "27fa45c399b45d8fd109a2507b4ab09f8ecc956182c1efb3bf795197a956e281",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:30:07.682Z"
-  },
-  {
-    "id": "04-dms",
-    "label": "Direct messages",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\04-dms.png",
-    "sha256": "0e8b7f5ba8a75061f7969cf3fa048711d1180459c67ac23cd5d6c8d533267604",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:30:12.517Z"
+    "captured_at": "2026-06-17T20:14:23.592Z"
   }
 ]

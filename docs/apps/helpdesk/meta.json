@@ -1,102 +1,52 @@
 [
   {
-    "id": "01-portal",
-    "label": "Support portal",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\01-portal.png",
-    "sha256": "cef1e415e63d5995d99c1a2d38d1b6bfb2934fa462c98bd7e6a8dbf7c49b804b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:39:48.380Z"
-  },
-  {
-    "id": "02-login",
-    "label": "Login screen",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\02-login.png",
-    "sha256": "cef1e415e63d5995d99c1a2d38d1b6bfb2934fa462c98bd7e6a8dbf7c49b804b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:40:01.014Z"
-  },
-  {
-    "id": "03-ticket-list",
-    "label": "Ticket list",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\03-ticket-list.png",
-    "sha256": "08929ad995ab4705d757e925a747642884c10b39fae119304bdf11dd24ffeaff",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:40:18.802Z"
-  },
-  {
-    "id": "04-ticket-detail",
-    "label": "Ticket detail",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\04-ticket-detail.png",
-    "sha256": "08929ad995ab4705d757e925a747642884c10b39fae119304bdf11dd24ffeaff",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:40:36.615Z"
-  },
-  {
-    "id": "05-new-ticket",
-    "label": "New ticket form",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\05-new-ticket.png",
-    "sha256": "08929ad995ab4705d757e925a747642884c10b39fae119304bdf11dd24ffeaff",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:40:54.402Z"
-  },
-  {
-    "id": "01-portal",
+    "id": "01-portal-entry",
     "label": "Support portal",
     "theme": "dark",
-    "file": "docs\\apps\\helpdesk\\screenshots\\dark\\01-portal.png",
-    "sha256": "876313a92639cf6d094f302f74363bc7e402da1a92b0eaf7cf3cd11ff77511c1",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:41:11.833Z"
+    "file": "docs\\apps\\helpdesk\\screenshots\\dark\\01-portal-entry.png",
+    "sha256": "c2accc4ab20b8108227157257f74236429dee4eda92decf56a6f8a3f4bf887bb",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-06-17T20:24:32.990Z"
   },
   {
-    "id": "02-login",
-    "label": "Login screen",
-    "theme": "dark",
-    "file": "docs\\apps\\helpdesk\\screenshots\\dark\\02-login.png",
-    "sha256": "876313a92639cf6d094f302f74363bc7e402da1a92b0eaf7cf3cd11ff77511c1",
+    "id": "01-portal-entry",
+    "label": "Support portal",
+    "theme": "light",
+    "file": "docs\\apps\\helpdesk\\screenshots\\light\\01-portal-entry.png",
+    "sha256": "b3494b38a2da4afa1ee60dab8da4071d52cd0424c75786015c4b0d23406fbff8",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:41:24.480Z"
+    "captured_at": "2026-06-17T20:24:30.557Z"
   },
   {
-    "id": "03-ticket-list",
-    "label": "Ticket list",
-    "theme": "dark",
-    "file": "docs\\apps\\helpdesk\\screenshots\\dark\\03-ticket-list.png",
-    "sha256": "3579596e20583879dcb9f995b71726a538ce24143930bb12822f6230eca6fcfa",
+    "id": "02-ticket-list",
+    "label": "My tickets",
+    "theme": "light",
+    "file": "docs\\apps\\helpdesk\\screenshots\\light\\02-ticket-list.png",
+    "sha256": "cd3fe0094d7219be81370ece1a1d419ac4dbf75ce06f409588d843eea53106d8",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:41:42.214Z"
+    "captured_at": "2026-06-17T20:24:39.767Z"
   },
   {
-    "id": "04-ticket-detail",
+    "id": "03-ticket-detail",
     "label": "Ticket detail",
-    "theme": "dark",
-    "file": "docs\\apps\\helpdesk\\screenshots\\dark\\04-ticket-detail.png",
-    "sha256": "3579596e20583879dcb9f995b71726a538ce24143930bb12822f6230eca6fcfa",
+    "theme": "light",
+    "file": "docs\\apps\\helpdesk\\screenshots\\light\\03-ticket-detail.png",
+    "sha256": "29231e4a3cccec80d197faab61a751c05dc3b1abfd4489e15a5dcf0d9579f53e",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:41:59.955Z"
+    "captured_at": "2026-06-17T20:24:44.732Z"
   },
   {
-    "id": "05-new-ticket",
-    "label": "New ticket form",
-    "theme": "dark",
-    "file": "docs\\apps\\helpdesk\\screenshots\\dark\\05-new-ticket.png",
-    "sha256": "348c6978521c5aed437b259004b3ad152bd90ec10193d3d264b6b94d8c6a7bc8",
+    "id": "04-new-ticket",
+    "label": "New ticket",
+    "theme": "light",
+    "file": "docs\\apps\\helpdesk\\screenshots\\light\\04-new-ticket.png",
+    "sha256": "c375c652883e806b283f87bbee49a00339388e9c41a6e24e25ed843b7632c0e0",
     "width": 1440,
     "height": 900,
-    "captured_at": "2026-04-17T16:42:17.670Z"
+    "captured_at": "2026-06-17T20:24:50.146Z"
   }
 ]
