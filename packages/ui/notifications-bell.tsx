@@ -58,6 +58,10 @@ interface Notification {
   type?: string | null;
   deep_link?: string | null;
   task_id?: string | null;
+  // Per-event context. For Banter-sourced rows (dm/mention/thread_reply) this
+  // carries `channel_id`, which we use to dedupe against the Banter unread
+  // channel list so one conversation isn't shown (or counted) twice.
+  metadata?: { channel_id?: string | null } | null;
 }
 
 /**
@@ -374,14 +378,40 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
     [unreadChannels],
   );
 
-  // Badge = unread persistent notifications + total unread Banter messages.
-  const unreadCount = notificationUnreadCount + banterUnreadTotal;
+  // Dedupe key set: any channel that already appears as a Banter unread item.
+  // A Banter message produces BOTH a persistent notification row ("New message
+  // from X" / "X mentioned you") AND a channel-unread entry. Rendering and
+  // counting both double-shows one conversation, so when the channel is in the
+  // unread list we treat the channel item as canonical and drop the matching
+  // persistent rows from the queue and the badge.
+  const unreadChannelIds = useMemo(
+    () => new Set(unreadChannels.map((c) => c.id)),
+    [unreadChannels],
+  );
+  const suppressedNotifCount = useMemo(
+    () =>
+      notifications.filter(
+        (n) => n.metadata?.channel_id && unreadChannelIds.has(n.metadata.channel_id),
+      ).length,
+    [notifications, unreadChannelIds],
+  );
+
+  // Badge = unread persistent notifications (minus the channel-deduped ones) +
+  // total unread Banter messages. Without the subtraction a single DM bumped
+  // the badge by 2 (one for the notification row, one for the channel).
+  const unreadCount =
+    Math.max(0, notificationUnreadCount - suppressedNotifCount) + banterUnreadTotal;
 
   // Merge both sources into one recency-sorted queue.
   const queueItems = useMemo<QueueItem[]>(() => {
     const items: QueueItem[] = [];
 
     for (const n of notifications) {
+      // Dedupe: skip a persistent row whose channel already shows as a Banter
+      // unread item — the channel entry (which clears on read) represents it.
+      if (n.metadata?.channel_id && unreadChannelIds.has(n.metadata.channel_id)) {
+        continue;
+      }
       const cat = n.category;
       const category: QueueItem['category'] =
         cat === 'assignment' || cat === 'task'
@@ -418,7 +448,7 @@ export function NotificationsBell({ inAppPrefix, onNavigate }: NotificationsBell
     return items.sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
-  }, [notifications, unreadChannels]);
+  }, [notifications, unreadChannels, unreadChannelIds]);
 
   const refetchQueue = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['bbb', 'notifications'] });

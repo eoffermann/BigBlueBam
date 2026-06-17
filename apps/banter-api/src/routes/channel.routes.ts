@@ -1412,6 +1412,23 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           ),
         );
 
+      // Reading the conversation also clears any unified-bell notification rows
+      // tied to this channel (the DM / mention / thread_reply rows emitted via
+      // notify.ts, all of which carry metadata.channel_id). Without this, the
+      // Bam notifications bell keeps showing "New message from X" after the
+      // channel has been read — the persistent rows are independent of Banter's
+      // per-channel read cursor, so reading the channel never cleared them.
+      // Fire-and-forget: a notification-bookkeeping failure must not fail the
+      // read.
+      await db
+        .execute(
+          sql`UPDATE notifications SET is_read = true
+              WHERE user_id = ${user.id}
+                AND is_read = false
+                AND metadata->>'channel_id' = ${id}`,
+        )
+        .catch(() => {});
+
       // Cache the read position in Redis for fast cross-device lookups
       const redis = (fastify as any).redis as import('ioredis').default | undefined;
       if (redis) {
