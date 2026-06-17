@@ -91,9 +91,28 @@ export async function hideVolatileOverlays(page: Page): Promise<void> {
     .catch(() => {});
 }
 
-/** Resolve a recipe's mask selectors to locators for `page.screenshot({ mask })`. */
+// Masks paint an opaque box over an element. They're only warranted for
+// genuinely NON-deterministic UI — live presence, typing, live-connection
+// status, hover tooltips, and secrets. Timestamps/dates/rollup numbers are
+// deterministic under the frozen clock, so masking them just redacts real data
+// with an ugly box (the fuchsia/gray bars). Any declared mask that isn't on this
+// allowlist is dropped, so recipes can keep their historical mask lists while
+// captures show the real seeded data.
+const LIVE_MASK_TOKENS = [
+  'presence', // presence-indicator / presence-dot / presence-avatars
+  'typing-indicator',
+  'recharts-tooltip',
+  'api-key-secret',
+  'text-emerald-600', // live WS "Live" connection chip
+  'text-amber-600', // live WS "connecting/reconnecting" chip
+  'lucide-users', // live occupant count
+];
+
+/** Resolve a recipe's mask selectors to locators, keeping only genuinely-live ones. */
 export function resolveMasks(page: Page, selectors: string[]): Locator[] {
-  return selectors.map((sel) => page.locator(sel));
+  return selectors
+    .filter((sel) => LIVE_MASK_TOKENS.some((tok) => sel.includes(tok)))
+    .map((sel) => page.locator(sel));
 }
 
 /**
