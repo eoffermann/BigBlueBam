@@ -163,9 +163,19 @@ function parseRoute(path: string): Route {
 }
 
 export function App() {
-  const { isAuthenticated, isLoading, fetchMe, user } = useAuthStore();
+  const { isAuthenticated, isLoading, fetchMe, user, completeFtue } = useAuthStore();
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
   const publicConfig = usePublicConfig();
+
+  // First-Time User Experience: fires once per account. A signed-in user who
+  // isn't mid-forced-password-change and whose notification_prefs.ftue_completed
+  // is unset gets walked through Settings (see the redirect effect below and the
+  // SettingsPage `ftue` prop). Completing/skipping persists the flag account-wide.
+  const ftueRequired =
+    isAuthenticated &&
+    !!user &&
+    user.force_password_change !== true &&
+    ((user.notification_prefs ?? {}) as Record<string, unknown>).ftue_completed !== true;
 
   useEffect(() => {
     fetchMe();
@@ -263,6 +273,18 @@ export function App() {
     navigate('/password-change');
   }, [isLoading, isAuthenticated, user, route.page, navigate]);
 
+  // FTUE gate: a first-time user is sent straight to Settings, where the guided
+  // tour runs. Skipped while loading or once the tour is done; the tour itself
+  // only opens a Launchpad modal (no navigation), so the user stays on Settings
+  // for the whole flow.
+  useEffect(() => {
+    if (isLoading) return;
+    if (!ftueRequired) return;
+    if (route.page !== 'settings') {
+      navigate('/settings');
+    }
+  }, [isLoading, ftueRequired, route.page, navigate]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -336,7 +358,15 @@ export function App() {
     case 'project-reports':
       return <ProjectReportsPage projectId={route.projectId} onNavigate={navigate} />;
     case 'settings':
-      return <SettingsPage onNavigate={navigate} />;
+      return (
+        <SettingsPage
+          onNavigate={navigate}
+          ftue={ftueRequired}
+          onFtueComplete={() => {
+            void completeFtue();
+          }}
+        />
+      );
     case 'my-work':
       return <MyWorkPage onNavigate={navigate} />;
     case 'superuser':

@@ -19,6 +19,14 @@ interface AuthState {
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   clearError: () => void;
+  /** Shallow-merge fields into the in-store user (keeps the SPA in sync after a
+   *  PATCH /auth/me without a full refetch). No-op when signed out. */
+  patchUser: (patch: Partial<User>) => void;
+  /** Mark the first-time-user experience as completed (account-level) by
+   *  setting `notification_prefs.ftue_completed` and persisting via PATCH
+   *  /auth/me. Falls back to a local mark if the request fails so the user is
+   *  never trapped in the tour for the rest of the session. */
+  completeFtue: () => Promise<void>;
 }
 
 function toAuthError(err: unknown, fallback: string): AuthError {
@@ -35,7 +43,7 @@ function toAuthError(err: unknown, fallback: string): AuthError {
   return { message: fallback };
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
@@ -93,4 +101,27 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  patchUser: (patch) =>
+    set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),
+
+  completeFtue: async () => {
+    const current = get().user;
+    if (!current) return;
+    const prefs = { ...(current.notification_prefs ?? {}), ftue_completed: true };
+    try {
+      const res = await api.patch<{ data: { notification_prefs?: Record<string, unknown> } }>(
+        '/auth/me',
+        { notification_prefs: prefs },
+      );
+      set((s) =>
+        s.user
+          ? { user: { ...s.user, notification_prefs: res.data.notification_prefs ?? prefs } }
+          : s,
+      );
+    } catch {
+      // Persist failed — mark locally so the tour doesn't re-trap this session.
+      set((s) => (s.user ? { user: { ...s.user, notification_prefs: prefs } } : s));
+    }
+  },
 }));

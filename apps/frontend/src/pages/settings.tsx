@@ -15,6 +15,17 @@ import { SmtpSettingsForm } from '@/components/settings/smtp-settings-form';
 import { SlackImportCard } from '@/components/settings/slack-import-card';
 import { PriorityManager } from '@/components/settings/priority-manager';
 import { usePriorities, priorityInlineStyle } from '@/hooks/use-priorities';
+import { timezoneSelectOptions } from '@/lib/timezones';
+import { SettingsFtueTour, type SettingsTab } from '@/components/ftue/settings-tour';
+
+/** Notification preference keys shown in the Notifications tab. */
+const NOTIFICATION_PREFS: { key: string; label: string }[] = [
+  { key: 'assigned', label: 'Task assigned to me' },
+  { key: 'mentioned', label: 'Mentioned in comments' },
+  { key: 'state_changed', label: 'Task state changed' },
+  { key: 'sprint', label: 'Sprint started/completed' },
+  { key: 'due_date', label: 'Due date approaching' },
+];
 
 interface ApiKeyData {
   id: string;
@@ -93,15 +104,28 @@ const WEBHOOK_EVENT_TYPES = [
 
 interface SettingsPageProps {
   onNavigate: (path: string) => void;
+  /** When true, render the first-time-user guided tour over this page. */
+  ftue?: boolean;
+  /** Called when the user finishes or skips the FTUE tour. */
+  onFtueComplete?: () => void;
 }
 
-export function SettingsPage({ onNavigate }: SettingsPageProps) {
-  const { user } = useAuthStore();
+export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: SettingsPageProps) {
+  const { user, patchUser } = useAuthStore();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'members' | 'tasks' | 'integrations' | 'helpdesk' | 'permissions' | 'launchpad' | 'ai-providers'>('profile');
   const [priorityManagerOpen, setPriorityManagerOpen] = useState(false);
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
+  // Notification preferences, hydrated from the user's saved prefs (default on).
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(() => {
+    const saved = (user?.notification_prefs ?? {}) as Record<string, unknown>;
+    return Object.fromEntries(
+      NOTIFICATION_PREFS.map(({ key }) => [key, saved[key] !== false]),
+    );
+  });
+  const [savingNotif, setSavingNotif] = useState(false);
+  const [savedNotif, setSavedNotif] = useState(false);
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     return (localStorage.getItem('bbam-theme') as 'system' | 'light' | 'dark') ?? 'system';
   });
@@ -617,12 +641,35 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
     setSaving(true);
     try {
       await api.patch('/auth/me', { display_name: displayName, timezone });
+      // Keep the in-store user in sync so the topbar/avatar reflect the change
+      // without a full refetch.
+      patchUser({ display_name: displayName, timezone });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
       // error handling
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    setSavingNotif(true);
+    try {
+      // Merge onto the existing prefs object so unrelated keys (e.g. the FTUE
+      // flag) survive — the API replaces the whole notification_prefs column.
+      const merged = { ...(user?.notification_prefs ?? {}), ...notifPrefs };
+      const res = await api.patch<{ data: { notification_prefs?: Record<string, unknown> } }>(
+        '/auth/me',
+        { notification_prefs: merged },
+      );
+      patchUser({ notification_prefs: res.data.notification_prefs ?? merged });
+      setSavedNotif(true);
+      setTimeout(() => setSavedNotif(false), 2000);
+    } catch {
+      // error handling
+    } finally {
+      setSavingNotif(false);
     }
   };
 
@@ -673,29 +720,28 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                   <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Profile</h2>
                   <p className="text-sm text-zinc-500">Update your personal information.</p>
                 </div>
-                <Input
-                  id="display-name"
-                  label="Display Name"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                />
+                <div data-ftue="display-name">
+                  <Input
+                    id="display-name"
+                    label="Display Name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                </div>
                 <Input
                   id="email"
                   label="Email"
                   value={user?.email ?? ''}
                   disabled
                 />
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Timezone</label>
-                  <select
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
-                  >
-                    {['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo', 'Australia/Sydney'].map((tz) => (
-                      <option key={tz} value={tz}>{tz}</option>
-                    ))}
-                  </select>
+                <div className="flex flex-col gap-1.5" data-ftue="timezone">
+                  <Select
+                    label="Timezone"
+                    options={timezoneSelectOptions(timezone)}
+                    value={timezone || 'UTC'}
+                    onValueChange={setTimezone}
+                    className="w-full"
+                  />
                 </div>
                 <div className="flex items-center gap-3">
                   <Button onClick={handleSaveProfile} loading={saving}>Save Changes</Button>
@@ -710,7 +756,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                   <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Appearance</h2>
                   <p className="text-sm text-zinc-500">Customize how BigBlueBam looks.</p>
                 </div>
-                <div>
+                <div data-ftue="theme">
                   <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3 block">Theme</label>
                   <div className="flex gap-3">
                     {([
@@ -742,23 +788,26 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                   <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Notifications</h2>
                   <p className="text-sm text-zinc-500">Configure how you receive notifications.</p>
                 </div>
-                <div className="space-y-4">
-                  {[
-                    { label: 'Task assigned to me', key: 'assigned' },
-                    { label: 'Mentioned in comments', key: 'mentioned' },
-                    { label: 'Task state changed', key: 'state_changed' },
-                    { label: 'Sprint started/completed', key: 'sprint' },
-                    { label: 'Due date approaching', key: 'due_date' },
-                  ].map((pref) => (
-                    <label key={pref.key} className="flex items-center justify-between">
+                <div className="space-y-4" data-ftue="notifications">
+                  {NOTIFICATION_PREFS.map((pref) => (
+                    <label key={pref.key} className="flex items-center justify-between cursor-pointer">
                       <span className="text-sm text-zinc-700 dark:text-zinc-300">{pref.label}</span>
                       <input
                         type="checkbox"
-                        defaultChecked
+                        checked={notifPrefs[pref.key] ?? true}
+                        onChange={(e) =>
+                          setNotifPrefs((prev) => ({ ...prev, [pref.key]: e.target.checked }))
+                        }
                         className="rounded border-zinc-300 text-primary-600 focus:ring-primary-500"
                       />
                     </label>
                   ))}
+                </div>
+                <div className="flex items-center gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                  <Button onClick={handleSaveNotifications} loading={savingNotif}>
+                    Save Preferences
+                  </Button>
+                  {savedNotif && <span className="text-sm text-green-600">Saved!</span>}
                 </div>
               </div>
             )}
@@ -2040,6 +2089,12 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
         </div>
       </div>
       <PriorityManager open={priorityManagerOpen} onOpenChange={setPriorityManagerOpen} />
+      {ftue && (
+        <SettingsFtueTour
+          setTab={(tab: SettingsTab) => setActiveTab(tab)}
+          onComplete={() => onFtueComplete?.()}
+        />
+      )}
     </AppLayout>
   );
 }

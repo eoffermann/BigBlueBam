@@ -13,6 +13,19 @@ setup.describe.configure({ mode: 'serial' });
 
 setup('authenticate as admin', async ({ page }) => {
   await loginViaUI(page, TEST_USERS.admin);
+  // Mark the first-time-user experience complete for the admin so the guided
+  // Settings tour doesn't hijack every b3 functional test (the FTUE fires for
+  // any account whose notification_prefs.ftue_completed is unset). The dedicated
+  // FTUE spec exercises the tour itself via the otherwise-unused member account.
+  const cookies = await page.context().cookies();
+  const csrf = cookies.find((c) => c.name === 'csrf_token')?.value;
+  const res = await page.request.patch('/b3/api/auth/me', {
+    headers: csrf ? { 'X-CSRF-Token': csrf } : {},
+    data: { notification_prefs: { ftue_completed: true } },
+  });
+  if (!res.ok()) {
+    console.warn(`[setup] mark admin FTUE complete failed: ${res.status()}`);
+  }
   await page.context().storageState({ path: ADMIN_STATE });
 });
 

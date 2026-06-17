@@ -97,6 +97,7 @@ interface LaunchpadTriggerProps {
 export const LaunchpadTrigger: FC<LaunchpadTriggerProps> = ({ onClick }) => (
   <button
     onClick={onClick}
+    data-ftue="launchpad"
     className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     title="Launchpad — switch between apps"
   >
