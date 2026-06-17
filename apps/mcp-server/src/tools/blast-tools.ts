@@ -260,6 +260,21 @@ export function registerBlastTools(server: McpServer, api: ApiClient, blastApiUr
   });
 
   registerTool(server, {
+    name: 'blast_list_campaigns',
+    description: 'List email campaigns with optional status filter and pagination.',
+    input: {
+      status: z.string().optional().describe('Filter by campaign status (e.g. draft, scheduled, sending, sent)'),
+      limit: z.number().int().positive().max(100).optional().describe('Page size (1-100)'),
+      offset: z.number().int().min(0).optional().describe('Offset for pagination'),
+    },
+    returns: z.object({ data: z.array(campaignShape) }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('GET', `/campaigns${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing campaigns', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'blast_get_campaign',
     description: 'Get campaign detail and delivery stats. `id` accepts either a UUID or the campaign name (exact match preferred, single fuzzy match acceptable).',
     input: {

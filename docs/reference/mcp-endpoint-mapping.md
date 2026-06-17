@@ -30,16 +30,16 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 
 | Surface | REST endpoints | …with an MCP tool | …without a tool | MCP-only tools (no endpoint) |
 |---|--:|--:|--:|--:|
-| Bam — Work management | 89 | 82 | 7 | 2 |
+| Bam — Work management | 93 | 86 | 7 | 2 |
 | Bam — Org, auth, admin & integrations | 156 | 37 | 119 | 0 |
-| Banter | 99 | 66 | 33 | 0 |
+| Banter | 99 | 67 | 32 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
 | Brief | 53 | 48 | 5 | 0 |
-| Bond | 72 | 69 | 3 | 0 |
+| Bond | 72 | 70 | 2 | 0 |
 | Bolt | 28 | 27 | 1 | 0 |
 | Bearing | 35 | 33 | 2 | 0 |
 | Board | 45 | 39 | 6 | 1 |
-| Blast | 40 | 26 | 14 | 2 |
+| Blast | 40 | 27 | 13 | 2 |
 | Bench | 29 | 29 | 0 | 3 |
 | Blueprint | 38 | 35 | 3 | 1 |
 | Book | 31 | 24 | 7 | 0 |
@@ -48,7 +48,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bureau | 38 | 33 | 5 | 3 |
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **937** | **690** | **247** | **19** |
+| **Total** | **941** | **697** | **244** | **19** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -264,6 +264,8 @@ Notes:
 
 
 ## Bam — Attachments / Uploads / Version
+
+> **⚠ No MCP tools in this section — intentional.** Binary file upload/download and version-blob endpoints. Agents never move binary payloads over MCP — they reference existing files via the cross-cutting `attachment_get` / `attachment_list` tools. Out of scope by design.
 - **Service:** `apps/api` · external `/b3/api/` (uploads/files at `/files/`) · MCP module(s): none in scope
 
 | REST endpoint | MCP tool | Description | UI call site |
@@ -288,6 +290,15 @@ Notes:
 | `POST /projects/:id/import/jira` | `import_jira` | Import Jira export rows | `apps/frontend/src/components/import/import-dialog.tsx` |
 | `POST /projects/:id/import/trello` | `import_trello` | Import Trello board JSON | `apps/frontend/src/components/import/import-dialog.tsx` |
 | — *(composite)* | `suggest_branch_name` | Fetches `/tasks/:id`, slugifies a branch name | — |
+
+### Saved views
+
+| REST endpoint | MCP tool | Description | UI call site |
+|---|---|---|---|
+| `GET /projects/:id/views` | `list_views` | List a project's saved views (own + shared) | — |
+| `POST /projects/:id/views` | `create_view` | Create a saved view (filters/sort/swimlane/type) | — |
+| `PATCH /views/:id` | `update_view` | Update a saved view | — |
+| `DELETE /views/:id` | `delete_view` | Delete a saved view | — |
 
 
 ---
@@ -391,6 +402,8 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 
 
 ## Bam — OAuth / SSO
+
+> **⚠ No MCP tools in this section — intentional.** OAuth provider connect / authorize / callback / link are browser-redirect credential flows with no agent-usable surface.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
@@ -402,6 +415,8 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 
 
 ## Bam — Guests
+
+> **⚠ No MCP tools in this section — intentional.** Guest-invitation issuance and the public accept-token flow — a credential/invite surface handled in the UI.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
@@ -417,47 +432,49 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 
 
 ## Bam — Platform / SuperUser org & user admin
+
+> **⚠ No MCP tools in this section — intentional.** Almost entirely SuperUser break-glass — impersonation, cross-org user/session/membership admin, platform audit. Intentionally UI/CLI-only; the few mapped rows are basic org reads.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): `platform-tools`
 
 Covers `platform.routes.ts` (`/v1/platform/*`) and `superuser.routes.ts` (`/superuser/*`, mounted under that prefix).
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /audit-log` | — | SuperUser audit trail (filtered) | `apps/frontend/src/lib/api/superuser.ts` |
+| `GET /audit-log` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | SuperUser audit trail (filtered) | `apps/frontend/src/lib/api/superuser.ts` |
 | `GET /beta-signups` | `list_beta_signups` | List public beta-gate signups | `apps/frontend/src/pages/superuser/index.tsx` |
-| `POST /context/clear` | — | Clear SuperUser active-org context | `apps/frontend/src/lib/api/superuser.ts` |
-| `POST /context/switch` | — | Switch SuperUser into an org context | `apps/frontend/src/lib/api/superuser.ts` |
-| `GET /organizations` | — | SuperUser org list (cursor-paginated) | `apps/frontend/src/lib/api/superuser.ts` |
-| `GET /organizations/:id` | — | SuperUser org detail + activity | `apps/frontend/src/lib/api/superuser.ts` |
-| `GET /overview` | — | Platform-wide stat counters | `apps/frontend/src/pages/superuser/index.tsx` |
+| `POST /context/clear` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Clear SuperUser active-org context | `apps/frontend/src/lib/api/superuser.ts` |
+| `POST /context/switch` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Switch SuperUser into an org context | `apps/frontend/src/lib/api/superuser.ts` |
+| `GET /organizations` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | SuperUser org list (cursor-paginated) | `apps/frontend/src/lib/api/superuser.ts` |
+| `GET /organizations/:id` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | SuperUser org detail + activity | `apps/frontend/src/lib/api/superuser.ts` |
+| `GET /overview` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Platform-wide stat counters | `apps/frontend/src/pages/superuser/index.tsx` |
 | `GET /platform-settings` | `get_platform_settings` | Read signup kill-switch flags | `apps/frontend/src/pages/superuser/index.tsx` |
 | `PATCH /platform-settings` | `set_public_signup_disabled` · `set_helpdesk_signup_disabled` | Toggle signup kill-switches | `apps/frontend/src/pages/superuser/index.tsx` |
-| `GET /superuser/calling-credentials` | — | LiveKit/voice provider config summary | `apps/frontend/src/pages/superuser/platform-calling-settings.tsx` |
-| `GET /users` | — | SuperUser user list (filtered) | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `GET /users/:id` | — | SuperUser user detail | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `DELETE /users/:id` | — | SuperUser soft-delete an account | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `PATCH /users/:id/active` | — | Enable/disable a user | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `PATCH /users/:id/email` | — | Initiate email change for a user | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `GET /users/:id/login-history` | — | User login history (paginated) | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `POST /users/:id/memberships` | — | Add user org membership | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `DELETE /users/:id/memberships/:orgId` | — | Remove user org membership | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `PATCH /users/:id/memberships/:orgId` | — | Change user's org membership role | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `GET /users/:id/projects` | — | List a user's projects | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `POST /users/:id/set-default-org` | — | Set user's default org | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `GET /users/:id/sessions` | — | List user sessions | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `DELETE /users/:id/sessions/:sessionId` | — | Revoke one user session | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `POST /users/:id/sessions/revoke-all` | — | Revoke all user sessions | `apps/frontend/src/lib/api/superuser-users.ts` |
-| `GET /v1/platform/audit-log` | — | Platform-admin audit trail | `apps/frontend/src/lib/api/superuser.ts` |
-| `GET /v1/platform/impersonation-sessions` | — | List active impersonations | `apps/frontend/src/lib/api/superuser.ts` |
-| `POST /v1/platform/impersonate` | — | Start impersonating a user | `apps/frontend/src/lib/api/superuser.ts` |
-| `POST /v1/platform/stop-impersonation` | — | Stop impersonating | `apps/frontend/src/components/layout/app-layout.tsx` |
+| `GET /superuser/calling-credentials` | — _(skip: LiveKit/voice credentials — UI/CLI-only)_ | LiveKit/voice provider config summary | `apps/frontend/src/pages/superuser/platform-calling-settings.tsx` |
+| `GET /users` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | SuperUser user list (filtered) | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `GET /users/:id` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | SuperUser user detail | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `DELETE /users/:id` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | SuperUser soft-delete an account | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `PATCH /users/:id/active` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Enable/disable a user | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `PATCH /users/:id/email` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Initiate email change for a user | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `GET /users/:id/login-history` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | User login history (paginated) | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `POST /users/:id/memberships` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Add user org membership | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `DELETE /users/:id/memberships/:orgId` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Remove user org membership | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `PATCH /users/:id/memberships/:orgId` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Change user's org membership role | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `GET /users/:id/projects` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | List a user's projects | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `POST /users/:id/set-default-org` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Set user's default org | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `GET /users/:id/sessions` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | List user sessions | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `DELETE /users/:id/sessions/:sessionId` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Revoke one user session | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `POST /users/:id/sessions/revoke-all` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Revoke all user sessions | `apps/frontend/src/lib/api/superuser-users.ts` |
+| `GET /v1/platform/audit-log` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Platform-admin audit trail | `apps/frontend/src/lib/api/superuser.ts` |
+| `GET /v1/platform/impersonation-sessions` | — _(skip: SuperUser impersonation (break-glass) — UI/CLI-only)_ | List active impersonations | `apps/frontend/src/lib/api/superuser.ts` |
+| `POST /v1/platform/impersonate` | — _(skip: SuperUser impersonation (break-glass) — UI/CLI-only)_ | Start impersonating a user | `apps/frontend/src/lib/api/superuser.ts` |
+| `POST /v1/platform/stop-impersonation` | — _(skip: SuperUser impersonation (break-glass) — UI/CLI-only)_ | Stop impersonating | `apps/frontend/src/components/layout/app-layout.tsx` |
 | `GET /v1/platform/orgs` | `platform_list_orgs` | List all orgs (member counts) | `apps/frontend/src/lib/api/superuser.ts` |
 | `POST /v1/platform/orgs` | `platform_create_org` | Create a new org | `apps/frontend/src/lib/api/superuser.ts` |
 | `GET /v1/platform/orgs/:id` | `platform_get_org` | Get org by id (member count) | `apps/frontend/src/lib/api/superuser.ts` |
 | `PATCH /v1/platform/orgs/:id` | `platform_update_org` | Update org (rename regenerates slug) | `apps/frontend/src/lib/api/superuser.ts` |
 | `DELETE /v1/platform/orgs/:id` | `platform_delete_org` | Soft-delete an org | `apps/frontend/src/lib/api/superuser.ts` |
-| `GET /v1/platform/orgs/:id/members` | — | List members of any org | `apps/frontend/src/lib/api/superuser.ts` |
-| `PATCH /v1/platform/users/:id/superuser` | — | Toggle SuperUser flag | `apps/frontend/src/lib/api/superuser.ts` |
+| `GET /v1/platform/orgs/:id/members` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | List members of any org | `apps/frontend/src/lib/api/superuser.ts` |
+| `PATCH /v1/platform/users/:id/superuser` | — _(skip: SuperUser/platform admin — UI/CLI-only)_ | Toggle SuperUser flag | `apps/frontend/src/lib/api/superuser.ts` |
 
 
 ## Bam — Launchpad
@@ -470,129 +487,147 @@ Covers `platform.routes.ts` (`/v1/platform/*`) and `superuser.routes.ts` (`/supe
 
 
 ## Bam — System settings (SuperUser)
+
+> **⚠ No MCP tools in this section — intentional.** SuperUser platform settings (SMTP, password policy, system config). UI/CLI-only; secret values are masked server-side.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /root-redirect` | — | Public: resolve site root redirect/bootstrap | nginx/site redirect |
-| `GET /system-settings` | — | List all settings (secrets masked) | `apps/frontend/src/components/settings/smtp-settings-form.tsx` |
-| `GET /system-settings/:key` | — | Read one setting (secrets masked) | `apps/frontend/src/pages/superuser/platform-calling-settings.tsx` |
+| `GET /root-redirect` | — _(skip: public unauthenticated redirect route)_ | Public: resolve site root redirect/bootstrap | nginx/site redirect |
+| `GET /system-settings` | — _(skip: SuperUser system settings — UI/CLI-only)_ | List all settings (secrets masked) | `apps/frontend/src/components/settings/smtp-settings-form.tsx` |
+| `GET /system-settings/:key` | — _(skip: SuperUser system settings — UI/CLI-only)_ | Read one setting (secrets masked) | `apps/frontend/src/pages/superuser/platform-calling-settings.tsx` |
 | `PUT /system-settings/:key` | `set_platform_launchpad_defaults`* | Update one setting (per-key validated) | `apps/frontend/src/components/settings/smtp-settings-form.tsx` |
-| `POST /system-settings/password_policy/preview` | — | Preview passwords from draft policy | `apps/frontend/src/components/superuser/password-policy-card.tsx` |
-| `POST /system-settings/smtp/test` | — | Verify/send SMTP test message | `apps/frontend/src/components/settings/smtp-settings-form.tsx` |
+| `POST /system-settings/password_policy/preview` | — _(skip: SuperUser system settings — UI/CLI-only)_ | Preview passwords from draft policy | `apps/frontend/src/components/superuser/password-policy-card.tsx` |
+| `POST /system-settings/smtp/test` | — _(skip: SuperUser system settings — UI/CLI-only)_ | Verify/send SMTP test message | `apps/frontend/src/components/settings/smtp-settings-form.tsx` |
 
 `*` `set_platform_launchpad_defaults` targets only the `launchpad_default_apps` key of `PUT /system-settings/:key`; no general-purpose system-settings tool exists. Counted as tool-less for the PUT row tally below.
 
 
 ## Bam — Deploy settings (SuperUser)
+
+> **⚠ No MCP tools in this section — intentional.** SuperUser-only deploy configuration. UI/CLI-only by design.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /superuser/deploy/settings` | — | Read deploy branch/repo/token/auto-update | `apps/frontend/src/lib/api/superuser-deploy.ts` |
-| `PUT /superuser/deploy/settings` | — | Write deploy settings (token tri-state) | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
-| `POST /superuser/deploy/verify-repo` | — | Verify repo URL+token vs GitHub API | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
+| `GET /superuser/deploy/settings` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Read deploy branch/repo/token/auto-update | `apps/frontend/src/lib/api/superuser-deploy.ts` |
+| `PUT /superuser/deploy/settings` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Write deploy settings (token tri-state) | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
+| `POST /superuser/deploy/verify-repo` | — _(skip: SuperUser deploy settings — UI/CLI-only)_ | Verify repo URL+token vs GitHub API | `apps/frontend/src/components/superuser/deploy-settings-card.tsx` |
 
 
 ## Bam — Permissions admin (SuperUser)
+
+> **⚠ No MCP tools in this section — intentional.** The permissions-matrix governance surface — groups, overrides, divergences. Intentionally UI/CLI-only: agents are gated *by* these policies, they do not edit them.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 Covers `permissions-admin.routes.ts` and `permissions-divergences.routes.ts`.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /superuser/permissions/catalog` | — | Browse permission catalog (filtered) | `apps/frontend/src/lib/api/superuser-permissions.ts` |
-| `GET /superuser/permissions/divergences` | — | Raw permission-divergence log (paginated) | `apps/frontend/src/pages/superuser/permissions-divergences.tsx` |
-| `GET /superuser/permissions/divergences/summary` | — | Divergence summary by permission/route | `apps/frontend/src/pages/superuser/permissions-divergences.tsx` |
-| `GET /superuser/permissions/groups` | — | List permission groups + counts | `apps/frontend/src/pages/superuser/permissions/groups-list.tsx` |
-| `POST /superuser/permissions/groups` | — | Create a permission group (clone) | `apps/frontend/src/pages/superuser/permissions/groups-list.tsx` |
-| `GET /superuser/permissions/groups/:id` | — | Get group + defaults + member count | `apps/frontend/src/lib/api/superuser-permissions.ts` |
-| `PATCH /superuser/permissions/groups/:id` | — | Rename/redescribe a group | `apps/frontend/src/lib/api/superuser-permissions.ts` |
-| `DELETE /superuser/permissions/groups/:id` | — | Soft-delete a group (no live members) | `apps/frontend/src/pages/superuser/permissions/groups-list.tsx` |
-| `PUT /superuser/permissions/groups/:id/defaults` | — | Set group defaults (glob set_true/false) | `apps/frontend/src/lib/api/superuser-permissions.ts` |
-| `POST /superuser/permissions/groups/:id/reset` | — | Reset group defaults to baseline | `apps/frontend/src/lib/api/superuser-permissions.ts` |
-| `GET /superuser/permissions/users/:id` | — | User memberships/overrides/effective matrix | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
-| `PUT /superuser/permissions/users/:id/membership` | — | Assign user to group at scope | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
-| `PUT /superuser/permissions/users/:id/overrides/:permission_id` | — | Set explicit user permission override | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
-| `DELETE /superuser/permissions/users/:id/overrides/:permission_id` | — | Clear a user permission override | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
-| `POST /superuser/permissions/users/:id/reattach` | — | Reattach user at scope (factory reset) | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
+| `GET /superuser/permissions/catalog` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Browse permission catalog (filtered) | `apps/frontend/src/lib/api/superuser-permissions.ts` |
+| `GET /superuser/permissions/divergences` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Raw permission-divergence log (paginated) | `apps/frontend/src/pages/superuser/permissions-divergences.tsx` |
+| `GET /superuser/permissions/divergences/summary` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Divergence summary by permission/route | `apps/frontend/src/pages/superuser/permissions-divergences.tsx` |
+| `GET /superuser/permissions/groups` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | List permission groups + counts | `apps/frontend/src/pages/superuser/permissions/groups-list.tsx` |
+| `POST /superuser/permissions/groups` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Create a permission group (clone) | `apps/frontend/src/pages/superuser/permissions/groups-list.tsx` |
+| `GET /superuser/permissions/groups/:id` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Get group + defaults + member count | `apps/frontend/src/lib/api/superuser-permissions.ts` |
+| `PATCH /superuser/permissions/groups/:id` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Rename/redescribe a group | `apps/frontend/src/lib/api/superuser-permissions.ts` |
+| `DELETE /superuser/permissions/groups/:id` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Soft-delete a group (no live members) | `apps/frontend/src/pages/superuser/permissions/groups-list.tsx` |
+| `PUT /superuser/permissions/groups/:id/defaults` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Set group defaults (glob set_true/false) | `apps/frontend/src/lib/api/superuser-permissions.ts` |
+| `POST /superuser/permissions/groups/:id/reset` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Reset group defaults to baseline | `apps/frontend/src/lib/api/superuser-permissions.ts` |
+| `GET /superuser/permissions/users/:id` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | User memberships/overrides/effective matrix | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
+| `PUT /superuser/permissions/users/:id/membership` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Assign user to group at scope | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
+| `PUT /superuser/permissions/users/:id/overrides/:permission_id` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Set explicit user permission override | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
+| `DELETE /superuser/permissions/users/:id/overrides/:permission_id` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Clear a user permission override | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
+| `POST /superuser/permissions/users/:id/reattach` | — _(skip: permissions-matrix admin — UI/CLI-only)_ | Reattach user at scope (factory reset) | `apps/frontend/src/components/superuser/user-permissions-tab.tsx` |
 
 
 ## Bam — Integrations: GitHub
+
+> **⚠ No MCP tools in this section — intentional.** Per-project GitHub credential config plus the inbound webhook receiver — UI-only credential management / public-inbound.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /projects/:id/github-integration` | — | Get project GitHub integration config | `apps/frontend/src/pages/settings.tsx` |
-| `PUT /projects/:id/github-integration` | — | Upsert GitHub integration (reveals secret) | `apps/frontend/src/pages/settings.tsx` |
-| `DELETE /projects/:id/github-integration` | — | Disconnect GitHub integration | `apps/frontend/src/pages/settings.tsx` |
-| `GET /tasks/:id/github-refs` | — | List linked commits/PRs for a task | `apps/frontend/src/pages/*task*` |
-| `POST /webhooks/github` | — | Public webhook ingest (HMAC-verified) | external (GitHub) |
+| `GET /projects/:id/github-integration` | — _(skip: GitHub integration config — UI-only)_ | Get project GitHub integration config | `apps/frontend/src/pages/settings.tsx` |
+| `PUT /projects/:id/github-integration` | — _(skip: GitHub integration config — UI-only)_ | Upsert GitHub integration (reveals secret) | `apps/frontend/src/pages/settings.tsx` |
+| `DELETE /projects/:id/github-integration` | — _(skip: GitHub integration config — UI-only)_ | Disconnect GitHub integration | `apps/frontend/src/pages/settings.tsx` |
+| `GET /tasks/:id/github-refs` | — _(skip: GitHub integration config — UI-only)_ | List linked commits/PRs for a task | `apps/frontend/src/pages/*task*` |
+| `POST /webhooks/github` | — _(skip: inbound webhook — public-inbound)_ | Public webhook ingest (HMAC-verified) | external (GitHub) |
 
 
 ## Bam — Integrations: Slack
+
+> **⚠ No MCP tools in this section — intentional.** Per-project Slack credential config plus the inbound slash-command / webhook receiver — UI-only / public-inbound.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /projects/:id/slack-integration` | — | Get project Slack integration config | `apps/frontend/src/pages/settings.tsx` |
-| `PUT /projects/:id/slack-integration` | — | Upsert Slack integration (SSRF-guarded) | `apps/frontend/src/pages/settings.tsx` |
-| `POST /projects/:id/slack-integration/test` | — | Send a Slack test message | `apps/frontend/src/pages/settings.tsx` |
-| `DELETE /projects/:id/slack-integration` | — | Disconnect Slack integration | `apps/frontend/src/pages/settings.tsx` |
-| `POST /webhooks/slack/command` | — | Public Slack slash-command handler | external (Slack) |
+| `GET /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Get project Slack integration config | `apps/frontend/src/pages/settings.tsx` |
+| `PUT /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Upsert Slack integration (SSRF-guarded) | `apps/frontend/src/pages/settings.tsx` |
+| `POST /projects/:id/slack-integration/test` | — _(skip: Slack integration config — UI-only)_ | Send a Slack test message | `apps/frontend/src/pages/settings.tsx` |
+| `DELETE /projects/:id/slack-integration` | — _(skip: Slack integration config — UI-only)_ | Disconnect Slack integration | `apps/frontend/src/pages/settings.tsx` |
+| `POST /webhooks/slack/command` | — _(skip: inbound webhook — public-inbound)_ | Public Slack slash-command handler | external (Slack) |
 
 
 ## Bam — Integrations: Webhooks
+
+> **⚠ No MCP tools in this section — intentional.** Outbound-webhook configuration (admin). UI-only.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /projects/:id/webhooks` | — | List project outbound webhooks | `apps/frontend/src/pages/settings.tsx` |
-| `POST /projects/:id/webhooks` | — | Create webhook (secret hashed, shown once) | `apps/frontend/src/pages/settings.tsx` |
-| `PATCH /webhooks/:id` | — | Update webhook url/events/secret/active | `apps/frontend/src/pages/settings.tsx` |
-| `DELETE /webhooks/:id` | — | Delete a webhook | `apps/frontend/src/pages/settings.tsx` |
+| `GET /projects/:id/webhooks` | — _(skip: outbound-webhook config — admin/UI-only)_ | List project outbound webhooks | `apps/frontend/src/pages/settings.tsx` |
+| `POST /projects/:id/webhooks` | — _(skip: outbound-webhook config — admin/UI-only)_ | Create webhook (secret hashed, shown once) | `apps/frontend/src/pages/settings.tsx` |
+| `PATCH /webhooks/:id` | — _(skip: outbound-webhook config — admin/UI-only)_ | Update webhook url/events/secret/active | `apps/frontend/src/pages/settings.tsx` |
+| `DELETE /webhooks/:id` | — _(skip: outbound-webhook config — admin/UI-only)_ | Delete a webhook | `apps/frontend/src/pages/settings.tsx` |
 
 
 ## Bam — Calendar / iCal
+
+> **⚠ No MCP tools in this section — intentional.** Token-authed binary `.ics` feeds and feed-token issuance — not an agent-consumable surface. Use the Book MCP tools for calendar data.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /me/calendar.ics` | — | My assigned tasks as .ics (token or session) | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
-| `GET /projects/:id/calendar.ics` | — | Project tasks as .ics (authed) | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
-| `GET /projects/:id/calendar-tokens` | — | List project public calendar tokens | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
-| `POST /projects/:id/calendar-tokens` | — | Mint a public calendar token | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
-| `DELETE /projects/:id/calendar-tokens/:tokenId` | — | Revoke a public calendar token | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
-| `GET /public/projects/:id/calendar.ics` | — | Public token-auth project .ics feed | external (calendar clients) |
+| `GET /me/calendar.ics` | — _(skip: binary .ics feed (token-auth) — not an agent surface)_ | My assigned tasks as .ics (token or session) | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
+| `GET /projects/:id/calendar.ics` | — _(skip: binary .ics feed (token-auth) — not an agent surface)_ | Project tasks as .ics (authed) | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
+| `GET /projects/:id/calendar-tokens` | — _(skip: iCal feed token (credential) — not an agent surface)_ | List project public calendar tokens | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
+| `POST /projects/:id/calendar-tokens` | — _(skip: iCal feed token (credential) — not an agent surface)_ | Mint a public calendar token | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
+| `DELETE /projects/:id/calendar-tokens/:tokenId` | — _(skip: iCal feed token (credential) — not an agent surface)_ | Revoke a public calendar token | `apps/frontend/src/components/views/calendar-export-menu.tsx` |
+| `GET /public/projects/:id/calendar.ics` | — _(skip: binary .ics feed (token-auth) — not an agent surface)_ | Public token-auth project .ics feed | external (calendar clients) |
 
 
 ## Bam — LLM providers
+
+> **⚠ No MCP tools in this section — intentional.** Org LLM-provider credential management — API keys and connectivity tests. UI/CLI-only secret handling.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /llm-providers` | — | List LLM providers visible to caller | `apps/frontend/src/hooks/use-llm-providers.ts` |
-| `POST /llm-providers` | — | Create scoped LLM provider (SSRF-guarded) | `apps/frontend/src/pages/settings-llm-providers.tsx` |
-| `GET /llm-providers/resolve` | — | Resolve effective provider for context | `apps/frontend/src/hooks/use-llm-providers.ts` |
-| `GET /llm-providers/:id` | — | Get LLM provider detail | `apps/frontend/src/pages/settings-llm-providers.tsx` |
-| `PATCH /llm-providers/:id` | — | Update LLM provider | `apps/frontend/src/pages/settings-llm-providers.tsx` |
-| `DELETE /llm-providers/:id` | — | Delete LLM provider | `apps/frontend/src/pages/settings-llm-providers.tsx` |
-| `POST /llm-providers/:id/test` | — | Test provider connectivity | `apps/frontend/src/pages/settings-llm-providers.tsx` |
+| `GET /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | List LLM providers visible to caller | `apps/frontend/src/hooks/use-llm-providers.ts` |
+| `POST /llm-providers` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Create scoped LLM provider (SSRF-guarded) | `apps/frontend/src/pages/settings-llm-providers.tsx` |
+| `GET /llm-providers/resolve` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Resolve effective provider for context | `apps/frontend/src/hooks/use-llm-providers.ts` |
+| `GET /llm-providers/:id` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Get LLM provider detail | `apps/frontend/src/pages/settings-llm-providers.tsx` |
+| `PATCH /llm-providers/:id` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Update LLM provider | `apps/frontend/src/pages/settings-llm-providers.tsx` |
+| `DELETE /llm-providers/:id` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Delete LLM provider | `apps/frontend/src/pages/settings-llm-providers.tsx` |
+| `POST /llm-providers/:id/test` | — _(skip: LLM provider credentials admin — UI/CLI-only)_ | Test provider connectivity | `apps/frontend/src/pages/settings-llm-providers.tsx` |
 
 
 ## Bam — API keys & Service accounts
+
+> **⚠ No MCP tools in this section — intentional.** Raw API-key / service-account secret issuance, rotation, and revocation — credential material. CLI/UI-only by design.
 - **Service:** `apps/api` · external `/b3/api/` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /auth/api-keys` | — | List own API keys (prefix hint) | `apps/frontend/src/pages/settings.tsx` |
-| `POST /auth/api-keys` | — | Create an API key (shown once) | `apps/frontend/src/pages/settings.tsx` |
-| `POST /auth/api-keys/:id/rotate` | — | Rotate an API key (7-day grace) | `apps/frontend/src/pages/settings.tsx` |
-| `DELETE /auth/api-keys/:id` | — | Revoke own API key | `apps/frontend/src/pages/settings.tsx` |
-| `GET /auth/service-accounts` | — | List caller-visible service accounts | `apps/frontend/src/pages/settings.tsx` |
-| `POST /auth/service-accounts` | — | Mint service account + key (shown once) | `apps/frontend/src/pages/settings.tsx` |
-| `POST /auth/service-accounts/:id/rotate` | — | Rotate a service-account key | `apps/frontend/src/pages/settings.tsx` |
-| `DELETE /auth/service-accounts/:id` | — | Soft-disable a service account | `apps/frontend/src/pages/settings.tsx` |
+| `GET /auth/api-keys` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | List own API keys (prefix hint) | `apps/frontend/src/pages/settings.tsx` |
+| `POST /auth/api-keys` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | Create an API key (shown once) | `apps/frontend/src/pages/settings.tsx` |
+| `POST /auth/api-keys/:id/rotate` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | Rotate an API key (7-day grace) | `apps/frontend/src/pages/settings.tsx` |
+| `DELETE /auth/api-keys/:id` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | Revoke own API key | `apps/frontend/src/pages/settings.tsx` |
+| `GET /auth/service-accounts` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | List caller-visible service accounts | `apps/frontend/src/pages/settings.tsx` |
+| `POST /auth/service-accounts` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | Mint service account + key (shown once) | `apps/frontend/src/pages/settings.tsx` |
+| `POST /auth/service-accounts/:id/rotate` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | Rotate a service-account key | `apps/frontend/src/pages/settings.tsx` |
+| `DELETE /auth/service-accounts/:id` | — _(skip: raw credential/API-key secrets — CLI/UI-only)_ | Soft-disable a service account | `apps/frontend/src/pages/settings.tsx` |
 
 
 > The `/v1/agents/*` identity & heartbeat endpoints and their `agent_*` MCP tools are documented under **Cross-app → Agent identity, audit & heartbeat** below.
@@ -609,7 +644,7 @@ External URL = `/banter/api/` + the path column. WebSocket realtime at `/banter/
 | --- | --- | --- | --- |
 | `GET /v1/channels` | `banter_list_channels` | List caller's channels with unread counts | `apps/banter/src/hooks/use-channels.ts` |
 | `POST /v1/channels` | `banter_create_channel` | Create a channel | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
-| `POST /v1/channels/bulk` | — | Bulk-create up to 50 channels | `apps/banter/src/components/sidebar/bulk-create-channels-dialog.tsx` |
+| `POST /v1/channels/bulk` | — _(skip: bulk-admin write — deferred)_ | Bulk-create up to 50 channels | `apps/banter/src/components/sidebar/bulk-create-channels-dialog.tsx` |
 | `GET /v1/channels/browse` | `banter_browse_channels` | List public channels (incl. unjoined) | `apps/banter/src/pages/channel-browser.tsx` |
 | `GET /v1/channels/by-name/:name` | `banter_get_channel_by_name` | Resolve channel by name/slug/handle | — |
 | `GET /v1/channels/:id` | `banter_get_channel` | Channel detail (UUID or slug) | `apps/banter/src/hooks/use-channels.ts` |
@@ -622,12 +657,12 @@ External URL = `/banter/api/` + the path column. WebSocket realtime at `/banter/
 | `DELETE /v1/channels/:id/members/:userId` | `banter_remove_channel_member` | Remove a member | `apps/banter/src/components/channels/channel-settings.tsx` |
 | `PATCH /v1/channels/:id/members/:userId` | — _(skip: member-role admin — not wrapped)_ | Update member role | `apps/banter/src/hooks/use-channels.ts` |
 | `POST /v1/channels/:id/mark-read` | `banter_mark_read` | Update last-read cursor | `apps/banter/src/hooks/use-unread.ts` |
-| `GET /v1/admin/channel-groups` | — | List sidebar channel groups | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
-| `POST /v1/admin/channel-groups` | — | Create a channel group | `apps/banter/src/pages/admin.tsx` |
-| `GET /v1/admin/channel-groups/:id` | — | Get a channel group | `apps/banter/src/pages/admin.tsx` |
-| `PATCH /v1/admin/channel-groups/:id` | — | Update a channel group | `apps/banter/src/pages/admin.tsx` |
-| `DELETE /v1/admin/channel-groups/:id` | — | Delete a channel group | `apps/banter/src/pages/admin.tsx` |
-| `POST /v1/admin/channel-groups/reorder` | — | Reorder channel groups | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
+| `GET /v1/admin/channel-groups` | — _(skip: org-admin sidebar config — UI-only)_ | List sidebar channel groups | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
+| `POST /v1/admin/channel-groups` | — _(skip: org-admin sidebar config — UI-only)_ | Create a channel group | `apps/banter/src/pages/admin.tsx` |
+| `GET /v1/admin/channel-groups/:id` | — _(skip: org-admin sidebar config — UI-only)_ | Get a channel group | `apps/banter/src/pages/admin.tsx` |
+| `PATCH /v1/admin/channel-groups/:id` | — _(skip: org-admin sidebar config — UI-only)_ | Update a channel group | `apps/banter/src/pages/admin.tsx` |
+| `DELETE /v1/admin/channel-groups/:id` | — _(skip: org-admin sidebar config — UI-only)_ | Delete a channel group | `apps/banter/src/pages/admin.tsx` |
+| `POST /v1/admin/channel-groups/reorder` | — _(skip: org-admin sidebar config — UI-only)_ | Reorder channel groups | `apps/banter/src/components/sidebar/banter-sidebar.tsx` |
 
 
 ### Messages, threads, reactions, pins
@@ -672,14 +707,14 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `GET /v1/calls/:id` | `banter_get_call`, `banter_get_active_huddle` | Call detail w/ participants | `apps/banter/src/pages/call-playback.tsx` |
 | `GET /v1/calls/:id/participants` | `banter_list_call_participants` | List call participants | `apps/banter/src/pages/call-playback.tsx` |
 | `GET /v1/calls/:id/transcript` | `banter_get_transcript` | Historical transcript segments | `apps/banter/src/pages/call-playback.tsx` |
-| `PATCH /v1/calls/:id` | — | Gone (410); was recording toggles | — |
+| `PATCH /v1/calls/:id` | — _(skip: live-call control; calling moved to Bureau)_ | Gone (410); was recording toggles | — |
 | `POST /v1/calls/:id/join` | `banter_join_call` | Gone (410); was join call | — |
 | `POST /v1/calls/:id/leave` | `banter_leave_call` | Gone (410); was leave call | — |
 | `POST /v1/calls/:id/end` | `banter_end_call` | Gone (410); was end call | — |
 | `POST /v1/calls/:id/invite-agent` | `banter_invite_agent_to_call` | Gone (410); was voice-agent invite | — |
-| `POST /v1/calls/:id/remove-agent` | — | Gone (410); was voice-agent removal | — |
-| `PATCH /v1/calls/:id/media-state` | — | Gone (410); was mute/cam/screenshare | — |
-| `POST /v1/webhooks/livekit` | — | LiveKit room-event webhook (HMAC) | — *(LiveKit SFU)* |
+| `POST /v1/calls/:id/remove-agent` | — _(skip: live-call control; calling moved to Bureau)_ | Gone (410); was voice-agent removal | — |
+| `PATCH /v1/calls/:id/media-state` | — _(skip: live-call control; calling moved to Bureau)_ | Gone (410); was mute/cam/screenshare | — |
+| `POST /v1/webhooks/livekit` | — _(skip: inbound LiveKit webhook (HMAC) — internal)_ | LiveKit room-event webhook (HMAC) | — *(LiveKit SFU)* |
 
 
 ### Users & user groups
@@ -736,19 +771,19 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `GET /v1/agent-subscriptions` | `banter_list_subscriptions` | List caller's pattern subscriptions | — |
 | `DELETE /v1/agent-subscriptions/:sid` | `banter_unsubscribe_pattern` | Disable a subscription | — |
 | `POST /v1/channels/:id/agent-subscriptions` | `banter_subscribe_pattern` | Create a pattern subscription | — |
-| `GET /v1/channels/:id/agent-subscriptions` | — | Channel-scoped "who's listening" (admin) | — |
+| `GET /v1/channels/:id/agent-subscriptions` | `banter_list_subscriptions` | Channel-scoped "who's listening" (admin) | — |
 
 
 ### Admin settings & files
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /v1/admin/settings` | — | Get org Banter settings (masked) | `apps/banter/src/pages/admin.tsx` |
-| `PATCH /v1/admin/settings` | — | Update org Banter settings | `apps/banter/src/pages/admin.tsx` |
-| `POST /v1/admin/settings/test-livekit` | — | Test LiveKit credentials | `apps/banter/src/pages/admin-calling-settings.tsx` |
-| `POST /v1/admin/settings/test-stt` | — | Test STT provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
-| `POST /v1/admin/settings/test-tts` | — | Test TTS provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
-| `POST /v1/admin/settings/push-voice-config` | — | Push voice config to voice agent | `apps/banter/src/pages/admin-calling-settings.tsx` |
+| `GET /v1/admin/settings` | — _(skip: org/provider-credential admin — UI-only)_ | Get org Banter settings (masked) | `apps/banter/src/pages/admin.tsx` |
+| `PATCH /v1/admin/settings` | — _(skip: org/provider-credential admin — UI-only)_ | Update org Banter settings | `apps/banter/src/pages/admin.tsx` |
+| `POST /v1/admin/settings/test-livekit` | — _(skip: org/provider-credential admin — UI-only)_ | Test LiveKit credentials | `apps/banter/src/pages/admin-calling-settings.tsx` |
+| `POST /v1/admin/settings/test-stt` | — _(skip: org/provider-credential admin — UI-only)_ | Test STT provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
+| `POST /v1/admin/settings/test-tts` | — _(skip: org/provider-credential admin — UI-only)_ | Test TTS provider connectivity | `apps/banter/src/pages/admin-calling-settings.tsx` |
+| `POST /v1/admin/settings/push-voice-config` | — _(skip: org/provider-credential admin — UI-only)_ | Push voice config to voice agent | `apps/banter/src/pages/admin-calling-settings.tsx` |
 | `POST /v1/files/upload` | — _(skip: multipart binary upload)_ | Multipart upload to MinIO | `apps/banter/src/components/messages/message-compose.tsx` |
 | `POST /v1/files/presigned-upload` | — _(skip: binary upload presign)_ | Generate a presigned PUT URL | `apps/banter/src/components/messages/message-compose.tsx` |
 
@@ -757,12 +792,12 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `POST /v1/admin/import/slack/upload` | — | Upload .zip, fast-scan preview | `apps/api` (Bam settings wizard via proxy) |
-| `GET /v1/admin/import/slack/` | — | List recent imports for the org | `apps/api` (Bam settings wizard via proxy) |
-| `GET /v1/admin/import/slack/:id/preview` | — | Full users/channels for the wizard | `apps/api` (Bam settings wizard via proxy) |
-| `POST /v1/admin/import/slack/:id/start` | — | Persist mapping, enqueue worker job | `apps/api` (Bam settings wizard via proxy) |
-| `GET /v1/admin/import/slack/:id/status` | — | Poll the durable import row | `apps/api` (Bam settings wizard via proxy) |
-| `DELETE /v1/admin/import/slack/:id` | — | Abort + cleanup | `apps/api` (Bam settings wizard via proxy) |
+| `POST /v1/admin/import/slack/upload` | — _(skip: Slack-import wizard (admin) — UI-only)_ | Upload .zip, fast-scan preview | `apps/api` (Bam settings wizard via proxy) |
+| `GET /v1/admin/import/slack/` | — _(skip: Slack-import wizard (admin) — UI-only)_ | List recent imports for the org | `apps/api` (Bam settings wizard via proxy) |
+| `GET /v1/admin/import/slack/:id/preview` | — _(skip: Slack-import wizard (admin) — UI-only)_ | Full users/channels for the wizard | `apps/api` (Bam settings wizard via proxy) |
+| `POST /v1/admin/import/slack/:id/start` | — _(skip: Slack-import wizard (admin) — UI-only)_ | Persist mapping, enqueue worker job | `apps/api` (Bam settings wizard via proxy) |
+| `GET /v1/admin/import/slack/:id/status` | — _(skip: Slack-import wizard (admin) — UI-only)_ | Poll the durable import row | `apps/api` (Bam settings wizard via proxy) |
+| `DELETE /v1/admin/import/slack/:id` | — _(skip: Slack-import wizard (admin) — UI-only)_ | Abort + cleanup | `apps/api` (Bam settings wizard via proxy) |
 
 
 ### Internal (service-to-service)
@@ -771,11 +806,11 @@ X-Internal-Secret gated; not user-facing, no MCP tools.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `POST /v1/internal/dm` | — | Send a DM between two users (bureau) | — *(internal)* |
-| `POST /v1/internal/feed` | — | Post an activity-feed message | — *(internal)* |
-| `POST /v1/internal/share` | — | Share a Bam entity into a channel | — *(internal)* |
-| `POST /v1/internal/transcript` | — | Receive one live transcript segment | — *(voice-agent)* |
-| `POST /v1/internal/transcription-callback` | — | Batch offline transcription callback | — *(voice-agent)* |
+| `POST /v1/internal/dm` | — _(skip: internal service-to-service route)_ | Send a DM between two users (bureau) | — *(internal)* |
+| `POST /v1/internal/feed` | — _(skip: internal service-to-service route)_ | Post an activity-feed message | — *(internal)* |
+| `POST /v1/internal/share` | — _(skip: internal service-to-service route)_ | Share a Bam entity into a channel | — *(internal)* |
+| `POST /v1/internal/transcript` | — _(skip: internal service-to-service route)_ | Receive one live transcript segment | — *(voice-agent)* |
+| `POST /v1/internal/transcription-callback` | — _(skip: internal service-to-service route)_ | Batch offline transcription callback | — *(voice-agent)* |
 
 
 ## Beacon (app)
@@ -907,7 +942,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `POST /folders` | `brief_folder_create` | Create a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `PATCH /folders/:id` | `brief_folder_update` | Update a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `DELETE /folders/:id` | `brief_folder_delete` | Delete a folder | `apps/brief/src/hooks/use-folders.ts` |
-| `POST /internal/can-read` | — | Cross-app read preflight (Bureau summon) | — *(internal service-to-service)* |
+| `POST /internal/can-read` | — _(skip: internal service-to-service route)_ | Cross-app read preflight (Bureau summon) | — *(internal service-to-service)* |
 
 
 ## Bond (app)
@@ -916,7 +951,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /activities` | — | List CRM activities (filterable) | `apps/bond/src/hooks/use-activities.ts` |
+| `GET /activities` | `bond_list_activities` | List CRM activities (filterable) | `apps/bond/src/hooks/use-activities.ts` |
 | `POST /activities` | `bond_log_activity` | Log activity against contact/deal/company | `apps/bond/src/hooks/use-activities.ts` |
 | `GET /activities/:id` | `bond_get_activity` | Get activity detail | — |
 | `PATCH /activities/:id` | `bond_update_activity` | Update an activity | — |
@@ -1137,11 +1172,11 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `GET /analytics/engagement-trend` | `blast_get_engagement_trend` | Org engagement trend over time | `apps/blast/src/hooks/use-analytics.ts` |
 | `GET /analytics/overview` | `blast_get_engagement_summary` | Org-level engagement metrics | `apps/blast/src/hooks/use-analytics.ts` |
 | `GET /analytics/unsubscribe-check` | `blast_check_unsubscribed` | Check email unsubscribe status | — |
-| `GET /campaigns` | — | List campaigns | `apps/blast/src/hooks/use-campaigns.ts` |
+| `GET /campaigns` | `blast_list_campaigns` | List campaigns | `apps/blast/src/hooks/use-campaigns.ts` |
 | `POST /campaigns` | `blast_draft_campaign` | Create draft campaign | `apps/blast/src/hooks/use-campaigns.ts` |
 | `GET /campaigns/:id` | `blast_get_campaign` | Campaign detail + stats | `apps/blast/src/hooks/use-campaigns.ts` |
 | `PATCH /campaigns/:id` | `blast_update_campaign` | Update campaign | `apps/blast/src/hooks/use-campaigns.ts` |
-| `DELETE /campaigns/:id` | — | Delete campaign | `apps/blast/src/hooks/use-campaigns.ts` |
+| `DELETE /campaigns/:id` | — _(skip: destructive delete — deferred (conservative))_ | Delete campaign | `apps/blast/src/hooks/use-campaigns.ts` |
 | `GET /campaigns/:id/analytics` | `blast_get_campaign_analytics` | Engagement metrics for campaign | `apps/blast/src/hooks/use-campaigns.ts` |
 | `GET /campaigns/:id/analytics/devices` | `blast_get_campaign_device_analytics` | Device-breakdown analytics | — |
 | `POST /campaigns/:id/cancel` | `blast_cancel_campaign` | Cancel a campaign | — |
@@ -1153,19 +1188,19 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `POST /segments` | `blast_create_segment` | Create a segment | `apps/blast/src/hooks/use-segments.ts` |
 | `GET /segments/:id` | `blast_get_segment` | Get a segment | `apps/blast/src/hooks/use-segments.ts` |
 | `PATCH /segments/:id` | `blast_update_segment` | Update a segment | `apps/blast/src/hooks/use-segments.ts` |
-| `DELETE /segments/:id` | — | Delete a segment | `apps/blast/src/hooks/use-segments.ts` |
+| `DELETE /segments/:id` | — _(skip: destructive delete — deferred (conservative))_ | Delete a segment | `apps/blast/src/hooks/use-segments.ts` |
 | `POST /segments/:id/count` | `blast_recalculate_segment_count` | Recalculate recipient count | `apps/blast/src/hooks/use-segments.ts` |
 | `GET /segments/:id/preview` | `blast_preview_segment` | Preview matching contacts | — |
 | `POST /segments/:id/evaluate` | `blast_evaluate_segment` | Full recipient evaluation for send | — |
-| `GET /sender-domains` | — | List sender domains | `apps/blast/src/pages/domain-settings.tsx` |
-| `POST /sender-domains` | — | Add sender domain | `apps/blast/src/pages/domain-settings.tsx` |
-| `POST /sender-domains/:id/verify` | — | Verify sender domain | `apps/blast/src/pages/domain-settings.tsx` |
-| `DELETE /sender-domains/:id` | — | Remove sender domain | `apps/blast/src/pages/domain-settings.tsx` |
+| `GET /sender-domains` | — _(skip: sender-domain DKIM/credential config — admin)_ | List sender domains | `apps/blast/src/pages/domain-settings.tsx` |
+| `POST /sender-domains` | — _(skip: sender-domain DKIM/credential config — admin)_ | Add sender domain | `apps/blast/src/pages/domain-settings.tsx` |
+| `POST /sender-domains/:id/verify` | — _(skip: sender-domain DKIM/credential config — admin)_ | Verify sender domain | `apps/blast/src/pages/domain-settings.tsx` |
+| `DELETE /sender-domains/:id` | — _(skip: sender-domain DKIM/credential config — admin)_ | Remove sender domain | `apps/blast/src/pages/domain-settings.tsx` |
 | `GET /templates` | `blast_list_templates` | List email templates | `apps/blast/src/hooks/use-templates.ts` |
 | `POST /templates` | `blast_create_template` | Create email template | `apps/blast/src/hooks/use-templates.ts` |
 | `GET /templates/:id` | `blast_get_template` | Get template content | `apps/blast/src/hooks/use-templates.ts` |
 | `PATCH /templates/:id` | `blast_update_template` | Update template | `apps/blast/src/hooks/use-templates.ts` |
-| `DELETE /templates/:id` | — | Delete template | `apps/blast/src/hooks/use-templates.ts` |
+| `DELETE /templates/:id` | — _(skip: destructive delete — deferred (conservative))_ | Delete template | `apps/blast/src/hooks/use-templates.ts` |
 | `POST /templates/:id/duplicate` | `blast_duplicate_template` | Duplicate template | `apps/blast/src/hooks/use-templates.ts` |
 | `POST /templates/:id/preview` | `blast_preview_template` | Render template with merge data | — |
 | `GET /t/o/:token` | — *(public tracking)* | Open-tracking pixel | email client |
@@ -1472,32 +1507,32 @@ the upstream registers, so external path = `/helpdesk/api/` + the part after `/h
 | `PATCH /helpdesk/api/agents/tickets/:id` | — _(skip: agent routes require X-Agent-Key, not Bearer — deferred)_ | Agent: update status/priority/category | — |
 | `GET /helpdesk/api/agents/tickets/by-number/:number` | `helpdesk_get_ticket_by_number` | Resolve ticket by human number | — |
 | `GET /helpdesk/api/agents/tickets/search` | `helpdesk_search_tickets` | Fuzzy ticket search (agent, org-scoped) | — |
-| `GET /helpdesk/api/admin/projects` | — | List org projects for default picker | `apps/helpdesk/src/pages/org-picker.tsx` |
-| `GET /helpdesk/api/events` | — | Replay event log across own tickets | `apps/helpdesk/src/hooks/use-tickets.ts` |
+| `GET /helpdesk/api/admin/projects` | — _(skip: admin project resolver (used internally))_ | List org projects for default picker | `apps/helpdesk/src/pages/org-picker.tsx` |
+| `GET /helpdesk/api/events` | — _(skip: SSE event stream — not an agent surface)_ | Replay event log across own tickets | `apps/helpdesk/src/hooks/use-tickets.ts` |
 | `GET /helpdesk/api/public-settings` | `helpdesk_get_public_settings` | Public helpdesk settings (no auth) | `apps/helpdesk/src/pages/register.tsx` |
-| `GET /helpdesk/api/public/orgs` | — | Public org-picker list | `apps/helpdesk/src/pages/org-picker.tsx` |
-| `GET /helpdesk/api/public/orgs/:slug` | — | Public org/portal discovery | `apps/helpdesk/src/stores/tenant.store.ts` |
+| `GET /helpdesk/api/public/orgs` | — _(skip: public portal discovery (resolver))_ | Public org-picker list | `apps/helpdesk/src/pages/org-picker.tsx` |
+| `GET /helpdesk/api/public/orgs/:slug` | — _(skip: public portal discovery (resolver))_ | Public org/portal discovery | `apps/helpdesk/src/stores/tenant.store.ts` |
 | `GET /helpdesk/api/settings` | `helpdesk_get_settings` · `helpdesk_set_default_project` | Full settings (admin) | `apps/helpdesk/src/app.tsx` |
 | `PATCH /helpdesk/api/settings` | `helpdesk_update_settings` · `helpdesk_set_default_project` | Update settings (admin) | `apps/helpdesk/src/app.tsx` |
 | `GET /helpdesk/api/tickets` | `list_tickets` | List caller's own tickets | `apps/helpdesk/src/hooks/use-tickets.ts` |
-| `POST /helpdesk/api/tickets` | — | Create a ticket (customer) | `apps/helpdesk/src/pages/new-ticket.tsx` |
+| `POST /helpdesk/api/tickets` | — _(skip: public/customer ticket intake — customer JWT)_ | Create a ticket (customer) | `apps/helpdesk/src/pages/new-ticket.tsx` |
 | `GET /helpdesk/api/tickets/search` | `helpdesk_search_tickets` *(agent route)* | Customer FTS over own tickets | `apps/helpdesk/src/pages/tickets-list.tsx` |
 | `GET /helpdesk/api/tickets/:id` | `get_ticket` | Ticket detail + messages | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `GET /helpdesk/api/tickets/by-number/:number` *(agent)* | `helpdesk_get_ticket_by_number` | Resolve by number — tool uses agent route | — |
-| `GET /helpdesk/api/tickets/:id/activity` | — | Ticket audit trail | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `GET /helpdesk/api/tickets/:id/attachments` | — | List ticket attachments | `apps/helpdesk/src/hooks/use-attachments.ts` |
-| `POST /helpdesk/api/tickets/:id/attachments` | — | Upload a ticket attachment | `apps/helpdesk/src/hooks/use-attachments.ts` |
-| `DELETE /helpdesk/api/tickets/:id/attachments/:attachmentId` | — | Delete a ticket attachment | `apps/helpdesk/src/hooks/use-attachments.ts` |
-| `GET /helpdesk/api/tickets/:id/events` | — | Per-ticket event-log replay | `apps/helpdesk/src/hooks/use-tickets.ts` |
-| `GET /helpdesk/api/tickets/:id/messages` | — | Paginated message history | `apps/helpdesk/src/hooks/use-ticket-messages.ts` |
+| `GET /helpdesk/api/tickets/:id/activity` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Ticket audit trail | `apps/helpdesk/src/pages/ticket-detail.tsx` |
+| `GET /helpdesk/api/tickets/:id/attachments` | — _(skip: multipart attachment upload/download)_ | List ticket attachments | `apps/helpdesk/src/hooks/use-attachments.ts` |
+| `POST /helpdesk/api/tickets/:id/attachments` | — _(skip: multipart attachment upload/download)_ | Upload a ticket attachment | `apps/helpdesk/src/hooks/use-attachments.ts` |
+| `DELETE /helpdesk/api/tickets/:id/attachments/:attachmentId` | — _(skip: multipart attachment upload/download)_ | Delete a ticket attachment | `apps/helpdesk/src/hooks/use-attachments.ts` |
+| `GET /helpdesk/api/tickets/:id/events` | — _(skip: SSE event stream — not an agent surface)_ | Per-ticket event-log replay | `apps/helpdesk/src/hooks/use-tickets.ts` |
+| `GET /helpdesk/api/tickets/:id/messages` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Paginated message history | `apps/helpdesk/src/hooks/use-ticket-messages.ts` |
 | `POST /helpdesk/api/tickets/:id/messages` | `reply_to_ticket` | Post a message (customer/agent) | `apps/helpdesk/src/pages/ticket-detail.tsx` |
 | `PATCH /helpdesk/api/tickets/:id` *(agent route)* | `update_ticket_status` | Update ticket status (tool → agent route) | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/tickets/:id/close` | — | Customer closes own ticket | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/tickets/:id/reopen` | — | Customer reopens a ticket | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/tickets/:id/update-priority` | — | Customer changes priority | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/tickets/:id/mark-duplicate` | — | Customer flags duplicate | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `DELETE /helpdesk/api/tickets/:id/mark-duplicate` | — | Customer clears duplicate flag | `apps/helpdesk/src/pages/ticket-detail.tsx` |
-| `POST /helpdesk/api/upload` | — | Generic multipart file upload | `apps/helpdesk/src/pages/new-ticket.tsx` |
+| `POST /helpdesk/api/tickets/:id/close` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer closes own ticket | `apps/helpdesk/src/pages/ticket-detail.tsx` |
+| `POST /helpdesk/api/tickets/:id/reopen` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer reopens a ticket | `apps/helpdesk/src/pages/ticket-detail.tsx` |
+| `POST /helpdesk/api/tickets/:id/update-priority` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer changes priority | `apps/helpdesk/src/pages/ticket-detail.tsx` |
+| `POST /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer flags duplicate | `apps/helpdesk/src/pages/ticket-detail.tsx` |
+| `DELETE /helpdesk/api/tickets/:id/mark-duplicate` | — _(skip: customer-portal route — customer JWT, not Bearer)_ | Customer clears duplicate flag | `apps/helpdesk/src/pages/ticket-detail.tsx` |
+| `POST /helpdesk/api/upload` | — _(skip: multipart attachment upload/download)_ | Generic multipart file upload | `apps/helpdesk/src/pages/new-ticket.tsx` |
 | `GET /helpdesk/api/v1/tickets/analytics/count-by-phrase` | `helpdesk_ticket_count_by_phrase` | Ticket counts bucketed by phrase | — |
 | `POST /helpdesk/api/v1/helpdesk-users/upsert` | `helpdesk_upsert_user` | Idempotent helpdesk-user upsert | — |
 
@@ -1524,7 +1559,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
-| `POST /v1/approvals` | — | Deprecated fire-and-forget `approval.requested` emitter | — |
+| `POST /v1/approvals` | — _(skip: deprecated — use proposal_create / proposal_list)_ | Deprecated fire-and-forget `approval.requested` emitter | — |
 | `GET /v1/proposals` | `proposal_list` | List proposals visible to caller | — |
 | `POST /v1/proposals` | `proposal_create` | Create a durable, decidable proposal | — |
 | `POST /v1/proposals/:id/decide` | `proposal_decide` | Approve / reject / request_revision a proposal | — |
@@ -1593,7 +1628,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 | `GET /v1/agent-policies` | `agent_policy_list` | List agent policy rows in caller's org | `apps/frontend/src/pages/superuser/agents-list.tsx` |
 | `GET /v1/agent-policies/:agent_user_id` | `agent_policy_get` | Get one agent's kill-switch + allowlist policy | — |
 | `POST /v1/agent-policies/:agent_user_id` | `agent_policy_set` | Upsert an agent policy (enabled, allowed_tools, etc.) | `apps/frontend/src/pages/superuser/agents-list.tsx` |
-| `POST /v1/agent-policies/:agent_user_id/check` | — | Internal tool-name allow/deny check (register-tool wrapper) | — |
+| `POST /v1/agent-policies/:agent_user_id/check` | — _(skip: internal policy-check (register-tool wrapper))_ | Internal tool-name allow/deny check (register-tool wrapper) | — |
 | `GET /v1/agent-webhook-deliveries` | `agent_webhook_deliveries_list` | List recent outbound webhook deliveries | — |
 | `POST /v1/agent-webhook-deliveries/:delivery_id/redeliver` | `agent_webhook_redeliver` | Re-enqueue a webhook delivery | — |
 | `POST /v1/agent-runners/:runner_user_id/webhook` | `agent_webhook_configure` | Configure a runner's outbound webhook + secret | — |
@@ -1618,17 +1653,19 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 
 ## Cross-app — Internal service-to-service endpoints
 
+> **⚠ No MCP tools in this section — intentional.** Almost all are `/internal/*` routes authenticated by a shared service secret and called server-to-server (worker, bolt-api, helpdesk). Not exposed through nginx; not an agent surface.
+
 - **Surface:** cross-app · API `apps/api` · MCP module(s): none
 
 | REST endpoint | MCP tool | Description | UI call site |
 |---|---|---|---|
-| `POST /internal/helpdesk/comments` | — | Internal: post a Bam comment from a helpdesk ticket | — |
-| `GET /internal/helpdesk/queue` | — | Session-auth proxy to helpdesk ticket queue | `apps/frontend/src/pages/helpdesk-agent-queue.tsx` |
-| `POST /internal/helpdesk/tasks` | — | Internal: create a Bam task from a helpdesk ticket | — |
-| `POST /internal/helpdesk/tasks/:id/move-to-terminal-phase` | — | Internal: close ticket's task into terminal phase | — |
-| `POST /internal/helpdesk/tasks/:id/reopen` | — | Internal: reopen ticket's task to first non-terminal phase | — |
-| `POST /internal/llm/chat` | — | Internal: proxy chat completion through stored provider keys | — |
-| `POST /internal/permissions/dual-read` | — | Internal: MCP permission dual-read + divergence telemetry | — |
+| `POST /internal/helpdesk/comments` | — _(skip: internal service-to-service route)_ | Internal: post a Bam comment from a helpdesk ticket | — |
+| `GET /internal/helpdesk/queue` | — _(skip: internal service-to-service route)_ | Session-auth proxy to helpdesk ticket queue | `apps/frontend/src/pages/helpdesk-agent-queue.tsx` |
+| `POST /internal/helpdesk/tasks` | — _(skip: internal service-to-service route)_ | Internal: create a Bam task from a helpdesk ticket | — |
+| `POST /internal/helpdesk/tasks/:id/move-to-terminal-phase` | — _(skip: internal service-to-service route)_ | Internal: close ticket's task into terminal phase | — |
+| `POST /internal/helpdesk/tasks/:id/reopen` | — _(skip: internal service-to-service route)_ | Internal: reopen ticket's task to first non-terminal phase | — |
+| `POST /internal/llm/chat` | — _(skip: internal service-to-service route)_ | Internal: proxy chat completion through stored provider keys | — |
+| `POST /internal/permissions/dual-read` | — _(skip: internal service-to-service route)_ | Internal: MCP permission dual-read + divergence telemetry | — |
 | `GET /public/config` | `get_public_config` | Public runtime flags (signup/bootstrap) | `apps/frontend/src` (usePublicConfig) |
 | `POST /public/beta-signup` | `submit_beta_signup` | Public beta "notify me" form submission | — |
 
