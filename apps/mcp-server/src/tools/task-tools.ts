@@ -177,6 +177,13 @@ function err(label: string, data: unknown) {
   };
 }
 
+// Minimal project shape referenced by get_board. project-tools owns the
+// canonical projectShape; we keep a passthrough placeholder here so the
+// board return type stays self-contained without a cross-module import.
+const projectShapeRef = z
+  .object({ id: z.string().uuid(), name: z.string() })
+  .passthrough();
+
 const taskShape = z.object({
   id: z.string().uuid(),
   human_id: z.string(),
@@ -906,6 +913,90 @@ export function registerTaskTools(server: McpServer, api: ApiClient): void {
     handler: async ({ task_id }) => {
       const result = await api.get(`/tasks/${task_id}/subtasks`);
       if (!result.ok) return err('listing task subtasks', result.data);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  // ─── Board state (phases + tasks + active/selected sprint) ──────────────
+  registerTool(server, {
+    name: 'get_board',
+    description:
+      "Get the full Kanban board for a project: the project record, every phase (board column) with its tasks, and the active sprint (or a specific sprint when sprint_id is supplied). This is the one-shot read an agent uses to understand the current shape of a board before reasoning about moves.",
+    input: {
+      project_id: z.string().uuid().describe('The project UUID'),
+      sprint_id: z
+        .string()
+        .uuid()
+        .optional()
+        .describe('Optional sprint UUID to scope the board to; defaults to the active sprint'),
+    },
+    returns: z
+      .object({
+        data: z
+          .object({
+            project: projectShapeRef,
+            phases: z.array(z.record(z.unknown())),
+            sprint: z.record(z.unknown()).nullable(),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+    handler: async ({ project_id, sprint_id }) => {
+      const qs = sprint_id ? `?sprint_id=${encodeURIComponent(sprint_id)}` : '';
+      const result = await api.get(`/projects/${project_id}/board${qs}`);
+      if (!result.ok) return err('getting board', result.data);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  // ─── Time-entry reads ───────────────────────────────────────────────────
+  const timeEntryShape = z
+    .object({
+      id: z.string().uuid(),
+      task_id: z.string().uuid(),
+      user_id: z.string().uuid(),
+      minutes: z.number(),
+      date: z.string(),
+      description: z.string().nullable().optional(),
+      created_at: z.string().optional(),
+    })
+    .passthrough();
+
+  registerTool(server, {
+    name: 'list_task_time_entries',
+    description: "List all logged time entries for a task, ordered by date ascending. Pairs with log_time (the writer).",
+    input: {
+      task_id: z.string().uuid().describe('The task UUID'),
+    },
+    returns: z.object({ data: z.array(timeEntryShape) }),
+    handler: async ({ task_id }) => {
+      const result = await api.get(`/tasks/${task_id}/time-entries`);
+      if (!result.ok) return err('listing task time entries', result.data);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'get_my_time_entries',
+    description: "List the calling user's own time entries across all tasks, optionally filtered to a [start_date, end_date] inclusive range. Useful for self-reporting and timesheet rollups.",
+    input: {
+      start_date: z.string().optional().describe('Inclusive lower bound (ISO date, YYYY-MM-DD)'),
+      end_date: z.string().optional().describe('Inclusive upper bound (ISO date, YYYY-MM-DD)'),
+    },
+    returns: z.object({ data: z.array(timeEntryShape) }),
+    handler: async ({ start_date, end_date }) => {
+      const params = new URLSearchParams();
+      if (start_date) params.set('start_date', start_date);
+      if (end_date) params.set('end_date', end_date);
+      const qs = params.toString();
+      const result = await api.get(`/me/time-entries${qs ? `?${qs}` : ''}`);
+      if (!result.ok) return err('listing my time entries', result.data);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
       };

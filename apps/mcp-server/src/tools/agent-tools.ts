@@ -10,6 +10,7 @@ import { registerTool } from '../lib/register-tool.js';
  *   - agent_heartbeat      service-account only. Upserts agent_runners row.
  *   - agent_audit          any authed user. Lists activity_log for a given agent.
  *   - agent_self_report    service-account only. Appends activity_log entry.
+ *   - agent_list           any authed user. Lists agent_runners in the active org.
  *
  * The "service-account only" gate is enforced at the API layer via
  * `request.user.kind === 'service'`; if a non-service caller invokes these
@@ -192,6 +193,48 @@ export function registerAgentTools(server: McpServer, api: ApiClient): void {
             {
               type: 'text' as const,
               text: `Error recording agent self-report: ${JSON.stringify(result.data)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'agent_list',
+    description:
+      "List the agent runners registered in the caller's active org. Returns one row per service-account user that has ever heartbeat'd, sorted by last_heartbeat_at descending (rows that have never heartbeat'd sort last). Use this to discover which agents exist, their advertised capabilities, version strings, and liveness (a NULL last_heartbeat_at means registered-but-never-seen; a stale timestamp means the runner has gone quiet). Any authenticated user may call this; no service-account gate.",
+    input: {},
+    returns: z.object({
+      data: z.array(
+        z
+          .object({
+            id: z.string().uuid(),
+            org_id: z.string().uuid(),
+            user_id: z.string().uuid(),
+            name: z.string(),
+            version: z.string().nullable().optional(),
+            capabilities: z.array(z.unknown()).optional(),
+            last_heartbeat_at: z.string().nullable().optional(),
+            first_seen_at: z.string().optional(),
+            created_at: z.string().optional(),
+            updated_at: z.string().optional(),
+          })
+          .passthrough(),
+      ),
+    }),
+    handler: async () => {
+      const result = await api.get('/v1/agents');
+      if (!result.ok) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error listing agents: ${JSON.stringify(result.data)}`,
             },
           ],
           isError: true,

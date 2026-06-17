@@ -133,6 +133,83 @@ export function registerSprintTools(server: McpServer, api: ApiClient): void {
   });
 
   registerTool(server, {
+    name: 'get_sprint',
+    description: 'Get a single sprint by UUID, including its status, dates, goal, and (after completion) velocity.',
+    input: {
+      sprint_id: z.string().uuid().describe('The sprint UUID'),
+    },
+    returns: z.object({ data: sprintShape }),
+    handler: async ({ sprint_id }) => {
+      const result = await api.get(`/sprints/${sprint_id}`);
+
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error getting sprint: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'update_sprint',
+    description: 'Update a sprint\'s name, goal, or start/end dates. Only the supplied fields are changed. Does not change sprint status (use start_sprint / complete_sprint / cancel_sprint for that).',
+    input: {
+      sprint_id: z.string().uuid().describe('The sprint UUID'),
+      name: z.string().max(100).optional().describe('New sprint name'),
+      goal: z.string().optional().describe('New sprint goal'),
+      start_date: z.string().optional().describe('New start date (ISO 8601)'),
+      end_date: z.string().optional().describe('New end date (ISO 8601)'),
+    },
+    returns: z.object({ data: sprintShape }),
+    handler: async ({ sprint_id, ...updates }) => {
+      const result = await api.patch(`/sprints/${sprint_id}`, updates);
+
+      if (!result.ok) {
+        const scopeErr = handleScopeError('update_sprint', 'read_write', result);
+        if (scopeErr) return scopeErr;
+        return {
+          content: [{ type: 'text' as const, text: `Error updating sprint: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'cancel_sprint',
+    description: 'Cancel a planned or active sprint. All tasks in the sprint are returned to the backlog (sprint_id set to null) and the sprint is marked cancelled. Rejects with INVALID_STATE if the sprint is already completed or cancelled.',
+    input: {
+      sprint_id: z.string().uuid().describe('The sprint UUID'),
+    },
+    returns: z.object({ data: sprintShape }),
+    handler: async ({ sprint_id }) => {
+      const result = await api.post(`/sprints/${sprint_id}/cancel`, {});
+
+      if (!result.ok) {
+        const scopeErr = handleScopeError('cancel_sprint', 'read_write', result);
+        if (scopeErr) return scopeErr;
+        return {
+          content: [{ type: 'text' as const, text: `Error cancelling sprint: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
     name: 'get_sprint_report',
     description: 'Get a sprint report with velocity, completion stats, and burndown data',
     input: {

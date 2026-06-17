@@ -100,6 +100,109 @@ export function registerImportTools(
     },
   });
 
+  registerTool(server, {
+    name: 'import_jira',
+    description:
+      'Import Jira-export rows into a project as tasks. Each row is a flat object of Jira CSV column -> value (e.g. Summary, Description, Status, Priority, Assignee). Unmatched statuses/labels are auto-created. Returns { imported, skipped, errors }.',
+    input: {
+      project_id: z.string().uuid().describe('The project ID'),
+      rows: z
+        .array(z.record(z.string()))
+        .max(5000)
+        .describe('Array of Jira-export row objects (column header -> cell value)'),
+    },
+    returns: z.object({
+      imported: z.number(),
+      skipped: z.number().optional(),
+      errors: z.array(z.string()).optional(),
+    }),
+    handler: async ({ project_id, rows }) => {
+      const result = await api.post(`/projects/${project_id}/import/jira`, { rows });
+
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error importing Jira rows: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'import_trello',
+    description:
+      'Import a Trello board export (JSON) into a project as tasks. Each list becomes a phase (auto-created if missing); each card becomes a task, with Trello labels mapped to project labels and checklist items mapped to subtasks. Returns { imported, skipped, errors }.',
+    input: {
+      project_id: z.string().uuid().describe('The project ID'),
+      lists: z
+        .array(
+          z.object({
+            name: z.string().describe('List name (becomes a phase)'),
+            cards: z
+              .array(
+                z.object({
+                  name: z.string().describe('Card name (becomes the task title)'),
+                  desc: z.string().optional().describe('Card description'),
+                  labels: z
+                    .array(
+                      z.object({
+                        name: z.string().optional().describe('Label name'),
+                        color: z.string().optional().describe('Trello label color'),
+                      }),
+                    )
+                    .optional()
+                    .describe('Trello labels on the card'),
+                  due: z.string().nullable().optional().describe('Due date (ISO 8601 or null)'),
+                  checklists: z
+                    .array(
+                      z.object({
+                        checkItems: z
+                          .array(
+                            z.object({
+                              name: z.string().describe('Checklist item text (becomes a subtask)'),
+                              state: z.string().optional().describe('"complete" marks the subtask done'),
+                            }),
+                          )
+                          .optional(),
+                      }),
+                    )
+                    .optional()
+                    .describe('Card checklists (items become subtasks)'),
+                  idMembers: z.array(z.string()).optional().describe('Trello member ids (unused for now)'),
+                }),
+              )
+              .max(100)
+              .describe('Cards in this list'),
+          }),
+        )
+        .max(5000)
+        .describe('Trello lists to import'),
+    },
+    returns: z.object({
+      imported: z.number(),
+      skipped: z.number().optional(),
+      errors: z.array(z.string()).optional(),
+    }),
+    handler: async ({ project_id, lists }) => {
+      const result = await api.post(`/projects/${project_id}/import/trello`, { lists });
+
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error importing Trello board: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
   // ── bam_import_csv (Phase 3, §5.7) ──────────────────────────────────────
   //
   // Spreadsheet-style CSV import as an MCP tool. Mirrors the api wire format

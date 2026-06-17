@@ -1280,4 +1280,365 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
       return result.ok ? ok(result.data) : writeErr('banter_set_presence', 'setting presence', result);
     },
   });
+
+  // ---------------------------------------------------------------------------
+  // Channel membership, read-state & presence reads (5)
+  // ---------------------------------------------------------------------------
+
+  registerTool(server, {
+    name: 'banter_list_channel_members',
+    description: 'List the members of a Banter channel (with display name, email, role, and mute state). Accepts a channel UUID, a bare channel name, or #name.',
+    input: {
+      channel_id: z
+        .string()
+        .min(1)
+        .describe('Channel UUID, name, or #name'),
+    },
+    returns: z.object({
+      data: z.array(z.object({
+        id: z.string().uuid(),
+        user_id: z.string().uuid(),
+        display_name: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+        avatar_url: z.string().nullable().optional(),
+        role: z.string().optional(),
+        joined_at: z.string().optional(),
+        is_muted: z.boolean().optional(),
+      }).passthrough()),
+    }),
+    handler: async ({ channel_id }) => {
+      const resolved = await resolveChannelId(banter, channel_id);
+      if (!resolved) {
+        return err('Channel not found', `Channel '${channel_id}' could not be resolved`);
+      }
+      const result = await banter.get(`/v1/channels/${resolved}/members`);
+      return result.ok ? ok(result.data) : err('listing channel members', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_mark_read',
+    description: 'Mark a Banter channel read up to a given message — advances the caller\'s last-read cursor and clears any unified notifications for that channel. Accepts a channel UUID, name, or #name.',
+    input: {
+      channel_id: z
+        .string()
+        .min(1)
+        .describe('Channel UUID, name, or #name'),
+      message_id: z.string().uuid().describe('The most recent message ID the caller has read'),
+    },
+    returns: z.object({}).passthrough(),
+    handler: async ({ channel_id, message_id }) => {
+      const resolved = await resolveChannelId(banter, channel_id);
+      if (!resolved) {
+        return err('Channel not found', `Channel '${channel_id}' could not be resolved`);
+      }
+      const result = await banter.post(`/v1/channels/${resolved}/mark-read`, { message_id });
+      return result.ok ? ok(result.data) : writeErr('banter_mark_read', 'marking channel read', result);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_get_presence',
+    description: 'Get the authenticated caller\'s current Banter presence row (status, custom status text/emoji, in-call channel).',
+    input: {},
+    returns: z.object({ data: z.object({}).passthrough().nullable() }).passthrough(),
+    handler: async () => {
+      const result = await banter.get('/v1/me/presence');
+      return result.ok ? ok(result.data) : err('getting presence', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_list_channel_presence',
+    description: 'List the non-offline (online/idle/in-call/dnd) members of a Banter channel. Accepts a channel UUID, name, or #name. Presence is ephemeral (Redis-backed) so treat the result as a point-in-time snapshot.',
+    input: {
+      channel_id: z
+        .string()
+        .min(1)
+        .describe('Channel UUID, name, or #name'),
+    },
+    returns: z.object({ data: z.array(z.object({ user_id: z.string().uuid(), status: z.string().optional() }).passthrough()) }),
+    handler: async ({ channel_id }) => {
+      const resolved = await resolveChannelId(banter, channel_id);
+      if (!resolved) {
+        return err('Channel not found', `Channel '${channel_id}' could not be resolved`);
+      }
+      const result = await banter.get(`/v1/channels/${resolved}/presence`);
+      return result.ok ? ok(result.data) : err('listing channel presence', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_search_channels',
+    description: 'Full-text search Banter channels by name, display name, topic, or description in the caller\'s org. Returns visible (public or member) channels only.',
+    input: {
+      q: z.string().min(1).max(200).describe('Search query string'),
+      limit: z.number().int().positive().max(50).optional().describe('Number of results (default 20)'),
+      offset: z.number().int().nonnegative().optional().describe('Result offset for pagination'),
+    },
+    returns: z.object({ data: z.array(channelShape) }),
+    handler: async (params) => {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined) qs.set(k, String(v));
+      }
+      const result = await banter.get(`/v1/search/channels?${qs.toString()}`);
+      return result.ok ? ok(result.data) : err('searching channels', result.data);
+    },
+  });
+
+  // ---------------------------------------------------------------------------
+  // Reactions & pins reads (2)
+  // ---------------------------------------------------------------------------
+
+  registerTool(server, {
+    name: 'banter_list_reactions',
+    description: 'List the emoji reactions on a Banter message, grouped by emoji with the reacting users.',
+    input: {
+      message_id: z.string().uuid().describe('The message ID'),
+    },
+    returns: z.object({
+      data: z.array(z.object({
+        emoji: z.string(),
+        count: z.number(),
+        users: z.array(z.object({ id: z.string().uuid(), display_name: z.string().nullable().optional(), avatar_url: z.string().nullable().optional() }).passthrough()),
+      }).passthrough()),
+    }),
+    handler: async ({ message_id }) => {
+      const result = await banter.get(`/v1/messages/${message_id}/reactions`);
+      return result.ok ? ok(result.data) : err('listing reactions', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_list_pins',
+    description: 'List the pinned messages in a Banter channel (with the pinned message and its author). Accepts a channel UUID, name, or #name.',
+    input: {
+      channel_id: z
+        .string()
+        .min(1)
+        .describe('Channel UUID, name, or #name'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), channel_id: z.string().uuid(), message_id: z.string().uuid(), message: messageShape.optional() }).passthrough()) }),
+    handler: async ({ channel_id }) => {
+      const resolved = await resolveChannelId(banter, channel_id);
+      if (!resolved) {
+        return err('Channel not found', `Channel '${channel_id}' could not be resolved`);
+      }
+      const result = await banter.get(`/v1/channels/${resolved}/pins`);
+      return result.ok ? ok(result.data) : err('listing pins', result.data);
+    },
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bookmarks (3)
+  // ---------------------------------------------------------------------------
+
+  const bookmarkShape = z.object({
+    id: z.string().uuid(),
+    message_id: z.string().uuid(),
+    note: z.string().nullable().optional(),
+    created_at: z.string().optional(),
+    channel_id: z.string().uuid().optional(),
+    channel_name: z.string().nullable().optional(),
+    channel_slug: z.string().nullable().optional(),
+    message_content: z.string().nullable().optional(),
+    message_author_display_name: z.string().nullable().optional(),
+  }).passthrough();
+
+  registerTool(server, {
+    name: 'banter_list_bookmarks',
+    description: 'List the authenticated caller\'s Banter message bookmarks, newest first, with channel and message preview context.',
+    input: {},
+    returns: z.object({ data: z.array(bookmarkShape) }),
+    handler: async () => {
+      const result = await banter.get('/v1/bookmarks');
+      return result.ok ? ok(result.data) : err('listing bookmarks', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_create_bookmark',
+    description: 'Bookmark a Banter message for the calling user, with an optional note. Idempotent — bookmarking an already-bookmarked message is a no-op.',
+    input: {
+      message_id: z.string().uuid().describe('The message ID to bookmark'),
+      note: z.string().max(500).optional().describe('Optional note to attach to the bookmark'),
+    },
+    returns: z.object({ data: bookmarkShape.or(z.object({ already_bookmarked: z.literal(true) })) }),
+    handler: async ({ message_id, note }) => {
+      const result = await banter.post('/v1/bookmarks', { message_id, note });
+      return result.ok ? ok(result.data) : writeErr('banter_create_bookmark', 'creating bookmark', result);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_delete_bookmark',
+    description: 'Remove a Banter bookmark for the calling user. Pass either the bookmark id (bookmark_id) or the bookmarked message id (message_id) — exactly one is required.',
+    input: {
+      bookmark_id: z.string().uuid().optional().describe('The bookmark ID to remove'),
+      message_id: z.string().uuid().optional().describe('Remove the caller\'s bookmark for this message ID'),
+    },
+    returns: z.object({ data: z.object({ success: z.boolean() }) }),
+    handler: async ({ bookmark_id, message_id }) => {
+      if ((!bookmark_id && !message_id) || (bookmark_id && message_id)) {
+        return err('removing bookmark', { message: 'Provide exactly one of bookmark_id or message_id.' });
+      }
+      const path = bookmark_id
+        ? `/v1/bookmarks/${bookmark_id}`
+        : `/v1/bookmarks/by-message/${message_id}`;
+      const result = await banter.delete(path);
+      return result.ok ? ok(result.data) : writeErr('banter_delete_bookmark', 'removing bookmark', result);
+    },
+  });
+
+  // ---------------------------------------------------------------------------
+  // DMs & user-group reads/management (3)
+  // ---------------------------------------------------------------------------
+
+  registerTool(server, {
+    name: 'banter_list_dms',
+    description: 'List the authenticated caller\'s direct-message and group-DM channels, ordered by most recent activity.',
+    input: {},
+    returns: z.object({ data: z.array(channelShape.extend({ role: z.string().optional(), last_read_message_id: z.string().uuid().nullable().optional() })) }),
+    handler: async () => {
+      const result = await banter.get('/v1/dm');
+      return result.ok ? ok(result.data) : err('listing DMs', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_list_group_members',
+    description: 'List the members of a Banter user group. Accepts a group UUID or a group @handle (e.g. "@engineering").',
+    input: {
+      group_id: z.string().min(1).describe('User group UUID or @handle'),
+    },
+    returns: z.object({
+      data: z.array(z.object({
+        id: z.string().uuid(),
+        user_id: z.string().uuid(),
+        display_name: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+        avatar_url: z.string().nullable().optional(),
+        added_at: z.string().optional(),
+      }).passthrough()),
+    }),
+    handler: async ({ group_id }) => {
+      let groupId = group_id;
+      if (!isUuid(group_id)) {
+        const cleaned = group_id.replace(/^@/, '').trim();
+        const lookup = await banter.get(`/v1/user-groups/by-handle/${encodeURIComponent(cleaned)}`);
+        const resolved = (lookup.data as { data?: { id?: string } | null } | null)?.data?.id;
+        if (!lookup.ok || !resolved) {
+          return err('User group not found', `Group '${group_id}' could not be resolved`);
+        }
+        groupId = resolved;
+      }
+      const result = await banter.get(`/v1/user-groups/${groupId}/members`);
+      return result.ok ? ok(result.data) : err('listing group members', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_delete_user_group',
+    description: 'Delete a Banter user group (destructive - requires confirmation). Accepts a group UUID or @handle. Requires org owner/admin privileges.',
+    input: {
+      group_id: z.string().min(1).describe('User group UUID or @handle to delete'),
+      confirm: z.boolean().describe('Must be true to confirm deletion'),
+    },
+    returns: z.object({ ok: z.boolean(), message: z.string().optional() }),
+    handler: async ({ group_id, confirm }) => {
+      if (!confirm) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Are you sure you want to delete user group ${group_id}? Call this tool again with confirm: true to proceed.`,
+          }],
+        };
+      }
+      let groupId = group_id;
+      if (!isUuid(group_id)) {
+        const cleaned = group_id.replace(/^@/, '').trim();
+        const lookup = await banter.get(`/v1/user-groups/by-handle/${encodeURIComponent(cleaned)}`);
+        const resolved = (lookup.data as { data?: { id?: string } | null } | null)?.data?.id;
+        if (!lookup.ok || !resolved) {
+          return err('User group not found', `Group '${group_id}' could not be resolved`);
+        }
+        groupId = resolved;
+      }
+      const result = await banter.delete(`/v1/user-groups/${groupId}`);
+      return result.ok
+        ? { content: [{ type: 'text' as const, text: `User group ${groupId} deleted.` }] }
+        : writeErr('banter_delete_user_group', 'deleting user group', result);
+    },
+  });
+
+  // ---------------------------------------------------------------------------
+  // Call participants & scheduled-message management (3)
+  // ---------------------------------------------------------------------------
+
+  registerTool(server, {
+    name: 'banter_list_call_participants',
+    description: 'List the participants of a Banter call (historical roster with join/leave times, duration, media flags, and bot/participation-mode metadata).',
+    input: {
+      call_id: z.string().uuid().describe('The call ID'),
+    },
+    returns: z.object({
+      data: z.array(z.object({
+        id: z.string().uuid(),
+        user_id: z.string().uuid(),
+        display_name: z.string().nullable().optional(),
+        avatar_url: z.string().nullable().optional(),
+        role: z.string().optional(),
+        joined_at: z.string().optional(),
+        left_at: z.string().nullable().optional(),
+        duration_seconds: z.number().nullable().optional(),
+        is_bot: z.boolean().optional(),
+        participation_mode: z.string().nullable().optional(),
+      }).passthrough()),
+    }),
+    handler: async ({ call_id }) => {
+      const result = await banter.get(`/v1/calls/${call_id}/participants`);
+      return result.ok ? ok(result.data) : err('listing call participants', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_list_scheduled_messages',
+    description: 'List scheduled (or delivered/cancelled/failed) posts queued for a Banter channel. Accepts a channel UUID, name, or #name. Defaults to status="pending".',
+    input: {
+      channel_id: z
+        .string()
+        .min(1)
+        .describe('Channel UUID, name, or #name'),
+      status: z.enum(['pending', 'delivered', 'cancelled', 'failed']).optional().describe('Filter by status (default pending)'),
+      limit: z.number().int().positive().max(200).optional().describe('Max results (default 50)'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), channel_id: z.string().uuid(), status: z.string(), scheduled_at: z.string().optional() }).passthrough()) }),
+    handler: async ({ channel_id, ...params }) => {
+      const resolved = await resolveChannelId(banter, channel_id);
+      if (!resolved) {
+        return err('Channel not found', `Channel '${channel_id}' could not be resolved`);
+      }
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined) qs.set(k, String(v));
+      }
+      const q = qs.toString();
+      const result = await banter.get(`/v1/channels/${resolved}/scheduled-messages${q ? `?${q}` : ''}`);
+      return result.ok ? ok(result.data) : err('listing scheduled messages', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_cancel_scheduled_message',
+    description: 'Cancel a pending scheduled Banter post. Only the original author or an org owner/admin may cancel, and only while the post is still pending (fails 409 otherwise).',
+    input: {
+      scheduled_message_id: z.string().uuid().describe('The scheduled message ID to cancel'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), status: z.string() }).passthrough() }),
+    handler: async ({ scheduled_message_id }) => {
+      const result = await banter.delete(`/v1/scheduled-messages/${scheduled_message_id}`);
+      return result.ok ? ok(result.data) : writeErr('banter_cancel_scheduled_message', 'cancelling scheduled message', result);
+    },
+  });
 }

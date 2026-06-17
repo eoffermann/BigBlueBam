@@ -11,6 +11,7 @@ import { registerTool } from '../lib/register-tool.js';
  *
  *   - attachment_get(upload_id)
  *   - attachment_list({ entity_type, entity_id, limit?, scan_status? })
+ *   - attachment_meta()  — discovery: supported parent types / scan statuses / limits
  *
  * Supported parent types: 'bam.task', 'helpdesk.ticket', 'beacon.entry'.
  * Brief has no attachment storage today, and Bond/Book/Blast do not
@@ -135,6 +136,40 @@ export function registerAttachmentTools(server: McpServer, api: ApiClient): void
             {
               type: 'text' as const,
               text: `Error listing attachments: ${JSON.stringify(result.data)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }],
+      };
+    },
+  });
+
+  registerTool(server, {
+    name: 'attachment_meta',
+    description:
+      "Discovery endpoint for the federated attachment surface. Returns the static set of supported parent entity_type values, the valid scan_status filter values, and the default/max list limits — so an agent can self-describe attachment_list/attachment_get capabilities without consulting docs or guessing. Read-only; no parameters. AGENTIC_TODO §17 Wave 4.",
+    input: {},
+    returns: z.object({
+      data: z
+        .object({
+          supported_parent_types: z.array(z.string()),
+          supported_scan_statuses: z.array(z.string()),
+          list_limit_default: z.number().int().positive(),
+          list_limit_max: z.number().int().positive(),
+        })
+        .passthrough(),
+    }),
+    handler: async () => {
+      const result = await api.get('/v1/attachments/_meta');
+      if (!result.ok) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Error fetching attachment meta: ${JSON.stringify(result.data)}`,
             },
           ],
           isError: true,
