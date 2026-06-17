@@ -119,7 +119,17 @@ export function registerPhraseCountTools(
       const url = `${trim(urls.helpdeskApiUrl)}/v1/tickets/analytics/count-by-phrase?${qs.toString()}`;
       try {
         const res = await fetch(url, { method: 'GET', headers: headers(api) });
-        const data = await res.json();
+        // Tolerate empty (204 No Content) and non-JSON bodies so DELETE/204 tools
+        // report success instead of throwing "Unexpected end of JSON input".
+        const __text = await res.text();
+        let data: unknown = null;
+        if (__text) {
+          try {
+            data = JSON.parse(__text);
+          } catch {
+            data = __text;
+          }
+        }
         if (!res.ok) return errEnvelope('helpdesk_ticket_count_by_phrase failed', data);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
@@ -168,7 +178,16 @@ export function registerPhraseCountTools(
       const url = `${trim(urls.apiUrl)}/v1/tasks/analytics/count-by-phrase?${qs.toString()}`;
       try {
         const res = await fetch(url, { method: 'GET', headers: headers(api) });
-        const data = await res.json();
+        // Tolerate empty / non-JSON bodies (consistency with the hardened clients).
+        const __text = await res.text();
+        let data: unknown = null;
+        if (__text) {
+          try {
+            data = JSON.parse(__text);
+          } catch {
+            data = __text;
+          }
+        }
         if (!res.ok) return errEnvelope('bam_task_count_by_phrase failed', data);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],

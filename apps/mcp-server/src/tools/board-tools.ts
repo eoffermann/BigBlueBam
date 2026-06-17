@@ -29,7 +29,17 @@ function createBoardClient(boardApiUrl: string, api: ApiClient) {
     }
 
     const res = await fetch(url, init);
-    const data = await res.json();
+    // Tolerate empty (204 No Content) and non-JSON bodies so DELETE/204 tools
+    // report success instead of throwing "Unexpected end of JSON input".
+    const __text = await res.text();
+    let data: unknown = null;
+    if (__text) {
+      try {
+        data = JSON.parse(__text);
+      } catch {
+        data = __text;
+      }
+    }
     return { ok: res.ok, status: res.status, data };
   }
 

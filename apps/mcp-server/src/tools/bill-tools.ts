@@ -31,7 +31,17 @@ function createBillClient(billApiUrl: string, api: ApiClient): BillClient {
     }
 
     const res = await fetch(url, init);
-    const data = await res.json();
+    // Tolerate empty (204 No Content) and non-JSON bodies so DELETE/204 tools
+    // report success instead of throwing "Unexpected end of JSON input".
+    const __text = await res.text();
+    let data: unknown = null;
+    if (__text) {
+      try {
+        data = JSON.parse(__text);
+      } catch {
+        data = __text;
+      }
+    }
     return { ok: res.ok, status: res.status, data };
   }
 
@@ -452,6 +462,423 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
         default_payment_terms_days: c.default_payment_terms_days,
       }));
       return ok({ data: clients });
+    },
+  });
+
+  const clientShape = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    email: z.string().nullable().optional(),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+  }).passthrough();
+
+  // ===== 16. bill_get_client =====
+  registerTool(server, {
+    name: 'bill_get_client',
+    description: 'Get a single billing client by UUID, including address and billing defaults.',
+    input: {
+      client_id: z.string().uuid().describe('Client UUID'),
+    },
+    returns: z.object({ data: clientShape }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/clients/${params.client_id}`);
+      return result.ok ? ok(result.data) : err('getting client', result.data);
+    },
+  });
+
+  // ===== 17. bill_create_client =====
+  registerTool(server, {
+    name: 'bill_create_client',
+    description: 'Create a new billing client for the organization.',
+    input: {
+      name: z.string().min(1).max(255).describe('Client name'),
+      email: z.string().email().max(255).optional().describe('Billing email'),
+      phone: z.string().max(50).optional().describe('Phone number'),
+      address_line1: z.string().max(255).optional().describe('Address line 1'),
+      address_line2: z.string().max(255).optional().describe('Address line 2'),
+      city: z.string().max(100).optional().describe('City'),
+      state_region: z.string().max(100).optional().describe('State or region'),
+      postal_code: z.string().max(20).optional().describe('Postal/ZIP code'),
+      country: z.string().length(2).optional().describe('ISO 3166-1 alpha-2 country code'),
+      tax_id: z.string().max(50).optional().describe('Tax identification number'),
+      bond_company_id: z.string().uuid().optional().describe('Linked Bond CRM company UUID'),
+      default_payment_terms_days: z.number().int().min(0).max(365).optional().describe('Default payment terms in days'),
+      default_payment_instructions: z.string().max(2000).optional().describe('Default payment instructions'),
+      notes: z.string().max(5000).optional().describe('Internal notes'),
+    },
+    returns: z.object({ data: clientShape }),
+    handler: async (params) => {
+      const result = await client.request('POST', '/clients', params);
+      return result.ok ? ok(result.data) : err('creating client', result.data);
+    },
+  });
+
+  // ===== 18. bill_update_client =====
+  registerTool(server, {
+    name: 'bill_update_client',
+    description: 'Update a billing client. Provide only the fields to change.',
+    input: {
+      client_id: z.string().uuid().describe('Client UUID'),
+      name: z.string().min(1).max(255).optional().describe('Client name'),
+      email: z.string().email().max(255).optional().describe('Billing email'),
+      phone: z.string().max(50).optional().describe('Phone number'),
+      address_line1: z.string().max(255).optional().describe('Address line 1'),
+      address_line2: z.string().max(255).optional().describe('Address line 2'),
+      city: z.string().max(100).optional().describe('City'),
+      state_region: z.string().max(100).optional().describe('State or region'),
+      postal_code: z.string().max(20).optional().describe('Postal/ZIP code'),
+      country: z.string().length(2).optional().describe('ISO 3166-1 alpha-2 country code'),
+      tax_id: z.string().max(50).optional().describe('Tax identification number'),
+      bond_company_id: z.string().uuid().optional().describe('Linked Bond CRM company UUID'),
+      default_payment_terms_days: z.number().int().min(0).max(365).optional().describe('Default payment terms in days'),
+      default_payment_instructions: z.string().max(2000).optional().describe('Default payment instructions'),
+      notes: z.string().max(5000).optional().describe('Internal notes'),
+    },
+    returns: z.object({ data: clientShape }),
+    handler: async ({ client_id, ...body }) => {
+      const result = await client.request('PATCH', `/clients/${client_id}`, body);
+      return result.ok ? ok(result.data) : err('updating client', result.data);
+    },
+  });
+
+  // ===== 19. bill_delete_client =====
+  registerTool(server, {
+    name: 'bill_delete_client',
+    description: 'Delete a billing client by UUID.',
+    input: {
+      client_id: z.string().uuid().describe('Client UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async (params) => {
+      const result = await client.request('DELETE', `/clients/${params.client_id}`);
+      return result.ok ? ok(result.data) : err('deleting client', result.data);
+    },
+  });
+
+  // ===== 20. bill_update_invoice =====
+  registerTool(server, {
+    name: 'bill_update_invoice',
+    description: 'Update a draft invoice. Provide only the fields to change.',
+    input: {
+      invoice_id: z.string().uuid().describe('Invoice UUID'),
+      client_id: z.string().uuid().optional().describe('Billing client UUID'),
+      project_id: z.string().uuid().optional().describe('Linked Bam project UUID'),
+      invoice_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Invoice date (YYYY-MM-DD)'),
+      due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Due date (YYYY-MM-DD)'),
+      tax_rate: z.number().min(0).max(100).optional().describe('Tax rate percentage'),
+      discount_amount: z.number().int().min(0).optional().describe('Discount amount in cents'),
+      payment_terms_days: z.number().int().min(0).max(365).optional().describe('Payment terms in days'),
+      payment_instructions: z.string().max(2000).optional().describe('Payment instructions'),
+      notes: z.string().max(5000).optional().describe('Internal notes'),
+      footer_text: z.string().max(2000).optional().describe('Invoice footer text'),
+      terms_text: z.string().max(5000).optional().describe('Invoice terms text'),
+      bond_deal_id: z.string().uuid().optional().describe('Linked Bond CRM deal UUID'),
+    },
+    returns: z.object({ data: invoiceShape }),
+    handler: async ({ invoice_id, ...body }) => {
+      const result = await client.request('PATCH', `/invoices/${invoice_id}`, body);
+      return result.ok ? ok(result.data) : err('updating invoice', result.data);
+    },
+  });
+
+  // ===== 21. bill_delete_invoice =====
+  registerTool(server, {
+    name: 'bill_delete_invoice',
+    description: 'Delete an invoice by UUID (draft invoices only).',
+    input: {
+      invoice_id: z.string().uuid().describe('Invoice UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async (params) => {
+      const result = await client.request('DELETE', `/invoices/${params.invoice_id}`);
+      return result.ok ? ok(result.data) : err('deleting invoice', result.data);
+    },
+  });
+
+  // ===== 22. bill_duplicate_invoice =====
+  registerTool(server, {
+    name: 'bill_duplicate_invoice',
+    description: 'Duplicate an existing invoice into a new draft, copying line items.',
+    input: {
+      invoice_id: z.string().uuid().describe('Source invoice UUID'),
+    },
+    returns: z.object({ data: invoiceShape }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/invoices/${params.invoice_id}/duplicate`);
+      return result.ok ? ok(result.data) : err('duplicating invoice', result.data);
+    },
+  });
+
+  // ===== 23. bill_void_invoice =====
+  registerTool(server, {
+    name: 'bill_void_invoice',
+    description: 'Void a finalized invoice — marks it void without deleting the record.',
+    input: {
+      invoice_id: z.string().uuid().describe('Invoice UUID'),
+    },
+    returns: z.object({ data: invoiceShape }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/invoices/${params.invoice_id}/void`);
+      return result.ok ? ok(result.data) : err('voiding invoice', result.data);
+    },
+  });
+
+  // ===== 24. bill_get_invoice_jobs =====
+  registerTool(server, {
+    name: 'bill_get_invoice_jobs',
+    description: 'Get the latest async PDF-generation and email-send job state for an invoice.',
+    input: {
+      invoice_id: z.string().uuid().describe('Invoice UUID'),
+    },
+    returns: z.object({
+      data: z.object({
+        pdf_generate: z.object({}).passthrough().nullable(),
+        email_send: z.object({}).passthrough().nullable(),
+      }),
+    }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/invoices/${params.invoice_id}/jobs`);
+      return result.ok ? ok(result.data) : err('getting invoice jobs', result.data);
+    },
+  });
+
+  // ===== 25. bill_update_line_item =====
+  registerTool(server, {
+    name: 'bill_update_line_item',
+    description: 'Update a line item on a draft invoice. Provide only the fields to change.',
+    input: {
+      invoice_id: z.string().uuid().describe('Invoice UUID'),
+      item_id: z.string().uuid().describe('Line item UUID'),
+      description: z.string().min(1).max(1000).optional().describe('Line item description'),
+      quantity: z.number().positive().optional().describe('Quantity'),
+      unit: z.string().max(20).optional().describe('Unit type: hours, days, units, fixed'),
+      unit_price: z.number().int().min(0).optional().describe('Unit price in cents'),
+      sort_order: z.number().int().optional().describe('Display sort order'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), description: z.string() }).passthrough() }),
+    handler: async ({ invoice_id, item_id, ...body }) => {
+      const result = await client.request('PATCH', `/invoices/${invoice_id}/line-items/${item_id}`, body);
+      return result.ok ? ok(result.data) : err('updating line item', result.data);
+    },
+  });
+
+  // ===== 26. bill_delete_line_item =====
+  registerTool(server, {
+    name: 'bill_delete_line_item',
+    description: 'Delete a line item from a draft invoice.',
+    input: {
+      invoice_id: z.string().uuid().describe('Invoice UUID'),
+      item_id: z.string().uuid().describe('Line item UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async (params) => {
+      const result = await client.request('DELETE', `/invoices/${params.invoice_id}/line-items/${params.item_id}`);
+      return result.ok ? ok(result.data) : err('deleting line item', result.data);
+    },
+  });
+
+  // ===== 27. bill_delete_payment =====
+  registerTool(server, {
+    name: 'bill_delete_payment',
+    description: 'Delete a recorded payment by UUID, reverting the invoice balance.',
+    input: {
+      payment_id: z.string().uuid().describe('Payment UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async (params) => {
+      const result = await client.request('DELETE', `/payments/${params.payment_id}`);
+      return result.ok ? ok(result.data) : err('deleting payment', result.data);
+    },
+  });
+
+  // ===== 28. bill_update_expense =====
+  registerTool(server, {
+    name: 'bill_update_expense',
+    description: 'Update an expense. Provide only the fields to change.',
+    input: {
+      expense_id: z.string().uuid().describe('Expense UUID'),
+      project_id: z.string().uuid().optional().describe('Linked Bam project UUID'),
+      description: z.string().min(1).max(1000).optional().describe('Expense description'),
+      amount: z.number().int().positive().optional().describe('Amount in cents'),
+      currency: z.string().length(3).optional().describe('ISO 4217 currency code'),
+      category: z.string().max(60).optional().describe('Category'),
+      vendor: z.string().max(255).optional().describe('Vendor name'),
+      expense_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Expense date (YYYY-MM-DD)'),
+      billable: z.boolean().optional().describe('Whether this can be invoiced to a client'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), description: z.string(), status: z.string() }).passthrough() }),
+    handler: async ({ expense_id, ...body }) => {
+      const result = await client.request('PATCH', `/expenses/${expense_id}`, body);
+      return result.ok ? ok(result.data) : err('updating expense', result.data);
+    },
+  });
+
+  // ===== 29. bill_delete_expense =====
+  registerTool(server, {
+    name: 'bill_delete_expense',
+    description: 'Delete an expense by UUID.',
+    input: {
+      expense_id: z.string().uuid().describe('Expense UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async (params) => {
+      const result = await client.request('DELETE', `/expenses/${params.expense_id}`);
+      return result.ok ? ok(result.data) : err('deleting expense', result.data);
+    },
+  });
+
+  // ===== 30. bill_approve_expense =====
+  registerTool(server, {
+    name: 'bill_approve_expense',
+    description: 'Approve a pending expense.',
+    input: {
+      expense_id: z.string().uuid().describe('Expense UUID'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), status: z.string() }).passthrough() }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/expenses/${params.expense_id}/approve`);
+      return result.ok ? ok(result.data) : err('approving expense', result.data);
+    },
+  });
+
+  // ===== 31. bill_reject_expense =====
+  registerTool(server, {
+    name: 'bill_reject_expense',
+    description: 'Reject a pending expense.',
+    input: {
+      expense_id: z.string().uuid().describe('Expense UUID'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), status: z.string() }).passthrough() }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/expenses/${params.expense_id}/reject`);
+      return result.ok ? ok(result.data) : err('rejecting expense', result.data);
+    },
+  });
+
+  // ===== 32. bill_list_rates =====
+  const rateShape = z.object({
+    id: z.string().uuid(),
+    rate_amount: z.number(),
+    rate_type: z.string().optional(),
+    currency: z.string().optional(),
+    project_id: z.string().uuid().nullable().optional(),
+    user_id: z.string().uuid().nullable().optional(),
+  }).passthrough();
+
+  registerTool(server, {
+    name: 'bill_list_rates',
+    description: 'List billing rates, optionally filtered by project or user.',
+    input: {
+      project_id: z.string().uuid().optional().describe('Filter by project UUID'),
+      user_id: z.string().uuid().optional().describe('Filter by user UUID'),
+    },
+    returns: z.object({ data: z.array(rateShape) }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/rates${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing rates', result.data);
+    },
+  });
+
+  // ===== 33. bill_create_rate =====
+  registerTool(server, {
+    name: 'bill_create_rate',
+    description: 'Create a billing rate, optionally scoped to a project and/or user with an effective date range.',
+    input: {
+      project_id: z.string().uuid().optional().describe('Scope to a project UUID (omit for org-wide)'),
+      user_id: z.string().uuid().optional().describe('Scope to a user UUID (omit for all users)'),
+      rate_amount: z.number().int().positive().describe('Rate amount in cents'),
+      rate_type: z.enum(['hourly', 'daily', 'fixed']).optional().describe('Rate type (default hourly)'),
+      currency: z.string().length(3).optional().describe('ISO 4217 currency code'),
+      effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Effective from date (YYYY-MM-DD)'),
+      effective_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Effective to date (YYYY-MM-DD)'),
+    },
+    returns: z.object({ data: rateShape }),
+    handler: async (params) => {
+      const result = await client.request('POST', '/rates', params);
+      return result.ok ? ok(result.data) : err('creating rate', result.data);
+    },
+  });
+
+  // ===== 34. bill_update_rate =====
+  registerTool(server, {
+    name: 'bill_update_rate',
+    description: 'Update a billing rate. Provide only the fields to change.',
+    input: {
+      rate_id: z.string().uuid().describe('Rate UUID'),
+      rate_amount: z.number().int().positive().optional().describe('Rate amount in cents'),
+      rate_type: z.enum(['hourly', 'daily', 'fixed']).optional().describe('Rate type'),
+      effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Effective from date (YYYY-MM-DD)'),
+      effective_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Effective to date (YYYY-MM-DD)'),
+    },
+    returns: z.object({ data: rateShape }),
+    handler: async ({ rate_id, ...body }) => {
+      const result = await client.request('PATCH', `/rates/${rate_id}`, body);
+      return result.ok ? ok(result.data) : err('updating rate', result.data);
+    },
+  });
+
+  // ===== 35. bill_delete_rate =====
+  registerTool(server, {
+    name: 'bill_delete_rate',
+    description: 'Delete a billing rate by UUID.',
+    input: {
+      rate_id: z.string().uuid().describe('Rate UUID'),
+    },
+    returns: z.object({ data: z.object({ deleted: z.boolean() }) }),
+    handler: async (params) => {
+      const result = await client.request('DELETE', `/rates/${params.rate_id}`);
+      return result.ok ? ok(result.data) : err('deleting rate', result.data);
+    },
+  });
+
+  // ===== 36. bill_get_outstanding =====
+  registerTool(server, {
+    name: 'bill_get_outstanding',
+    description: 'Outstanding-balance report: invoices with an unpaid balance and the amount still owed.',
+    input: {},
+    returns: z.object({}).passthrough().describe('Outstanding-balance report data'),
+    handler: async () => {
+      const result = await client.request('GET', '/reports/outstanding');
+      return result.ok ? ok(result.data) : err('getting outstanding', result.data);
+    },
+  });
+
+  // ===== 37. bill_get_settings =====
+  registerTool(server, {
+    name: 'bill_get_settings',
+    description: 'Get the organization billing settings (company info, default currency, tax rate, payment terms, invoice prefix).',
+    input: {},
+    returns: z.object({ data: z.object({}).passthrough() }),
+    handler: async () => {
+      const result = await client.request('GET', '/settings');
+      return result.ok ? ok(result.data) : err('getting settings', result.data);
+    },
+  });
+
+  // ===== 38. bill_update_settings =====
+  registerTool(server, {
+    name: 'bill_update_settings',
+    description: 'Update the organization billing settings. Provide only the fields to change.',
+    input: {
+      company_name: z.string().max(255).optional().describe('Company name on invoices'),
+      company_email: z.string().email().max(255).optional().describe('Company billing email'),
+      company_phone: z.string().max(50).optional().describe('Company phone'),
+      company_address: z.string().max(2000).optional().describe('Company address'),
+      company_logo_url: z.string().url().optional().describe('Company logo URL'),
+      company_tax_id: z.string().max(50).optional().describe('Company tax ID'),
+      default_currency: z.string().length(3).optional().describe('Default ISO 4217 currency code'),
+      default_tax_rate: z.number().min(0).max(100).optional().describe('Default tax rate percentage'),
+      default_payment_terms_days: z.number().int().min(0).max(365).optional().describe('Default payment terms in days'),
+      default_payment_instructions: z.string().max(2000).optional().describe('Default payment instructions'),
+      default_footer_text: z.string().max(2000).optional().describe('Default invoice footer text'),
+      default_terms_text: z.string().max(5000).optional().describe('Default invoice terms text'),
+      invoice_prefix: z.string().min(1).max(20).optional().describe('Invoice number prefix'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }),
+    handler: async (params) => {
+      const result = await client.request('PUT', '/settings', params);
+      return result.ok ? ok(result.data) : err('updating settings', result.data);
     },
   });
 }

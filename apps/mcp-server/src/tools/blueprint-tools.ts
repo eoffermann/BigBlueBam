@@ -43,7 +43,17 @@ function createBlueprintClient(blueprintApiUrl: string, api: ApiClient) {
     }
 
     const res = await fetch(url, init);
-    const data = await res.json();
+    // Tolerate empty (204 No Content) and non-JSON bodies so DELETE/204 tools
+    // report success instead of throwing "Unexpected end of JSON input".
+    const __text = await res.text();
+    let data: unknown = null;
+    if (__text) {
+      try {
+        data = JSON.parse(__text);
+      } catch {
+        data = __text;
+      }
+    }
     return { ok: res.ok, status: res.status, data };
   }
 
@@ -647,6 +657,269 @@ export function registerBlueprintTools(
     handler: async ({ id, node_id, ...body }) => {
       const result = await client.request('POST', `/diagrams/${id}/nodes/${node_id}/link-entity`, body);
       return result.ok ? ok(result.data) : err('linking blueprint node entity', result.data);
+    },
+  });
+
+  // ===== VERSIONS (3) =====
+
+  const versionShape = z
+    .object({
+      id: z.string().uuid(),
+      diagram_id: z.string().uuid(),
+      version_number: z.number().int(),
+      label: z.string().nullable().optional(),
+      created_by: z.string().uuid().nullable().optional(),
+      created_at: z.string(),
+    })
+    .passthrough();
+
+  registerTool(server, {
+    name: 'blueprint_list_versions',
+    description:
+      'List the saved version snapshots of a Blueprint diagram, newest first. Each version is an immutable point-in-time snapshot of the full graph (nodes + edges), captured by blueprint_snapshot_version or by the SPA. Use the version_number with blueprint_restore_version to roll the live diagram back. Returns metadata only — the snapshot payload is not inlined here.',
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+    },
+    returns: z.object({ data: z.array(versionShape) }),
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/diagrams/${id}/versions`);
+      return result.ok ? ok(result.data) : err('listing blueprint versions', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_snapshot_version',
+    description:
+      "Capture the current graph (nodes + edges) of a Blueprint diagram as a new immutable version snapshot, auto-numbered one higher than the latest. An optional `label` annotates the snapshot (e.g. \"before agent rewrite\", \"approved v2\"). Snapshotting does not change the live diagram — it just records a restore point. Pair with blueprint_restore_version to roll back later.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID to snapshot'),
+      label: z.string().max(200).nullable().optional().describe('Optional human label for the snapshot (max 200 chars)'),
+    },
+    returns: z.object({ data: versionShape }),
+    handler: async ({ id, label }) => {
+      const result = await client.request('POST', `/diagrams/${id}/versions`, { label });
+      return result.ok ? ok(result.data) : err('snapshotting blueprint version', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_restore_version',
+    description:
+      "Roll a Blueprint diagram's live graph back to a previously-snapshotted version, identified by its version_number (see blueprint_list_versions). Restoring replaces the current nodes and edges with the snapshot's contents — destructive to the current graph state. Take a fresh blueprint_snapshot_version first if you might want to undo the restore. Returns the restored graph payload.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+      version_number: z.number().int().positive().describe('Version number to restore (from blueprint_list_versions)'),
+      confirm_action: z.boolean().describe('Must be true to actually restore. Call once with false (or omit) to preview, then call again with true. Restoring overwrites the current graph.'),
+    },
+    returns: z.object({ data: z.unknown() }).passthrough(),
+    handler: async ({ id, version_number, confirm_action }) => {
+      if (!confirm_action) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Are you sure you want to restore Blueprint diagram ${id} to version ${version_number}? This overwrites the current nodes and edges with the snapshot's contents. Consider blueprint_snapshot_version first to preserve the current state, then call blueprint_restore_version again with confirm_action: true to proceed.`,
+          }],
+        };
+      }
+      const result = await client.request('POST', `/diagrams/${id}/versions/${version_number}/restore`);
+      return result.ok ? ok(result.data) : err('restoring blueprint version', result.data);
+    },
+  });
+
+  // ===== COMMENTS (3) =====
+
+  const commentShape = z
+    .object({
+      id: z.string().uuid(),
+      diagram_id: z.string().uuid().optional(),
+      node_id: z.string().uuid().nullable().optional(),
+      author_id: z.string().uuid().nullable().optional(),
+      body: z.string(),
+      body_plain: z.string().nullable().optional(),
+      resolved: z.boolean().optional(),
+      created_at: z.string(),
+      updated_at: z.string().optional(),
+    })
+    .passthrough();
+
+  registerTool(server, {
+    name: 'blueprint_list_comments',
+    description:
+      'List the comments on a Blueprint diagram in chronological order. Comments may be anchored to a specific node (node_id set) or attached to the diagram as a whole (node_id null), and carry a resolved flag. Use this to read review feedback before acting on it, or to find unresolved threads.',
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+    },
+    returns: z.object({ data: z.array(commentShape) }),
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/diagrams/${id}/comments`);
+      return result.ok ? ok(result.data) : err('listing blueprint comments', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_add_comment',
+    description:
+      "Add a comment to a Blueprint diagram. Anchor it to a specific node by passing `node_id` (e.g. to flag an issue with a particular step), or omit node_id to attach it to the diagram as a whole. `body` is the rich-text/markdown source; `body_plain` is an optional plain-text rendering used for search and notifications. Broadcasts a blueprint.comment.created event so collaborators see it live.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+      body: z.string().min(1).max(10000).describe('Comment body (rich-text/markdown source, max 10000 chars)'),
+      body_plain: z.string().max(10000).nullable().optional().describe('Optional plain-text rendering of the comment (for search/notifications)'),
+      node_id: z.string().uuid().nullable().optional().describe('Node to anchor the comment to (null/omit for a diagram-level comment)'),
+    },
+    returns: z.object({ data: commentShape }),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('POST', `/diagrams/${id}/comments`, body);
+      return result.ok ? ok(result.data) : err('adding blueprint comment', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_update_comment',
+    description:
+      "Edit a Blueprint comment's text or toggle its resolved state. Provide only the fields to change: pass `resolved: true` to resolve a review thread (or `false` to reopen it), and/or `body`/`body_plain` to edit the text. This is the resolve mechanism — there is no separate resolve endpoint.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+      comment_id: z.string().uuid().describe('Comment ID'),
+      body: z.string().min(1).max(10000).optional().describe('Updated comment body'),
+      body_plain: z.string().max(10000).nullable().optional().describe('Updated plain-text rendering (null to clear)'),
+      resolved: z.boolean().optional().describe('Set true to resolve the comment thread, false to reopen it'),
+    },
+    returns: z.object({ data: commentShape }),
+    handler: async ({ id, comment_id, ...body }) => {
+      const result = await client.request('PATCH', `/diagrams/${id}/comments/${comment_id}`, body);
+      return result.ok ? ok(result.data) : err('updating blueprint comment', result.data);
+    },
+  });
+
+  // ===== COLLABORATORS (3) =====
+
+  const collaboratorShape = z
+    .object({
+      id: z.string().uuid().optional(),
+      diagram_id: z.string().uuid().optional(),
+      user_id: z.string().uuid(),
+      role: z.string(),
+      created_at: z.string().optional(),
+    })
+    .passthrough();
+
+  registerTool(server, {
+    name: 'blueprint_list_collaborators',
+    description:
+      "List the explicit collaborators on a Blueprint diagram and their per-diagram roles (owner / editor / commenter / viewer). These are direct share grants on top of any project- or org-level visibility. Use this to see who has been granted access before adding or removing a collaborator.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+    },
+    returns: z.object({ data: z.array(collaboratorShape) }),
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/diagrams/${id}/collaborators`);
+      return result.ok ? ok(result.data) : err('listing blueprint collaborators', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_add_collaborator',
+    description:
+      "Grant a user explicit access to a Blueprint diagram at a given role. `role` is one of owner / editor / commenter / viewer (defaults to editor). Idempotent: re-adding an existing collaborator updates their role rather than erroring. `user_id` must be a Bam user UUID — resolve emails/names first via find_user_by_email / find_user_by_name.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+      user_id: z.string().uuid().describe('Bam user UUID to grant access to'),
+      role: z.enum(['owner', 'editor', 'commenter', 'viewer']).optional().describe('Collaboration role (default editor)'),
+    },
+    returns: z.object({ data: collaboratorShape }),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('POST', `/diagrams/${id}/collaborators`, body);
+      return result.ok ? ok(result.data) : err('adding blueprint collaborator', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_remove_collaborator',
+    description:
+      "Revoke a user's explicit collaborator grant on a Blueprint diagram. This removes only the direct share grant — the user may still see the diagram via project- or org-level visibility. Destructive — requires confirm_action=true to actually proceed. Call once with confirm_action: false (or omit) to preview, then call again with true to commit.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID'),
+      user_id: z.string().uuid().describe('Bam user UUID whose collaborator grant to revoke'),
+      confirm_action: z.boolean().describe('Must be true to actually remove. Call once with false (or omit) to preview, then call again with true.'),
+    },
+    returns: z.object({ data: z.object({ removed: z.boolean() }) }).passthrough(),
+    handler: async ({ id, user_id, confirm_action }) => {
+      if (!confirm_action) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Are you sure you want to remove collaborator ${user_id} from Blueprint diagram ${id}? This revokes only their direct share grant; they may still see the diagram via project/org visibility. Call blueprint_remove_collaborator again with confirm_action: true to proceed.`,
+          }],
+        };
+      }
+      const result = await client.request('DELETE', `/diagrams/${id}/collaborators/${user_id}`);
+      return result.ok ? ok(result.data) : err('removing blueprint collaborator', result.data);
+    },
+  });
+
+  // ===== STARS (2) =====
+
+  registerTool(server, {
+    name: 'blueprint_star',
+    description:
+      "Star a Blueprint diagram for the calling user, so it surfaces in their starred list (blueprint_list with starred=true). Idempotent — starring an already-starred diagram is a no-op. Personal bookmark only; does not affect other users.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID to star'),
+    },
+    returns: z.object({ data: z.object({ starred: z.boolean() }) }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/diagrams/${id}/star`);
+      return result.ok ? ok(result.data) : err('starring blueprint diagram', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'blueprint_unstar',
+    description:
+      "Remove the calling user's star from a Blueprint diagram. Idempotent — unstarring a diagram that was not starred is a no-op. Personal bookmark only; does not affect other users.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID to unstar'),
+    },
+    returns: z.object({ data: z.object({ starred: z.boolean() }) }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/diagrams/${id}/star`);
+      return result.ok ? ok(result.data) : err('unstarring blueprint diagram', result.data);
+    },
+  });
+
+  // ===== MERMAID IMPORT (1) =====
+
+  registerTool(server, {
+    name: 'blueprint_import_mermaid',
+    description:
+      "Import a Mermaid source string into a Blueprint diagram, materializing its nodes and edges into the typed graph. Set `replace: true` to wipe the existing graph first (otherwise the parsed nodes/edges are appended). This is the agent path for turning a Mermaid block (e.g. from a Brief, a Beacon entry, or an LLM draft) into an editable, queryable Blueprint graph. After import, call blueprint_apply_layout if you want ELK to position the new nodes. Returns import counts.",
+    input: {
+      id: z.string().uuid().describe('Diagram ID to import into'),
+      source: z.string().min(1).max(200000).describe('Mermaid source string (max 200000 chars)'),
+      replace: z.boolean().optional().describe('Wipe the existing graph before importing (default false — appends)'),
+    },
+    returns: z.object({ data: z.unknown() }).passthrough(),
+    handler: async ({ id, source, replace }) => {
+      const result = await client.request('POST', `/diagrams/${id}/import`, {
+        format: 'mermaid',
+        source,
+        replace,
+      });
+      return result.ok ? ok(result.data) : err('importing mermaid into blueprint', result.data);
+    },
+  });
+
+  // ===== TEMPLATES (1) =====
+
+  registerTool(server, {
+    name: 'blueprint_list_templates',
+    description:
+      "List the Blueprint diagram templates available to the caller's org. Templates seed a new diagram via the `template_id` parameter of blueprint_create. Returns template metadata; use the returned id as template_id when creating a diagram.",
+    input: {},
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string() }).passthrough()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/templates');
+      return result.ok ? ok(result.data) : err('listing blueprint templates', result.data);
     },
   });
 }

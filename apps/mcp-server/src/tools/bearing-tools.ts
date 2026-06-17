@@ -35,7 +35,17 @@ function createBearingClient(bearingApiUrl: string, api: ApiClient) {
     }
 
     const res = await fetch(url, init);
-    const data = await res.json();
+    // Tolerate empty (204 No Content) and non-JSON bodies so DELETE/204 tools
+    // report success instead of throwing "Unexpected end of JSON input".
+    const __text = await res.text();
+    let data: unknown = null;
+    if (__text) {
+      try {
+        data = JSON.parse(__text);
+      } catch {
+        data = __text;
+      }
+    }
     return { ok: res.ok, status: res.status, data };
   }
 
@@ -536,6 +546,342 @@ export function registerBearingTools(server: McpServer, api: ApiClient, bearingA
     handler: async () => {
       const result = await client.request('GET', '/reports/at-risk');
       return result.ok ? ok(result.data) : err('fetching at-risk goals', result.data);
+    },
+  });
+
+  // ===== GOALS — additional (delete / status override / updates / watchers / history) =====
+
+  registerTool(server, {
+    name: 'bearing_goal_delete',
+    description: 'Delete a goal and its key results. `id` accepts either a UUID or the goal title.',
+    input: {
+      id: z.string().describe('Goal UUID or goal title'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const goalId = await resolveGoalId(client, id);
+      if (!goalId) {
+        return err('deleting goal', { message: `Goal not found by title or id: ${id}` });
+      }
+      const result = await client.request('DELETE', `/goals/${goalId}`);
+      return result.ok ? ok({ deleted: true, id: goalId }) : err('deleting goal', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_goal_status_override',
+    description: 'Manually override a goal\'s status (e.g. force "at_risk" or "achieved"), bypassing automatic progress-derived status. `id` accepts a UUID or the goal title.',
+    input: {
+      id: z.string().describe('Goal UUID or goal title'),
+      status: z.enum(['draft', 'on_track', 'at_risk', 'behind', 'achieved', 'missed']).describe('New status to set'),
+    },
+    returns: goalShape,
+    handler: async ({ id, status }) => {
+      const goalId = await resolveGoalId(client, id);
+      if (!goalId) {
+        return err('overriding goal status', { message: `Goal not found by title or id: ${id}` });
+      }
+      const result = await client.request('POST', `/goals/${goalId}/status`, { status });
+      return result.ok ? ok(result.data) : err('overriding goal status', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_goal_updates',
+    description: 'List the status updates posted on a goal. `id` accepts a UUID or the goal title.',
+    input: {
+      id: z.string().describe('Goal UUID or goal title'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), goal_id: z.string().uuid(), status: z.string(), body: z.string().nullable().optional(), created_at: z.string() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const goalId = await resolveGoalId(client, id);
+      if (!goalId) {
+        return err('listing goal updates', { message: `Goal not found by title or id: ${id}` });
+      }
+      const result = await client.request('GET', `/goals/${goalId}/updates`);
+      return result.ok ? ok(result.data) : err('listing goal updates', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_goal_watchers',
+    description: 'List the users watching a goal. `id` accepts a UUID or the goal title.',
+    input: {
+      id: z.string().describe('Goal UUID or goal title'),
+    },
+    returns: z.object({ data: z.array(z.object({ user_id: z.string().uuid() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const goalId = await resolveGoalId(client, id);
+      if (!goalId) {
+        return err('listing goal watchers', { message: `Goal not found by title or id: ${id}` });
+      }
+      const result = await client.request('GET', `/goals/${goalId}/watchers`);
+      return result.ok ? ok(result.data) : err('listing goal watchers', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_goal_watch',
+    description: 'Add the calling user as a watcher on a goal (subscribe to its updates). `id` accepts a UUID or the goal title. The watcher is always the authenticated caller; there is no target-user parameter.',
+    input: {
+      id: z.string().describe('Goal UUID or goal title'),
+    },
+    returns: z.object({ goal_id: z.string().uuid(), user_id: z.string().uuid() }).passthrough(),
+    handler: async ({ id }) => {
+      const goalId = await resolveGoalId(client, id);
+      if (!goalId) {
+        return err('adding goal watcher', { message: `Goal not found by title or id: ${id}` });
+      }
+      const result = await client.request('POST', `/goals/${goalId}/watchers`);
+      return result.ok ? ok(result.data) : err('adding goal watcher', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_goal_unwatch',
+    description: 'Remove a watcher from a goal. `id` accepts a UUID or goal title; `user_id` accepts a UUID or email address. You may remove yourself, or — if you are the goal owner or an org admin/owner — remove another user.',
+    input: {
+      id: z.string().describe('Goal UUID or goal title'),
+      user_id: z.string().describe('Watcher to remove: user UUID or email address'),
+    },
+    returns: z.object({ removed: z.literal(true), goal_id: z.string().uuid(), user_id: z.string().uuid() }),
+    handler: async ({ id, user_id }) => {
+      const goalId = await resolveGoalId(client, id);
+      if (!goalId) {
+        return err('removing goal watcher', { message: `Goal not found by title or id: ${id}` });
+      }
+      const userId = await resolveOwnerId(api, user_id);
+      if (!userId) {
+        return err('removing goal watcher', { message: `User not found by email or id: ${user_id}` });
+      }
+      const result = await client.request('DELETE', `/goals/${goalId}/watchers/${userId}`);
+      return result.ok ? ok({ removed: true, goal_id: goalId, user_id: userId }) : err('removing goal watcher', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_goal_history',
+    description: 'Get the progress history (point-in-time snapshots) for a goal. `id` accepts a UUID or the goal title.',
+    input: {
+      id: z.string().describe('Goal UUID or goal title'),
+    },
+    returns: z.object({ data: z.array(z.object({}).passthrough()) }).passthrough(),
+    handler: async ({ id }) => {
+      const goalId = await resolveGoalId(client, id);
+      if (!goalId) {
+        return err('fetching goal history', { message: `Goal not found by title or id: ${id}` });
+      }
+      const result = await client.request('GET', `/goals/${goalId}/history`);
+      return result.ok ? ok(result.data) : err('fetching goal history', result.data);
+    },
+  });
+
+  // ===== KEY RESULTS — additional (list / get / delete / links / history) =====
+
+  registerTool(server, {
+    name: 'bearing_kr_list',
+    description: 'List the key results for a goal. `goal_id` accepts a UUID or the goal title.',
+    input: {
+      goal_id: z.string().describe('Goal UUID or goal title'),
+    },
+    returns: z.object({ data: z.array(krShape) }),
+    handler: async ({ goal_id }) => {
+      const goalId = await resolveGoalId(client, goal_id);
+      if (!goalId) {
+        return err('listing key results', { message: `Goal not found by title or id: ${goal_id}` });
+      }
+      const result = await client.request('GET', `/goals/${goalId}/key-results`);
+      return result.ok ? ok(result.data) : err('listing key results', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_kr_get',
+    description: 'Get a single key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.',
+    input: {
+      id: z.string().describe('Key result UUID or KR title'),
+    },
+    returns: krShape,
+    handler: async ({ id }) => {
+      const krId = await resolveKeyResultId(client, id);
+      if (!krId) {
+        return err('getting key result', {
+          message: `Key result not found by title or id: ${id}. If the title is shared across multiple goals, pass the UUID.`,
+        });
+      }
+      const result = await client.request('GET', `/key-results/${krId}`);
+      return result.ok ? ok(result.data) : err('getting key result', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_kr_delete',
+    description: 'Delete a key result. `id` accepts a UUID or the KR title — if the title is shared across multiple goals the tool fails and asks for disambiguation.',
+    input: {
+      id: z.string().describe('Key result UUID or KR title'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const krId = await resolveKeyResultId(client, id);
+      if (!krId) {
+        return err('deleting key result', {
+          message: `Key result not found by title or id: ${id}. If the title is shared across multiple goals, pass the UUID.`,
+        });
+      }
+      const result = await client.request('DELETE', `/key-results/${krId}`);
+      return result.ok ? ok({ deleted: true, id: krId }) : err('deleting key result', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_kr_links',
+    description: 'List the Bam-entity links attached to a key result. `key_result_id` accepts a UUID or the KR title.',
+    input: {
+      key_result_id: z.string().describe('Key result UUID or KR title'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), key_result_id: z.string().uuid() }).passthrough()) }),
+    handler: async ({ key_result_id }) => {
+      const krId = await resolveKeyResultId(client, key_result_id);
+      if (!krId) {
+        return err('listing key result links', {
+          message: `Key result not found by title or id: ${key_result_id}. If the title is shared across multiple goals, pass the UUID.`,
+        });
+      }
+      const result = await client.request('GET', `/key-results/${krId}/links`);
+      return result.ok ? ok(result.data) : err('listing key result links', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_kr_unlink',
+    description: 'Remove a link from a key result. `key_result_id` accepts a UUID or the KR title; `link_id` is the link UUID (get it from bearing_kr_links).',
+    input: {
+      key_result_id: z.string().describe('Key result UUID or KR title'),
+      link_id: z.string().uuid().describe('Link UUID to remove'),
+    },
+    returns: z.object({ removed: z.literal(true), key_result_id: z.string().uuid(), link_id: z.string().uuid() }),
+    handler: async ({ key_result_id, link_id }) => {
+      const krId = await resolveKeyResultId(client, key_result_id);
+      if (!krId) {
+        return err('removing key result link', {
+          message: `Key result not found by title or id: ${key_result_id}. If the title is shared across multiple goals, pass the UUID.`,
+        });
+      }
+      const result = await client.request('DELETE', `/key-results/${krId}/links/${link_id}`);
+      return result.ok
+        ? ok({ removed: true, key_result_id: krId, link_id })
+        : err('removing key result link', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_kr_history',
+    description: 'Get the value/progress snapshot history for a key result. `id` accepts a UUID or the KR title.',
+    input: {
+      id: z.string().describe('Key result UUID or KR title'),
+    },
+    returns: z.object({ data: z.array(z.object({}).passthrough()) }).passthrough(),
+    handler: async ({ id }) => {
+      const krId = await resolveKeyResultId(client, id);
+      if (!krId) {
+        return err('fetching key result history', {
+          message: `Key result not found by title or id: ${id}. If the title is shared across multiple goals, pass the UUID.`,
+        });
+      }
+      const result = await client.request('GET', `/key-results/${krId}/history`);
+      return result.ok ? ok(result.data) : err('fetching key result history', result.data);
+    },
+  });
+
+  // ===== PERIODS — additional (create / update / delete / activate / complete) =====
+
+  registerTool(server, {
+    name: 'bearing_period_create',
+    description: 'Create a new OKR period (planning window such as a quarter). Dates are YYYY-MM-DD.',
+    input: {
+      name: z.string().min(1).max(100).describe('Period label (e.g. "Q2 2026")'),
+      period_type: z.enum(['quarter', 'half', 'year', 'month', 'custom']).describe('Period cadence'),
+      starts_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Start date (YYYY-MM-DD)'),
+      ends_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('End date (YYYY-MM-DD)'),
+      status: z.enum(['planning', 'active', 'completed', 'archived']).optional().describe('Initial status (default planning)'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string(), status: z.string() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('POST', '/periods', params);
+      return result.ok ? ok(result.data) : err('creating period', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_period_update',
+    description: 'Update an OKR period. `id` accepts a UUID or the period label (e.g. "Q2 2026"). Provide only the fields to change. Setting status to "archived" archives the period.',
+    input: {
+      id: z.string().describe('Period UUID or period label'),
+      name: z.string().min(1).max(100).optional().describe('Updated label'),
+      period_type: z.enum(['quarter', 'half', 'year', 'month', 'custom']).optional().describe('Updated cadence'),
+      starts_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Updated start date (YYYY-MM-DD)'),
+      ends_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Updated end date (YYYY-MM-DD)'),
+      status: z.enum(['planning', 'active', 'completed', 'archived']).optional().describe('Updated status'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string(), status: z.string() }).passthrough(),
+    handler: async ({ id, ...rest }) => {
+      const periodId = await resolvePeriodId(client, id);
+      if (!periodId) {
+        return err('updating period', { message: `Period not found by label or id: ${id}` });
+      }
+      const result = await client.request('PATCH', `/periods/${periodId}`, rest);
+      return result.ok ? ok(result.data) : err('updating period', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_period_delete',
+    description: 'Delete an OKR period. `id` accepts a UUID or the period label (e.g. "Q2 2026").',
+    input: {
+      id: z.string().describe('Period UUID or period label'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const periodId = await resolvePeriodId(client, id);
+      if (!periodId) {
+        return err('deleting period', { message: `Period not found by label or id: ${id}` });
+      }
+      const result = await client.request('DELETE', `/periods/${periodId}`);
+      return result.ok ? ok({ deleted: true, id: periodId }) : err('deleting period', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_period_activate',
+    description: 'Activate an OKR period (mark it the current/live planning window). `id` accepts a UUID or the period label.',
+    input: {
+      id: z.string().describe('Period UUID or period label'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string(), status: z.string() }).passthrough(),
+    handler: async ({ id }) => {
+      const periodId = await resolvePeriodId(client, id);
+      if (!periodId) {
+        return err('activating period', { message: `Period not found by label or id: ${id}` });
+      }
+      const result = await client.request('POST', `/periods/${periodId}/activate`);
+      return result.ok ? ok(result.data) : err('activating period', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bearing_period_complete',
+    description: 'Complete an OKR period (close it out at end of cadence). `id` accepts a UUID or the period label.',
+    input: {
+      id: z.string().describe('Period UUID or period label'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string(), status: z.string() }).passthrough(),
+    handler: async ({ id }) => {
+      const periodId = await resolvePeriodId(client, id);
+      if (!periodId) {
+        return err('completing period', { message: `Period not found by label or id: ${id}` });
+      }
+      const result = await client.request('POST', `/periods/${periodId}/complete`);
+      return result.ok ? ok(result.data) : err('completing period', result.data);
     },
   });
 }
