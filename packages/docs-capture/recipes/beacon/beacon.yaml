@@ -19,6 +19,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Knowledge home" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -31,6 +32,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Knowledge home" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -45,6 +47,7 @@
     - { action: click, selector: "aside button:has-text('Browse')", optional: true }
     - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Browse articles" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -64,6 +67,7 @@
     - { action: wait, ms: 2500 }
   expect: ["main button:has-text('Verify'), main button:has-text('Challenge'), main button:has-text('Edit')"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Article detail" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -78,6 +82,7 @@
     - { action: click, selector: "aside button:has-text('Graph')", optional: true }
     - { action: wait, ms: 3000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Knowledge graph" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -92,6 +97,7 @@
     - { action: click, selector: "aside button:has-text('Dashboard')", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Freshness dashboard" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -111,6 +117,7 @@
     - { action: press, selector: "input[placeholder*='earch']", value: "Enter", optional: true }
     - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Hybrid search" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"

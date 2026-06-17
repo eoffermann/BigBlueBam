@@ -271,6 +271,7 @@ async function captureRecipe(
       frozenTime: FROZEN_TIME_ISO,
       gitSha,
       capturedAt: new Date().toISOString(),
+      ...(recipe.doc ? { doc: recipe.doc } : {}),
     });
     log(`  [OK]   ${recipe.app}/${recipe.id}.png  (${width}x${height})`);
     return { id: recipe.id, app: recipe.app, ok: true, file };
@@ -304,7 +305,15 @@ export async function runRecipes(recipes: LoadedRecipe[], opts: RunOptions): Pro
 
     for (const loaded of recipes) {
       const state = authByIdentity.get(loaded.recipe.identity)!;
-      results.push(await captureRecipe(browser, loaded, opts, state, manifest, gitSha));
+      let result = await captureRecipe(browser, loaded, opts, state, manifest, gitSha);
+      if (!result.ok) {
+        // One retry: most failures are transient load/timeout races under
+        // fresh-login + back-to-back captures, not real recipe faults. A genuinely
+        // broken recipe (missing data, bad selector) simply fails twice.
+        log(`  [retry] ${loaded.recipe.app}/${loaded.recipe.id}`);
+        result = await captureRecipe(browser, loaded, opts, state, manifest, gitSha);
+      }
+      results.push(result);
     }
   } finally {
     await browser.close();

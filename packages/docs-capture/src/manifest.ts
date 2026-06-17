@@ -29,6 +29,8 @@ export interface ManifestEntry {
   frozenTime: string;
   gitSha: string;
   capturedAt: string;
+  /** Present when the recipe opted into the docs via its `doc:` field. */
+  doc?: { order: number; label: string };
 }
 
 /** Resolve the current git SHA once (short-circuits to env or "unknown"). */

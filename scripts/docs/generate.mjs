@@ -126,19 +126,24 @@ function main() {
     // Stage 1: Health check
     checkHealth();
 
-    // Stage 2: Capture (screenshots)
+    // Stage 2a: Capture (recipe-driven engine -> shared screenshots/ tree).
+    // Credentials + target org come from the environment / screenshots.config.json
+    // (see packages/docs-capture environment resolver); generate.mjs forwards none.
+    const appsVal = appsFlag ? appsFlag.slice('--apps='.length) : '';
     if (skipCapture) {
-      console.log('\n--- Stage 2: Capture ---\n');
+      console.log('\n--- Stage 2a: Capture ---\n');
       console.log('  Skipped (--skip-capture)');
     } else {
-      const captureScript = path.join(ROOT, 'scripts', 'docs', 'capture.mjs');
-      if (fs.existsSync(captureScript)) {
-        runCommand('Stage 2: Capture', `node scripts/docs/capture.mjs${fwdStr}`);
-      } else {
-        console.log('\n--- Stage 2: Capture ---\n');
-        console.log('  Skipped (capture.mjs not yet implemented)');
-      }
+      runCommand(
+        'Stage 2a: Capture (recipe engine)',
+        `pnpm --filter @bigbluebam/docs-capture exec tsx src/cli.ts${appsVal ? ` --apps ${appsVal}` : ''}`,
+      );
     }
+
+    // Stage 2b: Bridge the shared tree into the docs layout (light/dark + meta.json)
+    // for every capture that opted in via its recipe `doc:` field. Idempotent;
+    // runs even with --skip-capture so docs reflect the current manifest.
+    runCommand('Stage 2b: Bridge -> docs', `node scripts/docs/bridge.mjs${appsVal ? ` --apps=${appsVal}` : ''}`);
 
     // Stage 3: Extract
     runCommand('Stage 3: Extract', `node scripts/docs/extract.mjs${fwdStr}`);

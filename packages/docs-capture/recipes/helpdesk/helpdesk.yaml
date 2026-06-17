@@ -31,6 +31,7 @@
     - { action: waitFor, selector: "input#email", optional: true }
   expect: ["input#email", "input#password"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Support portal" }
 
 - id: helpdesk-portal-entry-dark
   app: helpdesk
@@ -41,6 +42,7 @@
     - { action: waitFor, selector: "input#email", optional: true }
   expect: ["input#email"]
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Support portal" }
 
 - id: helpdesk-login
   app: helpdesk
@@ -67,6 +69,7 @@
   expectNot: ["input#password"]
   expect: ["button:has-text('New Ticket')"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "My tickets" }
   masks:
     - "[data-relative-time], time"
 
@@ -84,6 +87,7 @@
     - { action: wait, ms: 2000, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
   expectNot: ["input#password"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Ticket detail" }
   masks:
     - "[data-relative-time], time"
 
@@ -105,3 +109,4 @@
     - { action: wait, ms: 800, skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
   expectNot: ["input#password"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "New ticket" }

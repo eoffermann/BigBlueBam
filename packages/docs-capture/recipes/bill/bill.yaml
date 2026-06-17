@@ -21,6 +21,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Billing dashboard" }
   masks:
     - "table td:has-text('/')"
 
@@ -32,6 +33,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Invoice list" }
   masks:
     - "table td:has-text('/')"
 
@@ -43,6 +45,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 2, label: "Invoice list" }
   masks:
     - "table td:has-text('/')"
 
@@ -54,6 +57,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "New invoice" }
 
 - id: bill-invoice-detail
   app: bill
@@ -70,6 +74,7 @@
     - { action: click, selector: "table tbody td.cursor-pointer", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Invoice detail" }
   masks:
     - "table td:has-text('/')"
 
@@ -90,6 +95,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Expense list" }
   masks:
     - "table td:has-text('/')"
 
@@ -112,6 +118,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Financial reports" }
   masks:
     - "table td:has-text('/')"
 

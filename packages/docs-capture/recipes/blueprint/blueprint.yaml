@@ -28,6 +28,7 @@
     - { action: waitFor, selector: main }
     - { action: waitFor, selector: "div.group.cursor-pointer", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Diagram list" }
 
 - id: blueprint-diagram-editor
   app: blueprint
@@ -43,6 +44,7 @@
     - { action: wait, ms: 3500 }
   expect: [".react-flow"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Diagram editor" }
 
 - id: blueprint-editor-via-card
   app: blueprint
@@ -67,6 +69,7 @@
     - { action: waitFor, selector: "input#bp-new-name", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "New diagram" }
 
 - id: blueprint-starred-filter
   app: blueprint
@@ -78,6 +81,7 @@
     - { action: click, selector: "button:has-text('Starred')", optional: true }
     - { action: wait, ms: 1200 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Starred diagrams" }
 
 - id: blueprint-archived-filter
   app: blueprint
@@ -89,6 +93,7 @@
     - { action: click, selector: "button:has-text('Archived')", optional: true }
     - { action: wait, ms: 1200 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Archived diagrams" }
 
 - id: blueprint-diagram-list-dark
   app: blueprint
@@ -99,3 +104,4 @@
     - { action: waitFor, selector: main }
     - { action: waitFor, selector: "div.group.cursor-pointer", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Diagram list" }

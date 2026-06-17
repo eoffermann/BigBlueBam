@@ -50,6 +50,7 @@
     - { action: wait, ms: 2000 }
   expect: ["[data-task-id]"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Kanban board" }
   masks:
     - "[data-testid='presence-avatars']"
 
@@ -67,6 +68,7 @@
     - { action: wait, ms: 2000 }
   expect: ["[data-task-id]"]
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Kanban board" }
   masks:
     - "[data-testid='presence-avatars']"
 
@@ -86,6 +88,7 @@
     - { action: click, selector: "[data-task-id]", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Task detail" }
   masks:
     - "[data-testid='relative-timestamp']"
 
@@ -107,6 +110,7 @@
     - { action: fill, selector: "input[placeholder='Sprint 1']", value: "Voyage Sprint — Escape the Island", optional: true }
     - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Sprint planning" }
 
 # ---------------------------------------------------------------------------
 # Alternate views — List / Timeline / Calendar / Workload (view switcher).
@@ -124,6 +128,7 @@
     - { action: click, selector: "button[aria-label='List view']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "List view" }
 
 - id: bam-timeline-view
   app: bam
@@ -224,6 +229,7 @@
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "My Work" }
   masks:
     - "[data-testid='relative-timestamp']"
 
@@ -279,5 +285,6 @@
     - { action: click, selector: "button:has-text('Integrations')", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Integrations & API keys" }
   masks:
     - "[data-testid='api-key-secret']"

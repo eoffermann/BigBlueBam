@@ -27,6 +27,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Forms list" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -39,6 +40,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Forms list" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -54,6 +56,7 @@
     - { action: wait, ms: 2000 }
     - { action: waitFor, selector: "h3:has-text('Add Field')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Form builder" }
 
 - id: blank-form-preview
   app: blank
@@ -70,6 +73,7 @@
     - { action: wait, ms: 2500 }
     - { action: waitFor, selector: "span:has-text('Live Preview')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Live preview" }
 
 - id: blank-form-settings-dialog
   app: blank
@@ -84,6 +88,7 @@
     - { action: wait, ms: 1000 }
     - { action: waitFor, selector: "h2:has-text('Form Settings')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Form settings" }
 
 - id: blank-responses
   app: blank
@@ -100,6 +105,7 @@
     - { action: wait, ms: 2000 }
     - { action: waitFor, selector: "h1:has-text('Responses')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Responses table" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"
@@ -121,6 +127,7 @@
     - { action: wait, ms: 2500 }
     - { action: waitFor, selector: "h1:has-text('Analytics')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Form analytics" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "time"

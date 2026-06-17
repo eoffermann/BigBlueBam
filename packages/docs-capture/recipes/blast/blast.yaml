@@ -22,6 +22,7 @@
     - { action: waitFor, selector: "h1:has-text('Campaigns')", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Campaign list" }
   masks:
     # Date column (live sent/scheduled/created dates)
     - "table tbody td:last-child"
@@ -36,6 +37,7 @@
     - { action: waitFor, selector: "h1:has-text('Campaigns')", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Campaign list" }
   masks:
     - "table tbody td:last-child"
 
@@ -49,6 +51,7 @@
     - { action: waitFor, selector: "h1:has-text('New Campaign')", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "New campaign" }
 
 - id: blast-campaign-new-html
   app: blast
@@ -71,6 +74,7 @@
     - { action: waitFor, selector: "h1:has-text('Templates')", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Template gallery" }
   masks:
     # "updated N ago" relative time on each card
     - "div.group span.text-zinc-400"
@@ -84,6 +88,7 @@
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1200 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Template editor" }
 
 - id: blast-segments
   app: blast
@@ -95,6 +100,7 @@
     - { action: waitFor, selector: "h1:has-text('Segments')", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Segment list" }
   masks:
     # "Last Updated" relative-time column (4th body cell)
     - "table tbody td:nth-child(4)"
@@ -112,6 +118,7 @@
     - { action: fill, selector: "input[placeholder='Brief description...']", value: "Captains and vessels in our shipping lanes who might carry the castaways home.", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Segment builder" }
 
 - id: blast-analytics
   app: blast
@@ -123,6 +130,7 @@
     - { action: waitFor, selector: "h1:has-text('Email Analytics')", optional: true }
     - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Email analytics" }
   masks:
     # Stat-card values + sub-values (Total Sent / Delivered / open / click / bounce)
     - "p.text-2xl"

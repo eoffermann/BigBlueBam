@@ -14,6 +14,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Dashboard list" }
   masks:
     - "time"
     - "[datetime]"
@@ -28,6 +29,7 @@
     - { action: click, selector: '[class*="rounded-xl"][class*="cursor-pointer"]', optional: true }
     - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Dashboard view" }
   masks:
     - "time"
     - "[datetime]"
@@ -43,6 +45,7 @@
     - { action: click, selector: '[class*="rounded-xl"][class*="cursor-pointer"]', optional: true }
     - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 2, label: "Dashboard view" }
   masks:
     - "time"
     - "[datetime]"
@@ -62,6 +65,7 @@
     - { action: click, selector: "button:has-text('Run Query')", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Ad-hoc explorer" }
   masks:
     - "time"
     - "[datetime]"
@@ -74,6 +78,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Scheduled reports" }
   masks:
     - "time"
     - "[datetime]"
@@ -98,6 +103,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Bench settings" }
 
 - id: bench-widget-wizard
   app: bench
@@ -107,3 +113,4 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Widget wizard" }

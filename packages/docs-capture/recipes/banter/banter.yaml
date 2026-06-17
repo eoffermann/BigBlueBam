@@ -38,6 +38,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Channels & sidebar" }
   masks:
     - "[data-testid='presence-indicator']"
     - "[data-testid='presence-dot']"
@@ -54,6 +55,7 @@
     - { action: click, selector: "aside button:has(span:text-is('rescue-ops'))", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Channel conversation" }
   masks:
     - "[data-testid='presence-indicator']"
     - "[data-testid='presence-dot']"
@@ -70,6 +72,7 @@
     - { action: click, selector: "aside button:has(span:text-is('rescue-ops'))", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Channel conversation" }
   masks:
     - "[data-testid='presence-indicator']"
     - "[data-testid='presence-dot']"
@@ -90,6 +93,7 @@
     - { action: click, selector: "main [title='Reply in thread']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Threaded replies" }
   masks:
     - "[data-testid='presence-indicator']"
     - "[data-testid='presence-dot']"
@@ -131,6 +135,7 @@
     - { action: click, selector: "aside button:has(div.h-5.w-5.rounded-md)", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Direct messages" }
   masks:
     - "[data-testid='presence-indicator']"
     - "[data-testid='presence-dot']"
@@ -172,6 +177,7 @@
     - { action: press, selector: "input[placeholder*='earch' i], input[type='search']", value: "Enter", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Message search" }
   masks:
     - "[data-testid='relative-timestamp']"
 
@@ -185,3 +191,4 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Preferences" }

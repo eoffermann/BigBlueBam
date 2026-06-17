@@ -33,6 +33,7 @@
     - { action: waitFor, selector: main }
     - { action: waitFor, selector: "button.group", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Floor directory" }
   masks:
     # "N people here now" occupancy row — varies with live presence.
     - "div:has(> svg.lucide-users)"
@@ -47,6 +48,7 @@
     - { action: waitFor, selector: main }
     - { action: waitFor, selector: "button.group", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Floor directory" }
   masks:
     - "div:has(> svg.lucide-users)"
 
@@ -65,6 +67,7 @@
     - { action: waitFor, selector: "canvas.floor-canvas", optional: true }
     - { action: wait, ms: 3500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Live floor" }
   masks:
     # Connection status chip ("Live" / connecting / reconnecting) varies with the WS link.
     - "span.text-emerald-600"
@@ -99,6 +102,7 @@
   # No masks: the only timestamps are deterministic under the frozen clock, and the
   # prior mask selector matched the "Recent chats" header icon (covered the title).
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Recent chats" }
 
 # --- Admin · Floors --------------------------------------------------------
 - id: bureau-admin-floors
@@ -110,6 +114,7 @@
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Manage floors" }
   masks:
     # Per-floor live occupancy counts vary with presence.
     - "div:has(> svg.lucide-users)"
@@ -124,3 +129,4 @@
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Office assignments" }

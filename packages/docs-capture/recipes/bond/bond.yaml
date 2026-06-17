@@ -36,6 +36,7 @@
     - { action: waitFor, selector: "div.group.cursor-pointer, main", optional: true }
     - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Pipeline board" }
   masks:
     - "div.group.cursor-pointer span:has(svg.lucide-clock)"
     - "div.group.cursor-pointer span:has(svg.lucide-calendar)"
@@ -49,6 +50,7 @@
     - { action: waitFor, selector: "div.group.cursor-pointer, main", optional: true }
     - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Pipeline board" }
   masks:
     - "div.group.cursor-pointer span:has(svg.lucide-clock)"
     - "div.group.cursor-pointer span:has(svg.lucide-calendar)"
@@ -65,6 +67,7 @@
     - { action: click, selector: "div.group.cursor-pointer", optional: true }
     - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Deal detail" }
   masks:
     - "time"
     - "td:has-text('/')"
@@ -77,6 +80,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Contacts list" }
   masks:
     - "tbody tr td:last-child"
 
@@ -90,6 +94,7 @@
     - { action: click, selector: "tbody tr", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Contact detail" }
   masks:
     - "time"
 
@@ -101,6 +106,7 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Companies list" }
 
 - id: bond-company-detail
   app: bond
@@ -124,3 +130,4 @@
     - { action: waitFor, selector: main, optional: true }
     - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Analytics dashboard" }

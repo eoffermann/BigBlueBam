@@ -28,6 +28,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Document home" }
   masks:
     - "[data-testid='relative-timestamp']"
 
@@ -39,6 +40,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Document home" }
   masks:
     - "[data-testid='relative-timestamp']"
 
@@ -51,6 +53,7 @@
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Document list" }
   masks:
     - "[data-testid='relative-timestamp']"
 
@@ -67,6 +70,7 @@
     - { action: click, selector: "button:has(h3)", optional: true }
     - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Document reader" }
   masks:
     - "[data-testid='relative-timestamp']"
     - "[data-testid='presence-avatars']"
@@ -88,6 +92,7 @@
     - { action: click, selector: "button:has-text('Edit')", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Document editor" }
 
 - id: brief-templates
   app: brief
@@ -98,6 +103,7 @@
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Templates browser" }
 
 - id: brief-search
   app: brief
@@ -110,6 +116,7 @@
     - { action: press, selector: "input[placeholder*='search' i], input[placeholder*='Type to' i], input[type='search']", value: "Enter", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Search results" }
   masks:
     - "[data-testid='relative-timestamp']"
 

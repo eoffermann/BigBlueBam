@@ -28,6 +28,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Week view" }
   masks:
     - "[data-testid='current-time-indicator']"
     - ".now-line"
@@ -40,6 +41,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Week view" }
   masks:
     - "[data-testid='current-time-indicator']"
     - ".now-line"
@@ -52,6 +54,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Month view" }
 
 - id: book-day-view
   app: book
@@ -73,6 +76,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Cross-app timeline" }
 
 - id: book-booking-pages
   app: book
@@ -82,6 +86,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Booking pages" }
 
 - id: book-working-hours
   app: book
@@ -91,6 +96,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Working hours" }
 
 - id: book-calendars
   app: book
@@ -100,3 +106,4 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Calendars" }

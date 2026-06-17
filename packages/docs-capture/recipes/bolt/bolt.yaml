@@ -25,6 +25,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Automations home" }
   masks:
     - "div.cursor-pointer p.text-xs.text-zinc-600"
 
@@ -36,6 +37,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Automation editor" }
 
 - id: bolt-automation-detail
   app: bolt
@@ -48,6 +50,7 @@
     - { action: wait, ms: 2000 }
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Automation detail" }
 
 - id: bolt-executions
   app: bolt
@@ -57,6 +60,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Execution log" }
   masks:
     - "tbody tr td:last-child"
 
@@ -71,6 +75,7 @@
     - { action: wait, ms: 2000 }
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Execution detail" }
   masks:
     - "main > div > div > div > p.text-sm.text-zinc-500"
 
@@ -98,6 +103,7 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Template gallery" }
 
 - id: bolt-automations-dark
   app: bolt
@@ -107,5 +113,6 @@
   interactions:
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Automations home" }
   masks:
     - "div.cursor-pointer p.text-xs.text-zinc-300"
