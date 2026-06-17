@@ -634,4 +634,154 @@ export function registerBeaconTools(server: McpServer, api: ApiClient, beaconApi
       return result.ok ? ok(result.data) : err('getting recent beacons', result.data);
     },
   });
+
+  // ===== Stats, links, comments, attachments (endpoint-parity additions) =====
+  //
+  // Read + comment/link/attachment management endpoints that previously had no
+  // MCP tool. The multipart attachment UPLOAD (POST /beacons/:id/attachments)
+  // is intentionally NOT exposed — binary multipart upload is not an
+  // agent-appropriate surface; agents reference existing attachments via the
+  // cross-cutting attachment_get / attachment_list tools. `GET /beacons/by-slug/:slug`
+  // is also not a standalone tool: it is the slug resolver that resolveBeaconId
+  // already performs internally for every write tool.
+
+  const commentShape = z
+    .object({
+      id: z.string().uuid(),
+      beacon_id: z.string().uuid().optional(),
+      author_id: z.string().uuid().optional(),
+      parent_id: z.string().uuid().nullable().optional(),
+      body_markdown: z.string().optional(),
+      created_at: z.string().optional(),
+    })
+    .passthrough();
+
+  registerTool(server, {
+    name: 'beacon_stats',
+    description: 'Org-wide Beacon statistics (counts by status, staleness, verification) for the active scope.',
+    input: {
+      project_id: z.string().uuid().optional().describe('Optional project scope filter'),
+    },
+    returns: z.object({}).passthrough().describe('Aggregated stats — shape varies'),
+    handler: async (params) => {
+      const result = await client.request('GET', `/beacons/stats${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('getting beacon stats', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'beacon_links_list',
+    description: "List a Beacon's typed links (related/depends-on/etc.). `id` accepts a UUID, slug, or title.",
+    input: {
+      id: z.string().describe('Beacon UUID, slug, or title'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const beaconId = await resolveBeaconId(client, id);
+      if (!beaconId) return beaconNotFound(id);
+      const result = await client.request('GET', `/beacons/${beaconId}/links`);
+      return result.ok ? ok(result.data) : err('listing beacon links', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'beacon_comments_list',
+    description: 'List all comments on a Beacon (threaded). `id` accepts a UUID, slug, or title.',
+    input: {
+      id: z.string().describe('Beacon UUID, slug, or title'),
+    },
+    returns: z.object({ data: z.array(commentShape) }),
+    handler: async ({ id }) => {
+      const beaconId = await resolveBeaconId(client, id);
+      if (!beaconId) return beaconNotFound(id);
+      const result = await client.request('GET', `/beacons/${beaconId}/comments`);
+      return result.ok ? ok(result.data) : err('listing beacon comments', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'beacon_comment_add',
+    description: 'Add a comment to a Beacon, optionally as a reply to another comment. `id` accepts a UUID, slug, or title.',
+    input: {
+      id: z.string().describe('Beacon UUID, slug, or title'),
+      body_markdown: z.string().min(1).max(20_000).describe('Comment body (Markdown)'),
+      parent_id: z.string().uuid().optional().describe('Parent comment ID to reply to'),
+    },
+    returns: commentShape,
+    handler: async ({ id, body_markdown, parent_id }) => {
+      const beaconId = await resolveBeaconId(client, id);
+      if (!beaconId) return beaconNotFound(id);
+      const result = await client.request('POST', `/beacons/${beaconId}/comments`, {
+        body_markdown,
+        parent_id: parent_id ?? null,
+      });
+      return result.ok ? ok(result.data) : err('adding beacon comment', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'beacon_comment_edit',
+    description: "Edit a comment's body (author only). `id` accepts a UUID, slug, or title.",
+    input: {
+      id: z.string().describe('Beacon UUID, slug, or title'),
+      comment_id: z.string().uuid().describe('Comment ID to edit'),
+      body_markdown: z.string().min(1).max(20_000).describe('New comment body (Markdown)'),
+    },
+    returns: commentShape,
+    handler: async ({ id, comment_id, body_markdown }) => {
+      const beaconId = await resolveBeaconId(client, id);
+      if (!beaconId) return beaconNotFound(id);
+      const result = await client.request('PUT', `/beacons/${beaconId}/comments/${comment_id}`, {
+        body_markdown,
+      });
+      return result.ok ? ok(result.data) : err('editing beacon comment', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'beacon_comment_delete',
+    description: 'Delete a comment from a Beacon (author or admin). `id` accepts a UUID, slug, or title.',
+    input: {
+      id: z.string().describe('Beacon UUID, slug, or title'),
+      comment_id: z.string().uuid().describe('Comment ID to delete'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }).passthrough(),
+    handler: async ({ id, comment_id }) => {
+      const beaconId = await resolveBeaconId(client, id);
+      if (!beaconId) return beaconNotFound(id);
+      const result = await client.request('DELETE', `/beacons/${beaconId}/comments/${comment_id}`);
+      return result.ok ? ok(result.data) : err('deleting beacon comment', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'beacon_attachments_list',
+    description: "List a Beacon's attachments. `id` accepts a UUID, slug, or title.",
+    input: {
+      id: z.string().describe('Beacon UUID, slug, or title'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const beaconId = await resolveBeaconId(client, id);
+      if (!beaconId) return beaconNotFound(id);
+      const result = await client.request('GET', `/beacons/${beaconId}/attachments`);
+      return result.ok ? ok(result.data) : err('listing beacon attachments', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'beacon_attachment_delete',
+    description: 'Delete an attachment from a Beacon. `id` accepts a UUID, slug, or title.',
+    input: {
+      id: z.string().describe('Beacon UUID, slug, or title'),
+      attachment_id: z.string().uuid().describe('Attachment ID to delete'),
+    },
+    returns: z.object({}).passthrough(),
+    handler: async ({ id, attachment_id }) => {
+      const beaconId = await resolveBeaconId(client, id);
+      if (!beaconId) return beaconNotFound(id);
+      const result = await client.request('DELETE', `/beacons/${beaconId}/attachments/${attachment_id}`);
+      return result.ok ? ok(result.data) : err('deleting beacon attachment', result.data);
+    },
+  });
 }

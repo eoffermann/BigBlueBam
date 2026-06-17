@@ -54,6 +54,39 @@ _Counts are summed from the per-section tables. Some endpoints are shared by mul
 
 ---
 
+## MCP endpoint-parity build — implementation decisions (2026-06-17)
+
+Branch `feat/mcp-endpoint-parity`: a pass to give every **agent-appropriate** REST
+endpoint an MCP tool. Standing decisions for this work, so the per-app tables can
+stay terse:
+
+- **REST is never modified.** Every new tool is a thin wrapper that calls the
+  existing REST endpoint through the per-app fetch client (forwarding the
+  caller's bearer token + `X-Org-Id`), exactly like the established
+  `*-tools.ts` modules. No route handler, schema, or service signature changes.
+- **Skipped endpoint classes** (left `—`, annotated `_(skip: <reason>)_` in the
+  tables): auth / login / logout / session / password / OAuth callbacks; CSRF;
+  inbound webhooks & public-inbound (forms, tracking pixels, unsubscribe, ticket
+  intake); multipart **binary uploads** (agents reference existing files via
+  `attachment_get` / `attachment_list`); raw credential management (API-key
+  secrets); SuperUser break-glass & permission-matrix admin (intentionally
+  UI/CLI-only); pure internal/service-to-service routes (`/internal/*`,
+  `/tools/call`, dual-read). Slug/name **resolver** GETs are not standalone tools
+  — the write tools resolve names/slugs internally.
+- **Permission mapping.** New tools are not added to `@bigbluebam/permissions`
+  `TOOL_TO_PERMISSION` in this pass, so under per-action enforcement they
+  pass-through (only an explicit resolver `deny` blocks, which unmapped tools
+  never trigger). The backstops remain: the REST endpoint's own
+  scope/`requireCan`/RLS authorization, and the §15 agent-policy tool-name
+  allowlist. Adding granular `TOOL_TO_PERMISSION` entries for the new tools is a
+  tracked follow-up.
+- **Verification.** Each app's new tools are smoke-tested on the local Docker
+  stack via the internal `POST /tools/call` route (service-account harness),
+  exercising tool → REST → response, with self-cleaning test data. The
+  mcp-server `tsc --noEmit` must pass before each commit.
+
+---
+
 ## Bam core — work management surface (REST ↔ MCP map)
 
 Scope: the Bam "work management" REST routes in `apps/api/src/routes/` (project,
@@ -743,7 +776,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/beacon
 | `POST /beacons` | `beacon_create` | Create a new Beacon (Draft) | `apps/beacon/src/hooks/use-beacons.ts` |
 | `GET /beacons` | `beacon_list` | List Beacons with filters | `apps/beacon/src/hooks/use-beacons.ts` |
 | `GET /beacons/by-slug/:slug` | — | Resolve slug to Beacon (MCP resolver) | — |
-| `GET /beacons/stats` | — | Org-wide Beacon statistics | `apps/beacon/src/hooks/use-beacons.ts` |
+| `GET /beacons/stats` | `beacon_stats` | Org-wide Beacon statistics | `apps/beacon/src/hooks/use-beacons.ts` |
 | `GET /beacons/:id` | `beacon_get` | Get one Beacon by UUID or slug | `apps/beacon/src/hooks/use-beacons.ts` |
 | `PUT /beacons/:id` | `beacon_update` | Update Beacon, creates new version | `apps/beacon/src/hooks/use-beacons.ts` |
 | `DELETE /beacons/:id` | `beacon_retire` | Retire (soft-delete) a Beacon | `apps/beacon/src/hooks/use-beacons.ts` |
@@ -762,16 +795,16 @@ All routes are registered under the `/v1` prefix, so external paths are `/beacon
 | `GET /tags` | `beacon_tags_list` | List tags in scope with counts | `apps/beacon/src/hooks/use-beacons.ts` |
 | `POST /beacons/:id/tags` | `beacon_tag_add` | Add tags to a Beacon | — |
 | `DELETE /beacons/:id/tags/:tag` | `beacon_tag_remove` | Remove a tag from a Beacon | — |
-| `GET /beacons/:id/links` | — | List a Beacon's links | `apps/beacon/src/hooks/use-beacons.ts` |
+| `GET /beacons/:id/links` | `beacon_links_list` | List a Beacon's links | `apps/beacon/src/hooks/use-beacons.ts` |
 | `POST /beacons/:id/links` | `beacon_link_create` | Create a typed link between Beacons | — |
 | `DELETE /beacons/:id/links/:linkId` | `beacon_link_remove` | Remove a Beacon link | — |
-| `GET /beacons/:id/comments` | — | List comments on a Beacon | `apps/beacon/src/hooks/use-comments.ts` |
-| `POST /beacons/:id/comments` | — | Create a comment / reply | `apps/beacon/src/hooks/use-comments.ts` |
-| `PUT /beacons/:id/comments/:commentId` | — | Edit own comment | — |
-| `DELETE /beacons/:id/comments/:commentId` | — | Delete comment (author/admin) | `apps/beacon/src/hooks/use-comments.ts` |
-| `GET /beacons/:id/attachments` | — | List attachments on a Beacon | `apps/beacon/src/hooks/use-attachments.ts` |
-| `POST /beacons/:id/attachments` | — | Multipart attachment upload | `apps/beacon/src/hooks/use-attachments.ts` |
-| `DELETE /beacons/:id/attachments/:attachmentId` | — | Delete an attachment | `apps/beacon/src/hooks/use-attachments.ts` |
+| `GET /beacons/:id/comments` | `beacon_comments_list` | List comments on a Beacon | `apps/beacon/src/hooks/use-comments.ts` |
+| `POST /beacons/:id/comments` | `beacon_comment_add` | Create a comment / reply | `apps/beacon/src/hooks/use-comments.ts` |
+| `PUT /beacons/:id/comments/:commentId` | `beacon_comment_edit` | Edit own comment | — |
+| `DELETE /beacons/:id/comments/:commentId` | `beacon_comment_delete` | Delete comment (author/admin) | `apps/beacon/src/hooks/use-comments.ts` |
+| `GET /beacons/:id/attachments` | `beacon_attachments_list` | List attachments on a Beacon | `apps/beacon/src/hooks/use-attachments.ts` |
+| `POST /beacons/:id/attachments` | — _(skip: multipart upload)_ | Multipart attachment upload | `apps/beacon/src/hooks/use-attachments.ts` |
+| `DELETE /beacons/:id/attachments/:attachmentId` | `beacon_attachment_delete` | Delete an attachment | `apps/beacon/src/hooks/use-attachments.ts` |
 
 ### Search, saved queries, graph, policy
 
