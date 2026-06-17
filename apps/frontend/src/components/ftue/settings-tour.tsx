@@ -198,7 +198,7 @@ export function SettingsFtueTour({
             onClick={finish}
             className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
           >
-            Skip
+            Skip intro
           </button>
         </div>
         <h3 className="mt-1.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
