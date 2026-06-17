@@ -867,7 +867,7 @@ billOverdueReminderQueue
 const blankConfirmationEmailWorker = new Worker<BlankConfirmationEmailJobData>(
   'blank-confirmation-email',
   async (job: Job<BlankConfirmationEmailJobData>) => {
-    await processBlankConfirmationEmailJob(job, env, logger);
+    await processBlankConfirmationEmailJob(job, env, redis, logger);
   },
   { ...connection, concurrency: 1 },
 );

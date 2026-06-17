@@ -535,7 +535,8 @@ function clientScript(form: FormData): string {
           data[key] = inp.value !== '' ? Number(inp.value) : '';
         }
       } else if (f.type === 'file_upload' || f.type === 'image_upload') {
-        // File uploads handled separately; store filename for now
+        // Store the filename in response_data; the bytes are uploaded
+        // separately in uploadFiles() and attached as descriptors on submit.
         var fileInp = form.querySelector('input[name="' + key + '"]');
         data[key] = fileInp && fileInp.files.length ? fileInp.files[0].name : '';
       } else {
@@ -585,6 +586,32 @@ function clientScript(form: FormData): string {
     return errors;
   }
 
+  // Upload all selected files to MinIO via the public upload endpoint and
+  // return an array of attachment descriptors to attach to the submission.
+  function uploadFiles() {
+    var uploads = [];
+    for (var i = 0; i < FIELDS.length; i++) {
+      var f = FIELDS[i];
+      if (f.type !== 'file_upload' && f.type !== 'image_upload') continue;
+      var inp = form.querySelector('input[name="' + f.key + '"]');
+      if (!inp || !inp.files || !inp.files.length) continue;
+      (function(fieldKey, file) {
+        var fd = new FormData();
+        fd.append('field_key', fieldKey);
+        fd.append('file', file, file.name);
+        var p = fetch('/forms/' + encodeURIComponent(SLUG) + '/upload', {
+          method: 'POST',
+          body: fd
+        }).then(function(res) {
+          if (!res.ok) return res.json().then(function(b) { throw b; });
+          return res.json();
+        }).then(function(r) { return r.data; });
+        uploads.push(p);
+      })(f.key, inp.files[0]);
+    }
+    return Promise.all(uploads);
+  }
+
   form.addEventListener('submit', function(e) {
     e.preventDefault();
     clearErrors();
@@ -611,10 +638,14 @@ function clientScript(form: FormData): string {
       if (token) payload.captcha_token = token;
     }
 
-    fetch('/forms/' + encodeURIComponent(SLUG) + '/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    uploadFiles()
+    .then(function(attachments) {
+      if (attachments && attachments.length) payload.attachments = attachments;
+      return fetch('/forms/' + encodeURIComponent(SLUG) + '/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
     })
     .then(function(res) {
       if (!res.ok) return res.json().then(function(body) { throw body; });

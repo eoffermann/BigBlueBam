@@ -77,6 +77,12 @@ const updateFormSchema = z.object({
   custom_css: z.string().max(10000).nullable().optional(),
   notify_on_submit: z.boolean().optional(),
   notify_emails: z.array(z.string().email()).optional(),
+  notify_banter_channel_id: z.string().uuid().nullable().optional(),
+  allowed_domains: z
+    .array(z.string().min(1).max(253))
+    .max(50)
+    .nullable()
+    .optional(),
   rate_limit_per_ip: z.number().int().positive().optional(),
   captcha_enabled: z.boolean().optional(),
 });

@@ -52,7 +52,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bench | 29 | 29 | 0 | 3 |
 | Blueprint | 38 | 35 | 3 | 1 |
 | Book | 31 | 24 | 7 | 0 |
-| Blank | 22 | 18 | 4 | 1 |
+| Blank | 24 | 18 | 6 | 1 |
 | Bill | 44 | 39 | 5 | 0 |
 | Bureau | 38 | 33 | 5 | 3 |
 | Helpdesk | 38 | 15 | 23 | 0 |
@@ -340,6 +340,10 @@ MCP tool modules in scope: `me-tools`, `member-tools`, `user-resolver-tools`, `p
 | --- | --- | --- | --- |
 | `GET /org` | `get_my_org` | Get current org + member/owner counts | `apps/frontend/src/lib/api/people.ts` |
 | `PATCH /org` | — _(skip: org settings/branding admin — conservative scope)_ | Update org name/logo/settings | `apps/frontend/src/pages/settings.tsx` |
+| `GET /org/smtp-settings` | — _(skip: org SMTP admin — secret-bearing config, password-masked, UI-only)_ | Read org SMTP override (masked) | `apps/frontend/src/components/settings/org-smtp-settings-form.tsx` |
+| `PUT /org/smtp-settings` | — _(skip: org SMTP admin — secret-bearing config, UI-only)_ | Set org SMTP override | `apps/frontend/src/components/settings/org-smtp-settings-form.tsx` |
+| `DELETE /org/smtp-settings` | — _(skip: org SMTP admin — secret-bearing config, UI-only)_ | Clear org SMTP override (revert to platform) | `apps/frontend/src/components/settings/org-smtp-settings-form.tsx` |
+| `POST /org/smtp-settings/test` | — _(skip: org SMTP admin — verify/send, UI-only)_ | Verify org-effective SMTP relay | `apps/frontend/src/components/settings/org-smtp-settings-form.tsx` |
 | `GET /org/launchpad-apps` | — _(skip: resolver; `set_org_launchpad_apps` covers the override)_ | Get org Launchpad override + platform default | `apps/frontend/src/pages/settings.tsx` |
 | `PUT /org/launchpad-apps` | `set_org_launchpad_apps` | Set/clear org Launchpad override | `apps/frontend/src/pages/settings.tsx` |
 | `GET /org/members` | `list_members` | List org members (guest-scoped subset) | `apps/frontend/src/pages/people/index.tsx` |
@@ -1385,10 +1389,12 @@ or `/helpdesk/agents`) segment in-code.
 | `GET /blank/api/v1/forms/:id/submissions` | `blank_list_submissions` | List a form's submissions | `apps/blank/src/pages/form-responses.tsx` |
 | `GET /blank/api/v1/forms/:id/submissions/export` | `blank_export_submissions` | Export submissions as CSV | `apps/blank/src/pages/form-responses.tsx` |
 | `GET /blank/api/v1/submissions/:id` | `blank_get_submission` | Get one submission's data | `apps/blank/src/pages/form-responses.tsx` |
+| `GET /blank/api/v1/submissions/:id/files/:idx` | — _(skip: multipart/binary download, org-scoped auth)_ | Stream a stored submission attachment from MinIO | `apps/blank/src/pages/form-responses.tsx` |
 | `DELETE /blank/api/v1/submissions/:id` | `blank_delete_submission` | Delete a submission | `apps/blank/src/pages/form-responses.tsx` |
 | `GET /blank/api/forms/:slug` | — _(skip: public-inbound form render)_ | Public rendered form HTML | `apps/blank/src/pages/public-form.tsx` |
 | `GET /blank/api/forms/:slug/definition` | — _(skip: public-inbound form definition)_ | Public form field definitions | `apps/blank/src/pages/public-form.tsx` |
 | `POST /blank/api/forms/:slug/submit` | — _(skip: public-inbound form intake)_ | Public submit a response | `apps/blank/src/pages/public-form.tsx` |
+| `POST /blank/api/forms/:slug/upload` | — _(skip: public-inbound multipart file upload)_ | Public store a submission file in MinIO | `apps/blank-api/src/lib/form-renderer.ts` |
 | `— *(client-side)*` | `blank_generate_form` | AI builds a form spec from NL description | — |
 
 

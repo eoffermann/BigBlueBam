@@ -50,6 +50,8 @@ export interface UpdateFormInput {
   custom_css?: string | null;
   notify_on_submit?: boolean;
   notify_emails?: string[];
+  notify_banter_channel_id?: string | null;
+  allowed_domains?: string[] | null;
   rate_limit_per_ip?: number;
   captcha_enabled?: boolean;
 }

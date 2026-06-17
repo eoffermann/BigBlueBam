@@ -17,12 +17,23 @@
 
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
+import type Redis from 'ioredis';
 import { sql } from 'drizzle-orm';
 import nodemailer from 'nodemailer';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
 import { getSmtpConfig } from '../utils/smtp-config.js';
+import { postBanterChannelMessage } from '../utils/banter-post.js';
 import type { Env } from '../env.js';
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 export interface BlankConfirmationEmailJobData {
   /** Direct mode: process a single submission by id. */
@@ -46,6 +57,7 @@ interface SubmissionRow {
   confirmation_message: string | null;
   notify_on_submit: boolean;
   notify_emails: string[] | null;
+  notify_banter_channel_id: string | null;
 }
 
 async function loadSubmissionById(submissionId: string): Promise<SubmissionRow | null> {
@@ -63,7 +75,8 @@ async function loadSubmissionById(submissionId: string): Promise<SubmissionRow |
       f.confirmation_type,
       f.confirmation_message,
       f.notify_on_submit,
-      f.notify_emails
+      f.notify_emails,
+      f.notify_banter_channel_id
     FROM blank_submissions s
     INNER JOIN blank_forms f ON f.id = s.form_id
     WHERE s.id = ${submissionId}
@@ -88,12 +101,14 @@ async function findPendingSubmissions(limit: number): Promise<SubmissionRow[]> {
       f.confirmation_type,
       f.confirmation_message,
       f.notify_on_submit,
-      f.notify_emails
+      f.notify_emails,
+      f.notify_banter_channel_id
     FROM blank_submissions s
     INNER JOIN blank_forms f ON f.id = s.form_id
     WHERE s.processed = false
       AND (
         f.notify_on_submit = true
+        OR f.notify_banter_channel_id IS NOT NULL
         OR (s.submitted_by_email IS NOT NULL AND f.confirmation_type <> 'none')
       )
     ORDER BY s.submitted_at ASC
@@ -124,6 +139,7 @@ async function markSubmissionFailed(submissionId: string, message: string): Prom
 async function processSubmission(
   submission: SubmissionRow,
   env: Env,
+  redis: Redis,
   logger: Logger,
 ): Promise<boolean> {
   if (submission.processed) {
@@ -144,6 +160,7 @@ async function processSubmission(
       : null;
 
     const formLabel = submission.form_name;
+    const submittedAt = submission.submitted_at.toISOString?.() ?? String(submission.submitted_at);
 
     // 1. Confirmation email to the submitter.
     if (submission.submitted_by_email && (submission.confirmation_type ?? 'message') !== 'none') {
@@ -151,12 +168,14 @@ async function processSubmission(
       const body =
         submission.confirmation_message ??
         `Thanks for submitting ${formLabel}. We have received your response.`;
+      const html = `<p>${escapeHtml(body)}</p><p style="color:#6b7280;font-size:13px;">Form: ${escapeHtml(formLabel)}</p>`;
       if (transport && cfg) {
         await transport.sendMail({
           from: cfg.from,
           to: submission.submitted_by_email,
           subject,
           text: body,
+          html,
         });
         logger.info(
           { submissionId: submission.id, to: submission.submitted_by_email },
@@ -173,14 +192,20 @@ async function processSubmission(
     // 2. Notification emails to the form owner's configured recipients.
     if (submission.notify_on_submit && submission.notify_emails && submission.notify_emails.length > 0) {
       const subject = `New submission: ${formLabel}`;
+      const submitterLine = submission.submitted_by_email
+        ? `Submitted by: ${submission.submitted_by_email}`
+        : 'Submitted anonymously.';
       const body = [
-        `A new submission for form "${formLabel}" arrived at ${submission.submitted_at.toISOString?.() ?? submission.submitted_at}.`,
-        submission.submitted_by_email ? `Submitted by: ${submission.submitted_by_email}` : 'Submitted anonymously.',
+        `A new submission for form "${formLabel}" arrived at ${submittedAt}.`,
+        submitterLine,
       ].join('\n');
+      const html =
+        `<p>A new submission for form <strong>${escapeHtml(formLabel)}</strong> arrived at ${escapeHtml(submittedAt)}.</p>` +
+        `<p>${escapeHtml(submitterLine)}</p>`;
 
       for (const recipient of submission.notify_emails) {
         if (transport && cfg) {
-          await transport.sendMail({ from: cfg.from, to: recipient, subject, text: body });
+          await transport.sendMail({ from: cfg.from, to: recipient, subject, text: body, html });
           logger.info({ submissionId: submission.id, to: recipient }, 'blank-confirmation-email: notification email sent');
         } else {
           logger.info(
@@ -188,6 +213,37 @@ async function processSubmission(
             'blank-confirmation-email: SMTP not configured, logging notification',
           );
         }
+      }
+    }
+
+    // 3. Banter notification post to the form's configured channel.
+    let notifiedBanter = false;
+    if (submission.notify_banter_channel_id) {
+      const submitterText = submission.submitted_by_email
+        ? `from **${submission.submitted_by_email}**`
+        : 'from an anonymous visitor';
+      const content = `New **${formLabel}** form submission ${submitterText}.`;
+      const messageId = await postBanterChannelMessage(
+        redis,
+        {
+          channelId: submission.notify_banter_channel_id,
+          orgId: submission.organization_id,
+          content,
+          metadata: {
+            event_type: 'blank.submission.created',
+            form_id: submission.form_id,
+            form_slug: submission.form_slug,
+            submission_id: submission.id,
+          },
+        },
+        logger,
+      );
+      notifiedBanter = messageId !== null;
+      if (notifiedBanter) {
+        logger.info(
+          { submissionId: submission.id, channelId: submission.notify_banter_channel_id, messageId },
+          'blank-confirmation-email: Banter notification posted',
+        );
       }
     }
 
@@ -202,6 +258,7 @@ async function processSubmission(
         form_slug: submission.form_slug,
         notified_submitter: Boolean(submission.submitted_by_email),
         notification_recipients_count: submission.notify_on_submit ? submission.notify_emails?.length ?? 0 : 0,
+        notified_banter: notifiedBanter,
       },
       submission.organization_id,
       undefined,
@@ -223,6 +280,7 @@ async function processSubmission(
 export async function processBlankConfirmationEmailJob(
   job: Job<BlankConfirmationEmailJobData>,
   env: Env,
+  redis: Redis,
   logger: Logger,
 ): Promise<void> {
   const data = job.data ?? {};
@@ -234,7 +292,7 @@ export async function processBlankConfirmationEmailJob(
       logger.warn({ submissionId: data.submission_id }, 'blank-confirmation-email: submission not found');
       return;
     }
-    await processSubmission(submission, env, logger);
+    await processSubmission(submission, env, redis, logger);
     return;
   }
 
@@ -252,7 +310,7 @@ export async function processBlankConfirmationEmailJob(
   let sent = 0;
   let failed = 0;
   for (const sub of submissions) {
-    const ok = await processSubmission(sub, env, logger);
+    const ok = await processSubmission(sub, env, redis, logger);
     if (ok) sent += 1;
     else failed += 1;
   }

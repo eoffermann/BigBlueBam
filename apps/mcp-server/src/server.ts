@@ -212,7 +212,10 @@ function createMcpServer(
   registerBoltObservabilityTools(server, apiClient, env.BOLT_API_URL);
   registerBearingTools(server, apiClient, env.BEARING_API_URL);
   registerBondTools(server, apiClient, env.BOND_API_URL);
-  registerBlastTools(server, apiClient, env.BLAST_API_URL);
+  registerBlastTools(server, apiClient, env.BLAST_API_URL, {
+    apiInternalUrl: env.API_INTERNAL_URL,
+    internalSecret: env.INTERNAL_SERVICE_SECRET,
+  });
   registerBookTools(server, apiClient, env.BOOK_API_URL);
   registerBenchTools(server, apiClient, env.BENCH_API_URL);
   registerBillTools(server, apiClient, env.BILL_API_URL);

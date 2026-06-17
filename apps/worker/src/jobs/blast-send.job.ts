@@ -204,20 +204,29 @@ export interface BlastSendJobData {
 // file for the main transaction flow.
 // ---------------------------------------------------------------------------
 
-import { getSmtpConfig, type ResolvedSmtpConfig } from '../utils/smtp-config.js';
+import {
+  getSmtpConfigForOrg,
+  type ResolvedSmtpConfigWithLayer,
+} from '../utils/smtp-config.js';
 
 let cachedTransport: nodemailer.Transporter | null = null;
 let cachedFingerprint: string | null = null;
 
-function fingerprintConfig(cfg: ResolvedSmtpConfig): string {
+function fingerprintConfig(cfg: ResolvedSmtpConfigWithLayer): string {
   return [cfg.host, cfg.port, cfg.user ?? '', cfg.pass ?? '', cfg.secure].join('|');
 }
 
-async function resolveTransport(env: Env): Promise<{
+/**
+ * Resolve the transport for a Blast campaign, honoring a per-org SMTP
+ * override first and falling back to the platform relay (then env vars).
+ * The org id comes from the campaign's organization, so a tenant that wired
+ * up its own relay sends through it; everyone else rides the platform relay.
+ */
+async function resolveTransport(env: Env, orgId: string): Promise<{
   transport: nodemailer.Transporter | null;
-  cfg: ResolvedSmtpConfig | null;
+  cfg: ResolvedSmtpConfigWithLayer | null;
 }> {
-  const cfg = await getSmtpConfig(getDb(), env);
+  const cfg = await getSmtpConfigForOrg(getDb(), orgId, env);
   if (!cfg) return { transport: null, cfg: null };
   const fp = fingerprintConfig(cfg);
   if (cachedTransport && fp === cachedFingerprint) return { transport: cachedTransport, cfg };
@@ -402,7 +411,15 @@ export async function processBlastSendJob(
     'Contacts loaded and filtered',
   );
 
-  const { transport, cfg: smtpCfg } = await resolveTransport(env);
+  const { transport, cfg: smtpCfg } = await resolveTransport(env, org_id);
+  if (smtpCfg) {
+    logger.info(
+      { campaign_id, org_id, smtp_layer: smtpCfg.layer, smtp_host: smtpCfg.host },
+      smtpCfg.layer === 'org'
+        ? 'Blast send using org-level SMTP override'
+        : 'Blast send using platform SMTP relay',
+    );
+  }
   let sentCount = 0;
   let failedCount = 0;
 

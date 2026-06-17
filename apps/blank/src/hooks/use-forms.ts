@@ -46,7 +46,11 @@ export interface BlankForm {
   theme_color: string;
   header_image_url?: string | null;
   one_per_email?: boolean;
+  requires_login?: boolean;
+  allowed_domains?: string[] | null;
   notify_on_submit?: boolean;
+  notify_emails?: string[] | null;
+  notify_banter_channel_id?: string | null;
   submission_count?: number;
   field_count?: number;
   fields?: BlankField[];
@@ -155,6 +159,30 @@ export function useBamProjects() {
       });
       if (!res.ok) return { data: [] as BamProject[] };
       const json = (await res.json()) as { data?: BamProject[] };
+      return { data: json.data ?? [] };
+    },
+    staleTime: 60_000,
+  });
+}
+
+// Fetch the org's public Banter channels so the form-builder can offer a
+// "post to this channel on submit" picker. Uses the shared session cookie,
+// same pattern as useBamProjects.
+interface BanterChannelOption {
+  id: string;
+  name: string;
+}
+
+export function useBanterChannels() {
+  return useQuery({
+    queryKey: ['blank', 'banter-channels'],
+    queryFn: async () => {
+      const res = await fetch('/banter/api/v1/channels/browse', {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return { data: [] as BanterChannelOption[] };
+      const json = (await res.json()) as { data?: BanterChannelOption[] };
       return { data: json.data ?? [] };
     },
     staleTime: 60_000,

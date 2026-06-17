@@ -10,13 +10,16 @@ import {
   SMTP_SETTING_KEYS,
   clearSmtpConfigCache as _clearSmtpConfigCache,
   getSmtpConfig as _getSmtpConfig,
+  getSmtpConfigForOrg as _getSmtpConfigForOrg,
   isSmtpConfigured as _isSmtpConfigured,
+  type OrgSmtpOverride,
   type ResolvedSmtpConfig,
+  type ResolvedSmtpConfigWithLayer,
 } from '@bigbluebam/smtp-resolver';
 import type { Env } from '../env.js';
 
-export { clearSmtpConfigCache } from '@bigbluebam/smtp-resolver';
-export type { ResolvedSmtpConfig } from '@bigbluebam/smtp-resolver';
+export { clearSmtpConfigCache, clearOrgSmtpConfigCache } from '@bigbluebam/smtp-resolver';
+export type { ResolvedSmtpConfig, ResolvedSmtpConfigWithLayer } from '@bigbluebam/smtp-resolver';
 void _clearSmtpConfigCache;
 
 /** Subset of Env the shared resolver needs. */
@@ -71,4 +74,44 @@ export async function isSmtpConfigured(
   env: Env,
 ): Promise<boolean> {
   return _isSmtpConfigured(makeLoader(db), toSmtpEnv(env));
+}
+
+/**
+ * Builds the loader that reads ONE org's `settings.smtp` override out of the
+ * organizations table. Returns null when the org has no override (or the
+ * read fails), which makes the resolver fall straight through to the
+ * platform layer. The org's `settings` column is JSONB, so the `smtp`
+ * sub-object is already-parsed by the driver.
+ */
+function makeOrgLoader(db: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }) {
+  return async (orgId: string): Promise<OrgSmtpOverride | null> => {
+    try {
+      const result = await db.execute(
+        sql`SELECT settings -> 'smtp' AS smtp FROM organizations WHERE id = ${orgId} LIMIT 1`,
+      );
+      const rows = Array.isArray(result)
+        ? (result as Array<{ smtp: unknown }>)
+        : (((result as { rows?: Array<{ smtp: unknown }> }).rows) ?? []);
+      const raw = rows[0]?.smtp;
+      if (!raw || typeof raw !== 'object') return null;
+      return raw as OrgSmtpOverride;
+    } catch {
+      return null;
+    }
+  };
+}
+
+/**
+ * Resolve the effective SMTP config for a specific org, layering the org's
+ * own override over the platform singleton over the env vars. This is the
+ * entry point every org-scoped send path (Blast campaigns, org invitations)
+ * should use so a tenant that configured its own relay gets it, and everyone
+ * else falls back to the platform relay.
+ */
+export async function getSmtpConfigForOrg(
+  db: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> },
+  orgId: string,
+  env: Env,
+): Promise<ResolvedSmtpConfigWithLayer | null> {
+  return _getSmtpConfigForOrg(orgId, makeOrgLoader(db), makeLoader(db), toSmtpEnv(env));
 }

@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Plus, GripVertical, Trash2, Eye, Send, Settings, Type, AlignLeft, Mail, Phone, Link, Hash, ListChecks, ChevronDown, Calendar, Clock, Star, BarChart3, ThumbsUp, CheckSquare, ToggleLeft, Heading, FileText, EyeOff, Upload, SeparatorHorizontal, ChevronLeft, ChevronRight, X, Copy, ExternalLink, CheckCircle2, Globe, Building2, FolderKanban } from 'lucide-react';
-import { useForm, useUpdateForm, usePublishForm, useBamProjects } from '@/hooks/use-forms';
+import { useForm, useUpdateForm, usePublishForm, useBamProjects, useBanterChannels } from '@/hooks/use-forms';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import type { BlankField, BlankForm } from '@/hooks/use-forms';
@@ -841,19 +841,49 @@ function FormSettingsDialog({ form, onClose, onUpdate }: FormSettingsDialogProps
     const tzOffset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   });
+  const [requiresLogin, setRequiresLogin] = useState<boolean>(form.requires_login ?? false);
+  const [allowedDomains, setAllowedDomains] = useState<string>(
+    (form.allowed_domains ?? []).join(', '),
+  );
+  const [notifyOnSubmit, setNotifyOnSubmit] = useState<boolean>(form.notify_on_submit ?? false);
+  const [notifyEmails, setNotifyEmails] = useState<string>((form.notify_emails ?? []).join(', '));
+  const [banterChannelId, setBanterChannelId] = useState<string | null>(
+    form.notify_banter_channel_id ?? null,
+  );
 
   const projectsQuery = useBamProjects();
   const projects = projectsQuery.data?.data ?? [];
+  const channelsQuery = useBanterChannels();
+  const channels = channelsQuery.data?.data ?? [];
 
   const handleSave = () => {
+    // Parse comma/whitespace/newline-separated lists into trimmed arrays.
+    const parseList = (raw: string) =>
+      raw
+        .split(/[\s,;]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    const domains = parseList(allowedDomains).map((d) => d.toLowerCase().replace(/^@/, ''));
+    const emails = parseList(notifyEmails);
+
     const patch: Partial<BlankForm> & {
       visibility: 'public' | 'org' | 'project';
       expires_at: string | null;
       project_id: string | null;
+      requires_login: boolean;
+      allowed_domains: string[] | null;
+      notify_on_submit: boolean;
+      notify_emails: string[];
+      notify_banter_channel_id: string | null;
     } = {
       visibility,
       expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       project_id: visibility === 'project' ? projectId : null,
+      requires_login: requiresLogin,
+      allowed_domains: domains.length > 0 ? domains : null,
+      notify_on_submit: notifyOnSubmit,
+      notify_emails: emails,
+      notify_banter_channel_id: banterChannelId,
     };
     onUpdate(patch);
     onClose();
@@ -1003,6 +1033,121 @@ function FormSettingsDialog({ form, onClose, onUpdate }: FormSettingsDialogProps
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Access control */}
+          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-5">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                id="blank-form-settings-requires-login"
+                type="checkbox"
+                checked={requiresLogin}
+                onChange={(e) => setRequiresLogin(e.target.checked)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Require sign-in to submit
+                </div>
+                <div className="text-xs text-zinc-500 mt-0.5">
+                  Visitors must be signed in to a BigBlueBam account before they can submit.
+                </div>
+              </div>
+            </label>
+          </div>
+
+          {/* Allowed email domains */}
+          <div>
+            <label
+              htmlFor="blank-form-settings-allowed-domains"
+              className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1"
+            >
+              Allowed email domains
+            </label>
+            <p className="text-xs text-zinc-500 mb-2">
+              Optional. Only submitters whose email is on one of these domains may submit. Comma
+              separated, for example: acme.com, example.org. Leave blank to allow any domain.
+            </p>
+            <input
+              id="blank-form-settings-allowed-domains"
+              type="text"
+              value={allowedDomains}
+              onChange={(e) => setAllowedDomains(e.target.value)}
+              placeholder="acme.com, example.org"
+              className="w-full text-sm border border-zinc-300 dark:border-zinc-600 rounded-lg px-3 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+
+          {/* Submission notifications */}
+          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-5">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                id="blank-form-settings-notify-on-submit"
+                type="checkbox"
+                checked={notifyOnSubmit}
+                onChange={(e) => setNotifyOnSubmit(e.target.checked)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Email me on new submissions
+                </div>
+                <div className="text-xs text-zinc-500 mt-0.5">
+                  Send a notification email to the recipients below whenever this form is submitted.
+                </div>
+              </div>
+            </label>
+          </div>
+
+          {/* Notify emails */}
+          <div>
+            <label
+              htmlFor="blank-form-settings-notify-emails"
+              className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1"
+            >
+              Notification recipients
+            </label>
+            <p className="text-xs text-zinc-500 mb-2">
+              Comma separated email addresses to notify on each new submission.
+            </p>
+            <input
+              id="blank-form-settings-notify-emails"
+              type="text"
+              value={notifyEmails}
+              onChange={(e) => setNotifyEmails(e.target.value)}
+              placeholder="ops@acme.com, sales@acme.com"
+              className="w-full text-sm border border-zinc-300 dark:border-zinc-600 rounded-lg px-3 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+
+          {/* Banter channel notification */}
+          <div>
+            <label
+              htmlFor="blank-form-settings-banter-channel"
+              className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1"
+            >
+              Post to Banter channel
+            </label>
+            <p className="text-xs text-zinc-500 mb-2">
+              Optional. Post a message to a Banter channel on each new submission.
+            </p>
+            {channelsQuery.isLoading ? (
+              <div className="text-xs text-zinc-500">Loading channels...</div>
+            ) : (
+              <select
+                id="blank-form-settings-banter-channel"
+                value={banterChannelId ?? ''}
+                onChange={(e) => setBanterChannelId(e.target.value || null)}
+                className="w-full text-sm border border-zinc-300 dark:border-zinc-600 rounded-lg px-3 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+              >
+                <option value="">No Banter notification</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    #{c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
