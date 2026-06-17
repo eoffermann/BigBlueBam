@@ -15,14 +15,14 @@ test.describe('People Manager v2', () => {
     await expect(page.getByRole('heading', { name: 'People Manager' })).toBeVisible();
     const view = page.getByRole('button', { name: 'View' }).first();
     await expect(view).toBeVisible({ timeout: 15_000 });
-    // The only roster person here is the admin themselves; you cannot delete
-    // your own account, so the red per-row "Delete account" must NOT appear on
-    // the roster (caps.delete_account is false for self).
-    await expect(page.getByRole('button', { name: 'Delete account' })).toHaveCount(0);
+    // Delete is a BULK verb in the floating bar, not a per-row button — with no
+    // selection the bar (and its "Delete accounts") isn't shown.
+    await expect(page.getByRole('button', { name: 'Delete accounts' })).toHaveCount(0);
     await view.click();
     await expect(page).toHaveURL(/\/people-manager\/[0-9a-f-]{8}/);
-    // Same gating on the detail Danger zone.
-    await expect(page.getByRole('button', { name: 'Delete account' })).toHaveCount(0);
+    // You cannot delete your own account, so the detail Danger-zone "Delete
+    // account" must NOT appear (caps.delete_account is false for self).
+    await expect(page.getByRole('button', { name: 'Delete account', exact: true })).toHaveCount(0);
   });
 
   test('detail Overview timezone is a global dropdown, not a raw text field', async ({ page }) => {
@@ -73,6 +73,14 @@ test.describe('People Manager v2', () => {
     await expect(page.getByRole('button', { name: 'Disable' })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Enable' })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Remove from org' })).toBeEnabled();
+
+    // The bulk "Delete accounts" verb is present but DISABLED here — the only
+    // selectable person is the admin themselves, who can't be self-deleted.
+    // (Assert before opening the Change-role menu: Radix opens it modal, which
+    // aria-hides the rest of the bar.)
+    const del = page.getByRole('button', { name: 'Delete accounts' });
+    await expect(del).toBeVisible();
+    await expect(del).toBeDisabled();
 
     // The "Change role" verb opens its menu (not a dead control).
     await page.getByRole('button', { name: 'Change role' }).click();

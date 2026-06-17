@@ -19,7 +19,6 @@ import {
   type PersonMembership,
 } from '@/lib/api/people-manager';
 import { BulkActionBar, useBulkRun } from '@/components/people/bulk-action-bar';
-import { DeleteAccountDialog } from '@/components/people/delete-account-dialog';
 import { formatRelativeTime } from '@/lib/utils';
 import { exportCsv, todayStamp, type CsvColumn } from '@/lib/csv';
 import { InviteDialog } from './invite-dialog';
@@ -53,6 +52,9 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 const PAGE_LIMIT = 50;
+
+/** Verification phrase the operator must type to arm the bulk account delete. */
+const BULK_DELETE_PHRASE = 'Delete accounts';
 
 /** Flatten a person's per-org memberships into "Org · role" chips. */
 function MembershipChips({ memberships }: { memberships: PersonMembership[] }) {
@@ -108,11 +110,13 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
 
   const [showInvite, setShowInvite] = useState(false);
 
-  // Per-row account soft-delete. The target carries its own org (the first
-  // membership whose caps grant delete_account); the shared dialog gates the
-  // action behind typing the account email.
-  const [deleteTarget, setDeleteTarget] = useState<ScopedPerson | null>(null);
-  const deleteOrgId = deleteTarget?.memberships.find((m) => m.caps.delete_account)?.org_id;
+  // Bulk account soft-delete (a group verb in the floating bar, NOT a per-row
+  // action — individual delete lives on the person's Overview page). Gated
+  // behind typing a fixed phrase. Delete-account is cross-org, so unlike the
+  // membership verbs it does NOT need a single pinned org: each target is
+  // deleted via any org where the caller's caps grant it.
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkDeletePhrase, setBulkDeletePhrase] = useState('');
 
   const queryParams = useMemo(
     () => ({
@@ -322,6 +326,48 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
       },
     );
 
+  // How many selected people the caller can actually soft-delete: not
+  // themselves, and admin in EVERY org the target belongs to (encoded by
+  // caps.delete_account on at least one membership row). Drives the bulk button
+  // enablement and the confirmation count.
+  const isBulkDeletable = (p: ScopedPerson) =>
+    p.user.id !== currentUserId && p.memberships.some((m) => m.caps.delete_account);
+  const bulkDeletableCount = selectedPeople.filter(isBulkDeletable).length;
+
+  /**
+   * Soft-delete the selected accounts. Each target is deleted via any org where
+   * the caller's caps grant delete_account (the endpoint is cross-org); self
+   * and people the caller can't delete are skipped and tallied in the toast.
+   */
+  const bulkDeleteAccounts = () =>
+    bulk.runBulk(
+      {
+        label: 'Deleting accounts',
+        targets: selectedPeople,
+        action: (p) => {
+          const m = p.memberships.find((mm) => mm.caps.delete_account);
+          if (!m) return Promise.reject(new Error('no delete permission'));
+          return peopleManagerApi.deleteAccount(m.org_id, p.user.id);
+        },
+        skip: (p) => {
+          if (p.user.id === currentUserId) return 'self';
+          if (!p.memberships.some((mm) => mm.caps.delete_account)) return 'caps';
+          return null;
+        },
+      },
+      () => {
+        // Drop the deleted ids from the selection once the run settles.
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const p of selectedPeople) if (isBulkDeletable(p)) next.delete(p.user.id);
+          return next;
+        });
+        setConfirmBulkDelete(false);
+        setBulkDeletePhrase('');
+        invalidate();
+      },
+    );
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -517,25 +563,14 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
                         {p.user.last_seen_at ? formatRelativeTime(p.user.last_seen_at) : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onNavigate(`/people-manager/${p.user.id}`)}
-                            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View
-                          </button>
-                          {p.memberships.some((m) => m.caps.delete_account) && (
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              onClick={() => setDeleteTarget(p)}
-                            >
-                              <Trash2 className="h-4 w-4" /> Delete account
-                            </Button>
-                          )}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate(`/people-manager/${p.user.id}`)}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -639,6 +674,25 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
                 Remove from org
               </button>
 
+              {/* Bulk account soft-delete — cross-org, so independent of the
+                  pinned-org gating above; enabled when the selection contains
+                  anyone the caller can delete. Solid red to mark it as the most
+                  destructive verb; phrase-gated in the confirm dialog. */}
+              <button
+                type="button"
+                disabled={bulkDeletableCount === 0}
+                title={
+                  bulkDeletableCount === 0
+                    ? "Select accounts you can delete (you can't delete yourself)."
+                    : `Delete ${bulkDeletableCount} account${bulkDeletableCount === 1 ? '' : 's'}`
+                }
+                onClick={() => setConfirmBulkDelete(true)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete accounts
+              </button>
+
               <button
                 type="button"
                 onClick={handleExportCsv}
@@ -677,30 +731,60 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
         </div>
       </Dialog>
 
-      {/* Per-row account soft-delete, gated behind typing the account email. */}
-      {deleteTarget && deleteOrgId && (
-        <DeleteAccountDialog
-          open={true}
-          onOpenChange={(o) => {
-            if (!o) setDeleteTarget(null);
-          }}
-          userLabel={deleteTarget.user.display_name || deleteTarget.user.email}
-          confirmPhrase={deleteTarget.user.email}
-          onConfirm={(reason) =>
-            peopleManagerApi.deleteAccount(deleteOrgId, deleteTarget.user.id, reason)
+      {/* Bulk account soft-delete confirmation — phrase-gated. */}
+      <Dialog
+        open={confirmBulkDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmBulkDelete(false);
+            setBulkDeletePhrase('');
           }
-          onDeleted={() => {
-            const removedId = deleteTarget.user.id;
-            setSelectedIds((prev) => {
-              const next = new Set(prev);
-              next.delete(removedId);
-              return next;
-            });
-            setDeleteTarget(null);
-            invalidate();
-          }}
-        />
-      )}
+        }}
+        title={`Delete ${bulkDeletableCount} account${bulkDeletableCount === 1 ? '' : 's'}?`}
+        description="Soft-deletes each selected account across every org, revokes its sessions and API keys, and frees the email for re-invite. People you can't delete and your own account are skipped. Authored content is preserved. This cannot be undone."
+      >
+        <div className="space-y-4">
+          <div>
+            <label
+              htmlFor="bulk-delete-confirm"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
+            >
+              Type{' '}
+              <span className="font-mono font-semibold text-red-700 dark:text-red-300">
+                {BULK_DELETE_PHRASE}
+              </span>{' '}
+              to confirm
+            </label>
+            <input
+              id="bulk-delete-confirm"
+              type="text"
+              value={bulkDeletePhrase}
+              onChange={(e) => setBulkDeletePhrase(e.target.value)}
+              placeholder={BULK_DELETE_PHRASE}
+              autoComplete="off"
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-100"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setConfirmBulkDelete(false);
+                setBulkDeletePhrase('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={bulkDeletePhrase.trim() !== BULK_DELETE_PHRASE || bulkDeletableCount === 0}
+              onClick={bulkDeleteAccounts}
+            >
+              <Trash2 className="h-4 w-4" /> Delete account{bulkDeletableCount === 1 ? '' : 's'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </AppLayout>
   );
 }
