@@ -43,16 +43,28 @@ const STEPS: TourStep[] = [
     body: 'Due dates, sprints, and schedules show in your local time. Choose the city closest to you.',
   },
   {
+    tab: 'profile',
+    anchor: 'profile-save',
+    title: 'Save your profile',
+    body: 'Click Save Changes to keep your display name and timezone — they aren’t stored until you do.',
+  },
+  {
     tab: 'appearance',
     anchor: 'theme',
     title: 'Choose your appearance',
-    body: 'Light, dark, or match your system. You can change this anytime.',
+    body: 'Light, dark, or match your system. This one saves instantly — no button needed.',
   },
   {
     tab: 'notifications',
     anchor: 'notifications',
     title: 'Tune your notifications',
-    body: 'Pick what you want to hear about, then Save. You can revisit these whenever you like.',
+    body: 'Pick what you want to hear about. You can revisit these whenever you like.',
+  },
+  {
+    tab: 'notifications',
+    anchor: 'notif-save',
+    title: 'Save your preferences',
+    body: 'Click Save Preferences to keep your notification choices.',
   },
   {
     tab: null,

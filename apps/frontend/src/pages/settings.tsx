@@ -743,7 +743,7 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                     className="w-full"
                   />
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3" data-ftue="profile-save">
                   <Button onClick={handleSaveProfile} loading={saving}>Save Changes</Button>
                   {saved && <span className="text-sm text-green-600">Saved!</span>}
                 </div>
@@ -803,7 +803,10 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                     </label>
                   ))}
                 </div>
-                <div className="flex items-center gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <div
+                  className="flex items-center gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800"
+                  data-ftue="notif-save"
+                >
                   <Button onClick={handleSaveNotifications} loading={savingNotif}>
                     Save Preferences
                   </Button>
