@@ -1,52 +1,13 @@
-[
-  {
-    "id": "01-all-boards",
-    "label": "All boards",
-    "theme": "dark",
-    "file": "docs\\apps\\board\\screenshots\\dark\\01-all-boards.png",
-    "sha256": "87743dd39ada3f9aee9d4d576fdad6f69ff2bf1834a508b0b5f62823871025b5",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:20:07.022Z"
-  },
-  {
-    "id": "01-all-boards",
-    "label": "All boards",
-    "theme": "light",
-    "file": "docs\\apps\\board\\screenshots\\light\\01-all-boards.png",
-    "sha256": "3931b79fc2dc6aeaed4767164591aa7ce4194c5a075e239e4aa722b965a22d16",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:50.256Z"
-  },
-  {
-    "id": "02-canvas-populated",
-    "label": "Board canvas",
-    "theme": "light",
-    "file": "docs\\apps\\board\\screenshots\\light\\02-canvas-populated.png",
-    "sha256": "e92172176e3882015b60ccb28937ea315e4d321fa3f8ab5a7c83105ec217c5d7",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:56.572Z"
-  },
-  {
-    "id": "03-templates",
-    "label": "Board templates",
-    "theme": "light",
-    "file": "docs\\apps\\board\\screenshots\\light\\03-templates.png",
-    "sha256": "1a00b0e4616436c25e7f012a3535ed1a8f664f587d4e4c1b4c09533fee8cbb1b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:59.140Z"
-  },
-  {
-    "id": "04-version-history",
-    "label": "Version history",
-    "theme": "light",
-    "file": "docs\\apps\\board\\screenshots\\light\\04-version-history.png",
-    "sha256": "d1ac9acfd51781cb76093b1b5f541abe98f32d060d4bf18f3d962884bf5f758f",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:20:04.438Z"
-  }
-]
+{
+  "app": "board",
+  "nginx_path": "/board/",
+  "api_port": 4008,
+  "api_dir": "board-api",
+  "route_files": 9,
+  "schema_modules": 11,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "746a12ec7546ced270a6ccbbb7e55d68e6857b3d1f7827e776492dfbdfde6069",
+  "generated_at": "2026-06-17T20:37:34.983Z",
+  "mcp_tool_count": 40
+}

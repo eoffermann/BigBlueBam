@@ -1,52 +1,13 @@
-[
-  {
-    "id": "01-portal-entry",
-    "label": "Support portal",
-    "theme": "dark",
-    "file": "docs\\apps\\helpdesk\\screenshots\\dark\\01-portal-entry.png",
-    "sha256": "c2accc4ab20b8108227157257f74236429dee4eda92decf56a6f8a3f4bf887bb",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:24:32.990Z"
-  },
-  {
-    "id": "01-portal-entry",
-    "label": "Support portal",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\01-portal-entry.png",
-    "sha256": "b3494b38a2da4afa1ee60dab8da4071d52cd0424c75786015c4b0d23406fbff8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:24:30.557Z"
-  },
-  {
-    "id": "02-ticket-list",
-    "label": "My tickets",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\02-ticket-list.png",
-    "sha256": "cd3fe0094d7219be81370ece1a1d419ac4dbf75ce06f409588d843eea53106d8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:24:39.767Z"
-  },
-  {
-    "id": "03-ticket-detail",
-    "label": "Ticket detail",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\03-ticket-detail.png",
-    "sha256": "29231e4a3cccec80d197faab61a751c05dc3b1abfd4489e15a5dcf0d9579f53e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:24:44.732Z"
-  },
-  {
-    "id": "04-new-ticket",
-    "label": "New ticket",
-    "theme": "light",
-    "file": "docs\\apps\\helpdesk\\screenshots\\light\\04-new-ticket.png",
-    "sha256": "c375c652883e806b283f87bbee49a00339388e9c41a6e24e25ed843b7632c0e0",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:24:50.146Z"
-  }
-]
+{
+  "app": "helpdesk",
+  "nginx_path": "/helpdesk/",
+  "api_port": 4001,
+  "api_dir": "helpdesk-api",
+  "route_files": 10,
+  "schema_modules": 13,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "87a38b13f2c3aec187598acedca52229d8a0bd24c76f3fb596f2f566b2945f25",
+  "generated_at": "2026-06-17T20:37:35.017Z",
+  "mcp_tool_count": 11
+}

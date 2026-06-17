@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-knowledge-home",
-    "label": "Knowledge home",
-    "theme": "dark",
-    "file": "docs\\apps\\beacon\\screenshots\\dark\\01-knowledge-home.png",
-    "sha256": "d574e8d7fccc25b9b60abd8e6ce5fcea8b29228252be6adf3ad115a2a6bcea26",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:14:28.610Z"
-  },
-  {
-    "id": "01-knowledge-home",
-    "label": "Knowledge home",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\01-knowledge-home.png",
-    "sha256": "6fc18b86d4bdf6df079c51ca7ff389981293f4409ccbc6a5b0a0b8dccad8b550",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:26.061Z"
-  },
-  {
-    "id": "02-article-detail",
-    "label": "Article detail",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\02-article-detail.png",
-    "sha256": "4420ea7be5fdad024007db298e3277e8c575f41e1b98fcb81f581a1c0b740b0a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:39.727Z"
-  },
-  {
-    "id": "03-browse-list",
-    "label": "Browse articles",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\03-browse-list.png",
-    "sha256": "715e1fa2026ee15b58087bfd421c3264d0ee776536d23ec13ad9636fd74f3b3e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:33.148Z"
-  },
-  {
-    "id": "04-graph-explorer",
-    "label": "Knowledge graph",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\04-graph-explorer.png",
-    "sha256": "17ccd9c40155b8df3002c4ce2009e113c829b9db50f443d602804e936c327b51",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:44.783Z"
-  },
-  {
-    "id": "05-governance-dashboard",
-    "label": "Freshness dashboard",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\05-governance-dashboard.png",
-    "sha256": "52fd9068e0c3036bd6dac15f65dbac2e38f9564fc40647ed31e3d80836ef3798",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:15:03.836Z"
-  },
-  {
-    "id": "06-search-results",
-    "label": "Hybrid search",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\06-search-results.png",
-    "sha256": "675d10793e88589e254c427eb8e559969b8f31e89f6edc3754869d55efbd6eaf",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:15:09.851Z"
-  }
-]
+{
+  "app": "beacon",
+  "nginx_path": "/beacon/",
+  "api_port": 4004,
+  "api_dir": "beacon-api",
+  "route_files": 9,
+  "schema_modules": 12,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "d938a5945f77df950f9547299cc5ab8b0a39f8857b56bc94aa38aff60c86938e",
+  "generated_at": "2026-06-17T20:37:34.951Z",
+  "mcp_tool_count": 38
+}

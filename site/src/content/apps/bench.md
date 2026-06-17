@@ -1,17 +1,18 @@
 ---
 title: "Bench (Analytics)"
 app: bench
-generated: "2026-04-17T16:45:02.057Z"
+generated: "2026-06-17T20:37:35.153Z"
 ---
 
 # Bench (Analytics)
 
 
-Custom dashboards and ad-hoc analytics across all your BigBlueBam data.
+Bench turns the data your team already creates across the suite into shared dashboards, ad-hoc queries, and scheduled reports - no warehouse, no copy-paste.
 
-- Drag-and-drop dashboard builder with charts, tables, and metric widgets
-- Ad-hoc query explorer for instant data answers
-- Scheduled reports delivered on your cadence
+- Chart deals, campaigns, goals, and more from a curated cross-app data source registry, with every query automatically scoped to your organization.
+- Build dashboards from a four-step Widget Wizard or a gallery of prebuilt templates, then share them Private, by Project, or Org-wide.
+- Explore any source on demand, save reusable queries, and schedule dashboard snapshots to Email, a Banter channel, or a Brief document.
+- Built for AI agents too: through MCP, agents discover sources, run queries, build dashboards, summarize a whole board in one call, and flag anomalies, all under per-agent policy and visibility controls.
 
 ## See It in Action
 

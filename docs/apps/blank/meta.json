@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-form-list",
-    "label": "Forms list",
-    "theme": "dark",
-    "file": "docs\\apps\\blank\\screenshots\\dark\\01-form-list.png",
-    "sha256": "2765bd033714cabc8a216bb26b2dfe661b75eb83aad5aaaee606c520f2d85b7f",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:17:27.462Z"
-  },
-  {
-    "id": "01-form-list",
-    "label": "Forms list",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\01-form-list.png",
-    "sha256": "c86fd6411f5731b692e5027e52474555afaa5d53169c68ee2bb01f34f3b696b8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:17:24.980Z"
-  },
-  {
-    "id": "02-form-builder",
-    "label": "Form builder",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\02-form-builder.png",
-    "sha256": "9e971a3aebcb7939221b484bf9ec45e2bc640b19fec53f7490149bf84374dcab",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:17:31.503Z"
-  },
-  {
-    "id": "03-form-preview",
-    "label": "Live preview",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\03-form-preview.png",
-    "sha256": "ada1c8335b7e4c00ac861c0c41861a40aef73910e88f343280760e9c22fdbf9e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:18:08.036Z"
-  },
-  {
-    "id": "04-responses",
-    "label": "Responses table",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\04-responses.png",
-    "sha256": "c998f2c5d357cb4089d40d9c716cf15b37d89ac0eed8a0540bc96400b44fe395",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:18:47.245Z"
-  },
-  {
-    "id": "05-analytics",
-    "label": "Form analytics",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\05-analytics.png",
-    "sha256": "82b8757cb09aad04237cecc9c027b52c69476c33b507a14f1302534ac39e743f",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:18:53.944Z"
-  },
-  {
-    "id": "06-form-settings-dialog",
-    "label": "Form settings",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\06-form-settings-dialog.png",
-    "sha256": "f4fd20d7ddd9e93a60e3b000bb74310737bb591732622ceedad50e838bf8002a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:18:42.594Z"
-  }
-]
+{
+  "app": "blank",
+  "nginx_path": "/blank/",
+  "api_port": 4013,
+  "api_dir": "blank-api",
+  "route_files": 4,
+  "schema_modules": 5,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "d49f0f06eaa005ce41f9a9ad2055060f53ccf5f1415a3a8d07189591ee2ac42d",
+  "generated_at": "2026-06-17T20:37:34.968Z",
+  "mcp_tool_count": 20
+}

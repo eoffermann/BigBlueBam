@@ -113,8 +113,8 @@
       "level": 3
     },
     {
-      "anchor": "real-time-presence",
-      "title": "Real-time presence",
+      "anchor": "real-time-presence-and-audio",
+      "title": "Real-time presence and audio",
       "level": 3
     },
     {
@@ -126,6 +126,11 @@
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
       "level": 3
+    },
+    {
+      "anchor": "cross-cutting-agentic-platform",
+      "title": "Cross-cutting agentic platform",
+      "level": 4
     },
     {
       "anchor": "user-stories",
@@ -193,6 +198,11 @@
       "level": 3
     },
     {
+      "anchor": "story-have-an-agent-set-up-and-seed-a-board",
+      "title": "Story: Have an agent set up and seed a board",
+      "level": 3
+    },
+    {
       "anchor": "related",
       "title": "Related",
       "level": 2
@@ -207,12 +217,12 @@
     {
       "anchor": "key-concepts",
       "title": "Key concepts",
-      "text": "- Board - one infinite-canvas whiteboard. It has a name, a description, an emoji icon, a background pattern, a visibility setting, an optional project association, and a locked flag. - Element - anything on the canvas: a sticky note, text, a shape, a connector (arrow or line), an image, or a frame. - Sticky note - a colored note. The default color is yellow. - Frame - a labeled region on the canvas that groups the elements inside it. Frames are used when reading or summarizing a board by section. - Background - the canvas backdrop pattern. One of dots (default), grid, lines, or plain. - Visibility - who can see a board. private (creator plus explicitly added collaborators), project (project members plus collaborators plus creator), or organization (every member of your org). The default is project. - Collaborator - a person granted access to a single board with either view or edit permission. (See the note under Feature reference: there is no in-app screen to manage collaborators today.) - Lock - a board-level read-only switch. When a board is locked, only the board creator or an org admin or owner can edit it. - Star - your personal favorite marker on a board. - Version - a named snapshot of a board's canvas that you can restore later. - Template - a reusable board blueprint you start new boards from. System templates ship with the platform; your org can also create its own. - Integrity issue - a flag on a board whose project link is broken (cross-org, missing, or auto-detached). You resolve it by detaching the board from the project or reassigning it to a valid one. - Roles - org roles resolve as viewer, member, admin, owner. Admins and owners get full access to any board in the org."
+      "text": "- Board - one infinite-canvas whiteboard. It has a name, a description, an emoji icon, a background pattern, a visibility setting, an optional project association, and a locked flag. - Element - anything on the canvas: a sticky note, text, a shape, a connector (arrow or line), an image, or a frame. The canvas scene is stored whole, and a per-element copy is kept so the board can be searched, read, and promoted. - Sticky note - a colored note. The default color is yellow. (Excalidraw has no native sticky; Board builds one from a rectangle with bound text.) - Shape - a rectangle, diamond, ellipse, or freehand drawing from Excalidraw's toolbar. - Frame - a labeled region on the canvas that groups the elements inside it. Frames are used when reading or summarizing a board by section. - Background - the canvas backdrop pattern. One of dots (default), grid, lines, or plain. - Visibility - who can see a board. private (creator plus explicitly added collaborators), project (project members plus collaborators plus creator), or organization (every member of your org). The default is project. - Collaborator - a person granted access to a single board with either view or edit permission. There is no in-app screen to manage collaborators today; manage them through the visibility setting or have an agent or API client do it (see Feature reference). - Lock - a board-level read-only switch. When a board is locked, only the board creator or an org admin or owner can edit it. - Star - your personal favorite marker on a board. - Version - a named snapshot of a board's canvas that you can restore later. - Template - a reusable board blueprint you start new boards from. System templates ship with the platform; your org can also create its own. - Integrity issue - a flag on a board whose project link is broken (cross-org, missing, or auto-detached). You resolve it by detaching the board from the project or reassigning it to a valid one. - Roles - org roles resolve as viewer, member, admin, owner. Admins and owners get full access to any board in the org."
     },
     {
       "anchor": "where-to-find-it",
       "title": "Where to find it",
-      "text": "Board is served at /board/. A single board's canvas is at /board/<boardId, and its version history is at /board/<boardId/versions. Prerequisites: - A signed-in BigBlueBam session. Board uses the shared Bam session cookie. - An organization. To scope a board to a project, that project must exist in Bam and belong to your org. - Edit access to a board to change it. Locked boards are editable only by the creator or an org admin or owner. The left sidebar has four nav items: All Boards, Starred, Templates, and Archive. A project scope selector at the top of the sidebar lets you switch between \"All Projects\" and a single project to filter the list and stats."
+      "text": "Board is served at /board/. A single board's canvas is at /board/<boardId, and its version history is at /board/<boardId/versions. Prerequisites: - A signed-in BigBlueBam session. Board uses the shared Bam session cookie. - An organization. To scope a board to a project, that project must exist in Bam and belong to your org. - Edit access to a board to change it. Locked boards are editable only by the creator or an org admin or owner. The left sidebar has four nav items: All Boards, Starred, Templates, and Archive. A project scope selector at the top of the sidebar lets you switch between \"All Projects\" and a single project to filter the list and stats. Press ? anywhere outside a text field to open the in-app help."
     },
     {
       "anchor": "feature-reference",
@@ -222,12 +232,12 @@
     {
       "anchor": "board-list-all-boards",
       "title": "Board list (All Boards)",
-      "text": "The home view lists your boards as cards. It shows a heading \"Boards\" and the subtitle \"Visual collaboration whiteboards for your team\". The page has four stat cards across the top: Total Boards, Recent, Starred, and Archived. Below them is a search box and a grid of board cards. To browse and open a board: 1. Open Board at /board/. All Boards is the default view. 2. To narrow the list to one project, use the project scope selector at the top of the sidebar. A banner shows \"Showing: All Projects\" or \"Showing: <Project\", with a Show All Projects reset. 3. Type in the Search boards... box to filter by board name or description. 4. Click a board card to open its canvas. Each board card shows the board's thumbnail or icon, an element-count caption (\"N elements\" or \"Empty board\"), a project badge, and a collaborator-count chip (\"N collaborator(s)\"). A lock icon appears on locked boards. An amber warning icon appears when a board has an integrity issue, with the tooltip \"N integrity issue(s). Open the board to fix.\" If there are no boards, the empty state reads \"No boards yet\" (or \"No boards match your search\"), with a Create Board button that takes you to the Templates browser. The ... menu on each card holds Version history, Duplicate, Archive, and Delete. See the lifecycle and version sections below. See screenshots/light/01-list.png (light) and screenshots/dark/01-list.png (dark)."
+      "text": "The home view lists your boards as cards. It shows a heading \"Boards\" and the subtitle \"Visual collaboration whiteboards for your team\". The page has four stat cards across the top: Total Boards, Recent, Starred, and Archived. Below them is a search box and a grid of board cards. To browse and open a board: 1. Open Board at /board/. All Boards is the default view. 2. To narrow the list to one project, use the project scope selector at the top of the sidebar. A banner shows \"Showing: All Projects\" or \"Showing: <Project\", with a Show All Projects reset. 3. Type in the Search boards... box to filter by board name or description. 4. Click a board card to open its canvas. Each board card shows the board's thumbnail or icon, an element-count caption (\"N elements\" or \"Empty board\"), a project badge, and a collaborator-count chip (\"N collaborator(s)\"). A lock icon appears on locked boards. An amber warning icon appears when a board has an integrity issue, with the tooltip \"N integrity issue(s). Open the board to fix.\" If there are no boards, the empty state reads \"No boards yet\" (or \"No boards match your search\"), with a Create Board button that takes you to the Templates browser. The ... menu on each card holds Version history, Duplicate, Archive, and Delete. See the lifecycle and version sections below."
     },
     {
       "anchor": "creating-a-board-from-a-template",
       "title": "Creating a board from a template",
-      "text": "Templates give you a pre-built canvas (a retro layout, a brainstorm board, an architecture template, and so on). To create a board from a template: 1. From All Boards, click New Board (top-right), or click Templates in the sidebar. Both lead to the Templates browser. 2. The browser shows a heading \"Templates\" and the subtitle \"Start from a pre-built template, or create a blank board\". 3. Use the category tabs to filter: General, Retro, Brainstorm, Planning, Architecture, Strategy, or All. 4. On the template you want, click Use. 5. A new board is created from that template and its canvas opens. See screenshots/light/03-templates.png (light) and screenshots/dark/03-templates.png (dark)."
+      "text": "Templates give you a pre-built canvas (a retro layout, a brainstorm board, an architecture template, and so on). To create a board from a template: 1. From All Boards, click New Board (top-right), or click Templates in the sidebar. Both lead to the Templates browser. 2. The browser shows a heading \"Templates\" and the subtitle \"Start from a pre-built template, or create a blank board\". 3. Use the category tabs to filter: General, Retro, Brainstorm, Planning, Architecture, Strategy, or All. 4. On the template you want, click Use. 5. A new board is created from that template and its canvas opens."
     },
     {
       "anchor": "creating-a-blank-board",
@@ -237,17 +247,17 @@
     {
       "anchor": "the-infinite-canvas",
       "title": "The infinite canvas",
-      "text": "The canvas is a full-screen Excalidraw editor. It opens when you click a board card or finish creating a board. The drawing tools are Excalidraw's own native toolbar, not Board's. From that toolbar you can add and edit shapes (rectangle, diamond, ellipse), arrows and lines, text, freehand drawings, frames, and images, plus zoom, pan, and multi-select. Use Excalidraw's toolbar for everything you draw. Board overlays a few of its own controls on top of the canvas: - A floating board toolbar at the top (covered below). - A connection status badge at the top-right. - An integrity banner at the top when the board's project link is broken. - A chat panel that slides in from the right. Your work saves automatically. The canvas persists locally as you draw and writes to the server a few seconds after you stop, and it saves once more when you close the tab. You do not need a Save button for canvas content. See screenshots/light/02-canvas.png (light) and screenshots/dark/02-canvas.png (dark)."
+      "text": "The canvas is a full-screen Excalidraw editor. It opens when you click a board card or finish creating a board. The drawing tools are Excalidraw's own native toolbar, not Board's. From that toolbar you can add and edit shapes (rectangle, diamond, ellipse), arrows and lines, text, freehand drawings, frames, and images, plus zoom, pan, and multi-select. Use Excalidraw's toolbar for everything you draw. Board overlays a few of its own controls on top of the canvas: - A floating board toolbar at the top (covered below). - A connection status badge at the top-right. - An integrity banner at the top when the board's project link is broken. - A chat panel that slides in from the right. Your work saves automatically. The canvas persists locally as you draw and writes to the server a few seconds after you stop, and it saves once more when you close the tab. You do not need a Save button for canvas content."
     },
     {
       "anchor": "adding-sticky-notes",
       "title": "Adding sticky notes",
-      "text": "Sticky notes are colored notes for capturing ideas. The default color is yellow. Add stickies from Excalidraw's tools on the canvas (a rectangle with text). An AI agent can also add a sticky directly with a color and position; see Working with AI agents."
+      "text": "Sticky notes are colored notes for capturing ideas. The default color is yellow. Add stickies from Excalidraw's tools on the canvas (a rectangle with text). An AI agent can also add a sticky directly with one of six colors (yellow, green, blue, red, purple, orange) and a position; see Working with AI agents."
     },
     {
       "anchor": "adding-text",
       "title": "Adding text",
-      "text": "Add free text from Excalidraw's text tool on the canvas. An agent can add a text element with a font size and color; see Working with AI agents."
+      "text": "Add free text from Excalidraw's text tool on the canvas. An agent can add a text element with a position; see Working with AI agents."
     },
     {
       "anchor": "shapes-arrows-and-frames",
@@ -257,7 +267,7 @@
     {
       "anchor": "the-board-toolbar",
       "title": "The board toolbar",
-      "text": "The floating toolbar at the top of the canvas holds board-level controls (it is separate from Excalidraw's drawing toolbar): - A back arrow that returns to All Boards. - An icon picker and the board name. Click the name to rename the board inline; press Enter to save or Escape to cancel. - A lock icon, shown when the board is locked. - The presence strip, which shows who else is present on the board. - A Toggle chat button that opens the chat panel. - A Version history button that opens the board's versions. - A Share button. Note: this button is not wired to anything in the current build. It does not open a sharing dialog. See the collaborators note below. - A ... menu containing Lock board / Unlock board (working), and Export as PNG and Export as SVG. Note: the two export menu items are not wired to anything in the current build; they do not produce a file. To export, use the API or an agent (see Export below). To rename a board from the toolbar: 1. Open the board's canvas. 2. Click the board name in the floating toolbar. 3. Type the new name. 4. Press Enter to save (or Escape to cancel)."
+      "text": "The floating toolbar at the top of the canvas holds board-level controls (it is separate from Excalidraw's drawing toolbar): - A back arrow (tooltip \"Back to boards\") that returns to All Boards. - An icon picker and the board name. Click the name to rename the board inline; press Enter to save or Escape to cancel. - A lock icon, shown when the board is locked. - The presence strip, which shows who else is present on the board and is the entry point to a voice huddle (see Real-time presence and audio). - A Toggle chat button that opens the chat panel. - A Version history button that opens the board's versions. - A Share button. Note: this button is not wired to anything in the current build. It does not open a sharing dialog. See the collaborators note below. - A ... menu containing Lock board / Unlock board (working), and Export as PNG and Export as SVG. Note: the two export menu items are not wired to anything in the current build; they do not produce a file. To export, use the API or an agent (see Export below). To rename a board from the toolbar: 1. Open the board's canvas. 2. Click the board name in the floating toolbar. 3. Type the new name. 4. Press Enter to save (or Escape to cancel)."
     },
     {
       "anchor": "locking-a-board",
@@ -292,7 +302,7 @@
     {
       "anchor": "templates-browser",
       "title": "Templates browser",
-      "text": "Beyond creating boards, the Templates browser is where org templates are surfaced. Each template card shows a thumbnail or icon, a name, a description, a category badge, an element count, and a Use button. Categories shown as tabs are General, Retro, Brainstorm, Planning, Architecture, Strategy, and All. If there are none, the view reads \"No templates available\". System templates are read-only; your org can create and manage its own."
+      "text": "Beyond creating boards, the Templates browser is where org templates are surfaced. Each template card shows a thumbnail or icon, a name, a description, a category badge, an element count, and a Use button. Categories shown as tabs are General, Retro, Brainstorm, Planning, Architecture, Strategy, and All. If there are none, the view reads \"No templates available\". System templates are read-only; your org can create and manage its own (through the API or an agent today; see Working with AI agents)."
     },
     {
       "anchor": "fixing-a-board-with-an-integrity-issue",
@@ -307,12 +317,12 @@
     {
       "anchor": "collaborators-no-in-app-management-today",
       "title": "Collaborators (no in-app management today)",
-      "text": "A board's visibility (private, project, organization) controls who can reach it, and a board can also have explicit per-person collaborators with view or edit permission. There is a complete backend for adding, listing, changing, and removing collaborators, but there is no screen in the Board app to manage them today, and the toolbar's Share button is not connected to it. Until a sharing screen ships, manage who can see a board through its visibility setting, or have an agent or API client manage collaborators directly."
+      "text": "A board's visibility (private, project, organization) controls who can reach it, and a board can also have explicit per-person collaborators with view or edit permission. There is a complete backend for adding, listing, changing, and removing collaborators, but there is no screen in the Board app to manage them today, and the toolbar's Share button is not connected to it. Until a sharing screen ships, manage who can see a board through its visibility setting, or have an agent or API client manage collaborators directly (the boardaddcollaborator, boardlistcollaborators, boardupdatecollaborator, and boardremovecollaborator tools, covered under Working with AI agents)."
     },
     {
-      "anchor": "real-time-presence",
-      "title": "Real-time presence",
-      "text": "When more than one person is on a board, you see each other's live cursors on the canvas and presence indicators in the toolbar. The connection status badge at the top-right shows Live (green), Connecting (amber), or Offline (red), plus an \"N editors\" chip when other people are present. If your connection drops and reconnects, recent changes are replayed so the canvas catches up. Note on audio: voice huddles on a board are provided by the platform-wide Bureau presence system that the board toolbar surfaces, not by Board itself. Audio conferencing is not a Board feature or a board-api capability. Use the platform presence bar for voice."
+      "anchor": "real-time-presence-and-audio",
+      "title": "Real-time presence and audio",
+      "text": "When more than one person is on a board, you see each other's live cursors on the canvas and presence indicators in the toolbar. The connection status badge at the top-right shows Live (green), Connecting (amber), or Offline (red), plus an \"N editors\" chip when other people are present. If your connection drops and reconnects, recent changes are replayed so the canvas catches up. Audio for a board comes from the platform-wide presence system that the toolbar surfaces through its presence strip, not from a board-api capability. The strip reports the open canvas as a shared surface, and the platform call manager derives a per-board voice room from it, so a teammate can join a voice huddle on the same canvas. Audio conferencing is therefore a platform feature layered on top of Board, not something the Board service hosts itself."
     },
     {
       "anchor": "element-limits",
@@ -322,7 +332,12 @@
     {
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
-      "text": "Agents can read, build, and hand off boards through 14 MCP tools backed by board-api. For the full catalog and arguments, see the Board MCP-tools reference in docs/apps/board/. Read and observe: - boardlist - list boards, optionally filtered by project, visibility, and page size. - boardget - fetch one board's metadata. - boardreadelements - read every element on a board. - boardreadstickies - read only the sticky notes. - boardreadframes - read frames and the elements inside each. - boardsummarize - produce a frame-grouped summary of a board. - boardsearch - search element text across boards. Author and edit: - boardcreate - create a board, optionally from a template named or referenced by ID. - boardaddsticky - add a sticky note with a color (yellow, green, blue, red, purple, or orange) and a position. - boardaddtext - add a text element with a font size and color. - boardupdate - patch a board's metadata (name, description, background, visibility, icon). - boardarchive - archive (soft-delete) a board. Hand off and export: - boardpromotetotasks - the marquee cross-app flow. It turns brainstorm stickies into Bam tasks in a named project and phase, and records the links back to the source stickies. There is no human button for this today; it is an agent-and-API flow. - boardexport - export a board as SVG or PNG. Things for a human reviewer to know: - Promote-to-tasks creates real Bam tasks. Review the resulting tasks in the target project after an agent runs it. - Two MCP behaviors are known to drift from the backend and may not do what their description implies: boardupdate cannot toggle the lock state (locking is a separate action, so passing a locked value through boardupdate has no effect), and some tool descriptions and return shapes do not exactly match the live API. Prefer the dedicated paths (and verify results) for locking and promote-to-tasks. Agent actions emit Bolt events you can automate on: board.created, board.updated, board.locked, and board.elementspromoted."
+      "text": "Agents reach Board through 40 MCP tools backed by board-api. Every tool forwards your bearer token, so an agent acts with your permissions and a locked board stays locked. Most tools accept a board name or UUID; templates, projects, and phases also resolve by name. For the full catalog and arguments, see the Board MCP-tools reference in docs/apps/board/. What agents commonly do: - Read and observe a canvas. boardreadelements reads every element with its position, text, and type. boardreadstickies returns only sticky notes; boardreadframes returns frames with their child elements; boardsummarize produces a frame-grouped summary. boardsearch searches element text across boards. boardlist, boardget, boardlistrecent, boardliststarred, boardstats, and boardorgstats cover discovery and metadata. - Build a board. boardcreate makes a board (optionally from a template by name). boardaddsticky drops a sticky in one of six colors at a position; boardaddtext adds a text element. boardupdate patches name, description, background, visibility, and icon. - Promote to Bam tasks (the marquee cross-app flow). boardpromotetotasks turns selected brainstorm stickies into Bam tasks in a named project and phase, and records a link from each sticky back to its task. There is no human button for this today; it is an agent-and-API flow. boardlistlinks shows the resulting links and boarddeletelink removes one without touching the task or sticky. - Manage what humans cannot reach in the UI yet. Collaborators (boardaddcollaborator, boardlistcollaborators, boardupdatecollaborator, boardremovecollaborator), templates (boardlisttemplates, boardcreatetemplate, boardupdatetemplate, boarddeletetemplate, boardinstantiatetemplate), versions (boardlistversions, boardcreateversion, boardrestoreversion), chat (boardreadchat, boardpostchat), stars (boardstartoggle), and integrity (boardcheckintegrity, boardremediateintegrity) all have tools even where Board has no screen. - Run lifecycle and export. boardduplicate, boardarchive (soft delete), boardrestore, and boarddeletepermanent (hard, irreversible delete) cover lifecycle. boardexport exports SVG or PNG. Things for a human reviewer to know: - Promote-to-tasks creates real Bam tasks. Review the resulting tasks in the target project after an agent runs it. - boarddeletepermanent cascades through elements, collaborators, stars, versions, and links and cannot be undone. Prefer boardarchive unless removal is final. - Two MCP behaviors are known to drift from the backend and may not do what their description implies: boardupdate cannot toggle the lock state (its PATCH does not accept a locked field, so locking stays a separate action with no MCP tool of its own), and a few tool descriptions and return shapes do not exactly match the live API (for example boardcreate lists different background and visibility defaults than the server applies, which are dots and project). Prefer the dedicated paths and verify results. - Right after a fresh board is drawn, the per-element copy that powers search and promote may lag the canvas by a few seconds. If boardsearch or a promote finds nothing on a brand-new board, give the snapshot a moment. Agent actions emit Bolt events you can automate on: board.created, board.updated, board.locked, and board.elementspromoted."
+    },
+    {
+      "anchor": "cross-cutting-agentic-platform",
+      "title": "Cross-cutting agentic platform",
+      "text": "Board's tools sit on the same platform surface every app shares, so agent work is identifiable, reviewable, and governed: - Identity and heartbeat. Agent and service accounts are distinct from human users, and their actions are tagged as such in the activity log. Long-running agents report liveness with agentheartbeat. - Approvals. An agent can route a board action it should not take unilaterally (for example a permanent delete or a large promote-to-tasks run) into an approval queue with proposalcreate; a human reviews and resolves it with proposallist and proposaldecide. - Unified activity. Board activity is queryable alongside every other app through the unified activity view and activityquery / activitybyactor. - Visibility preflight. Before an agent posts a board's contents into another shared surface, it calls canaccess for each cited entity and drops anything the asking user is not allowed to see. - Policies and webhooks. Per-agent kill switches and tool allowlists (a board. glob covers Board's tools) gate every service-account call, and subscribed Bolt events can be pushed to an agent runner over a signed outbound webhook."
     },
     {
       "anchor": "user-stories",
@@ -332,7 +347,7 @@
     {
       "anchor": "story-create-your-first-board-from-a-template",
       "title": "Story: Create your first board from a template",
-      "text": "Who: A team member new to Board. Goal: Get a working whiteboard started without setting up a layout by hand. Before you start: Be signed in to BigBlueBam. Steps 1. Go to /board/. You land on All Boards. 2. Click New Board at the top-right. The Templates browser opens. 3. Use the category tabs (General, Retro, Brainstorm, Planning, Architecture, Strategy, All) to find a fitting layout. 4. On the template you want, click Use. 5. The new board opens on the canvas. Result: A new board exists, pre-filled from the template, and you are looking at its canvas. It appears in All Boards. Related: To start empty instead, see \"Create a blank board\". An agent can do the same with boardcreate using a template name."
+      "text": "Who: A team member new to Board. Goal: Get a working whiteboard started without setting up a layout by hand. Before you start: Be signed in to BigBlueBam. Steps 1. Go to /board/. You land on All Boards. 2. Click New Board at the top-right. The Templates browser opens. 3. Use the category tabs (General, Retro, Brainstorm, Planning, Architecture, Strategy, All) to find a fitting layout. 4. On the template you want, click Use. 5. The new board opens on the canvas. Result: A new board exists, pre-filled from the template, and you are looking at its canvas. It appears in All Boards. Related: To start empty instead, see \"Create a blank board\". An agent can do the same with boardcreate (template by name) or boardinstantiatetemplate."
     },
     {
       "anchor": "story-create-a-blank-board",
@@ -347,42 +362,42 @@
     {
       "anchor": "story-collaborate-live-with-teammates",
       "title": "Story: Collaborate live with teammates",
-      "text": "Who: Two or more people working a board at the same time. Goal: Edit together and see each other's changes and cursors. Before you start: Each person needs access to the same board. Steps 1. Each person opens the same board's canvas. 2. Watch the connection status badge at the top-right for Live, and the \"N editors\" chip for who is present. 3. Add and move elements. Changes from others appear on your canvas in real time, and you see their cursors. 4. If your connection drops, wait for it to reconnect; recent changes are replayed automatically. Result: Everyone is editing one shared canvas and stays in sync. Related: Voice for the session comes from the platform presence bar (Bureau), not from Board. To talk while you work, see \"Chat while you whiteboard\"."
+      "text": "Who: Two or more people working a board at the same time. Goal: Edit together and see each other's changes and cursors. Before you start: Each person needs access to the same board. Steps 1. Each person opens the same board's canvas. 2. Watch the connection status badge at the top-right for Live, and the \"N editors\" chip for who is present. 3. Add and move elements. Changes from others appear on your canvas in real time, and you see their cursors. 4. If your connection drops, wait for it to reconnect; recent changes are replayed automatically. Result: Everyone is editing one shared canvas and stays in sync. Related: To talk while you work, use the presence strip in the toolbar to start a voice huddle on the canvas. To type instead, see \"Chat while you whiteboard\"."
     },
     {
       "anchor": "story-chat-while-you-whiteboard",
       "title": "Story: Chat while you whiteboard",
-      "text": "Who: Collaborators on a board. Goal: Discuss the board without leaving it. Before you start: Have the board open and edit access. Steps 1. Open the board's canvas. 2. Click Toggle chat in the floating toolbar to open the chat panel. 3. Type in Type a message... and send. 4. Read the thread in the panel; your messages are right-aligned. Result: The team has a running discussion attached to the board. Related: Chat refreshes by polling, so messages from others appear on the next refresh rather than instantly."
+      "text": "Who: Collaborators on a board. Goal: Discuss the board without leaving it. Before you start: Have the board open and edit access. Steps 1. Open the board's canvas. 2. Click Toggle chat in the floating toolbar to open the chat panel. 3. Type in Type a message... and send. 4. Read the thread in the panel; your messages are right-aligned. Result: The team has a running discussion attached to the board. Related: Chat refreshes by polling, so messages from others appear on the next refresh rather than instantly. An agent can read or post with boardreadchat and boardpostchat."
     },
     {
       "anchor": "story-star-and-find-your-boards",
       "title": "Story: Star and find your boards",
-      "text": "Who: A regular Board user with many boards. Goal: Keep important boards one click away and filter the list. Before you start: Have at least one board. Steps 1. On All Boards, click the star overlay on a board card to favorite it. 2. Click Starred in the sidebar to see only starred boards. 3. Back on All Boards, use the project scope selector to filter by project. 4. Use the Search boards... box to find a board by name or description. Result: Your favorites are grouped in Starred, and you can filter and search the full list. Related: An agent can list boards with boardlist and search element text with boardsearch."
+      "text": "Who: A regular Board user with many boards. Goal: Keep important boards one click away and filter the list. Before you start: Have at least one board. Steps 1. On All Boards, click the star overlay on a board card to favorite it. 2. Click Starred in the sidebar to see only starred boards. 3. Back on All Boards, use the project scope selector to filter by project. 4. Use the Search boards... box to find a board by name or description. Result: Your favorites are grouped in Starred, and you can filter and search the full list. Related: An agent can list boards with boardlist, list starred with boardliststarred, toggle a star with boardstartoggle, and search element text with boardsearch."
     },
     {
       "anchor": "story-snapshot-and-restore-a-board",
       "title": "Story: Snapshot and restore a board",
-      "text": "Who: Anyone about to make a big change. Goal: Save a restore point and roll back if needed. Before you start: Have edit access to the board. Steps 1. Open the board and click the Version history button in the floating toolbar. 2. On the \"Version History\" page, click Save Version. 3. Type a Version name and confirm. 4. Later, to roll back, return to \"Version History\", click Restore on the version you want, and confirm at \"Restore this version?\". Result: A named snapshot is saved, and you can restore the canvas to it at any time. Related: The dialog's Description field and the list's element-count and creator-name fields are not stored or returned by the backend today and render blank."
+      "text": "Who: Anyone about to make a big change. Goal: Save a restore point and roll back if needed. Before you start: Have edit access to the board. Steps 1. Open the board and click the Version history button in the floating toolbar. 2. On the \"Version History\" page, click Save Version. 3. Type a Version name and confirm. 4. Later, to roll back, return to \"Version History\", click Restore on the version you want, and confirm at \"Restore this version?\". Result: A named snapshot is saved, and you can restore the canvas to it at any time. Related: The dialog's Description field and the list's element-count and creator-name fields are not stored or returned by the backend today and render blank. An agent can snapshot and restore with boardcreateversion, boardlistversions, and boardrestoreversion."
     },
     {
       "anchor": "story-promote-brainstorm-stickies-into-bam-tasks",
       "title": "Story: Promote brainstorm stickies into Bam tasks",
-      "text": "Who: A facilitator (with an agent's help) turning ideas into tracked work. Goal: Convert selected sticky notes into Bam tasks in a project and phase. Before you start: Stickies exist on the board, and you know the target Bam project (and optionally phase). There is no human button for this; it runs through an agent or the API. Steps 1. Identify the sticky notes you want to turn into tasks. 2. Ask an agent to promote them, naming the target project and phase. The agent uses boardpromotetotasks. 3. The agent creates one Bam task per sticky and records a link from each sticky to its task. 4. Open the target project in Bam to review the new tasks. Result: Each promoted sticky has a matching Bam task, linked back to the source element. Related: This emits a board.elementspromoted Bolt event you can automate on. See the Bam help doc for task management."
+      "text": "Who: A facilitator (with an agent's help) turning ideas into tracked work. Goal: Convert selected sticky notes into Bam tasks in a project and phase. Before you start: Stickies exist on the board, and you know the target Bam project (and optionally phase). There is no human button for this; it runs through an agent or the API. Steps 1. Identify the sticky notes you want to turn into tasks. 2. Ask an agent to promote them, naming the target project and phase. The agent uses boardpromotetotasks. 3. The agent creates one Bam task per sticky and records a link from each sticky to its task. 4. Open the target project in Bam to review the new tasks. Result: Each promoted sticky has a matching Bam task, linked back to the source element. Related: This emits a board.elementspromoted Bolt event you can automate on. An agent can review the links with boardlistlinks. See the Bam help doc for task management."
     },
     {
       "anchor": "story-lock-a-finished-board",
       "title": "Story: Lock a finished board",
-      "text": "Who: The board creator or an org admin or owner. Goal: Freeze a board so others cannot change it. Before you start: Be the creator or an org admin or owner. Steps 1. Open the board's canvas. 2. Open the ... menu in the floating toolbar. 3. Click Lock board. 4. To allow edits again, repeat and click Unlock board. Result: The board is read-only for everyone except its creator and org admins and owners, and shows a lock icon in the toolbar and on its card. Related: An agent cannot toggle the lock through boardupdate; locking is a separate action."
+      "text": "Who: The board creator or an org admin or owner. Goal: Freeze a board so others cannot change it. Before you start: Be the creator or an org admin or owner. Steps 1. Open the board's canvas. 2. Open the ... menu in the floating toolbar. 3. Click Lock board. 4. To allow edits again, repeat and click Unlock board. Result: The board is read-only for everyone except its creator and org admins and owners, and shows a lock icon in the toolbar and on its card. Related: An agent cannot toggle the lock through boardupdate; locking is a separate action with no MCP tool of its own today."
     },
     {
       "anchor": "story-fix-a-board-flagged-with-an-integrity-issue",
       "title": "Story: Fix a board flagged with an integrity issue",
-      "text": "Who: Anyone who opens a board with a broken project link. Goal: Clear the integrity warning by detaching or reassigning the project. Before you start: Have edit access to the board. Steps 1. Open the board; its card in All Boards shows an amber warning icon. 2. Read the amber integrity banner at the top of the canvas. 3. To drop the broken link, click Detach from project (or Leave unattached). 4. To repoint it, click Reassign to a project, choose a project in the \"Reassign to a project\" dialog, and confirm. Result: The integrity warning clears and the board is either unattached or attached to a valid project."
+      "text": "Who: Anyone who opens a board with a broken project link. Goal: Clear the integrity warning by detaching or reassigning the project. Before you start: Have edit access to the board. Steps 1. Open the board; its card in All Boards shows an amber warning icon. 2. Read the amber integrity banner at the top of the canvas. 3. To drop the broken link, click Detach from project (or Leave unattached). 4. To repoint it, click Reassign to a project, choose a project in the \"Reassign to a project\" dialog, and confirm. Result: The integrity warning clears and the board is either unattached or attached to a valid project. Related: An agent can do the same with boardcheckintegrity and boardremediateintegrity (action detach or reassign)."
     },
     {
       "anchor": "story-archive-restore-or-delete-a-board",
       "title": "Story: Archive, restore, or delete a board",
-      "text": "Who: A board owner cleaning up. Goal: Remove a board from the active list, recover it, or delete it for good. Before you start: Have edit access to the board. Steps 1. On All Boards, open the board card's ... menu and click Archive. 2. To recover it, click Archive in the sidebar, find the board, and click Restore. 3. To remove it permanently, click Delete permanently on the archived card, or use Delete on the ... menu in the list and confirm \"Delete board?\". Result: The board is archived (recoverable) or permanently deleted, depending on your choice. Related: Use Duplicate on the ... menu first if you want a copy before removing the original."
+      "text": "Who: A board owner cleaning up. Goal: Remove a board from the active list, recover it, or delete it for good. Before you start: Have edit access to the board. Steps 1. On All Boards, open the board card's ... menu and click Archive. 2. To recover it, click Archive in the sidebar, find the board, and click Restore. 3. To remove it permanently, click Delete permanently on the archived card, or use Delete on the ... menu in the list and confirm \"Delete board?\". Result: The board is archived (recoverable) or permanently deleted, depending on your choice. Related: Use Duplicate on the ... menu first if you want a copy before removing the original. An agent uses boardarchive, boardrestore, and boarddeletepermanent."
     },
     {
       "anchor": "story-export-a-board-image",
@@ -390,9 +405,14 @@
       "text": "Who: Anyone who needs a picture of the board for a doc or deck. Goal: Get an SVG or PNG of the board. Before you start: Have access to the board. Note the canvas ... menu export items do not work today. Steps 1. Recognize that Export as PNG and Export as SVG in the canvas ... menu are not wired and will not produce a file. 2. Ask an agent to export the board, choosing SVG or PNG; the agent uses boardexport. 3. The server renders the image and returns it. Result: You have an SVG or PNG rendering of the board. Related: Export is also available directly through the board-api export endpoint."
     },
     {
+      "anchor": "story-have-an-agent-set-up-and-seed-a-board",
+      "title": "Story: Have an agent set up and seed a board",
+      "text": "Who: Someone who wants a board built and pre-populated without doing it by hand. Goal: Get a named board, scoped to a project, with starter stickies on it. Before you start: Be signed in. Know the project name (if you want it scoped) and the rough content you want seeded. Steps 1. Ask an agent to create the board, naming it and the project. The agent uses boardcreate (optionally from a template by name). 2. Ask the agent to drop your starter ideas as stickies. It uses boardaddsticky once per note, choosing colors. 3. Open /board/ and the new board appears in All Boards; open it to see the seeded canvas. Result: A ready-to-use board exists with your starting content, and you can keep editing it live. Related: The agent can also group the stickies into frames so a later boardsummarize reads cleanly, and can promote them to Bam tasks with boardpromotetotasks."
+    },
+    {
       "anchor": "related",
       "title": "Related",
-      "text": "- Bam - the core project and task app. Board scopes boards to Bam projects, and promote-to-tasks creates Bam tasks in a project and phase. See docs/apps/api/ or the Bam help doc. - Bolt - workflow automation. Board emits board.created, board.updated, board.locked, and board.elementspromoted events you can build rules on. - Bureau (platform presence) - provides the presence strip and any voice huddle on a board. Audio is a platform feature, not part of Board. - Board MCP-tools reference - the full list and arguments for the 14 Board MCP tools, in docs/apps/board/. - Board guide - the product guide in docs/apps/board/, for narrative and background."
+      "text": "- Bam - the core project and task app. Board scopes boards to Bam projects, and promote-to-tasks creates Bam tasks in a project and phase. See docs/apps/api/ or the Bam help doc. - Bolt - workflow automation. Board emits board.created, board.updated, board.locked, and board.elementspromoted events you can build rules on. - Platform presence and audio - provides the toolbar presence strip and any voice huddle on a board. Audio is a platform feature, not part of the Board service. - Board MCP-tools reference - the full list and arguments for the 40 Board MCP tools, in docs/apps/board/. - Board guide - the product guide in docs/apps/board/, for narrative and background."
     }
   ],
   "labels": {
@@ -411,10 +431,9 @@
     "Board name": "creating-a-blank-board",
     "Bolt": "related",
     "Brainstorm": "creating-a-board-from-a-template",
-    "Bureau (platform presence)": "related",
     "Cancel": "creating-a-blank-board",
     "Collaborator": "key-concepts",
-    "Connecting": "real-time-presence",
+    "Connecting": "real-time-presence-and-audio",
     "Create Board": "board-list-all-boards",
     "Delete": "board-list-all-boards",
     "Delete permanently": "archive-restore-and-delete",
@@ -429,18 +448,20 @@
     "Icon": "creating-a-blank-board",
     "Integrity issue": "key-concepts",
     "Leave unattached": "fixing-a-board-with-an-integrity-issue",
-    "Live": "real-time-presence",
+    "Live": "real-time-presence-and-audio",
     "Lock": "key-concepts",
     "Lock board": "the-board-toolbar",
     "New Board": "creating-a-board-from-a-template",
-    "Offline": "real-time-presence",
+    "Offline": "real-time-presence-and-audio",
     "Planning": "creating-a-board-from-a-template",
+    "Platform presence and audio": "related",
     "Reassign to a project": "fixing-a-board-with-an-integrity-issue",
     "Recent": "board-list-all-boards",
     "Restore": "version-history-snapshots",
     "Retro": "creating-a-board-from-a-template",
     "Roles": "key-concepts",
     "Save Version": "version-history-snapshots",
+    "Shape": "key-concepts",
     "Share": "the-board-toolbar",
     "Show All Projects": "board-list-all-boards",
     "Star": "key-concepts",
@@ -464,6 +485,7 @@
     "connection status badge": "the-infinite-canvas",
     "icon picker": "the-board-toolbar",
     "integrity banner": "the-infinite-canvas",
+    "name or UUID": "working-with-ai-agents",
     "presence strip": "the-board-toolbar",
     "visibility": "collaborators-no-in-app-management-today"
   },

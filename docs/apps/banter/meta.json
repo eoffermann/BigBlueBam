@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-channel-view",
-    "label": "Channel conversation",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\01-channel-view.png",
-    "sha256": "59b242a1c03563a6166e2c053f3710f5059a5921a2223caaf5442001a66cb584",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:13:58.209Z"
-  },
-  {
-    "id": "01-channel-view",
-    "label": "Channel conversation",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\01-channel-view.png",
-    "sha256": "6f22d96df18d378f1819016847efe8264c3cd8cf06befdf19447885f24cf287d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:13:54.030Z"
-  },
-  {
-    "id": "02-channel-list",
-    "label": "Channels & sidebar",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\02-channel-list.png",
-    "sha256": "41aa35282e0b10f2fb6bf563b0b5e7201c2adaac83c1dc74a7c12564d83b8514",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:27:28.383Z"
-  },
-  {
-    "id": "03-thread",
-    "label": "Threaded replies",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\03-thread.png",
-    "sha256": "095e07b98818395f9d014fe146df0b575ab09d02fc19bc90f6146a81369a51ec",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:03.333Z"
-  },
-  {
-    "id": "04-dms",
-    "label": "Direct messages",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\04-dms.png",
-    "sha256": "330cff858ef1a257fc3ba3439a3e6358e1b19414950f299c97ccfda39c47ccf8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:12.233Z"
-  },
-  {
-    "id": "05-search",
-    "label": "Message search",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\05-search.png",
-    "sha256": "d2d0767ef86c781c8a792c7e73efb097cc265bb6ae7fef974258d86f3d54a90f",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:21.198Z"
-  },
-  {
-    "id": "06-preferences",
-    "label": "Preferences",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\06-preferences.png",
-    "sha256": "742062a0db6ead0a5ed6f091885ea95c364c49bfe7d2356972e09268e8a0cc2f",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:14:23.592Z"
-  }
-]
+{
+  "app": "banter",
+  "nginx_path": "/banter/",
+  "api_port": 4002,
+  "api_dir": "banter-api",
+  "route_files": 21,
+  "schema_modules": 22,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "5cb1a5a1a44ea9ef815af3de35e1955a922b26d2422d9cf3e20719c12d16581c",
+  "generated_at": "2026-06-17T20:37:34.944Z",
+  "mcp_tool_count": 69
+}

@@ -1,27 +1,28 @@
 ---
 title: "Banter (Team Messaging)"
 app: banter
-generated: "2026-04-17T16:45:01.927Z"
+generated: "2026-06-17T20:37:35.143Z"
 ---
 
 # Banter (Team Messaging)
 
 
-Real-time team messaging with channels, threads, and voice calls.
+Real-time team chat where your conversations and your AI agents work in the same room.
 
-- Organized channels with threaded replies and rich text formatting
-- Cross-product embeds show live previews of tasks, documents, and deals
-- Voice calls with recording for teams that need to talk it out
+- Channels, direct messages, threads, reactions, pins, and bookmarks, all sharing your BigBlueBam identity with no separate login
+- AI agents post, reply, react, schedule, and listen for patterns through the same chat surface, gated by visibility checks and org policy
+- Share Bam tasks and sprints or Helpdesk tickets straight into a channel so discussion stays next to the work
+- Scheduled posts and per-channel quiet hours keep automated traffic on the team's schedule, not the bot's
 
 ## See It in Action
 
 
-![Channels](screenshots/light/01-channels.png)
+![Channel View](screenshots/light/01-channel-view.png)
 
 
-![Channel View](screenshots/light/02-channel-view.png)
+![Channel List](screenshots/light/02-channel-list.png)
 
-![Threads](screenshots/light/03-threads.png)
+![Thread](screenshots/light/03-thread.png)
 
 ---
 

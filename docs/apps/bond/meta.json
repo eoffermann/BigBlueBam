@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-pipeline-board",
-    "label": "Pipeline board",
-    "theme": "dark",
-    "file": "docs\\apps\\bond\\screenshots\\dark\\01-pipeline-board.png",
-    "sha256": "495e537ef438986d39f4ad79bee6505acaaecc8afb323baf48ca312b4d809b86",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:21:35.175Z"
-  },
-  {
-    "id": "01-pipeline-board",
-    "label": "Pipeline board",
-    "theme": "light",
-    "file": "docs\\apps\\bond\\screenshots\\light\\01-pipeline-board.png",
-    "sha256": "7ec7bb6fbaa35201516060bf5e820af113e404d773958d03a86058a46756adad",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:32.022Z"
-  },
-  {
-    "id": "02-deal-detail",
-    "label": "Deal detail",
-    "theme": "light",
-    "file": "docs\\apps\\bond\\screenshots\\light\\02-deal-detail.png",
-    "sha256": "1dec5925caa43e3407e335392b9e4bdf6b800630249705feb0822f734b79c17a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:39.776Z"
-  },
-  {
-    "id": "03-contacts-list",
-    "label": "Contacts list",
-    "theme": "light",
-    "file": "docs\\apps\\bond\\screenshots\\light\\03-contacts-list.png",
-    "sha256": "66306a9472da1e0f4f89c50d5aaab266503d1e1c0d020c349bd61fe449e2cce6",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:42.208Z"
-  },
-  {
-    "id": "04-contact-detail",
-    "label": "Contact detail",
-    "theme": "light",
-    "file": "docs\\apps\\bond\\screenshots\\light\\04-contact-detail.png",
-    "sha256": "180d5d5a3f48d96338ed8ec81a1c3ed0b8fcce6ff87c0aaf7b4cdb44dbfde0bc",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:46.220Z"
-  },
-  {
-    "id": "05-companies-list",
-    "label": "Companies list",
-    "theme": "light",
-    "file": "docs\\apps\\bond\\screenshots\\light\\05-companies-list.png",
-    "sha256": "e81f192d2f0db01c2e9056afcdd6ad770df537567564c87f3d1bcd3e524bf3f2",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:48.641Z"
-  },
-  {
-    "id": "06-analytics",
-    "label": "Analytics dashboard",
-    "theme": "light",
-    "file": "docs\\apps\\bond\\screenshots\\light\\06-analytics.png",
-    "sha256": "d24708ac782db91a7855341632e6a5aca3a2cfe8cff879e68e477a895ddb7a36",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:55.655Z"
-  }
-]
+{
+  "app": "bond",
+  "nginx_path": "/bond/",
+  "api_port": 4009,
+  "api_dir": "bond-api",
+  "route_files": 11,
+  "schema_modules": 16,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "d27d533b9d2b10ac4cd1ae9302f2700e3a4def5035f7b325734ab9b994ac060b",
+  "generated_at": "2026-06-17T20:37:34.995Z",
+  "mcp_tool_count": 69
+}

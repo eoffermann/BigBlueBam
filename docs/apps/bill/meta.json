@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-dashboard",
-    "label": "Billing dashboard",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\01-dashboard.png",
-    "sha256": "09087c50e51088fc6070b3714acfd8533e9117fbea67374da03a9e15e56247c9",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:16:00.209Z"
-  },
-  {
-    "id": "02-invoice-list",
-    "label": "Invoice list",
-    "theme": "dark",
-    "file": "docs\\apps\\bill\\screenshots\\dark\\02-invoice-list.png",
-    "sha256": "fd2f9c87f0c672a9c8f31bd2451ea58e6a5c61b9fe6a7d7c3606c6a26a608300",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:16:34.292Z"
-  },
-  {
-    "id": "02-invoice-list",
-    "label": "Invoice list",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\02-invoice-list.png",
-    "sha256": "5b96dbbf875d85580de73cca93e647ab69a81df8372a59e254c5bb12a5443f88",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:16:17.214Z"
-  },
-  {
-    "id": "03-invoice-detail",
-    "label": "Invoice detail",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\03-invoice-detail.png",
-    "sha256": "de9f077a6fb460847fac0c36023f56cacb451185d8d251e93902198cba5b5659",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:17:10.668Z"
-  },
-  {
-    "id": "04-invoice-new",
-    "label": "New invoice",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\04-invoice-new.png",
-    "sha256": "3b7f97ed7dd2dde098855e81da8b7aa8dfce33cfcccba1ff3df76fa492d8b5ce",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:16:36.616Z"
-  },
-  {
-    "id": "05-expenses",
-    "label": "Expense list",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\05-expenses.png",
-    "sha256": "f49021070983ec2bdd6a8c4ca70bff3e945c721d697fdb350ed89e82ec6bb0b9",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:17:15.488Z"
-  },
-  {
-    "id": "06-reports",
-    "label": "Financial reports",
-    "theme": "light",
-    "file": "docs\\apps\\bill\\screenshots\\light\\06-reports.png",
-    "sha256": "48819416c88797c9ad000c67aff11f9f29d723726a54b136e84988572ef5a97b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:17:20.316Z"
-  }
-]
+{
+  "app": "bill",
+  "nginx_path": "/bill/",
+  "api_port": 4014,
+  "api_dir": "bill-api",
+  "route_files": 8,
+  "schema_modules": 11,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "34b668ced079068b83b16ae250a253fbb9ab21e671f1050f36f788c62404a1d1",
+  "generated_at": "2026-06-17T20:37:34.964Z",
+  "mcp_tool_count": 39
+}

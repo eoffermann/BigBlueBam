@@ -1,62 +1,13 @@
-[
-  {
-    "id": "01-dashboard",
-    "label": "Goal dashboard",
-    "theme": "dark",
-    "file": "docs\\apps\\bearing\\screenshots\\dark\\01-dashboard.png",
-    "sha256": "d5960021ac9fa980d180f4e9bf127a517f172e4610d71c85b064080e31b1eb43",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:15:17.030Z"
-  },
-  {
-    "id": "01-dashboard",
-    "label": "Goal dashboard",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\01-dashboard.png",
-    "sha256": "84665c059534edb661c49c871a4d625cb81d8e6149e0af09ff238246e39ece1c",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:15:13.373Z"
-  },
-  {
-    "id": "02-goal-detail",
-    "label": "Goal detail",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\02-goal-detail.png",
-    "sha256": "ada1c8335b7e4c00ac861c0c41861a40aef73910e88f343280760e9c22fdbf9e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:15:21.126Z"
-  },
-  {
-    "id": "03-my-goals",
-    "label": "My goals",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\03-my-goals.png",
-    "sha256": "f743b24ceb2b02397296773e924efa91c5b294663fd71231f3d8e2730ffe4cbf",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:15:24.640Z"
-  },
-  {
-    "id": "04-at-risk",
-    "label": "At-risk goals",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\04-at-risk.png",
-    "sha256": "0288fdbe40bc3707e7419128a7ecce57eb95545b49c250acaf517c3de6d335df",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:15:28.125Z"
-  },
-  {
-    "id": "05-periods",
-    "label": "Periods",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\05-periods.png",
-    "sha256": "0529c65aa1174fe417692b66457cf89e9f85c01eaca1e77fba2b238b412e0516",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:15:31.634Z"
-  }
-]
+{
+  "app": "bearing",
+  "nginx_path": "/bearing/",
+  "api_port": 4007,
+  "api_dir": "bearing-api",
+  "route_files": 4,
+  "schema_modules": 9,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "14270a0947a1b65f7d73beabdda7be830b6e02e20aa8d2462b7587ca5d137c5a",
+  "generated_at": "2026-06-17T20:37:34.955Z",
+  "mcp_tool_count": 30
+}

@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-home",
-    "label": "Document home",
-    "theme": "dark",
-    "file": "docs\\apps\\brief\\screenshots\\dark\\01-home.png",
-    "sha256": "75c26ef33ffb81ccd369268b8f80fff0970679ec060cb5997196836a14028aa9",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:22:19.755Z"
-  },
-  {
-    "id": "01-home",
-    "label": "Document home",
-    "theme": "light",
-    "file": "docs\\apps\\brief\\screenshots\\light\\01-home.png",
-    "sha256": "5dc3b035475a084e62a623507b68c84fef444087e5fd63eb9c6995e9302726a4",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:17.058Z"
-  },
-  {
-    "id": "02-documents",
-    "label": "Document list",
-    "theme": "light",
-    "file": "docs\\apps\\brief\\screenshots\\light\\02-documents.png",
-    "sha256": "5fc63a770adaed7177531dad4e511dd2c85a5ac3d00ed0d8dd62bb54a3f92562",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:23.443Z"
-  },
-  {
-    "id": "03-detail",
-    "label": "Document reader",
-    "theme": "light",
-    "file": "docs\\apps\\brief\\screenshots\\light\\03-detail.png",
-    "sha256": "47772afea5bbcaf4f6cef9686650145f9813c904e8bd0353827361cb5775c0da",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:59.594Z"
-  },
-  {
-    "id": "04-editor",
-    "label": "Document editor",
-    "theme": "light",
-    "file": "docs\\apps\\brief\\screenshots\\light\\04-editor.png",
-    "sha256": "47772afea5bbcaf4f6cef9686650145f9813c904e8bd0353827361cb5775c0da",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:23:52.226Z"
-  },
-  {
-    "id": "05-templates",
-    "label": "Templates browser",
-    "theme": "light",
-    "file": "docs\\apps\\brief\\screenshots\\light\\05-templates.png",
-    "sha256": "1295382c899049aa790f9966d7c38bdbd2012f7b8b869c1ee19014a2b0b50cb2",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:23:55.788Z"
-  },
-  {
-    "id": "06-search",
-    "label": "Search results",
-    "theme": "light",
-    "file": "docs\\apps\\brief\\screenshots\\light\\06-search.png",
-    "sha256": "788ffebf4cc4b597a9f4502418f93edb87f41aa26dd6ccb5887d1586765e27bb",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:23:59.864Z"
-  }
-]
+{
+  "app": "brief",
+  "nginx_path": "/brief/",
+  "api_port": 4005,
+  "api_dir": "brief-api",
+  "route_files": 10,
+  "schema_modules": 10,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "22a0869cecbc5429fb53a301865770ab1944d2bf42ea7c23283e8d9320525539",
+  "generated_at": "2026-06-17T20:37:35.006Z",
+  "mcp_tool_count": 48
+}

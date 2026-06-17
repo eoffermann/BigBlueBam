@@ -1,27 +1,28 @@
 ---
 title: "Bond (CRM)"
 app: bond
-generated: "2026-04-17T16:45:02.329Z"
+generated: "2026-06-17T20:37:35.176Z"
 ---
 
 # Bond (CRM)
 
 
-A lightweight CRM with visual pipelines and stale-deal detection.
+A lightweight CRM with visual pipelines, stale-deal detection, and an AI-agent surface.
 
-- Drag-and-drop pipeline board with customizable stages and deal cards
-- Contact and company profiles with cross-app activity timelines
-- Stale deal alerts so no opportunity sits idle too long
+- Drag-and-drop pipeline board that auto-loads your default pipeline, with swimlanes by owner or close month
+- Contact and company profiles with lifecycle stages, lead scoring, and cross-app activity timelines
+- Stale-deal alerts and duplicate detection so no opportunity sits idle and no contact is entered twice
+- Over 70 MCP tools let agents run the whole CRM: create and move deals, log activities, dedupe contacts, and forecast revenue
 
 ## See It in Action
 
 
-![Pipeline](screenshots/light/01-pipeline.png)
+![Pipeline Board](screenshots/light/01-pipeline-board.png)
 
 
-![Contacts](screenshots/light/02-contacts.png)
+![Deal Detail](screenshots/light/02-deal-detail.png)
 
-![Deal Detail](screenshots/light/03-deal-detail.png)
+![Contacts List](screenshots/light/03-contacts-list.png)
 
 ---
 

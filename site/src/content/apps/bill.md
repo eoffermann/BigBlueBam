@@ -1,27 +1,28 @@
 ---
 title: "Bill (Invoicing)"
 app: bill
-generated: "2026-04-17T16:45:02.128Z"
+generated: "2026-06-17T20:37:35.156Z"
 ---
 
 # Bill (Invoicing)
 
 
-Professional invoicing that turns tracked time into billable work.
+Invoicing that turns client work into billed, tracked, and reconciled revenue.
 
-- Create invoices from Bam time entries in one click
-- Client portal with public invoice pages for easy payment
-- Expense tracking and financial reports in one place
+- Draft, finalize, and send invoices with line items, tax, and on-demand PDFs
+- Record payments and watch each invoice move from sent to partially paid to paid
+- Track expenses and bill rates, then review revenue, aging, profitability, and overdue in one place
+- Spin up draft invoices straight from a won Bond deal, and let agents drive the whole lifecycle over MCP
 
 ## See It in Action
 
 
-![Invoice List](screenshots/light/01-invoice-list.png)
+![Dashboard](screenshots/light/01-dashboard.png)
 
 
-![Invoice New](screenshots/light/02-invoice-new.png)
+![Invoice List](screenshots/light/02-invoice-list.png)
 
-![Clients](screenshots/light/03-clients.png)
+![Invoice Detail](screenshots/light/03-invoice-detail.png)
 
 ---
 

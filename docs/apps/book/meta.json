@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-week-view",
-    "label": "Week view",
-    "theme": "dark",
-    "file": "docs\\apps\\book\\screenshots\\dark\\01-week-view.png",
-    "sha256": "8f4546d5f6d4b773a53ecf2a6fe00f5f83e88260a26b9a6be4f4e3dd669c77f4",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:22:00.540Z"
-  },
-  {
-    "id": "01-week-view",
-    "label": "Week view",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\01-week-view.png",
-    "sha256": "d9b0e44a3a2b84000721f8bf46248f6a3d940b8ffffc145b04e62dd24f127094",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:58.076Z"
-  },
-  {
-    "id": "02-month-view",
-    "label": "Month view",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\02-month-view.png",
-    "sha256": "8f2898c990e9e53717e35ae1111858ea1071bda87fa01b0aef1ae0b1e2284003",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:02.870Z"
-  },
-  {
-    "id": "03-timeline",
-    "label": "Cross-app timeline",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\03-timeline.png",
-    "sha256": "71bbc6c776663eb3f4c59b1bfade26996c22be4b44a30f0b43610438d94c5fd9",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:07.498Z"
-  },
-  {
-    "id": "04-booking-pages",
-    "label": "Booking pages",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\04-booking-pages.png",
-    "sha256": "e1c4db9dc82b3933680cc3c206cd623ad2042e7ea9a7d2edb84c80dbad44ae7a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:09.850Z"
-  },
-  {
-    "id": "05-working-hours",
-    "label": "Working hours",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\05-working-hours.png",
-    "sha256": "3abe001e69d161eed9aa598a62a4a36ecab464d8d842b66379036f7fa967413a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:12.235Z"
-  },
-  {
-    "id": "06-calendars",
-    "label": "Calendars",
-    "theme": "light",
-    "file": "docs\\apps\\book\\screenshots\\light\\06-calendars.png",
-    "sha256": "60773111cc8d829f38fdc0711b317063ed913cc0e2f59250dc37120a3d6663d0",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:22:14.570Z"
-  }
-]
+{
+  "app": "book",
+  "nginx_path": "/book/",
+  "api_port": 4012,
+  "api_dir": "book-api",
+  "route_files": 9,
+  "schema_modules": 10,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "468b13fbf8dc5fa7a7face7da2d6d066cd2d000eea8055497edf66cd950441de",
+  "generated_at": "2026-06-17T20:37:35.000Z",
+  "mcp_tool_count": 24
+}

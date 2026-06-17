@@ -1,72 +1,13 @@
-[
-  {
-    "id": "01-board",
-    "label": "Kanban board",
-    "theme": "dark",
-    "file": "docs\\apps\\bam\\screenshots\\dark\\01-board.png",
-    "sha256": "fd0afeda6d0fe370b1d56b948d50841ca9b21d22852ede00314e2b4fbb57d4ca",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:09:57.675Z"
-  },
-  {
-    "id": "01-board",
-    "label": "Kanban board",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\01-board.png",
-    "sha256": "faaf255040666f5ecbc184ba8f5447158151a0336380ffec07ab1e17b6958b8e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:09:52.931Z"
-  },
-  {
-    "id": "02-task-detail",
-    "label": "Task detail",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\02-task-detail.png",
-    "sha256": "25a1356b8299312ac91f8d40b9e627197a9dba25a241a0141a109f2885c898ce",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:10:02.423Z"
-  },
-  {
-    "id": "03-sprint-create",
-    "label": "Sprint planning",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\03-sprint-create.png",
-    "sha256": "8e9f5c9483d6e04bcc2a4ad895c537f11a96dcf1aa3acc925a970dd74f7fecef",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:27:25.747Z"
-  },
-  {
-    "id": "04-list-view",
-    "label": "List view",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\04-list-view.png",
-    "sha256": "d9d57dcc324b9031b71b78bf1a1ceee033506d64907fb743a724abbabe9aed58",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:11:08.414Z"
-  },
-  {
-    "id": "05-my-work",
-    "label": "My Work",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\05-my-work.png",
-    "sha256": "38fd66b909f554c2adaecb4e4f4226c3414b94d813a17bfb366c3e164373df05",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:12:34.530Z"
-  },
-  {
-    "id": "06-settings-integrations",
-    "label": "Integrations & API keys",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\06-settings-integrations.png",
-    "sha256": "f2819a6c019766970ad70f15f17f6b934dd0e6cf676289f24cf71127a884889c",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:12:48.485Z"
-  }
-]
+{
+  "app": "bam",
+  "nginx_path": "/b3/",
+  "api_port": 4000,
+  "api_dir": "api",
+  "route_files": 66,
+  "schema_modules": 54,
+  "has_seeder": false,
+  "has_frontend": false,
+  "src_hash": "3784428e008af56e50aad1d44143ecf8021a42a44cd21ac4c3ab282f4e79953d",
+  "generated_at": "2026-06-17T20:37:34.934Z",
+  "mcp_tool_count": 123
+}

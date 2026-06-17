@@ -1,62 +1,13 @@
-[
-  {
-    "id": "01-automations",
-    "label": "Automations home",
-    "theme": "dark",
-    "file": "docs\\apps\\bolt\\screenshots\\dark\\01-automations.png",
-    "sha256": "08dba4d9080fcc3b31938ec7ef32fa7d4ae8f726f112a3b5d42acfb7a7669d42",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:21:29.041Z"
-  },
-  {
-    "id": "01-automations",
-    "label": "Automations home",
-    "theme": "light",
-    "file": "docs\\apps\\bolt\\screenshots\\light\\01-automations.png",
-    "sha256": "00d5d27060cdedb1d03718ea5d86ee39069bbacfac974cb80713995e062e565c",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:20:09.378Z"
-  },
-  {
-    "id": "02-editor",
-    "label": "Automation editor",
-    "theme": "light",
-    "file": "docs\\apps\\bolt\\screenshots\\light\\02-editor.png",
-    "sha256": "b0affec73284b9c070ca180ce425afbfad457a8c9c549048bd435bff686a21ca",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:20:11.727Z"
-  },
-  {
-    "id": "03-automation-detail",
-    "label": "Automation detail",
-    "theme": "light",
-    "file": "docs\\apps\\bolt\\screenshots\\light\\03-automation-detail.png",
-    "sha256": "d9812ba4d99b96fd6cafb00b72e195c867a7e2a6724d51fe2d6304d07a8e8266",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:20:15.795Z"
-  },
-  {
-    "id": "04-executions",
-    "label": "Execution log",
-    "theme": "light",
-    "file": "docs\\apps\\bolt\\screenshots\\light\\04-executions.png",
-    "sha256": "78fa48d3155465974932f336b7e4d76f6ee3aaa34425cc7739225edf4b33ade6",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:20:18.138Z"
-  },
-  {
-    "id": "06-templates",
-    "label": "Template gallery",
-    "theme": "light",
-    "file": "docs\\apps\\bolt\\screenshots\\light\\06-templates.png",
-    "sha256": "beb077380109f68803a14fba4f6a4fa13ef30ceb75dead6e65b92f09c350d98e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:21:26.526Z"
-  }
-]
+{
+  "app": "bolt",
+  "nginx_path": "/bolt/",
+  "api_port": 4006,
+  "api_dir": "bolt-api",
+  "route_files": 7,
+  "schema_modules": 10,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "6a32d94540af312d044c669e7ebe38305bc47ac30db9037cf31fa727758c5901",
+  "generated_at": "2026-06-17T20:37:34.989Z",
+  "mcp_tool_count": 24
+}

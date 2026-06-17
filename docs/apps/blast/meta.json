@@ -1,82 +1,13 @@
-[
-  {
-    "id": "01-campaigns",
-    "label": "Campaign list",
-    "theme": "dark",
-    "file": "docs\\apps\\blast\\screenshots\\dark\\01-campaigns.png",
-    "sha256": "3f7861c6cf2594b7f7cee9016ebb85b8edb91bb87fafef85575e5b68011c226b",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:19:01.917Z"
-  },
-  {
-    "id": "01-campaigns",
-    "label": "Campaign list",
-    "theme": "light",
-    "file": "docs\\apps\\blast\\screenshots\\light\\01-campaigns.png",
-    "sha256": "e063c104af2b8d82b38367ab8c2ae2e8d23631ae318a4832e984cfc5ff6e2606",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:18:59.046Z"
-  },
-  {
-    "id": "02-campaign-new",
-    "label": "New campaign",
-    "theme": "light",
-    "file": "docs\\apps\\blast\\screenshots\\light\\02-campaign-new.png",
-    "sha256": "9f9871cccf53ef2e0b4fee25c8067869a5cac0b4fa013eca915d61d0b789c632",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:04.695Z"
-  },
-  {
-    "id": "03-templates",
-    "label": "Template gallery",
-    "theme": "light",
-    "file": "docs\\apps\\blast\\screenshots\\light\\03-templates.png",
-    "sha256": "b953371de108d0a7967a32ef3eaf1257ceefbb01650724a407c9ff6cfefc91a4",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:10.474Z"
-  },
-  {
-    "id": "04-template-editor",
-    "label": "Template editor",
-    "theme": "light",
-    "file": "docs\\apps\\blast\\screenshots\\light\\04-template-editor.png",
-    "sha256": "f19ba6b644d23cfdc9a38664a2a1d7ff33b0b091be825f0c5a2d9f3eb908f072",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:13.644Z"
-  },
-  {
-    "id": "05-segments",
-    "label": "Segment list",
-    "theme": "light",
-    "file": "docs\\apps\\blast\\screenshots\\light\\05-segments.png",
-    "sha256": "5b56d8585e9ea5f75b948af4786eb2ec2d2eb33745d0b5cef742393856cb12fd",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:16.431Z"
-  },
-  {
-    "id": "06-segment-builder",
-    "label": "Segment builder",
-    "theme": "light",
-    "file": "docs\\apps\\blast\\screenshots\\light\\06-segment-builder.png",
-    "sha256": "57da681574f83a83a0dbaca4e742c6379ec003b557e7c8cc8df105d8c9f3b604",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:19.209Z"
-  },
-  {
-    "id": "07-analytics",
-    "label": "Email analytics",
-    "theme": "light",
-    "file": "docs\\apps\\blast\\screenshots\\light\\07-analytics.png",
-    "sha256": "e724d884c26500c708731b838102650769c3091d76dd5f5c3d18e26916592ddd",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:22.156Z"
-  }
-]
+{
+  "app": "blast",
+  "nginx_path": "/blast/",
+  "api_port": 4010,
+  "api_dir": "blast-api",
+  "route_files": 7,
+  "schema_modules": 9,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "82e7ae67e596663dfb3c08e63e466c1292278802fb948178450df18779b6b6b3",
+  "generated_at": "2026-06-17T20:37:34.972Z",
+  "mcp_tool_count": 28
+}

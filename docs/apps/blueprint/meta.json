@@ -1,62 +1,13 @@
-[
-  {
-    "id": "01-diagram-list",
-    "label": "Diagram list",
-    "theme": "dark",
-    "file": "docs\\apps\\blueprint\\screenshots\\dark\\01-diagram-list.png",
-    "sha256": "93f67e292c914112c9f55ccf89e8d9b034eff6ad80430e5f29d36c2df542692a",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-17T20:19:47.763Z"
-  },
-  {
-    "id": "01-diagram-list",
-    "label": "Diagram list",
-    "theme": "light",
-    "file": "docs\\apps\\blueprint\\screenshots\\light\\01-diagram-list.png",
-    "sha256": "50772afdfc96f4eb0708ea50d16e914cd223bc0374ba52041e571438208e286d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:24.527Z"
-  },
-  {
-    "id": "02-diagram-editor",
-    "label": "Diagram editor",
-    "theme": "light",
-    "file": "docs\\apps\\blueprint\\screenshots\\light\\02-diagram-editor.png",
-    "sha256": "aee142bbeb60392f5ee0ac52b7b12ec6f8c5c408b889486fa1eb1524e82b06ed",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:30.188Z"
-  },
-  {
-    "id": "03-new-diagram-dialog",
-    "label": "New diagram",
-    "theme": "light",
-    "file": "docs\\apps\\blueprint\\screenshots\\light\\03-new-diagram-dialog.png",
-    "sha256": "cdf8ad1cbd0ada14340b6957ebacab035ae18a29325c5f8e7913bd80842dcf20",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:38.764Z"
-  },
-  {
-    "id": "04-starred-filter",
-    "label": "Starred diagrams",
-    "theme": "light",
-    "file": "docs\\apps\\blueprint\\screenshots\\light\\04-starred-filter.png",
-    "sha256": "3b8402345bd5aa3417aa8f7c639ad3fe68d78888a2c77c342c85e674cef13dd9",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:42.008Z"
-  },
-  {
-    "id": "05-archived-filter",
-    "label": "Archived diagrams",
-    "theme": "light",
-    "file": "docs\\apps\\blueprint\\screenshots\\light\\05-archived-filter.png",
-    "sha256": "0672a0d52614a4c112910f649d735f8fab78a9fff6405735336b954901dfcf1d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-17T20:19:45.257Z"
-  }
-]
+{
+  "app": "blueprint",
+  "nginx_path": "/blueprint/",
+  "api_port": 4015,
+  "api_dir": "blueprint-api",
+  "route_files": 6,
+  "schema_modules": 11,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "52ec32e6de33c99e8ec24c4f22b911e8d48f694a2efe361935393ab41db72e6d",
+  "generated_at": "2026-06-17T20:37:34.977Z",
+  "mcp_tool_count": 36
+}
