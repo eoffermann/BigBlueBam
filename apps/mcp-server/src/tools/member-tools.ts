@@ -405,4 +405,222 @@ export function registerMemberTools(server: McpServer, api: ApiClient): void {
       };
     },
   });
+
+  // ─── Org membership management (durable, non-credential) ─────────────────
+  //
+  // These wrap the org-admin member surface in org.routes.ts. They manage
+  // *durable membership* — who is in the org, what role they hold, which
+  // projects they belong to — NOT credentials/secrets/sessions (those stay
+  // UI/CLI-only by design). All require org admin/owner scope (or SuperUser)
+  // and a rank check vs. the target, enforced server-side.
+
+  const memberDetailShape = z.object({
+    id: z.string().uuid(),
+    email: z.string(),
+    display_name: z.string().nullable().optional(),
+    avatar_url: z.string().nullable().optional(),
+    timezone: z.string().nullable().optional(),
+    role: z.string(),
+    is_active: z.boolean(),
+    joined_at: z.string().nullable().optional(),
+    is_default_org: z.boolean().nullable().optional(),
+    version: z.number().int().nullable().optional(),
+    created_at: z.string().nullable().optional(),
+    last_seen_at: z.string().nullable().optional(),
+    projects: z
+      .array(
+        z.object({
+          project_id: z.string().uuid(),
+          name: z.string().optional(),
+          role: z.string().optional(),
+          joined_at: z.string().nullable().optional(),
+        }).passthrough(),
+      )
+      .optional(),
+  }).passthrough();
+
+  registerTool(server, {
+    name: 'bam_get_org_member',
+    description:
+      "Org-admin: fetch one member of the caller's active org by user id, including their org role, active/disabled status, join date, last-seen, and their project memberships within this org. Read-only. Use list_members to enumerate, then this for detail. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+    },
+    returns: z.object({ data: memberDetailShape }),
+    handler: async ({ user_id }) => {
+      const result = await api.get(`/org/members/${user_id}`);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error fetching member: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_list_member_projects',
+    description:
+      "Org-admin: list the projects a given member belongs to within the caller's active org, with the member's per-project role and join date. Read-only — pair with bam_add_member_to_projects to grant access. Requires org admin/owner scope (or SuperUser). 404 if the user is not a member of the active org.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+    },
+    returns: z.object({
+      data: z.array(
+        z.object({
+          project_id: z.string().uuid(),
+          project_name: z.string().optional(),
+          project_slug: z.string().optional(),
+          role: z.string().optional(),
+          joined_at: z.string().nullable().optional(),
+          is_archived: z.boolean().optional(),
+        }).passthrough(),
+      ),
+    }),
+    handler: async ({ user_id }) => {
+      const result = await api.get(`/org/members/${user_id}/projects`);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error listing member projects: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_get_member_activity',
+    description:
+      "Org-admin: read a member's activity feed (their authored task/project actions within the caller's active org), newest first, cursor-paginated. Read-only audit view — for cross-app activity prefer activity_by_actor. Requires org admin/owner scope (or SuperUser) and that the caller outranks the target.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+      cursor: z.string().optional().describe('Opaque pagination cursor from a prior response.'),
+      limit: z.number().int().positive().max(200).optional().describe('Page size (default 50, max 200).'),
+    },
+    returns: z.object({
+      data: z.array(
+        z.object({
+          id: z.string().uuid(),
+          project_id: z.string().uuid().optional(),
+          project_name: z.string().optional(),
+          task_id: z.string().uuid().nullable().optional(),
+          action: z.string().optional(),
+          details: z.unknown().optional(),
+          created_at: z.string(),
+        }).passthrough(),
+      ),
+      next_cursor: z.string().nullable().optional(),
+    }),
+    handler: async ({ user_id, cursor, limit }) => {
+      const params = new URLSearchParams();
+      if (cursor) params.set('cursor', cursor);
+      if (limit) params.set('limit', String(limit));
+      const qs = params.toString();
+      const result = await api.get(`/org/members/${user_id}/activity${qs ? `?${qs}` : ''}`);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error fetching member activity: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_update_member_role',
+    description:
+      "Org-admin: change a member's organization role (member / admin / viewer) in the caller's active org. Durable membership management, not a credential operation. The caller must be org admin/owner (or SuperUser) and must outrank both the current and target role. 'owner' is not settable here — use the transfer-ownership flow (UI/CLI) instead. Optionally pass `version` for optimistic concurrency: a stale version returns 409 VERSION_CONFLICT echoing the current version. 404 if the user is not a member of the active org.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+      role: z.enum(['member', 'admin', 'viewer']).describe("New org role. 'owner' is intentionally not settable here."),
+      version: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('Optional optimistic-concurrency token; omit for last-write-wins.'),
+    },
+    returns: z.object({ data: memberShape }),
+    handler: async ({ user_id, role, version }) => {
+      const body: Record<string, unknown> = { role };
+      if (version !== undefined) body.version = version;
+      const result = await api.patch(`/org/members/${user_id}`, body);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error updating member role: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_add_member_to_projects',
+    description:
+      "Org-admin: add an existing org member to one or more projects in the caller's active org, each with a per-project role (admin / member / viewer). Existing memberships are left untouched (returned in `skipped`), new ones in `added`. The caller must be org admin/owner (or SuperUser) and outrank the target. Every project_id must belong to the active org (400 CROSS_ORG_PROJECT otherwise). 404 if the user is not a member of the active org.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+      assignments: z
+        .array(
+          z.object({
+            project_id: z.string().uuid().describe('Project UUID in the caller\'s active org.'),
+            role: z.enum(['admin', 'member', 'viewer']).describe('Per-project role to grant.'),
+          }),
+        )
+        .min(1)
+        .describe('One or more (project_id, role) assignments.'),
+    },
+    returns: z.object({
+      data: z.object({
+        added: z.array(z.string().uuid()),
+        skipped: z.array(z.string().uuid()),
+      }).passthrough(),
+    }),
+    handler: async ({ user_id, assignments }) => {
+      const result = await api.post(`/org/members/${user_id}/projects`, { assignments });
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error adding member to projects: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
+
+  registerTool(server, {
+    name: 'bam_remove_member_from_org',
+    description:
+      "Org-admin: remove a member from the caller's active org (drops their org membership and project memberships in this org; does NOT delete the user account, which keeps authored content intact). Durable membership management, not a credential/account-deletion op. The caller must be org admin/owner (or SuperUser), must outrank the target, and cannot remove themselves. Requires confirm_action=true to proceed — call once without it to preview, then again with confirm_action:true to actually remove. 404 if the user is not a member of the active org.",
+    input: {
+      user_id: z.string().uuid().describe('Target user UUID (must be a member of the caller\'s active org).'),
+      confirm_action: z
+        .boolean()
+        .optional()
+        .describe('Must be true to actually remove. Omit (or pass false) to preview, then call again with true.'),
+    },
+    returns: z.object({ data: z.object({ success: z.boolean() }) }),
+    handler: async ({ user_id, confirm_action }) => {
+      if (!confirm_action) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Are you sure you want to remove user ${user_id} from the active org? This drops their org and project memberships here but keeps their account and authored content. Call bam_remove_member_from_org again with confirm_action: true to proceed.`,
+          }],
+        };
+      }
+      const result = await api.delete(`/org/members/${user_id}`);
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error removing member: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
 }

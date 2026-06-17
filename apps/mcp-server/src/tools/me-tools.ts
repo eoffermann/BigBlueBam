@@ -63,6 +63,40 @@ export function registerMeTools(server: McpServer, api: ApiClient): void {
   });
 
   registerTool(server, {
+    name: 'get_my_org',
+    description:
+      "Read the caller's active organization metadata — name, slug, plan, logo, free-form settings JSONB, plus live counts (active_owner_count, member_count) used by the People UI. This is the org-level analog of get_me: it tells you which org downstream calls are scoped to and basic facts about it. Read-only; use platform_get_org (SuperUser) for a different org by id, or switch_active_org first to change scope.",
+    input: {},
+    returns: z
+      .object({
+        data: z
+          .object({
+            id: z.string().uuid(),
+            name: z.string(),
+            slug: z.string().optional(),
+            plan: z.string().optional(),
+            logo_url: z.string().nullable().optional(),
+            settings: z.record(z.unknown()).nullable().optional(),
+            active_owner_count: z.number().int().optional(),
+            member_count: z.number().int().optional(),
+            created_at: z.string().optional(),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+    handler: async () => {
+      const result = await api.get('/org');
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Error fetching org: ${JSON.stringify(result.data)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result.data, null, 2) }] };
+    },
+  });
+
+  registerTool(server, {
     name: 'list_my_orgs',
     description: 'List organizations the authenticated user is a member of, including role in each.',
     input: {},
