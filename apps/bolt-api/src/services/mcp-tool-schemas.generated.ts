@@ -8350,7 +8350,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "enum": [
           "open",
           "in_progress",
-          "waiting_on_client",
+          "waiting_on_customer",
           "resolved",
           "closed"
         ],
@@ -8439,7 +8439,7 @@ export const MCP_TOOL_SCHEMAS: McpToolSchema[] = [
         "enum": [
           "open",
           "in_progress",
-          "waiting_on_client",
+          "waiting_on_customer",
           "resolved",
           "closed"
         ],
