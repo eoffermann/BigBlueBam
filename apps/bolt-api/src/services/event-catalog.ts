@@ -1699,6 +1699,23 @@ const bookEvents: EventDefinition[] = [
   },
   {
     source: 'book',
+    event_type: 'connection.synced',
+    description:
+      'Fired after an external calendar connection (ICS feed / Google / Microsoft) completes a sync, with the import result counts.',
+    payload_schema: [
+      { name: 'connection.id', type: 'uuid', description: 'External connection ID' },
+      { name: 'connection.provider', type: 'string', description: 'Provider key (ics/google/microsoft)' },
+      { name: 'connection.user_id', type: 'uuid', description: 'Owner user ID' },
+      { name: 'connection.calendar_id', type: 'uuid?', description: 'Target Book calendar events were mirrored into' },
+      { name: 'connection.status', type: 'string', description: 'Resulting sync status (active/error/needs_config)' },
+      { name: 'result.imported', type: 'number', description: 'Events fetched from the source this run' },
+      { name: 'result.created', type: 'number', description: 'New Book events created' },
+      { name: 'result.updated', type: 'number', description: 'Existing Book events updated' },
+      { name: 'result.removed', type: 'number', description: 'Mirror events removed (cancelled/vanished upstream)' },
+    ],
+  },
+  {
+    source: 'book',
     event_type: 'event.updated',
     description: 'Fired when a calendar event is updated (time, attendees, etc).',
     payload_schema: [

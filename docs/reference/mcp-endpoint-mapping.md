@@ -51,13 +51,13 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Blast | 40 | 27 | 13 | 2 |
 | Bench | 29 | 29 | 0 | 3 |
 | Blueprint | 38 | 35 | 3 | 1 |
-| Book | 31 | 24 | 7 | 0 |
+| Book | 33 | 25 | 8 | 0 |
 | Blank | 24 | 18 | 6 | 1 |
 | Bill | 52 | 47 | 5 | 0 |
-| Bureau | 38 | 33 | 5 | 3 |
+| Bureau | 42 | 37 | 5 | 0 |
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **950** | **705** | **245** | **19** |
+| **Total** | **956** | **710** | **246** | **16** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1345,11 +1345,13 @@ or `/helpdesk/agents`) segment in-code.
 | `DELETE /book/api/v1/calendars/:id` | `book_delete_calendar` | Delete a calendar | `apps/book/src/hooks/use-calendars.ts` |
 | `POST /book/api/v1/calendars/:id/ical` | — _(skip: iCal feed token mint)_ | Mint an iCal feed token | `apps/book/src/pages/connections.tsx` |
 | `GET /book/api/v1/calendars/:id/ical` | — _(skip: public token-auth .ics feed)_ | Public token-auth `.ics` feed | — (external calendar client) |
-| `GET /book/api/v1/connections` | `book_list_connections` | List external calendar connections | `apps/book/src/pages/connections.tsx` |
-| `POST /book/api/v1/connections/google` | — _(skip: OAuth calendar connect)_ | Connect a Google calendar | `apps/book/src/pages/connections.tsx` |
-| `POST /book/api/v1/connections/microsoft` | — _(skip: OAuth calendar connect)_ | Connect a Microsoft calendar | `apps/book/src/pages/connections.tsx` |
-| `DELETE /book/api/v1/connections/:id` | `book_delete_connection` | Remove a calendar connection | `apps/book/src/pages/connections.tsx` |
-| `POST /book/api/v1/connections/:id/sync` | `book_sync_connection` | Force-sync a connection | `apps/book/src/pages/connections.tsx` |
+| `GET /book/api/v1/connections` | `book_list_connections` | List external calendar connections | `apps/book/src/hooks/use-connections.ts` |
+| `POST /book/api/v1/connections/ics` | `book_create_connection` | Subscribe to an .ics feed (no-OAuth provider path) | `apps/book/src/hooks/use-connections.ts` |
+| `POST /book/api/v1/connections/google` | — _(skip: needs operator Google OAuth creds; not yet wired)_ | Connect a Google calendar | `apps/book/src/pages/connections.tsx` |
+| `POST /book/api/v1/connections/microsoft` | — _(skip: needs operator Microsoft OAuth creds; not yet wired)_ | Connect a Microsoft calendar | `apps/book/src/pages/connections.tsx` |
+| `DELETE /book/api/v1/connections/:id` | `book_delete_connection` | Remove a calendar connection (and its mirror events) | `apps/book/src/hooks/use-connections.ts` |
+| `POST /book/api/v1/connections/:id/sync` | `book_sync_connection` | Force-sync a connection (runs the engine inline) | `apps/book/src/hooks/use-connections.ts` |
+| `POST /book/api/v1/internal/connections/sync-due` | — _(skip: internal service-to-service; worker sync sweep)_ | Sync all due connections | `apps/worker/src/jobs/book-calendar-sync.job.ts` |
 | `GET /book/api/v1/events` | `book_list_events` | List events in a date range | `apps/book/src/hooks/use-events.ts` |
 | `POST /book/api/v1/events` | `book_create_event` | Create an event with attendees | `apps/book/src/hooks/use-events.ts` |
 | `GET /book/api/v1/events/:id` | `book_get_event` | Get one event | `apps/book/src/pages/event-detail.tsx` |
@@ -1466,7 +1468,7 @@ or `/helpdesk/agents`) segment in-code.
 | --- | --- | --- | --- |
 | `GET /bureau/api/v1/bookings/:id` *(none)* | — | *(no booking GET; PATCH/DELETE only)* | — |
 | `PATCH /bureau/api/v1/bookings/:id` | `bureau_update_booking` | Update a room booking window | — |
-| `DELETE /bureau/api/v1/bookings/:id` | `bureau_cancel_booking` | Soft-cancel a booking (confirm) | — |
+| `DELETE /bureau/api/v1/bookings/:id` | `bureau_cancel_booking` | Soft-cancel a booking (confirm) | `apps/bureau/src/pages/booking.tsx` |
 | `GET /bureau/api/v1/chat/rooms` | `bureau_list_chats` | List caller's chat threads | `apps/bureau/src/pages/chats.tsx` |
 | `GET /bureau/api/v1/chat/rooms/:roomKey/messages` | `bureau_get_chat_messages` | Chat transcript recovery | `apps/bureau/src/pages/chats.tsx` |
 | `PATCH /bureau/api/v1/chat/rooms/:roomKey/retention` | `bureau_set_chat_retention` | Set chat retention (admin) | `apps/bureau/src/pages/chats.tsx` |
@@ -1483,28 +1485,29 @@ or `/helpdesk/agents`) segment in-code.
 | `GET /bureau/api/v1/offices` | `bureau_list_offices` | All offices + owners (admin) | `apps/bureau/src/pages/admin/offices.tsx` |
 | `POST /bureau/api/v1/offices/assign` | `bureau_assign_office` | Assign an office to a user (admin) | `apps/bureau/src/pages/admin/offices.tsx` |
 | `GET /bureau/api/v1/offices/mine` | `bureau_my_office` | Caller's owned office | `apps/bureau/src/pages/floor-list.tsx` |
+| `GET /bureau/api/v1/presence` | `bureau_get_presence` | Org-wide live presence snapshot | — |
 | `GET /bureau/api/v1/presence/here` | `bureau_who_is_here` | Co-presence by URL chip | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `GET /bureau/api/v1/presence/locate` | `bureau_locate_user` | Locate a user's current room/floor | — |
 | `GET /bureau/api/v1/presence/where/:userId` | `bureau_where_is_user` | Locate a user ("Hunt") | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `PATCH /bureau/api/v1/me/status` | `bureau_set_status` | Set + persist caller's presence status | — |
 | `POST /bureau/api/v1/ring` | — _(skip: realtime ring signal — not wrapped)_ | Ring a user on a surface | `apps/bureau/src/hooks/use-bureau-ws.ts` |
+| `GET /bureau/api/v1/rooms` | `bureau_list_rooms` | List org rooms (bookable filter) + floor name | `apps/bureau/src/hooks/use-rooms.ts` |
 | `GET /bureau/api/v1/rooms/:id` | `bureau_who_is_in_room` | Room detail + live occupants | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
 | `POST /bureau/api/v1/rooms` | `bureau_create_room` | Create a room on a floor | `apps/bureau/src/pages/admin/floor-editor.tsx` |
 | `PATCH /bureau/api/v1/rooms/:id` | `bureau_update_room` | Update room fields | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
 | `DELETE /bureau/api/v1/rooms/:id` | `bureau_delete_room` | Soft-delete a room (admin) | `apps/bureau/src/pages/admin/floor-editor.tsx` |
 | `POST /bureau/api/v1/rooms/:id/acl` | — _(skip: room ACL admin — not wrapped)_ | Upsert a room ACL entry | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
 | `DELETE /bureau/api/v1/rooms/:id/acl/:userId` | — _(skip: room ACL admin — not wrapped)_ | Remove a room ACL entry | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
-| `GET /bureau/api/v1/rooms/:id/bookings` | `bureau_list_bookings` | List room bookings in a window | — |
-| `POST /bureau/api/v1/rooms/:id/bookings` | `bureau_book_room` | Reserve a room (confirm) | — |
+| `GET /bureau/api/v1/rooms/:id/bookings` | `bureau_list_bookings` | List room bookings in a window | `apps/bureau/src/hooks/use-rooms.ts` |
+| `POST /bureau/api/v1/rooms/:id/bookings` | `bureau_book_room` | Reserve a room (confirm) | `apps/bureau/src/pages/booking.tsx` |
 | `PATCH /bureau/api/v1/rooms/:id/door` | `bureau_set_door_state` | Set room default privacy | `apps/bureau/src/components/floor-editor/room-inspector.tsx` |
 | `POST /bureau/api/v1/rooms/:id/token` | `bureau_move_self` | Mint LiveKit token / enter room | `apps/bureau/src/hooks/use-bureau-ws.ts` |
 | `POST /bureau/api/v1/summon` | `bureau_summon` | Summon co-occupants to a URL (confirm) | `apps/bureau/src/stores/bureau-store.ts` |
 | `GET /bureau/api/v1/summons/:id` | `bureau_get_summon` | Summon audit-row lookup | — |
 | `POST /bureau/api/v1/summons/:id/grant-access` | `bureau_summon_grant_access` | Grant-and-summon follow-up | `apps/bureau/src/stores/bureau-store.ts` |
 | `POST /bureau/api/v1/surface-huddle/token` | — _(skip: LiveKit token mint)_ | Mint surface-huddle LiveKit token | `apps/bureau/src/hooks/use-bureau-ws.ts` |
-| `GET /bureau/api/v1/settings` | `bureau_get_settings` | Get org Bureau settings | `apps/bureau/src/pages/floor-list.tsx` |
-| `PATCH /bureau/api/v1/settings` | `bureau_update_settings` | Update Bureau settings (admin) | `apps/bureau/src/pages/admin/floor-list.tsx` |
-| `— *(stub; no endpoint)*` | `bureau_locate_user` | Locate user — stub (`/presence/locate` unimplemented) | — |
-| `— *(stub; no endpoint)*` | `bureau_get_presence` | Org presence map — stub (`/presence` unimplemented) | — |
-| `— *(stub; no endpoint)*` | `bureau_set_status` | Set DND/away — stub (`PATCH /me/status` unimplemented) | — |
+| `GET /bureau/api/v1/settings` | `bureau_get_settings` | Get org Bureau settings | `apps/bureau/src/pages/admin/settings.tsx` |
+| `PATCH /bureau/api/v1/settings` | `bureau_update_settings` | Update Bureau settings (admin) | `apps/bureau/src/pages/admin/settings.tsx` |
 
 
 ## Helpdesk (app)
@@ -1735,7 +1738,7 @@ External prefix for the Bam api is `/b3/api/`, so a route shown as `POST /v1/pro
 Noticed while mapping; **not fixed here** — flagging for follow-up:
 
 - **Bearing client/server path mismatches:** `POST /key-results/:id/set-value` (FIXED 2026-06-17 — client now posts `/key-results/:id/value`) and `GET /periods/:id/report` (FIXED 2026-06-17 — a structured `/periods/:id/report` route now backs the dashboard stat cards + progress chart). **Still open:** the SPA calls `POST /goals/:id/override-status` while the server route is `POST /goals/:id/status` — the Override-status control still 404s. Same wrong-path family as the set-value bug; one-line fix in `apps/bearing/src/hooks/useGoals.ts`.
-- **Bureau presence tools unwired:** `bureau_locate_user`, `bureau_get_presence`, `bureau_set_status` target endpoints (`/presence/locate`, `/presence`, `PATCH /me/status`) that don't exist on bureau-api (presence lives at `/presence/where/:userId`); they fail soft with stub envelopes.
+- **Bureau presence tools wired (FIXED 2026-06-17):** `bureau_get_presence`, `bureau_locate_user`, `bureau_set_status` now back real endpoints in `apps/bureau-api/src/routes/me-status.routes.ts` (`GET /v1/presence`, `GET /v1/presence/locate`, `PATCH /v1/me/status`) over the live Redis presence store. `bureau_set_status` persists the chosen status durably (`bureau:user:{id}:status`) so it survives reconnects and applies even when the caller has no live web session.
 - **Banter calling endpoints return HTTP 410 Gone:** `banter_start_call` / `join` / `leave` / `end` / `invite_agent` tools still exist, but calling moved to the Bureau docked-box and the endpoints are tombstoned.
 - **Board / Blueprint granular write endpoints are MCP/agent-only:** the SPAs persist via `PUT /boards/:id/scene` (Board) and read via the composite `/graph` endpoint (Blueprint); many element/node write endpoints are reachable only through MCP tools, not the UI.
 - **LLM-placeholder tools (stubbed, no model wired):** `blast_draft_email_content`, `blast_suggest_subject_lines`, `blank_generate_form`, `blank_summarize_responses`.

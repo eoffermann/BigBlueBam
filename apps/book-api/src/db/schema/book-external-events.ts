@@ -9,6 +9,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { users } from './bbb-refs.js';
 import { bookExternalConnections } from './book-external-connections.js';
+import { bookEvents } from './book-events.js';
 
 export const bookExternalEvents = pgTable(
   'book_external_events',
@@ -26,10 +27,16 @@ export const bookExternalEvents = pgTable(
     end_at: timestamp('end_at', { withTimezone: true }).notNull(),
     all_day: boolean('all_day').notNull().default(false),
     visibility: varchar('visibility', { length: 20 }).notNull().default('busy'),
+    // The mirrored book_events row this external event maps to (0199). Lets a
+    // re-sync update in place and a disconnect clean up the mirror.
+    book_event_id: uuid('book_event_id').references(() => bookEvents.id, {
+      onDelete: 'set null',
+    }),
     synced_at: timestamp('synced_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex('book_ext_events_conn_ext_idx').on(table.connection_id, table.external_event_id),
     index('idx_book_ext_events_user').on(table.user_id, table.start_at, table.end_at),
+    index('idx_book_ext_events_book_event').on(table.book_event_id),
   ],
 );

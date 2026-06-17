@@ -18,11 +18,12 @@ import type { ApiClient } from '../middleware/api-client.js';
  * `confirm_action: false` (or omit) to preview, then call again with
  * `confirm_action: true` to actually proceed.
  *
- * Some perception tools (`bureau_locate_user`, `bureau_get_presence`) and the
- * status tool (`bureau_set_status`) call endpoints that do not yet exist on
- * bureau-api. Those tools return an empty stub envelope and log a TODO so the
- * tool catalog is complete and agents fail soft until workstream 13 lands the
- * missing endpoints.
+ * The perception tools (`bureau_locate_user`, `bureau_get_presence`) and the
+ * status tool (`bureau_set_status`) are backed by the real Redis presence
+ * store (workstream 13): GET /v1/presence, GET /v1/presence/locate, and
+ * PATCH /v1/me/status in apps/bureau-api/src/routes/me-status.routes.ts.
+ * `bureau_set_status` persists the status durably so it survives reconnects
+ * and applies even when the caller has no live web session.
  */
 function createBureauClient(bureauApiUrl: string, api: ApiClient) {
   const baseUrl = bureauApiUrl.replace(/\/$/, '');
@@ -180,6 +181,22 @@ export function registerBureauTools(
   });
 
   registerTool(server, {
+    name: 'bureau_list_rooms',
+    description:
+      "List rooms across the caller's org (live, non-archived), each joined with its floor name, type, capacity, and bookable flag. Pass bookable: true to restrict to reservable rooms (the set bureau_book_room accepts), or floor_id to scope to one floor. Use this to find a room id to book without walking every floor via bureau_get_floor.",
+    input: {
+      bookable: z.boolean().optional().describe('When true, return only bookable rooms'),
+      floor_id: z.string().uuid().optional().describe('Restrict to one floor'),
+    },
+    returns: z.object({ data: z.array(roomShape) }),
+    handler: async ({ bookable, floor_id }) => {
+      const qs = buildQs({ bookable: bookable ? '1' : undefined, floor_id });
+      const result = await client.request('GET', `/rooms${qs}`);
+      return result.ok ? ok(result.data) : err('listing bureau rooms', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'bureau_get_floor',
     description:
       "Fetch a single Bureau floor by id, including its rooms array (with live per-room occupancy), background image, and layout JSON. Use this to render the floor view or to enumerate rooms before bureau_who_is_in_room / bureau_move_self.",
@@ -210,36 +227,58 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_locate_user',
     description:
-      "Locate a user inside Bureau: returns their current room_id and floor_id if they have a live session, or null otherwise. STUB: the underlying /v1/presence/locate endpoint is not yet implemented on bureau-api (workstream 13). Until then this tool returns { data: null } so agents can call it without erroring, but it cannot actually locate users. Tracked separately; agents should treat a null result as 'not located' rather than 'not in Bureau'.",
+      "Locate a user inside Bureau: returns their current room_id and floor_id (plus status and the surface URL they are on) if they have a live presence session in the caller's org, or { data: null } when they have none. Backed by the live Redis presence sessions the floor view uses. A null result means 'not currently on Bureau in your org' (offline, or active in a different org). For cross-app location by surface URL (which app/page they are on, with a destination-access preflight) prefer bureau_where_is_user; this tool answers the spatial 'which room/floor' question.",
     input: {
       user_id: z.string().uuid().describe('User id to locate'),
     },
-    returns: z.object({ data: z.unknown().nullable() }).passthrough(),
+    returns: z
+      .object({
+        data: z
+          .object({
+            user_id: z.string().uuid(),
+            room_id: z.string().uuid().nullable(),
+            floor_id: z.string().uuid().nullable(),
+            status: z.string().optional(),
+            location_url: z.string().nullable().optional(),
+            location_app: z.string().nullable().optional(),
+            location_label: z.string().nullable().optional(),
+          })
+          .nullable(),
+      })
+      .passthrough(),
     handler: async ({ user_id }) => {
       const result = await client.request('GET', `/presence/locate?user=${encodeURIComponent(user_id)}`);
-      if (result.ok) return ok(result.data);
-      // Endpoint not implemented yet — fail soft with null so the tool catalog
-      // is complete and agents can probe presence without erroring.
-      if (result.status === 404 || result.status === 0) {
-        return ok({ data: null, _stub: true, _todo: 'bureau-api: implement GET /v1/presence/locate (workstream 13)' });
-      }
-      return err('locating user', result.data);
+      return result.ok ? ok(result.data) : err('locating user', result.data);
     },
   });
 
   registerTool(server, {
     name: 'bureau_get_presence',
     description:
-      "Snapshot the full org-wide Bureau presence map: every user with a live session, their current room, floor, and status (active/dnd/away). STUB: the underlying /v1/presence endpoint is not yet implemented on bureau-api (workstream 13). Until then this tool returns { data: [] }. Agents asking 'who is in Bureau right now?' should expect an empty list until the endpoint lands.",
+      "Snapshot the full org-wide Bureau presence map: every user with a live session in the caller's org, with their current room_id, floor_id, status (available/busy/dnd/focus/away/in_meeting), and the surface URL/app they are on. Reads the live Redis presence sessions that drive the floor view and the floating presence widget. An empty list means nobody in your org has a live Bureau session right now. Use bureau_locate_user for a single user, or bureau_who_is_in_room for one room's occupants.",
     input: {},
-    returns: z.object({ data: z.array(z.unknown()) }).passthrough(),
+    returns: z
+      .object({
+        data: z.array(
+          z
+            .object({
+              user_id: z.string().uuid(),
+              display_name: z.string().nullable().optional(),
+              avatar_url: z.string().nullable().optional(),
+              status: z.string(),
+              room_id: z.string().uuid().nullable(),
+              floor_id: z.string().uuid().nullable(),
+              location_url: z.string().nullable().optional(),
+              location_app: z.string().nullable().optional(),
+              location_label: z.string().nullable().optional(),
+            })
+            .passthrough(),
+        ),
+      })
+      .passthrough(),
     handler: async () => {
       const result = await client.request('GET', '/presence');
-      if (result.ok) return ok(result.data);
-      if (result.status === 404 || result.status === 0) {
-        return ok({ data: [], _stub: true, _todo: 'bureau-api: implement GET /v1/presence (workstream 13)' });
-      }
-      return err('reading bureau presence', result.data);
+      return result.ok ? ok(result.data) : err('reading bureau presence', result.data);
     },
   });
 
@@ -264,18 +303,24 @@ export function registerBureauTools(
   registerTool(server, {
     name: 'bureau_set_status',
     description:
-      "Set the caller's Bureau presence status: 'active', 'dnd' (Do Not Disturb — knocks are rejected with 423 Locked and the leave-a-note follow-up), or 'away'. STUB: the underlying PATCH /v1/me/status endpoint is not yet implemented on bureau-api (workstream 13). Until then the tool returns { data: { status, _stub: true } } so agents can call it without erroring, but no state actually changes.",
+      "Set AND persist the caller's Bureau presence status: 'available', 'busy', 'away', or 'dnd' (Do Not Disturb — knocks are rejected with 423 Locked and the leave-a-note follow-up). The status is stored durably (it survives reconnects and applies even when the caller has no live web session — e.g. an agent setting its own status over MCP) and is fanned out to every live session immediately so the floor view and the floating presence widget repaint at once. Returns { status, live_sessions, persisted } where live_sessions is how many live sessions were updated (0 is normal for an agent with no open floor view; the durable status still persisted). Read it back with bureau_get_presence or bureau_locate_user.",
     input: {
-      status: z.enum(['active', 'dnd', 'away']).describe('Presence status to set'),
+      status: z
+        .enum(['available', 'busy', 'away', 'dnd'])
+        .describe('Presence status to set'),
     },
-    returns: z.object({ data: z.object({ status: z.string() }).passthrough() }),
+    returns: z.object({
+      data: z
+        .object({
+          status: z.string(),
+          live_sessions: z.number().int().optional(),
+          persisted: z.boolean().optional(),
+        })
+        .passthrough(),
+    }),
     handler: async ({ status }) => {
       const result = await client.request('PATCH', '/me/status', { status });
-      if (result.ok) return ok(result.data);
-      if (result.status === 404 || result.status === 0) {
-        return ok({ data: { status, _stub: true }, _todo: 'bureau-api: implement PATCH /v1/me/status (workstream 13)' });
-      }
-      return err('setting bureau status', result.data);
+      return result.ok ? ok(result.data) : err('setting bureau status', result.data);
     },
   });
 

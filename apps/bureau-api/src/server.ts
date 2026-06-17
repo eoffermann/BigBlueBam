@@ -21,6 +21,7 @@ import livekitRoutes from './routes/livekit.routes.js';
 import summonsRoutes from './routes/summons.routes.js';
 import presenceHereRoutes from './routes/presence-here.routes.js';
 import presenceWhereRoutes from './routes/presence-where.routes.js';
+import meStatusRoutes from './routes/me-status.routes.js';
 import ringRoutes from './routes/ring.routes.js';
 import wsRoutes from './routes/ws.routes.js';
 import chatRoutes from './routes/chat.routes.js';
@@ -157,6 +158,10 @@ await fastify.register(presenceHereRoutes, { prefix: '/v1' });
 // now (url/app/label), so the caller can jump to them. Org-scoped,
 // DND-respecting, destination-access-filtered.
 await fastify.register(presenceWhereRoutes, { prefix: '/v1' });
+// Real-presence (workstream 13): org-wide presence snapshot, point-locate,
+// and the durable + live set-status path that backs the bureau_get_presence
+// / bureau_locate_user / bureau_set_status MCP tools (previously stubs).
+await fastify.register(meStatusRoutes, { prefix: '/v1' });
 await fastify.register(ringRoutes, { prefix: '/v1' });
 // Room text chat recovery + retention (live chat itself rides the WS hub).
 await fastify.register(chatRoutes, { prefix: '/v1' });

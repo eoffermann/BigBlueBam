@@ -50,6 +50,17 @@ export const keys = {
   /** SCAN match pattern for live-session readers (presence-here). */
   sessionScanPattern: () => 'bureau:sess:*',
   /**
+   * Durable per-user presence status (TTL-less HASH: { status, orgId }).
+   * Why it exists: the per-session `bureau:sess:{id}` HASH carries a 35s
+   * TTL and only exists while a socket is connected. A status the user
+   * chose (`away`, `dnd`, …) must outlive a reconnect and apply even when
+   * an agent sets it over MCP with no live web session. createSession
+   * seeds a new session's status from this key, and PATCH /v1/me/status
+   * writes it. Org-scoped so a switched-org read never leaks the wrong
+   * value.
+   */
+  userStatus: (userId: string) => `bureau:user:${userId}:status`,
+  /**
    * Durable per-session index HASH (sessionId → JSON snapshot, no TTL).
    * Why it exists: the per-session `bureau:sess:{id}` HASH carries a 35s
    * TTL, and Redis EVICTS the key the moment it lapses — by the time the
@@ -202,8 +213,14 @@ export async function createSession(
     orgId,
     floorId = null,
     device,
-    status = 'available',
+    status,
   } = args;
+
+  // Seed the session's status from the user's durable choice (if any) so a
+  // reconnect doesn't silently reset an `away`/`dnd` back to `available`.
+  // An explicit `status` arg still wins (the WS hub never passes one today).
+  const seededStatus =
+    status ?? (await getUserStatus(redis, userId, orgId)) ?? 'available';
 
   const sessionKey = keys.session(sessionId);
   const userKey = keys.userSessions(userId);
@@ -216,7 +233,7 @@ export async function createSession(
     orgId,
     floorId: floorId ?? '',
     roomId: '',
-    status,
+    status: seededStatus,
     statusText: '',
     emoji: '',
     locationUrl: '',
@@ -472,6 +489,63 @@ export async function setStatus(
   );
   pipeline.expire(sessionKey, SESSION_TTL_SECONDS);
   await pipeline.exec();
+}
+
+/**
+ * Persist a user's chosen presence status durably (TTL-less), org-scoped.
+ * This is the value `createSession` seeds new sessions from and that
+ * `getUserStatus` returns when the user has no live session. Writing it
+ * does NOT touch any live session HASH — the caller (PATCH /v1/me/status)
+ * fans the same value out to every live session separately so the live
+ * floor repaints immediately.
+ */
+export async function setUserStatus(
+  redis: Redis,
+  userId: string,
+  orgId: string,
+  status: PresenceStatus,
+): Promise<void> {
+  await redis.hset(keys.userStatus(userId), 'status', status, 'orgId', orgId);
+}
+
+/**
+ * Read a user's durable presence status. Returns null when none has ever
+ * been set, OR when the stored status belongs to a different org than the
+ * caller's (a member of two orgs gets a per-org status; the durable key is
+ * single-valued, so we only honor it inside the org it was set in).
+ */
+export async function getUserStatus(
+  redis: Redis,
+  userId: string,
+  orgId: string,
+): Promise<PresenceStatus | null> {
+  const stored = await redis.hgetall(keys.userStatus(userId));
+  if (!stored || !stored.status) return null;
+  if (stored.orgId && stored.orgId !== orgId) return null;
+  return stored.status as PresenceStatus;
+}
+
+/**
+ * Update the live status field on every live session of a user (across
+ * devices) and refresh each session's TTL. Returns the number of live
+ * sessions touched. Used by PATCH /v1/me/status so a status set over REST
+ * /MCP lands on the same Redis fields the floor view and DND check read.
+ */
+export async function setStatusForUserSessions(
+  redis: Redis,
+  userId: string,
+  status: PresenceStatus,
+): Promise<number> {
+  const sessionIds = await redis.smembers(keys.userSessions(userId));
+  if (sessionIds.length === 0) return 0;
+  const pipeline = redis.pipeline();
+  for (const sessionId of sessionIds) {
+    const sessionKey = keys.session(sessionId);
+    pipeline.hset(sessionKey, 'status', status, 'lastBeat', String(Date.now()));
+    pipeline.expire(sessionKey, SESSION_TTL_SECONDS);
+  }
+  await pipeline.exec();
+  return sessionIds.length;
 }
 
 /**

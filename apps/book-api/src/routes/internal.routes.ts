@@ -50,6 +50,7 @@ import {
   bookEventAttendees,
   users,
 } from '../db/schema/index.js';
+import { syncDueConnections } from '../services/external-sync.service.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Internal-secret guard.
@@ -449,4 +450,32 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ data: event });
     },
   );
+
+  /**
+   * POST /v1/internal/connections/sync-due
+   *
+   * Called by the worker's scheduled `book-calendar-sync` job. Runs the
+   * external-sync engine for every connection due for a refresh (ICS feeds
+   * today) and returns per-connection results. The engine itself updates
+   * last_sync_at / sync_status / counters, so the worker just triggers it.
+   *
+   * Body: { stale_minutes?: number } — only sync connections last synced more
+   * than this many minutes ago (default 30).
+   */
+  fastify.post('/internal/connections/sync-due', async (request, reply) => {
+    if (!(await requireInternalSecret(request, reply))) return;
+
+    const body = z
+      .object({ stale_minutes: z.number().int().min(0).max(10080).optional() })
+      .safeParse(request.body ?? {});
+    const staleMinutes = body.success ? body.data.stale_minutes : undefined;
+
+    const results = await syncDueConnections(staleMinutes ?? 30);
+    return reply.status(200).send({
+      data: {
+        synced: results.length,
+        results,
+      },
+    });
+  });
 }
