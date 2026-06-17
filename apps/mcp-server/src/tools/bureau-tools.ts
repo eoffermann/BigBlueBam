@@ -505,4 +505,380 @@ export function registerBureauTools(
       return result.ok ? ok(result.data) : err('updating bureau room', result.data);
     },
   });
+
+  // ============================================================
+  // FLOORS — additional (update / background / delete)
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_update_floor',
+    description:
+      "Update a Bureau floor's metadata. Provide only the fields to change. Org admins/owners only (gated server-side; non-admins get 403). To UNARCHIVE a soft-deleted floor, pass archived_at: null — that is the only PATCH that can target an archived floor, and it is the symmetric undo of bureau_delete_floor. Any field-only PATCH (name/layout/etc.) requires the floor to be live. `slug` and `building_id` are immutable here (set them at create time).",
+    input: {
+      id: z.string().uuid().describe('Floor id'),
+      name: z.string().min(1).max(120).optional().describe('Updated display name'),
+      layout: z.record(z.unknown()).optional().describe('Updated free-form Canvas2D layout payload'),
+      background_url: z.string().max(2048).nullable().optional().describe('Updated floor background image URL (null clears it)'),
+      position: z.number().int().min(0).optional().describe('Updated sort order (lower = earlier)'),
+      is_default: z.boolean().optional().describe("Mark/unmark this as the org's default floor"),
+      archived_at: z.null().optional().describe('Pass null to unarchive (restore) a soft-deleted floor. No other value is accepted.'),
+    },
+    returns: z.object({ data: floorShape }),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/floors/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating bureau floor', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_set_floor_background',
+    description:
+      "Set a Bureau floor's background image URL. Org admins/owners only (gated server-side). This only stores the URL string on the floor row — uploading the image to object storage is a separate concern handled by the UI. Use bureau_update_floor with background_url: null to clear it.",
+    input: {
+      id: z.string().uuid().describe('Floor id'),
+      background_url: z.string().min(1).max(2048).describe('Background image URL to store on the floor'),
+    },
+    returns: z.object({ data: floorShape }),
+    handler: async ({ id, background_url }) => {
+      const result = await client.request('POST', `/floors/${id}/background`, { background_url });
+      return result.ok ? ok(result.data) : err('setting bureau floor background', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_delete_floor',
+    description:
+      "Soft-delete (archive) a Bureau floor. Org admins/owners only (gated server-side). This is a soft delete — the row stays and can be restored with bureau_update_floor (archived_at: null). Archiving a floor hides it and its rooms from the floor view. " +
+      "Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    input: {
+      id: z.string().uuid().describe('Floor id to archive'),
+      confirm_action: z.boolean().describe('Must be true to actually archive. Call once with false (or omit) to preview.'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), archived: z.boolean() }).passthrough() }),
+    handler: async ({ id, confirm_action }) => {
+      if (!confirm_action) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Preview: archive (soft-delete) Bureau floor ${id}. This hides the floor and its rooms from the floor view; the row is retained and can be restored via bureau_update_floor with archived_at: null. Call bureau_delete_floor again with confirm_action: true to proceed.`,
+          }],
+        };
+      }
+      const result = await client.request('DELETE', `/floors/${id}`);
+      if (result.ok) return ok({ data: { id, archived: true } });
+      return err('deleting bureau floor', result.data);
+    },
+  });
+
+  // ============================================================
+  // ROOMS — additional (delete)
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_delete_room',
+    description:
+      "Soft-delete (archive) a Bureau room. Org admins/owners only (gated server-side). This is a soft delete — the row is retained for auditability but the room disappears from the floor and can no longer be entered, booked, or knocked on. " +
+      "Requires confirm_action=true to actually delete. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    input: {
+      id: z.string().uuid().describe('Room id to archive'),
+      confirm_action: z.boolean().describe('Must be true to actually archive. Call once with false (or omit) to preview.'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), archived: z.boolean() }).passthrough() }),
+    handler: async ({ id, confirm_action }) => {
+      if (!confirm_action) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Preview: archive (soft-delete) Bureau room ${id}. The room will disappear from its floor and can no longer be entered, booked, or knocked on. Call bureau_delete_room again with confirm_action: true to proceed.`,
+          }],
+        };
+      }
+      const result = await client.request('DELETE', `/rooms/${id}`);
+      if (result.ok) return ok({ data: { id, archived: true } });
+      return err('deleting bureau room', result.data);
+    },
+  });
+
+  // ============================================================
+  // BOOKING — additional (update window)
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_update_booking',
+    description:
+      "Update a Bureau booking's title, time window, or access. Provide only the fields to change. Only the organizer or an org admin/owner may update a booking; cancelled bookings cannot be edited. Changing the window re-schedules the lifecycle jobs (privacy lock at starts_at, release at ends_at). To get a booking id, use bureau_list_bookings on the room (there is no standalone booking GET).",
+    input: {
+      id: z.string().uuid().describe('Booking id'),
+      title: z.string().min(1).max(200).optional().describe('Updated booking title'),
+      starts_at: z.string().datetime({ offset: true }).optional().describe('Updated start time (ISO-8601 with offset)'),
+      ends_at: z.string().datetime({ offset: true }).optional().describe('Updated end time (ISO-8601 with offset)'),
+      access: z.enum(['open', 'locked']).optional().describe("'open' lets non-attendees wander in; 'locked' holds the room private"),
+    },
+    returns: z.object({ data: bookingShape }),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/bookings/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating bureau booking', result.data);
+    },
+  });
+
+  // ============================================================
+  // OFFICES (3) — personal-office assignment + lookup
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_list_offices',
+    description:
+      "List every type='office' room across the org's live floors, joined with each office's current owner (display name, email, avatar) and floor name. Org admins/owners only (gated server-side; non-admins get 403). Use this to see who has a personal office before bureau_assign_office.",
+    input: {},
+    returns: z.object({ data: z.array(z.object({
+      id: z.string().uuid(),
+      floor_id: z.string().uuid(),
+      floor_name: z.string().nullable().optional(),
+      name: z.string(),
+      type: z.string(),
+      privacy_default: z.string().optional(),
+      owner: z.object({ id: z.string().uuid(), display_name: z.string().nullable().optional(), email: z.string().nullable().optional(), avatar_url: z.string().nullable().optional() }).nullable().optional(),
+      updated_at: z.string().optional(),
+    }).passthrough()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/offices');
+      return result.ok ? ok(result.data) : err('listing bureau offices', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_assign_office',
+    description:
+      "Assign a Bureau room (office) to a user as its owner — the user becomes the room's occupant and knock target. Org admins/owners only (gated server-side; non-admins get 403). The target user must be an active member of the org. Assignment is org-scoped; any non-archived room can be assigned (the floor designer may repurpose a huddle as an office), though the admin offices view only surfaces type='office' rooms.",
+    input: {
+      room_id: z.string().uuid().describe('Room id to assign'),
+      user_id: z.string().uuid().describe('User id to make the owner/occupant'),
+    },
+    returns: z.object({ data: roomShape }),
+    handler: async (body) => {
+      const result = await client.request('POST', '/offices/assign', body);
+      return result.ok ? ok(result.data) : err('assigning bureau office', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_my_office',
+    description:
+      "Return the Bureau room owned by the caller (their personal office), or { data: null } if they have none. Use this to find the caller's home room before bureau_set_door_state or bureau_move_self.",
+    input: {},
+    returns: z.object({ data: roomShape.nullable() }),
+    handler: async () => {
+      const result = await client.request('GET', '/offices/mine');
+      return result.ok ? ok(result.data) : err('getting caller bureau office', result.data);
+    },
+  });
+
+  // ============================================================
+  // KNOCKS — additional (inbox / leave-note)
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_knock_inbox',
+    description:
+      "List the pending knocks where the caller is the office owner — i.e. visitors currently waiting at the caller's door. Newest first. Resolve each with bureau_respond_knock (admit/defer/decline). Knocks that timed out (no response within 30s) are not pending and won't appear here.",
+    input: {},
+    returns: z.object({ data: z.array(knockShape) }),
+    handler: async () => {
+      const result = await client.request('GET', '/knocks/inbox');
+      return result.ok ? ok(result.data) : err('listing bureau knock inbox', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_leave_note',
+    description:
+      "Leave a note for an office owner who is in Do Not Disturb — the DND fallback for bureau_knock (which returns 423 Locked when the owner is in DND). Delivers the message as a Banter DM to the owner, prefixed '[Bureau knock note] '. Only valid for type='office' rooms with an owner; you cannot leave a note on your own office. Returns { delivered: true } when the DM was posted, or { delivered: false } (HTTP 202) if Banter was unreachable and the note was dropped — surface that to the caller rather than assuming success.",
+    input: {
+      room_id: z.string().uuid().describe('Office room id whose owner should receive the note'),
+      message: z.string().min(1).max(2000).describe('The note text to DM the owner'),
+    },
+    returns: z.object({ data: z.object({ delivered: z.boolean() }).passthrough() }),
+    handler: async (body) => {
+      const result = await client.request('POST', '/knocks/leave-note', body);
+      return result.ok ? ok(result.data) : err('leaving bureau note', result.data);
+    },
+  });
+
+  // ============================================================
+  // PRESENCE — real endpoints (co-presence by URL / locate a user)
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_who_is_here',
+    description:
+      "Co-presence by URL: list OTHER users currently on the same content surface (the given canonical URL) according to their live Bureau session — for the 'X others here' chip and starting a huddle. Deduped by user (multiple devices collapse to one), excludes the caller, and access-filtered: if the CALLER cannot see the destination URL the result is empty. This reads live, ephemeral presence state; an empty list means nobody else is reporting that exact URL right now.",
+    input: {
+      url: z.string().min(1).max(2048).describe('Canonical surface URL to check co-presence on (must match what the SDK reports)'),
+    },
+    returns: z.object({ data: z.array(z.object({
+      user_id: z.string().uuid(),
+      display_name: z.string().nullable().optional(),
+      avatar_url: z.string().nullable().optional(),
+      status: z.string().optional(),
+      status_emoji: z.string().nullable().optional(),
+    }).passthrough()) }),
+    handler: async ({ url }) => {
+      const result = await client.request('GET', `/presence/here${buildQs({ url })}`);
+      return result.ok ? ok(result.data) : err('reading bureau co-presence', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_where_is_user',
+    description:
+      "Locate a specific user ('Hunt'): returns the URL/app/label/status of the surface the target user is currently on, so the caller can jump to them. Returns { data: { located: true, url, app, label, status } } or { data: { located: false } } when the user is offline, in Do Not Disturb, in a different org right now, or on a surface the CALLER cannot see (denial is indistinguishable from absence). This is the real, implemented locate endpoint (unlike the bureau_locate_user stub); prefer this tool. The target must share the caller's active org.",
+    input: {
+      user_id: z.string().uuid().describe('User id to locate'),
+    },
+    returns: z.object({ data: z.object({
+      located: z.boolean(),
+      url: z.string().optional(),
+      app: z.string().nullable().optional(),
+      label: z.string().nullable().optional(),
+      status: z.string().optional(),
+    }).passthrough() }),
+    handler: async ({ user_id }) => {
+      const result = await client.request('GET', `/presence/where/${user_id}`);
+      return result.ok ? ok(result.data) : err('locating bureau user', result.data);
+    },
+  });
+
+  // ============================================================
+  // SUMMON — additional (audit lookup / grant-access follow-up)
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_get_summon',
+    description:
+      "Fetch a summon audit row by id: who summoned, from which room, the target URL/app, and the eligible/denied recipient lists. Only the original summoner (or an org admin/owner) may read it. Use this after bureau_summon to inspect who was eligible vs denied, then optionally bureau_summon_grant_access to grant the denied users and re-summon them.",
+    input: {
+      id: z.string().uuid().describe('Summon id'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), summoner_id: z.string().uuid().optional(), from_room_id: z.string().uuid().nullable().optional(), target_url: z.string().optional(), target_app: z.string().optional() }).passthrough() }),
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/summons/${id}`);
+      return result.ok ? ok(result.data) : err('getting bureau summon', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_summon_grant_access',
+    description:
+      "§4.4 grant-and-summon follow-up: for users who were DENIED on a prior summon (because they lacked access to the target URL), grant them access AND re-summon them in one step. Only the original summoner may call this on their own summon. Get the summon id and the denied user ids from bureau_get_summon. " +
+      "HIGH IMPACT — this grants cross-app access to the target resource AND DMs each user a real-time summon. Requires confirm_action=true to proceed. Call once with confirm_action: false (or omit) to preview, then call again with true.",
+    input: {
+      id: z.string().uuid().describe('Summon id to grant access on'),
+      user_ids: z.array(z.string().uuid()).min(1).max(100).describe('User ids (from the summon\'s denied list) to grant access and re-summon'),
+      confirm_action: z.boolean().describe('Must be true to actually grant + summon. Call once with false (or omit) to preview.'),
+    },
+    returns: z.object({ data: z.object({ granted: z.unknown(), missing: z.unknown() }).passthrough() }),
+    handler: async ({ id, user_ids, confirm_action }) => {
+      if (!confirm_action) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Preview: grant access to ${user_ids.length} user(s) on summon ${id} and re-summon them to the target surface. This grants cross-app access to the target resource and DMs each user in real time. Call bureau_summon_grant_access again with confirm_action: true to proceed.`,
+          }],
+        };
+      }
+      const result = await client.request('POST', `/summons/${id}/grant-access`, { user_ids });
+      return result.ok ? ok(result.data) : err('granting bureau summon access', result.data);
+    },
+  });
+
+  // ============================================================
+  // CHAT (3) — room-chat recovery + retention
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_list_chats',
+    description:
+      "List the Bureau room-chat threads the caller participated in (the recovery half of room chat — the live half is WS-only). Optional `search` filters by thread. Use the returned room keys with bureau_get_chat_messages to read a transcript.",
+    input: {
+      search: z.string().max(255).optional().describe('Optional search filter over the caller\'s chat threads'),
+    },
+    returns: z.object({ data: z.array(z.object({}).passthrough()) }),
+    handler: async ({ search }) => {
+      const result = await client.request('GET', `/chat/rooms${buildQs({ search })}`);
+      return result.ok ? ok(result.data) : err('listing bureau chats', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_get_chat_messages',
+    description:
+      "Recover the transcript of a Bureau room chat by its room key. Access is gated by participation: you can re-read what you were present for; org admins/owners and SuperUsers can additionally read any thread they can name. Returns up to `limit` messages (default 100, max 200), oldest-first within the page; pass `before` (ISO-8601) to page backwards in time.",
+    input: {
+      room_key: z.string().min(1).max(255).describe('Chat room key (from bureau_list_chats)'),
+      before: z.string().datetime({ offset: true }).optional().describe('Return messages created before this timestamp (ISO-8601) for pagination'),
+      limit: z.number().int().positive().max(200).optional().describe('Max messages to return (default 100, max 200)'),
+    },
+    returns: z.object({ data: z.array(z.object({}).passthrough()) }),
+    handler: async ({ room_key, ...query }) => {
+      const result = await client.request('GET', `/chat/rooms/${encodeURIComponent(room_key)}/messages${buildQs(query)}`);
+      return result.ok ? ok(result.data) : err('reading bureau chat messages', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_set_chat_retention',
+    description:
+      "Set the retention policy on a Bureau room chat. Org admins/owners and SuperUsers only (gated server-side; others get 403). Provide retention_hours (1..168, i.e. up to one week) to extend, OR retain_forever: true to keep the transcript indefinitely. At least one must be given.",
+    input: {
+      room_key: z.string().min(1).max(255).describe('Chat room key'),
+      retention_hours: z.number().int().min(1).max(168).optional().describe('Hours to retain the transcript (1..168 = up to one week)'),
+      retain_forever: z.boolean().optional().describe('Keep the transcript indefinitely'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }),
+    handler: async ({ room_key, ...body }) => {
+      const result = await client.request('PATCH', `/chat/rooms/${encodeURIComponent(room_key)}/retention`, body);
+      return result.ok ? ok(result.data) : err('setting bureau chat retention', result.data);
+    },
+  });
+
+  // ============================================================
+  // SETTINGS (2) — org Bureau preferences
+  // ============================================================
+
+  registerTool(server, {
+    name: 'bureau_get_settings',
+    description:
+      "Get the org-wide Bureau settings (continuous_audio, allow_auto_follow, default_office_privacy, members_can_book, members_can_create_rooms). Creates and returns a default row if none exists yet. Readable by any member; mutating requires bureau_update_settings (admin/owner).",
+    input: {},
+    returns: z.object({ data: z.object({
+      org_id: z.string().uuid().optional(),
+      continuous_audio: z.boolean().optional(),
+      allow_auto_follow: z.boolean().optional(),
+      default_office_privacy: z.string().optional(),
+      members_can_book: z.boolean().optional(),
+      members_can_create_rooms: z.boolean().optional(),
+    }).passthrough() }),
+    handler: async () => {
+      const result = await client.request('GET', '/settings');
+      return result.ok ? ok(result.data) : err('getting bureau settings', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bureau_update_settings',
+    description:
+      "Update the org-wide Bureau settings. Org admins/owners only (gated server-side; non-admins get 403). Provide only the fields to change. `members_can_book` gates whether non-admins may reserve rooms; `members_can_create_rooms` gates whether non-admins may create rooms; `default_office_privacy` is the door state new offices boot with.",
+    input: {
+      continuous_audio: z.boolean().optional().describe('Whether always-on spatial audio is enabled for the org'),
+      allow_auto_follow: z.boolean().optional().describe('Whether auto-follow (being pulled along on navigation) is permitted'),
+      default_office_privacy: z.enum(['open', 'knock', 'private']).optional().describe('Default door privacy new offices boot with'),
+      members_can_book: z.boolean().optional().describe('Whether non-admin members may book rooms'),
+      members_can_create_rooms: z.boolean().optional().describe('Whether non-admin members may create rooms'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }),
+    handler: async (body) => {
+      const result = await client.request('PATCH', '/settings', body);
+      return result.ok ? ok(result.data) : err('updating bureau settings', result.data);
+    },
+  });
 }

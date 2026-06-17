@@ -957,4 +957,824 @@ export function registerBondTools(server: McpServer, api: ApiClient, bondApiUrl:
       return result.ok ? ok(result.data) : err('searching contacts', result.data);
     },
   });
+
+  registerTool(server, {
+    name: 'bond_search_companies',
+    description: 'Full-text search across company name and domain. Lightweight typeahead-style lookup; for filtered/paginated browsing use bond_list_companies.',
+    input: {
+      query: z.string().min(1).max(200).describe('Search query string (name or domain)'),
+      limit: z.number().int().positive().max(100).optional().describe('Max results (default unspecified, max 100)'),
+    },
+    returns: z.object({ data: z.array(companyShape) }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/companies/search${buildQs({ q: params.query, limit: params.limit })}`);
+      return result.ok ? ok(result.data) : err('searching companies', result.data);
+    },
+  });
+
+  // ===== CONTACTS — additional (delete / restore) =====
+
+  registerTool(server, {
+    name: 'bond_delete_contact',
+    description: 'Soft-delete a contact. `id` accepts a contact UUID, an email, or a unique name fragment (single-match only). Use bond_restore_contact to undo.',
+    input: {
+      id: z.string().describe('Contact — accepts a UUID, email address, or unique name fragment'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveContactId(client, id);
+      if (!resolvedId) {
+        return err('deleting contact', {
+          error: `Could not resolve contact "${id}" — pass a contact UUID, an email, or a name that matches exactly one record.`,
+        });
+      }
+      const result = await client.request('DELETE', `/contacts/${resolvedId}`);
+      return result.ok ? ok({ deleted: true, id: resolvedId }) : err('deleting contact', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_restore_contact',
+    description: 'Undelete a previously soft-deleted contact. `id` must be the contact UUID (a deleted contact will not surface in name/email search).',
+    input: {
+      id: z.string().uuid().describe('Contact UUID to restore'),
+    },
+    returns: contactShape,
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/contacts/${id}/restore`);
+      return result.ok ? ok(result.data) : err('restoring contact', result.data);
+    },
+  });
+
+  // ===== COMPANIES — additional (delete / restore / contacts / deals) =====
+
+  registerTool(server, {
+    name: 'bond_delete_company',
+    description: 'Soft-delete a company. `id` accepts a company UUID or an exact/unique company name. Use bond_restore_company to undo.',
+    input: {
+      id: z.string().describe('Company — accepts a UUID or a unique company name'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveCompanyId(client, id);
+      if (!resolvedId) {
+        return err('deleting company', {
+          error: `Could not resolve company "${id}" — pass a company UUID or a company name that matches exactly one record.`,
+        });
+      }
+      const result = await client.request('DELETE', `/companies/${resolvedId}`);
+      return result.ok ? ok({ deleted: true, id: resolvedId }) : err('deleting company', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_restore_company',
+    description: 'Undelete a previously soft-deleted company. `id` must be the company UUID (a deleted company will not surface in name search).',
+    input: {
+      id: z.string().uuid().describe('Company UUID to restore'),
+    },
+    returns: companyShape,
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/companies/${id}/restore`);
+      return result.ok ? ok(result.data) : err('restoring company', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_list_company_contacts',
+    description: 'List the contacts associated with a company. `id` accepts a company UUID or a unique company name.',
+    input: {
+      id: z.string().describe('Company — accepts a UUID or a unique company name'),
+    },
+    returns: z.object({ data: z.array(contactShape) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveCompanyId(client, id);
+      if (!resolvedId) {
+        return err('listing company contacts', {
+          error: `Could not resolve company "${id}" — pass a company UUID or a unique company name.`,
+        });
+      }
+      const result = await client.request('GET', `/companies/${resolvedId}/contacts`);
+      return result.ok ? ok(result.data) : err('listing company contacts', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_list_company_deals',
+    description: 'List the deals attached to a company (paginated). `id` accepts a company UUID or a unique company name.',
+    input: {
+      id: z.string().describe('Company — accepts a UUID or a unique company name'),
+      limit: z.number().int().positive().max(100).optional().describe('Page size (default unspecified, max 100)'),
+      offset: z.number().int().min(0).optional().describe('Pagination offset'),
+      sort: z.string().max(60).optional().describe('Sort field with optional - prefix (e.g., "-value")'),
+    },
+    returns: z.object({ data: z.array(dealShape), next_cursor: z.string().nullable().optional() }).passthrough(),
+    handler: async ({ id, ...query }) => {
+      const resolvedId = await resolveCompanyId(client, id);
+      if (!resolvedId) {
+        return err('listing company deals', {
+          error: `Could not resolve company "${id}" — pass a company UUID or a unique company name.`,
+        });
+      }
+      const result = await client.request('GET', `/companies/${resolvedId}/deals${buildQs(query)}`);
+      return result.ok ? ok(result.data) : err('listing company deals', result.data);
+    },
+  });
+
+  // ===== DEALS — additional (delete / restore / duplicate / contacts / history / related) =====
+
+  registerTool(server, {
+    name: 'bond_delete_deal',
+    description: 'Soft-delete a deal. `id` accepts a deal UUID or a unique title fragment (single-match only). Use bond_restore_deal to undo.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveDealId(client, id);
+      if (!resolvedId) {
+        return err('deleting deal', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const result = await client.request('DELETE', `/deals/${resolvedId}`);
+      return result.ok ? ok({ deleted: true, id: resolvedId }) : err('deleting deal', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_restore_deal',
+    description: 'Undelete a previously soft-deleted deal. `id` must be the deal UUID (a deleted deal will not surface in title search).',
+    input: {
+      id: z.string().uuid().describe('Deal UUID to restore'),
+    },
+    returns: dealShape,
+    handler: async ({ id }) => {
+      const result = await client.request('POST', `/deals/${id}/restore`);
+      return result.ok ? ok(result.data) : err('restoring deal', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_duplicate_deal',
+    description: 'Duplicate a deal (creates a copy in the same pipeline/stage). `id` accepts a deal UUID or a unique title fragment.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+    },
+    returns: dealShape,
+    handler: async ({ id }) => {
+      const resolvedId = await resolveDealId(client, id);
+      if (!resolvedId) {
+        return err('duplicating deal', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const result = await client.request('POST', `/deals/${resolvedId}/duplicate`);
+      return result.ok ? ok(result.data) : err('duplicating deal', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_list_deal_contacts',
+    description: 'List the contacts associated with a deal (with their per-deal role). `id` accepts a deal UUID or a unique title fragment.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+    },
+    returns: z.object({ data: z.array(contactShape) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveDealId(client, id);
+      if (!resolvedId) {
+        return err('listing deal contacts', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const result = await client.request('GET', `/deals/${resolvedId}/contacts`);
+      return result.ok ? ok(result.data) : err('listing deal contacts', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_add_deal_contact',
+    description: 'Associate a contact with a deal, optionally tagging the contact\'s role (e.g. "decision_maker", "champion"). `id` accepts a deal UUID or title fragment; `contact_id` accepts a contact UUID, email, or unique name fragment.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      contact_id: z.string().describe('Contact — accepts a UUID, email, or unique name fragment'),
+      role: z.string().max(60).optional().describe('Role of the contact on this deal'),
+    },
+    returns: z.object({ deal_id: z.string().uuid(), contact_id: z.string().uuid() }).passthrough(),
+    handler: async ({ id, contact_id, role }) => {
+      const resolvedDealId = await resolveDealId(client, id);
+      if (!resolvedDealId) {
+        return err('adding deal contact', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const resolvedContactId = await resolveContactId(client, contact_id);
+      if (!resolvedContactId) {
+        return err('adding deal contact', {
+          error: `Could not resolve contact "${contact_id}" — pass a contact UUID, email, or unique name fragment.`,
+        });
+      }
+      const body: Record<string, unknown> = { contact_id: resolvedContactId };
+      if (role !== undefined) body.role = role;
+      const result = await client.request('POST', `/deals/${resolvedDealId}/contacts`, body);
+      return result.ok ? ok(result.data) : err('adding deal contact', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_remove_deal_contact',
+    description: 'Remove a contact association from a deal. `id` accepts a deal UUID or title fragment; `contact_id` accepts a contact UUID, email, or unique name fragment.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+      contact_id: z.string().describe('Contact — accepts a UUID, email, or unique name fragment'),
+    },
+    returns: z.object({ deleted: z.literal(true), deal_id: z.string().uuid(), contact_id: z.string().uuid() }),
+    handler: async ({ id, contact_id }) => {
+      const resolvedDealId = await resolveDealId(client, id);
+      if (!resolvedDealId) {
+        return err('removing deal contact', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const resolvedContactId = await resolveContactId(client, contact_id);
+      if (!resolvedContactId) {
+        return err('removing deal contact', {
+          error: `Could not resolve contact "${contact_id}" — pass a contact UUID, email, or unique name fragment.`,
+        });
+      }
+      const result = await client.request('DELETE', `/deals/${resolvedDealId}/contacts/${resolvedContactId}`);
+      return result.ok
+        ? ok({ deleted: true, deal_id: resolvedDealId, contact_id: resolvedContactId })
+        : err('removing deal contact', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_get_deal_stage_history',
+    description: 'Get the stage transition history for a deal (each move with timestamp and actor). `id` accepts a deal UUID or a unique title fragment.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+    },
+    returns: z.object({ data: z.array(z.object({ stage_id: z.string().uuid().optional() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveDealId(client, id);
+      if (!resolvedId) {
+        return err('getting deal stage history', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const result = await client.request('GET', `/deals/${resolvedId}/stage-history`);
+      return result.ok ? ok(result.data) : err('getting deal stage history', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_list_deal_activities',
+    description: 'List the activity timeline for a deal (notes, calls, emails, meetings, stage changes). `id` accepts a deal UUID or a unique title fragment.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), activity_type: z.string() }).passthrough()) }).passthrough(),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveDealId(client, id);
+      if (!resolvedId) {
+        return err('listing deal activities', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const result = await client.request('GET', `/deals/${resolvedId}/activities`);
+      return result.ok ? ok(result.data) : err('listing deal activities', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_get_deal_related',
+    description: 'Get cross-product records linked to a deal: invoices (Bill), events (Book), and tasks (Bam). Each section is best-effort and returns an empty array if its source is unavailable. `id` accepts a deal UUID or a unique title fragment.',
+    input: {
+      id: z.string().describe('Deal — accepts a UUID or a unique deal title fragment'),
+    },
+    returns: z.object({ data: z.object({ invoices: z.array(z.unknown()), events: z.array(z.unknown()), tasks: z.array(z.unknown()) }).passthrough() }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveDealId(client, id);
+      if (!resolvedId) {
+        return err('getting deal related records', {
+          error: `Could not resolve deal "${id}" — pass a deal UUID or a title fragment that matches exactly one deal.`,
+        });
+      }
+      const result = await client.request('GET', `/deals/${resolvedId}/related`);
+      return result.ok ? ok(result.data) : err('getting deal related records', result.data);
+    },
+  });
+
+  // ===== ACTIVITIES — additional (list / get / update / delete) =====
+
+  registerTool(server, {
+    name: 'bond_list_activities',
+    description: 'List CRM activities, optionally filtered by contact, deal, company, or activity type. `contact_id`/`deal_id`/`company_id` must be UUIDs.',
+    input: {
+      contact_id: z.string().uuid().optional().describe('Filter by contact'),
+      deal_id: z.string().uuid().optional().describe('Filter by deal'),
+      company_id: z.string().uuid().optional().describe('Filter by company'),
+      activity_type: z.string().optional().describe('Filter by activity type (e.g., "note", "call", "meeting")'),
+      limit: z.number().int().positive().max(100).optional().describe('Page size (default unspecified, max 100)'),
+      offset: z.number().int().min(0).optional().describe('Pagination offset'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), activity_type: z.string() }).passthrough()) }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('GET', `/activities${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing activities', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_get_activity',
+    description: 'Get a single activity by ID.',
+    input: {
+      id: z.string().uuid().describe('Activity ID'),
+    },
+    returns: z.object({ id: z.string().uuid(), activity_type: z.string() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/activities/${id}`);
+      return result.ok ? ok(result.data) : err('getting activity', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_update_activity',
+    description: 'Update an activity\'s subject, body, or metadata. Provide only the fields to change.',
+    input: {
+      id: z.string().uuid().describe('Activity ID'),
+      subject: z.string().max(255).optional().describe('Updated subject/title'),
+      body: z.string().max(10000).optional().describe('Updated body/notes'),
+      metadata: z.record(z.unknown()).optional().describe('Updated activity-type-specific data'),
+    },
+    returns: z.object({ id: z.string().uuid(), activity_type: z.string() }).passthrough(),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/activities/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating activity', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_delete_activity',
+    description: 'Delete an activity by ID.',
+    input: {
+      id: z.string().uuid().describe('Activity ID'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/activities/${id}`);
+      return result.ok ? ok({ deleted: true, id }) : err('deleting activity', result.data);
+    },
+  });
+
+  // ===== PIPELINES & STAGES (10) =====
+
+  registerTool(server, {
+    name: 'bond_list_pipelines',
+    description: 'List all CRM pipelines for the org, each with its ordered stages.',
+    input: {},
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string(), is_default: z.boolean().optional() }).passthrough()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/pipelines');
+      return result.ok ? ok(result.data) : err('listing pipelines', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_get_pipeline',
+    description: 'Get a single pipeline with its stages. `id` accepts a pipeline UUID or an exact pipeline name.',
+    input: {
+      id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string(), stages: z.array(z.object({ id: z.string().uuid(), name: z.string() }).passthrough()).optional() }).passthrough(),
+    handler: async ({ id }) => {
+      const pipelineId = await resolvePipelineId(client, id);
+      if (!pipelineId) {
+        return err('getting pipeline', { error: `Could not resolve pipeline "${id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const result = await client.request('GET', `/pipelines/${pipelineId}`);
+      return result.ok ? ok(result.data) : err('getting pipeline', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_create_pipeline',
+    description: 'Create a new pipeline, optionally seeding it with stages. Requires admin scope. Each stage may set stage_type ("active"/"won"/"lost"), probability, and rotting threshold.',
+    input: {
+      name: z.string().min(1).max(255).describe('Pipeline name'),
+      description: z.string().max(2000).optional().describe('Pipeline description'),
+      is_default: z.boolean().optional().describe('Mark this pipeline the org default'),
+      currency: z.string().length(3).optional().describe('Default currency code (e.g. "USD")'),
+      stages: z.array(z.object({
+        name: z.string().min(1).max(100).describe('Stage name'),
+        sort_order: z.number().int().optional().describe('Display order'),
+        stage_type: z.enum(['active', 'won', 'lost']).optional().describe('Stage semantics'),
+        probability_pct: z.number().int().min(0).max(100).optional().describe('Default win probability for deals in this stage'),
+        rotting_days: z.number().int().positive().optional().describe('Days before a deal in this stage is flagged stale'),
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Hex color (e.g. "#3b82f6")'),
+      })).optional().describe('Initial stages to create with the pipeline'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('POST', '/pipelines', params);
+      return result.ok ? ok(result.data) : err('creating pipeline', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_update_pipeline',
+    description: 'Update a pipeline\'s metadata. Requires admin scope. Provide only the fields to change. `id` accepts a pipeline UUID or an exact name.',
+    input: {
+      id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      description: z.string().max(2000).optional().describe('Updated description'),
+      is_default: z.boolean().optional().describe('Set as org default'),
+      currency: z.string().length(3).optional().describe('Updated default currency'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string() }).passthrough(),
+    handler: async ({ id, ...body }) => {
+      const pipelineId = await resolvePipelineId(client, id);
+      if (!pipelineId) {
+        return err('updating pipeline', { error: `Could not resolve pipeline "${id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const result = await client.request('PATCH', `/pipelines/${pipelineId}`, body);
+      return result.ok ? ok(result.data) : err('updating pipeline', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_delete_pipeline',
+    description: 'Delete a pipeline. Requires admin scope. `id` accepts a pipeline UUID or an exact name.',
+    input: {
+      id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const pipelineId = await resolvePipelineId(client, id);
+      if (!pipelineId) {
+        return err('deleting pipeline', { error: `Could not resolve pipeline "${id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const result = await client.request('DELETE', `/pipelines/${pipelineId}`);
+      return result.ok ? ok({ deleted: true, id: pipelineId }) : err('deleting pipeline', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_list_stages',
+    description: 'List the ordered stages of a pipeline. `pipeline_id` accepts a pipeline UUID or an exact name.',
+    input: {
+      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string(), stage_type: z.string().optional() }).passthrough()) }),
+    handler: async ({ pipeline_id }) => {
+      const pipelineId = await resolvePipelineId(client, pipeline_id);
+      if (!pipelineId) {
+        return err('listing stages', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const result = await client.request('GET', `/pipelines/${pipelineId}/stages`);
+      return result.ok ? ok(result.data) : err('listing stages', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_create_stage',
+    description: 'Add a stage to a pipeline. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name.',
+    input: {
+      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      name: z.string().min(1).max(100).describe('Stage name'),
+      sort_order: z.number().int().optional().describe('Display order'),
+      stage_type: z.enum(['active', 'won', 'lost']).optional().describe('Stage semantics'),
+      probability_pct: z.number().int().min(0).max(100).optional().describe('Default win probability for deals in this stage'),
+      rotting_days: z.number().int().positive().optional().describe('Days before a deal in this stage is flagged stale'),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Hex color (e.g. "#3b82f6")'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string() }).passthrough(),
+    handler: async ({ pipeline_id, ...body }) => {
+      const pipelineId = await resolvePipelineId(client, pipeline_id);
+      if (!pipelineId) {
+        return err('creating stage', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const result = await client.request('POST', `/pipelines/${pipelineId}/stages`, body);
+      return result.ok ? ok(result.data) : err('creating stage', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_update_stage',
+    description: 'Update a pipeline stage. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name; `stage_id` accepts a stage UUID or an exact stage name within that pipeline. Provide only the fields to change.',
+    input: {
+      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      stage_id: z.string().describe('Stage — accepts a UUID or an exact stage name within the pipeline'),
+      name: z.string().min(1).max(100).optional().describe('Updated stage name'),
+      sort_order: z.number().int().optional().describe('Updated display order'),
+      stage_type: z.enum(['active', 'won', 'lost']).optional().describe('Updated stage semantics'),
+      probability_pct: z.number().int().min(0).max(100).optional().describe('Updated default win probability'),
+      rotting_days: z.number().int().positive().optional().describe('Updated stale threshold in days'),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Updated hex color'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string() }).passthrough(),
+    handler: async ({ pipeline_id, stage_id, ...body }) => {
+      const pipelineId = await resolvePipelineId(client, pipeline_id);
+      if (!pipelineId) {
+        return err('updating stage', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const stageId = await resolveStageId(client, pipelineId, stage_id);
+      if (!stageId) {
+        return err('updating stage', { error: `Could not resolve stage "${stage_id}" inside pipeline "${pipeline_id}" — pass a stage UUID or an exact stage name.` });
+      }
+      const result = await client.request('PATCH', `/pipelines/${pipelineId}/stages/${stageId}`, body);
+      return result.ok ? ok(result.data) : err('updating stage', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_delete_stage',
+    description: 'Delete a stage from a pipeline. Requires admin scope. `pipeline_id` accepts a pipeline UUID or exact name; `stage_id` accepts a stage UUID or exact stage name within the pipeline.',
+    input: {
+      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      stage_id: z.string().describe('Stage — accepts a UUID or an exact stage name within the pipeline'),
+    },
+    returns: z.object({ deleted: z.literal(true), pipeline_id: z.string().uuid(), stage_id: z.string().uuid() }),
+    handler: async ({ pipeline_id, stage_id }) => {
+      const pipelineId = await resolvePipelineId(client, pipeline_id);
+      if (!pipelineId) {
+        return err('deleting stage', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const stageId = await resolveStageId(client, pipelineId, stage_id);
+      if (!stageId) {
+        return err('deleting stage', { error: `Could not resolve stage "${stage_id}" inside pipeline "${pipeline_id}" — pass a stage UUID or an exact stage name.` });
+      }
+      const result = await client.request('DELETE', `/pipelines/${pipelineId}/stages/${stageId}`);
+      return result.ok
+        ? ok({ deleted: true, pipeline_id: pipelineId, stage_id: stageId })
+        : err('deleting stage', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_reorder_stages',
+    description: 'Reorder a pipeline\'s stages. Requires admin scope. `pipeline_id` accepts a pipeline UUID or an exact name; `stage_ids` is the full ordered list of stage UUIDs.',
+    input: {
+      pipeline_id: z.string().describe('Pipeline — accepts a UUID or exact pipeline name'),
+      stage_ids: z.array(z.string().uuid()).min(1).describe('Stage UUIDs in the desired order'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string() }).passthrough()) }),
+    handler: async ({ pipeline_id, stage_ids }) => {
+      const pipelineId = await resolvePipelineId(client, pipeline_id);
+      if (!pipelineId) {
+        return err('reordering stages', { error: `Could not resolve pipeline "${pipeline_id}" — pass a pipeline UUID or an exact pipeline name.` });
+      }
+      const result = await client.request('POST', `/pipelines/${pipelineId}/stages/reorder`, { stage_ids });
+      return result.ok ? ok(result.data) : err('reordering stages', result.data);
+    },
+  });
+
+  // ===== CUSTOM FIELD DEFINITIONS (5) =====
+
+  registerTool(server, {
+    name: 'bond_list_custom_fields',
+    description: 'List custom field definitions, optionally filtered to one entity type (contact, company, or deal).',
+    input: {
+      entity_type: z.enum(['contact', 'company', 'deal']).optional().describe('Filter to one entity type'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), entity_type: z.string(), field_key: z.string(), label: z.string(), field_type: z.string() }).passthrough()) }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/custom-field-definitions${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing custom field definitions', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_get_custom_field',
+    description: 'Get a single custom field definition by ID.',
+    input: {
+      id: z.string().uuid().describe('Custom field definition ID'),
+    },
+    returns: z.object({ id: z.string().uuid(), entity_type: z.string(), field_key: z.string(), label: z.string(), field_type: z.string() }).passthrough(),
+    handler: async ({ id }) => {
+      const result = await client.request('GET', `/custom-field-definitions/${id}`);
+      return result.ok ? ok(result.data) : err('getting custom field definition', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_create_custom_field',
+    description: 'Create a custom field definition for contacts, companies, or deals. Requires admin scope. `field_key` must be lowercase snake_case starting with a letter. select/multi_select types take an `options` list.',
+    input: {
+      entity_type: z.enum(['contact', 'company', 'deal']).describe('Which entity the field applies to'),
+      field_key: z.string().min(1).max(60).regex(/^[a-z][a-z0-9_]*$/).describe('Stable key (lowercase snake_case, starts with a letter)'),
+      label: z.string().min(1).max(100).describe('Human-readable label'),
+      field_type: z.enum(['text', 'number', 'date', 'select', 'multi_select', 'url', 'email', 'phone', 'boolean']).describe('Field data type'),
+      options: z.array(z.object({ value: z.string().min(1).max(100), label: z.string().min(1).max(100) })).optional().describe('Options for select / multi_select'),
+      required: z.boolean().optional().describe('Whether the field is required'),
+      sort_order: z.number().int().min(0).optional().describe('Display order'),
+    },
+    returns: z.object({ id: z.string().uuid(), field_key: z.string(), label: z.string() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('POST', '/custom-field-definitions', params);
+      return result.ok ? ok(result.data) : err('creating custom field definition', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_update_custom_field',
+    description: 'Update a custom field definition. Requires admin scope. Provide only the fields to change (the entity_type and field_key are immutable).',
+    input: {
+      id: z.string().uuid().describe('Custom field definition ID'),
+      label: z.string().min(1).max(100).optional().describe('Updated label'),
+      field_type: z.enum(['text', 'number', 'date', 'select', 'multi_select', 'url', 'email', 'phone', 'boolean']).optional().describe('Updated field type'),
+      options: z.array(z.object({ value: z.string().min(1).max(100), label: z.string().min(1).max(100) })).optional().describe('Updated options for select / multi_select'),
+      required: z.boolean().optional().describe('Updated required flag'),
+      sort_order: z.number().int().min(0).optional().describe('Updated display order'),
+    },
+    returns: z.object({ id: z.string().uuid(), field_key: z.string(), label: z.string() }).passthrough(),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/custom-field-definitions/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating custom field definition', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_delete_custom_field',
+    description: 'Delete a custom field definition. Requires admin scope.',
+    input: {
+      id: z.string().uuid().describe('Custom field definition ID'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/custom-field-definitions/${id}`);
+      return result.ok ? ok({ deleted: true, id }) : err('deleting custom field definition', result.data);
+    },
+  });
+
+  // ===== SCORING RULES (4) =====
+
+  registerTool(server, {
+    name: 'bond_list_scoring_rules',
+    description: 'List the lead-scoring rules configured for the org.',
+    input: {},
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string(), score_delta: z.number(), enabled: z.boolean().optional() }).passthrough()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/scoring-rules');
+      return result.ok ? ok(result.data) : err('listing scoring rules', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_create_scoring_rule',
+    description: 'Create a lead-scoring rule. Requires admin scope. When a contact matches the condition, score_delta (-100..100) is applied to its lead score.',
+    input: {
+      name: z.string().min(1).max(100).describe('Rule name'),
+      description: z.string().max(500).optional().describe('Rule description'),
+      condition_field: z.string().min(1).max(100).describe('Contact field to evaluate (e.g. "lifecycle_stage", "lead_source")'),
+      condition_operator: z.enum(['equals', 'not_equals', 'contains', 'gt', 'lt', 'gte', 'lte', 'exists', 'not_exists']).describe('Comparison operator'),
+      condition_value: z.string().max(500).describe('Value to compare against'),
+      score_delta: z.number().int().min(-100).max(100).describe('Points to add (or subtract) when the condition matches'),
+      enabled: z.boolean().optional().describe('Whether the rule is active (default true)'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string(), score_delta: z.number() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('POST', '/scoring-rules', params);
+      return result.ok ? ok(result.data) : err('creating scoring rule', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_update_scoring_rule',
+    description: 'Update a lead-scoring rule. Requires admin scope. Provide only the fields to change.',
+    input: {
+      id: z.string().uuid().describe('Scoring rule ID'),
+      name: z.string().min(1).max(100).optional().describe('Updated name'),
+      description: z.string().max(500).optional().describe('Updated description'),
+      condition_field: z.string().min(1).max(100).optional().describe('Updated condition field'),
+      condition_operator: z.enum(['equals', 'not_equals', 'contains', 'gt', 'lt', 'gte', 'lte', 'exists', 'not_exists']).optional().describe('Updated operator'),
+      condition_value: z.string().max(500).optional().describe('Updated comparison value'),
+      score_delta: z.number().int().min(-100).max(100).optional().describe('Updated point delta'),
+      enabled: z.boolean().optional().describe('Enable/disable the rule'),
+    },
+    returns: z.object({ id: z.string().uuid(), name: z.string(), score_delta: z.number() }).passthrough(),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/scoring-rules/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating scoring rule', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_delete_scoring_rule',
+    description: 'Delete a lead-scoring rule. Requires admin scope.',
+    input: {
+      id: z.string().uuid().describe('Scoring rule ID'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const result = await client.request('DELETE', `/scoring-rules/${id}`);
+      return result.ok ? ok({ deleted: true, id }) : err('deleting scoring rule', result.data);
+    },
+  });
+
+  // ===== ANALYTICS — additional (conversion / velocity / win-loss) =====
+
+  registerTool(server, {
+    name: 'bond_get_conversion_rates',
+    description: 'Get stage-to-stage conversion rates for a pipeline over an optional date window.',
+    input: {
+      pipeline_id: z.string().uuid().describe('Pipeline ID'),
+      start_date: z.string().optional().describe('Window start (ISO date)'),
+      end_date: z.string().optional().describe('Window end (ISO date)'),
+    },
+    returns: z.object({ data: z.unknown() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('GET', `/analytics/conversion-rates${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('getting conversion rates', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_get_deal_velocity',
+    description: 'Get the average time deals spend in each stage of a pipeline.',
+    input: {
+      pipeline_id: z.string().uuid().describe('Pipeline ID'),
+    },
+    returns: z.object({ data: z.unknown() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('GET', `/analytics/deal-velocity${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('getting deal velocity', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_get_win_loss',
+    description: 'Get win/loss ratio and analysis, optionally scoped to a pipeline and date window.',
+    input: {
+      pipeline_id: z.string().uuid().optional().describe('Pipeline ID (defaults to all pipelines)'),
+      start_date: z.string().optional().describe('Window start (ISO date)'),
+      end_date: z.string().optional().describe('Window end (ISO date)'),
+    },
+    returns: z.object({ data: z.unknown() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('GET', `/analytics/win-loss${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('getting win-loss analysis', result.data);
+    },
+  });
+
+  // ===== IMPORT MAPPINGS (2) =====
+
+  registerTool(server, {
+    name: 'bond_create_import_mapping',
+    description: 'Record (upsert) a single external-system → Bond-entity import mapping for dedup/lookup. Requires admin scope. This is the JSON mapping primitive, not a CSV/file upload.',
+    input: {
+      source_system: z.string().min(1).max(60).describe('External system name (e.g. "salesforce", "hubspot")'),
+      source_id: z.string().min(1).max(255).describe('Record ID in the external system'),
+      bond_entity_type: z.enum(['contact', 'company', 'deal']).describe('Bond entity type this maps to'),
+      bond_entity_id: z.string().uuid().describe('Bond entity UUID this maps to'),
+    },
+    returns: z.object({ source_system: z.string(), source_id: z.string(), bond_entity_id: z.string().uuid() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('POST', '/imports/mappings', params);
+      return result.ok ? ok(result.data) : err('creating import mapping', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_list_import_mappings',
+    description: 'List external-system → Bond-entity import mappings for the org, optionally filtered by source system.',
+    input: {
+      source_system: z.string().max(60).optional().describe('Filter by external system name'),
+      limit: z.number().int().positive().max(500).optional().describe('Page size (max 500)'),
+      offset: z.number().int().min(0).optional().describe('Pagination offset'),
+    },
+    returns: z.object({ data: z.array(z.object({ source_system: z.string(), source_id: z.string(), bond_entity_id: z.string().uuid() }).passthrough()) }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('GET', `/imports/mappings${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing import mappings', result.data);
+    },
+  });
+
+  // ===== USER SETTINGS (2) =====
+
+  registerTool(server, {
+    name: 'bond_get_user_settings',
+    description: 'Get the calling user\'s own Bond settings (e.g. reply-to email).',
+    input: {},
+    returns: z.object({ data: z.object({ reply_to_email: z.string().nullable().optional() }).passthrough() }).passthrough(),
+    handler: async () => {
+      const result = await client.request('GET', '/user-settings');
+      return result.ok ? ok(result.data) : err('getting user settings', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bond_update_user_settings',
+    description: 'Set or clear the calling user\'s Bond reply-to email address. Pass an empty string or null to clear it.',
+    input: {
+      reply_to_email: z.union([z.string().email().max(255), z.literal(''), z.null()]).optional().describe('Reply-to email; empty string or null clears it'),
+    },
+    returns: z.object({ data: z.object({ reply_to_email: z.string().nullable().optional() }).passthrough() }).passthrough(),
+    handler: async (params) => {
+      const result = await client.request('PATCH', '/user-settings', params);
+      return result.ok ? ok(result.data) : err('updating user settings', result.data);
+    },
+  });
 }

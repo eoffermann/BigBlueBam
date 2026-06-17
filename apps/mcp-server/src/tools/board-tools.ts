@@ -119,6 +119,26 @@ async function resolvePhaseId(
   return null;
 }
 
+/**
+ * Resolve a user identifier (UUID, email, or free-text name) to a UUID via the
+ * shared Bam users table. board-api has no user endpoint — users live in the
+ * Bam API and are shared across the suite — so this routes through the main
+ * `api` client, mirroring the bearing/bond owner resolvers. Returns `null` on
+ * miss so the caller can surface a clean "user not found" error.
+ */
+async function resolveUserId(api: ApiClient, idOrEmail: string): Promise<string | null> {
+  if (isUuid(idOrEmail)) return idOrEmail;
+  if (idOrEmail.includes('@')) {
+    const result = await api.get(`/users/by-email?email=${encodeURIComponent(idOrEmail)}`);
+    if (!result.ok) return null;
+    return ((result.data as { data: { id: string } | null }).data)?.id ?? null;
+  }
+  const result = await api.get(`/users/search?q=${encodeURIComponent(idOrEmail)}&limit=1`);
+  if (!result.ok) return null;
+  const users = (result.data as { data: Array<{ id: string }> }).data ?? [];
+  return users[0]?.id ?? null;
+}
+
 function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
 }
@@ -464,8 +484,495 @@ export function registerBoardTools(server: McpServer, api: ApiClient, boardApiUr
     },
     returns: z.object({ data: z.array(z.object({ board_id: z.string().uuid(), element: elementShape }).passthrough()) }),
     handler: async (params) => {
-      const result = await client.request('GET', `/boards/search${buildQs(params)}`);
+      // The board-api search endpoint takes `q`, not `query`.
+      const qs = buildQs({ q: params.query, project_id: params.project_id });
+      const result = await client.request('GET', `/boards/search${qs}`);
       return result.ok ? ok(result.data) : err('searching boards', result.data);
+    },
+  });
+
+  // ===== BOARD DISCOVERY — additional reads (3) =====
+
+  registerTool(server, {
+    name: 'board_list_recent',
+    description: 'List the boards most recently updated by or visible to the caller.',
+    input: {},
+    returns: z.object({ data: z.array(boardShape) }).passthrough(),
+    handler: async () => {
+      const result = await client.request('GET', '/boards/recent');
+      return result.ok ? ok(result.data) : err('listing recent boards', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_list_starred',
+    description: 'List the boards the calling user has starred.',
+    input: {},
+    returns: z.object({ data: z.array(boardShape) }).passthrough(),
+    handler: async () => {
+      const result = await client.request('GET', '/boards/starred');
+      return result.ok ? ok(result.data) : err('listing starred boards', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_org_stats',
+    description: 'Get org-level board statistics (counts, activity rollups across all boards in the organization).',
+    input: {},
+    returns: z.object({ data: z.object({}).passthrough() }).passthrough(),
+    handler: async () => {
+      const result = await client.request('GET', '/boards/stats');
+      return result.ok ? ok(result.data) : err('getting org board stats', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_stats',
+    description: 'Get statistics for a single board (element counts, collaborator counts, last activity). `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }).passthrough(),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('getting board stats', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('GET', `/boards/${resolvedId}/stats`);
+      return result.ok ? ok(result.data) : err('getting board stats', result.data);
+    },
+  });
+
+  // ===== BOARD LIFECYCLE — additional (5) =====
+
+  registerTool(server, {
+    name: 'board_duplicate',
+    description: 'Duplicate a board, copying its elements into a new board. `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name to duplicate'),
+    },
+    returns: boardShape,
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('duplicating board', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('POST', `/boards/${resolvedId}/duplicate`);
+      return result.ok ? ok(result.data) : err('duplicating board', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_restore',
+    description: 'Restore a previously archived board. `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: boardShape,
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('restoring board', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('POST', `/boards/${resolvedId}/restore`);
+      return result.ok ? ok(result.data) : err('restoring board', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_delete_permanent',
+    description: 'Permanently hard-delete a board and ALL of its elements, collaborators, stars, and versions (cascade). This is irreversible — distinct from board_archive which only soft-deletes. `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name to permanently delete'),
+    },
+    returns: z.object({ data: z.object({}).passthrough() }).passthrough(),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('permanently deleting board', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('DELETE', `/boards/${resolvedId}/permanent`);
+      return result.ok ? ok(result.data) : err('permanently deleting board', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_star_toggle',
+    description: 'Toggle the calling user\'s star on a board (favorite / unfavorite). `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: z.object({ data: z.object({ starred: z.boolean().optional() }).passthrough() }).passthrough(),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('toggling board star', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('POST', `/boards/${resolvedId}/star`);
+      return result.ok ? ok(result.data) : err('toggling board star', result.data);
+    },
+  });
+
+  // ===== BOARD INTEGRITY (2) =====
+
+  registerTool(server, {
+    name: 'board_check_integrity',
+    description: 'Run a per-board integrity check, returning the list of structural issues (e.g. a project_id referencing a project outside the org). `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: z.object({ data: z.object({ issues: z.array(z.object({}).passthrough()), ok: z.boolean() }).passthrough() }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('checking board integrity', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('GET', `/boards/${resolvedId}/integrity`);
+      return result.ok ? ok(result.data) : err('checking board integrity', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_remediate_integrity',
+    description: 'Apply a fix for a board integrity issue: "detach" clears the board\'s project association, "reassign" moves it to a different project (which must belong to the caller\'s org). `id` accepts a board UUID or name; for "reassign", `project_id` accepts a project UUID or project name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+      action: z.enum(['detach', 'reassign']).describe('Remediation action to apply'),
+      project_id: z.string().optional().describe('Target project UUID or name (required for "reassign")'),
+    },
+    returns: z.object({ data: boardShape }),
+    handler: async ({ id, action, project_id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('remediating board integrity', { error: `Board not found: ${id}` });
+      }
+      let body: Record<string, unknown>;
+      if (action === 'reassign') {
+        if (!project_id) {
+          return err('remediating board integrity', {
+            error: 'project_id is required when action is "reassign"',
+          });
+        }
+        const resolvedProjectId = await resolveProjectId(api, project_id);
+        if (!resolvedProjectId) {
+          return err('remediating board integrity', {
+            error: `Project not found: ${project_id}`,
+          });
+        }
+        body = { action: 'reassign', project_id: resolvedProjectId };
+      } else {
+        body = { action: 'detach' };
+      }
+      const result = await client.request('POST', `/boards/${resolvedId}/remediate`, body);
+      return result.ok ? ok(result.data) : err('remediating board integrity', result.data);
+    },
+  });
+
+  // ===== BOARD CHAT (2) =====
+
+  registerTool(server, {
+    name: 'board_read_chat',
+    description: 'Read the recent chat messages on a board (most recent first, capped server-side). `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), user_id: z.string().uuid(), body: z.string(), created_at: z.string() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('reading board chat', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('GET', `/boards/${resolvedId}/chat`);
+      return result.ok ? ok(result.data) : err('reading board chat', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_post_chat',
+    description: 'Post a chat message into a board\'s side-channel chat. `board_id` accepts either a UUID or a board name.',
+    input: {
+      board_id: z.string().describe('Board UUID or name'),
+      body: z.string().min(1).max(5000).describe('Message text (max 5000 chars)'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), body: z.string(), created_at: z.string() }).passthrough() }),
+    handler: async ({ board_id, body }) => {
+      const resolvedBoardId = await resolveBoardId(client, board_id);
+      if (!resolvedBoardId) {
+        return err('posting board chat', { error: `Board not found: ${board_id}` });
+      }
+      const result = await client.request('POST', `/boards/${resolvedBoardId}/chat`, { body });
+      return result.ok ? ok(result.data) : err('posting board chat', result.data);
+    },
+  });
+
+  // ===== COLLABORATORS (4) =====
+
+  registerTool(server, {
+    name: 'board_list_collaborators',
+    description: 'List the collaborators (and their view/edit permission) on a board. `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), board_id: z.string().uuid(), user_id: z.string().uuid(), permission: z.string() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('listing board collaborators', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('GET', `/boards/${resolvedId}/collaborators`);
+      return result.ok ? ok(result.data) : err('listing board collaborators', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_add_collaborator',
+    description: 'Add a collaborator to a board with a view or edit permission. `board_id` accepts a UUID or board name; `user_id` accepts a user UUID or email address.',
+    input: {
+      board_id: z.string().describe('Board UUID or name'),
+      user_id: z.string().describe('Collaborator: user UUID or email address'),
+      permission: z.enum(['view', 'edit']).optional().describe('Permission level (default edit)'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), board_id: z.string().uuid(), user_id: z.string().uuid(), permission: z.string() }).passthrough() }),
+    handler: async ({ board_id, user_id, permission }) => {
+      const resolvedBoardId = await resolveBoardId(client, board_id);
+      if (!resolvedBoardId) {
+        return err('adding board collaborator', { error: `Board not found: ${board_id}` });
+      }
+      const resolvedUserId = await resolveUserId(api, user_id);
+      if (!resolvedUserId) {
+        return err('adding board collaborator', { error: `User not found by email or id: ${user_id}` });
+      }
+      const body: Record<string, unknown> = { user_id: resolvedUserId };
+      if (permission !== undefined) body.permission = permission;
+      const result = await client.request('POST', `/boards/${resolvedBoardId}/collaborators`, body);
+      return result.ok ? ok(result.data) : err('adding board collaborator', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_update_collaborator',
+    description: 'Change a collaborator\'s permission (view or edit) on a board. `collaborator_id` is the collaborator-row UUID (get it from board_list_collaborators).',
+    input: {
+      collaborator_id: z.string().uuid().describe('Collaborator row UUID (from board_list_collaborators)'),
+      permission: z.enum(['view', 'edit']).describe('New permission level'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), permission: z.string() }).passthrough() }),
+    handler: async ({ collaborator_id, permission }) => {
+      const result = await client.request('PATCH', `/collaborators/${collaborator_id}`, { permission });
+      return result.ok ? ok(result.data) : err('updating board collaborator', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_remove_collaborator',
+    description: 'Remove a collaborator from a board. `collaborator_id` is the collaborator-row UUID (get it from board_list_collaborators).',
+    input: {
+      collaborator_id: z.string().uuid().describe('Collaborator row UUID (from board_list_collaborators)'),
+    },
+    returns: z.object({ removed: z.literal(true), collaborator_id: z.string().uuid() }),
+    handler: async ({ collaborator_id }) => {
+      const result = await client.request('DELETE', `/collaborators/${collaborator_id}`);
+      return result.ok
+        ? ok({ removed: true, collaborator_id })
+        : err('removing board collaborator', result.data);
+    },
+  });
+
+  // ===== ELEMENT-TASK LINKS (2) =====
+
+  registerTool(server, {
+    name: 'board_list_links',
+    description: 'List the element-to-Bam-task links on a board (created when stickies are promoted to tasks). `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), board_id: z.string().uuid(), element_id: z.string(), task_id: z.string().uuid() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('listing board links', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('GET', `/boards/${resolvedId}/links`);
+      return result.ok ? ok(result.data) : err('listing board links', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_delete_link',
+    description: 'Delete a single element-to-task link by its link UUID (get it from board_list_links). This does not delete the underlying task or element, only the association.',
+    input: {
+      link_id: z.string().uuid().describe('Link row UUID (from board_list_links)'),
+    },
+    returns: z.object({ removed: z.literal(true), link_id: z.string().uuid() }),
+    handler: async ({ link_id }) => {
+      const result = await client.request('DELETE', `/links/${link_id}`);
+      return result.ok
+        ? ok({ removed: true, link_id })
+        : err('deleting board link', result.data);
+    },
+  });
+
+  // ===== VERSIONS (3) =====
+
+  registerTool(server, {
+    name: 'board_list_versions',
+    description: 'List the saved version snapshots of a board. `id` accepts either a UUID or a board name.',
+    input: {
+      id: z.string().describe('Board UUID or name'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), board_id: z.string().uuid(), name: z.string().nullable().optional(), created_at: z.string() }).passthrough()) }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveBoardId(client, id);
+      if (!resolvedId) {
+        return err('listing board versions', { error: `Board not found: ${id}` });
+      }
+      const result = await client.request('GET', `/boards/${resolvedId}/versions`);
+      return result.ok ? ok(result.data) : err('listing board versions', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_create_version',
+    description: 'Capture a named snapshot of a board\'s current scene that can later be restored. `board_id` accepts either a UUID or a board name.',
+    input: {
+      board_id: z.string().describe('Board UUID or name'),
+      name: z.string().min(1).max(255).optional().describe('Optional snapshot label'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), board_id: z.string().uuid(), name: z.string().nullable().optional(), created_at: z.string() }).passthrough() }),
+    handler: async ({ board_id, name }) => {
+      const resolvedBoardId = await resolveBoardId(client, board_id);
+      if (!resolvedBoardId) {
+        return err('creating board version', { error: `Board not found: ${board_id}` });
+      }
+      const body: Record<string, unknown> = {};
+      if (name !== undefined) body.name = name;
+      const result = await client.request('POST', `/boards/${resolvedBoardId}/versions`, body);
+      return result.ok ? ok(result.data) : err('creating board version', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_restore_version',
+    description: 'Restore a board to a previously captured version snapshot, replacing its current scene. `board_id` accepts a UUID or board name; `version_id` is the version UUID (get it from board_list_versions).',
+    input: {
+      board_id: z.string().describe('Board UUID or name'),
+      version_id: z.string().uuid().describe('Version snapshot UUID (from board_list_versions)'),
+    },
+    returns: z.object({ data: boardShape }),
+    handler: async ({ board_id, version_id }) => {
+      const resolvedBoardId = await resolveBoardId(client, board_id);
+      if (!resolvedBoardId) {
+        return err('restoring board version', { error: `Board not found: ${board_id}` });
+      }
+      const result = await client.request('POST', `/boards/${resolvedBoardId}/versions/${version_id}/restore`);
+      return result.ok ? ok(result.data) : err('restoring board version', result.data);
+    },
+  });
+
+  // ===== TEMPLATES (5) =====
+
+  registerTool(server, {
+    name: 'board_list_templates',
+    description: 'List the board templates available to the org (system + org-defined), optionally filtered by category.',
+    input: {
+      category: z.string().max(100).optional().describe('Filter by template category'),
+    },
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), name: z.string(), category: z.string().nullable().optional() }).passthrough()) }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/templates${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing board templates', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_create_template',
+    description: 'Create a board template, optionally seeded from an existing board\'s scene. `board_id` (if provided) accepts a UUID or a board name to capture as the template.',
+    input: {
+      name: z.string().min(1).max(255).describe('Template name'),
+      description: z.string().max(2000).optional().describe('Template description'),
+      category: z.string().max(100).optional().describe('Template category'),
+      icon: z.string().max(10).optional().describe('Template icon (short string / emoji)'),
+      board_id: z.string().optional().describe('Source board UUID or name to capture the template scene from'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), name: z.string() }).passthrough() }),
+    handler: async ({ board_id, ...rest }) => {
+      const body: Record<string, unknown> = { ...rest };
+      if (board_id !== undefined) {
+        const resolvedBoardId = await resolveBoardId(client, board_id);
+        if (!resolvedBoardId) {
+          return err('creating board template', { error: `Board not found: ${board_id}` });
+        }
+        body.board_id = resolvedBoardId;
+      }
+      const result = await client.request('POST', '/templates', body);
+      return result.ok ? ok(result.data) : err('creating board template', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_update_template',
+    description: 'Update a board template\'s metadata. `id` accepts either a UUID or a template name. Provide only the fields to change.',
+    input: {
+      id: z.string().describe('Template UUID or name'),
+      name: z.string().min(1).max(255).optional().describe('Updated name'),
+      description: z.string().max(2000).optional().describe('Updated description'),
+      category: z.string().max(100).optional().describe('Updated category'),
+      icon: z.string().max(10).optional().describe('Updated icon'),
+      sort_order: z.number().int().min(0).max(10000).optional().describe('Updated sort order'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), name: z.string() }).passthrough() }),
+    handler: async ({ id, ...rest }) => {
+      const resolvedId = await resolveTemplateId(client, id);
+      if (!resolvedId) {
+        return err('updating board template', { error: `Template not found: ${id}` });
+      }
+      const result = await client.request('PATCH', `/templates/${resolvedId}`, rest);
+      return result.ok ? ok(result.data) : err('updating board template', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_delete_template',
+    description: 'Delete a board template. `id` accepts either a UUID or a template name.',
+    input: {
+      id: z.string().describe('Template UUID or name'),
+    },
+    returns: z.object({ deleted: z.literal(true), id: z.string().uuid() }),
+    handler: async ({ id }) => {
+      const resolvedId = await resolveTemplateId(client, id);
+      if (!resolvedId) {
+        return err('deleting board template', { error: `Template not found: ${id}` });
+      }
+      const result = await client.request('DELETE', `/templates/${resolvedId}`);
+      return result.ok ? ok({ deleted: true, id: resolvedId }) : err('deleting board template', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'board_instantiate_template',
+    description: 'Create a new board from a template. `id` accepts a template UUID or name; `project_id` (if provided) accepts a project UUID or name to associate the new board with.',
+    input: {
+      id: z.string().describe('Template UUID or name'),
+      name: z.string().min(1).max(255).optional().describe('Name for the new board (defaults to the template name)'),
+      project_id: z.string().optional().describe('Project UUID or name to associate the new board with'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), name: z.string() }).passthrough() }),
+    handler: async ({ id, name, project_id }) => {
+      const resolvedId = await resolveTemplateId(client, id);
+      if (!resolvedId) {
+        return err('instantiating board template', { error: `Template not found: ${id}` });
+      }
+      const body: Record<string, unknown> = {};
+      if (name !== undefined) body.name = name;
+      if (project_id !== undefined) {
+        const resolvedProjectId = await resolveProjectId(api, project_id);
+        if (!resolvedProjectId) {
+          return err('instantiating board template', { error: `Project not found: ${project_id}` });
+        }
+        body.project_id = resolvedProjectId;
+      }
+      const result = await client.request('POST', `/templates/${resolvedId}/instantiate`, body);
+      return result.ok ? ok(result.data) : err('instantiating board template', result.data);
     },
   });
 }
