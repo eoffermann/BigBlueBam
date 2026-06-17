@@ -52,3 +52,8 @@ __pycache__/
 
 # Help-docs build scratch (working artifacts, not deliverables)
 docs/.help-build/
+
+# Populated screenshot capture skill (packages/docs-capture)
+/screenshots/
+screenshots.config.json
+packages/docs-capture/_probe.mjs

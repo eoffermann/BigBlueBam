@@ -1,0 +1,57 @@
+# Board — visual collaboration whiteboards.
+# Recipes mined from docs/apps/board/help.md (Feature reference + User Stories).
+# Selectors lean on stable hooks where they exist; the canvas card grid still
+# uses the `div.group.cursor-pointer` pattern (no data-testid yet — tracked as a
+# test-id gap to close). Real-time presence dots are masked.
+
+- id: board-all-boards
+  app: board
+  demonstrates: "The All Boards grid showing several populated whiteboards"
+  route: /board/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: board-canvas-populated
+  app: board
+  demonstrates: "An infinite canvas with sticky notes and shapes mid-brainstorm"
+  route: /board/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: wait, ms: 2500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-avatars']"
+
+- id: board-templates
+  app: board
+  demonstrates: "The board templates browser used to start a new board"
+  route: /board/templates
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: board-version-history
+  app: board
+  demonstrates: "A board's version-history (snapshots) panel"
+  route: /board/
+  identity: admin
+  interactions:
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: wait, ms: 2000 }
+    - { action: click, selector: "button:has-text('History'), button[title*='istory']", optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: board-all-boards-dark
+  app: board
+  demonstrates: "The All Boards grid in dark theme (marketing/retina)"
+  route: /board/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
