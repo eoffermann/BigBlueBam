@@ -16,7 +16,7 @@ Authoring happens in the Blank SPA, which requires a BigBlueBam login. Filling o
 
 - **Form** - the top-level object you build and share. It has a name, a slug (used in its public URL), a description, fields, and behavior settings.
 - **Field** - a single input or element on the form. Fields are ordered, can be marked required, and each has a stable **field key** (letters, digits, and underscores; must start with a letter or underscore) used as the storage key for answers.
-- **Field type** - what kind of input a field is, for example Short Text, Email, Rating, NPS, or Dropdown. You pick the type from the builder palette when you add a field.
+- **Field type** - what kind of input a field is, for example Short Text, Email, Rating, NPS, or Dropdown. You pick the type from the builder palette when you add a field. A few layout-only types (Section Header, Paragraph, Hidden Field, and Page Break) carry no submitted answer.
 - **Form status** - the lifecycle state of a form: **draft** (still being built), **published** (live and accepting responses), or **closed** (no longer accepting responses). New forms start as draft.
 - **Form type** - a label on the form (Public, Internal, or Embedded) found on the per-form Settings page.
 - **Visibility** - who can reach the form through its URL: **Public** (anyone with the link), **Organization** (members of your org), or **Project members** (members of a chosen Bam project).
@@ -72,7 +72,7 @@ The builder at `/blank/forms/<id>/edit` is where you design a form. It has a lef
 
 The left palette is headed **Add Field**. Click any type to append a field of that type to the canvas. The available types are:
 
-Short Text, Long Text, Email, Phone, URL, Number, Single Select, Multi Select, Dropdown, Date, Time, Rating, Scale, NPS, Checkbox, Toggle, File Upload, Section Header, Paragraph, and Hidden Field.
+Short Text, Long Text, Email, Phone, URL, Number, Single Select, Multi Select, Dropdown, Date, Time, Rating, Scale, NPS, Checkbox, Toggle, File Upload, Section Header, Paragraph, Hidden Field, and Page Break.
 
 To name the form:
 
@@ -101,7 +101,7 @@ The top-right action bar of the builder has these controls:
 
 If the form has no fields, the canvas shows "Click a field type on the left to add it".
 
-> Note: the palette also lists a **Page Break** item, but adding one currently fails because the API does not accept the page-break field type. To create a multi-page form, set the **Page Number** on individual fields in Field Settings instead. See "Multi-page forms" below.
+The palette's **Page Break** item splits a form into pages. Adding one inserts a layout-only divider in the builder rather than a stray input, and the public form pages at that boundary. See "Multi-page forms" below. You can also page a form by setting the **Page Number** on individual fields in Field Settings.
 
 ### Field Settings
 
@@ -123,6 +123,8 @@ Type-specific controls:
 - **Min Value** and **Max Value** - for numeric fields.
 - **Scale Min** and **Scale Max** - for Scale fields.
 - **Regex Pattern** - an optional validation pattern applied to string answers.
+
+Layout-only fields (Section Header, Paragraph, Hidden Field, and Page Break) do not show validation controls like the regex pattern, because they collect no answer.
 
 ### Form Settings dialog
 
@@ -196,6 +198,8 @@ To filter by attachment processing state:
 
 The table columns are: a row number (#), **Email**, the first five display fields' answers, **Files** (a processing-status pill), and **Date**. If there are no submissions, the table shows "No responses yet."
 
+> Note: file uploads are accepted, stored against the submission, and tracked through the **Files** processing-status pill, but file processing is simulated today. There is no real attachment storage or scanning behind the status, so treat the processing state as a placeholder, not proof a file was scanned.
+
 To export responses:
 
 1. Open the Responses view for the form.
@@ -226,6 +230,19 @@ The per-form Settings page has these sections:
 
 Each control saves immediately when you change it.
 
+> Note: confirmation emails to respondents and notification emails to your team are logged rather than delivered today, because outbound email (SMTP) is not yet wired up. The toggles persist, but no message is actually sent.
+
+### Multi-page forms
+
+A longer form can be split across pages so respondents work through it a section at a time.
+
+There are two ways to page a form:
+
+- **Page Break field.** In the builder, click **Page Break** in the **Add Field** palette wherever you want a page boundary. It appears as a divider in the builder (it collects no answer) and the public form starts a new page there.
+- **Page Number.** Select a field in the canvas and set its **Page Number** in Field Settings, assigning each field to the page you want it on.
+
+To show a progress bar across the pages, open the per-form Settings page at `/blank/forms/<id>/settings` and enable **Show Progress Bar** under Branding. Use **Preview** to confirm the pages before you publish.
+
 ### Blank Settings (app-level)
 
 The **Blank Settings** item in the sidebar opens a read-only information page at `/blank/settings`, headed **Settings**. It displays the app defaults (default form type Public, default theme color #3b82f6), the rate-limiting policy (10 submissions per hour), and the events Blank emits. Nothing on this page is editable.
@@ -235,6 +252,8 @@ The **Blank Settings** item in the sidebar opens a read-only information page at
 A published form is served as a self-contained HTML page at `https://YOUR-DOMAIN/forms/<slug>`. This is the page the Publish dialog gives you and the one respondents fill out. It renders the form's fields, splits a multi-page form across pages with Back and Next controls and a progress bar, optionally collects the respondent's email, and shows the confirmation (message, redirect, or page) after a successful submission.
 
 Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission. The public submit endpoint is rate-limited to 10 submissions per hour per IP, and a form can also enforce a per-email limit, a maximum response count, and an expiration date.
+
+> Note: a form can carry `requires_login` and `allowed_domains` settings, but the public submit path does not enforce them today. Only visibility (org/project membership) and the expiration date gate who can submit. Do not rely on `requires_login` or `allowed_domains` to restrict a Public form.
 
 ### Working with AI agents
 
@@ -360,6 +379,8 @@ For the full tool catalog and argument shapes, see the MCP-tools reference in `d
 
 **Result:** People who are not in the org (or not members of the chosen project) get a forbidden response when they open the public URL. Members can view and submit as normal.
 
+**Related:** Visibility (org and project membership) is the enforced gate. The `requires_login` and `allowed_domains` settings are stored but not enforced on the public submit path, so do not rely on them to restrict a Public form.
+
 ### Story: Build a multi-page survey
 
 **Who:** An author with a longer survey to split across pages.
@@ -368,15 +389,14 @@ For the full tool catalog and argument shapes, see the MCP-tools reference in `d
 
 **Steps**
 
-1. In the builder, click a field in the canvas to open **Field Settings**.
-2. Set the field's **Page Number** to the page you want it on.
-3. Repeat for the other fields, assigning each a page number.
-4. (Optional) Open the per-form Settings page at `/blank/forms/<id>/settings` and enable **Show Progress Bar** under Branding.
-5. Click **Preview** to confirm the pages, then **Publish**.
+1. In the builder, click **Page Break** in the **Add Field** palette wherever you want a page boundary. It appears as a divider in the canvas.
+2. Add or arrange the fields for each page around the page breaks. (Alternatively, select a field, open **Field Settings**, and set its **Page Number**.)
+3. (Optional) Open the per-form Settings page at `/blank/forms/<id>/settings` and enable **Show Progress Bar** under Branding.
+4. Click **Preview** to confirm the pages, then **Publish**.
 
 **Result:** The public form shows fields grouped by page with Back and Next controls and, if enabled, a progress bar.
 
-> Note: do not use the palette's **Page Break** item to split pages. It currently fails because the API does not accept the page-break field type. Use **Page Number** on each field instead.
+**Related:** Page breaks and per-field Page Number both page a form; use whichever fits how you build.
 
 ### Story: Close a form to stop accepting responses
 

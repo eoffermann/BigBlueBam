@@ -1,7 +1,7 @@
 ---
 title: "Bam (Project Management)"
 app: bam
-generated: "2026-06-17T20:37:35.136Z"
+generated: "2026-06-17T22:16:23.459Z"
 ---
 
 # Bam (Project Management)

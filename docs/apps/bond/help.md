@@ -86,7 +86,7 @@ To group deals into swimlanes:
 
 ### Creating a deal
 
-Deals are created from the board. The Create Deal dialog collects a name, an optional value, and an optional expected close date. It does not collect company, owner, probability, currency, or linked contacts; set those through an MCP tool or the REST API (see Working with AI agents).
+Deals are created from the board. The Create Deal dialog collects a name, an optional value, and an optional expected close date. It does not collect company, owner, probability, currency, or linked contacts; set those by editing the deal afterward (see Deal detail and outcomes), or through an MCP tool or the REST API (see Working with AI agents). You can also create a deal already linked to a contact from the contact's page (see Contact detail).
 
 To add a deal at the first stage:
 
@@ -106,6 +106,12 @@ To add a deal directly to a specific stage:
 
 Open a deal card to see its full record at `/deals/:id`: the header with the deal name and a status badge (**Open**, **Won**, or **Lost**), value, company link, close date, days in stage, and owner. The left side shows the description, an inline Log Activity form, and the Activity timeline. The right side shows Details (Probability, Weighted Value, Created, Closed, Close Reason, Lost To), the Related panel, and Stage History.
 
+To edit a deal:
+
+1. Open the deal and click the overflow menu (the "..." button).
+2. Choose **Edit Deal**. The "Edit Deal" dialog opens, pre-filled with the deal's current values.
+3. Update the **Deal Name**, **Description**, **Value ($)**, **Expected Close Date**, and other fields, then click **Save Changes**. The change is saved through the API and the deal updates in place.
+
 To close a deal as won:
 
 1. Open the deal.
@@ -114,16 +120,14 @@ To close a deal as won:
 To close a deal as lost:
 
 1. Open the deal.
-2. Click **Lost** (the X-circle button). The deal moves to a Lost-type stage and its probability is set to 0.
-
-Note: the in-app Lost button records the loss without a reason or competitor. To capture a close reason or the competitor you lost to, use the REST endpoint or MCP tool (see Working with AI agents).
+2. Click **Lost** (the X-circle button). The "Mark Deal as Lost" dialog opens.
+3. Enter a **Reason** for the loss and, optionally, the **Lost to Competitor** you lost to.
+4. Click **Mark as Lost**. The deal moves to a Lost-type stage, its probability is set to 0, and the reason and competitor are recorded (they show in the deal's Details under Close Reason and Lost To, and feed the Analytics "Top Loss Reasons" and "Top Competitors" sections).
 
 To delete a deal:
 
 1. Open the deal and click the overflow menu (the "..." button).
 2. Choose **Delete Deal**. The deal is soft-deleted and you return to the board. It can be restored later through the API or MCP.
-
-Editing a deal in place is not available in the app yet. The overflow menu lists **Edit Deal**, but it does no work; there is no edit dialog. To change a deal's fields, use an MCP tool or the REST API.
 
 ### Stage History and Related items
 
@@ -159,6 +163,10 @@ To add a contact:
 3. Choose a **Lifecycle Stage** (Lead, Subscriber, MQL, SQL, Opportunity, Customer, Evangelist, or Other). It defaults to Lead.
 4. Click **Create Contact**. The contact is added and you land on its detail page.
 
+### Bulk-importing contacts
+
+Bond can import many contacts at once. Bulk import takes a JSON body with a `contacts` array (1 to 5000 records), not a spreadsheet upload, so there is no in-app CSV file picker; the import is driven through the REST API (`POST /contacts/import`) or an agent and requires admin access. Unmatched companies referenced by the records are resolved by the importer. For a single idempotent ingest by email, use the `bond_upsert_contact` tool instead (see Working with AI agents).
+
 ### Contact detail
 
 ![Contact detail](screenshots/light/04-contact-detail.png)
@@ -172,11 +180,20 @@ To work a contact:
 3. Use the **details** tab to read Lead Source, Owner, City, State/Region, Country, Created, and Last Contacted.
 4. The **deals** tab shows a text summary of the contact's deals.
 
+To edit a contact:
+
+1. Click the overflow menu ("...") and choose **Edit Contact**. The "Edit Contact" dialog opens, pre-filled.
+2. Update **First Name**, **Last Name**, **Email**, **Phone**, **Job Title**, or the **Lifecycle Stage**, then click **Save Changes**. The change is saved through the API.
+
+To create a deal linked to this contact:
+
+1. Click the overflow menu ("...") and choose **Create Deal**. The "Create Deal" dialog opens.
+2. Type a **Deal Name**, an optional **Value ($)**, and pick a **Pipeline** (it defaults to your org's default pipeline).
+3. Click **Create Deal**. The deal is created at the pipeline's first active stage and is linked to this contact.
+
 To delete a contact:
 
 1. Click the overflow menu ("...") and choose **Delete Contact**. The contact is soft-deleted; restore it from the Contacts list with Include deleted.
-
-The contact overflow menu also lists **Edit Contact** and **Create Deal**, but neither is wired up in the app yet; selecting them does nothing. To edit a contact (including its lifecycle stage) or to create a deal tied to a contact, use an MCP tool or the REST API.
 
 ### Companies list
 
@@ -211,11 +228,14 @@ To work a company:
 3. Use the **details** tab to read Website, Owner, Address, and Created.
 4. The **contacts** and **deals** tabs show text summaries.
 
+To edit a company:
+
+1. Click the overflow menu ("...") and choose **Edit Company**. The "Edit Company" dialog opens, pre-filled.
+2. Update the company's fields and click **Save Changes**. The change is saved through the API.
+
 To delete a company:
 
 1. Click the overflow menu ("...") and choose **Delete Company**. The company is soft-deleted; restore it from the Companies list with Include deleted.
-
-The company overflow menu also lists **Edit Company**, but it is not wired up yet; selecting it does nothing. To edit a company's fields, use an MCP tool or the REST API.
 
 ### Logging activity
 
@@ -243,7 +263,7 @@ To read your numbers:
 5. **Stage Transitions** shows from-stage to to-stage with a count badge.
 6. **Revenue Forecast (weighted)** breaks the weighted total into Next 30 days, Next 60 days, Next 90 days, Beyond 90 days, and No close date (only non-zero buckets show).
 7. **Stale Deals (N)** lists clickable rows (name, stage, an X-of-Y days badge, value). Click a row to open that deal.
-8. **Top Loss Reasons** and **Top Competitors** summarize why deals were lost and to whom.
+8. **Top Loss Reasons** and **Top Competitors** summarize why deals were lost and to whom (populated from the reason and competitor you enter when you mark a deal Lost).
 
 ### Bond Settings: Pipelines
 
@@ -318,14 +338,14 @@ Deleted deals are restored through the REST API or the `bond_restore_deal` MCP t
 
 ### Working with AI agents
 
-Bond exposes a large MCP catalog (over 70 tools across `bond-tools.ts`, plus the cross-cutting `bond_find_duplicates`), so an AI agent can do everything a salesperson does in the app, plus the admin configuration and the in-place edits the current UI does not expose. Most write tools accept a name or a UUID (a pipeline or stage name, a contact email or name, a company name or domain, a deal title fragment, an owner email); an ambiguous or missing match returns a clean error instead of mutating data.
+Bond exposes a large MCP catalog (over 70 tools across `bond-tools.ts`, plus the cross-cutting `bond_find_duplicates`), so an AI agent can do everything a salesperson does in the app, plus the admin configuration the current UI does not expose. Most write tools accept a name or a UUID (a pipeline or stage name, a contact email or name, a company name or domain, a deal title fragment, an owner email); an ambiguous or missing match returns a clean error instead of mutating data.
 
 What agents commonly drive:
 
-- **Contacts:** `bond_create_contact`, `bond_update_contact`, `bond_list_contacts`, `bond_get_contact`, `bond_search_contacts`, `bond_merge_contacts`, `bond_delete_contact`, and `bond_restore_contact`. Editing a contact (including lifecycle stage), which the app cannot do in place, runs through `bond_update_contact`.
+- **Contacts:** `bond_create_contact`, `bond_update_contact`, `bond_list_contacts`, `bond_get_contact`, `bond_search_contacts`, `bond_merge_contacts`, `bond_delete_contact`, and `bond_restore_contact`. `bond_update_contact` does the same edit the in-app Edit Contact dialog does, including lifecycle stage.
 - **Idempotent contact ingestion:** `bond_upsert_contact` upserts by email. It is part of the platform's idempotent write plane and returns a `created` flag and an idempotency key, so repeated ingestion does not create duplicates. It also resurrects a soft-deleted contact with the same email.
-- **Companies:** `bond_create_company`, `bond_update_company`, `bond_list_companies`, `bond_get_company`, `bond_search_companies`, `bond_delete_company`, `bond_restore_company`, `bond_list_company_contacts`, and `bond_list_company_deals`. Editing a company, which the app cannot do in place, runs through `bond_update_company`.
-- **Deals:** `bond_create_deal` (collects fields the in-app dialog omits, such as company, owner, and probability), `bond_update_deal` (the in-place edit the UI lacks), `bond_list_deals`, `bond_get_deal`, `bond_move_deal_stage`, `bond_close_deal_won`, and `bond_close_deal_lost` (the lost tool can record a close reason and the competitor you lost to). `bond_duplicate_deal`, `bond_delete_deal`, and `bond_restore_deal` round out the lifecycle, and `bond_list_deal_contacts`, `bond_add_deal_contact`, `bond_remove_deal_contact`, `bond_get_deal_stage_history`, `bond_list_deal_activities`, and `bond_get_deal_related` cover the deal detail surface.
+- **Companies:** `bond_create_company`, `bond_update_company`, `bond_list_companies`, `bond_get_company`, `bond_search_companies`, `bond_delete_company`, `bond_restore_company`, `bond_list_company_contacts`, and `bond_list_company_deals`. `bond_update_company` matches the in-app Edit Company dialog.
+- **Deals:** `bond_create_deal` (collects fields the in-app board dialog omits at creation, such as company, owner, and probability), `bond_update_deal` (the same edit the in-app Edit Deal dialog does), `bond_list_deals`, `bond_get_deal`, `bond_move_deal_stage`, `bond_close_deal_won`, and `bond_close_deal_lost` (records a close reason and the competitor you lost to, just like the in-app Mark Deal as Lost dialog). `bond_duplicate_deal`, `bond_delete_deal`, and `bond_restore_deal` round out the lifecycle, and `bond_list_deal_contacts`, `bond_add_deal_contact`, `bond_remove_deal_contact`, `bond_get_deal_stage_history`, `bond_list_deal_activities`, and `bond_get_deal_related` cover the deal detail surface.
 - **Activities:** `bond_log_activity` mirrors the Log Activity form; `bond_list_activities`, `bond_get_activity`, `bond_update_activity`, and `bond_delete_activity` manage the timeline.
 - **Pipelines and stages (admin):** `bond_list_pipelines`, `bond_get_pipeline`, `bond_create_pipeline`, `bond_update_pipeline`, `bond_delete_pipeline`, and the stage tools `bond_list_stages`, `bond_create_stage`, `bond_update_stage`, `bond_delete_stage`, and `bond_reorder_stages`. `bond_reorder_stages` and `bond_update_stage` do the stage reordering and the probability/rotting/color edits the Settings UI cannot.
 - **Custom fields (admin):** `bond_list_custom_fields`, `bond_get_custom_field`, `bond_create_custom_field`, `bond_update_custom_field`, and `bond_delete_custom_field`.
@@ -374,10 +394,11 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 2. In the "Create Contact" dialog, fill in **First Name**, **Last Name**, **Email**, **Phone**, and **Job Title** (at least one of first name, last name, or email is required).
 3. Choose a **Lifecycle Stage**, for example **Lead** or **MQL**, then click **Create Contact**.
 4. On the contact's detail page, click **Log Activity**, pick **Call** or **Note**, write a subject and details, and click **Log Activity**.
+5. To reclassify the contact later, open the overflow menu ("..."), choose **Edit Contact**, change the **Lifecycle Stage**, and click **Save Changes**.
 
-**Result:** The contact exists with a lifecycle stage and a first activity in its timeline.
+**Result:** The contact exists with a lifecycle stage and a first activity in its timeline, and you can update its details and stage at any time.
 
-**Related:** Changing the contact's lifecycle stage later is not available in the app; use the `bond_update_contact` MCP tool or the REST API. See ![Contacts list](screenshots/light/03-contacts-list.png).
+**Related:** Agents can do the same with `bond_create_contact` and `bond_update_contact`. See ![Contacts list](screenshots/light/03-contacts-list.png).
 
 ### Story: Create a deal and move it to close
 
@@ -389,13 +410,14 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 1. Click **Add Deal** (or the **+** on a specific stage column).
 2. In the "Create Deal" dialog, type a **Deal Name**, an optional **Value ($)**, and an optional **Expected Close Date**, then click **Create Deal**.
-3. As the deal progresses, drag its card from one stage column to the next. Each move is recorded in Stage History.
-4. Open the deal and use **Log Activity** to record calls and meetings along the way.
-5. When the deal closes, open it and click **Won** or **Lost**.
+3. To set a company, owner, or other fields the create dialog omits, open the deal, use the overflow menu's **Edit Deal**, and **Save Changes**.
+4. As the deal progresses, drag its card from one stage column to the next. Each move is recorded in Stage History.
+5. Open the deal and use **Log Activity** to record calls and meetings along the way.
+6. When the deal closes, open it and click **Won**, or click **Lost** and enter a **Reason** (and optional **Lost to Competitor**) in the "Mark Deal as Lost" dialog.
 
-**Result:** The deal shows an **Open**, **Won**, or **Lost** badge, its probability is set (100 for won, 0 for lost), and the board reflects its final stage.
+**Result:** The deal shows an **Open**, **Won**, or **Lost** badge, its probability is set (100 for won, 0 for lost), and a lost deal records its reason and competitor for reporting.
 
-**Related:** To set a company, owner, probability, or linked contacts at creation, or to record a close reason or competitor on a loss, use `bond_create_deal` / `bond_close_deal_lost` or the REST API. See ![Deal detail](screenshots/light/02-deal-detail.png).
+**Related:** Agents can create deals with more fields up front via `bond_create_deal`, edit them with `bond_update_deal`, and close them with `bond_close_deal_won` / `bond_close_deal_lost`. See ![Deal detail](screenshots/light/02-deal-detail.png).
 
 ### Story: Work the board with swimlanes
 
@@ -451,18 +473,19 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 ### Story: Manage companies
 
 **Who:** An account manager organizing accounts.
-**Goal:** Create a company and tie contacts and deals to it.
+**Goal:** Create a company, edit its details, and tie contacts and deals to it.
 **Before you start:** You need read/write access. You are on the Companies list.
 
 **Steps**
 
 1. Click **Add Company**.
 2. In the "Create Company" dialog, type a **Company Name**, and optionally a **Domain**, **Industry**, **Company Size**, and **Website**, then click **Create Company**.
-3. On the company's detail page, use the **contacts** and **deals** tabs to see linked records (shown as summaries), and **Log Activity** to record touches against the account.
+3. On the company's detail page, open the overflow menu ("...") and choose **Edit Company** to update its fields; click **Save Changes**.
+4. Use the **contacts** and **deals** tabs to see linked records (shown as summaries), and **Log Activity** to record touches against the account.
 
-**Result:** The company exists with its linked contact and deal counts, and its activity timeline is started.
+**Result:** The company exists with its linked contact and deal counts, its details are editable in place, and its activity timeline is started.
 
-**Related:** Editing a company in place is not available in the app; use `bond_update_company` or the REST API. See ![Companies list](screenshots/light/05-companies-list.png).
+**Related:** Agents can manage the same record with `bond_create_company` and `bond_update_company`. See ![Companies list](screenshots/light/05-companies-list.png).
 
 ### Story: Configure lead scoring
 

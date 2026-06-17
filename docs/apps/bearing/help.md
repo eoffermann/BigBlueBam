@@ -52,7 +52,7 @@ What you see, top to bottom:
 
 - The header **"Goals Dashboard"** with the subtitle "Track objectives and key results across your organization." and a **New Goal** button.
 - A period selector card showing the selected period's name, date range, and time remaining.
-- A stats row with four cards: **Total Goals**, **Avg Progress**, **At Risk**, and **Achieved**.
+- A stats row with four cards: **Total Goals**, **Avg Progress**, **At Risk**, and **Achieved**. These read from the selected period's report and populate with the period's real totals.
 - Scope tabs: **All**, **Organization**, **Team**, **Project**, **Individual**.
 - A search box with placeholder "Search goals...".
 - A grid of goal cards. With the **All** tab selected, cards are grouped by scope. Each card shows the goal's title, scope badge, project or team, a progress bar (actual against expected), the owner avatar, and the key result count.
@@ -60,8 +60,6 @@ What you see, top to bottom:
 To open a goal, click its card. To browse a different period, change the selection in the sidebar period selector.
 
 If no period is selected you see a "Select a period" prompt. If the period has no goals you see "No goals found" with a **Create First Goal** button.
-
-> Known limitation: the four stat cards at the top of the Dashboard are wired to a data source that does not exist in this build, so they may not populate. The goal grid, the scope tabs, and the search box work and are the reliable way to read the state of a period. To get accurate period totals, use the AI agent tool `bearing_period_get` or `bearing_report` described under Working with AI agents.
 
 ### My Goals
 
@@ -94,7 +92,7 @@ The Periods page at `/periods` is where you create and manage the time boxes tha
 
 - The header reads **"Periods"** with the subtitle "Manage time periods for organizing goals and OKRs." and a **New Period** button.
 - A table with columns **Name**, **Type**, **Date Range**, **Status**, and **Goals**, plus a row menu.
-- Each row has a "..." menu with **Edit**, an **Activate** item (shown only when the period's status is draft), a **Complete** item (shown only when the period is active), and **Delete**.
+- Each row has a "..." menu with **Edit**, an **Activate** item (shown only while the period's status is planning), a **Complete** item (shown only when the period is active), and **Delete**.
 
 To create a period:
 
@@ -106,9 +104,7 @@ To create a period:
 
 To edit a period, choose **Edit** from the row menu. The same dialog opens with a **Save Changes** button.
 
-To complete a period when it is over, choose **Complete** from the row menu (available only while the period is active). To delete a period, choose **Delete** and confirm. Deleting is blocked with a conflict error if the period still has goals.
-
-> Known limitation: a newly created period is saved with a status that the row menu's **Activate** guard does not match, so the **Activate** item may not appear for a brand-new period in the UI. If you cannot activate a period from the menu, an AI agent or REST caller can activate it through the API (`bearing_period_activate`). The sidebar period selector still lets you select any period regardless of status.
+To activate a newly created period so it becomes the working scope, choose **Activate** from the row menu (shown while the period is in planning). To complete a period when it is over, choose **Complete** from the row menu (available only while the period is active). To delete a period, choose **Delete** and confirm. Deleting is blocked with a conflict error if the period still has goals.
 
 ### Goal Detail
 
@@ -126,7 +122,9 @@ To edit a goal's title or description:
 
 Below the header is a meta row with the owner avatar and name, the scope badge, the period-name badge, and the project-name badge, followed by a progress bar reading "{n}% (expected: {m}%)".
 
-> Known limitation: the right sidebar **Progress Over Time** chart reads from the same missing data source as the Dashboard stat cards and may not render data. The **Period Timeline** card shows the goal's creation date but its time-remaining badge is inert in this build. The progress bar values themselves and the **Watchers** card work as described.
+The right sidebar holds a **Progress Over Time** chart that plots the goal's actual progress against expected over the period, a **Period Timeline** card showing the goal's creation date, and the **Watchers** card.
+
+Note: the **Period Timeline** card's time-remaining badge is inert in this build (it is fed an empty end date), so it does not count down. The progress chart, the progress-bar values, and the **Watchers** card all work as described.
 
 ### Create a Goal
 
@@ -157,7 +155,7 @@ To add a key result:
 
 To edit a key result, hover its row, open the "..." menu, and choose **Edit**. The same dialog opens with a **Save Changes** button. To delete one, open the "..." menu and choose **Delete**, then confirm.
 
-Each key result row shows a metric icon, the title, a progress bar, a sparkline of recent values, and a "current / target" readout. The goal's overall progress is the average of its key results' progress, and that progress now renders correctly throughout Bearing (see the note under Record progress below).
+Each key result row shows a metric icon, the title, a progress bar, a sparkline of recent values, and a "current / target" readout. The goal's overall progress is the average of its key results' progress, and that progress renders correctly throughout Bearing (see the note under Record progress below).
 
 ### Record progress on a Key Result
 
@@ -168,11 +166,9 @@ You record progress (a check-in) by setting a key result's current value.
 3. Type the new current value in the inline number field.
 4. Click **Save**, or **Cancel** to back out. Pressing Enter saves and Escape cancels.
 
-A check-in updates the key result's current value and progress, recomputes the goal's overall progress as the average of its key results, re-derives the goal's status, and writes a snapshot row that feeds the KR sparkline and the goal history chart.
+A check-in records the new value, updates the key result's progress, recomputes the goal's overall progress as the average of its key results, re-derives the goal's status, and writes a snapshot row that feeds the KR sparkline and the goal history chart.
 
-Goal and key-result progress now display the real percentage. Earlier builds capped the stored progress value at a precision that overflowed for any figure of 10 percent or more, which left progress bars stuck at 0 percent; that storage limit has been widened, so bars and percentages reflect the actual numbers.
-
-> Known limitation: in this build the inline **Update** control posts to an endpoint path the backend does not expose, so the check-in may fail to record from the UI. Until that path is corrected, the reliable way to record a key result value is the AI agent tool `bearing_kr_update`, which performs the value check-in through the working backend route (`POST /key-results/:id/value`). Editing the key result's start or target value through the **Edit** dialog works normally.
+Goal and key-result progress display the real percentage. Earlier builds capped the stored progress value at a precision that overflowed for any figure of 10 percent or more, which left progress bars stuck at 0 percent; that storage limit has been widened, so bars and percentages reflect the actual numbers.
 
 ### Post a status update
 
@@ -191,10 +187,11 @@ The **Watchers** card on the goal detail page subscribes people to status-change
 
 1. On the goal detail page, find the **Watchers (n)** card in the right sidebar.
 2. Click the add (person-plus) icon to reveal the input.
-3. Click the **+** button to add yourself, or press Enter.
-4. To stop watching, hover your watcher chip and click the **X**.
+3. Type a user ID or email into the **User ID or email** field.
+4. Click the **+** button, or press Enter, to subscribe that person.
+5. To stop watching, hover a watcher chip and click the **X**.
 
-Note: the add form shows a "User ID or email" field, but the backend always adds the **calling user**, so this control subscribes **you** to the goal regardless of what you type. To remove a watcher who is not you, you must be the goal's owner or an org admin or owner.
+The form subscribes whoever you enter, resolving the value to an active member of your org by user ID first, then by email. To remove a watcher who is not you, you must be the goal's owner or an org admin or owner.
 
 When a watched goal's status changes, a background job emails the watchers (using real email when SMTP is configured for the deployment), with an unsubscribe link per recipient.
 
@@ -211,16 +208,16 @@ To produce any of these, use the AI agent tools `bearing_report` and `bearing_at
 
 ### Working with AI agents
 
-Bearing exposes 31 MCP tools so AI agents can drive the same goals and key results you manage in the UI, and reach a few capabilities the human UI does not surface (linking, reports, and CSV-style detail). Agents forward your bearer token and org context, and many tools accept human labels (a period name, a goal or key result title, an owner's email) in place of UUIDs. When a key result title is shared across multiple goals, the resolver fails closed and asks the agent to disambiguate with a UUID.
+Bearing exposes a set of MCP tools so AI agents can drive the same goals and key results you manage in the UI, and reach a few capabilities the human UI does not surface (linking, reports, status override, and CSV-style detail). Agents forward your bearer token and org context, and many tools accept human labels (a period name, a goal or key result title, an owner's email) in place of UUIDs. When a key result title is shared across multiple goals, the resolver fails closed and asks the agent to disambiguate with a UUID.
 
 Period tools:
 
 - `bearing_periods` - list periods, optionally filtered by status or year.
-- `bearing_period_get` - one period plus its stats (goal count, average progress, at-risk count). Use this to get accurate period totals that the Dashboard stat cards do not currently show.
+- `bearing_period_get` - one period plus its stats (goal count, average progress, at-risk count).
 - `bearing_period_create` - create a period (cadence quarter, half, year, month, or custom) with start and end dates.
 - `bearing_period_update` - change a period's name, type, dates, or status (set status to archived to archive it).
 - `bearing_period_delete` - delete a period.
-- `bearing_period_activate` - make a period the live planning window. This is the dependable way to activate a new period given the UI's **Activate** menu limitation.
+- `bearing_period_activate` - make a period the live planning window.
 - `bearing_period_complete` - close a period out at the end of the cadence.
 
 Goal tools:
@@ -230,11 +227,11 @@ Goal tools:
 - `bearing_goal_create` - create a goal, naming the period by label and the owner by email.
 - `bearing_goal_update` - update a goal, including reassigning the owner. This is the only way to change a goal's owner, since the UI has no owner picker.
 - `bearing_goal_delete` - delete a goal and its key results.
-- `bearing_goal_status_override` - force a goal's status (for example to at_risk or achieved), bypassing the automatic progress-derived status.
+- `bearing_goal_status_override` - force a goal's status (for example to at_risk or achieved), bypassing the automatic progress-derived status. There is no human screen for this; it is agent and REST only.
 - `bearing_goal_updates` - list the status updates posted on a goal.
 - `bearing_goal_history` - get a goal's point-in-time progress snapshots.
 - `bearing_goal_watchers` - list a goal's watchers.
-- `bearing_goal_watch` - add the calling user as a watcher (no target-user parameter).
+- `bearing_goal_watch` - add a watcher to a goal.
 - `bearing_goal_unwatch` - remove a watcher (yourself, or anyone if you are the owner or an org admin or owner).
 
 Key result tools:
@@ -242,7 +239,7 @@ Key result tools:
 - `bearing_kr_list` - list the key results under a goal.
 - `bearing_kr_get` - get one key result.
 - `bearing_kr_create` - add a key result to a goal.
-- `bearing_kr_update` - update a key result's definition and, when a current value is supplied, record a value check-in. This is the reliable way to record progress while the inline **Update** control's endpoint path is broken.
+- `bearing_kr_update` - update a key result's definition and, when a current value is supplied, record a value check-in.
 - `bearing_kr_delete` - delete a key result.
 - `bearing_kr_link` - link a key result to a Bam epic, project, sprint, or task so its progress tracks real delivery. There is no human screen for this in the current build; it is agent and REST only.
 - `bearing_kr_links` - list the Bam-entity links on a key result.
@@ -283,11 +280,12 @@ For reviewers: agent-created goals and updates show up in the same lists and fee
 4. Choose a **Type** of **Quarter**.
 5. Set the **Start Date** and **End Date** to cover the quarter.
 6. Click **Create Period**.
-7. In the sidebar period scope selector at the top, select the period you just created.
+7. In the period's "..." menu, choose **Activate**.
+8. In the sidebar period scope selector at the top, select the period you just created.
 
-**Result:** The period is selected and scopes the whole UI. The Dashboard now shows this period and is ready for goals.
+**Result:** The period is active and selected, and scopes the whole UI. The Dashboard now shows this period and is ready for goals.
 
-**Related:** If the row menu's **Activate** item does not appear for your new period, an agent can activate it through the API; selecting the period in the sidebar is enough to start working in it. See "Provision a quarter with an agent" below.
+**Related:** You can also start working in a period just by selecting it in the sidebar selector. See "Provision a quarter with an agent" below for the agent counterpart.
 
 ### Story: Create your first objective
 
@@ -324,7 +322,7 @@ For reviewers: agent-created goals and updates show up in the same lists and fee
 6. Click **Add Key Result**.
 7. Repeat for each measurable outcome.
 
-**Result:** Each key result appears as a row with a progress bar and a "current / target" readout. The goal's progress is the average of its key results and now renders the real percentage.
+**Result:** Each key result appears as a row with a progress bar and a "current / target" readout. The goal's progress is the average of its key results and renders the real percentage.
 
 **Related:** Record progress on a key result next. To wire a key result to real Bam delivery, an agent can use `bearing_kr_link`.
 
@@ -341,9 +339,9 @@ For reviewers: agent-created goals and updates show up in the same lists and fee
 3. Type the new current value in the inline field.
 4. Click **Save**.
 
-**Result:** The key result's value and progress update, the goal's overall progress and status recompute from the average, and a snapshot is written for the sparkline. Progress now shows the true percentage rather than being pinned at 0 percent.
+**Result:** The key result's value and progress update, the goal's overall progress and status recompute from the average, and a snapshot is written for the sparkline. Progress shows the true percentage.
 
-**Related:** If the inline **Update** does not save in your build, record the value with the agent tool `bearing_kr_update`, which writes the check-in through the working backend route.
+**Related:** Post a status update to add narrative for the team. An agent can record the same check-in with `bearing_kr_update`.
 
 ### Story: Post a status update for the team
 
@@ -398,18 +396,19 @@ For reviewers: agent-created goals and updates show up in the same lists and fee
 ### Story: Watch a goal you care about
 
 **Who:** A stakeholder who wants to be told when a goal's status changes.
-**Goal:** Subscribe yourself to a goal's status-change emails.
+**Goal:** Subscribe someone to a goal's status-change emails.
 **Before you start:** You are on the goal's detail page.
 
 **Steps**
 
 1. In the right sidebar, find the **Watchers** card.
 2. Click the add (person-plus) icon.
-3. Click the **+** button (or press Enter) to add yourself.
+3. Type a user ID or email into the **User ID or email** field.
+4. Click the **+** button, or press Enter, to subscribe that person.
 
-**Result:** Your avatar appears as a watcher. When the goal's status changes, a background job emails you.
+**Result:** The watcher's avatar appears on the card. When the goal's status changes, a background job emails them.
 
-**Related:** The add control always subscribes you, the calling user, even though it shows a "User ID or email" field. An agent can do the same with `bearing_goal_watch`.
+**Related:** The form subscribes whoever you enter, resolving the value by user ID first, then by email. An agent can do the same with `bearing_goal_watch`.
 
 ### Story: Close out the quarter
 

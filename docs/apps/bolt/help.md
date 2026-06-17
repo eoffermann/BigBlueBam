@@ -142,9 +142,15 @@ If the form has problems, a banner reads "Please fix the following errors before
 
 ### Test Run
 
-The editor shows a **Test Run** button in the Settings sidebar for an already-saved automation (it does not appear while creating a new one). It is meant to evaluate the automation's conditions against a sample event without running any actions.
+The editor shows a **Test Run** button in the Settings sidebar for an already-saved automation (it does not appear while creating a new one). It evaluates the automation's conditions against a sample event without running any actions.
 
-Known issue: Test Run does not work reliably in the current build. The button sends the request without the event body that the test endpoint requires, so the call is rejected as a validation error, and the success message reads a field (`execution_id`) that the test endpoint never returns. Do not rely on Test Run to verify a rule today. To confirm an automation behaves as intended, enable it and inspect the resulting runs in the Execution Log, or use the `bolt_test` MCP tool with a simulated event (see Working with AI agents). Note that even when it works, a test only evaluates conditions; it never executes actions.
+To use it:
+
+1. Open a saved automation in the editor.
+2. Click **Test Run** in the Settings sidebar. Bolt sends a simulated event, seeded from the trigger filter when you have one, to the test endpoint.
+3. Read the result box that appears under the button. A green box means the conditions passed (the actions would run on a real event); an amber box means they did not. The box shows a human-readable summary message.
+
+The test only evaluates conditions; it never executes actions. To confirm an automation's actions actually run, enable it and inspect the resulting runs in the Execution Log. Agents can run the same conditions-only dry run with the `bolt_test` MCP tool, passing an explicit simulated event (see Working with AI agents).
 
 ### Duplicating an automation
 
@@ -222,7 +228,7 @@ To start from a template:
 
 The template gallery is shown below.
 
-![Template gallery - the grid of pre-built templates, each with a source badge and Use Template button](screenshots/light/06-templates.png)
+![Template gallery - the grid of pre-built templates, each with a source badge and Use Template button](screenshots/light/05-templates.png)
 
 Note that some templates are starting points rather than turnkey rules. A few are labeled "(requires agent)" and wire a working notify step but leave the cross-app part (for example creating an invoice from a closed deal) for an AI agent to complete. Others need a value only you can supply (a cron schedule, a project and phase for a created task). Read each template's actions after instantiating and fill in anything marked required before you enable it.
 
@@ -235,7 +241,7 @@ Bolt exposes 26 MCP tools: 24 in the core Bolt tool module plus 2 observability 
 - **Authoring and operating:** `bolt_create`, `bolt_update`, `bolt_patch` (metadata-only: name, description, enabled), `bolt_get`, `bolt_get_automation_by_name`, `bolt_list`, `bolt_stats`, `bolt_enable`, `bolt_disable`, `bolt_duplicate`, and `bolt_delete`. Mutating tools accept a name as well as a UUID and resolve it through `bolt_get_automation_by_name`, returning a clean "Automation not found" on a miss. This lets an agent run meta-automation tasks like "disable the Nightly Deploys rule" by name.
 - **Templates:** `bolt_list_templates` and `bolt_instantiate_template` (with optional name, description, project, and cron overrides) let an agent stand up a rule from a built-in blueprint.
 - **Versions:** `bolt_list_versions` and `bolt_restore_version` read and roll back the snapshots that every save records. This history has no in-app UI; agents and the REST API are the only way to use it (see below).
-- **Inspecting and testing:** `bolt_executions` (runs for an automation), `bolt_list_executions` (org-wide runs), `bolt_execution_detail` (one run with its steps), `bolt_retry_execution` (re-queue a failed or partial run), and `bolt_test` (evaluate an automation's conditions against a simulated `event`). As in the UI, `bolt_test` only evaluates conditions; it does not execute actions. Unlike the broken in-app Test Run, the tool does send the simulated event body, so it is the reliable way to dry-check a rule's conditions today.
+- **Inspecting and testing:** `bolt_executions` (runs for an automation), `bolt_list_executions` (org-wide runs), `bolt_execution_detail` (one run with its steps), `bolt_retry_execution` (re-queue a failed or partial run), and `bolt_test` (evaluate an automation's conditions against a simulated `event`). As in the UI, `bolt_test` only evaluates conditions; it does not execute actions. It returns `passed` (whether the actions would run), a per-condition `log`, and a human-readable `message`. The tool requires an explicit simulated `event` payload, so an agent can dry-check a rule against any payload it wants to imagine.
 - **Catalogs:** `bolt_events` (the trigger event catalog, optionally filtered by source) and `bolt_actions` (the action allowlist with parameter schemas). An agent discovers valid triggers and actions here before building a rule.
 - **AI drafting:** `bolt_generate` turns a natural-language prompt into a draft automation (it does not save; pass the result to `bolt_create`), and `bolt_explain` renders an automation definition in plain English. Both require an LLM provider configured in Bam Settings and return `AI_NOT_CONFIGURED` otherwise. This drafting has no in-app UI; it is agent and API only.
 - **Observability:** `bolt_event_trace` returns the full evaluation trail for one ingested event id (every automation it matched, each condition outcome, and each action outcome), and `bolt_recent_events` lists recent ingested events that matched at least one automation, filtered by source, event, since, and limit.
@@ -291,7 +297,7 @@ For the full tool catalog and parameter schemas, see the MCP-tools reference and
 4. In **IF - Conditions** (optional), click **Add Condition** and build each row: a field, an operator, and a value. Remember that fields reading the event body start with `event.` (for example `event.task.priority`).
 5. In **THEN - Actions**, click **Add Action**, pick a tool, and fill in its Parameters. Use `{{ event.* }}` and `{{ step[N].result.* }}` templates where you need values from the event or a previous step. Use "Show advanced" to set **On Error** and **Retry Count**.
 6. In the Settings sidebar, set **Max Executions / Hour** and **Cooldown (seconds)**.
-7. Click **Save Draft** to keep it off for now, or **Save & Enable** to turn it on.
+7. Save the rule, then click **Test Run** to dry-check its conditions against a sample event. When you are satisfied, click **Save & Enable** to turn it on (or **Save Draft** to keep it off for now).
 
 **Result:** The automation is saved. If you used Save & Enable, it will fire on the next matching event; if you saved a draft, enable it later from the home list power toggle.
 
@@ -395,7 +401,7 @@ For the full tool catalog and parameter schemas, see the MCP-tools reference and
 1. List or find the rule with `bolt_list` or `bolt_get_automation_by_name`.
 2. Discover valid triggers and actions with `bolt_events` and `bolt_actions`, then create or modify rules with `bolt_create`, `bolt_update`, or the metadata-only `bolt_patch`. To draft from a prompt, use `bolt_generate` and pass the result to `bolt_create`.
 3. Turn rules on or off with `bolt_enable` and `bolt_disable`, addressing them by name. Clone with `bolt_duplicate` (the copy starts disabled).
-4. Dry-check a rule's conditions against a simulated event with `bolt_test` (no actions run).
+4. Dry-check a rule's conditions against a simulated event with `bolt_test` (no actions run); read the returned `passed`, `log`, and `message`.
 5. Audit behavior with `bolt_executions`, `bolt_list_executions`, `bolt_execution_detail`, `bolt_event_trace` (one event's full trail), and `bolt_recent_events` (recent matched events). Re-queue a failure with `bolt_retry_execution`.
 6. When a change needs sign-off, file a `proposal_create` and let a human resolve it with `proposal_decide`.
 

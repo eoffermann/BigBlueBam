@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-17T20:37:35.371Z",
+  "generated_at": "2026-06-17T22:16:23.698Z",
   "screenshots": [
     {
       "app": "bam",
@@ -70,8 +70,8 @@
       "theme": "light",
       "file": "02-channel-list.png",
       "path": "docs/apps/banter/screenshots/light/02-channel-list.png",
-      "size": 117293,
-      "hash": "41aa35282e0b10f2fb6bf563b0b5e7201c2adaac83c1dc74a7c12564d83b8514"
+      "size": 117292,
+      "hash": "eedfeea30bde3302942a26520f6c31f20218a13944e17a7b656f09dd21d54ba9"
     },
     {
       "app": "banter",
@@ -102,8 +102,8 @@
       "theme": "light",
       "file": "06-preferences.png",
       "path": "docs/apps/banter/screenshots/light/06-preferences.png",
-      "size": 83023,
-      "hash": "742062a0db6ead0a5ed6f091885ea95c364c49bfe7d2356972e09268e8a0cc2f"
+      "size": 83538,
+      "hash": "3e137694afd6c0a00c555686269613cc738be3599ef0a0b2cb59661fc8d5c714"
     },
     {
       "app": "banter",
@@ -174,8 +174,8 @@
       "theme": "light",
       "file": "01-dashboard.png",
       "path": "docs/apps/bearing/screenshots/light/01-dashboard.png",
-      "size": 86056,
-      "hash": "84665c059534edb661c49c871a4d625cb81d8e6149e0af09ff238246e39ece1c"
+      "size": 86829,
+      "hash": "e03d3258ea3844670aeeb1c42460c1854d07bc836c4aa8d992bd5ad5d3b036ae"
     },
     {
       "app": "bearing",
@@ -190,8 +190,8 @@
       "theme": "light",
       "file": "03-my-goals.png",
       "path": "docs/apps/bearing/screenshots/light/03-my-goals.png",
-      "size": 79623,
-      "hash": "f743b24ceb2b02397296773e924efa91c5b294663fd71231f3d8e2730ffe4cbf"
+      "size": 79615,
+      "hash": "627a3c6811f91b942e424d247cb910d4efe9fc292cd6edf71985b52f641ac694"
     },
     {
       "app": "bearing",
@@ -206,32 +206,32 @@
       "theme": "light",
       "file": "05-periods.png",
       "path": "docs/apps/bearing/screenshots/light/05-periods.png",
-      "size": 40385,
-      "hash": "0529c65aa1174fe417692b66457cf89e9f85c01eaca1e77fba2b238b412e0516"
+      "size": 40375,
+      "hash": "d2ba3c879cc806e556de0b3f9da010691488f0ea723a68d4ffed0ba4492e3bbc"
     },
     {
       "app": "bearing",
       "theme": "dark",
       "file": "01-dashboard.png",
       "path": "docs/apps/bearing/screenshots/dark/01-dashboard.png",
-      "size": 215576,
-      "hash": "d5960021ac9fa980d180f4e9bf127a517f172e4610d71c85b064080e31b1eb43"
+      "size": 217278,
+      "hash": "7703ccec9ef137d327c5a0f8caf3c6cccce2d52a7c03801873dde0bf079f0dcc"
     },
     {
       "app": "bench",
       "theme": "light",
       "file": "01-dashboard-list.png",
       "path": "docs/apps/bench/screenshots/light/01-dashboard-list.png",
-      "size": 52317,
-      "hash": "d16625ec4d477a1374d2d45c9d471cbbe9145e5fde710201e12618ea31b8d849"
+      "size": 52387,
+      "hash": "ed5d528954246c474957de073db20d1ed41c60d1c47827a23380fce5caddce8b"
     },
     {
       "app": "bench",
       "theme": "light",
       "file": "02-dashboard-view.png",
       "path": "docs/apps/bench/screenshots/light/02-dashboard-view.png",
-      "size": 59157,
-      "hash": "4b888653f160029cf4b1b1c961f9a54d1f8078a981204966714a7ffb2e664923"
+      "size": 67804,
+      "hash": "c693497e982b59dc398e237514e4cdad022d7bd0e2cb82dfc6f10a22f7024398"
     },
     {
       "app": "bench",
@@ -239,15 +239,15 @@
       "file": "03-explorer.png",
       "path": "docs/apps/bench/screenshots/light/03-explorer.png",
       "size": 57235,
-      "hash": "e77b5a387adc6ef6718dea6e340c492c7f0c501d411469804885efbd651cc4ca"
+      "hash": "8354f6d9971e2225acce9c2923c8e7fb0b116d142838a7e99b2025039fc83fcc"
     },
     {
       "app": "bench",
       "theme": "light",
       "file": "04-widget-wizard.png",
       "path": "docs/apps/bench/screenshots/light/04-widget-wizard.png",
-      "size": 52317,
-      "hash": "d16625ec4d477a1374d2d45c9d471cbbe9145e5fde710201e12618ea31b8d849"
+      "size": 52387,
+      "hash": "ed5d528954246c474957de073db20d1ed41c60d1c47827a23380fce5caddce8b"
     },
     {
       "app": "bench",
@@ -270,16 +270,16 @@
       "theme": "dark",
       "file": "02-dashboard-view.png",
       "path": "docs/apps/bench/screenshots/dark/02-dashboard-view.png",
-      "size": 160982,
-      "hash": "6dac357ebcfe8a2ada7a88222106eecd90a19a5bd0ad9a3ab9b153a0b9923e52"
+      "size": 181453,
+      "hash": "930de8f8d972f3a1b947e81832d9349c7ebd52d0dd51697888673c6775162ca9"
     },
     {
       "app": "bill",
       "theme": "light",
       "file": "01-dashboard.png",
       "path": "docs/apps/bill/screenshots/light/01-dashboard.png",
-      "size": 78881,
-      "hash": "09087c50e51088fc6070b3714acfd8533e9117fbea67374da03a9e15e56247c9"
+      "size": 78619,
+      "hash": "0f4201a9d3f6764e745822e3722f1579664b25744f98a7c7d1e28ad053b939ed"
     },
     {
       "app": "bill",
@@ -318,8 +318,8 @@
       "theme": "light",
       "file": "06-reports.png",
       "path": "docs/apps/bill/screenshots/light/06-reports.png",
-      "size": 80010,
-      "hash": "48819416c88797c9ad000c67aff11f9f29d723726a54b136e84988572ef5a97b"
+      "size": 80016,
+      "hash": "8d6b121a5a4d1f9cc9bec721d7883ca5a724dc3fccadd536a5829e463fcc304e"
     },
     {
       "app": "bill",
@@ -550,8 +550,8 @@
       "theme": "light",
       "file": "02-editor.png",
       "path": "docs/apps/bolt/screenshots/light/02-editor.png",
-      "size": 74649,
-      "hash": "b0affec73284b9c070ca180ce425afbfad457a8c9c549048bd435bff686a21ca"
+      "size": 74648,
+      "hash": "1eeb10fa708335897de20756916bd6230daf7b02479afba780e702e357f1e882"
     },
     {
       "app": "bolt",
@@ -572,10 +572,10 @@
     {
       "app": "bolt",
       "theme": "light",
-      "file": "06-templates.png",
-      "path": "docs/apps/bolt/screenshots/light/06-templates.png",
-      "size": 106330,
-      "hash": "beb077380109f68803a14fba4f6a4fa13ef30ceb75dead6e65b92f09c350d98e"
+      "file": "05-templates.png",
+      "path": "docs/apps/bolt/screenshots/light/05-templates.png",
+      "size": 106336,
+      "hash": "1022a5513585fbef4c4c72fb146c019d6b15d37ad7864d66ad2c121b2ba90264"
     },
     {
       "app": "bolt",
@@ -590,8 +590,8 @@
       "theme": "light",
       "file": "01-pipeline-board.png",
       "path": "docs/apps/bond/screenshots/light/01-pipeline-board.png",
-      "size": 66985,
-      "hash": "7ec7bb6fbaa35201516060bf5e820af113e404d773958d03a86058a46756adad"
+      "size": 63580,
+      "hash": "69f5268cdf3e8d69d4821213a925098475477bc1cb639f3a26af3627bf56cdb0"
     },
     {
       "app": "bond",
@@ -606,8 +606,8 @@
       "theme": "light",
       "file": "03-contacts-list.png",
       "path": "docs/apps/bond/screenshots/light/03-contacts-list.png",
-      "size": 91656,
-      "hash": "66306a9472da1e0f4f89c50d5aaab266503d1e1c0d020c349bd61fe449e2cce6"
+      "size": 91266,
+      "hash": "17d38ced9cd99b8daa3cfffd7fc5d3b5d8e116ba42bceb4ad0ea584e0abd4a95"
     },
     {
       "app": "bond",
@@ -622,24 +622,24 @@
       "theme": "light",
       "file": "05-companies-list.png",
       "path": "docs/apps/bond/screenshots/light/05-companies-list.png",
-      "size": 72950,
-      "hash": "e81f192d2f0db01c2e9056afcdd6ad770df537567564c87f3d1bcd3e524bf3f2"
+      "size": 71750,
+      "hash": "041514f9ab5b907ae8b2c90ff287dd0c541568ed4ebd36173bee53fccf38fb9d"
     },
     {
       "app": "bond",
       "theme": "light",
       "file": "06-analytics.png",
       "path": "docs/apps/bond/screenshots/light/06-analytics.png",
-      "size": 65442,
-      "hash": "d24708ac782db91a7855341632e6a5aca3a2cfe8cff879e68e477a895ddb7a36"
+      "size": 65068,
+      "hash": "6aebca3e7d1108d675322c449de0e10c5fc87a855850da32a03ff93228d54348"
     },
     {
       "app": "bond",
       "theme": "dark",
       "file": "01-pipeline-board.png",
       "path": "docs/apps/bond/screenshots/dark/01-pipeline-board.png",
-      "size": 175193,
-      "hash": "495e537ef438986d39f4ad79bee6505acaaecc8afb323baf48ca312b4d809b86"
+      "size": 166335,
+      "hash": "ae7a852fe60c86ec6477f39820b16e265df2df84f3835837bbc9732b91259f48"
     },
     {
       "app": "book",
@@ -662,8 +662,8 @@
       "theme": "light",
       "file": "03-timeline.png",
       "path": "docs/apps/book/screenshots/light/03-timeline.png",
-      "size": 36746,
-      "hash": "71bbc6c776663eb3f4c59b1bfade26996c22be4b44a30f0b43610438d94c5fd9"
+      "size": 75630,
+      "hash": "cbb58eca2b0b1be4449479d489019449dec3eb125a9925bebf3454d173ad0f5c"
     },
     {
       "app": "book",
@@ -814,16 +814,16 @@
       "theme": "light",
       "file": "02-ticket-list.png",
       "path": "docs/apps/helpdesk/screenshots/light/02-ticket-list.png",
-      "size": 49780,
-      "hash": "cd3fe0094d7219be81370ece1a1d419ac4dbf75ce06f409588d843eea53106d8"
+      "size": 48894,
+      "hash": "3b83dd4285b7a70089a3a047b9498c92725562b600b1a15ea7978a4848a80e79"
     },
     {
       "app": "helpdesk",
       "theme": "light",
       "file": "03-ticket-detail.png",
       "path": "docs/apps/helpdesk/screenshots/light/03-ticket-detail.png",
-      "size": 43408,
-      "hash": "29231e4a3cccec80d197faab61a751c05dc3b1abfd4489e15a5dcf0d9579f53e"
+      "size": 52121,
+      "hash": "f54b3532525d7c5062b0e998f69e407bb45154b16f94ba69ed93352d0f43f446"
     },
     {
       "app": "helpdesk",

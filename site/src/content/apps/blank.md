@@ -1,7 +1,7 @@
 ---
 title: "Blank (Forms)"
 app: blank
-generated: "2026-06-17T20:37:35.159Z"
+generated: "2026-06-17T22:16:23.479Z"
 ---
 
 # Blank (Forms)

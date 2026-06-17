@@ -1,7 +1,7 @@
 ---
 title: "Helpdesk (Support Portal) Guide"
 app: helpdesk
-generated: "2026-06-17T20:37:35.187Z"
+generated: "2026-06-17T22:16:23.510Z"
 ---
 
 # Helpdesk (Support Portal) Guide

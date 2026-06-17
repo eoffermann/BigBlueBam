@@ -1,7 +1,7 @@
 ---
 title: "Bolt (Workflow Automation) Guide"
 app: bolt
-generated: "2026-06-17T20:37:35.172Z"
+generated: "2026-06-17T22:16:23.493Z"
 ---
 
 # Bolt (Workflow Automation) Guide
@@ -50,7 +50,7 @@ Open Bolt from the app switcher at `/bolt/`. Browse Templates for a head start o
 
 ### Templates
 
-![Templates](screenshots/light/06-templates.png)
+![Templates](screenshots/light/05-templates.png)
 
 
 ## MCP Tools
@@ -83,7 +83,7 @@ Open Bolt from the app switcher at `/bolt/`. Browse Templates for a head start o
 | `bolt_restore_version` | Restore an automation to a previously saved version. The current state is snapshotted first, then the named version becomes the live definition. | `id`, `version_id` |
 | `bolt_retry_execution` | Retry a failed (or partial) execution. Re-runs the automation against the original event payload and creates a new execution row. | `id` |
 | `bolt_stats` | Get aggregate automation statistics for the org (totals, enabled count, execution counts). Pass project_id to scope the numbers to a single project so they line up with a filtered list view. | `project_id` |
-| `bolt_test` | Test-fire an automation with a simulated event payload. | `id`, `event` |
+| `bolt_test` | Dry-run an automation against a simulated event payload. This evaluates ONLY the automation\ | `id`, `event` |
 | `bolt_update` | Update an existing automation. Provide only the fields to change. | `id`, `trigger_source`, `trigger_event`, `trigger_filter`, `conditions`, `actions`, `enabled` |
 
 ## Related Apps

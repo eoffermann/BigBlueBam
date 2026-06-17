@@ -1,7 +1,7 @@
 ---
 title: "Bearing (Goals & OKRs) Guide"
 app: bearing
-generated: "2026-06-17T20:37:35.149Z"
+generated: "2026-06-17T22:16:23.468Z"
 ---
 
 # Bearing (Goals & OKRs) Guide

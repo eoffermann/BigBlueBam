@@ -1,7 +1,7 @@
 ---
 title: "Blueprint Guide"
 app: blueprint
-generated: "2026-06-17T20:37:35.165Z"
+generated: "2026-06-17T22:16:23.486Z"
 ---
 
 # Blueprint Guide
@@ -20,7 +20,7 @@ The headline idea is that anything a person can do to a diagram, an agent can do
 - Typed node/edge graph stored in relational tables, so every structural mutation is an auditable API call and an MCP tool, not an edit to an opaque image.
 - React Flow editor with a shape palette (Rounded, Rectangle, Diamond, Ellipse, Hexagon), a property inspector, drag-to-connect edges, an add-connected-node palette, snap-to-grid, and resize handles.
 - Five diagram types: Flowchart, Graph, Sequence, Class, and Mind map.
-- Server-side ELK auto-layout (Layered and Force-directed in the UI; mrtree, radial, and rectpacking through the API or an agent), with pinned nodes excluded.
+- Server-side ELK auto-layout with four dropdown choices (Layered, Force-directed, Tree, and Grid; Tree maps to mrtree and Grid to rectpacking), plus radial through the API or an agent, with pinned nodes excluded.
 - Versions: save immutable snapshots of the whole graph and restore an earlier one.
 - Mermaid and JSON export, and Mermaid import that materializes a Mermaid block into the editable graph.
 - Comments anchored to a node or the whole diagram, with a resolved flag, and explicit per-diagram collaborators at owner / editor / commenter / viewer roles.

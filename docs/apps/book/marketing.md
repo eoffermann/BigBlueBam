@@ -1,7 +1,7 @@
 ---
 title: "Book (Scheduling)"
 app: book
-generated: "2026-06-17T20:37:35.179Z"
+generated: "2026-06-17T22:16:23.501Z"
 ---
 
 # Book (Scheduling)

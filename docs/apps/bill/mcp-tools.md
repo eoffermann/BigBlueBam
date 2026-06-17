@@ -9,7 +9,7 @@
 | `bill_create_expense` | Log a new expense, optionally linked to a project. | `amount`, `category`, `vendor`, `project_id`, `billable` |
 | `bill_create_invoice` | Create a new blank draft invoice for a billing client. | `client_id`, `project_id`, `tax_rate`, `notes` |
 | `bill_create_invoice_from_deal` | Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info.  | `deal_id`, `client_id` |
-| `bill_create_invoice_from_time` | Generate an invoice from Bam time entries for a project and date range. | `project_id`, `client_id`, `date_from`, `date_to` |
+| `bill_create_invoice_from_time` | Generate a draft invoice from Bam time entries for a project over a date range.  | `project_id`, `client_id`, `date_from`, `date_to` |
 | `bill_create_rate` | Create a billing rate, optionally scoped to a project and/or user with an effective date range. | `project_id`, `user_id`, `rate_amount`, `rate_type`, `currency`, `effective_from`, `effective_to` |
 | `bill_delete_client` | Delete a billing client by UUID. | `client_id` |
 | `bill_delete_expense` | Delete an expense by UUID. | `expense_id` |

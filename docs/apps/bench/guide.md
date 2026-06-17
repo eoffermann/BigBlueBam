@@ -1,7 +1,7 @@
 ---
 title: "Bench (Analytics) Guide"
 app: bench
-generated: "2026-06-17T20:37:35.152Z"
+generated: "2026-06-17T22:16:23.472Z"
 ---
 
 # Bench (Analytics) Guide
@@ -18,7 +18,7 @@ Bench is built to be driven by people and by AI agents on equal footing. Operato
 ## Key Features
 
 - **Dashboards and widgets** - Named, shareable dashboards assembled from chart, KPI, counter, and table widgets, each backed by a registered data source. Visibility is Private, Project, or Organization, with an optional default and an optional auto-refresh.
-- **A curated cross-app data source registry** - An allowlist of `(product, entity)` sources with declared measures, dimensions, and filters. Working sources include Bond deals and contacts, Blast campaigns, Beacon articles, Bearing goals, Bureau floor analytics, and three pre-computed materialized views (Daily Task Throughput, Pipeline Snapshot, Campaign Engagement). Every query is automatically org-scoped.
+- **A curated cross-app data source registry** - An allowlist of `(product, entity)` sources with declared measures, dimensions, and filters. Working sources include Bam tasks, Bond deals and contacts, Blast campaigns, Beacon articles, Bearing goals, Bureau floor analytics, and the Pipeline Snapshot and Campaign Engagement materialized views. Every query is automatically org-scoped.
 - **Widget Wizard and Templates** - A four-step wizard (Data Source, Measures and Dimensions, Chart Type, Name and Style) for custom widgets, plus a gallery of prebuilt presets grouped by category.
 - **Live widget editing** - A two-column widget editor with a live preview that re-runs the query and reports row count and timing as you change the source, type, fields, or display options.
 - **Ad-Hoc Explorer** - Pick a source, review its measures and dimensions, and run a query to get a results table with timing.

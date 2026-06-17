@@ -25,5 +25,5 @@
 | `bolt_restore_version` | Restore an automation to a previously saved version. The current state is snapshotted first, then the named version becomes the live definition. | `id`, `version_id` |
 | `bolt_retry_execution` | Retry a failed (or partial) execution. Re-runs the automation against the original event payload and creates a new execution row. | `id` |
 | `bolt_stats` | Get aggregate automation statistics for the org (totals, enabled count, execution counts). Pass project_id to scope the numbers to a single project so they line up with a filtered list view. | `project_id` |
-| `bolt_test` | Test-fire an automation with a simulated event payload. | `id`, `event` |
+| `bolt_test` | Dry-run an automation against a simulated event payload. This evaluates ONLY the automation\ | `id`, `event` |
 | `bolt_update` | Update an existing automation. Provide only the fields to change. | `id`, `trigger_source`, `trigger_event`, `trigger_filter`, `conditions`, `actions`, `enabled` |

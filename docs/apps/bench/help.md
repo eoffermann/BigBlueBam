@@ -71,13 +71,13 @@ To view a dashboard:
 
 1. Open it from the Dashboards list.
 2. Read each widget; the small clock and number under a widget is how long that widget's query took.
-3. Click **Refresh** to re-pull the data, or the fullscreen toggle for a kiosk display.
+3. Pick a date range from the picker to scope the time-based widgets, or click **Refresh** to re-pull the data, or the fullscreen toggle for a kiosk display.
 
 If the dashboard has a saved auto-refresh interval, the view re-fetches on that schedule on its own.
 
 If a dashboard has no widgets, the view shows "This dashboard has no widgets yet." with an **Add widgets** link to the edit view.
 
-> Known limitation: the date-range picker on the dashboard view is presentational in this release. The view holds the selected range but does not pass it into the per-widget queries, so changing the range does not re-filter the widgets. To scope by date today, set a `date_range` in the widget's own query config (via the Widget Wizard preset configs, the API, or an MCP tool).
+The date-range picker scopes the dashboard's widgets: the selected preset or custom From/To range is passed into each widget's query, so changing the range re-filters the widgets that have a time field. Widgets with no time dimension run their own stored query unchanged.
 
 ### Dashboard edit
 
@@ -97,8 +97,7 @@ To edit a dashboard:
 1. Open the dashboard and click **Edit**.
 2. Change **Name**, **Description**, or **Visibility** and click **Save**.
 3. Add widgets with **Templates** or **Custom Widget**, edit a widget with its **Edit** link, or remove one with its trash icon.
-
-> Known limitation: the drag handle on each widget row is visual only in this release; reordering by dragging is not yet wired. Layout is set by seeding and by the duplicate logic, not by dragging in the UI.
+4. To reorder widgets, drag a widget row by its drag handle and drop it where you want it. The new order is saved to the dashboard layout and survives a reload.
 
 ### Widget Templates gallery
 
@@ -110,9 +109,9 @@ To add a preset widget:
 
 1. In the Dashboard edit view, click **Templates**.
 2. Optionally click a category pill to filter.
-3. Click a preset card. Bench adds it to the dashboard and closes the gallery.
+3. Click a preset card. Bench instantiates it as a working widget on the dashboard (carrying a full query config that maps to registered sources and fields) and closes the gallery.
 
-> Known limitation: some presets reference fields or a data source that are not in the registry as shipped. The CRM, Email Marketing, and the Tasks-by-Priority project preset map to registered fields and work. The "Sprint Velocity" and "Tasks by State" presets reference fields the Tasks source does not expose, the Cross-Product "Daily Task Throughput" preset names a `mv` data source that is not a registered product (the materialized views are registered under the `bench` product), and the Support presets depend on the Tickets source, which does not return data (see "Sources that do not return data"). If a preset comes back empty or errors, build the widget from the Widget Wizard against a registered source instead.
+The presets in the Project Management, CRM, Email Marketing, and Cross-Product categories build widgets against registered sources that return data. The **Support** presets (Open Tickets, Tickets by Priority) build cleanly but query the Tickets source, which does not return data in this release (see "Sources that do not return data"), so those widgets show "No data".
 
 ### Widget Wizard
 
@@ -162,7 +161,9 @@ To explore a source:
 3. Click **Run Query**.
 4. Read the results table, plus the row count and timing.
 
-> Known limitation: the Explorer is not a freeform query builder. **Run Query** always runs one fixed shape per source: the first measure with its first aggregation, plus the first two dimensions, limited to 50 rows. There are no measure, dimension, or filter controls in this view. For arbitrary measures, dimensions, and filters, an agent can use the `bench_query_ad_hoc` MCP tool. The Run action on the Saved Queries page navigates here but the Explorer does not yet load the saved query config; it still runs its own fixed shape.
+When you open the Explorer from a saved query's **Run** button, it loads that saved query's source and full configuration and runs it for you (a "Loaded saved query: <name>" note appears). When you open the Explorer directly and pick a source yourself, **Run Query** runs one fixed shape per source: the first measure with its first aggregation, plus the first two dimensions, limited to 50 rows.
+
+> Known limitation: when you pick a source manually in the Explorer there are no measure, dimension, or filter controls; it runs the fixed shape described above. For arbitrary measures, dimensions, and filters without going through a saved query, an agent can use the `bench_query_ad_hoc` MCP tool.
 
 ### Scheduled Reports
 
@@ -197,16 +198,15 @@ To save a query:
 
 1. Click **New Query**. A dialog titled **New Saved Query** opens.
 2. Fill in **Name**, an optional **Description**, and choose a **Data Source**.
-3. Click **Create**.
+3. Check the **Measures** to aggregate and the **Dimensions** to group by (at least one measure is required).
+4. Click **Create**. Bench saves the query with a real configuration built from your measures and dimensions.
 
 To edit or run a saved query:
 
-1. Click the **Edit** pencil to change the name, description, or data source (dialog titled **Edit Saved Query**), then click **Update**.
-2. Click **Run** to jump to the Explorer for that source.
+1. Click the **Edit** pencil to change the name, description, data source, measures, or dimensions (dialog titled **Edit Saved Query**), then click **Update**. Editing reloads the saved configuration so you keep its definition.
+2. Click **Run** to open the Explorer with that saved query loaded and executed.
 
 If you have none yet, the page shows "No saved queries" with the hint "Create a query to save and re-run later from the explorer."
-
-> Known limitation: the create/edit dialog has no in-UI measure/dimension/filter builder, so a query created in the UI carries an empty query config (an edit preserves whatever config the query already had). The Run button navigates to the Explorer with the source preselected but does not load the saved config there. To save a query with a real config, an agent can use `bench_create_saved_query`, which accepts the full measures/dimensions/filters shape.
 
 ### Bench Settings
 
@@ -245,19 +245,17 @@ These are the sources Bench can query, from the data source registry. Each query
 
 Notes on specific sources:
 
-- The Bond, Blast, Beacon, Bearing, and the three `bench` materialized-view sources return data and back the working dashboard widgets and Explorer queries.
+- The Bam tasks source, the Bond, Blast, Beacon, and Bearing sources, and the Pipeline Snapshot and Campaign Engagement materialized views all return data and back the working dashboard widgets and Explorer queries. The Bam tasks source is org-scoped by its `org_id` column.
 - The Bureau Floor Analytics source is a nightly rollup, not a live feed. Its rows are written once per floor per day for the previous day, so a one-day window is usually empty during the day. Use a Last 7 days window for Bureau widgets. The agent anomaly and period-comparison tools do not work against this source, because it has no `created_at` column.
 
 ### Sources that do not return data
 
 Two registered sources do not return data in this release, because their backing tables have no organization column and the query builder scopes every query by `organization_id`:
 
-- **bam:tasks (Tasks)** - the `tasks` table is scoped by `project_id`, not by an org column, so the org filter fails and the query returns nothing. This affects the seeded Engineering Overview task widgets (Open Tasks, Tasks by Priority, Task State Distribution) and the Tasks-based gallery presets, which show "No data".
-- **helpdesk:tickets (Tickets)** - the `tickets` table is also scoped by `project_id` with no org column, so the same failure applies. The Support gallery presets are affected.
+- **helpdesk:tickets (Tickets)** - the `tickets` table is scoped by `project_id` with no org column, so the org filter fails and the query returns nothing. The Support gallery presets (Open Tickets, Tickets by Priority) are affected. Fixing this needs a schema change to give the table an org column (or an org-scoping join), not a registry tweak.
+- **bench:daily_task_throughput (Daily Task Throughput)** - this materialized view is grouped by project and day with no organization column, unlike the Pipeline Snapshot and Campaign Engagement views, so the org filter fails and it returns nothing. The Daily Task Throughput gallery preset works around this by charting the org-scoped Bam tasks source with a daily time bucket instead.
 
-If you need task or ticket analytics today, use the **bench: Daily Task Throughput** materialized-view source (which is org-scoped) for task throughput rather than the bam:tasks source.
-
-> TODO (needs source): the build brief states the `bam.tasks` source was corrected to scope by `org_id` and to use a `state_id` dimension. The registry in this checkout (`apps/bench-api/src/lib/data-source-registry.ts`) still sets `baseTable: 'tasks'` with no org column override and exposes a `state` (not `state_id`) dimension, and the `tasks` table in `infra/postgres/migrations/0000_init.sql` has neither an `organization_id` nor an `org_id` column. This doc describes the code as it stands. If the correction has since landed, update this section and the registered-sources table.
+If you need task analytics today, use the **bam: Tasks** source (now org-scoped) or build a daily-throughput widget from the Bam tasks source with a day time bucket, as the gallery preset does.
 
 ### Working with AI agents
 
@@ -265,14 +263,11 @@ Agents drive Bench through the Model Context Protocol. The Bench MCP tools call 
 
 What agents commonly do in Bench:
 
-- **Discover what can be queried** - `bench_list_data_sources` lists every source with its schema; `bench_get_data_source` returns the measures, dimensions, and filterable fields for one source. Agents should call these first to learn valid field names.
-- **Run ad-hoc queries** - `bench_query_ad_hoc` runs a structured query (measures, dimensions, filters, limit) against any registered source. This is the freeform query path the Explorer UI does not yet expose.
-- **Read dashboards and widgets** - `bench_list_dashboards`, `bench_get_dashboard`, `bench_list_widgets`, `bench_query_widget`, and `bench_refresh_widget` read a dashboard and run its widget queries. `bench_summarize_dashboard` is the canonical "read this dashboard for me" entry point: it fetches the dashboard and runs every widget query, returning the bundle for summarization. Widgets backed by a non-returning source come back as a per-widget error rather than failing the whole call.
-- **Build and maintain dashboards** - `bench_create_dashboard`, `bench_update_dashboard`, `bench_duplicate_dashboard`, and `bench_delete_dashboard` manage dashboards; `bench_add_widget`, `bench_get_widget`, `bench_update_widget`, and `bench_delete_widget` manage their widgets; `bench_export_dashboard` queues a PDF export render.
-- **Manage saved queries** - `bench_list_saved_queries`, `bench_get_saved_query`, `bench_create_saved_query`, `bench_update_saved_query`, and `bench_delete_saved_query`. Unlike the UI dialog, `bench_create_saved_query` accepts a full query config.
-- **Manage and trigger reports** - `bench_list_scheduled_reports`, `bench_create_scheduled_report`, `bench_update_scheduled_report`, and `bench_delete_scheduled_report` manage schedules; `bench_generate_report` triggers an immediate delivery (the same Send now path, still a delivery stub).
-- **Detect anomalies and compare periods** - `bench_detect_anomalies` compares the most recent period against the previous one and flags a change over 30% with a severity of high, medium, or low. `bench_compare_periods` compares two arbitrary date ranges and returns both values, the percent change, and the direction. There is no UI for either; both are agent-only. Both filter on a `created_at` column, so they work only for sources that have one with a valid org column (Bond, Blast, Beacon, Bearing) and not for the bam:tasks, helpdesk:tickets, Bureau, or materialized-view sources.
-- **Inspect materialized views** - `bench_list_materialized_views` reports each view's refresh state; `bench_refresh_materialized_view` forces a refresh.
+- **Discover what can be queried** - `bench_list_data_sources` lists every source with its schema. Agents should call this first to learn valid field names.
+- **Run ad-hoc queries** - `bench_query_ad_hoc` runs a structured query (measures, dimensions, filters, limit) against any registered source. This is the freeform query path the Explorer UI does not expose for manually-picked sources.
+- **Read dashboards and widgets** - `bench_list_dashboards`, `bench_get_dashboard`, `bench_list_widgets`, and `bench_query_widget` read a dashboard and run its widget queries. `bench_summarize_dashboard` is the canonical "read this dashboard for me" entry point: it fetches the dashboard and runs every widget query, returning the bundle for summarization. Widgets backed by a non-returning source come back as a per-widget error rather than failing the whole call.
+- **Manage and trigger reports** - `bench_list_scheduled_reports` lists schedules; `bench_generate_report` triggers an immediate delivery (the same Send now path, still a delivery stub).
+- **Detect anomalies and compare periods** - `bench_detect_anomalies` compares the most recent period against the previous one and flags a change over 30% with a severity of high, medium, or low. `bench_compare_periods` compares two arbitrary date ranges and returns both values, the percent change, and the direction. There is no UI for either; both are agent-only. Both filter on a `created_at` column, so they work only for sources that have one with a valid org column (Bond, Blast, Beacon, Bearing) and not for the helpdesk:tickets, Bureau, or materialized-view sources.
 
 When you review agent work in Bench, the things to confirm are that the agent queried a source that actually returns data, that visibility on any dashboard it created matches your intent (the default is Private), and that a report it created or triggered points at the right delivery target. Note again that triggering a report does not yet send anything.
 
@@ -291,10 +286,10 @@ Bench also participates in the cross-cutting agentic platform. Every agent actio
 1. Go to `/bench/`. The **Dashboards** list shows the dashboards you can see.
 2. Click a dashboard card.
 3. Read each widget's chart or KPI; the clock and number under a widget is its query time.
-4. Click **Refresh** (circular-arrow icon) to re-pull the data.
+4. Pick a date range from the picker to scope the time-based widgets, or click **Refresh** (circular-arrow icon) to re-pull the data.
 5. Click the fullscreen toggle (the expand icon) if you want a kiosk display.
 
-**Result:** You are on the dashboard read view with current data for your active organization.
+**Result:** You are on the dashboard read view with current data for your active organization, scoped to the range you chose.
 
 **Related:** The `bench_get_dashboard` and `bench_summarize_dashboard` tools let an agent read the same dashboard.
 
@@ -310,9 +305,9 @@ Bench also participates in the cross-cutting agentic platform. Every agent actio
 2. Bench creates "Untitled Dashboard" and opens it in the **Edit Dashboard** view.
 3. Set **Name**, **Description**, and **Visibility**, then click **Save**.
 4. Click **Templates** to add a prebuilt widget, or **Custom Widget** to open the Widget Wizard.
-5. Add the widgets you want, then click the back arrow to return to the read view.
+5. Add the widgets you want, drag their rows to order them, then click the back arrow to return to the read view.
 
-**Result:** A new dashboard with your widgets, visible according to the visibility you chose.
+**Result:** A new dashboard with your widgets in the order you set, visible according to the visibility you chose.
 
 **Related:** An agent can do this with `bench_create_dashboard` plus `bench_add_widget`.
 
@@ -325,7 +320,7 @@ Bench also participates in the cross-cutting agentic platform. Every agent actio
 **Steps**
 
 1. Click **Custom Widget** to open the **New Widget** wizard.
-2. Step 1: pick a **Data Source** that returns data (for example Bond Deals or a `bench` materialized view).
+2. Step 1: pick a **Data Source** that returns data (for example Bond Deals or Bam Tasks).
 3. Step 2: check one or more **Measures** and the **Dimensions** to group by.
 4. Step 3: pick a **Chart Type**.
 5. Step 4: type a **Widget Name** and confirm the summary.
@@ -347,7 +342,21 @@ Bench also participates in the cross-cutting agentic platform. Every agent actio
 2. Optionally click a category pill (for example CRM or Email Marketing) to filter.
 3. Click a preset card.
 
-**Result:** Bench adds the preset widget and closes the gallery. If a preset comes back empty (some presets reference fields or sources not in the registry, and the Support presets depend on a non-returning source), remove it and build the widget from the Widget Wizard against a registered source instead.
+**Result:** Bench instantiates the preset as a working widget and closes the gallery. Presets in the Project Management, CRM, Email Marketing, and Cross-Product categories return data; the Support presets build cleanly but show "No data" because the Tickets source is not org-scoped in this release.
+
+### Story: Reorder a dashboard's widgets
+
+**Who:** An operator or lead with `read_write` scope.
+**Goal:** Change the order widgets appear in.
+**Before you start:** The dashboard has at least two widgets.
+
+**Steps**
+
+1. Open the dashboard and click **Edit**.
+2. Grab a widget row by its drag handle (the grip icon at the left of the row).
+3. Drag it above or below another widget and drop it.
+
+**Result:** The widgets reorder, and the new order is saved to the dashboard layout, so it survives a reload and shows the same way in the read view.
 
 ### Story: Tune a widget with the live preview
 
@@ -382,12 +391,12 @@ Bench also participates in the cross-cutting agentic platform. Every agent actio
 
 **Result:** A table of the fixed query shape (first measure, first two dimensions, up to 50 rows) for that source.
 
-**Related:** For arbitrary measures, dimensions, and filters, an agent uses `bench_query_ad_hoc`.
+**Related:** For arbitrary measures, dimensions, and filters, save a query with the configuration you want and run it here, or use the `bench_query_ad_hoc` tool from an agent.
 
-### Story: Save a query for later
+### Story: Save a query and run it later
 
 **Who:** Anyone with `read_write` scope.
-**Goal:** Keep a reusable query definition.
+**Goal:** Keep a reusable query definition and re-run it.
 **Before you start:** You are logged in.
 
 **Steps**
@@ -395,12 +404,12 @@ Bench also participates in the cross-cutting agentic platform. Every agent actio
 1. Open **Saved Queries** from the sidebar.
 2. Click **New Query**.
 3. Enter a **Name**, an optional **Description**, and pick a **Data Source**.
-4. Click **Create**.
-5. Later, click **Run** on the saved row to open the Explorer for that source, or the **Edit** pencil to update it.
+4. Check the **Measures** and **Dimensions** you want, then click **Create**.
+5. Later, click **Run** on the saved row to open the Explorer with the query loaded and executed, or the **Edit** pencil to change it.
 
-**Result:** The query appears in the Saved Queries list.
+**Result:** The query appears in the Saved Queries list with a real configuration, and **Run** opens the Explorer showing its results.
 
-**Related:** To save a query with a real measures/dimensions/filters config (which the UI dialog does not capture), use `bench_create_saved_query`.
+**Related:** An agent can save a query with `bench_create_saved_query`.
 
 ### Story: Schedule a recurring report
 
@@ -420,7 +429,7 @@ Bench also participates in the cross-cutting agentic platform. Every agent actio
 
 **Result:** The report appears in the list with an **Active** pill and its schedule. Note that delivery is a stub in this release: status is stamped but no artifact is actually sent, and a successful run shows the neutral status pill rather than a colored one.
 
-**Related:** `bench_create_scheduled_report` and `bench_generate_report` do the same from an agent.
+**Related:** `bench_generate_report` triggers the same Send now path from an agent.
 
 ### Story: Duplicate a dashboard as a starting template
 

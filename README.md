@@ -548,7 +548,7 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 
 ### Bond (CRM)
 
-11 routes, 16 schemas, 69 MCP tools
+12 routes, 16 schemas, 69 MCP tools
 
 <img src="docs/apps/bond/screenshots/light/01-pipeline-board.png" width="400" alt="Bond (CRM)">
 

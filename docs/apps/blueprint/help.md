@@ -20,7 +20,7 @@ Several capabilities in Blueprint are agent-driven or API-driven rather than poi
 - **Shape** - the visual form of a node. The palette offers Rounded, Rectangle, Diamond, Ellipse, and Hexagon.
 - **Edge** - a connection between two nodes. Carries a kind (Default, Dependency, Flow, Reference, Inherits) and an end marker (Filled arrow, Open arrow, No arrow / None).
 - **Pinned** - a node excluded from auto-layout. A pinned node keeps the position you set by hand when you run a layout pass.
-- **Layout algorithm** - the auto-arrange engine, run server-side by ELK. The working algorithms are Layered, Force-directed, and (through the API or an agent) mrtree, radial, and rectpacking. See the note under Auto-layout about the Tree and Grid menu entries.
+- **Layout algorithm** - the auto-arrange engine, run server-side by ELK. The layout dropdown offers Layered, Force-directed, Tree, and Grid, and all four apply a layout. Tree maps to ELK's mrtree and Grid maps to ELK's rectpacking. The radial algorithm is reachable only through the API or an agent.
 - **Linked entity** - a cross-product reference from a node to an object in another app, such as a Bam task, a Beacon entry, a Bond deal, or a Bearing goal. Only Bam tasks have live two-way sync.
 - **Visibility** - who can see the diagram. Private (you, plus collaborators), Project (project members, or the org if there is no project), or Organization (everyone in your org).
 - **Collaborator** - a user granted explicit access to one diagram at a role of owner, editor, commenter, or viewer, on top of any project- or org-level visibility. Managed today through the API or an agent.
@@ -161,7 +161,7 @@ To run a layout:
 
 You can also right-click empty canvas and pick an algorithm under **Reorganize**, where the current algorithm carries a **Current** badge.
 
-Important caveat about the algorithm choices: only **Layered** and **Force-directed** actually run. The backend accepts the algorithm names layered, mrtree, force, radial, rectpacking, and manual. The dropdown's **Tree** and **Grid** entries send names the backend does not recognize, so choosing either one returns "Unknown algorithm" and does not rearrange the diagram. Use **Layered** or **Force-directed** in the UI. The additional algorithms mrtree, radial, and rectpacking are reachable only through the API or an agent using `blueprint_apply_layout`.
+All four dropdown choices apply a layout. **Layered** and **Force-directed** map to ELK's layered and force algorithms. **Tree** maps to ELK's mrtree (a tree layout) and **Grid** maps to ELK's rectpacking (a compact grid-like packing). The radial algorithm is not in the dropdown and is reachable only through the API or an agent using `blueprint_apply_layout`.
 
 ### Export a diagram
 
@@ -169,7 +169,7 @@ To export, click the **Export** dropdown in the top bar. It offers **Mermaid (.m
 
 You can also export from the pane right-click menu via **Export as Mermaid** and **Export as JSON**.
 
-Only Mermaid and JSON export work today. The underlying tool advertises SVG and PNG (those are deferred to a worker render job), but the in-process export service rejects those formats with "Format ... is not supported in-process", so do not rely on image export from the editor.
+Only Mermaid and JSON export are offered in the editor. The underlying tool advertises SVG and PNG, but those are deferred to a worker render job and the in-process export service rejects them with "Format ... is not supported in-process", so image export is not available from the editor today.
 
 ### Mermaid import
 
@@ -260,7 +260,7 @@ Common agent flows:
 
 - **Author a whole diagram in one call.** An agent reads a process description, org roster, or task list and calls `blueprint_create` to make the diagram, then `blueprint_generate` with a list of node specs and edge specs. The server materializes the ids, wires up parent containers, and runs auto-layout. This is the headline path; `blueprint_generate` accepts 1 to 500 node specs and up to 2000 edge specs, with `replace: true` to wipe the existing graph first or `auto_layout: false` to skip the post-generate pass.
 - **Turn a Mermaid block into an editable graph.** `blueprint_import_mermaid` parses a Mermaid source string (for example from a Brief, a Beacon entry, or an LLM draft) into the typed node/edge graph, then `blueprint_apply_layout` positions it.
-- **Edit incrementally.** `blueprint_add_node`, `blueprint_update_node`, `blueprint_move_node`, `blueprint_duplicate_node`, and `blueprint_delete_node` cover nodes; `blueprint_add_edge`, `blueprint_update_edge`, and `blueprint_delete_edge` cover edges; `blueprint_apply_layout` re-arranges. Through `blueprint_apply_layout` an agent can use the mrtree, radial, and rectpacking algorithms that the UI dropdown does not reach.
+- **Edit incrementally.** `blueprint_add_node`, `blueprint_update_node`, `blueprint_move_node`, `blueprint_duplicate_node`, and `blueprint_delete_node` cover nodes; `blueprint_add_edge`, `blueprint_update_edge`, and `blueprint_delete_edge` cover edges; `blueprint_apply_layout` re-arranges. Through `blueprint_apply_layout` an agent can use the radial algorithm that the UI dropdown does not reach.
 - **Read the graph.** `blueprint_list`, `blueprint_get`, `blueprint_read_nodes`, `blueprint_read_edges`, `blueprint_search`, and `blueprint_export`. Note `blueprint_search` matches only on name and description and filters the visible list client-side; it does not search node labels yet.
 - **Round-trip with Bam.** `blueprint_generate_from_bam` turns a project's tasks into a diagram; `blueprint_promote_graph_to_tasks` and `blueprint_promote_node_to_task` return a plan the caller executes against Bam; `blueprint_link_entity` attaches a cross-product reference so the two-way sync hook fires.
 - **Version, review, and share.** `blueprint_snapshot_version` / `blueprint_list_versions` / `blueprint_restore_version` manage restore points; `blueprint_list_comments` / `blueprint_add_comment` / `blueprint_update_comment` (set `resolved: true` to resolve a thread) drive review; `blueprint_list_collaborators` / `blueprint_add_collaborator` / `blueprint_remove_collaborator` manage explicit access; `blueprint_star` / `blueprint_unstar` set the caller's personal favorite; `blueprint_list_templates` lists templates.
@@ -359,13 +359,13 @@ For the full tool catalog and schemas, see the Blueprint MCP-tools reference in 
 **Steps**
 
 1. Pin the nodes you want to keep in place: select each one and click the Pin toggle in the Inspector, or right-click and choose **Pin position**.
-2. In the layout dropdown, choose **Layered** or **Force-directed**. Do not choose Tree or Grid; those do not apply.
+2. In the layout dropdown, choose an algorithm: **Layered** or **Force-directed** for edge-aware arrangements, **Tree** for a hierarchy, or **Grid** for a compact packing.
 3. Pick a direction and click **Apply layout**.
 4. If you want everything aligned to a grid afterward, right-click empty canvas and choose **Snap nodes to grid now**.
 
 **Result:** The unpinned nodes are arranged by the chosen algorithm; the pinned nodes stay where you put them.
 
-**Related:** For mrtree, radial, or rectpacking layouts, use an agent with `blueprint_apply_layout`, since the UI dropdown does not offer them.
+**Related:** For a radial layout, use an agent with `blueprint_apply_layout`, since the UI dropdown does not offer it.
 
 ### Story: Have an agent draft a diagram from a document
 

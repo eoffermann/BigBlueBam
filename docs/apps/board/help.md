@@ -132,8 +132,8 @@ The floating toolbar at the top of the canvas holds board-level controls (it is 
 - The **presence strip**, which shows who else is present on the board and is the entry point to a voice huddle (see Real-time presence and audio).
 - A **Toggle chat** button that opens the chat panel.
 - A **Version history** button that opens the board's versions.
-- A **Share** button. Note: this button is not wired to anything in the current build. It does not open a sharing dialog. See the collaborators note below.
-- A **...** menu containing **Lock board** / **Unlock board** (working), and **Export as PNG** and **Export as SVG**. Note: the two export menu items are not wired to anything in the current build; they do not produce a file. To export, use the API or an agent (see Export below).
+- A **Share** button that copies a shareable link to the board to your clipboard. The button briefly reads "Link copied" after a successful copy.
+- A **...** menu containing **Lock board** / **Unlock board**, and **Export as PNG** and **Export as SVG**. Each export item renders the board on the server and downloads a real image file.
 
 To rename a board from the toolbar:
 
@@ -141,6 +141,13 @@ To rename a board from the toolbar:
 2. Click the board name in the floating toolbar.
 3. Type the new name.
 4. Press Enter to save (or Escape to cancel).
+
+To copy a shareable link:
+
+1. Open the board's canvas.
+2. Click the **Share** button in the floating toolbar.
+3. The board's link is copied to your clipboard and the button shows "Link copied".
+4. Paste the link to anyone who has access to the board. Access is still governed by the board's visibility and collaborators, so the link opens for people who are already allowed to see it.
 
 ### Locking a board
 
@@ -248,11 +255,18 @@ To fix it:
 
 A board's canvas can be exported as JSON, SVG, or PNG.
 
-Note: the **Export as PNG** and **Export as SVG** items in the canvas **...** menu are not wired in the current build and do not produce a file. Working export is available through the API and through an AI agent. The server can render an SVG string or a PNG image of the board; an agent does this with the `board_export` tool (see Working with AI agents).
+To export an image from the canvas:
+
+1. Open the board's canvas.
+2. In the floating toolbar, open the **...** menu.
+3. Click **Export as PNG** or **Export as SVG**. The menu item briefly reads "Exporting…" while the server renders the board.
+4. A real image file downloads, named after the board.
+
+Export is also available to AI agents: an agent renders SVG or PNG with the `board_export` tool, and the same server endpoint (`GET /boards/:id/export/:format`) can be called directly through the API.
 
 ### Collaborators (no in-app management today)
 
-A board's visibility (`private`, `project`, `organization`) controls who can reach it, and a board can also have explicit per-person collaborators with `view` or `edit` permission. There is a complete backend for adding, listing, changing, and removing collaborators, but there is no screen in the Board app to manage them today, and the toolbar's **Share** button is not connected to it. Until a sharing screen ships, manage who can see a board through its **visibility** setting, or have an agent or API client manage collaborators directly (the `board_add_collaborator`, `board_list_collaborators`, `board_update_collaborator`, and `board_remove_collaborator` tools, covered under Working with AI agents).
+A board's visibility (`private`, `project`, `organization`) controls who can reach it, and a board can also have explicit per-person collaborators with `view` or `edit` permission. There is a complete backend for adding, listing, changing, and removing collaborators, but there is no screen in the Board app to manage them today. The toolbar's **Share** button copies the board's link rather than opening a collaborator manager. Until a sharing screen ships, control who can see a board through its **visibility** setting, or have an agent or API client manage collaborators directly (the `board_add_collaborator`, `board_list_collaborators`, `board_update_collaborator`, and `board_remove_collaborator` tools, covered under Working with AI agents).
 
 ### Real-time presence and audio
 
@@ -274,7 +288,7 @@ What agents commonly do:
 - **Build a board.** `board_create` makes a board (optionally from a template by name). `board_add_sticky` drops a sticky in one of six colors at a position; `board_add_text` adds a text element. `board_update` patches name, description, background, visibility, and icon.
 - **Promote to Bam tasks (the marquee cross-app flow).** `board_promote_to_tasks` turns selected brainstorm stickies into Bam tasks in a named project and phase, and records a link from each sticky back to its task. There is no human button for this today; it is an agent-and-API flow. `board_list_links` shows the resulting links and `board_delete_link` removes one without touching the task or sticky.
 - **Manage what humans cannot reach in the UI yet.** Collaborators (`board_add_collaborator`, `board_list_collaborators`, `board_update_collaborator`, `board_remove_collaborator`), templates (`board_list_templates`, `board_create_template`, `board_update_template`, `board_delete_template`, `board_instantiate_template`), versions (`board_list_versions`, `board_create_version`, `board_restore_version`), chat (`board_read_chat`, `board_post_chat`), stars (`board_star_toggle`), and integrity (`board_check_integrity`, `board_remediate_integrity`) all have tools even where Board has no screen.
-- **Run lifecycle and export.** `board_duplicate`, `board_archive` (soft delete), `board_restore`, and `board_delete_permanent` (hard, irreversible delete) cover lifecycle. `board_export` exports SVG or PNG.
+- **Run lifecycle and export.** `board_duplicate`, `board_archive` (soft delete), `board_restore`, and `board_delete_permanent` (hard, irreversible delete) cover lifecycle. `board_export` exports SVG or PNG, the same render the canvas export menu downloads.
 
 Things for a human reviewer to know:
 
@@ -365,7 +379,24 @@ Board's tools sit on the same platform surface every app shares, so agent work i
 
 **Result:** Everyone is editing one shared canvas and stays in sync.
 
-**Related:** To talk while you work, use the presence strip in the toolbar to start a voice huddle on the canvas. To type instead, see "Chat while you whiteboard".
+**Related:** To bring people in, copy the board link with the **Share** button (see "Share a board link"). To talk while you work, use the presence strip in the toolbar to start a voice huddle on the canvas. To type instead, see "Chat while you whiteboard".
+
+### Story: Share a board link
+
+**Who:** Anyone who wants a teammate on a board.
+**Goal:** Hand someone a direct link to the board.
+**Before you start:** Have the board open. The recipient must already be allowed to see the board (through its visibility or as a collaborator).
+
+**Steps**
+
+1. Open the board's canvas.
+2. Click the **Share** button in the floating toolbar.
+3. The board's link is copied to your clipboard and the button shows "Link copied".
+4. Paste the link into chat, email, or wherever your teammate will find it.
+
+**Result:** Your teammate has a direct link that opens the board's canvas, subject to the board's visibility and collaborator rules.
+
+**Related:** There is no in-app collaborator manager yet; widen who can open the link through the board's **visibility** setting, or have an agent add explicit collaborators with `board_add_collaborator`.
 
 ### Story: Chat while you whiteboard
 
@@ -489,17 +520,18 @@ Board's tools sit on the same platform surface every app shares, so agent work i
 
 **Who:** Anyone who needs a picture of the board for a doc or deck.
 **Goal:** Get an SVG or PNG of the board.
-**Before you start:** Have access to the board. Note the canvas **...** menu export items do not work today.
+**Before you start:** Have access to the board.
 
 **Steps**
 
-1. Recognize that **Export as PNG** and **Export as SVG** in the canvas **...** menu are not wired and will not produce a file.
-2. Ask an agent to export the board, choosing SVG or PNG; the agent uses `board_export`.
-3. The server renders the image and returns it.
+1. Open the board's canvas.
+2. Open the **...** menu in the floating toolbar.
+3. Click **Export as PNG** or **Export as SVG**. The item shows "Exporting…" while the server renders the board.
+4. The image file downloads, named after the board.
 
-**Result:** You have an SVG or PNG rendering of the board.
+**Result:** You have an SVG or PNG rendering of the board saved to your downloads.
 
-**Related:** Export is also available directly through the board-api export endpoint.
+**Related:** An agent can export the same render with `board_export`, and the export endpoint is also reachable directly through the board-api.
 
 ### Story: Have an agent set up and seed a board
 

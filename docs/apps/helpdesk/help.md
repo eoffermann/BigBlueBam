@@ -17,7 +17,7 @@ The core objects you work with are the **ticket** (the support request), its **m
 - **Portal** - an org's public support site, served at `/helpdesk/<org-slug>/`. Each org with a Helpdesk settings row gets one. Per-project portals are available at `/helpdesk/<org-slug>/<project-slug>/`. The portal a customer lands on decides which org owns their account and tickets.
 - **Customer** - an end user with a Helpdesk account scoped to one org. Customers have their own email and password sign-in, separate from the suite single sign-on. They use the portal SPA.
 - **Ticket** - a single customer support request. It has a human-readable number shown as `#123`, a subject, a description, a status, a priority, and an optional category. Each ticket is owned by one customer and back-linked to a Bam task.
-- **Status** - where the ticket is in its lifecycle. The five canonical statuses are **Open**, **In Progress**, **Waiting on Customer**, **Resolved**, and **Closed**.
+- **Status** - where the ticket is in its lifecycle. The five canonical statuses are **Open**, **In Progress**, **Waiting on Customer**, **Resolved**, and **Closed**. The stored values are `open`, `in_progress`, `waiting_on_customer`, `resolved`, and `closed`.
 - **Priority** - how urgent the ticket is. Customers can set **Low**, **Medium**, or **High**. Agents can additionally set **Critical**. The badge displays all four.
 - **Message** - a post on a ticket. Authored by the customer, an agent, or the system. Agent messages flagged as internal notes are hidden from customers.
 - **Category** - an optional label chosen from the list an admin configured for the portal. The Category field only appears when categories are configured.
@@ -100,13 +100,11 @@ To use the list:
 
 1. Open **My Tickets** (the logo and the "My Tickets" nav button both bring you here).
 2. Use the search box (placeholder "Search subject, number, or category...") to filter by subject, ticket number, or category.
-3. Use the filter chips to narrow by status: **all**, **open**, **in progress**, **resolved**, **closed**.
+3. Use the filter chips to narrow by status: **all**, **open**, **in progress**, **waiting on customer**, **resolved**, and **closed**. Each chip maps to a real ticket status, so picking one shows exactly the tickets in that state.
 4. Read the columns: **#**, **Subject**, **Status**, **Priority**, **Category**, **Updated**. A **New** dot marks a ticket with activity you have not seen.
 5. Click a row to open the ticket.
 
 The list refreshes in real time when a new message is posted or a status changes. If you have no tickets, the empty state reads "No tickets yet" with "Create your first one!". If a search matches nothing, it reads "No tickets match your search."
-
-Two filter chips, "awaiting customer" and "awaiting internal", do not match any real status and will always show an empty list. To filter for tickets you need to respond to, look for the **Waiting on Customer** status badge on the rows rather than using those chips. See the flagged behavior in Related.
 
 ![My tickets](screenshots/light/02-ticket-list.png)
 
@@ -220,7 +218,7 @@ What agents can do on the agent surface:
 - Merge duplicates: move the messages onto a primary ticket and close the source.
 - Pull a ranked list of similar tickets to find duplicates or related issues.
 
-The agent queue shows an SLA badge for each ticket (breached, imminent, or ok). The badge's first-response target is hardcoded at 4 hours with a 0.75 imminent threshold. This is independent of the per-org SLA setting that the background breach monitor actually enforces (default 8 hours for first response, 48 hours for resolution), so the queue badge and the recorded breach events can disagree. See Related.
+The agent queue shows an SLA badge for each ticket (breached, imminent, or ok). The badge's first-response target is currently a fixed 4 hours with a 0.75 imminent threshold. This is independent of the per-org SLA setting that the background breach monitor actually enforces (default 8 hours for first response, 48 hours for resolution), so the queue badge and the recorded breach events can disagree. See Related.
 
 Most agents drive these actions through the MCP tools in Working with AI agents below, or through Bam's own ticket views.
 
@@ -268,7 +266,7 @@ Reading and finding tickets:
 Acting on tickets:
 
 - **reply_to_ticket** - post a public reply or an internal note. It resolves the ticket number to the record first.
-- **update_ticket_status** - change a ticket's status.
+- **update_ticket_status** - change a ticket's status. Its status values are the canonical set: `open`, `in_progress`, `waiting_on_customer`, `resolved`, `closed`.
 
 Configuration and intake:
 
@@ -286,8 +284,6 @@ Two agent flows are worth calling out for human reviewers:
 
 - **Ticket to Bam task.** Every ticket the portal creates already spawns a Bam task in the default project. An agent working tickets sees the same trail there. When you review an agent's work, check both the ticket conversation and the linked task.
 - **Similar-ticket search before merging.** A triage agent should call **helpdesk_find_similar_tickets** to find candidates before merging duplicates. A human should confirm the proposed primary before a merge closes the source ticket, since merge moves messages and is not a customer-reversible action.
-
-One caveat to know when reviewing agent output: the **update_ticket_status** tool's status list is stale. It advertises `waiting_on_client`, but the canonical status the API accepts is **waiting_on_customer**, and passing `waiting_on_client` is rejected. Use the canonical statuses (open, in_progress, waiting_on_customer, resolved, closed). See Related for the full list of flagged mismatches.
 
 Helpdesk also participates in the cross-cutting agentic platform that spans the whole suite:
 
@@ -337,6 +333,22 @@ For the complete tool catalog, see the MCP tools reference in `docs/apps/helpdes
 **Result:** Your reply appears in the timeline. If the ticket was **Waiting on Customer**, it flips back to **Open**.
 
 **Related:** Attach a file or inline image.
+
+### Story: Filter your tickets by status
+
+**Who:** A customer with several tickets.
+**Goal:** Narrow the list to just the tickets in one state.
+**Before you start:** You are on **My Tickets** with more than one ticket.
+
+**Steps**
+
+1. Above the list, find the filter chips: **all**, **open**, **in progress**, **waiting on customer**, **resolved**, **closed**.
+2. Click the chip for the status you want, for example **waiting on customer** to see the tickets where the agent is waiting on you.
+3. Click **all** to clear the filter.
+
+**Result:** The list shows only the tickets in the chosen state. You can combine a chip with the search box to narrow further.
+
+**Related:** My Tickets list feature.
 
 ### Story: Attach a file or inline image
 
@@ -437,7 +449,7 @@ For the complete tool catalog, see the MCP tools reference in `docs/apps/helpdes
 
 **Result:** The ticket reflects your reply and new status. The linked Bam task is updated in step with the ticket.
 
-**Related:** Merge duplicates; note that the queue's SLA badge target is hardcoded at 4 hours and may not match the org's configured SLA.
+**Related:** Merge duplicates; note that the queue's SLA badge target is a fixed 4 hours and may not match the org's configured SLA.
 
 ### Story: Merge duplicate tickets
 
@@ -502,9 +514,7 @@ For the complete tool catalog, see the MCP tools reference in `docs/apps/helpdes
 These are real behaviors in the current code that can surprise you. Document them so users do not chase them as bugs.
 
 - **No Knowledge Base in Helpdesk.** Some older guide material describes a Helpdesk knowledge base. There is no such feature in the Helpdesk code. The knowledge base product is the separate **Beacon** app. Do not look for a KB in Helpdesk.
-- **Dead filter chips.** On **My Tickets**, the "awaiting customer" and "awaiting internal" filter chips match no real status and always show an empty list. Use the **open**, **in progress**, **resolved**, and **closed** chips, and read the **Waiting on Customer** status badge directly on the rows.
-- **Stale status value in update_ticket_status.** The MCP **update_ticket_status** tool advertises `waiting_on_client`, but the API rejects it. The canonical value is **waiting_on_customer**. `helpdesk_search_tickets` lists both, but only the canonical statuses (open, in_progress, waiting_on_customer, resolved, closed) work end to end.
-- **Agent-queue SLA badge is hardcoded.** The agent queue's SLA badge uses a fixed 4-hour first-response target. The actual breach monitor uses the per-org SLA settings (default 8 hours for first response, 48 hours for resolution). The badge and the recorded breaches can therefore disagree.
+- **Agent-queue SLA badge target is fixed.** The agent queue's SLA badge uses a fixed 4-hour first-response target with a 0.75 imminent threshold. The actual breach monitor uses the per-org SLA settings (default 8 hours for first response, 48 hours for resolution). The badge and the recorded breaches can therefore disagree.
 
 ## Related
 

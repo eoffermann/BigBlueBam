@@ -8,9 +8,9 @@ Book gives every BigBlueBam user a calendar without any extra setup. The first t
 
 Beyond plain events, Book computes availability. It takes the working hours you define, subtracts the events that mark you as busy, and produces free time slots. Those slots power two things: public booking pages, where someone outside your org can grab a slot on your calendar, and the availability tools that AI agents use to find a meeting time across several people.
 
-Book also pulls other apps into one place. The Timeline view is designed to aggregate Book events with Bam task due dates and Bond deal close dates, so you can scan a week across the whole suite. Events can link to a Bam task, a Bond deal, or a Helpdesk ticket, and every Book-native event gets a LiveKit huddle room so attendees have a place to meet by video.
+Book also pulls other apps into one place. The Timeline view aggregates Book events with Bam task due dates and Bond deal close dates, so you can scan a week across the whole suite. Events can link to a Bam task, a Bond deal, or a Helpdesk ticket, and every Book-native event gets a LiveKit huddle room so attendees have a place to meet by video.
 
-Some areas of Book are partially built. Where a screen exists but does not yet do what its label implies, this document says so plainly under the relevant feature so you do not lose time on a path that cannot complete today. Read those notes before relying on booking pages, the public Meet page, the Timeline, external calendar connections, reminders, or recurrence.
+A few areas of Book are still being finished. Where a screen exists but does not yet do what its label implies, this document says so plainly under the relevant feature so you do not lose time on a path that cannot complete today. Two of these remain: external calendar connections (the Connections page) and reminders and recurrence. Read those notes before relying on connecting an outside calendar or on reminder and repeat behavior.
 
 ### Key concepts
 
@@ -86,7 +86,7 @@ Note: Book's calendar views do not support drag-to-create or drag-to-resize. Cre
 
 ### Timeline view
 
-A cross-app view that groups items by day across a week. It is meant to gather Book events (blue), Bam task due dates (orange), and Bond deal close dates (teal), with a legend reading "Book Events / Bam Tasks / Bond Deals".
+A cross-app view that groups items by day across a week. It gathers Book events (blue), Bam task due dates (orange), and Bond deal close dates (teal), with a legend reading "Book Events / Bam Tasks / Bond Deals".
 
 ![Cross-app timeline](screenshots/light/03-timeline.png)
 
@@ -95,10 +95,10 @@ To use the Timeline:
 1. Click **Timeline** in the sidebar.
 2. Read the heading (for example "Timeline: Jun 9 - Jun 15, 2026").
 3. Move between weeks with the left and right chevron arrows, or click **This Week** to return to the current week.
-4. Scan the per-day grouping; each item carries a source label (Event, Task, or Deal).
+4. Scan the per-day grouping; each item carries a source label (Event, Task, or Deal) and, for timed items, its time.
 5. Click a Book item to open that event (this opens the event edit form).
 
-Known limitation: the Timeline screen and its backing service do not yet agree on the shape of the data. The service returns each item's time under `start_at` and labels its sources `book`, `bam_task`, and `bond_deal`, while the screen reads a `date` field and expects sources named `book`, `bam`, and `bond`. As a result, item times may not render and Bam and Bond items fall back to a generic style. The underlying timeline data is produced by the API, but the current screen does not display it reliably. Treat the Timeline as a preview. To find specific times for now, use the Week, Day, or Month views, or read the data with the `book_get_timeline` MCP tool.
+The Timeline reads Book events, Bam task due dates, and Bond deal close dates from the API and renders each under the right source style, with timed items showing their time. Bam and Bond items appear with their own Task and Deal styling. To read the same data with an agent, use the `book_get_timeline` MCP tool.
 
 ### New Event and Edit Event
 
@@ -158,7 +158,7 @@ To manage booking pages:
 3. Click **New Booking Page** to create one.
 4. Click **Edit** on a page to change it, or the trash icon to delete it (confirm "Delete this booking page?").
 
-Note: the list shows an amber **Feature under development** banner that reads "Booking pages are coming soon. We're integrating with Bond CRM to support lead capture and meeting scheduling." That banner is still rendered on this view. The page list, creation, deletion, and the booking backend are in fact shipped; the parts that do not yet complete are editing an existing page and the public booking flow itself, both described below. The screenshot above includes this banner.
+Note: the list still renders an amber **Feature under development** banner that reads "Booking pages are coming soon. We're integrating with Bond CRM to support lead capture and meeting scheduling." That banner is stale. The page list, creation, editing, deletion, the public booking flow, and the on-booking Bond contact creation are all shipped and working. The screenshot above includes this banner.
 
 ### Booking page editor
 
@@ -172,18 +172,31 @@ To create a booking page:
 4. Optionally add a **Description** and adjust **Duration (min)**, **Buffer Before (min)**, **Buffer After (min)**, and **Brand Color**.
 5. Click **Create**. Use **Cancel** or **Back to Booking Pages** to leave.
 
+To edit an existing page:
+
+1. From the Booking Pages list, click **Edit** on the page you want.
+2. The form opens with the heading **Edit Booking Page** and loads the page's current title, slug, description, duration, buffers, and brand color.
+3. Change any field and click **Update**.
+
 Current limitations:
 
-- Editing an existing page does not work. The editor's edit mode requests a single booking page by ID from a route that does not exist in the backend, so the form never populates when you open a page for editing. Creating new pages works reliably; treat editing existing pages as unavailable until the missing route ships. Agents can update a page through the `book_update_booking_page` MCP tool in the meantime.
-- The editor exposes only title, slug, description, duration, buffers, and brand color. The booking page model also supports advance limit, minimum notice, confirmation message, redirect URL, logo, an enabled flag, and the cross-app flags `auto_create_bond_contact`, `auto_create_bam_task`, and `bam_project_id`. None of these are surfaced in the editor today. Because `auto_create_bond_contact` defaults to on at the data layer, it is effectively on for new pages even though there is no toggle for it (and see the Meet page note: that auto-create attempt currently does not authenticate against Bond).
+- The editor exposes only title, slug, description, duration, buffers, and brand color. The booking page model also supports advance limit, minimum notice, confirmation message, redirect URL, logo, an enabled flag, and the cross-app flags `auto_create_bond_contact`, `auto_create_bam_task`, and `bam_project_id`. None of these are surfaced in the editor today, so to change them use the `book_update_booking_page` MCP tool. Because `auto_create_bond_contact` defaults to on at the data layer, new pages create a Bond contact on each booking by default even though there is no toggle for it in the editor.
 
 ### Public Meet page
 
 The public scheduling page a visitor sees at `/book/meet/<slug>`. It does not require login. It shows the page title, "with {owner}", the duration, and the description, then a **Pick a time** section that groups available slots by day, then a **Your details** form with **Full name** (required), **Email** (required), and **Notes (optional)**, and a submit button labelled "Book {time}" (or "Pick a time above" until a slot is chosen). On success it shows a **Booking confirmed** screen with the page's confirmation message.
 
-Current limitation: the public Meet page does not complete a booking in its current build. The slots endpoint returns each slot using `start` and `end`, while the page reads `start_at` and `end_at`, so the slot buttons render invalid times and the time submitted with a booking comes through empty. The booking backend itself works (it creates a confirmed event on the owner's default calendar, guards against double-booking with a row lock, and returns a 409 "This time slot is no longer available" on a collision), but the public page in front of it cannot complete a booking until the field-shape mismatch is fixed. Do not rely on the public Meet page yet.
+To book time as a visitor:
 
-For the same reason, do not present the on-booking Bond contact creation as working. Each public booking is supposed to create a Bond contact, but the call is best-effort and is sent to the Bond API with only an internal-secret header, which the Bond contacts route does not accept as authentication. The request is rejected and the failure is silently discarded, so no contact is created. The Bam-task hook on booking is built the same way and only runs when explicitly enabled, which the editor does not allow today.
+1. Open the page's `/book/meet/<slug>` link. The available times for the next two weeks load under **Pick a time**, grouped by day.
+2. Click a time slot to select it.
+3. Fill in **Full name** and **Email** (both required), and an optional note in **Notes (optional)**.
+4. Click **Book {time}**.
+5. The page shows the **Booking confirmed** screen with the owner's confirmation message. If the page has a redirect URL configured, you are sent there instead.
+
+The slots offered come from the owner's working hours minus the events that mark them busy, cut into meeting-sized chunks that respect the page's duration and before and after buffers. Booking creates a confirmed event on the owner's default calendar. Two visitors cannot grab the same slot: the booking is guarded by a row lock, and a collision returns a 409 with "This time slot is no longer available."
+
+When a booking comes in and the page has `auto_create_bond_contact` on (the default), Book creates or updates a matching Bond contact by email, attributed to the booking-page owner and tagged with a `booking_page` lead source. Re-booking with the same email does not create a duplicate contact. The Bam-task hook on booking only runs when a page explicitly enables `auto_create_bam_task` and sets a `bam_project_id`, which the editor does not expose; set those with `book_update_booking_page` if you want each booking to spawn a follow-up task.
 
 ### Calendars
 
@@ -244,17 +257,16 @@ Agents reach Book through 24 MCP tools. They use the same Book API and permissio
 - **Creating and changing events:** `book_create_event` (resolves a calendar by name and an attendee by email, and can set attendees, which the human form cannot), `book_update_event` and `book_cancel_event` (resolve an event by UUID or title), and `book_rsvp_event` (RSVP by event UUID or title).
 - **Availability and meeting time:** `book_get_availability` (one person's free slots), `book_get_team_availability` (free slots for two or more people), `book_find_meeting_time` (intersects team availability and returns up to three suggestions), and `book_find_meeting_time_for_users` (a mixed-roster finder that treats agents and service accounts as always available while respecting human working hours). These four have no human UI in Book today, so they are the main reason to involve an agent.
 - **Calendars:** `book_list_calendars`, `book_create_calendar`, `book_update_calendar`, `book_delete_calendar` (the last three resolve a calendar by UUID or name).
-- **Booking pages:** `book_list_booking_pages`, `book_create_booking_page`, `book_update_booking_page` (set `enabled: false` to take a page offline without deleting it), and `book_delete_booking_page`.
+- **Booking pages:** `book_list_booking_pages`, `book_create_booking_page`, `book_update_booking_page` (set `enabled: false` to take a page offline without deleting it, or set the cross-app flags the editor does not expose), and `book_delete_booking_page`.
 - **Working hours:** `book_get_working_hours` and `book_set_working_hours` (a full replace; include every day you want available).
 - **External connections:** `book_list_connections`, `book_sync_connection`, and `book_delete_connection` (subject to the same sync limitation described under Connections).
 
 Things to know when reviewing agent work:
 
 - An agent can add attendees at creation time even though the human event form cannot. Check the attendee list on the event detail page to confirm who was invited.
-- `book_update_booking_page` is currently the only working way to edit an existing booking page, because the human editor cannot load one.
-- The same caveats that apply to people apply to agents: recurrence is not expanded, reminders do not exist, and external calendar sync does not run. An agent cannot work around these because the backend does not implement them.
-- Book publishes five automation events to Bolt, all from source `book`: `event.created`, `event.updated`, `event.cancelled`, `event.rsvp`, and `booking.created`. Use these to drive cross-app automations (for example, post to a Banter channel when a booking comes in).
-- The on-booking Bond contact creation hook does not authenticate against Bond today (see the Meet page note), so do not build an automation that assumes a Bond contact appears after a booking until that is fixed.
+- `book_update_booking_page` is the way to set the booking-page options the human editor does not surface (advance limit, minimum notice, confirmation message, redirect URL, logo, the enabled flag, and the cross-app auto-create flags).
+- Some caveats that apply to people apply to agents too: recurrence is not expanded, reminders do not exist, and external calendar sync does not run. An agent cannot work around these because the backend does not implement them.
+- Book publishes five automation events to Bolt, all from source `book`: `event.created`, `event.updated`, `event.cancelled`, `event.rsvp`, and `booking.created`. Use these to drive cross-app automations (for example, post to a Banter channel when a booking comes in). A new public booking creates or updates a Bond contact by email when the page has `auto_create_bond_contact` on, so a `booking.created` automation can safely assume the matching contact exists.
 
 Book agents also sit on the cross-cutting agentic platform that every BigBlueBam app shares:
 
@@ -369,10 +381,10 @@ For the full tool catalog and schemas, see the Book MCP-tools reference and guid
 
 **Related:** Calendars feature. Agents manage calendars with `book_list_calendars`, `book_create_calendar`, `book_update_calendar`, and `book_delete_calendar`.
 
-### Story: Create a public booking page
+### Story: Create and share a public booking page
 
 **Who:** Someone who wants outside people to book time with them.
-**Goal:** Publish a scheduling link at `/book/meet/<slug>`.
+**Goal:** Publish a scheduling link at `/book/meet/<slug>` and share it.
 **Before you start:** Set your Working Hours first, since they define the offered slots. Have booking-page write permission.
 
 **Steps**
@@ -382,12 +394,28 @@ For the full tool catalog and schemas, see the Book MCP-tools reference and guid
 3. Enter a **URL Slug** after "/meet/" using lowercase letters, numbers, and hyphens (for example "intro-call").
 4. Optionally set **Description**, **Duration (min)**, **Buffer Before (min)**, **Buffer After (min)**, and **Brand Color**.
 5. Click **Create**.
+6. Copy the page's `/meet/<slug>` link from the Booking Pages list and share it. To change the page later, click **Edit** on its row.
 
-**Result:** The page appears in your Booking Pages list with an **Active** pill and its `/meet/<slug>` link.
+**Result:** The page appears in your Booking Pages list with an **Active** pill and its `/meet/<slug>` link. A visitor who opens the link sees your available times, picks a slot, and books; the booking lands as a confirmed event on your default calendar, and a matching Bond contact is created or updated by email (unless the page's `auto_create_bond_contact` flag has been turned off).
 
-**Important caveats before you share the link:** the public Meet page cannot currently complete a booking because of the slot field-shape mismatch, the on-booking Bond contact creation does not authenticate against Bond, and editing an existing page does not work in the human editor. Create-and-share works as far as the page object; the visitor-facing booking flow does not complete yet. Hold off on sharing the link with real prospects until the Meet page is fixed.
+**Related:** Booking Pages list, Booking page editor, and Public Meet page features. Agents create pages with `book_create_booking_page` and edit them (including the options the editor does not surface) with `book_update_booking_page`.
 
-**Related:** Booking Pages list, Booking page editor, and Public Meet page features. Agents create pages with `book_create_booking_page` and edit them with `book_update_booking_page`.
+### Story: Book time as an outside visitor
+
+**Who:** A prospect or client with a booking-page link.
+**Goal:** Reserve a time on the page owner's calendar.
+**Before you start:** You have a `/book/meet/<slug>` link. No login is required.
+
+**Steps**
+
+1. Open the link. Under **Pick a time**, the next two weeks of available slots load, grouped by day.
+2. Click a time slot to select it.
+3. Fill in **Full name** and **Email**, and an optional **Notes (optional)**.
+4. Click **Book {time}**.
+
+**Result:** You see the **Booking confirmed** screen with the owner's confirmation message (or you are sent to the page's redirect URL, if set). The owner's default calendar gains a confirmed event, and a Bond contact is created or updated from your email when the page has that on.
+
+**Related:** Public Meet page feature. The booking emits a `booking.created` Bolt event from source `book`, which Bolt rules can react to.
 
 ### Story: See everything happening this week across apps
 
@@ -402,7 +430,7 @@ For the full tool catalog and schemas, see the Book MCP-tools reference and guid
 3. Move between weeks with the left and right chevron arrows, or click **This Week**.
 4. Scan the per-day items, using the source labels and the "Book Events / Bam Tasks / Bond Deals" legend.
 
-**Result:** You see the week's items grouped by day. Note the Timeline currently has a data-shape mismatch, so item times may not render and non-Book items may appear in a generic style. For exact times, cross-check in the Week, Day, or Month views.
+**Result:** You see the week's items grouped by day. Book events show in blue with their time, Bam tasks in orange on their due date, and Bond deals in teal on their close date. Click a Book item to open its event.
 
 **Related:** Timeline feature. Agents read the same data with `book_get_timeline`.
 
@@ -442,7 +470,7 @@ For the full tool catalog and schemas, see the Book MCP-tools reference and guid
 ## Related
 
 - **Bam** (`/b3/`) - Sign in here first; Book has no login of its own. Bam tasks with due dates appear on the Book Timeline, and events can link to a Bam task.
-- **Bond** (`/bond/`) - Bond deal close dates appear on the Book Timeline, and events can link to a Bond deal. Booking pages are intended to create a Bond contact on each booking, but that hook does not authenticate against Bond today (see the Public Meet page note).
+- **Bond** (`/bond/`) - Bond deal close dates appear on the Book Timeline, and events can link to a Bond deal. A public booking creates or updates a Bond contact by email when the page has `auto_create_bond_contact` on (the default).
 - **Helpdesk** (`/helpdesk/`) - Events can link to a Helpdesk ticket.
 - **Bolt** (`/bolt/`) - Subscribe to Book's automation events (`event.created`, `event.updated`, `event.cancelled`, `event.rsvp`, `booking.created`, all from source `book`) to drive cross-app workflows.
 - **Banter** (`/banter/`) - A common automation target, for example posting to a channel when a booking arrives.

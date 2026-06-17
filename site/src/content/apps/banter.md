@@ -1,7 +1,7 @@
 ---
 title: "Banter (Team Messaging)"
 app: banter
-generated: "2026-06-17T20:37:35.143Z"
+generated: "2026-06-17T22:16:23.462Z"
 ---
 
 # Banter (Team Messaging)
