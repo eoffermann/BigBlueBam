@@ -32,12 +32,16 @@
 - id: blueprint-diagram-editor
   app: blueprint
   demonstrates: "The diagram editor: React Flow canvas with nodes and edges, the top toolbar (Add node, layout, snapshot, export, Promote to Bam), zoom/fit controls, and the minimap"
-  route: /blueprint/d/38e60a5c-803c-477a-9763-937a36c3a1ee
+  # Open a real seeded diagram via the list (the previous hardcoded id was from
+  # another environment and rendered "Diagram not found").
+  route: /blueprint/
   identity: admin
   interactions:
-    - { action: waitFor, selector: body }
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
     - { action: waitFor, selector: ".react-flow", optional: true }
     - { action: wait, ms: 3500 }
+  expect: [".react-flow"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
 
 - id: blueprint-editor-via-card

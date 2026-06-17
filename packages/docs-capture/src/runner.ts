@@ -245,12 +245,12 @@ async function captureRecipe(
 
     let buffer: Buffer;
     if (target === 'fullPage') {
-      buffer = await page.screenshot({ path: file, type: 'png', fullPage: true, mask, animations: 'disabled' });
+      buffer = await page.screenshot({ path: file, type: 'png', fullPage: true, mask, maskColor: '#E5E7EB', animations: 'disabled' });
     } else if (/^\d+,\d+,\d+,\d+$/.test(target)) {
       const [x = 0, y = 0, width = 0, height = 0] = target.split(',').map(Number);
-      buffer = await page.screenshot({ path: file, type: 'png', clip: { x, y, width, height }, mask, animations: 'disabled' });
+      buffer = await page.screenshot({ path: file, type: 'png', clip: { x, y, width, height }, mask, maskColor: '#E5E7EB', animations: 'disabled' });
     } else {
-      buffer = await page.locator(target).first().screenshot({ path: file, type: 'png', mask, animations: 'disabled' });
+      buffer = await page.locator(target).first().screenshot({ path: file, type: 'png', mask, maskColor: '#E5E7EB', animations: 'disabled' });
     }
 
     const sha256 = createHash('sha256').update(buffer).digest('hex');

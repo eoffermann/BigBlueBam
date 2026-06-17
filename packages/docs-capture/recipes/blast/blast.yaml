@@ -101,12 +101,15 @@
 
 - id: blast-segment-builder
   app: blast
-  demonstrates: "The segment builder — match mode plus field/operator/value condition rows"
+  demonstrates: "The segment builder — name, description, match mode, and field/operator/value condition rows"
   route: /blast/segments/new
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
     - { action: waitFor, selector: "h1:has-text('New Segment')", optional: true }
+    # Populate name + description so the builder reads as a real segment, not a blank form.
+    - { action: fill, selector: "input[placeholder='e.g., Active Leads']", value: "Passing Ships — Rescue Prospects", optional: true }
+    - { action: fill, selector: "input[placeholder='Brief description...']", value: "Captains and vessels in our shipping lanes who might carry the castaways home.", optional: true }
     - { action: wait, ms: 800 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
 

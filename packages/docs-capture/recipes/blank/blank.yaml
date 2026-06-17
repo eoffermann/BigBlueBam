@@ -61,11 +61,13 @@
   route: /blank/
   identity: admin
   interactions:
-    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']" }
-    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']", optional: true }
-    - { action: wait, ms: 1500 }
+    # Open a form that actually has fields (Howell Luau RSVP) so the preview
+    # renders content, not a blank panel.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')" }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')", optional: true }
+    - { action: wait, ms: 2000 }
     - { action: click, selector: "button:has-text('Preview')", optional: true }
-    - { action: wait, ms: 1500 }
+    - { action: wait, ms: 2500 }
     - { action: waitFor, selector: "span:has-text('Live Preview')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
 
@@ -89,9 +91,10 @@
   route: /blank/
   identity: admin
   interactions:
-    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']" }
-    - { action: hover, selector: "[class*='rounded-xl'][class*='cursor-pointer']", optional: true }
-    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer'] button.p-1", optional: true }
+    # Target the Howell Luau RSVP form (5 submissions) so the table isn't empty.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')" }
+    - { action: hover, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')", optional: true }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau') button.p-1", optional: true }
     - { action: wait, ms: 500 }
     - { action: click, selector: "[role='menuitem']:has-text('Responses')", optional: true }
     - { action: wait, ms: 2000 }
@@ -107,9 +110,10 @@
   route: /blank/
   identity: admin
   interactions:
-    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']" }
-    - { action: hover, selector: "[class*='rounded-xl'][class*='cursor-pointer']", optional: true }
-    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer'] button.p-1", optional: true }
+    # Target the Howell Luau RSVP form (5 submissions) so analytics has data.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')" }
+    - { action: hover, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')", optional: true }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau') button.p-1", optional: true }
     - { action: wait, ms: 500 }
     - { action: click, selector: "[role='menuitem']:has-text('Responses')", optional: true }
     - { action: wait, ms: 1500 }
