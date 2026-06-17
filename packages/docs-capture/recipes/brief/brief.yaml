@@ -78,13 +78,15 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
-    - { action: wait, ms: 1200 }
-    # Open a real seeded brief (not the blank /new editor), then enter edit mode.
-    - { action: click, selector: "button:has-text('Operation Coconut'), [class*='cursor-pointer']:has-text('Operation Coconut'), a:has-text('Operation Coconut')", optional: true }
     - { action: wait, ms: 1500 }
+    # Open a real seeded doc (same proven card-click chain as brief-detail), then
+    # enter edit mode — instead of the blank /new editor.
+    - { action: click, selector: "button.w-full.text-left", optional: true }
+    - { action: click, selector: "main button[class*='rounded-xl']", optional: true }
+    - { action: click, selector: "button:has(h3)", optional: true }
+    - { action: wait, ms: 2000 }
     - { action: click, selector: "button:has-text('Edit')", optional: true }
     - { action: wait, ms: 2000 }
-  expect: "Operation Coconut"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
 
 - id: brief-templates

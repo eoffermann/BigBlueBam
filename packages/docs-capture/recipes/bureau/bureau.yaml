@@ -54,10 +54,13 @@
 - id: bureau-live-floor
   app: bureau
   demonstrates: "The live floor view — the spatial map drawing one rectangle per room with occupant dots and the Live connection chip"
-  route: /bureau/floors/a0000000-0000-4000-8000-bbb00000f100
+  # Open the org's real floor via the directory — the hardcoded sentinel floor id
+  # belonged to another environment and rendered "failed to load".
+  route: /bureau/
   identity: admin
   interactions:
-    - { action: waitFor, selector: body }
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button.group", optional: true }
     # The canvas is the floor map; wait for it, then let the room rectangles paint.
     - { action: waitFor, selector: "canvas.floor-canvas", optional: true }
     - { action: wait, ms: 3500 }
