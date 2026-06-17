@@ -85,6 +85,14 @@ export class WebSocketManager {
           return;
         }
 
+        // The banter-api relays events as { type, data, timestamp } (its
+        // BanterEvent shape), but every handler reads `event.payload`. Alias
+        // data→payload so handlers receive the body regardless of the server's
+        // key. (Without this, every handler's `event.payload` was undefined.)
+        if ((data as { payload?: unknown }).payload === undefined) {
+          (data as { payload?: unknown }).payload = (data as { data?: unknown }).data;
+        }
+
         // Dispatch to type-specific handlers
         const typeHandlers = this.handlers.get(data.type);
         if (typeHandlers) {

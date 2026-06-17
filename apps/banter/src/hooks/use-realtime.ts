@@ -4,6 +4,21 @@ import { ws } from '@/lib/websocket';
 import { useChannelStore } from '@/stores/channel.store';
 
 /**
+ * Resolve the channel id from an event body, tolerating the different shapes
+ * the banter-api emits: top-level `channel_id` (typing/unread/read), nested
+ * under `message` (message.*), or under `call` (call.started). Returns
+ * undefined when the body carries no channel id — callers treat that as "this
+ * room's event" since events only arrive for rooms we're subscribed to.
+ */
+function eventChannelId(payload: unknown): string | undefined {
+  const p = payload as
+    | { channel_id?: string; message?: { channel_id?: string }; call?: { channel_id?: string } }
+    | null
+    | undefined;
+  return p?.channel_id ?? p?.message?.channel_id ?? p?.call?.channel_id;
+}
+
+/**
  * Subscribe to a channel room via WebSocket and invalidate
  * relevant queries when events arrive.
  */
@@ -15,50 +30,54 @@ export function useRealtimeChannel(channelId: string) {
   useEffect(() => {
     if (!channelId) return;
 
-    const room = `channel:${channelId}`;
+    // The WS server namespaces channel rooms as `banter:channel:<id>` and only
+    // honors subscribes with that prefix (ws/handler.ts). The old `channel:<id>`
+    // never matched, so the client was never actually in the room and received
+    // no message events — which is why the timeline only refreshed on refocus.
+    const room = `banter:channel:${channelId}`;
     ws.joinRoom(room);
 
-    const unsubMessage = ws.on('message.created', (event) => {
-      const payload = event.payload as { channel_id: string };
-      if (payload.channel_id === channelId) {
-        queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
+    // Events only reach us for rooms we're subscribed to, so an event whose
+    // body resolves to this channel (or carries no channel id) is ours.
+    const isForThisChannel = (event: { payload: unknown }) => {
+      const cid = eventChannelId(event.payload);
+      return cid === undefined || cid === channelId;
+    };
 
-        // If this is not the active channel, increment unread
-        if (activeChannelId !== channelId) {
-          queryClient.invalidateQueries({ queryKey: ['unread-counts'] });
-        }
+    const unsubMessage = ws.on('message.created', (event) => {
+      if (!isForThisChannel(event)) return;
+      queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
+      // If this is not the active channel, refresh unread counts too.
+      if (activeChannelId !== channelId) {
+        queryClient.invalidateQueries({ queryKey: ['unread-counts'] });
       }
     });
 
     const unsubEdit = ws.on('message.updated', (event) => {
-      const payload = event.payload as { channel_id: string };
-      if (payload.channel_id === channelId) {
+      if (isForThisChannel(event)) {
         queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
       }
     });
 
     const unsubDelete = ws.on('message.deleted', (event) => {
-      const payload = event.payload as { channel_id: string };
-      if (payload.channel_id === channelId) {
+      if (isForThisChannel(event)) {
         queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
       }
     });
 
     const unsubReaction = ws.on('reaction.toggled', (event) => {
-      const payload = event.payload as { channel_id: string };
-      if (payload.channel_id === channelId) {
+      if (isForThisChannel(event)) {
         queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
       }
     });
 
     const unsubUnread = ws.on('unread.updated', (event) => {
       const payload = event.payload as {
-        channel_id: string;
-        unread_messages: number;
-        unread_mentions: number;
-      };
-      if (payload.channel_id === channelId) {
-        setUnreadCount(channelId, payload.unread_messages, payload.unread_mentions);
+        unread_messages?: number;
+        unread_mentions?: number;
+      } | null;
+      if (isForThisChannel(event) && payload && typeof payload.unread_messages === 'number') {
+        setUnreadCount(channelId, payload.unread_messages, payload.unread_mentions ?? 0);
       }
     });
 
