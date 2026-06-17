@@ -1,10 +1,19 @@
 # BigBlueBam — REST Endpoint ↔ MCP Tool ↔ UI Surface Map
 
-> **⚠ KEEP THIS CURRENT.** This is the single map of our REST / MCP / CLI / UI surface.
+> **⚠ KEEP THIS CURRENT AND COMPLETE.** This is the single map of our REST / MCP / CLI / UI surface.
 > **Any time you add, remove, rename, or consolidate a REST endpoint; add, change, or remove an MCP tool; change a `cli.ts` command; or wire/unwire a UI call site — update the relevant table in this file in the SAME change.**
-> A stale surface map is worse than none. This is not yet CI-enforced, so it is on us to keep it honest.
+>
+> **Complete means no bare `—`.** Every REST row's MCP-tool column must be either a backtick-wrapped tool name **or** `— _(skip: <short reason>)_` saying why no tool exists (auth/credentials, multipart/binary, public-inbound, SuperUser/permission admin, internal service-to-service route, realtime/ws/Yjs, resolver-done-internally, deprecated, deferred, …). A section that is **entirely or nearly tool-less** gets a `> **⚠ No MCP tools in this section — intentional.**` callout under its heading explaining why. Keep the coverage summary counts in sync.
+>
+> A stale or half-annotated surface map is worse than none. Not yet CI-enforced, so it is on us to keep it honest **and exhaustive**.
 
-_Last full survey: 2026-06-16._
+_Last full survey: 2026-06-17._
+
+Self-check that the map has no un-annotated gaps (must print `0`):
+
+```sh
+grep -cE '^\| `[^|]+` \| — \|' docs/reference/mcp-endpoint-mapping.md
+```
 
 ## What this is
 
