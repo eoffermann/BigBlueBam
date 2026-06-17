@@ -6,7 +6,7 @@
 
 Helpdesk gives each organization its own branded support portal. Customers reach it at a public URL, create an account scoped to that org, and submit support requests as tickets. They follow each ticket as a conversation: agents reply, the status moves through its lifecycle, and the customer can attach files, change priority, mark duplicates, reopen, or close.
 
-Customers and agents are two different identities. Customers are end users who live only in Helpdesk. Support agents are your BigBlueBam (Bam) staff users. Agents do not use the customer portal SPA. They work tickets through the agent REST surface and through MCP tools, and they see the matching Bam task inside the Bam app. Every ticket is mirrored to a Bam task on creation, so customer replies, status changes, and closures leave a durable trail on the project board even if the ticket is later deleted.
+Customers and agents are two different identities. Customers are end users who live only in Helpdesk; they sign in with an org-scoped email and password that is completely separate from the BigBlueBam (Bam) suite single sign-on. Support agents are your Bam staff users. Agents do not use the customer portal SPA. They work tickets through the agent REST surface and through MCP tools, and they see the matching Bam task inside the Bam app. Every ticket is mirrored to a Bam task on creation, so customer replies, status changes, and closures leave a durable trail on the project board even if the ticket is later deleted.
 
 Helpdesk is multi-tenant. Any organization that has a Helpdesk settings row gets a portal at `/helpdesk/<org-slug>/`, and optionally per-project portals at `/helpdesk/<org-slug>/<project-slug>/`. The portal that a customer lands on determines which org their account and tickets belong to.
 
@@ -14,17 +14,18 @@ The core objects you work with are the **ticket** (the support request), its **m
 
 ### Key concepts
 
+- **Portal** - an org's public support site, served at `/helpdesk/<org-slug>/`. Each org with a Helpdesk settings row gets one. Per-project portals are available at `/helpdesk/<org-slug>/<project-slug>/`. The portal a customer lands on decides which org owns their account and tickets.
+- **Customer** - an end user with a Helpdesk account scoped to one org. Customers have their own email and password sign-in, separate from the suite single sign-on. They use the portal SPA.
 - **Ticket** - a single customer support request. It has a human-readable number shown as `#123`, a subject, a description, a status, a priority, and an optional category. Each ticket is owned by one customer and back-linked to a Bam task.
 - **Status** - where the ticket is in its lifecycle. The five canonical statuses are **Open**, **In Progress**, **Waiting on Customer**, **Resolved**, and **Closed**.
 - **Priority** - how urgent the ticket is. Customers can set **Low**, **Medium**, or **High**. Agents can additionally set **Critical**. The badge displays all four.
 - **Message** - a post on a ticket. Authored by the customer, an agent, or the system. Agent messages flagged as internal notes are hidden from customers.
 - **Category** - an optional label chosen from the list an admin configured for the portal. The Category field only appears when categories are configured.
+- **Agent** - a support staff member. Agents authenticate with a per-agent agent API key (prefixed `hdag_`) on the agent routes, not with the customer portal. They do not use the customer portal SPA.
+- **Admin** - an org owner or admin who configures the portal settings.
 - **Duplicate** - a ticket flagged as a copy of another. A customer "mark as duplicate" is annotative: it posts updates on the primary instead. An agent "merge" actually moves the messages onto the primary and closes the source.
 - **Attachment** - a file uploaded to a ticket. It appears in the Attachments block once it has been scanned, with a Download link.
 - **Bam task** - the project-board task created automatically for every ticket. It lives in the portal's default project so your staff can triage, assign, and track support work alongside other project work.
-- **Customer** - an end user with a Helpdesk account scoped to one org. They use the portal.
-- **Agent** - a support staff member. Agents authenticate with a per-agent agent API key (prefixed `hdag_`) on the agent routes. They do not use the customer portal.
-- **Admin** - an org owner or admin who configures the portal settings.
 
 ### Where to find it
 
@@ -34,9 +35,11 @@ The portal is served at `/helpdesk/`. Visiting the bare site root redirects to t
 - `/helpdesk/<org-slug>/` is a specific org's portal.
 - `/helpdesk/<org-slug>/<project-slug>/` is a per-project portal, when one is configured.
 
-A customer needs an account on the org's portal before they can file tickets. Registration is built in unless the admin has disabled signups. There is no separate install step: any org with a Helpdesk settings row is live.
+A customer needs an account on the org's portal before they can file tickets. This account uses Helpdesk's own customer sign-in, which is separate from the suite single sign-on that staff use for Bam and the other apps; a customer never needs a Bam account. Registration is built in unless the admin has disabled signups. There is no separate install step: any org with a Helpdesk settings row is live.
 
 There is no Knowledge Base in Helpdesk. If you are looking for a searchable knowledge base, that is the separate Beacon app.
+
+![Support portal](screenshots/light/01-portal-entry.png)
 
 ## Feature reference
 
@@ -53,11 +56,9 @@ To choose a portal:
 
 If no portals are configured, you see the empty state: "No helpdesk portals are configured yet...".
 
-![Support portal](screenshots/light/01-portal.png)
-
 ### Register (create an account)
 
-Customers self-register on the org's portal. Each account is scoped to that one org.
+Customers self-register on the org's portal. Each account is scoped to that one org and uses Helpdesk's own customer sign-in, not the suite single sign-on.
 
 To create an account:
 
@@ -78,8 +79,6 @@ To sign in:
 4. You land on **My Tickets**.
 
 The footer link "Dont have an account? Create one" sends you to registration. If signups are disabled for the org, that link routes to the Bam beta gate instead. Repeated failed logins lock the account temporarily.
-
-![Login screen](screenshots/light/02-login.png)
 
 ### Verify email
 
@@ -109,7 +108,7 @@ The list refreshes in real time when a new message is posted or a status changes
 
 Two filter chips, "awaiting customer" and "awaiting internal", do not match any real status and will always show an empty list. To filter for tickets you need to respond to, look for the **Waiting on Customer** status badge on the rows rather than using those chips. See the flagged behavior in Related.
 
-![Ticket list](screenshots/light/03-ticket-list.png)
+![My tickets](screenshots/light/02-ticket-list.png)
 
 ### New Ticket
 
@@ -127,7 +126,7 @@ To create a ticket:
 
 When you submit, the portal creates the ticket and spawns a Bam task in the portal's project so your support staff can work it. If you submit the same subject and description again within an hour, the portal returns your existing ticket instead of creating a duplicate.
 
-![New ticket form](screenshots/light/05-new-ticket.png)
+![New ticket](screenshots/light/04-new-ticket.png)
 
 ### Ticket detail (the conversation)
 
@@ -136,6 +135,8 @@ The ticket detail page is the full conversation and the place to take action on 
 The header shows "#{number} - {subject}", a presence strip of who else is viewing, the **Status** badge, the **Priority** badge with a dropdown, the category chip when set, and "Created on {date}".
 
 The body shows the **Description**, an **Attachments** block, and the timeline of messages and status changes. Your own messages appear on the right labeled "You"; agent and system messages appear on the left. Status changes appear as italic lines, for example "Status changed from X to Y". If the conversation is long, click "Load older messages". When there are no messages yet, the timeline reads "No messages yet."
+
+![Ticket detail](screenshots/light/03-ticket-detail.png)
 
 #### Reply to a ticket
 
@@ -188,8 +189,6 @@ Use this to hand a ticket off to a Banter channel for internal discussion.
 2. Click **Download** to retrieve a file once it has been scanned. Until then it shows **Unavailable**.
 3. To add a file, upload it from the ticket. Files are owner-scoped: only the ticket owner can delete an attachment.
 
-![Ticket detail](screenshots/light/04-ticket-detail.png)
-
 ### Notifications prompt
 
 On the tickets list, if your browser has not yet been asked, a banner offers browser push notifications: "Get notified when agents respond to your tickets."
@@ -212,7 +211,7 @@ Support agents work tickets through the agent REST surface under `/helpdesk/api/
 What agents can do on the agent surface:
 
 - List org tickets, filtered by status, assignee, and SLA state, via the agent queue.
-- Resolve a ticket by its `#number`, with the requester and the task assignee attached.
+- Resolve a ticket by its `#number`, enriched with the requester and the task assignee.
 - Search tickets by subject and description.
 - Open full ticket detail, including internal notes that customers never see.
 - Post a public reply or an internal note. The first agent reply stamps the first-response time.
@@ -256,14 +255,14 @@ Note that the SLA minute settings live on the settings row but are not part of t
 
 ### Working with AI agents
 
-Helpdesk exposes 13 MCP tools so agents and automations can triage, answer, search, and configure tickets. They proxy to the Helpdesk API and forward the caller's token, so an agent acts with its own authority.
+Helpdesk exposes 13 MCP tools so agents and automations can triage, answer, search, and configure tickets. They proxy to the Helpdesk API and forward the caller's token, so an agent acts with its own authority. Be aware that the agent surface routes (`/helpdesk/api/agents/`) require an `hdag_` agent API key, so a tool calling those routes acts as a configured support agent, not as a customer.
 
 Reading and finding tickets:
 
-- **list_tickets** - list tickets on the agent surface.
+- **list_tickets** - list tickets with optional status, assignee, and client filters.
 - **get_ticket** - open a ticket with its messages.
-- **helpdesk_get_ticket_by_number** - resolve a `#number` to the full record.
-- **helpdesk_search_tickets** - fuzzy search across tickets by subject and description.
+- **helpdesk_get_ticket_by_number** - resolve a `#number` to the full record, enriched with requester and task assignee.
+- **helpdesk_search_tickets** - fuzzy search across tickets by subject and body, returning a compact projection ordered by most recently updated.
 - **helpdesk_find_similar_tickets** - rank tickets similar to a given one, for finding duplicates or related issues. This is the dedupe surface a triage agent uses before merging.
 
 Acting on tickets:
@@ -273,10 +272,10 @@ Acting on tickets:
 
 Configuration and intake:
 
-- **helpdesk_get_public_settings** - read the public settings subset.
+- **helpdesk_get_public_settings** - read the public settings subset (email-verification requirement, categories, welcome message). No auth required.
 - **helpdesk_get_settings** - read the full org settings (admin).
 - **helpdesk_update_settings** - edit settings (admin).
-- **helpdesk_set_default_project** - set the project that incoming tickets create their Bam task in (admin).
+- **helpdesk_set_default_project** - set the project that incoming tickets create their Bam task in, by org slug and project slug (admin).
 - **helpdesk_upsert_user** - idempotently create or update a customer by org and email, for example from an external system reconciling its user list. The update path never overwrites the password.
 
 Reporting:
@@ -290,6 +289,14 @@ Two agent flows are worth calling out for human reviewers:
 
 One caveat to know when reviewing agent output: the **update_ticket_status** tool's status list is stale. It advertises `waiting_on_client`, but the canonical status the API accepts is **waiting_on_customer**, and passing `waiting_on_client` is rejected. Use the canonical statuses (open, in_progress, waiting_on_customer, resolved, closed). See Related for the full list of flagged mismatches.
 
+Helpdesk also participates in the cross-cutting agentic platform that spans the whole suite:
+
+- **Identity, audit, and heartbeat.** Agent and service callers carry an explicit kind, and their actions are stamped onto the activity trail. Long-running runners report liveness with `agent_heartbeat`. Helpdesk ticket actions show up in this trail like any other app's.
+- **Unified activity view.** Helpdesk's per-ticket activity log is one of the sources UNIONed into the platform's unified activity view, so a cross-app agent can see ticket events alongside Bam, Bond, and the rest. Helpdesk uses `actor_type=agent` to mean a human support agent; the platform remaps that to the human kind so it does not collide with the platform's agent identity.
+- **Approval queues.** Sensitive proposals can be routed to a durable approval queue (`proposal_create`, `proposal_list`, `proposal_decide`) so a human signs off before an agent acts. Pair this with merges and bulk status changes.
+- **Visibility preflight.** Before an agent posts ticket content into a shared cross-app surface, it must call `can_access` for every cited entity and drop anything the asker is not allowed to see.
+- **Agent policies and outbound webhooks.** A per-agent kill switch and tool allowlist (the `helpdesk.*` prefix among them) gate which Helpdesk tools an agent may call, and outbound webhooks push subscribed Helpdesk Bolt events (ticket created, message posted, status changed, closed, reopened, user upserted, SLA breached) to agent runners.
+
 For the complete tool catalog, see the MCP tools reference in `docs/apps/helpdesk/`.
 
 ## User Stories
@@ -298,7 +305,7 @@ For the complete tool catalog, see the MCP tools reference in `docs/apps/helpdes
 
 **Who:** A customer reaching support for the first time.
 **Goal:** Get a support request in front of an agent.
-**Before you start:** Know which organization you need support from. Signups must be enabled on that org's portal.
+**Before you start:** Know which organization you need support from. Signups must be enabled on that org's portal. You do not need a Bam suite account; Helpdesk has its own customer sign-in.
 
 **Steps**
 
@@ -472,7 +479,7 @@ For the complete tool catalog, see the MCP tools reference in `docs/apps/helpdes
 
 **Steps**
 
-1. Call **helpdesk_upsert_user** with the org and the customer's email.
+1. Call **helpdesk_upsert_user** with the org slug and the customer's email.
 2. Provide the display name and any other fields.
 
 **Result:** The customer is created if new, or updated if they already exist, matched on org and email. The password is never overwritten on update. A `user.upserted` event is emitted for downstream automations.
@@ -494,7 +501,7 @@ For the complete tool catalog, see the MCP tools reference in `docs/apps/helpdes
 
 These are real behaviors in the current code that can surprise you. Document them so users do not chase them as bugs.
 
-- **No Knowledge Base in Helpdesk.** Some older guide material and a "knowledge base" screenshot describe a Helpdesk knowledge base. There is no such feature in the Helpdesk code. The knowledge base product is the separate **Beacon** app. Do not look for a KB in Helpdesk.
+- **No Knowledge Base in Helpdesk.** Some older guide material describes a Helpdesk knowledge base. There is no such feature in the Helpdesk code. The knowledge base product is the separate **Beacon** app. Do not look for a KB in Helpdesk.
 - **Dead filter chips.** On **My Tickets**, the "awaiting customer" and "awaiting internal" filter chips match no real status and always show an empty list. Use the **open**, **in progress**, **resolved**, and **closed** chips, and read the **Waiting on Customer** status badge directly on the rows.
 - **Stale status value in update_ticket_status.** The MCP **update_ticket_status** tool advertises `waiting_on_client`, but the API rejects it. The canonical value is **waiting_on_customer**. `helpdesk_search_tickets` lists both, but only the canonical statuses (open, in_progress, waiting_on_customer, resolved, closed) work end to end.
 - **Agent-queue SLA badge is hardcoded.** The agent queue's SLA badge uses a fixed 4-hour first-response target. The actual breach monitor uses the per-org SLA settings (default 8 hours for first response, 48 hours for resolution). The badge and the recorded breaches can therefore disagree.

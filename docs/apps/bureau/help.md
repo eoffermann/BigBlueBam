@@ -4,7 +4,7 @@
 
 ## Overview
 
-Bureau gives your org a spatial office. You browse **floors**, drop into **rooms**, and see live **occupant** dots for everyone who is around. Each room maps to a real-time audio room, so entering a room can start or join a voice huddle. Around all of that, a floating **docked box** rides along inside every app in the suite, showing where you are, who else is on the same page, and giving you one-click actions to invite, hunt, or pull everyone to where you are looking.
+Bureau gives your org a spatial office. You browse **floors**, drop into **rooms**, and see live occupant dots for everyone who is around. Each room maps to a real-time audio room, so entering a room can start or join a voice huddle. Around all of that, a floating docked box rides along inside every app in the suite, showing where you are, who else is on the same page, and giving you one-click actions to invite, hunt, or pull everyone to where you are looking.
 
 Bureau solves the "remote office" feel for small-to-medium teams. It answers three questions that are otherwise hard to answer over chat alone: who is available right now, can I interrupt them, and can we all jump to the same place. Knocking on a colleague's office, summoning a room to a Board canvas, and booking a conference room are all first-class actions.
 
@@ -16,7 +16,7 @@ The core objects you work with are floors, rooms (including personal **offices**
 
 - **Floor** - One navigable office map. A floor owns a layout, an optional background image, a slug used in its URL, and a position in the list. One floor can be marked the default.
 - **Building** - An optional grouping of floors for multi-site orgs. It exists in the data model and a new floor can carry a `building_id`, but there is no building management screen in the app today.
-- **Room** - An addressable space on a floor. Each room maps one-to-one to an audio room. Rooms come in 8 types: **Office**, **Huddle**, **Conference**, **Meeting**, **Open space**, **Lounge**, **Focus**, and **Lobby**.
+- **Room** - An addressable space on a floor. Each room maps one-to-one to an audio room. Rooms come in 8 types: **Office (single owner)**, **Huddle**, **Conference**, **Meeting**, **Open space**, **Lounge**, **Focus**, and **Lobby**.
 - **Office** - A room of type Office that has an owner. The owner can be knocked on, sets the door, and admits or declines visitors. Think of it as a personal office.
 - **Door state (privacy)** - How a room treats visitors. Three values: **Open** (anyone can enter), **Knock** (visitors must knock to be let in), and **Private** (only people on the room's access list). The room stores a durable default; live overrides such as a short do-not-disturb window apply on top of it.
 - **Room access list (ACL)** - Per-user grants for private rooms, with role **member** or **manager**. Managers can edit the room and manage its access list.
@@ -33,13 +33,13 @@ The core objects you work with are floors, rooms (including personal **offices**
 
 ### Where to find it
 
-Bureau is served at **`/bureau/`**. You must be logged in to BigBlueBam first; Bureau shares the Bam session. If you are not logged in you will see "Please log in to BigBlueBam first" with a "Go to BigBlueBam Login" link.
+Bureau is served at **`/bureau/`**. You must be logged in to BigBlueBam first; Bureau shares the Bam session. If you are not logged in you will see "Please log in to BigBlueBam first to access Bureau." with a **"Go to BigBlueBam Login"** link.
 
 The sidebar (brand label **"Bureau"**) groups navigation under:
 
-- **Floors**: "All floors" (the Floors landing), then one row per floor with a live occupancy badge.
-- **History**: "Recent chats".
-- **Admin** (org admin, owner, or SuperUser only): "Edit floors" and "Offices".
+- **Floors**: **"All floors"** (the Floors landing), then one row per floor with a live occupancy badge.
+- **History**: **"Recent chats"**.
+- **Admin** (org admin, owner, or SuperUser only): **"Edit floors"** and **"Offices"**.
 
 Floor and office administration require org admin, owner, or SuperUser. Audio huddles require LiveKit to be configured and the platform calling switch to be on; if calling is disabled, joining a room's audio returns a "calling disabled" error.
 
@@ -47,7 +47,7 @@ Floor and office administration require org admin, owner, or SuperUser. Audio hu
 
 ### Browse floors
 
-![Floor directory](screenshots/light/01-floors.png)
+![Floor directory](screenshots/light/01-floor-directory.png)
 
 The Floors landing is where you pick a place to drop in.
 
@@ -57,24 +57,26 @@ To browse floors:
 2. Each floor card shows the floor name, its slug, a **"Default"** pill on the default floor, and a live count such as "3 people here now".
 3. Click a floor card to open its live view.
 
-If no floors exist yet you will see "No floors yet" and "Ask an org admin to create the first floor under Admin to Floors."
+If no floors exist yet you will see **"No floors yet"** and "Ask an org admin to create the first floor under Admin to Floors."
 
 ### The live floor view (presence canvas)
 
-![Live floor view](screenshots/light/02-floor.png)
+![Live floor](screenshots/light/02-live-floor.png)
 
-The floor view is the spatial map. It draws one rectangle per room over a grid background, with a dot for each occupant.
+The floor view is the spatial map. It draws one rectangle per room over a grid background, with a dot for each occupant. It is a Canvas2D scene (the canvas carries the class `floor-canvas`), so occupant dots are painted, not DOM elements.
 
 To use the floor view:
 
 1. From the Floors landing, click a floor. The URL becomes `/floors/:id`.
-2. Read the status bar at the top: it shows the floor name and a connection chip that reads **"Live"** when the real-time link is healthy.
-3. Click a room rectangle to enter it. Entering a room mints your audio token and places your dot inside that room. Rooms without an assigned layout zone are auto-arranged in a 4-column grid.
-4. When you are inside a room, a **"Leave room"** button appears. Click it to step back out.
+2. Read the status bar at the top: it shows the floor name and a connection chip that reads **"Live"** when the real-time link is healthy, or the raw connection status otherwise.
+3. Click a room rectangle to enter it. Entering a room mints your audio token and places your dot inside that room. Rooms without an assigned layout zone are auto-arranged in a 4-column grid so the floor still navigates.
+4. When you are inside a room, a **"Leave room"** button appears in the status bar. Click it to step back out.
 
 The live map updates as people enter, leave, and change status, over the Bureau real-time connection.
 
 ### Recent chats
+
+![Recent chats](screenshots/light/03-recent-chats.png)
 
 Room chats are ephemeral, but you can recover what was said for rooms you were present in.
 
@@ -83,9 +85,11 @@ To review past room chat:
 1. In the sidebar, under History, click **"Recent chats"**. The heading is **"Recent chats"** with the subtitle "Room chats you were present for. Messages expire 24 hours after they were sent unless an admin extends or retains the thread."
 2. Use the search box ("Search by room name or message text...") to filter the thread list.
 3. Each thread shows its room label, message count, retention text, and last-message time. A shield icon marks a thread that has been retained.
-4. Click a thread to open its transcript dialog.
+4. Click a thread to open its transcript dialog. Expired messages show "All messages in this chat have expired."
 
-If you are an admin, each thread offers a **"Retention"** dropdown with the options "24 hours (default)", "2 days", "3 days", "1 week (max)", and "Retain permanently". Choose one to extend or pin the thread.
+If you are an admin, the transcript dialog offers a **"Retention"** dropdown with the options "24 hours (default)", "2 days", "3 days", "1 week (max)", and "Retain permanently". Choose one to extend or pin the thread.
+
+If you have no threads yet, you will see "No room chats yet - open the chat panel on the Bureau widget anywhere in the suite."
 
 ### Move yourself between rooms
 
@@ -108,9 +112,9 @@ Before knocking, summoning, or joining, you often want to know who is already th
 To see occupants:
 
 1. On the floor view, look at the dots inside each room rectangle.
-2. Enter a room, then read the docked box: the **"In:"** row names the room and shows "(X people here)", and the occupants list names everyone present (or **"Just you"** when you are alone). Agent occupants are prefixed "(A) ".
+2. Enter a room, then read the docked box: the **"In:"** row names the room and the people-here count, and the occupants list names everyone present (or **"Just you"** when you are alone). Agent occupants are prefixed "(A) ".
 
-**AI agent note:** **`bureau_who_is_in_room`** returns a room's detail and its live occupant ids. It is access-filtered, so private rooms you cannot see return not-found. Use it before `bureau_summon` or `bureau_knock` to decide who would actually be pulled or disturbed.
+**AI agent note:** **`bureau_who_is_in_room`** returns a room's detail and its live occupant ids. It is access-filtered, so private rooms you cannot see return not-found. Use it before `bureau_summon` or `bureau_knock` to decide who would actually be pulled or disturbed. For co-presence by URL rather than by room, use **`bureau_who_is_here`**, which lists the other users on a given content surface.
 
 ### Knock and respond to a knock
 
@@ -120,7 +124,9 @@ To knock on an office:
 
 1. On the floor, click the office whose door is set to Knock (or whose live override blocks direct entry).
 2. The owner receives an incoming-knock toast in their docked box.
-3. Wait for the owner's decision. If no one answers within 30 seconds the knock auto-defers.
+3. Wait for the owner's decision. If no one answers within 30 seconds the knock auto-times-out.
+
+Only office rooms with an owner can be knocked on. You cannot knock on your own office, and you cannot knock on an office that has no owner.
 
 To respond when someone knocks on your office, use the incoming-knock toast in your docked box:
 
@@ -128,9 +134,9 @@ To respond when someone knocks on your office, use the incoming-knock toast in y
 2. **"Not now"** defers the knock; the visitor is told you are busy.
 3. **"Decline"** politely rejects the visitor.
 
-If you are in DND when someone tries to knock, the knock is blocked and the visitor is offered a leave-a-note path that delivers a Banter direct message prefixed "[Bureau knock note] ".
+If you are in DND when someone tries to knock, the knock is blocked (the server returns 423) and the visitor is offered a leave-a-note path that delivers a Banter direct message prefixed "[Bureau knock note] ".
 
-**AI agent note:** **`bureau_knock`** creates the knock; if the owner is in DND it returns a 423 with a leave-a-note pointer, which an agent should surface rather than retry. **`bureau_respond_knock`** resolves a knock as the owner with `admit`, `defer`, or `decline`.
+**AI agent note:** **`bureau_knock`** creates the knock; if the owner is in DND it returns a 423 with a leave-a-note pointer, which an agent should surface rather than retry. **`bureau_respond_knock`** resolves a knock as the owner with `admit`, `defer`, or `decline`. **`bureau_knock_inbox`** lists the pending knocks waiting at the agent's own door, and **`bureau_leave_note`** sends the DND fallback DM.
 
 ### Summon (Bring everyone here)
 
@@ -144,7 +150,7 @@ To bring everyone here:
 4. Each recipient sees a **"Summon"** toast that names you and the destination, with **Join** and **Stay here** buttons. If auto-follow is enabled, the toast shows a "Going in Ns..." countdown with a "cancel" link, then navigates automatically.
 5. Anyone who lacks access lands on the denied list, so you can follow up by granting access and re-summoning.
 
-**AI agent note:** **`bureau_summon`** is high-impact and uses the `confirm_action` two-step. Call it once to preview the planned recipients, then again with `confirm_action: true` to send. The caller must be in a Bureau room or the call fails.
+**AI agent note:** **`bureau_summon`** is high-impact and uses the `confirm_action` two-step. Call it once to preview the planned recipients, then again with `confirm_action: true` to send. The caller must be in a Bureau room or the call fails with 400. After sending, **`bureau_get_summon`** inspects who was eligible versus denied, and **`bureau_summon_grant_access`** grants access to denied users and re-summons them in one step (also a two-step confirm).
 
 ### Ring (Invite)
 
@@ -156,7 +162,7 @@ To invite one person:
 2. Pick the member to ring. They receive an incoming-call overlay.
 3. When they accept, they are navigated to your surface and auto-join the huddle.
 
-DND is respected: if the recipient is head-down, a normal ring does not get through. Admins can **right-click "Invite..."** to Force Invite, which bypasses the accept prompt with a 3-second cancellable auto-navigate.
+DND is respected: if the recipient is head-down, a normal ring does not get through. Admins can right-click **"Invite..."** to Force Invite, which bypasses the accept prompt with a 3-second cancellable auto-navigate.
 
 ### Hunt
 
@@ -168,7 +174,9 @@ To hunt a teammate:
 2. Pick the member you want to find.
 3. You jump to wherever they currently are.
 
-Hunt respects DND (a head-down member cannot be located) and filters out destinations you cannot access.
+Hunt is org-scoped: the teammate must share your active org. It respects DND (a head-down member cannot be located) and runs a destination-access preflight, so if you cannot see the surface they are on, the result is the same as "not located" - their location is never leaked through a URL you could not open.
+
+**AI agent note:** **`bureau_where_is_user`** is the real, implemented Hunt tool. It returns `{ located: true, url, app, label, status }` or `{ located: false }` when the target is offline, in DND, in a different org, or on a surface the caller cannot see. Prefer it over the legacy `bureau_locate_user` stub.
 
 ### Book and cancel a room
 
@@ -184,7 +192,7 @@ To cancel a booking, the organizer or an admin removes it. Cancellation is a sof
 
 There is no dedicated booking screen in the Bureau SPA today; booking and cancellation run through the Bureau API and the MCP tools.
 
-**AI agent note:** **`bureau_book_room`** and **`bureau_cancel_booking`** both use the `confirm_action` two-step: preview first, then confirm. **`bureau_list_bookings`** lists active bookings for a room over a window (default next 7 days), including the Book event back-link.
+**AI agent note:** **`bureau_book_room`** and **`bureau_cancel_booking`** both use the `confirm_action` two-step: preview first, then confirm. **`bureau_list_bookings`** lists active bookings for a room over a window (default next 7 days), including the Book event back-link, and **`bureau_update_booking`** edits a booking's title, window, or access (organizer or admin only).
 
 ### Door states (set a room's privacy)
 
@@ -194,7 +202,7 @@ The three states are **Open**, **Knock**, and **Private**. The durable default i
 
 To change the durable default in the app, edit the room in the Floor editor and set its **Door default** (see Admin - Floor editor below). To change it directly, the office owner, a room manager, or an org admin can patch the room's door.
 
-The Bureau SPA's room inspector only sets the durable default. Live lock and DND overrides are driven through the docked box and the real-time connection.
+The Bureau SPA's room inspector only sets the durable default. Live lock and DND overrides are driven through the docked box and the real-time connection. The door button in the docked box (tooltip **"Toggle door privacy"**) flips the live override while you are in a room.
 
 **AI agent note:** **`bureau_set_door_state`** sets a room's durable default privacy. It is restricted server-side to the office owner (for offices), a room manager, or org admins and owners.
 
@@ -244,7 +252,7 @@ The box is draggable by its header and collapsible. Because your presence lives 
 
 ### Admin - Floors list
 
-![Admin floor management](screenshots/light/03-admin-floors.png)
+![Manage floors](screenshots/light/04-admin-floors.png)
 
 Admins manage the org's floors here.
 
@@ -255,7 +263,7 @@ To manage floors:
 3. Live floor cards offer **"Edit"**, **"Preview as member"**, and **"Archive"**. Archived rows offer **"Restore"**.
 4. To add a floor, click **"New floor"**. In the dialog, enter a **Name** (placeholder "e.g. Engineering 3F") and a **Slug** (auto-generated, lowercase letters, numbers, and dashes; helper "Used in the floor URL: /floors/{slug}"). Click **"Create + open editor"**.
 
-Non-admins see "Floor administration requires admin or owner".
+Archiving a floor prompts a confirmation and hides it from the member-side floor list; you can restore it later from this page. Non-admins see **"Floor administration requires admin or owner"**.
 
 ### Admin - Floor editor
 
@@ -263,8 +271,8 @@ The Floor editor is the canvas where you place rooms on a floor.
 
 To lay out a floor:
 
-1. Open a floor in the editor (via "New floor" or "Edit"). The top toolbar shows Back, an editable floor-name input, a "{n} zones · WxH" readout, the tool selector **"Select" / "New room" / "New office"**, the image-underlay control, and **"Save"**.
-2. To add a space, pick **"New room"** or **"New office"** and click-drag on the canvas. The empty-canvas hint reads "Click a zone to edit it, or pick 'New room' / 'New office' and click-drag on the floor."
+1. Open a floor in the editor (via "New floor" or "Edit"). The top toolbar shows a Back arrow, an editable floor-name input, a "{n} zones · WxH" readout, the tool selector **"Select" / "New room" / "New office"**, the image-underlay control, and **"Save"**.
+2. To add a space, pick **"New room"** or **"New office"** and click-drag on the canvas. The empty-inspector hint reads "Click a zone to edit it, or pick "New room" / "New office" and click-drag on the floor."
 3. Select a zone to open the room inspector on the right. Set:
    - **Name** (placeholder "e.g. War Room").
    - **Type**: "Office (single owner)", "Huddle", "Conference", "Meeting", "Open space", "Lounge", "Focus", or "Lobby".
@@ -273,11 +281,13 @@ To lay out a floor:
    - **Bookable** ("Allow reservations via Book").
    - **Owner** (offices only): a people picker ("Choose owner...") plus a "View owner in People" link.
    - **Geometry (world units)**: x, y, w, h, with a read-only **Zone id**.
-4. To delete a room, use **"Remove zone"** in the inspector footer. On save it soft-deletes the room and "Live occupants are evicted to the lobby".
+4. To delete a room, use **"Remove zone"** in the inspector footer. On save it soft-deletes the room and "Live occupants are evicted to the lobby."
 5. To set a background underlay, use the image-underlay control to upload an image; you can later Replace or Remove it.
 6. Click **"Save"**. Bureau writes the layout and floor name, then creates, updates, or deletes rooms to match the canvas.
 
 ### Admin - Offices
+
+![Office assignments](screenshots/light/05-admin-offices.png)
 
 The Offices screen is where you assign or reassign who owns each personal office.
 
@@ -286,37 +296,43 @@ To assign an office owner:
 1. In the sidebar Admin group, click **"Offices"**. The heading is **"Admin · Offices"**.
 2. The table has columns **"Floor / Office"**, **"Owner"** (avatar, name, and email, or **"Unassigned"**), and **"Actions"**.
 3. Click **"Reassign owner"** on a row. In the "Reassign {office}" dialog, search by name or email (placeholder "Search name or email..."); the current owner carries a "Current" tag.
-4. Pick the new owner to assign the office to them.
+4. Pick the new owner to assign the office to them. The new owner sees this room under "My office" immediately, and the previous owner loses owner-mode privileges (door, knock approvals).
 
-Non-admins see "Office administration requires admin or owner".
+Non-admins see **"Office administration requires admin or owner"**.
 
 ### Org settings (API and MCP only)
 
-Bureau has org-level settings - `continuous_audio`, `allow_auto_follow`, `default_office_privacy`, `members_can_book`, and `members_can_create_rooms` - that affect who can book and create rooms and how auto-follow behaves. These materially change behavior, but there is no settings screen in the Bureau SPA today. They are reachable only through the Bureau API and MCP. The `free_walk` setting exists in the data model but cannot be changed through the settings update path, so it is effectively read-only.
+Bureau has org-level settings - `continuous_audio`, `allow_auto_follow`, `default_office_privacy`, `members_can_book`, and `members_can_create_rooms` - that affect who can book and create rooms and how auto-follow behaves. These materially change behavior, but there is no settings screen in the Bureau SPA today. They are reachable only through the Bureau API and the **`bureau_get_settings`** / **`bureau_update_settings`** MCP tools.
 
 ### Working with AI agents
 
-Agents are first-class spatial occupants in Bureau. An agent that enters a room shows up on the floor and in the occupants list with an "(A) " prefix, on the agent device class. Agents drive Bureau through 17 MCP tools, all forwarding the calling user's token and gated by the same server-side permission checks as the UI.
+Agents are first-class spatial occupants in Bureau. An agent that enters a room shows up on the floor and in the occupants list with an "(A) " prefix. Agents drive Bureau through over 30 `bureau_*` MCP tools, all forwarding the calling user's token and gated by the same server-side permission checks as the UI.
 
 What agents commonly do:
 
-- **Perceive the office** with `bureau_list_floors`, `bureau_get_floor`, and `bureau_who_is_in_room`.
+- **Perceive the office** with `bureau_list_floors`, `bureau_get_floor`, `bureau_who_is_in_room`, and `bureau_who_is_here` (co-presence by URL).
 - **Move into a room** with `bureau_move_self` (the canonical "appear in the room" action).
-- **Socialize** with `bureau_knock` and `bureau_respond_knock`. On a DND block, surface the leave-a-note hint rather than retrying.
-- **Teleport a room** with `bureau_summon` (high-impact, two-step confirm; caller must be in a room).
-- **Book and cancel** with `bureau_book_room` (two-step confirm), `bureau_list_bookings`, and `bureau_cancel_booking` (two-step confirm).
+- **Find a person** with `bureau_where_is_user` (the real Hunt; returns the user's current surface or `{ located: false }`).
+- **Socialize** with `bureau_knock`, `bureau_respond_knock`, `bureau_knock_inbox`, and `bureau_leave_note`. On a DND block, surface the leave-a-note hint rather than retrying.
+- **Teleport a room** with `bureau_summon` (high-impact, two-step confirm; caller must be in a room), then inspect or recover with `bureau_get_summon` and `bureau_summon_grant_access`.
+- **Book and manage rooms** with `bureau_book_room` (two-step confirm), `bureau_list_bookings`, `bureau_update_booking`, and `bureau_cancel_booking` (two-step confirm).
 - **Set a door** with `bureau_set_door_state`.
-- **Administer** with `bureau_create_floor`, `bureau_create_room`, and `bureau_update_room` (all admin/owner gated server-side).
+- **Administer floors and rooms** with `bureau_create_floor`, `bureau_update_floor`, `bureau_set_floor_background`, `bureau_delete_floor` (two-step confirm), `bureau_create_room`, `bureau_update_room`, and `bureau_delete_room` (two-step confirm), all admin/owner gated server-side.
+- **Manage offices** with `bureau_list_offices`, `bureau_assign_office`, and `bureau_my_office`.
+- **Recover chats** with `bureau_list_chats`, `bureau_get_chat_messages`, and `bureau_set_chat_retention`.
+- **Read or change org settings** with `bureau_get_settings` and `bureau_update_settings`.
 
-Three high-impact tools - `bureau_book_room`, `bureau_cancel_booking`, and `bureau_summon` - use the `confirm_action` two-step: call once to preview, then again with `confirm_action: true` to commit.
+Six high-impact tools use the `confirm_action` two-step (call once to preview, then again with `confirm_action: true` to commit): `bureau_summon`, `bureau_summon_grant_access`, `bureau_book_room`, `bureau_cancel_booking`, `bureau_delete_floor`, and `bureau_delete_room`.
 
 Three tools are stubs that hit endpoints which are not yet built, and an agent should treat them as not-yet-functional:
 
-- **`bureau_locate_user`** returns a null "not located" envelope. It does not actually locate users yet.
+- **`bureau_locate_user`** returns a null "not located" envelope. Use the implemented `bureau_where_is_user` instead.
 - **`bureau_get_presence`** returns an empty list. It cannot snapshot the org-wide presence map yet.
 - **`bureau_set_status`** returns a stub and changes nothing. Its enum (`active`, `dnd`, `away`) also does not match the canonical status set (`available`, `busy`, `dnd`, `focus`, `away`, `in_meeting`). Real status is set over the live connection through the docked box, not through this tool.
 
-A human reviewing agent work in Bureau should know that a summon DMs every eligible co-occupant in real time and that a booking can create or anchor a Book calendar event and can flip a room private for its window. The confirm step exists so these are previewed before they fire.
+Bureau participates in the suite-wide agentic platform alongside its own tools. Service-account agents are bound by the §15 `agent_policies` kill switch and tool allowlists (the `bureau.*` prefix), and every action is written to the unified activity view with the actor's kind (human, agent, or service). Cross-app result posting must pass the platform `can_access` visibility preflight, which is exactly the check Bureau already runs internally before a summon, hunt, or co-presence read reveals a destination. High-impact spatial actions can be routed through the platform approval queue (`proposal_create` / `proposal_decide`), and agents can subscribe to Bureau's Bolt events through outbound webhooks. Agents should also call `agent_heartbeat` so their session is treated as live.
+
+A human reviewing agent work in Bureau should know that a summon DMs every eligible co-occupant in real time, that a hunt reveals where a teammate is, and that a booking can create or anchor a Book calendar event and can flip a room private for its window. The confirm step exists so these are previewed before they fire. For the full catalog and signatures, see the MCP-tools reference in `docs/apps/bureau/`.
 
 ## User Stories
 
@@ -332,7 +348,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 2. Click a floor card to open its live view at `/floors/:id`.
 3. On the canvas, click an Open room rectangle to enter it. Your dot appears inside, and your audio connects.
 4. Read the docked box: the **"In:"** row names your room and the occupants list shows who is with you (or **"Just you"**).
-5. When you are done, click **"Leave room"** on the floor view.
+5. When you are done, click **"Leave room"** in the floor view status bar.
 
 **Result:** You are present in a room, joined to its audio huddle, and visible to teammates on the floor.
 
@@ -353,7 +369,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Result:** You are either admitted to the office or told to come back later, without interrupting work uninvited.
 
-**Related:** Respond to a knock. If the owner is in DND, you are offered a leave-a-note path that lands in their Banter DMs. Agents use `bureau_knock`.
+**Related:** Triage knocks at your own office. If the owner is in DND, you are offered a leave-a-note path that lands in their Banter DMs. Agents use `bureau_knock` and, on a DND block, `bureau_leave_note`.
 
 ### Story: Triage knocks at your own office
 
@@ -370,7 +386,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Result:** You control who enters your office, and head-down mode shields you while still letting people leave a note.
 
-**Related:** Set your status and DND. Agents resolve knocks with `bureau_respond_knock`.
+**Related:** Set your status and DND. Agents resolve knocks with `bureau_respond_knock` and review waiting visitors with `bureau_knock_inbox`.
 
 ### Story: Bring everyone here (teleport the room)
 
@@ -387,7 +403,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Result:** Eligible teammates land on the same URL and join the same huddle; people without access are not sent a dead link.
 
-**Related:** Ring (Invite) for one person. Agents use `bureau_summon` with the `confirm_action` two-step.
+**Related:** Ring (Invite) for one person. Agents use `bureau_summon` with the `confirm_action` two-step, then `bureau_summon_grant_access` to grant and re-summon the denied users.
 
 ### Story: Invite one person to your screen
 
@@ -410,7 +426,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Who:** Someone trying to find where a colleague is working.
 **Goal:** Jump to wherever a specific teammate currently is.
-**Before you start:** The teammate is online and not head-down, and you can access where they are.
+**Before you start:** The teammate is online and not head-down, shares your active org, and you can access where they are.
 
 **Steps**
 
@@ -420,7 +436,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Result:** You arrive where the teammate is, ready to join them.
 
-**Related:** A head-down (DND) teammate cannot be located. Invite pulls them to you instead.
+**Related:** A head-down (DND) teammate cannot be located, and a surface you cannot access reads as "not located". Invite pulls them to you instead. Agents use `bureau_where_is_user`.
 
 ### Story: Book the conference room
 
@@ -437,7 +453,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Result:** The room is reserved for your window and mirrored to Book; a locked booking holds it private when it starts.
 
-**Related:** Booking runs through the Bureau API and MCP today. Agents use `bureau_book_room`, `bureau_list_bookings`, and `bureau_cancel_booking`; the book and cancel tools use the `confirm_action` two-step.
+**Related:** Booking runs through the Bureau API and MCP today. Agents use `bureau_book_room`, `bureau_list_bookings`, `bureau_update_booking`, and `bureau_cancel_booking`; the book and cancel tools use the `confirm_action` two-step.
 
 ### Story: Recover what was said in a room
 
@@ -454,7 +470,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Result:** You read the past conversation, and an admin can keep it from expiring.
 
-**Related:** Room chat is opened live from the docked box **"CHAT"** toggle.
+**Related:** Room chat is opened live from the docked box **"CHAT"** toggle. Agents use `bureau_list_chats`, `bureau_get_chat_messages`, and `bureau_set_chat_retention`.
 
 ### Story: Build a floor (admin)
 
@@ -468,12 +484,12 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 2. Enter a **Name** and confirm the auto-generated **Slug**, then click **"Create + open editor"**.
 3. In the Floor editor, pick **"New room"** or **"New office"** and click-drag on the canvas to place spaces.
 4. Select each zone and set its **Name**, **Type**, **Capacity (people)**, **Door default**, **Bookable**, and (for offices) **Owner** in the inspector.
-5. Optionally upload an **Image underlay** for the floor background.
+5. Optionally upload an image underlay for the floor background.
 6. Click **"Save"**.
 
 **Result:** A new floor exists with its rooms and offices, ready for people to drop in. Removed zones evict any live occupants to the lobby.
 
-**Related:** Assign offices; Door states. Agents use `bureau_create_floor`, `bureau_create_room`, and `bureau_update_room`.
+**Related:** Assign an office owner; Door states. Agents use `bureau_create_floor`, `bureau_create_room`, and `bureau_update_room`.
 
 ### Story: Assign an office owner (admin)
 
@@ -490,7 +506,7 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 
 **Result:** The office shows the new owner in the **"Owner"** column, and that owner now receives knocks and controls the door.
 
-**Related:** Build a floor; Knock and respond to a knock.
+**Related:** Build a floor; Knock and respond to a knock. Agents use `bureau_list_offices` and `bureau_assign_office`.
 
 ### Story: Agent staffs a room and pulls humans in
 
@@ -504,10 +520,11 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 2. Call `bureau_move_self` on the target room so the agent appears as an occupant.
 3. Call `bureau_who_is_in_room` to confirm who is present.
 4. Call `bureau_summon` with `confirm_action: false` to preview the eligible recipients, then again with `confirm_action: true` to send everyone to the destination URL.
+5. Optionally call `bureau_get_summon`, then `bureau_summon_grant_access` to grant access to anyone on the denied list and re-summon them.
 
 **Result:** The agent is present in the room and the eligible co-occupants are pulled to the shared resource. Recipients who lack access are reported in the denied count.
 
-**Related:** Bring everyone here; See who is in a room. The agent must be in a room before `bureau_summon` will succeed.
+**Related:** Bring everyone here; See who is in a room. The agent must be in a room before `bureau_summon` will succeed, and cross-app result posting should pass the platform `can_access` preflight.
 
 ## Related
 
@@ -518,4 +535,4 @@ A human reviewing agent work in Bureau should know that a summon DMs every eligi
 - **Book** - Bureau bookings mirror to Book events; cancelling a booking cancels the linked Book event best-effort.
 - **Bolt** - Bureau emits events (entering and leaving rooms, status changes, knocks, room booked, room locked, summon issued) on the `bureau` source for automation.
 - **Bench** - Daily floor utilization rolls up for reporting in Bench.
-- MCP tools: this app exposes 17 `bureau_*` tools. `bureau_book_room`, `bureau_cancel_booking`, and `bureau_summon` use the `confirm_action` two-step. `bureau_locate_user`, `bureau_get_presence`, and `bureau_set_status` are stubs and do not yet change state.
+- MCP tools: this app exposes over 30 `bureau_*` tools. `bureau_summon`, `bureau_summon_grant_access`, `bureau_book_room`, `bureau_cancel_booking`, `bureau_delete_floor`, and `bureau_delete_room` use the `confirm_action` two-step. `bureau_locate_user`, `bureau_get_presence`, and `bureau_set_status` are stubs and do not yet change state (use `bureau_where_is_user` for Hunt instead of `bureau_locate_user`). See the MCP-tools reference in `docs/apps/bureau/`.

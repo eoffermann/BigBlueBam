@@ -86,7 +86,7 @@ expiry policy requires SuperUser.
 Press the `?` key (when your cursor is not in a text field) to open the in-app
 help from any Beacon screen.
 
-![Knowledge Home](screenshots/light/01-home.png)
+![Knowledge home](screenshots/light/01-knowledge-home.png)
 
 ## Feature reference
 
@@ -127,7 +127,7 @@ To start a new article from here, click **"New Beacon"** (or, if the list is
 empty, **"Create Beacon"** in the "No beacons yet. Create your first one." empty
 state).
 
-![Article list](screenshots/light/02-browse.png)
+![Browse articles](screenshots/light/03-browse-list.png)
 
 ### Read an article (detail page)
 
@@ -150,7 +150,7 @@ What you see:
 To open an article, click any card in Browse, Search, the Graph, or the Recent
 Activity list, then read or act on it from the detail page.
 
-![Article detail](screenshots/light/03-detail.png)
+![Article detail](screenshots/light/02-article-detail.png)
 
 ### Create and edit an article
 
@@ -182,7 +182,7 @@ Known limitation: the editor includes a **"Tags (comma-separated)"** field
 (placeholder "e.g. onboarding, deployment, api"), but anything you type there is
 currently not saved on either create or edit. Do not rely on the editor to set
 tags. Tags on an article today come from agent or API writes
-(`beacon_upsert_by_slug` and the write-plane endpoints), and you filter by them
+(`beacon_upsert_by_slug` and the tag write endpoints), and you filter by them
 on the Search screen.
 
 Editing an existing article works the same way, except the Project field is
@@ -268,7 +268,7 @@ up to two linked beacons with their link type.
 Your search configuration is reflected in the URL, so you can copy the link and
 share an exact search with a teammate.
 
-![Search results](screenshots/light/06-search.png)
+![Hybrid search](screenshots/light/06-search-results.png)
 
 ### Saved queries
 
@@ -315,7 +315,7 @@ To explore the graph:
    **"View Beacon"** (open detail) and **"Explore from here"** (re-center the
    graph on that node).
 
-![Knowledge graph explorer](screenshots/light/04-graph.png)
+![Knowledge graph](screenshots/light/04-graph-explorer.png)
 
 ### Tags
 
@@ -336,8 +336,10 @@ change the tags stored on an article. The article detail page and graph node
 popovers display an article's tags read-only. The editor's "Tags
 (comma-separated)" field does not persist (see Create and edit an article), so
 the tags you see on articles today are written by agents or the API, not from
-the UI. Article tags drive 1-to-20-tag filter sets (each tag 1 to 128
-characters) and the implicit "Tag Affinity" edges in the Graph.
+the UI. Writing tags goes through the tag endpoints (or `beacon_tag_add` /
+`beacon_tag_remove`): you may add 1 to 20 tags at a time, each 1 to 128
+characters, and removing a tag that is not present returns an error. Article
+tags also drive the implicit "Tag Affinity" edges in the Graph.
 
 ### Links between articles
 
@@ -419,7 +421,7 @@ To use each tab:
   <owner> <time>" with the article's verification count (shown as v<count>) and
   current status.
 
-![Governance dashboard](screenshots/light/05-dashboard.png)
+![Freshness dashboard](screenshots/light/05-governance-dashboard.png)
 
 ### Expiry Policy Settings
 
@@ -461,7 +463,7 @@ update knowledge, run retrieval to ground answers, verify articles, and build or
 query the graph and policy. Comments and attachments have no MCP tools, so
 agents cannot post comments or upload files; those stay human-only.
 
-Common agent flows and the tools behind them:
+Common agent flows and the Beacon-specific tools behind them:
 
 - **Idempotent ingestion.** Agents write or refresh knowledge with
   `beacon_upsert_by_slug` (the `POST /entries/upsert` write plane). The tool is
@@ -470,6 +472,11 @@ Common agent flows and the tools behind them:
   rather than creating duplicates. This is the recommended path for bulk or
   repeated imports; there is no human button for it. Because the editor's tag
   field does not persist, agent and API writes are how tags get set on articles.
+- **Authoring and lifecycle.** Beyond upsert, agents have the full set:
+  `beacon_create`, `beacon_update`, `beacon_get`, `beacon_list`,
+  `beacon_publish`, `beacon_verify`, `beacon_challenge`, `beacon_retire`,
+  `beacon_restore`, `beacon_versions`, and `beacon_version_get`. Each tool
+  resolves an article by UUID, slug, or title.
 - **Grounding and retrieval (RAG).** Agents pull knowledge with `beacon_search`
   or `beacon_search_context`. The context variant always turns on graph and tag
   expansion and pre-fetches linked articles, so an agent gets a richer slice of
@@ -477,7 +484,9 @@ Common agent flows and the tools behind them:
 - **Automated verification.** `beacon_verify` accepts verification types
   `AgentAutomatic`, `AgentAssisted`, and `ScheduledReview`, plus an optional
   confidence score. Agent verifications show up under the dashboard's **Agent
-  Activity** tab, so a human can review what the agent confirmed.
+  Activity** tab, so a human can review what the agent confirmed. The daily
+  expiry sweep also enqueues Pending Review articles for an agent verification
+  pass.
 - **Graph and governance.** Agents can build and read the graph with
   `beacon_link_create`, `beacon_link_remove`, `beacon_graph_neighbors`,
   `beacon_graph_hubs`, and `beacon_graph_recent`, and read or set expiry policy
@@ -485,9 +494,32 @@ Common agent flows and the tools behind them:
   Treat policy as the four expiry and grace fields (min, max, default expiry
   days, grace period days). Link creation and removal are agent/API only; the
   Beacon SPA has no human link-management control.
+- **Tags and saved queries.** `beacon_tags_list` reads tags in scope;
+  `beacon_tag_add` and `beacon_tag_remove` write them. `beacon_query_save`,
+  `beacon_query_list`, `beacon_query_get`, and `beacon_query_delete` manage
+  saved searches.
+
+**Platform agent rails.** Beacon's tools run inside the suite-wide agentic
+platform, so the same guardrails apply here as everywhere:
+
 - **Visibility preflight.** Before an agent cites a Beacon in a shared surface,
-  it must confirm the asker can see it. Beacons are visibility-gated; refusal
-  reasons include `beacon_private_not_owner` and `beacon_project_not_member`.
+  it must confirm the asker can see it by calling `can_access` (entity type
+  `beacon.entry`). Beacons are visibility-gated; refusal reasons include
+  `beacon_private_not_owner` and `beacon_project_not_member`. Anything the asker
+  cannot see is dropped from the agent's answer.
+- **Cross-app retrieval.** `search_everything` fans out across the suite and
+  includes Beacon results with normalized scoring, and `resolve_references`
+  turns canonical mentions into Beacon links. Both honor the same visibility
+  rules.
+- **Identity, heartbeat, and audit.** Agent and service accounts are tagged with
+  a `kind` and emit heartbeats (`agent_heartbeat`); their Beacon writes are
+  attributed in the unified activity view alongside Bam, Bond, and Helpdesk
+  events, so you can audit what an agent created, verified, or retired.
+- **Approvals and policy.** High-impact agent work can be routed through the
+  proposal queue (`proposal_create` / `proposal_list` / `proposal_decide`) for a
+  human to approve. Per-agent kill switches and tool allowlists (the `beacon.*`
+  prefix) gate which agents may touch Beacon at all, and subscribed Bolt events
+  can be pushed to agent runners over signed outbound webhooks.
 
 For the full tool catalog, see `docs/apps/beacon/mcp-tools.md`.
 
@@ -662,7 +694,8 @@ archived articles are retired or restored. The Freshness Score improves.
 
 **Related:** Expiry Policy Settings; lifecycle actions. Agents use
 `beacon_verify` and `beacon_retire`; agent verifications appear under the
-**Agent Activity** tab.
+**Agent Activity** tab as "Verified by <owner>" rows with the verification count
+(v<count>) and status.
 
 ### Story: Set the freshness policy for a team
 
@@ -717,7 +750,8 @@ this story is human-only.
 **Who:** An AI agent or an integration importing knowledge.
 **Goal:** Create or update articles repeatably without making duplicates.
 **Before you start:** The agent runs through the MCP server with a service
-account and the right permissions.
+account and the right permissions (the `beacon.*` tool prefix must be allowed by
+its agent policy).
 
 **Steps**
 
@@ -732,7 +766,8 @@ account and the right permissions.
 
 **Result:** Knowledge stays in sync with the source system across repeated runs.
 Each upsert emits an `entry.upserted` Bolt event carrying the `created` flag, so
-automations can react to inserts and updates differently.
+automations can react to inserts and updates differently. The write is
+attributed to the agent in the unified activity view for later audit.
 
 **Related:** Working with AI agents. A human can review the result on the
 article's detail page.
@@ -746,5 +781,8 @@ article's detail page.
   `beacon.verified`, `beacon.challenged`, `comment.created`,
   `attachment.uploaded`, and `beacon.expired` (emitted when an article is
   retired). Use Bolt to automate reactions to knowledge changes.
+- **Cross-app search** - Beacon articles surface in the platform-wide
+  `search_everything` and `resolve_references` retrieval, so other apps and
+  agents can find and cite knowledge subject to the same visibility rules.
 - `docs/apps/beacon/mcp-tools.md` - the full Beacon MCP tool reference.
 - `docs/apps/beacon/guide.md` - the Beacon product guide.

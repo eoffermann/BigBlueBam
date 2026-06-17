@@ -10,6 +10,8 @@ Bill is org-scoped: every client, invoice, expense, rate, and setting belongs to
 
 A few conventions to know up front. All money in Bill is stored and entered in **integer cents**, not dollars. The amount, rate, and payment inputs in the UI are labeled "(cents)" and take whole numbers, so typing `150` means one dollar and fifty cents. Invoices are only editable while they are in `draft`; once you finalize an invoice, its number and line items are locked.
 
+Roles matter for the money-sensitive steps. Any member who can write to Bill can build a draft invoice, add line items, manage clients, log expenses, record payments, and configure rates and settings. But the steps that commit money or sign off on it - **Finalize**, **Re-send / Send**, and **Approve** or **Reject** an expense - require an admin or owner role. A member can prepare the work; an admin or owner approves and sends it.
+
 ### Key concepts
 
 - **Invoice** - A billable document addressed to one client. It snapshots your company details (the "from" side) and the client details (the "to" side) when it is created, and carries an invoice date, due date, line items, tax, totals, and payment history. Its number is literally `DRAFT` until you finalize it.
@@ -24,9 +26,11 @@ A few conventions to know up front. All money in Bill is stored and entered in *
 
 ### Where to find it
 
-Bill is served at `/bill/`. You must be logged in to BigBlueBam first; if you are not, Bill shows a "Please log in to BigBlueBam first" screen with a link to `/b3/`. Everything is scoped to your active organization, and mutating actions require the matching Bill permission on your account.
+Bill is served at `/bill/`. You must be logged in to BigBlueBam first; if you are not, Bill shows a "Please log in to BigBlueBam first to access Bill." screen with a "Go to BigBlueBam Login" link to `/b3/`. Everything is scoped to your active organization, and mutating actions require the matching Bill permission on your account.
 
 The left sidebar carries a fixed **New Invoice** quick-action button, then the nav items **Dashboard**, **Invoices**, **Clients**, **Expenses**, **Rates**, and **Reports**, and under a **Bill Settings** subheading the **Bill Settings** item. Press `?` anywhere in Bill to open the embedded Help viewer.
+
+![Billing dashboard](screenshots/light/01-dashboard.png)
 
 ## Feature reference
 
@@ -59,7 +63,7 @@ The **Overdue** pill filters on the stored `overdue` status, which nothing sets,
 To finalize a draft from the list:
 
 1. Find a draft row.
-2. Click **Finalize** in its Actions cell.
+2. Click **Finalize** in its Actions cell. Finalize requires an admin or owner role.
 3. The invoice is assigned a number and moves to `sent`; it can no longer be edited.
 
 To download a PDF from the list:
@@ -75,11 +79,11 @@ To request approval from the list:
 
 The two entry points for creating invoices live at the top of this view: **From Time Entries** (see "Invoice from time entries") and **New Invoice** (see "Create an invoice").
 
-![Invoice list](screenshots/light/01-invoice-list.png)
+![Invoice list](screenshots/light/02-invoice-list.png)
 
 ### Create an invoice
 
-The New Invoice form at `/bill/invoices/new` (titled **New Invoice**) builds a draft invoice manually. Reach it from the sidebar **New Invoice** button, the Invoices list **New Invoice** button, or a client's **+ New Invoice** link.
+The New Invoice form at `/bill/invoices/new` (titled **New Invoice**) builds a draft invoice manually. Reach it from the sidebar **New Invoice** button, the Invoices list **New Invoice** button, or a client's **+ New Invoice** link. Any member with write access can create a draft.
 
 To create an invoice:
 
@@ -90,7 +94,7 @@ To create an invoice:
 5. Optionally add **Notes (internal)**.
 6. Click **Create Draft Invoice**. Bill creates the draft, adds each line item, and opens the new invoice's detail page. Use **Cancel** to return to the Dashboard instead.
 
-![New invoice form](screenshots/light/02-invoice-new.png)
+![New invoice form](screenshots/light/04-invoice-new.png)
 
 ### Invoice from time entries
 
@@ -98,7 +102,7 @@ The page at `/bill/invoices/from-time` is titled **Invoice from Time Entries** w
 
 This page is currently a non-functional placeholder. It shows an amber banner ("This wizard requires Bam time entries integration. Currently, you can create invoices manually with line items."), a **Project** text field, **Date From** and **Date To** date fields, a **Preview Line Items** button that is permanently disabled, and a **Create Manually Instead** button that sends you to the manual New Invoice form. The page makes no API call, so you cannot generate a time-based invoice from this screen.
 
-The underlying capability does exist and works from the API and from an AI agent. To bill tracked time today, use the `bill_create_invoice_from_time` MCP tool (see "Working with AI agents") or call `POST /bill/api/v1/invoices/from-time-entries` directly with a project, a client, and the specific time entry IDs to bill. The service joins those time entries to their tasks, resolves a rate per user-and-task group, and builds one line item per group.
+The underlying capability does exist and works from the API. To bill tracked time today, call `POST /bill/api/v1/invoices/from-time-entries` directly with a project, a client, and the specific `time_entry_ids` to bill. The service joins those time entries to their tasks, resolves a rate per user-and-task group, and builds one line item per group. The `bill_create_invoice_from_time` MCP tool exists but currently passes a date range instead of the required entry IDs, so it is not a working path yet; see "Working with AI agents."
 
 ### Invoice detail
 
@@ -107,8 +111,8 @@ The detail page at `/bill/invoices/:id` shows everything about one invoice: head
 The header actions vary by status:
 
 - **Edit** appears on drafts and opens the edit form.
-- **Finalize** appears on drafts; it assigns the number and locks the invoice.
-- **Re-send** appears on sent or viewed invoices; it marks the invoice sent again and queues an email if email is configured.
+- **Finalize** appears on drafts; it assigns the number and locks the invoice. Admin or owner only.
+- **Re-send** appears on sent or viewed invoices; it marks the invoice sent again and queues an email if email is configured. Admin or owner only.
 - **Void** appears on any non-draft, non-void invoice; it cancels the invoice.
 - **Duplicate** is always available; it clones the invoice (and its line items) into a new draft and opens that draft.
 - **Request approval** opens an inline form that posts to Bam's approval queue, the same flow as the list view.
@@ -132,6 +136,8 @@ To duplicate an invoice:
 
 1. Click **Duplicate** in the header.
 2. Bill creates a new draft with the same line items and opens it for editing.
+
+![Invoice detail](screenshots/light/03-invoice-detail.png)
 
 ### Edit an invoice
 
@@ -164,8 +170,6 @@ To open and edit a client:
 
 The client detail page also shows **Total Billed**, **Total Paid**, and **Outstanding Balance** summary cards computed from this client's invoices, the read-only address, tax ID, payment terms, and notes, and an **Invoices** table (Invoice #, Date, Status, Total, Paid, Due). The **+ New Invoice** link opens the New Invoice form; note that it does not pre-select this client, so choose the client again on the form.
 
-![Clients list](screenshots/light/03-clients.png)
-
 ### Expenses
 
 The Expenses list at `/bill/expenses` is titled **Expenses** with the subtitle "Track project expenses and receipts." Columns are Description, Category, Vendor, Date, Amount, Status, and Actions. A row of status pills filters the list: **All** (empty), **pending**, **approved**, **rejected**, and **reimbursed**. Note that nothing in Bill sets an expense to `reimbursed`, so the **reimbursed** pill returns no rows.
@@ -181,12 +185,12 @@ To log an expense:
 To approve or reject an expense:
 
 1. On the Expenses list, find a `pending` row.
-2. Click **Approve** or **Reject** in its Actions cell.
+2. Click **Approve** or **Reject** in its Actions cell. Approving and rejecting require an admin or owner role.
 3. The status changes to `approved` or `rejected`. Only pending expenses can be approved or rejected; once approved, an expense is locked.
 
-Editing an expense, deleting one, and attaching a receipt are supported by the API but have no button in the current UI. To attach a receipt or edit an expense, use the API (`POST /bill/api/v1/expenses/:id/receipt`, `PATCH /bill/api/v1/expenses/:id`).
+Editing an expense, deleting one, and attaching a receipt are supported by the API but have no button in the current UI. To attach a receipt or edit an expense, use the API (`POST /bill/api/v1/expenses/:id/receipt`, `PATCH /bill/api/v1/expenses/:id`) or the matching MCP tools.
 
-![Expenses list](screenshots/light/04-expenses.png)
+![Expense list](screenshots/light/05-expenses.png)
 
 ### Rates
 
@@ -200,9 +204,7 @@ To add a rate:
 
 To delete a rate, click **Delete** in its Actions cell.
 
-The inline form only sets amount and type, so rates created in the UI are organization-scoped. Project-specific, user-specific, and date-bounded rates are supported by the data model and the resolver but must be created through the API (`POST /bill/api/v1/rates` with `project_id`, `user_id`, `effective_from`, or `effective_to`). When Bill bills time, it resolves the most specific rate that applies, preferring a user-and-project rate, then a user rate, then a project rate, then the organization rate, restricted to rates whose date range covers the work date.
-
-![Billing rates list](screenshots/light/05-rates.png)
+The inline form only sets amount and type, so rates created in the UI are organization-scoped. Project-specific, user-specific, and date-bounded rates are supported by the data model and the resolver but must be created through the API (`POST /bill/api/v1/rates` with `project_id`, `user_id`, `effective_from`, or `effective_to`) or the `bill_create_rate` MCP tool, which accepts those scopes. When Bill bills time, it resolves the most specific rate that applies, preferring a user-and-project rate, then a user rate, then a project rate, then the organization rate, restricted to rates whose date range covers the work date.
 
 ### Reports
 
@@ -213,7 +215,7 @@ The Reports view at `/bill/reports` is titled **Financial Reports**. It renders 
 - **Project Profitability** (Project, Revenue, Expenses, Profit, Margin). Only approved expenses count against profit.
 - **Overdue Invoices** (Invoice, Client, Amount Due, Days Overdue). Each row links to the invoice. This is the authoritative overdue list; it computes overdue from each invoice's due date rather than a stored status.
 
-Revenue and profitability exclude draft, void, and written-off invoices. Outstanding and overdue also exclude paid invoices.
+Revenue and profitability exclude draft, void, and written-off invoices. Outstanding and overdue also exclude paid invoices. Report views require Bill report permissions.
 
 To read your reports:
 
@@ -237,7 +239,7 @@ To update your billing identity and defaults:
 2. Edit any field under **Company Information** or **Invoice Defaults**.
 3. Click **Save Settings**. The button shows "Saved!" on success.
 
-![Billing settings](screenshots/light/07-settings.png)
+The settings record also stores a company logo URL and a default currency, both reachable through the API and the `bill_update_settings` MCP tool, but neither has a field in the current Settings form.
 
 ### PDF generation
 
@@ -253,28 +255,40 @@ There is no Bill SPA page for the public view and no client-facing payment actio
 
 ### Working with AI agents
 
-Bill exposes 16 MCP tools (catalogued in `apps/mcp-server/src/tools/bill-tools.ts`), enough for an agent to drive most of the invoicing lifecycle from chat or a Bolt automation rule. The tools resolve fuzzy identifiers: a client can be named by name or email, and a Bam project by name, and the tool resolves it to an ID.
+Bill exposes 39 MCP tools (catalogued in `apps/mcp-server/src/tools/bill-tools.ts`), which together cover the full invoicing lifecycle from chat or a Bolt automation rule. Many tools resolve fuzzy identifiers: a client can be named by name or email, and a Bam project by name, and the tool resolves it to an ID. Mutating tools run under the same per-action permissions as the UI, so an agent acting as a member can build drafts but cannot finalize, send, or approve expenses unless its account has the admin or owner grant.
 
 What agents commonly do:
 
-- **List and inspect:** `bill_list_invoices`, `bill_get_invoice`, `bill_list_clients`, `bill_list_expenses`.
-- **Build a draft:** `bill_create_invoice` (blank draft for a client), then `bill_add_line_item` per line. For a Bond-deal handoff, `bill_create_invoice_from_deal` pulls the deal value into one line item; in a Bolt rule the deal ID is passed as `{{ event.deal.id }}` from a `deal.*` event, and it must be a UUID.
-- **Finish and collect:** `bill_finalize_invoice` to assign the number and lock the invoice, `bill_send_invoice` to mark it sent, and `bill_record_payment` to log receipts.
-- **Expenses and rates:** `bill_create_expense` to log a cost, `bill_resolve_rate` to look up the effective rate for a project, user, and date.
-- **Reporting:** `bill_get_overdue`, `bill_get_revenue_summary`, and `bill_get_profitability` back the Reports view's data.
+- **List and inspect:** `bill_list_invoices`, `bill_get_invoice`, `bill_get_invoice_jobs`, `bill_list_clients`, `bill_get_client`, `bill_list_expenses`, `bill_list_rates`, `bill_get_settings`.
+- **Build a draft:** `bill_create_invoice` (blank draft for a client), then `bill_add_line_item`, `bill_update_line_item`, and `bill_delete_line_item` per line. `bill_update_invoice` adjusts a draft's dates, tax, discount, terms, notes, and footer. For a Bond-deal handoff, `bill_create_invoice_from_deal` pulls the deal value into one line item; in a Bolt rule the deal ID is passed as `{{ event.deal.id }}` from a `deal.*` event, and it must be a UUID.
+- **Finish and collect:** `bill_finalize_invoice` to assign the number and lock the invoice, `bill_send_invoice` to mark it sent, `bill_record_payment` to log receipts, and `bill_delete_payment` to reverse one. `bill_void_invoice`, `bill_duplicate_invoice`, and `bill_delete_invoice` cover the rest of the invoice lifecycle.
+- **Clients:** `bill_create_client`, `bill_update_client`, and `bill_delete_client` manage the recipient records.
+- **Expenses and rates:** `bill_create_expense`, `bill_update_expense`, `bill_delete_expense`, `bill_approve_expense`, and `bill_reject_expense` for costs; `bill_create_rate`, `bill_update_rate`, `bill_delete_rate`, and `bill_resolve_rate` for billing rates (the create tool accepts project, user, and effective-date scoping that the UI form does not).
+- **Reporting:** `bill_get_overdue`, `bill_get_revenue_summary`, `bill_get_profitability`, and `bill_get_outstanding` back the Reports view's data.
+- **Settings:** `bill_get_settings` and `bill_update_settings` read and write the org billing identity and invoice defaults, including the logo URL and default currency the UI form omits.
+
+A typical agent flow is: an agent drafts an invoice from a deal or from logged time, fills line items, and records a payment when one lands, while leaving the **Finalize** and **Send** steps for an admin or owner to approve. For high-stakes actions, route the work through the platform approval queue (the `proposal_create` / `proposal_list` / `proposal_decide` tools) so a human signs off before money moves.
 
 Two cautions for agent-driven invoicing:
 
-- `bill_create_invoice_from_time` is the only working path to bill tracked time today, because the in-app wizard is a stub. However, this tool sends `date_from` and `date_to`, while the API route it calls (`POST /invoices/from-time-entries`) requires an explicit list of `time_entry_ids` and ignores dates. As written, the tool call is expected to fail validation. Until the tool is fixed to pass `time_entry_ids`, drive time-based invoicing by calling the API directly with the entry IDs.
-- The tools cover creation through payment but not voiding, duplicating, editing, deleting, approving or rejecting expenses, updating rates, or changing settings. Those actions remain human-driven in the UI (or direct API calls).
+- `bill_create_invoice_from_time` sends `date_from` and `date_to`, while the API route it calls (`POST /invoices/from-time-entries`) requires an explicit list of `time_entry_ids` and ignores dates. As written, the tool call is expected to fail validation. Until the tool is fixed to pass `time_entry_ids`, drive time-based invoicing by calling the API directly with the entry IDs.
+- The invoice number format the live finalizer produces is `{prefix}-{number:05d}` (for example `INV-00001`). Year-based forms like `INV-2026-0042` that appear in some seed data and examples are not what finalize generates.
 
-When an agent surfaces Bill data into a shared surface in another app, it should run the platform `can_access` visibility check per `docs/reference/agent-conventions.md`. For the full tool catalog, see the MCP-tools reference in `docs/apps/bill/`.
+Bill participates in the cross-cutting agentic platform that every BigBlueBam app shares:
+
+- **Identity and heartbeat.** Agent and service accounts carry `users.kind` (`agent` or `service`), which is mirrored onto each activity row's `actor_type`, so Bill writes made by an agent are attributable. Agent runners report liveness with `agent_heartbeat`.
+- **Approvals.** Beyond the in-app **Request approval** flow (which posts to Bam's queue), agents can stage any decision in the durable proposal queue with `proposal_create` and let a human resolve it with `proposal_decide`.
+- **Unified activity.** Bill invoice and payment activity is queryable across apps through `activity_query` and `activity_by_actor`, and surfaces in the unified activity view alongside the other apps.
+- **Policies and webhooks.** Per-agent kill switches and tool allowlists (the `bill.*` glob) gate which Bill tools a given agent may call. Subscribed Bill events can be pushed to agent runners over HMAC-signed outbound webhooks.
+- **Visibility.** Before an agent surfaces Bill data (an invoice total, a client balance) into a shared surface in another app, it should run the platform `can_access` check for each cited `bill.invoice` entity and drop anything the asker is not allowed to see, per `docs/reference/agent-conventions.md`.
+
+For the full tool catalog, see the MCP-tools reference in `docs/apps/bill/`.
 
 ## User Stories
 
 ### Story: Set up your billing identity
 
-**Who:** An org admin setting up Bill for the first time.
+**Who:** An org admin or owner setting up Bill for the first time.
 **Goal:** Make new invoices carry your company details and sensible defaults.
 **Before you start:** You are logged in to BigBlueBam and have Bill settings permission.
 
@@ -287,11 +301,11 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 
 **Result:** Your company identity is stored. Every new invoice snapshots these details onto its "from" side and inherits the defaults you set.
 
-**Related:** Add your first client next (Story: Add a client and send your first invoice).
+**Related:** Add your first client next (Story: Add a client and send your first invoice). An agent can set the same fields, including the logo URL and default currency, with `bill_update_settings`.
 
 ### Story: Add a client and send your first invoice
 
-**Who:** Anyone who bills clients.
+**Who:** Anyone who bills clients. (A member can build the draft; an admin or owner finalizes and sends.)
 **Goal:** Create a client, invoice them, and send it.
 **Before you start:** Billing identity is set in Bill Settings. You have permission to create clients and invoices.
 
@@ -304,14 +318,14 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 5. In **Line Items**, enter a Description, Qty, and Unit Price (in cents) for each row, using **+ Add line item** for more rows.
 6. Set the **Tax Rate** if needed and review **Subtotal**, **Tax**, and **Total**.
 7. Click **Create Draft Invoice**. You land on the draft's detail page.
-8. Click **Finalize** in the header. The invoice gets its number and locks.
+8. Click **Finalize** in the header (admin or owner). The invoice gets its number and locks.
 9. Click **Re-send** to dispatch it (this queues an email if email is configured).
 
 **Result:** The client has a finalized, sent invoice with a permanent number. It appears in the Invoices list as `sent`.
 
-**Related:** Record the payment when it arrives (Story: Record a payment to closeout). An agent can do the same with `bill_create_invoice`, `bill_add_line_item`, `bill_finalize_invoice`, and `bill_send_invoice`.
+**Related:** Record the payment when it arrives (Story: Record a payment to close out). An agent can do the same with `bill_create_client`, `bill_create_invoice`, `bill_add_line_item`, `bill_finalize_invoice`, and `bill_send_invoice`.
 
-### Story: Record a payment to closeout
+### Story: Record a payment to close out
 
 **Who:** Anyone tracking receivables.
 **Goal:** Log payments against an invoice and watch it reach paid.
@@ -328,13 +342,13 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 
 **Result:** A partial payment shows the invoice as `partially_paid`; when payments reach the total it becomes `paid`. The Dashboard **Paid** and **Outstanding** tiles reflect the change.
 
-**Related:** Bill rejects a payment larger than the remaining balance. An agent can record payments with `bill_record_payment`.
+**Related:** Bill rejects a payment larger than the remaining balance. An agent can record payments with `bill_record_payment` and reverse one with `bill_delete_payment`.
 
 ### Story: Capture and approve an expense
 
-**Who:** A team member logging a project cost, and a reviewer approving it.
+**Who:** A team member logging a project cost, and an admin or owner approving it.
 **Goal:** Record an expense and move it through approval.
-**Before you start:** You have permission to create expenses; the reviewer has permission to approve.
+**Before you start:** You have permission to create expenses; the reviewer has the admin or owner role needed to approve.
 
 **Steps**
 
@@ -346,7 +360,7 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 
 **Result:** The expense moves to `approved` (or `rejected`). Approved expenses count against project profit in the Project Profitability report and can no longer be edited.
 
-**Related:** Receipt upload and expense edits are API-only today. An agent can log expenses with `bill_create_expense` and list them with `bill_list_expenses`.
+**Related:** Receipt upload and expense edits are available through the API and the `bill_update_expense` tool. An agent can log expenses with `bill_create_expense`, list them with `bill_list_expenses`, and decide them with `bill_approve_expense` / `bill_reject_expense`.
 
 ### Story: Send an invoice for approval before billing
 
@@ -363,7 +377,7 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 
 **Result:** A request is posted to Bam's approval queue (subject type `bill.invoice`) and a Banter DM goes to the approver via Bolt. The approver reviews and decides inside Bam.
 
-**Related:** After approval, finalize and send the invoice (Story: Add a client and send your first invoice).
+**Related:** After approval, finalize and send the invoice (Story: Add a client and send your first invoice). An agent can stage a comparable sign-off in the platform proposal queue with `proposal_create`.
 
 ### Story: Turn a won Bond deal into an invoice
 
@@ -374,8 +388,8 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 **Steps**
 
 1. Have an agent call `bill_create_invoice_from_deal` with the deal's UUID and the billing client. In a Bolt rule, pass `{{ event.deal.id }}` from the triggering `deal.*` event.
-2. The tool creates a draft invoice with the deal value as one line item and opens it for review.
-3. In Bill, open the new draft, adjust line items or tax if needed, and click **Finalize**.
+2. The tool creates a draft invoice with the deal value as one line item and emits `invoice.created`.
+3. In Bill, open the new draft, adjust line items or tax if needed, and click **Finalize** (admin or owner).
 4. Click **Re-send** to send it.
 
 **Result:** A draft invoice tied to the deal becomes a finalized, sent invoice. A human stays in control of finalize and send.
@@ -384,14 +398,14 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 
 ### Story: Bill tracked time from a project
 
-**Who:** An agent or API caller billing logged hours (the in-app wizard does not work).
+**Who:** An API caller billing logged hours (the in-app wizard does not work).
 **Goal:** Generate an invoice from specific Bam time entries.
-**Before you start:** A rate exists that covers the work (set one under Rates, or via the API for project/user scope). You have the project, the client, and the time entry IDs to bill.
+**Before you start:** A rate exists that covers the work (set one under Rates, via the API, or with `bill_create_rate` for project/user scope). You have the project, the client, and the time entry IDs to bill.
 
 **Steps**
 
 1. Confirm a rate applies by checking Rates, or have an agent call `bill_resolve_rate` for the project, user, and date.
-2. Call `POST /bill/api/v1/invoices/from-time-entries` with `project_id`, `client_id`, and the array of `time_entry_ids` to bill. (The `bill_create_invoice_from_time` MCP tool currently sends date ranges instead of entry IDs and is expected to fail validation, so use the API or pass the entry IDs explicitly.)
+2. Call `POST /bill/api/v1/invoices/from-time-entries` with `project_id`, `client_id`, and the array of `time_entry_ids` to bill. (The `bill_create_invoice_from_time` MCP tool currently sends date ranges instead of entry IDs and is expected to fail validation, so use the API with the entry IDs.)
 3. The service groups the entries by user and task, resolves a rate per group, and builds one line item per group on a new draft.
 4. In Bill, open the draft, review the generated line items, click **Finalize**, then **Re-send**.
 
@@ -415,7 +429,7 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 
 **Result:** A complete financial snapshot for the period, with overdue invoices computed from due dates rather than a stored status.
 
-**Related:** An agent can pull the same data with `bill_get_revenue_summary`, `bill_get_profitability`, and `bill_get_overdue`. The Dashboard's **Overdue** tile does not reflect this; use the Reports table.
+**Related:** An agent can pull the same data with `bill_get_revenue_summary`, `bill_get_profitability`, `bill_get_outstanding`, and `bill_get_overdue`. The Dashboard's **Overdue** tile does not reflect this; use the Reports table.
 
 ### Story: Chase overdue invoices automatically
 
@@ -440,4 +454,4 @@ When an agent surfaces Bill data into a shared surface in another app, it should
 - **Bond** (`/bond/`) - Won deals convert into draft invoices via `bill_create_invoice_from_deal`; a Bill client can link to a Bond company.
 - **Bolt** (`/bolt/`) - Automation rules consume Bill events such as `invoice.paid`, `invoice.overdue`, and `payment.recorded`, and can trigger `bill_create_invoice_from_deal`.
 - **Banter** (`/banter/`) - Approval requests reach the approver as a Banter DM.
-- Bill's own docs in `docs/apps/bill/`: the MCP-tools reference (the full 16-tool catalog) and `guide.md`.
+- Bill's own docs in `docs/apps/bill/`: the MCP-tools reference (the full 39-tool catalog) and `guide.md`.

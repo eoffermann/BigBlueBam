@@ -1,4 +1,4 @@
-# Blank - Forms and submissions
+# Blank - Forms and surveys
 
 > Blank is the forms and surveys app in BigBlueBam. Build a form with drag-and-drop fields, publish it to a public URL, and collect and review responses without writing any code.
 
@@ -15,11 +15,12 @@ Authoring happens in the Blank SPA, which requires a BigBlueBam login. Filling o
 ### Key concepts
 
 - **Form** - the top-level object you build and share. It has a name, a slug (used in its public URL), a description, fields, and behavior settings.
-- **Field** - a single input or element on the form. Fields are ordered, can be marked required, and each has a stable **field key** (letters, digits, and underscores) used as the storage key for answers.
+- **Field** - a single input or element on the form. Fields are ordered, can be marked required, and each has a stable **field key** (letters, digits, and underscores; must start with a letter or underscore) used as the storage key for answers.
 - **Field type** - what kind of input a field is, for example Short Text, Email, Rating, NPS, or Dropdown. You pick the type from the builder palette when you add a field.
 - **Form status** - the lifecycle state of a form: **draft** (still being built), **published** (live and accepting responses), or **closed** (no longer accepting responses). New forms start as draft.
 - **Form type** - a label on the form (Public, Internal, or Embedded) found on the per-form Settings page.
 - **Visibility** - who can reach the form through its URL: **Public** (anyone with the link), **Organization** (members of your org), or **Project members** (members of a chosen Bam project).
+- **Logic (conditional display)** - a field can be configured to show only when another field meets a condition (for example, equals or contains a value). This is stored on the field and is available to agents through the MCP field tools; the visual builder does not yet expose a conditional editor.
 - **Submission** - one response to a form. Submissions are listed in the Responses view and aggregated in Analytics.
 - **Confirmation** - what a respondent sees after submitting: a message, a redirect, or a custom page.
 - **Public form URL** - the shareable link to your published form, in the form `https://YOUR-DOMAIN/forms/<slug>`. This is the server-rendered page the Publish dialog hands you.
@@ -42,7 +43,7 @@ Prerequisites:
 
 The Forms list at `/blank/` is the home screen. It is headed **Forms** with the subtitle "Build forms and surveys to capture responses from anyone." Each form appears as a card showing its name, description, a status pill (draft, published, or closed), the field count, the submission count, and a relative "updated" time.
 
-See `screenshots/light/01-form-list.png` for the Forms list with cards.
+![Forms list](screenshots/light/01-form-list.png)
 
 To create a form:
 
@@ -67,7 +68,7 @@ If you have no forms yet, the list shows an empty state: "No forms yet" with "Cr
 
 The builder at `/blank/forms/<id>/edit` is where you design a form. It has a left field palette, a center canvas, an optional right field-config panel, and an optional live-preview panel.
 
-See `screenshots/light/02-form-builder.png` for the builder with the palette and canvas.
+![Form builder](screenshots/light/02-form-builder.png)
 
 The left palette is headed **Add Field**. Click any type to append a field of that type to the canvas. The available types are:
 
@@ -127,6 +128,8 @@ Type-specific controls:
 
 The **Settings** button in the builder action bar opens the Form Settings dialog, titled **Form Settings**. It covers visibility, expiration, and project scoping.
 
+![Form settings](screenshots/light/06-form-settings-dialog.png)
+
 To set visibility:
 
 1. Click **Settings** in the builder.
@@ -169,16 +172,18 @@ To share a published form:
 
 Preview shows the form exactly as a respondent would see it, without accepting input.
 
-See `screenshots/light/03-form-preview.png` for the full-page preview.
+![Live preview](screenshots/light/03-form-preview.png)
 
 There are two ways to preview:
 
-- In the builder, click **Preview** (eye icon) to toggle the live-preview panel on the right. The panel renders the form as you edit.
+- In the builder, click **Preview** (eye icon) to toggle the live-preview panel on the right. The panel renders the form as you edit and splits a multi-page form at page boundaries with Previous and Next controls and a progress bar.
 - From the Forms list overflow menu, click **Preview**, or go to `/blank/forms/<id>/preview`, for the full-page Form Preview. The header has a "Back to Builder" link and a "PREVIEW MODE" label, and all inputs are disabled.
 
 ### Responses
 
 The Responses view lists every submission for a form. Open it from a form card's overflow menu (**Responses**) or at `/blank/forms/<id>/responses`. The page is titled "<form name> - Responses" and shows the submission count. The back chevron returns you to the builder.
+
+![Responses table](screenshots/light/04-responses.png)
 
 Actions on the Responses page:
 
@@ -199,6 +204,8 @@ To export responses:
 ### Analytics
 
 The Analytics view aggregates the responses to a form. Open it with the **Analytics** button on the Responses page or at `/blank/forms/<id>/analytics`. The page is titled "<form name> - Analytics" and shows the total submission count.
+
+![Form analytics](screenshots/light/05-analytics.png)
 
 It contains:
 
@@ -223,31 +230,44 @@ Each control saves immediately when you change it.
 
 The **Blank Settings** item in the sidebar opens a read-only information page at `/blank/settings`, headed **Settings**. It displays the app defaults (default form type Public, default theme color #3b82f6), the rate-limiting policy (10 submissions per hour), and the events Blank emits. Nothing on this page is editable.
 
-See `screenshots/light/04-settings.png` for the app-level Blank Settings page.
-
 ### Public form
 
 A published form is served as a self-contained HTML page at `https://YOUR-DOMAIN/forms/<slug>`. This is the page the Publish dialog gives you and the one respondents fill out. It renders the form's fields, splits a multi-page form across pages with Back and Next controls and a progress bar, optionally collects the respondent's email, and shows the confirmation (message, redirect, or page) after a successful submission.
 
-Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission.
+Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission. The public submit endpoint is rate-limited to 10 submissions per hour per IP, and a form can also enforce a per-email limit, a maximum response count, and an expiration date.
 
 ### Working with AI agents
 
-Agents can drive much of Blank through MCP tools that proxy to the same API the SPA uses. The tools share your permissions, so an agent can only do what you could do.
+Agents drive Blank through MCP tools that proxy to the same API the SPA uses. The tools share your permissions, so an agent can only do what you could do. There are 20 Blank MCP tools, and together they cover the full authoring lifecycle: generate, create, edit fields, publish, close, duplicate, delete, and read or export responses.
 
-Common agent actions and the tools that perform them:
+Generate and create:
 
-- Draft a form from a description with **`blank_generate_form`**, which returns a suggested form specification (it does not save anything), then create it with **`blank_create_form`** (which accepts inline field definitions).
-- List and inspect forms with **`blank_list_forms`** and **`blank_get_form`**.
-- Update form settings with **`blank_update_form`**.
-- Publish a draft with **`blank_publish_form`**.
-- Read responses with **`blank_list_submissions`** and **`blank_get_submission`**.
-- Summarize and report on results with **`blank_summarize_responses`** and **`blank_get_form_analytics`** (these return the same analytics payload the Analytics view uses).
-- Export raw responses with **`blank_export_submissions`** (returns CSV text).
+- Draft a form from a description with **`blank_generate_form`**, which returns a suggested form specification (it does not save anything). Its heuristics seed fields when the description mentions name, email, phone, NPS, rating or satisfaction, feedback or comment, and bug or issue.
+- Create the draft with **`blank_create_form`**, which accepts inline field definitions.
 
-There are 11 Blank MCP tools in total. Some have no matching screen in the SPA: `blank_generate_form` and `blank_get_submission` are agent-only, since the builder has no AI-draft entry point and the Responses table has no per-submission detail view. There is also no MCP tool to add, edit, reorder, or delete fields after a form is created; an agent that needs specific fields should supply them inline when calling `blank_create_form`.
+Edit structure:
 
-When reviewing agent work, check the form's fields and visibility in the builder before publishing, and confirm the public URL from the **Your form is live** dialog. For the full tool catalog and argument shapes, see the MCP-tools reference in `docs/apps/blank/mcp-tools.md`.
+- Add a field with **`blank_add_field`** (it accepts the conditional-display arguments `conditional_on_field_id`, `conditional_operator`, and `conditional_value`).
+- Change a field with **`blank_update_field`**, remove one with **`blank_delete_field`**, and reorder them with **`blank_reorder_fields`**.
+
+Inspect, publish, and manage lifecycle:
+
+- List and read forms with **`blank_list_forms`** and **`blank_get_form`**.
+- Update form metadata with **`blank_update_form`**.
+- Publish a draft with **`blank_publish_form`** and stop new responses with **`blank_close_form`**.
+- Clone a form with **`blank_duplicate_form`**, get its iframe snippet with **`blank_get_embed_code`**, and remove a form with **`blank_delete_form`** (destructive).
+
+Read and report on responses:
+
+- List and read submissions with **`blank_list_submissions`** and **`blank_get_submission`**.
+- Summarize and report on results with **`blank_summarize_responses`** and **`blank_get_form_analytics`** (both return the same analytics payload the Analytics view uses).
+- Export raw responses with **`blank_export_submissions`** (returns CSV text), and remove a single response with **`blank_delete_submission`** (destructive).
+
+Some tools have no matching screen in the SPA: `blank_generate_form` (the builder has no AI-draft entry point), `blank_get_submission` (the Responses table has no per-submission detail view), `blank_add_field` / `blank_update_field` / `blank_delete_field` / `blank_reorder_fields` (an agent can edit fields directly, whereas a person does the same work in the builder canvas), `blank_close_form`, `blank_get_embed_code`, and `blank_delete_submission`. When reviewing agent work, check the form's fields and visibility in the builder before publishing, and confirm the public URL from the **Your form is live** dialog.
+
+Blank also participates in the suite-wide agent platform. Agent activity is attributed to an agent identity and surfaced in the unified activity feed; long-running agents send heartbeats. Destructive or sensitive steps (publishing, closing, or deleting) can be routed through the approval-queue tools so a human decides before the action lands. Per-agent policies (kill switch plus a `blank.*` tool allowlist) gate which Blank tools a service account may call, and subscribed Blank events can be pushed to agent runners through signed outbound webhooks. Before an agent quotes a submission's contents into a shared surface it should call the visibility preflight (`can_access`) for that entity and drop anything the asker is not allowed to see.
+
+For the full tool catalog and argument shapes, see the MCP-tools reference in `docs/apps/blank/mcp-tools.md`.
 
 ## User Stories
 
@@ -323,6 +343,8 @@ When reviewing agent work, check the form's fields and visibility in the builder
 
 **Result:** A new draft form with the same fields, ready to edit and publish independently of the original.
 
+**Related:** An agent can clone a form with `blank_duplicate_form`.
+
 ### Story: Restrict a form to your organization or a project
 
 **Who:** An author who wants the form limited to internal people.
@@ -356,16 +378,16 @@ When reviewing agent work, check the form's fields and visibility in the builder
 
 > Note: do not use the palette's **Page Break** item to split pages. It currently fails because the API does not accept the page-break field type. Use **Page Number** on each field instead.
 
-### Story: Close a form to stop accepting responses (API or agent)
+### Story: Close a form to stop accepting responses
 
 **Who:** An author or agent wrapping up a collection.
 **Goal:** Stop new submissions on a published form.
-**Before you start:** You have the `blank.form.close` permission. There is no button for this in the SPA; close is performed through the API.
+**Before you start:** You have the `blank.form.close` permission. There is no Close button in the SPA; closing is done through the API or an agent.
 
 **Steps**
 
-1. Call `POST /blank/api/v1/forms/<id>/close` with your session cookie or API key.
-2. Blank sets the form's status to closed, turns off **Accept Responses**, and emits a `form.closed` event.
+1. Call `POST /blank/api/v1/forms/<id>/close` with your session cookie or API key, or have an agent call `blank_close_form`.
+2. Blank sets the form's status to closed, turns off **Accept Responses**, and emits a `form.closed` event (source `blank`).
 
 **Result:** The form's public page no longer accepts submissions, and its status pill reads "closed" on the Forms list. There is no in-app control to reopen or un-publish a form.
 
@@ -375,14 +397,14 @@ When reviewing agent work, check the form's fields and visibility in the builder
 
 **Who:** A user delegating form creation to an AI agent.
 **Goal:** Go from a plain-language description to a published, shareable form.
-**Before you start:** The agent runs with your credentials and your publish permission.
+**Before you start:** The agent runs with your credentials and your publish permission. Its `blank.*` policy allowlist must permit the tools below.
 
 **Steps**
 
 1. Ask the agent to draft the form. It calls `blank_generate_form` with your description and returns a suggested specification of fields. Nothing is saved yet.
 2. Review the suggested fields with the agent and adjust.
-3. The agent calls `blank_create_form` with the field definitions inline to create the draft.
-4. The agent calls `blank_publish_form` to publish it.
+3. The agent calls `blank_create_form` with the field definitions inline to create the draft. It can refine the structure further with `blank_add_field`, `blank_update_field`, `blank_delete_field`, and `blank_reorder_fields`.
+4. The agent calls `blank_publish_form` to publish it. If publishing is routed through the approval queue, you approve the proposal first.
 5. Open the form in the builder to confirm the fields and visibility, then copy the public URL from the **Your form is live** dialog (open it with the **Share** button).
 6. Later, ask the agent to report on results with `blank_summarize_responses`.
 

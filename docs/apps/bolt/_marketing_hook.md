@@ -1,5 +1,6 @@
-Event-driven workflow automation that connects all your BigBlueBam apps.
+Event-driven workflow automation that connects every BigBlueBam app: WHEN this happens, IF these hold, THEN run these steps.
 
-- Visual node-graph editor for building automations without code
-- Triggers from every BigBlueBam app with cross-app action chains
-- Detailed execution logs with per-step traces for debugging
+- Build rules with a Simple WHEN / IF / THEN editor or a Visual node-graph canvas, no code required
+- Trigger off over 130 events across the suite and run cross-app action chains with variable interpolation between steps
+- Detailed execution logs with per-step traces, single-event tracing, and one-click retry of failed runs
+- Built for AI agents too: 26 MCP tools to author, test, and observe automations, with policy guardrails and approvals

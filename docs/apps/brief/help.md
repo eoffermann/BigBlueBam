@@ -10,15 +10,15 @@
 Brief stores your team's writing as **Documents**. Each document has a title, a
 URL slug, an optional icon, a rich-text body, a status, a visibility level, an
 optional project, and an optional folder. Documents are edited in a rich-text
-editor with a formatting toolbar and slash commands, and two or more people can
-type in the same document at the same time with live cursors.
+editor (built on Tiptap) with a formatting toolbar and slash commands, and two
+or more people can type in the same document at the same time with live cursors.
 
 Beyond writing, Brief organizes documents into **Folders** and scopes them to
-**Projects**, keeps numbered **Versions** as you publish, supports threaded
-**Comments** for review, lets you **Star** documents for quick access, and can
-**Promote** a finished document into a Beacon knowledge-base article. Documents
-can also be **Linked** to Bam tasks and Beacon articles so related work stays
-connected.
+**Projects**, keeps numbered **Versions** as you publish, supports threaded and
+text-anchored **Comments** for review, lets you **Star** documents for quick
+access, and can **Promote** a finished document into a Beacon knowledge-base
+article. Documents can also be **Linked** to Bam tasks and Beacon articles so
+related work stays connected.
 
 Brief is part of the BigBlueBam suite. It shares your platform login with Bam
 and the other apps, pulls its project list from Bam, and publishes events to
@@ -33,6 +33,10 @@ Brief is currently in BETA. The sidebar header shows a `beta` badge.
 - **Document** - A single piece of writing. It has a title, a globally unique
   slug, an optional icon (up to 2 characters), a rich-text body, a word count, a
   status, a visibility, an optional project, and an optional folder.
+- **Editor** - The Tiptap rich-text surface where you write. It has a formatting
+  toolbar, slash commands (type `/`), a live word count, a Table of Contents
+  built from your headings, and a Settings sidebar for icon, visibility,
+  project, and starting template.
 - **Status** - The document's place in its lifecycle. The four statuses are
   **Draft**, **In Review**, **Approved**, and **Archived**. New documents start
   as Draft. Saving a draft keeps it Draft; publishing sets it to Approved. There
@@ -46,22 +50,23 @@ Brief is currently in BETA. The sidebar header shows a `beta` badge.
   Organization, Project, or Private instead (see Set visibility).
 - **Folder** - A named container for documents. Folders can be nested and can be
   scoped to a project. You create folders from the sidebar; renaming and deleting
-  folders is not available in the UI today.
+  folders is not available in the UI today (an agent can do both, see Working
+  with AI agents).
 - **Project scope** - A filter in the sidebar that limits the documents and
   folders you see to one project, or shows everything with "All Projects".
 - **Version** - A numbered snapshot of a document. Versions are listed read-only
   in the document detail sidebar; creating and restoring versions is done through
   the API or an agent (see Working with AI agents).
 - **Comment** - A note on a document. Comments can be threaded (a reply to
-  another comment) and can be marked resolved. Comments appear in the detail
-  sidebar.
+  another comment) and can be anchored to a span of text. Comments can be marked
+  resolved and appear in the detail sidebar.
 - **Star** - A per-user bookmark on a document. Starred documents show on the
   Home and Starred screens.
 - **Template** - A pre-built starting point for a new document. You pick a
   template from the Templates screen and the editor pre-fills with its content.
 - **Link** - A typed connection from a document to a Bam task or a Beacon
   article. Links show read-only under "Linked Items" in the detail sidebar;
-  creating a task link is done through an agent or the API (see Linked Items).
+  creating links is done through an agent or the API (see Linked Items).
 - **Promote to Beacon** - Graduating a finished document into a Beacon
   knowledge-base article. This is one-way: once promoted, the document records
   the Beacon it became.
@@ -144,9 +149,8 @@ You create documents in the editor, either blank or from a template.
 
 To create a new document:
 
-1. Click **New Document** on Home, or **New Document** in the Documents toolbar,
-   or **+ New Document** from anywhere it appears. This opens the editor at
-   `/new`.
+1. Click **New Document** on Home, or **New Document** in the Documents toolbar.
+   This opens the editor at `/new`.
 2. Type a title in the **"Document title..."** field at the top.
 3. Write your content in the body. Use the toolbar, slash commands, or both (see
    Write and format).
@@ -188,9 +192,9 @@ To use slash commands:
 The footer shows a live word count as you type. The right sidebar shows a
 **Table of Contents** built from your headings.
 
-Note: the editor renders task-embed, mention, and channel-link nodes if a
-document already contains them, but the toolbar and slash menu do not include a
-control to insert a Beacon embed or a mention.
+Note: the editor renders task-embed, mention, callout, beacon-embed, and
+channel-link nodes if a document already contains them, but the toolbar and slash
+menu do not include a control to insert a Beacon embed or a mention.
 
 ### The "Brief summary (optional)" field
 
@@ -255,8 +259,10 @@ Alternatively, when creating a blank document you can pick a template from the
 none).
 
 If there are no templates, the Templates screen shows "No templates available
-yet." with "Templates can be created by administrators." Templates are created
-through the API, an agent, or seed data; there is no template-authoring screen.
+yet." with "Templates can be created by administrators." There is no
+template-authoring screen in Brief today; templates come from the API, an agent,
+or seed data. An agent can create, update, and delete org-level templates (see
+Working with AI agents).
 
 ![Template browser](screenshots/light/05-templates.png)
 
@@ -312,11 +318,13 @@ To edit a document:
 
 When two or more people open the same document's editor, each sees the others'
 cursors and presence, and readers on the detail page see the changes as they
-happen.
+happen. Brief uses a conflict-free shared editing model (Yjs) over the
+`/brief/ws` WebSocket, so concurrent edits merge without overwriting each other.
 
 ### Comments
 
-Comments let your team review a document in the detail sidebar.
+Comments let your team review a document in the detail sidebar. A comment can be
+a top-level note, a threaded reply, or anchored to a span of text.
 
 To add a comment:
 
@@ -339,8 +347,6 @@ To star or unstar a document:
    not starred and **Remove star** when it is.
 3. Find your starred documents on the **Starred** screen and in the Starred list
    on Home.
-
-![Starred documents](screenshots/light/06-starred.png)
 
 ### Duplicate a document
 
@@ -394,9 +400,8 @@ The detail sidebar shows a read-only **Linked Items** section listing the Bam
 tasks and Beacon articles connected to the document. Task links open in Bam at
 `/b3/tasks/:id` and Beacon links open in Beacon.
 
-There is no button in the Brief UI to create a link. Task links are created
-through an agent or the API; Beacon links are created through the API. See
-Working with AI agents.
+There is no button in the Brief UI to create or remove a link. Links are created
+and removed through an agent or the API (see Working with AI agents).
 
 ### Folders and project scope
 
@@ -415,7 +420,8 @@ To filter by project scope:
 2. Choose **All Projects** or a specific project. Documents and folders filter to
    that scope.
 
-Renaming and deleting folders is not available in the UI today.
+Renaming, moving, and deleting folders are not available in the Brief UI today;
+an agent or the API can do all three (see Working with AI agents).
 
 ### Search
 
@@ -435,63 +441,112 @@ search." If nothing matches, it shows "No documents found for &quot;&lt;query&gt
 Note: search results do not currently show a body excerpt under each title.
 Keyword search matches against the title and body text.
 
+![Search results](screenshots/light/06-search.png)
+
 ### Working with AI agents
 
-Agents work with Brief through the Model Context Protocol (MCP). Brief exposes 18
-MCP tools. Agents commonly author and maintain documents end to end, run
-reviews, and connect documents to the rest of the suite. Each tool forwards your
-bearer token, so an agent can only do what your account is allowed to do, and
-write tools require the `read_write` scope.
+Agents work with Brief through the Model Context Protocol (MCP). Brief exposes 48
+MCP tools that span the entire app: documents, search, comments, versions, links,
+collaborators, embeds, templates, and folders. Each tool forwards your bearer
+token, so an agent can only do what your account is allowed to do, and write
+tools require the `read_write` scope. Brief enforces Organization, Project, and
+Private visibility on the server regardless of how a tool is called.
+
+Many of these tools have no human button in Brief. They are the only way to do
+things like append content, set the **In Review** status, create or remove links,
+manage collaborators, author templates, or rename and delete folders.
 
 Authoring and maintenance:
 
 - `brief_create` creates a document (title, project, folder, template, markdown
   content, visibility).
 - `brief_update_content` replaces the document body; `brief_append_content` adds
-  to it. `brief_append_content` has no human button, so appending is agent or
-  API only.
+  to the end of it. `brief_append_content` has no human button, so appending is
+  agent or API only.
 - `brief_update` changes metadata such as title, status, visibility, folder,
   icon, and pinned. This is the only way to set the **In Review** status, which
   has no control in the editor.
-- `brief_archive`, `brief_restore`, and `brief_duplicate` cover the lifecycle
-  actions.
+- `brief_archive`, `brief_restore`, `brief_duplicate`, and `brief_star` cover the
+  lifecycle and bookmarking actions.
 
 Search and reading:
 
-- `brief_list` lists documents; `brief_get` opens one. `brief_search` runs the
-  keyword search. Brief is also a registered source for the platform-wide
-  `search_everything` tool.
+- `brief_list`, `brief_get`, `brief_recent`, `brief_starred`, and `brief_stats`
+  cover listing, opening, and counting documents. `brief_search` runs the keyword
+  search; `brief_semantic_search` runs vector search and falls back to full-text
+  search when the vector index is unavailable. Brief is also a registered source
+  for the platform-wide `search_everything` tool.
 
 Review:
 
-- `brief_comment_list`, `brief_comment_add`, and `brief_comment_resolve` let an
-  agent read, add, and resolve comments.
+- `brief_comment_list`, `brief_comment_add`, `brief_comment_resolve`,
+  `brief_comment_edit`, and `brief_comment_delete` cover reading, adding,
+  resolving, editing, and deleting comments. `brief_comment_react` and
+  `brief_comment_unreact` add and remove emoji reactions, which have no UI.
 
 Versions:
 
-- `brief_versions` lists versions, `brief_version_get` fetches one, and
-  `brief_version_restore` restores a version. There is no human button to create
-  or restore a version, so version management is agent or API only.
+- `brief_versions` lists versions, `brief_version_get` fetches one,
+  `brief_version_create` records a named snapshot, `brief_version_restore`
+  restores a version, and `brief_version_diff` computes a line-by-line diff
+  between two versions. There is no human button to create, restore, or diff
+  versions, so version management is agent or API only.
+
+Export:
+
+- `brief_export_markdown` and `brief_export_html` return the document as Markdown
+  or as a standalone styled HTML page, the same content the **Export** button
+  downloads.
 
 Cross-app links and graduation:
 
-- `brief_link_task` creates a link from a document to a Bam task (by UUID or by a
-  human reference like FRND-42). This is the only way to create a task link;
-  there is no UI for it. Beacon links are created through the API only and have
-  no MCP tool.
+- `brief_links_list` lists every task and Beacon link on a document.
+  `brief_link_task` creates a link to a Bam task (by UUID or by a human reference
+  like FRND-42); `brief_link_beacon` creates a link to a Beacon article;
+  `brief_link_remove` removes either kind. These tools are the only way to create
+  or remove links, since "Linked Items" is read-only in the UI.
 - `brief_promote_to_beacon` graduates a document into a Beacon article, the same
   action as the **Promote to Beacon** button.
 
-Sharing and collaborators are API and MCP territory, not a Brief UI feature. The
-backend supports per-document collaborators with **view**, **comment**, or
-**edit** permission, but there is no share dialog in Brief and no MCP tool for
-collaborators. To share a single document with specific people you must use the
-collaborator API directly, or set the document's visibility to Project or
-Organization.
+Sharing, organizing, and templates:
 
-When an agent posts a Brief document link into a shared surface in another app,
-it should first check the platform `can_access` tool for the reader. Brief
-enforces Organization, Project, and Private visibility on the server regardless.
+- `brief_collaborators_list`, `brief_collaborator_add`,
+  `brief_collaborator_update`, and `brief_collaborator_remove` manage per-document
+  collaborators with **view**, **comment**, or **edit** permission. Brief has no
+  share dialog, so collaborator management is agent or API only; to share a single
+  document with specific people, use these tools or set the document's visibility
+  to Project or Organization.
+- `brief_folders_list`, `brief_folder_create`, `brief_folder_update`, and
+  `brief_folder_delete` manage the folder tree. The UI can only create folders, so
+  renaming, moving, and deleting are agent or API only.
+- `brief_templates_list`, `brief_template_create`, `brief_template_update`, and
+  `brief_template_delete` manage org-level templates. There is no
+  template-authoring screen, so template CRUD is agent or API only.
+- `brief_embeds_list` and `brief_embed_delete` read and remove embedded file
+  records.
+
+Cross-cutting agent platform. Brief plugs into the suite-wide agentic surfaces
+that every app shares:
+
+- **Identity and heartbeat.** Agent and service accounts are first-class:
+  `agent_heartbeat`, `agent_self_report`, and `agent_audit` let a runner announce
+  itself and report its activity, and every write an agent makes is stamped with
+  its actor type in the unified activity log.
+- **Approvals.** When a change should pause for a human, agents file it with
+  `proposal_create`; a reviewer lists and decides with `proposal_list` and
+  `proposal_decide`. This is the safe path for an agent to draft a sensitive
+  document, comment, or promotion and wait for sign-off before it lands.
+- **Cross-app read plane.** `search_everything` fans out across Brief and the
+  other apps, and `resolve_references` turns mentions into resolved entities.
+  Brief contributes documents to both.
+- **Visibility preflight.** Before posting a Brief document link into a shared
+  surface in another app, an agent should call `can_access` for the reader and
+  drop anything the reader is not allowed to see. Brief still enforces visibility
+  on the server, so this is a courtesy check that avoids dangling links.
+- **Policies and webhooks.** Per-agent kill switches and tool allowlists
+  (`agent_policies`) gate which `brief.*` tools a given service account may call,
+  and outbound webhooks push subscribed Bolt events (such as `document.published`
+  and `document.promoted`) to agent runners.
 
 For the full tool catalog see `docs/apps/brief/mcp-tools.md`.
 
@@ -537,7 +592,8 @@ with `brief_create` followed by `brief_update_content`.
 
 **Result:** A new document exists based on the template.
 
-**Related:** Start from a template; Create a document.
+**Related:** Start from a template; Create a document. An agent can author the
+template itself with `brief_template_create`.
 
 ### Story: Organize documents with folders and project scope
 
@@ -557,7 +613,9 @@ with `brief_create` followed by `brief_update_content`.
 **Result:** Your documents are grouped by folder and project and easy to find
 through the sidebar filters.
 
-**Related:** Folders and project scope; Browse the document list.
+**Related:** Folders and project scope; Browse the document list. An agent can
+rename, move, or delete a folder with `brief_folder_update` and
+`brief_folder_delete`, which the UI cannot do.
 
 ### Story: Co-edit a document in real time
 
@@ -595,7 +653,7 @@ saw the changes as they happened.
 **Result:** Brief opens the matching document.
 
 **Related:** Search; Browse the document list. An agent can search with
-`brief_search`.
+`brief_search`, or `brief_semantic_search` for a meaning-based match.
 
 ### Story: Review a document with comments
 
@@ -617,7 +675,8 @@ resolve.
 done.
 
 **Related:** Comments. An agent can use `brief_comment_add` and
-`brief_comment_resolve`.
+`brief_comment_resolve`, and can anchor a comment to a span of text with the
+`anchor_text` option.
 
 ### Story: Star a document for quick access
 
@@ -633,7 +692,7 @@ done.
 
 **Result:** The document appears in your Starred views.
 
-**Related:** Star a document.
+**Related:** Star a document. An agent can toggle the star with `brief_star`.
 
 ### Story: Duplicate a document to reuse its structure
 
@@ -649,7 +708,8 @@ done.
 
 **Result:** A draft copy exists for you to edit independently.
 
-**Related:** Duplicate a document. An agent can use `brief_duplicate`.
+**Related:** Duplicate a document. An agent can use `brief_duplicate`, optionally
+copying into a different project.
 
 ### Story: Export a document to a file
 
@@ -665,7 +725,8 @@ done.
 
 **Result:** The file downloads to your machine.
 
-**Related:** Export a document.
+**Related:** Export a document. An agent can fetch the same content with
+`brief_export_markdown` or `brief_export_html`.
 
 ### Story: Archive a document and restore it later
 
@@ -724,7 +785,9 @@ document and the task. Linking has no human UI.
 **Result:** The document and task are connected and the relationship is visible
 to readers.
 
-**Related:** Linked Items; Working with AI agents.
+**Related:** Linked Items; Working with AI agents. An agent can also link a
+Beacon article with `brief_link_beacon` and remove either link with
+`brief_link_remove`.
 
 ### Story: Snapshot and restore a version (agent driven)
 
@@ -735,8 +798,8 @@ no human button for this.
 
 **Steps**
 
-1. The agent records a snapshot through the versions API (optionally with a
-   change summary).
+1. The agent calls `brief_version_create` with an optional label and change
+   summary to record a snapshot.
 2. A human opening the document sees the snapshot listed read-only under
    **Version** in the detail sidebar.
 3. To roll back, the agent calls `brief_version_restore` with the target version,
@@ -745,7 +808,8 @@ no human button for this.
 **Result:** The document has a versioned history and can be returned to an
 earlier state.
 
-**Related:** Read a document; Working with AI agents.
+**Related:** Read a document; Working with AI agents. An agent can compare two
+snapshots with `brief_version_diff`.
 
 ### Story: Agent authors a document end to end
 
@@ -766,7 +830,9 @@ permissions.
 **Result:** A complete, linked document exists, and a Beacon article was created
 from it, all without manual editing.
 
-**Related:** Working with AI agents; Promote a document into Beacon knowledge.
+**Related:** Working with AI agents; Promote a document into Beacon knowledge. If
+the promotion should pause for review, the agent can file a `proposal_create`
+first and wait for a human `proposal_decide`.
 
 ## Related
 
@@ -779,3 +845,4 @@ from it, all without manual editing.
   automations can react.
 - Brief's MCP tool catalog: `docs/apps/brief/mcp-tools.md`.
 - Brief's product guide: `docs/apps/brief/guide.md`.
+</content>

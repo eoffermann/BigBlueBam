@@ -19,7 +19,7 @@ This document describes what the Bond web app actually does today. Where an acti
 - **Deal** - a revenue opportunity in a pipeline. Holds a name, value, currency, expected close date, probability, and a computed weighted value (value times probability). A deal is Open until it is closed Won or Lost.
 - **Lifecycle stage** - where a contact sits in your funnel: Lead, Subscriber, MQL (marketing qualified), SQL (sales qualified), Opportunity, Customer, Evangelist, or Other. New contacts default to Lead.
 - **Lead score** - a number from 0 to 100 cached on each contact. Scoring rules add or subtract points based on contact attributes.
-- **Pipeline** - an ordered set of stages plus a currency. One pipeline can be the default. The active pipeline is chosen from the sidebar scope selector.
+- **Pipeline** - an ordered set of stages plus a currency. One pipeline can be the default. The default pipeline is selected automatically when you open the board; you can switch to another from the sidebar scope selector.
 - **Stage** - a column on the board. Has a name, a type (Active, Won, or Lost), a probability percentage, an optional rotting threshold in days, and a color.
 - **Activity** - a timeline entry logged against a contact, company, and/or deal. Types include Note, Email Sent, Email Received, Call, Meeting, and Task, plus system-generated entries like stage changes and deal created/won/lost.
 - **Rotting (stale) deal** - an open deal whose days in its current stage exceed that stage's rotting threshold. The card turns orange, and red when it is more than 1.5 times over.
@@ -34,7 +34,7 @@ Bond lives at `/bond/`. Open it from the Launchpad app switcher in the top-left 
 Prerequisites:
 
 - You must be signed in to BigBlueBam. If you are not, Bond shows "Please log in to BigBlueBam first to access Bond." with a "Go to BigBlueBam Login" button that sends you to `/b3/`.
-- At least one pipeline must exist before you can create deals. With no pipeline, the board shows "No pipeline selected" and a Create Pipeline button.
+- At least one pipeline must exist before you can create deals. If your org has no pipeline at all, the board shows "No pipeline selected" and a Create Pipeline button. Once a pipeline exists, the board selects it for you automatically (see Choosing the active pipeline below).
 - Bond is org-scoped. Use the OrgSwitcher in the header to change which organization's data you see.
 
 Roles and visibility:
@@ -48,7 +48,7 @@ The sidebar nav has five items: **Pipeline Board**, **Contacts**, **Companies**,
 
 ### Choosing the active pipeline
 
-The pipeline scope selector at the top of the sidebar sets which pipeline the board and Analytics use.
+The pipeline scope selector at the top of the sidebar sets which pipeline the board and Analytics use. When pipelines exist, Bond auto-selects one for you on first load (the one marked default, or the first pipeline if none is marked default), so the board opens straight onto deals instead of an empty "No pipeline selected" screen. You only see that empty state when the org genuinely has no pipelines yet.
 
 To switch pipelines:
 
@@ -58,11 +58,13 @@ To switch pipelines:
 
 ### Pipeline Board
 
+![Pipeline board](screenshots/light/01-pipeline-board.png)
+
 The board (`/`) shows every deal in the active pipeline as a card in a stage column. The header shows the pipeline name and a summary: "N deals", "Total: $X", and "Weighted: $Y".
 
 To read the board:
 
-1. Open **Pipeline Board** from the sidebar.
+1. Open **Pipeline Board** from the sidebar. The default pipeline loads automatically.
 2. Each column is a stage, with a color dot, the stage name, a deal count, and the stage's total value.
 3. Each card shows the deal name, company, value, close date, days in stage, and the owner's avatar. Orange cards are rotting; red cards are severely overdue (more than 1.5 times the rotting threshold).
 
@@ -100,6 +102,8 @@ To add a deal directly to a specific stage:
 
 ### Deal detail and outcomes
 
+![Deal detail](screenshots/light/02-deal-detail.png)
+
 Open a deal card to see its full record at `/deals/:id`: the header with the deal name and a status badge (**Open**, **Won**, or **Lost**), value, company link, close date, days in stage, and owner. The left side shows the description, an inline Log Activity form, and the Activity timeline. The right side shows Details (Probability, Weighted Value, Created, Closed, Close Reason, Lost To), the Related panel, and Stage History.
 
 To close a deal as won:
@@ -130,6 +134,8 @@ On a deal's detail page:
 
 ### Contacts list
 
+![Contacts list](screenshots/light/03-contacts-list.png)
+
 The Contacts list (`/contacts`) is your people directory. The header shows "Contacts", an "N total" count, a "Search contacts..." box, an **Include deleted** checkbox, and an **Add Contact** button.
 
 To browse and filter contacts:
@@ -155,6 +161,8 @@ To add a contact:
 
 ### Contact detail
 
+![Contact detail](screenshots/light/04-contact-detail.png)
+
 A contact's page (`/contacts/:id`) shows the avatar, name, title, a link to the company, the lifecycle badge, and the lead score. Below are the email (mailto), phone (tel), and deal count. Three tabs organize the body: **activity**, **details**, and **deals**.
 
 To work a contact:
@@ -171,6 +179,8 @@ To delete a contact:
 The contact overflow menu also lists **Edit Contact** and **Create Deal**, but neither is wired up in the app yet; selecting them does nothing. To edit a contact (including its lifecycle stage) or to create a deal tied to a contact, use an MCP tool or the REST API.
 
 ### Companies list
+
+![Companies list](screenshots/light/05-companies-list.png)
 
 The Companies list (`/companies`) holds the organizations you work with. The header shows "Companies", an "N total" count, a "Search companies..." box, an **Include deleted** checkbox, and an **Add Company** button.
 
@@ -220,6 +230,8 @@ To log an activity:
 
 ### Analytics
 
+![Analytics dashboard](screenshots/light/06-analytics.png)
+
 The Analytics page (`/analytics`) reports on the effective pipeline (the active one, falling back to the default, then the first). The header reads "Analytics" with "<pipeline> overview".
 
 To read your numbers:
@@ -251,7 +263,7 @@ To inspect and manage stages:
 3. To add a stage, use the inline **Add stage** form: type a name, pick a type (Active, Won, or Lost), and click **Add**.
 4. To delete a stage, hover the row and click the trash icon.
 
-Note: each stage row shows a drag handle, but reordering stages is not wired in the Settings UI. Stage reordering, and editing a stage's probability, rotting days, or color, are available only through the REST API. The Add stage form sets only the name and type.
+Note: each stage row shows a drag handle, but reordering stages is not wired in the Settings UI. Stage reordering, and editing a stage's probability, rotting days, or color, are available through the REST API or the `bond_reorder_stages` and `bond_update_stage` MCP tools. The Add stage form sets only the name and type.
 
 ### Bond Settings: Custom Fields
 
@@ -302,28 +314,31 @@ To restore a deleted contact or company:
 2. Check **Include deleted**.
 3. Find the struck-through row and click **Restore**.
 
-Deleted deals are restored through the REST API or MCP, not from the board UI.
+Deleted deals are restored through the REST API or the `bond_restore_deal` MCP tool, not from the board UI.
 
 ### Working with AI agents
 
-Bond exposes 22 MCP tools in its catalog (plus the cross-cutting `bond_find_duplicates`), so an AI agent can do most of what a salesperson does, and several things the current UI does not expose. Most write tools accept a name or a UUID (a pipeline or stage name, a contact email or name, a company name or domain, a deal title fragment, an owner email); an ambiguous or missing match returns a clean error instead of mutating data.
+Bond exposes a large MCP catalog (over 70 tools across `bond-tools.ts`, plus the cross-cutting `bond_find_duplicates`), so an AI agent can do everything a salesperson does in the app, plus the admin configuration and the in-place edits the current UI does not expose. Most write tools accept a name or a UUID (a pipeline or stage name, a contact email or name, a company name or domain, a deal title fragment, an owner email); an ambiguous or missing match returns a clean error instead of mutating data.
 
 What agents commonly drive:
 
-- **Contacts:** `bond_create_contact`, `bond_update_contact`, `bond_list_contacts`, `bond_get_contact`, `bond_search_contacts`, and `bond_merge_contacts`. Editing a contact (including lifecycle stage), which the app cannot do in place, runs through `bond_update_contact`.
+- **Contacts:** `bond_create_contact`, `bond_update_contact`, `bond_list_contacts`, `bond_get_contact`, `bond_search_contacts`, `bond_merge_contacts`, `bond_delete_contact`, and `bond_restore_contact`. Editing a contact (including lifecycle stage), which the app cannot do in place, runs through `bond_update_contact`.
 - **Idempotent contact ingestion:** `bond_upsert_contact` upserts by email. It is part of the platform's idempotent write plane and returns a `created` flag and an idempotency key, so repeated ingestion does not create duplicates. It also resurrects a soft-deleted contact with the same email.
-- **Companies:** `bond_create_company`, `bond_update_company`, `bond_list_companies`, `bond_get_company`. Editing a company, which the app cannot do in place, runs through `bond_update_company`.
-- **Deals:** `bond_create_deal` (collects fields the in-app dialog omits, such as company, owner, and probability), `bond_update_deal` (the in-place edit the UI lacks), `bond_list_deals`, `bond_get_deal`, `bond_move_deal_stage`, `bond_close_deal_won`, and `bond_close_deal_lost` (the lost tool can record a close reason and the competitor you lost to).
-- **Activities:** `bond_log_activity` mirrors the Log Activity form.
-- **Lead scoring:** `bond_score_lead` recalculates a contact's score, the action the Settings UI has no button for.
-- **Reporting:** `bond_get_pipeline_summary`, `bond_get_stale_deals`, and `bond_get_forecast` return the same data the Analytics page renders.
-- **Deduplication:** `bond_find_duplicates` returns ranked likely-duplicate contacts with confidence and signals, and pairs with the platform `dedupe_record_decision` and `dedupe_list_pending` tools (entity type `bond.contact`) plus `bond_merge_contacts` to resolve them. There is no in-app dedupe screen; this loop is API and tool only.
+- **Companies:** `bond_create_company`, `bond_update_company`, `bond_list_companies`, `bond_get_company`, `bond_search_companies`, `bond_delete_company`, `bond_restore_company`, `bond_list_company_contacts`, and `bond_list_company_deals`. Editing a company, which the app cannot do in place, runs through `bond_update_company`.
+- **Deals:** `bond_create_deal` (collects fields the in-app dialog omits, such as company, owner, and probability), `bond_update_deal` (the in-place edit the UI lacks), `bond_list_deals`, `bond_get_deal`, `bond_move_deal_stage`, `bond_close_deal_won`, and `bond_close_deal_lost` (the lost tool can record a close reason and the competitor you lost to). `bond_duplicate_deal`, `bond_delete_deal`, and `bond_restore_deal` round out the lifecycle, and `bond_list_deal_contacts`, `bond_add_deal_contact`, `bond_remove_deal_contact`, `bond_get_deal_stage_history`, `bond_list_deal_activities`, and `bond_get_deal_related` cover the deal detail surface.
+- **Activities:** `bond_log_activity` mirrors the Log Activity form; `bond_list_activities`, `bond_get_activity`, `bond_update_activity`, and `bond_delete_activity` manage the timeline.
+- **Pipelines and stages (admin):** `bond_list_pipelines`, `bond_get_pipeline`, `bond_create_pipeline`, `bond_update_pipeline`, `bond_delete_pipeline`, and the stage tools `bond_list_stages`, `bond_create_stage`, `bond_update_stage`, `bond_delete_stage`, and `bond_reorder_stages`. `bond_reorder_stages` and `bond_update_stage` do the stage reordering and the probability/rotting/color edits the Settings UI cannot.
+- **Custom fields (admin):** `bond_list_custom_fields`, `bond_get_custom_field`, `bond_create_custom_field`, `bond_update_custom_field`, and `bond_delete_custom_field`.
+- **Lead scoring:** `bond_list_scoring_rules`, `bond_create_scoring_rule`, `bond_update_scoring_rule`, and `bond_delete_scoring_rule` manage the rules; `bond_score_lead` recalculates a contact's score, the action the Settings UI has no button for.
+- **Reporting:** `bond_get_pipeline_summary`, `bond_get_stale_deals`, `bond_get_forecast`, `bond_get_conversion_rates`, `bond_get_deal_velocity`, and `bond_get_win_loss` return the data the Analytics page renders.
+- **Deduplication:** `bond_find_duplicates` returns ranked likely-duplicate contacts with confidence and signals (full-name trigram similarity, exact email match, exact normalized-phone match), and pairs with the platform `dedupe_record_decision` and `dedupe_list_pending` tools (entity type `bond.contact`) plus `bond_merge_contacts` to resolve them. There is no in-app dedupe screen; this loop is API and tool only.
+- **Import mappings and settings:** `bond_create_import_mapping` and `bond_list_import_mappings` record external-system-to-Bond lookups for dedup; `bond_get_user_settings` and `bond_update_user_settings` manage per-user Bond preferences such as reply-to email.
 
-What agents cannot do through Bond MCP tools: there are no tools for pipeline or stage CRUD, custom-field CRUD, scoring-rule CRUD, company delete, or contact/deal delete and restore. Those remain UI or REST actions.
+Cross-cutting agent platform: Bond data is reachable through the platform read plane too. `search_everything` fans out across apps (including Bond) with optional asker-mode `can_access` filtering, and composite views like `account_view` assemble a contact or company picture across apps. Agents run with an identity (`users.kind` of `agent` or `service`), send `agent_heartbeat`, and are gated by `agent_policies` (per-agent kill switch plus glob tool allowlists such as `bond.*`); risky changes can be routed through the proposal queue (`proposal_create` / `proposal_decide`) for human approval, and outbound webhooks push subscribed Bolt events to agent runners. Before an agent cites a Bond entity in a shared surface, it should preflight with `can_access(asker_user_id, 'bond.contact', id)` (or the relevant entity type) and drop anything not allowed.
 
 Event-driven automation: Bond emits Bolt events on the `bond` source for `deal.created`, `deal.updated`, `deal.stage_changed`, `deal.won`, `deal.lost`, `contact.created`, `contact.upserted`, `activity.logged`, and `deal.rotting`. A daily worker job emits `deal.rotting` for open deals that have aged past their stage's rotting threshold, so downstream Bolt rules can nudge an owner or hand off to another app.
 
-Reviewing agent work: own-only visibility is enforced server-side, so a member or viewer service account only sees and acts on records it owns. Agents posting cross-app results should preflight visibility before citing Bond entities.
+Reviewing agent work: own-only visibility is enforced server-side, so a member or viewer service account only sees and acts on records it owns.
 
 For the full tool catalog and schemas, see the Bond MCP-tools reference and guide in `docs/apps/bond/`.
 
@@ -343,9 +358,9 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 4. The pipeline is seeded with six stages: Prospect, Qualified, Proposal, Negotiation, Closed Won, and Closed Lost. Click the pipeline row to expand it.
 5. Add any stages your team needs with the inline **Add stage** form (name plus type), and delete any you do not want with the trash icon on a stage row.
 
-**Result:** A pipeline exists with its stages. The Pipeline Board now renders columns instead of the "No pipeline selected" message, and you can start adding deals.
+**Result:** A pipeline exists with its stages. Because at least one pipeline now exists, the Pipeline Board auto-selects it and renders columns instead of the "No pipeline selected" message, and you can start adding deals.
 
-**Related:** Tune stage probability, rotting days, color, or order through the REST API; the Settings UI sets only stage name and type. See ![Pipeline board](screenshots/light/01-pipeline.png).
+**Related:** Tune stage probability, rotting days, color, or order through the `bond_update_stage` and `bond_reorder_stages` MCP tools or the REST API; the Settings UI sets only stage name and type. See ![Pipeline board](screenshots/light/01-pipeline-board.png).
 
 ### Story: Add and qualify a contact
 
@@ -362,13 +377,13 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** The contact exists with a lifecycle stage and a first activity in its timeline.
 
-**Related:** Changing the contact's lifecycle stage later is not available in the app; use the `bond_update_contact` MCP tool or the REST API. See ![Contacts list](screenshots/light/02-contacts.png).
+**Related:** Changing the contact's lifecycle stage later is not available in the app; use the `bond_update_contact` MCP tool or the REST API. See ![Contacts list](screenshots/light/03-contacts-list.png).
 
 ### Story: Create a deal and move it to close
 
 **Who:** A salesperson working an opportunity.
 **Goal:** Track a deal from creation through Won or Lost.
-**Before you start:** You need read/write access and at least one pipeline. You are on the Pipeline Board.
+**Before you start:** You need read/write access and at least one pipeline. You are on the Pipeline Board, which has the default pipeline already selected.
 
 **Steps**
 
@@ -380,7 +395,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** The deal shows an **Open**, **Won**, or **Lost** badge, its probability is set (100 for won, 0 for lost), and the board reflects its final stage.
 
-**Related:** To set a company, owner, probability, or linked contacts at creation, or to record a close reason or competitor on a loss, use `bond_create_deal` / `bond_close_deal_lost` or the REST API. See ![Deal detail](screenshots/light/03-deal-detail.png).
+**Related:** To set a company, owner, probability, or linked contacts at creation, or to record a close reason or competitor on a loss, use `bond_create_deal` / `bond_close_deal_lost` or the REST API. See ![Deal detail](screenshots/light/02-deal-detail.png).
 
 ### Story: Work the board with swimlanes
 
@@ -414,7 +429,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** Each stale deal is reviewed and gets a fresh touch, which resets its activity history.
 
-**Related:** Agents can pull the same list with `bond_get_stale_deals`. A daily worker also emits `deal.rotting` to Bolt so automation rules can nudge owners. See ![Analytics dashboard](screenshots/light/04-analytics.png).
+**Related:** Agents can pull the same list with `bond_get_stale_deals`. A daily worker also emits `deal.rotting` to Bolt so automation rules can nudge owners. See ![Analytics dashboard](screenshots/light/06-analytics.png).
 
 ### Story: Forecast revenue
 
@@ -431,7 +446,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** You have a weighted forecast, a win rate, velocity per stage, and a breakdown of losses.
 
-**Related:** Agents can fetch the same figures with `bond_get_forecast` and `bond_get_pipeline_summary`.
+**Related:** Agents can fetch the same figures with `bond_get_forecast`, `bond_get_pipeline_summary`, `bond_get_deal_velocity`, and `bond_get_win_loss`.
 
 ### Story: Manage companies
 
@@ -447,7 +462,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** The company exists with its linked contact and deal counts, and its activity timeline is started.
 
-**Related:** Editing a company in place is not available in the app; use `bond_update_company` or the REST API. See ![Companies list](screenshots/light/05-companies.png).
+**Related:** Editing a company in place is not available in the app; use `bond_update_company` or the REST API. See ![Companies list](screenshots/light/05-companies-list.png).
 
 ### Story: Configure lead scoring
 
@@ -465,7 +480,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** Enabled rules combine to produce each contact's lead score, clamped to 0-100. The score shows as a star and number on contact rows and detail pages.
 
-**Related:** There is no recalculate button in the app; trigger recalculation with the `bond_score_lead` MCP tool or the `/scoring/recalculate` REST endpoint.
+**Related:** There is no recalculate button in the app; trigger recalculation with the `bond_score_lead` MCP tool or the `/scoring/recalculate` REST endpoint. Agents can also manage the rules themselves with `bond_create_scoring_rule` and `bond_update_scoring_rule`.
 
 ### Story: Extend the schema with custom fields
 
@@ -483,7 +498,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** The new field appears grouped under its entity type. Custom fields are org-wide for that entity type, not tied to a single pipeline.
 
-**Related:** Custom-field definitions are managed only in the UI and REST API; there is no MCP tool for custom-field CRUD.
+**Related:** Agents can manage the same definitions with `bond_create_custom_field`, `bond_update_custom_field`, and `bond_delete_custom_field`.
 
 ### Story: Restore a deleted record
 
@@ -497,7 +512,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 2. Find the struck-through row for the record you deleted.
 3. Click **Restore** on that row.
 
-**Result:** The record returns to the active list. (Deleted deals are restored through the REST API or MCP rather than the board.)
+**Result:** The record returns to the active list. (Deleted deals are restored with the `bond_restore_deal` MCP tool or the REST API rather than the board.)
 
 ### Story: Deduplicate contacts (agent-assisted)
 
@@ -513,7 +528,7 @@ For the full tool catalog and schemas, see the Bond MCP-tools reference and guid
 
 **Result:** Duplicate contacts are consolidated into a single record, and your decision is recorded so the pair is not re-flagged.
 
-**Related:** This is the §7 dedup loop for entity type `bond.contact`.
+**Related:** This is the platform dedup loop for entity type `bond.contact`. Pending pairs are listed with `dedupe_list_pending`.
 
 ### Story: Hand a deal off across the suite
 

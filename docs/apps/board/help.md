@@ -12,15 +12,18 @@ Boards live inside your BigBlueBam organization and can optionally be scoped to 
 
 Board does not have its own login. It reads your shared BigBlueBam session, and your permissions come from Bam. If you are not signed in, Board shows a "Please log in to BigBlueBam first" screen with a link to the main app.
 
+![All boards](screenshots/light/01-all-boards.png)
+
 ### Key concepts
 
 - **Board** - one infinite-canvas whiteboard. It has a name, a description, an emoji icon, a background pattern, a visibility setting, an optional project association, and a locked flag.
-- **Element** - anything on the canvas: a sticky note, text, a shape, a connector (arrow or line), an image, or a frame.
-- **Sticky note** - a colored note. The default color is yellow.
+- **Element** - anything on the canvas: a sticky note, text, a shape, a connector (arrow or line), an image, or a frame. The canvas scene is stored whole, and a per-element copy is kept so the board can be searched, read, and promoted.
+- **Sticky note** - a colored note. The default color is yellow. (Excalidraw has no native sticky; Board builds one from a rectangle with bound text.)
+- **Shape** - a rectangle, diamond, ellipse, or freehand drawing from Excalidraw's toolbar.
 - **Frame** - a labeled region on the canvas that groups the elements inside it. Frames are used when reading or summarizing a board by section.
 - **Background** - the canvas backdrop pattern. One of `dots` (default), `grid`, `lines`, or `plain`.
 - **Visibility** - who can see a board. `private` (creator plus explicitly added collaborators), `project` (project members plus collaborators plus creator), or `organization` (every member of your org). The default is `project`.
-- **Collaborator** - a person granted access to a single board with either `view` or `edit` permission. (See the note under Feature reference: there is no in-app screen to manage collaborators today.)
+- **Collaborator** - a person granted access to a single board with either `view` or `edit` permission. There is no in-app screen to manage collaborators today; manage them through the visibility setting or have an agent or API client do it (see Feature reference).
 - **Lock** - a board-level read-only switch. When a board is locked, only the board creator or an org admin or owner can edit it.
 - **Star** - your personal favorite marker on a board.
 - **Version** - a named snapshot of a board's canvas that you can restore later.
@@ -38,7 +41,7 @@ Prerequisites:
 - An organization. To scope a board to a project, that project must exist in Bam and belong to your org.
 - Edit access to a board to change it. Locked boards are editable only by the creator or an org admin or owner.
 
-The left sidebar has four nav items: **All Boards**, **Starred**, **Templates**, and **Archive**. A project scope selector at the top of the sidebar lets you switch between "All Projects" and a single project to filter the list and stats.
+The left sidebar has four nav items: **All Boards**, **Starred**, **Templates**, and **Archive**. A project scope selector at the top of the sidebar lets you switch between "All Projects" and a single project to filter the list and stats. Press `?` anywhere outside a text field to open the in-app help.
 
 ## Feature reference
 
@@ -61,7 +64,7 @@ If there are no boards, the empty state reads "No boards yet" (or "No boards mat
 
 The **...** menu on each card holds **Version history**, **Duplicate**, **Archive**, and **Delete**. See the lifecycle and version sections below.
 
-See `screenshots/light/01-list.png` (light) and `screenshots/dark/01-list.png` (dark).
+![All boards](screenshots/light/01-all-boards.png)
 
 ### Creating a board from a template
 
@@ -75,7 +78,7 @@ To create a board from a template:
 4. On the template you want, click **Use**.
 5. A new board is created from that template and its canvas opens.
 
-See `screenshots/light/03-templates.png` (light) and `screenshots/dark/03-templates.png` (dark).
+![Board templates](screenshots/light/03-templates.png)
 
 ### Creating a blank board
 
@@ -103,17 +106,17 @@ Board overlays a few of its own controls on top of the canvas:
 
 Your work saves automatically. The canvas persists locally as you draw and writes to the server a few seconds after you stop, and it saves once more when you close the tab. You do not need a Save button for canvas content.
 
-See `screenshots/light/02-canvas.png` (light) and `screenshots/dark/02-canvas.png` (dark).
+![Board canvas](screenshots/light/02-canvas-populated.png)
 
 #### Adding sticky notes
 
 Sticky notes are colored notes for capturing ideas. The default color is yellow.
 
-Add stickies from Excalidraw's tools on the canvas (a rectangle with text). An AI agent can also add a sticky directly with a color and position; see Working with AI agents.
+Add stickies from Excalidraw's tools on the canvas (a rectangle with text). An AI agent can also add a sticky directly with one of six colors (yellow, green, blue, red, purple, orange) and a position; see Working with AI agents.
 
 #### Adding text
 
-Add free text from Excalidraw's text tool on the canvas. An agent can add a text element with a font size and color; see Working with AI agents.
+Add free text from Excalidraw's text tool on the canvas. An agent can add a text element with a position; see Working with AI agents.
 
 #### Shapes, arrows, and frames
 
@@ -123,10 +126,10 @@ Rectangles, diamonds, ellipses, arrows, lines, freehand strokes, images, and fra
 
 The floating toolbar at the top of the canvas holds board-level controls (it is separate from Excalidraw's drawing toolbar):
 
-- A **back arrow** that returns to **All Boards**.
+- A **back arrow** (tooltip "Back to boards") that returns to **All Boards**.
 - An **icon picker** and the board name. Click the name to rename the board inline; press Enter to save or Escape to cancel.
 - A lock icon, shown when the board is locked.
-- The **presence strip**, which shows who else is present on the board.
+- The **presence strip**, which shows who else is present on the board and is the entry point to a voice huddle (see Real-time presence and audio).
 - A **Toggle chat** button that opens the chat panel.
 - A **Version history** button that opens the board's versions.
 - A **Share** button. Note: this button is not wired to anything in the current build. It does not open a sharing dialog. See the collaborators note below.
@@ -185,6 +188,8 @@ To restore a version:
 
 Note: the Save Version dialog has a **Description (optional)** field, and the list is laid out to show a description, an element count, and the creator's name. The backend does not store the description and does not return an element count or creator name on versions today, so those fields render blank. Only the version name, the creator reference, and the timestamp are saved and shown reliably.
 
+![Version history](screenshots/light/04-version-history.png)
+
 ### Archive, restore, and delete
 
 Archiving hides a board without destroying it. Deleting is permanent.
@@ -226,7 +231,7 @@ To star a board:
 
 ### Templates browser
 
-Beyond creating boards, the Templates browser is where org templates are surfaced. Each template card shows a thumbnail or icon, a name, a description, a category badge, an element count, and a **Use** button. Categories shown as tabs are **General**, **Retro**, **Brainstorm**, **Planning**, **Architecture**, **Strategy**, and **All**. If there are none, the view reads "No templates available". System templates are read-only; your org can create and manage its own.
+Beyond creating boards, the Templates browser is where org templates are surfaced. Each template card shows a thumbnail or icon, a name, a description, a category badge, an element count, and a **Use** button. Categories shown as tabs are **General**, **Retro**, **Brainstorm**, **Planning**, **Architecture**, **Strategy**, and **All**. If there are none, the view reads "No templates available". System templates are read-only; your org can create and manage its own (through the API or an agent today; see Working with AI agents).
 
 ### Fixing a board with an integrity issue
 
@@ -247,13 +252,13 @@ Note: the **Export as PNG** and **Export as SVG** items in the canvas **...** me
 
 ### Collaborators (no in-app management today)
 
-A board's visibility (`private`, `project`, `organization`) controls who can reach it, and a board can also have explicit per-person collaborators with `view` or `edit` permission. There is a complete backend for adding, listing, changing, and removing collaborators, but there is no screen in the Board app to manage them today, and the toolbar's **Share** button is not connected to it. Until a sharing screen ships, manage who can see a board through its **visibility** setting, or have an agent or API client manage collaborators directly.
+A board's visibility (`private`, `project`, `organization`) controls who can reach it, and a board can also have explicit per-person collaborators with `view` or `edit` permission. There is a complete backend for adding, listing, changing, and removing collaborators, but there is no screen in the Board app to manage them today, and the toolbar's **Share** button is not connected to it. Until a sharing screen ships, manage who can see a board through its **visibility** setting, or have an agent or API client manage collaborators directly (the `board_add_collaborator`, `board_list_collaborators`, `board_update_collaborator`, and `board_remove_collaborator` tools, covered under Working with AI agents).
 
-### Real-time presence
+### Real-time presence and audio
 
 When more than one person is on a board, you see each other's live cursors on the canvas and presence indicators in the toolbar. The connection status badge at the top-right shows **Live** (green), **Connecting** (amber), or **Offline** (red), plus an "N editors" chip when other people are present. If your connection drops and reconnects, recent changes are replayed so the canvas catches up.
 
-Note on audio: voice huddles on a board are provided by the platform-wide Bureau presence system that the board toolbar surfaces, not by Board itself. Audio conferencing is not a Board feature or a board-api capability. Use the platform presence bar for voice.
+Audio for a board comes from the platform-wide presence system that the toolbar surfaces through its presence strip, not from a board-api capability. The strip reports the open canvas as a shared surface, and the platform call manager derives a per-board voice room from it, so a teammate can join a voice huddle on the same canvas. Audio conferencing is therefore a platform feature layered on top of Board, not something the Board service hosts itself.
 
 ### Element limits
 
@@ -261,37 +266,34 @@ A board can hold a large number of elements, with a soft limit at 500 and a hard
 
 ### Working with AI agents
 
-Agents can read, build, and hand off boards through 14 MCP tools backed by board-api. For the full catalog and arguments, see the Board MCP-tools reference in `docs/apps/board/`.
+Agents reach Board through 40 MCP tools backed by board-api. Every tool forwards your bearer token, so an agent acts with your permissions and a locked board stays locked. Most tools accept a board **name or UUID**; templates, projects, and phases also resolve by name. For the full catalog and arguments, see the Board MCP-tools reference in `docs/apps/board/`.
 
-Read and observe:
+What agents commonly do:
 
-- `board_list` - list boards, optionally filtered by project, visibility, and page size.
-- `board_get` - fetch one board's metadata.
-- `board_read_elements` - read every element on a board.
-- `board_read_stickies` - read only the sticky notes.
-- `board_read_frames` - read frames and the elements inside each.
-- `board_summarize` - produce a frame-grouped summary of a board.
-- `board_search` - search element text across boards.
-
-Author and edit:
-
-- `board_create` - create a board, optionally from a template named or referenced by ID.
-- `board_add_sticky` - add a sticky note with a color (yellow, green, blue, red, purple, or orange) and a position.
-- `board_add_text` - add a text element with a font size and color.
-- `board_update` - patch a board's metadata (name, description, background, visibility, icon).
-- `board_archive` - archive (soft-delete) a board.
-
-Hand off and export:
-
-- `board_promote_to_tasks` - the marquee cross-app flow. It turns brainstorm stickies into Bam tasks in a named project and phase, and records the links back to the source stickies. There is no human button for this today; it is an agent-and-API flow.
-- `board_export` - export a board as SVG or PNG.
+- **Read and observe a canvas.** `board_read_elements` reads every element with its position, text, and type. `board_read_stickies` returns only sticky notes; `board_read_frames` returns frames with their child elements; `board_summarize` produces a frame-grouped summary. `board_search` searches element text across boards. `board_list`, `board_get`, `board_list_recent`, `board_list_starred`, `board_stats`, and `board_org_stats` cover discovery and metadata.
+- **Build a board.** `board_create` makes a board (optionally from a template by name). `board_add_sticky` drops a sticky in one of six colors at a position; `board_add_text` adds a text element. `board_update` patches name, description, background, visibility, and icon.
+- **Promote to Bam tasks (the marquee cross-app flow).** `board_promote_to_tasks` turns selected brainstorm stickies into Bam tasks in a named project and phase, and records a link from each sticky back to its task. There is no human button for this today; it is an agent-and-API flow. `board_list_links` shows the resulting links and `board_delete_link` removes one without touching the task or sticky.
+- **Manage what humans cannot reach in the UI yet.** Collaborators (`board_add_collaborator`, `board_list_collaborators`, `board_update_collaborator`, `board_remove_collaborator`), templates (`board_list_templates`, `board_create_template`, `board_update_template`, `board_delete_template`, `board_instantiate_template`), versions (`board_list_versions`, `board_create_version`, `board_restore_version`), chat (`board_read_chat`, `board_post_chat`), stars (`board_star_toggle`), and integrity (`board_check_integrity`, `board_remediate_integrity`) all have tools even where Board has no screen.
+- **Run lifecycle and export.** `board_duplicate`, `board_archive` (soft delete), `board_restore`, and `board_delete_permanent` (hard, irreversible delete) cover lifecycle. `board_export` exports SVG or PNG.
 
 Things for a human reviewer to know:
 
 - Promote-to-tasks creates real Bam tasks. Review the resulting tasks in the target project after an agent runs it.
-- Two MCP behaviors are known to drift from the backend and may not do what their description implies: `board_update` cannot toggle the lock state (locking is a separate action, so passing a locked value through `board_update` has no effect), and some tool descriptions and return shapes do not exactly match the live API. Prefer the dedicated paths (and verify results) for locking and promote-to-tasks.
+- `board_delete_permanent` cascades through elements, collaborators, stars, versions, and links and cannot be undone. Prefer `board_archive` unless removal is final.
+- Two MCP behaviors are known to drift from the backend and may not do what their description implies: `board_update` cannot toggle the lock state (its PATCH does not accept a `locked` field, so locking stays a separate action with no MCP tool of its own), and a few tool descriptions and return shapes do not exactly match the live API (for example `board_create` lists different background and visibility defaults than the server applies, which are `dots` and `project`). Prefer the dedicated paths and verify results.
+- Right after a fresh board is drawn, the per-element copy that powers search and promote may lag the canvas by a few seconds. If `board_search` or a promote finds nothing on a brand-new board, give the snapshot a moment.
 
 Agent actions emit Bolt events you can automate on: `board.created`, `board.updated`, `board.locked`, and `board.elements_promoted`.
+
+#### Cross-cutting agentic platform
+
+Board's tools sit on the same platform surface every app shares, so agent work is identifiable, reviewable, and governed:
+
+- **Identity and heartbeat.** Agent and service accounts are distinct from human users, and their actions are tagged as such in the activity log. Long-running agents report liveness with `agent_heartbeat`.
+- **Approvals.** An agent can route a board action it should not take unilaterally (for example a permanent delete or a large promote-to-tasks run) into an approval queue with `proposal_create`; a human reviews and resolves it with `proposal_list` and `proposal_decide`.
+- **Unified activity.** Board activity is queryable alongside every other app through the unified activity view and `activity_query` / `activity_by_actor`.
+- **Visibility preflight.** Before an agent posts a board's contents into another shared surface, it calls `can_access` for each cited entity and drops anything the asking user is not allowed to see.
+- **Policies and webhooks.** Per-agent kill switches and tool allowlists (a `board.*` glob covers Board's tools) gate every service-account call, and subscribed Bolt events can be pushed to an agent runner over a signed outbound webhook.
 
 ## User Stories
 
@@ -311,7 +313,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** A new board exists, pre-filled from the template, and you are looking at its canvas. It appears in **All Boards**.
 
-**Related:** To start empty instead, see "Create a blank board". An agent can do the same with `board_create` using a template name.
+**Related:** To start empty instead, see "Create a blank board". An agent can do the same with `board_create` (template by name) or `board_instantiate_template`.
 
 ### Story: Create a blank board
 
@@ -363,7 +365,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** Everyone is editing one shared canvas and stays in sync.
 
-**Related:** Voice for the session comes from the platform presence bar (Bureau), not from Board. To talk while you work, see "Chat while you whiteboard".
+**Related:** To talk while you work, use the presence strip in the toolbar to start a voice huddle on the canvas. To type instead, see "Chat while you whiteboard".
 
 ### Story: Chat while you whiteboard
 
@@ -380,7 +382,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** The team has a running discussion attached to the board.
 
-**Related:** Chat refreshes by polling, so messages from others appear on the next refresh rather than instantly.
+**Related:** Chat refreshes by polling, so messages from others appear on the next refresh rather than instantly. An agent can read or post with `board_read_chat` and `board_post_chat`.
 
 ### Story: Star and find your boards
 
@@ -397,7 +399,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** Your favorites are grouped in **Starred**, and you can filter and search the full list.
 
-**Related:** An agent can list boards with `board_list` and search element text with `board_search`.
+**Related:** An agent can list boards with `board_list`, list starred with `board_list_starred`, toggle a star with `board_star_toggle`, and search element text with `board_search`.
 
 ### Story: Snapshot and restore a board
 
@@ -414,7 +416,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** A named snapshot is saved, and you can restore the canvas to it at any time.
 
-**Related:** The dialog's Description field and the list's element-count and creator-name fields are not stored or returned by the backend today and render blank.
+**Related:** The dialog's Description field and the list's element-count and creator-name fields are not stored or returned by the backend today and render blank. An agent can snapshot and restore with `board_create_version`, `board_list_versions`, and `board_restore_version`.
 
 ### Story: Promote brainstorm stickies into Bam tasks
 
@@ -431,7 +433,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** Each promoted sticky has a matching Bam task, linked back to the source element.
 
-**Related:** This emits a `board.elements_promoted` Bolt event you can automate on. See the Bam help doc for task management.
+**Related:** This emits a `board.elements_promoted` Bolt event you can automate on. An agent can review the links with `board_list_links`. See the Bam help doc for task management.
 
 ### Story: Lock a finished board
 
@@ -448,7 +450,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** The board is read-only for everyone except its creator and org admins and owners, and shows a lock icon in the toolbar and on its card.
 
-**Related:** An agent cannot toggle the lock through `board_update`; locking is a separate action.
+**Related:** An agent cannot toggle the lock through `board_update`; locking is a separate action with no MCP tool of its own today.
 
 ### Story: Fix a board flagged with an integrity issue
 
@@ -465,6 +467,8 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** The integrity warning clears and the board is either unattached or attached to a valid project.
 
+**Related:** An agent can do the same with `board_check_integrity` and `board_remediate_integrity` (action `detach` or `reassign`).
+
 ### Story: Archive, restore, or delete a board
 
 **Who:** A board owner cleaning up.
@@ -479,7 +483,7 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Result:** The board is archived (recoverable) or permanently deleted, depending on your choice.
 
-**Related:** Use **Duplicate** on the **...** menu first if you want a copy before removing the original.
+**Related:** Use **Duplicate** on the **...** menu first if you want a copy before removing the original. An agent uses `board_archive`, `board_restore`, and `board_delete_permanent`.
 
 ### Story: Export a board image
 
@@ -497,10 +501,26 @@ Agent actions emit Bolt events you can automate on: `board.created`, `board.upda
 
 **Related:** Export is also available directly through the board-api export endpoint.
 
+### Story: Have an agent set up and seed a board
+
+**Who:** Someone who wants a board built and pre-populated without doing it by hand.
+**Goal:** Get a named board, scoped to a project, with starter stickies on it.
+**Before you start:** Be signed in. Know the project name (if you want it scoped) and the rough content you want seeded.
+
+**Steps**
+
+1. Ask an agent to create the board, naming it and the project. The agent uses `board_create` (optionally from a template by name).
+2. Ask the agent to drop your starter ideas as stickies. It uses `board_add_sticky` once per note, choosing colors.
+3. Open `/board/` and the new board appears in **All Boards**; open it to see the seeded canvas.
+
+**Result:** A ready-to-use board exists with your starting content, and you can keep editing it live.
+
+**Related:** The agent can also group the stickies into frames so a later `board_summarize` reads cleanly, and can promote them to Bam tasks with `board_promote_to_tasks`.
+
 ## Related
 
 - **Bam** - the core project and task app. Board scopes boards to Bam projects, and promote-to-tasks creates Bam tasks in a project and phase. See `docs/apps/api/` or the Bam help doc.
 - **Bolt** - workflow automation. Board emits `board.created`, `board.updated`, `board.locked`, and `board.elements_promoted` events you can build rules on.
-- **Bureau (platform presence)** - provides the presence strip and any voice huddle on a board. Audio is a platform feature, not part of Board.
-- **Board MCP-tools reference** - the full list and arguments for the 14 Board MCP tools, in `docs/apps/board/`.
+- **Platform presence and audio** - provides the toolbar presence strip and any voice huddle on a board. Audio is a platform feature, not part of the Board service.
+- **Board MCP-tools reference** - the full list and arguments for the 40 Board MCP tools, in `docs/apps/board/`.
 - **Board guide** - the product guide in `docs/apps/board/`, for narrative and background.
