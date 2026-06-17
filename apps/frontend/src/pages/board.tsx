@@ -182,10 +182,12 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
   // Subscribe to realtime events for this project
   useRealtime(projectId);
 
-  // Fetch project members
+  // Org members back the assignee picker + assignee filter + swimlanes. Assignment
+  // isn't gated on project membership, so any org member is assignable (org members
+  // are a superset of project members, so card-avatar resolution still works).
   const { data: membersRes } = useQuery({
-    queryKey: ['project-members', projectId],
-    queryFn: () => api.get<PaginatedResponse<Member>>(`/projects/${projectId}/members`),
+    queryKey: ['org-members'],
+    queryFn: () => api.get<PaginatedResponse<Member>>(`/org/members`),
     enabled: !!projectId,
   });
   const members = membersRes?.data ?? [];
