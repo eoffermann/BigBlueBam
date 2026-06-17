@@ -16,13 +16,16 @@
 #     valid creds these recipes FAIL verification (and write no image) rather
 #     than mislabel a login screen as a ticket list.
 #
-# The org-scoped route default is /helpdesk/mage-inc/ (seeded by seed-mage.js).
-# Point SHOTS_HELPDESK_EMAIL/PASSWORD at a customer that exists in THAT org.
+# The org-scoped route default is /helpdesk/gilligan-travel-ltd/ (seeded by
+# scripts/seed-gilligan/helpdesk.mjs). Point SHOTS_HELPDESK_EMAIL/PASSWORD at a
+# customer that exists in THAT org, e.g.
+#   SHOTS_HELPDESK_EMAIL=gilligan-hd@gilligantravel.example
+#   SHOTS_HELPDESK_PASSWORD=coconut12345678
 
 - id: helpdesk-portal-entry
   app: helpdesk
   demonstrates: "The org support portal sign-in — the first screen a customer sees at /helpdesk/<org>/"
-  route: /helpdesk/mage-inc/
+  route: /helpdesk/gilligan-travel-ltd/
   identity: admin
   interactions:
     - { action: waitFor, selector: "input#email", optional: true }
@@ -32,7 +35,7 @@
 - id: helpdesk-portal-entry-dark
   app: helpdesk
   demonstrates: "The org support portal sign-in in dark theme (marketing/retina)"
-  route: /helpdesk/mage-inc/
+  route: /helpdesk/gilligan-travel-ltd/
   identity: admin
   interactions:
     - { action: waitFor, selector: "input#email", optional: true }
@@ -42,7 +45,7 @@
 - id: helpdesk-login
   app: helpdesk
   demonstrates: "The 'Welcome back' customer sign-in screen with Email + Password fields"
-  route: /helpdesk/mage-inc/login
+  route: /helpdesk/gilligan-travel-ltd/login
   identity: admin
   interactions:
     - { action: waitFor, selector: "input#email", optional: true }
@@ -52,7 +55,7 @@
 - id: helpdesk-ticket-list
   app: helpdesk
   demonstrates: "The 'My Tickets' list after portal login — search box, status filter chips, and ticket rows"
-  route: /helpdesk/mage-inc/
+  route: /helpdesk/gilligan-travel-ltd/
   identity: admin
   interactions:
     - { action: fill, selector: "input#email", value: "${SHOTS_HELPDESK_EMAIL}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
@@ -70,7 +73,7 @@
 - id: helpdesk-ticket-detail
   app: helpdesk
   demonstrates: "A ticket's detail conversation — status/priority badges, description, and message timeline"
-  route: /helpdesk/mage-inc/
+  route: /helpdesk/gilligan-travel-ltd/
   identity: admin
   interactions:
     - { action: fill, selector: "input#email", value: "${SHOTS_HELPDESK_EMAIL}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
@@ -87,7 +90,7 @@
 - id: helpdesk-new-ticket
   app: helpdesk
   demonstrates: "The New Ticket form — Subject, Priority, and the rich-text Description editor"
-  route: /helpdesk/mage-inc/
+  route: /helpdesk/gilligan-travel-ltd/
   identity: admin
   interactions:
     - { action: fill, selector: "input#email", value: "${SHOTS_HELPDESK_EMAIL}", skipIfEnvUnset: SHOTS_HELPDESK_EMAIL }
