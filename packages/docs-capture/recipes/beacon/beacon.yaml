@@ -58,8 +58,11 @@
     - { action: waitFor, selector: main }
     - { action: click, selector: "aside button:has-text('Browse')", optional: true }
     - { action: wait, ms: 2000 }
-    - { action: click, selector: "button.w-full.text-left", optional: true }
+    # Scope the article-card click to the content area: a bare button.w-full.text-left
+    # also matched a sidebar/launchpad item (it navigated to the Bam People page).
+    - { action: click, selector: "main button.w-full.text-left" }
     - { action: wait, ms: 2500 }
+  expect: ["main button:has-text('Verify'), main button:has-text('Challenge'), main button:has-text('Edit')"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
     - "[data-testid='relative-timestamp']"
@@ -102,7 +105,9 @@
     - { action: waitFor, selector: main }
     - { action: click, selector: "aside button:has-text('Search')", optional: true }
     - { action: wait, ms: 1500 }
-    - { action: fill, selector: "input[placeholder*='earch']", value: "deployment", optional: true }
+    # "radio" matches the seeded island articles (coconut radio, etc.); the old
+    # "deployment" query returned nothing, so the page looked empty.
+    - { action: fill, selector: "input[placeholder*='earch']", value: "radio", optional: true }
     - { action: press, selector: "input[placeholder*='earch']", value: "Enter", optional: true }
     - { action: wait, ms: 2500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }

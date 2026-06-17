@@ -51,7 +51,7 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
-    - { action: click, selector: "aside button:has(span:text-is('general'))", optional: true }
+    - { action: click, selector: "aside button:has(span:text-is('rescue-ops'))", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
@@ -67,7 +67,7 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
-    - { action: click, selector: "aside button:has(span:text-is('general'))", optional: true }
+    - { action: click, selector: "aside button:has(span:text-is('rescue-ops'))", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
   masks:
@@ -163,11 +163,14 @@
 
 - id: banter-search
   app: banter
-  demonstrates: "The Search page with the query box and channel/author/date filters"
+  demonstrates: "Search results for a query across channels, with match context"
   route: /banter/search
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: fill, selector: "input[placeholder*='earch' i], input[type='search']", value: "raft", optional: true }
+    - { action: press, selector: "input[placeholder*='earch' i], input[type='search']", value: "Enter", optional: true }
+    - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
     - "[data-testid='relative-timestamp']"

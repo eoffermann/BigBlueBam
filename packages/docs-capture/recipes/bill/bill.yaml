@@ -62,7 +62,12 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-    - { action: click, selector: "table tbody tr", optional: true }
+    - { action: waitFor, selector: "table tbody td.cursor-pointer", optional: true }
+    # The row's navigate-to-detail onClick lives on the cells (td.cursor-pointer),
+    # not the <tr> — clicking the tr missed it and re-captured the list. Prefer the
+    # S.S. Wanderer invoice; fall back to the first row.
+    - { action: click, selector: "tr:has-text('Wanderer') td.cursor-pointer", optional: true }
+    - { action: click, selector: "table tbody td.cursor-pointer", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:

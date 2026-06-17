@@ -50,11 +50,17 @@
 
 - id: bench-explorer
   app: bench
-  demonstrates: "The Ad-Hoc Explorer: a data-source picker with read-only measures/dimensions and a results table"
+  demonstrates: "The Ad-Hoc Explorer: data source selected (Knowledge Base Articles) with a populated results table"
   route: /bench/explorer
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    # Pick the beacon Knowledge Base Articles source (option value is product:entity)
+    # and run the query so the results table is populated, not an empty picker.
+    - { action: select, selector: "select", value: "beacon:articles", optional: true }
+    - { action: wait, ms: 600 }
+    - { action: click, selector: "button:has-text('Run Query')", optional: true }
+    - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
     - "time"

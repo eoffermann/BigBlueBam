@@ -132,10 +132,16 @@ const asArr = (v) => (Array.isArray(v) ? v : (v?.data ?? []));
     let i = 0;
     for (const task of proj.tasks) {
       const phase = phases.length ? phases[i % phases.length] : null;
+      // Spread start/due dates around the frozen capture clock (2026-06-15) so
+      // the Timeline/Gantt view renders populated bars.
+      const day = 10 + ((i * 2) % 16);
+      const pad = (n) => String(n).padStart(2, '0');
       const body = {
         title: task.t,
         assignee_id: CAST[task.who],
         priority: task.p,
+        start_date: `2026-06-${pad(day)}`,
+        due_date: `2026-06-${pad(Math.min(30, day + 2 + (i % 4)))}`,
         ...(phase ? { phase_id: phase.id } : {}),
       };
       try {

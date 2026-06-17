@@ -44,9 +44,11 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: wait, ms: 2000 }
+  expect: ["[data-task-id]"]
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   masks:
     - "[data-testid='presence-avatars']"
@@ -59,9 +61,11 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: wait, ms: 2000 }
+  expect: ["[data-task-id]"]
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
   masks:
     - "[data-testid='presence-avatars']"
@@ -76,8 +80,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "[data-task-id]", optional: true }
     - { action: wait, ms: 2000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
@@ -94,10 +99,13 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[aria-label='Create sprint']", optional: true }
-    - { action: wait, ms: 1500 }
+    # Fill the sprint name so the Create button is enabled (not dimmed/disabled).
+    - { action: fill, selector: "input[placeholder='Sprint 1']", value: "Voyage Sprint — Escape the Island", optional: true }
+    - { action: wait, ms: 1000 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
 
 # ---------------------------------------------------------------------------
@@ -110,8 +118,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[aria-label='List view']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
@@ -123,8 +132,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[aria-label='Timeline view']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
@@ -136,8 +146,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[aria-label='Calendar view']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
@@ -149,8 +160,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[aria-label='Workload view']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
@@ -165,8 +177,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[title='Manage epics']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
@@ -178,8 +191,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[title='Task templates']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
@@ -191,8 +205,9 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
     - { action: click, selector: "button.group", optional: true }
-    - { action: waitFor, selector: "[data-task-id]", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
     - { action: click, selector: "button[title='Import tasks']", optional: true }
     - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
