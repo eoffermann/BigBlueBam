@@ -317,8 +317,9 @@ export function buildFeedFaninDeps(
       }
       // 'source' — every member of the org follows by default. Cross-app
       // producers (Phase 5) exercise this; Banter only uses 'channel'.
+      // NB: organization_memberships keys org on org_id (not organization_id).
       const res = await db.execute(sql`
-        SELECT user_id FROM organization_memberships WHERE organization_id = ${orgId}
+        SELECT user_id FROM organization_memberships WHERE org_id = ${orgId}
       `);
       return extractUserIds(res);
     },

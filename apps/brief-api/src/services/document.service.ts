@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { eq, and, or, sql, asc, desc, gt, ilike, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { feedFaninForDocument } from './feed-queue.js';
 import {
   briefDocuments,
   briefStars,
@@ -187,6 +188,17 @@ export async function createDocument(
     .then((payload) => publishBoltEvent('document.created', 'brief', payload, orgId, userId, 'user'))
     .catch(() => {});
 
+  // Banter Feed: surface "Bob created a new Brief" to project followers (§8,
+  // §11) and to the creator directly.
+  feedFaninForDocument({
+    docId: doc!.id,
+    category: 'brief.document.created',
+    createdBy: userId,
+    actorId: userId,
+    orgId,
+    projectId: doc!.project_id ?? null,
+  }).catch(() => {});
+
   return doc!;
 }
 
@@ -358,6 +370,18 @@ export async function updateDocument(
   enrichDocumentEventPayload(doc!, userId, { changed_fields: changedFields })
     .then((payload) => publishBoltEvent('document.updated', 'brief', payload, orgId, userId, 'user'))
     .catch(() => {});
+
+  // Banter Feed: surface the edit to contributors (creator + collaborators)
+  // and to project followers (§8, §11).
+  feedFaninForDocument({
+    docId: doc!.id,
+    category: 'brief.document.edited',
+    createdBy: doc!.created_by,
+    actorId: userId,
+    orgId,
+    projectId: doc!.project_id ?? null,
+    includeCollaborators: true,
+  }).catch(() => {});
 
   // Emit document.published when status transitions to approved
   if (data.status === 'approved' && existing.status !== 'approved') {

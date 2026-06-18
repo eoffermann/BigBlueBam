@@ -12,6 +12,7 @@ import { requireProjectAccessForEntity } from '../middleware/authorize.js';
 import * as projectService from '../services/project.service.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichTask, loadActor, loadOrg } from '../services/bolt-event-enricher.service.js';
+import { feedFaninForTask } from '../services/feed-queue.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 
 export default async function commentRoutes(fastify: FastifyInstance) {
@@ -211,6 +212,18 @@ export default async function commentRoutes(fastify: FastifyInstance) {
           // fire-and-forget
         }
       })();
+
+      // Banter Feed: a comment surfaces to the task's people (assignee,
+      // reporter, watchers, prior commenters). Direct-only category (§8).
+      feedFaninForTask({
+        taskId: request.params.id,
+        category: 'bam.task.comment_on_my_task',
+        actorId: request.user!.id,
+        orgId: request.user!.org_id,
+        projectId: task.project_id,
+        includePriorCommenters: true,
+        broad: false,
+      }).catch(() => {});
 
       return reply.status(201).send({ data: comment });
     },

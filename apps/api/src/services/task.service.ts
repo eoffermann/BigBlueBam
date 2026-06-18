@@ -25,6 +25,8 @@ import { escapeLike } from '../lib/escape-like.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichTask, loadActor, loadOrg, loadPhase } from './bolt-event-enricher.service.js';
 import { fanoutNotification, enqueueNotification } from './notification-fanout.service.js';
+import { enqueueFeedFanin, feedFaninForTask } from './feed-queue.js';
+import { RELATIONSHIP_FLAGS } from '@bigbluebam/shared';
 
 /**
  * Enqueue async title-fetch jobs for links the synchronous path left
@@ -774,6 +776,27 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
           body: notifBody,
           deep_link: `/b3/tasks/${task.id}`,
         }).catch(() => {});
+
+        // Banter Feed: the new assignee gets a direct (Path A) entry. Assigned
+        // is direct-only — no broad surfacing (§8).
+        const nowIso = new Date().toISOString();
+        enqueueFeedFanin({
+          entity_type: 'bam.task',
+          entity_id: task.id,
+          source: 'bam',
+          org_id: orgId,
+          actor_id: actorId ?? null,
+          project_id: task.project_id,
+          published_at: nowIso,
+          last_activity_at: nowIso,
+          direct_recipients: [
+            {
+              user_id: data.assignee_id,
+              relationship_flags: RELATIONSHIP_FLAGS.ASSIGNEE,
+              category: 'bam.task.assigned_to_me',
+            },
+          ],
+        }).catch(() => {});
       }
     }).catch(() => {});
   }
@@ -1046,6 +1069,17 @@ export async function moveTask(taskId: string, data: MoveTaskInput, actorId?: st
         actorId,
         actorId ? 'user' : 'system',
       );
+
+      // Banter Feed: a state/phase change surfaces to the task's people (Path A)
+      // and to project followers (Path B, §8 broad_surface=true).
+      feedFaninForTask({
+        taskId: task.id,
+        category: 'bam.task.state_changed',
+        actorId,
+        orgId,
+        projectId: task.project_id,
+        broad: true,
+      }).catch(() => {});
     }).catch(() => {});
   }
 

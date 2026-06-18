@@ -19,9 +19,43 @@ deferred work, and gotchas discovered while building, so nothing rots silently.
 - **Phase 4 — read API + Feed UI (§6/§13):** DONE. Read-time scoring + Redis
   cache; `/v1/feed` + seen/dismiss/permalink; Feed page + button; Feed is the
   default Banter landing.
-- **Phase 5 — cross-app fan-in (§11):** PENDING.
+- **Phase 5 — cross-app fan-in (§11):** Bam + Brief DONE (the §17.5 "first"
+  set). Bam: task assignment → `bam.task.assigned_to_me` (direct), comment →
+  `bam.task.comment_on_my_task` (direct: assignee/reporter/watchers/prior
+  commenters), state change → `bam.task.state_changed` (direct + project
+  followers). Brief: create/edit → `brief.document.created`/`edited` (creator +
+  collaborators direct, project followers broad). Each app has its own
+  `services/feed-queue.ts` producer; the worker's project/source broad
+  enumeration is exercised by these. The remaining sources
+  (bond/bell/book/bearing/board/bill/blank/bolt) are a mechanical extension —
+  see the template below.
 - **Phase 6 — unified notifications (§12):** PENDING.
 - **Phase 7 — settings pages (§9):** PENDING.
+
+### Extending cross-app fan-in to the remaining sources (the §17.5 tail)
+
+The pattern is identical for every app and proven across Banter/Bam/Brief:
+
+1. Add a `services/feed-queue.ts` to the app (copy `apps/api/src/services/
+   feed-queue.ts`), importing `bullmq` (add to package.json if absent),
+   `BANTER_FEED_FANIN_QUEUE`, `RELATIONSHIP_FLAGS`, and the job types from
+   `@bigbluebam/shared`.
+2. At each activity site (co-located with the existing `publishBoltEvent`
+   call), fire a fire-and-forget `enqueueFeedFanin({...})` with the entity, the
+   org/project, the actor, the producer-resolved `direct_recipients`
+   (concerned users + their flags), and `broad_category` / `broad_scope` per the
+   §8 / §11 tables. Map each remaining category:
+   - `bond.deal.updated` → deal owner; broad `source` (bond).
+   - `bell.ticket.updated` → assigned agent + interactors; broad `source` (bell).
+   - `book.event.invited` → invitees (direct-only).
+   - `bearing.kr.progress` → KR + goal owner; broad `source` (bearing).
+   - `bill.invoice.activity` → invoice owner; broad `source` (bill).
+   - `blank.form.response` → form owner; broad `source` (blank).
+   - `board.canvas_edited` → early contributors only (broad_surface=FALSE).
+   - `bolt.run.failed_mine` → the human the run acted for (direct-only).
+3. No worker change is needed — `handleFeedFanin` + `enumerateBroadCandidates`
+   already handle channel/project/source scopes and any entity_type registered
+   in Phase 1.
 
 ## Deferred / known-incomplete (revisit, do not let rot)
 
