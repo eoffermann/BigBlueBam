@@ -226,22 +226,44 @@ export interface HydratedFeedEntry {
  * Seed the candidate index from recent posts in the channels the user follows,
  * so the feed is never empty for anyone with accessible recent activity (the
  * Facebook/Instagram model: your feed is your sources' recent content, not just
- * events that happened after you existed). Idempotent (ON CONFLICT DO NOTHING)
- * and gated by a short-lived Redis flag so it runs ~hourly per user, not on
- * every read; live fan-in covers new posts in between. Membership IS the access
- * gate (you only get channels you belong to), so no separate can_access pass.
+ * events that happened after you existed). Idempotent (ON CONFLICT DO NOTHING).
+ * Membership IS the access gate (you only get channels you belong to), so no
+ * separate can_access pass.
+ *
+ * Gating, and why it is NOT a bare time flag: the seed runs ONLY when the user's
+ * feed is actually empty. A populated feed needs nothing (live fan-in keeps it
+ * fresh and the early-return below is one cheap indexed lookup). Gating on real
+ * emptiness — rather than "have I attempted this recently?" — means a 0-yield or
+ * failed seed can never keep an empty feed quiet. The original implementation set
+ * a 1h flag even when the INSERT matched 0 rows (e.g. a transient error, or the
+ * earlier JS-Date-param bug that silently matched nothing), which permanently
+ * quieted the feed for an impersonated/new user until the flag expired. The flag
+ * here is now a short negative-cache that ONLY guards the empty-feed branch.
  */
 async function ensureChannelBackfill(
   redis: Redis | undefined,
   userId: string,
   windowDays: number,
 ): Promise<void> {
+  // Populated feed → nothing to do. Indexed point lookup on user_id.
+  const existing = await db
+    .select({ one: sql<number>`1` })
+    .from(banterFeedEntries)
+    .where(eq(banterFeedEntries.user_id, userId))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  // Feed is empty. Rate-limit the seed attempt with a SHORT-lived flag so rapid
+  // reads for a genuinely-empty org don't hammer the INSERT, but it self-heals
+  // within seconds once seedable posts exist — never the hour-long suppression
+  // the old flag caused. Once the insert below seeds rows, the next read takes
+  // the early return above, so this flag never suppresses a populated feed.
   const flagKey = `bfeed:bf:${userId}`;
   if (redis) {
     try {
-      if (await redis.get(flagKey)) return; // backfilled recently
+      if (await redis.get(flagKey)) return;
     } catch {
-      // Redis unavailable — fall through and backfill (correctness over the
+      // Redis unavailable — fall through and seed (correctness over the
       // perf optimization the flag provides).
     }
   }
@@ -284,7 +306,11 @@ async function ensureChannelBackfill(
 
   if (redis) {
     try {
-      await redis.set(flagKey, '1', 'EX', 3600);
+      // Short TTL: guards only the empty-feed case. If the insert seeded rows,
+      // the next read returns early at the existing-entries check and never
+      // reaches this flag; if it seeded nothing (genuinely empty org), we retry
+      // in ~2 minutes rather than staying quiet for an hour.
+      await redis.set(flagKey, '1', 'EX', 120);
     } catch {
       // Non-fatal.
     }
