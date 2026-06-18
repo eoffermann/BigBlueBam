@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   KeyRound,
   Lock,
+  LogIn,
   LogOut,
   Mail,
   Plus,
@@ -28,6 +29,7 @@ import { timezoneSelectOptions } from '@/lib/timezones';
 import { ApiError } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
 import { UserPermissionsTab } from '@/components/superuser/user-permissions-tab';
+import { ImpersonateDialog } from '@/components/superuser/impersonate-dialog';
 import {
   superuserPermissionsApi,
   type ScopeType,
@@ -120,6 +122,7 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
   };
 
   const [resetCtx, setResetCtx] = useState<{ orgId: string } | null>(null);
+  const [showImpersonate, setShowImpersonate] = useState(false);
 
   if (isLoading) {
     return (
@@ -212,11 +215,20 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isSuperuser && u.is_active && (
+              <Button
+                variant="secondary"
+                onClick={() => setShowImpersonate(true)}
+                title={`Act as ${u.display_name || u.email} until you end the session`}
+              >
+                <LogIn className="h-4 w-4" /> Impersonate
+              </Button>
+            )}
             {isSuperuser && (
               <Button
                 variant="secondary"
                 onClick={() => onNavigate(`/superuser/people/${userId}`)}
-                title="Impersonate, grant/revoke SuperUser, session inventory, change email, set default org"
+                title="Grant/revoke SuperUser, session inventory, change email, set default org"
               >
                 <Shield className="h-4 w-4" /> SuperUser tools
               </Button>
@@ -317,6 +329,13 @@ export function PeopleManagerDetailPage({ userId, onNavigate }: PeopleManagerDet
             const res = await peopleManagerApi.resetPassword(resetCtx.orgId, userId, password);
             return res.data.password;
           }}
+        />
+      )}
+
+      {showImpersonate && (
+        <ImpersonateDialog
+          user={{ id: userId, display_name: u.display_name, email: u.email }}
+          onClose={() => setShowImpersonate(false)}
         />
       )}
     </AppLayout>

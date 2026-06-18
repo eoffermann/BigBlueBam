@@ -26,6 +26,7 @@ import { Badge } from '@/components/common/badge';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { superuserApi } from '@/lib/api/superuser';
 import { UserPermissionsTab } from '@/components/superuser/user-permissions-tab';
+import { ImpersonateDialog } from '@/components/superuser/impersonate-dialog';
 import {
   superuserUsersApi,
   type OrgRole,
@@ -1068,53 +1069,5 @@ function AddToOrgDialog({
   );
 }
 
-// ─── Impersonate dialog ─────────────────────────────────────────────────────
-
-function ImpersonateDialog({ user, onClose }: { user: SuperuserUserDetail; onClose: () => void }) {
-  const [reason, setReason] = useState('');
-  const impersonate = useMutation({
-    mutationFn: () => superuserUsersApi.impersonate(user.id, reason.trim() || undefined),
-    onSuccess: () => {
-      window.location.href = '/b3/';
-    },
-  });
-  const err = impersonate.error as Error | null;
-
-  return (
-    <Dialog
-      open={true}
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-      title="Impersonate user"
-      description={`You will act as ${user.display_name || user.email} until you end the impersonation session.`}
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          impersonate.mutate();
-        }}
-        className="space-y-4"
-      >
-        <Input
-          label="Reason (optional)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g. Investigating support ticket #1234"
-          autoFocus
-        />
-        {err && (
-          <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 dark:bg-red-950 dark:border-red-900 dark:text-red-300">
-            {err.message}
-          </div>
-        )}
-        <div className="flex items-center justify-end gap-2 pt-2">
-          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="submit" variant="danger" loading={impersonate.isPending}>
-            <LogIn className="h-4 w-4" /> Impersonate
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  );
-}
+// ImpersonateDialog now lives in components/superuser/impersonate-dialog.tsx,
+// shared with the People Manager detail page (imported at the top of this file).
