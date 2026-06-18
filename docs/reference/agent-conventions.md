@@ -43,27 +43,41 @@ Every non-`ok` reason means "do not surface". The reason code is for
 telemetry (and, when applicable, for deciding whether to escalate to a
 human operator with "I found something but could not cite it").
 
-## 2. Canonical `entity_type` list (Wave 2)
+## 2. Canonical `entity_type` list
 
 Only the following entity types have preflight coverage. Any other value
-returns `allowed: false, reason: 'unsupported_entity_type'`.
+returns `allowed: false, reason: 'unsupported_entity_type'` (with a
+`supported_entity_types` hint).
 
-| entity_type        | physical table          | visibility rule (summary)                                                          |
-| ------------------ | ----------------------- | ---------------------------------------------------------------------------------- |
-| `bam.task`         | `tasks`                 | project member, or org admin/owner                                                 |
-| `bam.project`      | `projects`              | project member, or org admin/owner                                                 |
-| `bam.sprint`       | `sprints`               | project member of the sprint's project, or org admin/owner                         |
-| `helpdesk.ticket`  | `tickets` (helpdesk)    | project member if `project_id` is set; otherwise "same org" (inbound triage)       |
-| `bond.deal`        | `bond_deals`            | same org; for role member/viewer, also `owner_id === asker_user_id`                |
-| `bond.contact`     | `bond_contacts`         | same org; for role member/viewer, also `owner_id === asker_user_id`                |
-| `bond.company`     | `bond_companies`        | same org                                                                           |
-| `brief.document`   | `brief_documents`       | mirrors `documentVisibilityPredicate` (org / private / project with collaborators) |
-| `beacon.entry`     | `beacon_entries`        | mirrors Beacon graph visibility (Organization / Private owner / Project member)    |
+| entity_type          | physical table          | visibility rule (summary)                                                          |
+| -------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
+| `bam.task`           | `tasks`                 | project member, or org admin/owner                                                 |
+| `bam.project`        | `projects`              | project member, or org admin/owner                                                 |
+| `bam.sprint`         | `sprints`               | project member of the sprint's project, or org admin/owner                         |
+| `helpdesk.ticket`    | `tickets` (helpdesk)    | project member if `project_id` is set; otherwise "same org" (inbound triage)       |
+| `bond.deal`          | `bond_deals`            | same org; for role member/viewer, also `owner_id === asker_user_id`                |
+| `bond.contact`       | `bond_contacts`         | same org; for role member/viewer, also `owner_id === asker_user_id`                |
+| `bond.company`       | `bond_companies`        | same org                                                                           |
+| `brief.document`     | `brief_documents`       | mirrors `documentVisibilityPredicate` (org / private / project with collaborators) |
+| `beacon.entry`       | `beacon_entries`        | mirrors Beacon graph visibility (Organization / Private owner / Project member)    |
+| `blueprint.diagram`  | `blueprint_diagrams`    | same org (per-diagram collab rules enforced authoritatively by blueprint-api)      |
+| `blueprint.node`     | `blueprint_nodes`       | reachable iff its parent diagram is                                                |
+| `banter.channel`     | `banter_channels`       | mirrors `requireChannelMember`: member-only; SuperUser bypass; archived hidden; non-member org admins NOT elevated |
+| `banter.message`     | `banter_messages`       | inherits parent channel access; soft-deleted messages are `not_found`              |
+| `bearing.goal`       | `bearing_goals`         | same org (Bearing has no per-goal visibility enum)                                 |
+| `bearing.kr`         | `bearing_key_results`   | inherits parent goal access                                                        |
+| `board.board`        | `boards`                | mirrors board `visibilityFilter` (organization / private+collaborator / project member) |
+| `book.event`         | `book_events`           | same org (event `visibility` is a free/busy status, not a privacy gate)            |
+| `bill.invoice`       | `bill_invoices`         | same org                                                                           |
+| `blank.form`         | `blank_forms`           | visibility public / org / project (project member when `project_id` is set)        |
+| `bolt.rule`          | `bolt_automations`      | same org (automations are org-level infrastructure)                                |
 
-**Forward pointer:** Wave 3 will extend coverage to Bearing (goals/KRs),
-Board (rooms), Blast (campaigns), Book (events), Bill (invoices), Blank
-(forms), Banter (messages and channels), and Bolt (rules). Until then
-agents that cite those entity kinds MUST NOT surface them cross-audience.
+The bottom 11 rows landed with the Banter Feed entity-type registration
+(`docs/plans/banter-feed-design-document.md` §16), extending the original
+Wave 2 set so the Feed's `can_access` gate admits cross-app entities instead
+of denying-by-default. The `SUPPORTED_ENTITY_TYPES` export in
+`apps/api/src/services/visibility.service.ts` remains the single source of
+truth; this table is documentation that must be kept in lockstep with it.
 
 ## 3. Determining `asker_user_id`
 

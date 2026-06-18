@@ -3,10 +3,12 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useChannel } from '@/hooks/use-channels';
 import { BanterLayout } from '@/pages/banter-layout';
 import { ChannelView } from '@/pages/channel-view';
+import { FeedPage } from '@/pages/feed';
 import { ChannelBrowser } from '@/pages/channel-browser';
 import { BookmarksPage } from '@/pages/bookmarks';
 import { SearchPage } from '@/pages/search';
 import { PreferencesPage } from '@/pages/preferences';
+import { FeedSettingsPage } from '@/pages/feed-settings';
 import { AdminPage } from '@/pages/admin';
 import { AdminCallingSettingsPage } from '@/pages/admin-calling-settings';
 import { CallPlaybackPage } from '@/pages/call-playback';
@@ -19,10 +21,12 @@ type Route =
   | { page: 'channel'; slug: string }
   | { page: 'dm'; id: string }
   | { page: 'go'; id: string }
+  | { page: 'feed'; entryId?: string }
   | { page: 'browse' }
   | { page: 'bookmarks' }
   | { page: 'search' }
   | { page: 'settings' }
+  | { page: 'feed-settings' }
   | { page: 'admin' }
   | { page: 'admin-calling' }
   | { page: 'call'; id: string }
@@ -65,9 +69,16 @@ function parseRoute(path: string): Route {
     return { page: 'call', id: callMatch[1]! };
   }
 
+  // /feed and /feed/:entryId — the ranked landing view + permalinks.
+  const feedMatch = p.match(/^\/feed(?:\/([^/]+))?$/);
+  if (feedMatch) {
+    return { page: 'feed', entryId: feedMatch[1] };
+  }
+
   if (p === '/browse') return { page: 'browse' };
   if (p === '/bookmarks') return { page: 'bookmarks' };
   if (p === '/search') return { page: 'search' };
+  if (p === '/settings/feed') return { page: 'feed-settings' };
   if (p === '/settings') return { page: 'settings' };
   if (p === '/admin/calling') return { page: 'admin-calling' };
   if (p === '/admin') return { page: 'admin' };
@@ -175,7 +186,8 @@ export function App() {
   // /banter -> /banter/ 301), producing a black screen.
   useEffect(() => {
     if (isAuthenticated && route.page === 'redirect') {
-      navigate('/channels/general');
+      // Feed is the default Banter landing view (§17.4).
+      navigate('/feed');
     }
   }, [isAuthenticated, route.page, navigate]);
 
@@ -236,6 +248,8 @@ export function App() {
         return <ChannelView slug={route.slug} type="channel" onNavigate={navigate} />;
       case 'dm':
         return <ChannelView slug={route.id} type="dm" onNavigate={navigate} />;
+      case 'feed':
+        return <FeedPage entryId={route.entryId} onNavigate={navigate} />;
       case 'browse':
         return <ChannelBrowser onNavigate={navigate} />;
       case 'bookmarks':
@@ -244,6 +258,8 @@ export function App() {
         return <SearchPage onNavigate={navigate} />;
       case 'settings':
         return <PreferencesPage onNavigate={navigate} />;
+      case 'feed-settings':
+        return <FeedSettingsPage onNavigate={navigate} />;
       case 'admin':
         return <AdminPage onNavigate={navigate} />;
       case 'admin-calling':

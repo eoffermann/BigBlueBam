@@ -67,6 +67,17 @@ const canReadBody = z.object({
   target_url: z.string().min(1),
 });
 
+// General (entity_type, entity_id) preflight for internal service callers
+// (e.g. the worker's Banter Feed fan-in). Mirrors the public
+// /v1/visibility/can_access tool but authenticates with the internal service
+// secret instead of a user session, so server-to-server callers don't need a
+// per-user credential. Returns the flat PreflightResult shape.
+const canAccessBody = z.object({
+  asker_user_id: z.string().uuid(),
+  entity_type: z.string().min(1).max(64),
+  entity_id: z.string().min(1).max(128),
+});
+
 /**
  * Map a Bam URL to a §11 visibility entity. Recognized shapes (anywhere
  * under /b3/): .../tasks/:uuid, .../sprints/:uuid, .../projects/:uuid.
@@ -131,6 +142,27 @@ export default async function internalCanReadRoutes(fastify: FastifyInstance) {
         allowed: result.allowed,
         can_share: false,
         reason: result.reason,
+      });
+    },
+  );
+
+  // POST /internal/visibility/can-access — general (entity_type, entity_id)
+  // preflight for internal service callers. Same rules as the agent-facing
+  // can_access tool; service-secret auth instead of a user session.
+  fastify.post(
+    '/internal/visibility/can-access',
+    { preHandler: [requireInternalSecret] },
+    async (request, reply) => {
+      const body = canAccessBody.parse(request.body);
+      const result = await preflightAccess(
+        body.asker_user_id,
+        body.entity_type,
+        body.entity_id,
+      );
+      return reply.send({
+        allowed: result.allowed,
+        reason: result.reason,
+        ...(result.entity_org_id ? { entity_org_id: result.entity_org_id } : {}),
       });
     },
   );

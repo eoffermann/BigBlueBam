@@ -28,6 +28,7 @@ import {
   varchar,
   text,
   bigint,
+  boolean,
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
@@ -196,4 +197,161 @@ export const blueprintDiagramsStub = pgTable('blueprint_diagrams', {
 export const blueprintNodesStub = pgTable('blueprint_nodes', {
   id: uuid('id').primaryKey(),
   diagram_id: uuid('diagram_id').notNull(),
+});
+
+// ===========================================================================
+// Banter Feed entity-type registration (docs/plans/banter-feed-design-document.md §16)
+// ===========================================================================
+// The Banter Feed surfaces entities from across the suite, and every cross-app
+// entity passes can_access (the Wave 2 visibility preflight). These stubs add
+// the columns the new preflight branches read. Same warning as above: minimal
+// columns, kept in lockstep with the real physical schema, invisible to the
+// drift guard.
+
+// ---------------------------------------------------------------------------
+// banter - channels, messages, channel memberships
+// ---------------------------------------------------------------------------
+// Real schemas: apps/banter-api/src/db/schema/{channels,messages,channel-memberships}.ts.
+// A channel is readable iff it is a public channel in the same org OR the asker
+// is a member. A message inherits its parent channel's visibility.
+export const banterChannelsStub = pgTable(
+  'banter_channels',
+  {
+    id: uuid('id').primaryKey(),
+    org_id: uuid('org_id').notNull(),
+    // 'public' | 'private' | 'dm' | 'group_dm'
+    type: varchar('type', { length: 20 }).notNull(),
+    is_archived: boolean('is_archived').notNull(),
+  },
+  (table) => [index('pas_banter_channels_org_idx').on(table.org_id)],
+);
+
+export const banterMessagesStub = pgTable(
+  'banter_messages',
+  {
+    id: uuid('id').primaryKey(),
+    channel_id: uuid('channel_id').notNull(),
+    is_deleted: boolean('is_deleted').notNull(),
+  },
+  (table) => [index('pas_banter_messages_channel_idx').on(table.channel_id)],
+);
+
+export const banterChannelMembershipsStub = pgTable(
+  'banter_channel_memberships',
+  {
+    id: uuid('id').primaryKey(),
+    channel_id: uuid('channel_id').notNull(),
+    user_id: uuid('user_id').notNull(),
+  },
+  (table) => [
+    index('pas_banter_channel_memberships_lookup_idx').on(
+      table.channel_id,
+      table.user_id,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// bearing - goals, key results
+// ---------------------------------------------------------------------------
+// Real schemas: apps/bearing-api/src/db/schema/{bearing-goals,bearing-key-results}.ts.
+// Bearing has no per-goal visibility enum: any org member can read any goal in
+// their org (apps/bearing-api/src/middleware/authorize.ts gates on org match
+// only). A KR inherits its parent goal's visibility (joined via goal_id).
+export const bearingGoalsStub = pgTable('bearing_goals', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+export const bearingKeyResultsStub = pgTable('bearing_key_results', {
+  id: uuid('id').primaryKey(),
+  goal_id: uuid('goal_id').notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// board - boards, collaborators
+// ---------------------------------------------------------------------------
+// Real schemas: apps/board-api/src/db/schema/{boards,board-collaborators}.ts.
+// Mirrors board.service.ts visibilityFilter:
+//  - visibility='organization': any org member.
+//  - visibility='private':      creator or explicit collaborator.
+//  - visibility='project':      creator, collaborator, or project member.
+// archived_at IS NOT NULL means the board is archived.
+export const boardsStub = pgTable(
+  'boards',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    project_id: uuid('project_id'),
+    created_by: uuid('created_by').notNull(),
+    visibility: varchar('visibility', { length: 20 }).notNull(),
+    archived_at: timestamp('archived_at', { withTimezone: true }),
+  },
+  (table) => [index('pas_boards_org_idx').on(table.organization_id)],
+);
+
+export const boardCollaboratorsStub = pgTable(
+  'board_collaborators',
+  {
+    id: uuid('id').primaryKey(),
+    board_id: uuid('board_id').notNull(),
+    user_id: uuid('user_id').notNull(),
+  },
+  (table) => [
+    index('pas_board_collaborators_lookup_idx').on(table.board_id, table.user_id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// book - events
+// ---------------------------------------------------------------------------
+// Real schema: apps/book-api/src/db/schema/book-events.ts.
+// book_events.visibility is a free/busy STATUS (busy/free/tentative/oof), not a
+// privacy enum. The list route scopes on org, so any org member can read any
+// event in their org; creator and attendees are subsets of that. Org match is
+// therefore the entire gate (no attendee join needed for the allow decision).
+export const bookEventsStub = pgTable('book_events', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// bill - invoices
+// ---------------------------------------------------------------------------
+// Real schema: apps/bill-api/src/db/schema/bill-invoices.ts. No per-invoice
+// visibility enum: any org member can read any invoice (org-wide). Org match
+// is the entire rule.
+export const billInvoicesStub = pgTable('bill_invoices', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// blank - forms
+// ---------------------------------------------------------------------------
+// Real schema: apps/blank-api/src/db/schema/blank-forms.ts.
+// Mirrors form.service.ts visibility enforcement:
+//  - visibility='public': anyone (within the org, for the preflight's purposes).
+//  - visibility='org':    any org member.
+//  - visibility='project': project member when project_id is set, else org member.
+export const blankFormsStub = pgTable(
+  'blank_forms',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    project_id: uuid('project_id'),
+    visibility: varchar('visibility', { length: 20 }).notNull(),
+  },
+  (table) => [index('pas_blank_forms_org_idx').on(table.organization_id)],
+);
+
+// ---------------------------------------------------------------------------
+// bolt - automations (rules)
+// ---------------------------------------------------------------------------
+// Real schema: apps/bolt-api/src/db/schema/bolt-automations.ts. No per-rule
+// visibility enum: automations are org-level infrastructure readable by any
+// org member. Note the org column is org_id (not organization_id).
+export const boltAutomationsStub = pgTable('bolt_automations', {
+  id: uuid('id').primaryKey(),
+  org_id: uuid('org_id').notNull(),
 });

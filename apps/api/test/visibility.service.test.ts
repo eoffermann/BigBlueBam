@@ -72,9 +72,10 @@ function pushSelect(rows: unknown[]) {
 
 // Helper for an asker lookup (users WHERE id). Wave E.F: loadAsker now
 // runs two SELECTs — the user row, then the role join against
-// account_group_memberships → permission_groups.
-function mockAsker(org_id: string, role: string) {
-  pushSelect([{ id: USER_ASKER, org_id }]);
+// account_group_memberships → permission_groups. The user row also carries
+// is_superuser (used by the Banter channel/message branches).
+function mockAsker(org_id: string, role: string, is_superuser = false) {
+  pushSelect([{ id: USER_ASKER, org_id, is_superuser }]);
   pushSelect([{ legacy_role: role }]);
 }
 
@@ -525,6 +526,385 @@ describe('visibility.service preflightAccess', () => {
         },
       ]);
       const result = await preflightAccess(USER_ASKER, 'beacon.entry', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  // =========================================================================
+  // Banter Feed entity-type registration (banter-feed-design-document.md §16)
+  // =========================================================================
+
+  const CHANNEL_ID = 'ffffffff-0000-0000-0000-000000000006';
+
+  describe('banter.channel', () => {
+    it('allows a member of a public channel', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: CHANNEL_ID, org_id: ORG_A, type: 'public', is_archived: false }]);
+      pushSelect([{ id: 'cm-1' }]); // membership found
+      const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
+      expect(result.allowed).toBe(true);
+      expect(result.reason).toBe('ok');
+      expect(result.entity_org_id).toBe(ORG_A);
+    });
+
+    it('denies a non-member of a public channel with banter_not_channel_member', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: CHANNEL_ID, org_id: ORG_A, type: 'public', is_archived: false }]);
+      pushSelect([]); // no membership
+      const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('banter_not_channel_member');
+    });
+
+    it('returns not_found for a non-member of a private channel (leak-safe)', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: CHANNEL_ID, org_id: ORG_A, type: 'private', is_archived: false }]);
+      pushSelect([]); // no membership
+      const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+
+    it('does NOT elevate a non-member org admin', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([{ id: CHANNEL_ID, org_id: ORG_A, type: 'private', is_archived: false }]);
+      pushSelect([]); // no membership — admin is not auto-allowed
+      const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+
+    it('allows a SuperUser without membership (bypass)', async () => {
+      mockAsker(ORG_A, 'member', true);
+      pushSelect([{ id: CHANNEL_ID, org_id: ORG_A, type: 'private', is_archived: true }]);
+      // no membership query — SuperUser bypasses membership and archived gate
+      const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
+      expect(result.allowed).toBe(true);
+      expect(result.reason).toBe('ok');
+    });
+
+    it('returns not_found for an archived channel to a non-SuperUser', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: CHANNEL_ID, org_id: ORG_A, type: 'public', is_archived: true }]);
+      const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+
+    it('returns not_found for a cross-org channel', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([{ id: CHANNEL_ID, org_id: ORG_B, type: 'public', is_archived: false }]);
+      const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  describe('banter.message', () => {
+    it('allows a message in a channel the asker belongs to', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          is_deleted: false,
+          channel_id: CHANNEL_ID,
+          org_id: ORG_A,
+          type: 'public',
+          is_archived: false,
+        },
+      ]);
+      pushSelect([{ id: 'cm-1' }]); // membership found
+      const result = await preflightAccess(USER_ASKER, 'banter.message', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('returns not_found for a soft-deleted message', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          is_deleted: true,
+          channel_id: CHANNEL_ID,
+          org_id: ORG_A,
+          type: 'public',
+          is_archived: false,
+        },
+      ]);
+      const result = await preflightAccess(USER_ASKER, 'banter.message', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+
+    it('denies a message in a public channel the asker has not joined', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          is_deleted: false,
+          channel_id: CHANNEL_ID,
+          org_id: ORG_A,
+          type: 'public',
+          is_archived: false,
+        },
+      ]);
+      pushSelect([]); // no membership
+      const result = await preflightAccess(USER_ASKER, 'banter.message', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('banter_not_channel_member');
+    });
+  });
+
+  describe('bearing.goal', () => {
+    it('allows any org member to read a goal (org-wide)', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_A }]);
+      const result = await preflightAccess(USER_ASKER, 'bearing.goal', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+      expect(result.reason).toBe('ok');
+    });
+
+    it('returns not_found for a cross-org goal', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_B }]);
+      const result = await preflightAccess(USER_ASKER, 'bearing.goal', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+
+    it('returns not_found when the goal does not exist', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([]);
+      const result = await preflightAccess(USER_ASKER, 'bearing.goal', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  describe('bearing.kr', () => {
+    it('allows a KR whose parent goal is in the asker org', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_A }]); // joined goal org
+      const result = await preflightAccess(USER_ASKER, 'bearing.kr', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('returns not_found for a KR whose goal is in another org', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_B }]);
+      const result = await preflightAccess(USER_ASKER, 'bearing.kr', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  describe('board.board', () => {
+    it('allows organization-visibility boards to any org member', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          org_id: ORG_A,
+          project_id: null,
+          created_by: USER_OTHER,
+          visibility: 'organization',
+        },
+      ]);
+      const result = await preflightAccess(USER_ASKER, 'board.board', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows private boards to a collaborator', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          org_id: ORG_A,
+          project_id: null,
+          created_by: USER_OTHER,
+          visibility: 'private',
+        },
+      ]);
+      pushSelect([{ id: 'bc-1' }]); // collaborator found
+      const result = await preflightAccess(USER_ASKER, 'board.board', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('denies private boards with no collaborator', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          org_id: ORG_A,
+          project_id: null,
+          created_by: USER_OTHER,
+          visibility: 'private',
+        },
+      ]);
+      pushSelect([]); // not a collaborator
+      const result = await preflightAccess(USER_ASKER, 'board.board', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('board_private_no_collaborator');
+    });
+
+    it('allows project boards to a project member', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          org_id: ORG_A,
+          project_id: PROJECT_ID,
+          created_by: USER_OTHER,
+          visibility: 'project',
+        },
+      ]);
+      pushSelect([]); // not a collaborator
+      pushSelect([{ id: 'pm-1' }]); // project member
+      const result = await preflightAccess(USER_ASKER, 'board.board', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('denies project boards to a non-member, non-collaborator', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          org_id: ORG_A,
+          project_id: PROJECT_ID,
+          created_by: USER_OTHER,
+          visibility: 'project',
+        },
+      ]);
+      pushSelect([]); // not a collaborator
+      pushSelect([]); // not a project member
+      const result = await preflightAccess(USER_ASKER, 'board.board', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_project_member');
+    });
+
+    it('returns not_found for a cross-org board', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([
+        {
+          id: ENTITY_ID,
+          org_id: ORG_B,
+          project_id: null,
+          created_by: USER_OTHER,
+          visibility: 'organization',
+        },
+      ]);
+      const result = await preflightAccess(USER_ASKER, 'board.board', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  describe('book.event', () => {
+    it('allows any org member to read an event (org-wide)', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_A }]);
+      const result = await preflightAccess(USER_ASKER, 'book.event', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('returns not_found for a cross-org event', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_B }]);
+      const result = await preflightAccess(USER_ASKER, 'book.event', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  describe('bill.invoice', () => {
+    it('allows any org member to read an invoice (org-wide)', async () => {
+      mockAsker(ORG_A, 'viewer');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_A }]);
+      const result = await preflightAccess(USER_ASKER, 'bill.invoice', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('returns not_found for a cross-org invoice', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([{ id: ENTITY_ID, organization_id: ORG_B }]);
+      const result = await preflightAccess(USER_ASKER, 'bill.invoice', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  describe('blank.form', () => {
+    it('allows public forms to any org member', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        { id: ENTITY_ID, organization_id: ORG_A, project_id: null, visibility: 'public' },
+      ]);
+      const result = await preflightAccess(USER_ASKER, 'blank.form', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows org-visibility forms to any org member', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        { id: ENTITY_ID, organization_id: ORG_A, project_id: null, visibility: 'org' },
+      ]);
+      const result = await preflightAccess(USER_ASKER, 'blank.form', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows project-visibility forms to a project member', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        { id: ENTITY_ID, organization_id: ORG_A, project_id: PROJECT_ID, visibility: 'project' },
+      ]);
+      pushSelect([{ id: 'pm-1' }]); // project member
+      const result = await preflightAccess(USER_ASKER, 'blank.form', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('denies project-visibility forms to a non-member', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([
+        { id: ENTITY_ID, organization_id: ORG_A, project_id: PROJECT_ID, visibility: 'project' },
+      ]);
+      pushSelect([]); // not a project member
+      const result = await preflightAccess(USER_ASKER, 'blank.form', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_project_member');
+    });
+
+    it('allows project-visibility forms to an org admin', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([
+        { id: ENTITY_ID, organization_id: ORG_A, project_id: PROJECT_ID, visibility: 'project' },
+      ]);
+      const result = await preflightAccess(USER_ASKER, 'blank.form', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('returns not_found for a cross-org form', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([
+        { id: ENTITY_ID, organization_id: ORG_B, project_id: null, visibility: 'public' },
+      ]);
+      const result = await preflightAccess(USER_ASKER, 'blank.form', ENTITY_ID);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe('not_found');
+    });
+  });
+
+  describe('bolt.rule', () => {
+    it('allows any org member to read an automation (org-wide)', async () => {
+      mockAsker(ORG_A, 'member');
+      pushSelect([{ id: ENTITY_ID, org_id: ORG_A }]);
+      const result = await preflightAccess(USER_ASKER, 'bolt.rule', ENTITY_ID);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('returns not_found for a cross-org automation', async () => {
+      mockAsker(ORG_A, 'admin');
+      pushSelect([{ id: ENTITY_ID, org_id: ORG_B }]);
+      const result = await preflightAccess(USER_ASKER, 'bolt.rule', ENTITY_ID);
       expect(result.allowed).toBe(false);
       expect(result.reason).toBe('not_found');
     });

@@ -7,6 +7,7 @@ import { MessageTimeline } from '@/components/messages/message-timeline';
 import { MessageCompose } from '@/components/messages/message-compose';
 import { TypingIndicator } from '@/components/messages/typing-indicator';
 import { ChannelSettings } from '@/components/channels/channel-settings';
+import { ChannelFollowButton } from '@/components/channels/channel-follow-button';
 import { cn } from '@/lib/utils';
 
 interface ChannelViewProps {
@@ -73,6 +74,8 @@ export function ChannelView({ slug, type, onNavigate }: ChannelViewProps) {
         )}
 
         <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+          {/* Feed follow/mute — channels only; DMs route to the DM view (§12.2). */}
+          {type === 'channel' && <ChannelFollowButton channelId={channel.id} />}
           <HeaderButton icon={<Users className="h-4 w-4" />} label={`${channel.member_count}`} />
           <HeaderButton icon={<Pin className="h-4 w-4" />} label="" title="Pinned messages" />
           <HeaderButton

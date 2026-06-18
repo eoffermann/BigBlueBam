@@ -56,6 +56,7 @@ function createBanterClient(banterApiUrl: string, api: ApiClient) {
     get: (path: string) => request('GET', path),
     post: (path: string, body?: unknown) => request('POST', path, body),
     patch: (path: string, body?: unknown) => request('PATCH', path, body),
+    put: (path: string, body?: unknown) => request('PUT', path, body),
     delete: (path: string) => request('DELETE', path),
   };
 }
@@ -1639,6 +1640,128 @@ export function registerBanterTools(server: McpServer, api: ApiClient, banterApi
     handler: async ({ scheduled_message_id }) => {
       const result = await banter.delete(`/v1/scheduled-messages/${scheduled_message_id}`);
       return result.ok ? ok(result.data) : writeErr('banter_cancel_scheduled_message', 'cancelling scheduled message', result);
+    },
+  });
+
+  // ---------------------------------------------------------------------------
+  // Banter Feed tools (8) — docs/plans/banter-feed-design-document.md §14.
+  // Agents are first-class feed users (§15): an agent reads its own ranked feed
+  // to catch up on what concerns it. Platform weight writes stay UI/SuperUser
+  // only and are deliberately not exposed here.
+  // ---------------------------------------------------------------------------
+
+  registerTool(server, {
+    name: 'banter_feed_query',
+    description:
+      "The caller's ranked Banter Feed: posts in followed channels, replies on threads they are in, and cross-app activity that concerns them, most-relevant first. Filter by category/source; set explain=true for score breakdowns.",
+    input: {
+      cursor: z.string().optional().describe('Pagination cursor (offset)'),
+      limit: z.number().int().min(1).max(100).optional().describe('Page size (default 30)'),
+      category: z.string().optional().describe("Filter to one category, e.g. 'bam.task.assigned_to_me'"),
+      source: z.string().optional().describe("Filter to one source app, e.g. 'bam', 'brief'"),
+      unseen: z.boolean().optional().describe('Only entries not yet seen'),
+      explain: z.boolean().optional().describe('Include the per-entry score breakdown'),
+    },
+    returns: z.object({ data: z.array(z.unknown()), next_cursor: z.string().nullable().optional() }),
+    handler: async (params) => {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined) qs.set(k, String(v));
+      }
+      const q = qs.toString();
+      const result = await banter.get(`/v1/feed${q ? `?${q}` : ''}`);
+      return result.ok ? ok(result.data) : err('querying feed', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_feed_mark_seen',
+    description:
+      'Mark feed entries as seen (they sink in the ranking but do not vanish). Provide either entry_ids or a before_seq watermark.',
+    input: {
+      entry_ids: z.array(z.string().uuid()).max(500).optional().describe('Entry ids to mark seen'),
+      before_seq: z.number().int().nonnegative().optional().describe('Mark everything at or below this seq seen'),
+    },
+    returns: z.object({ data: z.object({ marked: z.number() }).passthrough() }),
+    handler: async (params) => {
+      const result = await banter.post('/v1/feed/seen', params);
+      return result.ok ? ok(result.data) : err('marking feed seen', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_feed_dismiss',
+    description: 'Dismiss a single feed entry — it is excluded from future reads entirely.',
+    input: { entry_id: z.string().uuid().describe('The feed entry id to dismiss') },
+    returns: z.object({ data: z.object({ success: z.boolean() }).passthrough() }),
+    handler: async ({ entry_id }) => {
+      const result = await banter.post(`/v1/feed/${entry_id}/dismiss`);
+      return result.ok ? ok(result.data) : err('dismissing feed entry', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_feed_explain',
+    description:
+      'Return the full score breakdown for one feed entry (recency, weight, affinity, interaction, engagement, multipliers). For tuning and debugging.',
+    input: { entry_id: z.string().uuid().describe('The feed entry id') },
+    returns: z.object({ data: z.unknown() }),
+    handler: async ({ entry_id }) => {
+      const result = await banter.get(`/v1/feed/${entry_id}?explain=true`);
+      return result.ok ? ok(result.data) : err('explaining feed entry', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_feed_subscription_set',
+    description:
+      "Follow / unfollow / mute a scope in the caller's feed. scope_type is item|channel|project|source; scope_source is the app (banter, bam, brief, ...). state is following|unfollowed|muted. unfollowed is a soft opt-out (keeps direct items); muted is a hard opt-out.",
+    input: {
+      scope_type: z.enum(['item', 'channel', 'project', 'source']),
+      scope_source: z.string().describe("Owning app, e.g. 'banter', 'bam'"),
+      scope_id: z.string().uuid().optional().describe('Entity/channel/project id; omit for a source-level scope'),
+      state: z.enum(['following', 'unfollowed', 'muted']),
+    },
+    returns: z.object({ data: z.unknown() }),
+    handler: async (params) => {
+      const result = await banter.put('/v1/feed/subscriptions', params);
+      return result.ok ? ok(result.data) : err('setting feed subscription', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_feed_subscription_list',
+    description: "List the caller's explicit feed subscription rows (the deviations from the default-on state).",
+    input: { source: z.string().optional().describe('Filter to one source app') },
+    returns: z.object({ data: z.array(z.unknown()) }),
+    handler: async ({ source }) => {
+      const q = source ? `?source=${encodeURIComponent(source)}` : '';
+      const result = await banter.get(`/v1/feed/subscriptions${q}`);
+      return result.ok ? ok(result.data) : err('listing feed subscriptions', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_feed_weights_get',
+    description:
+      "Effective feed ranking weights for the caller's org (merged platform defaults + org overrides), plus the raw overrides at each level.",
+    input: {},
+    returns: z.object({ data: z.unknown() }),
+    handler: async () => {
+      const result = await banter.get('/v1/feed/weights');
+      return result.ok ? ok(result.data) : err('getting feed weights', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'banter_feed_weights_set_org',
+    description:
+      "Set this org's feed ranking weight overrides (org admin/owner). Send only the knobs to override (categories map, gravity, recency_offset, engagement_weight, interaction_boost, affinity_boost, seen_multiplier, candidate_window_days, must_see_floor); the rest inherit. Bumps the version so the change is live on the next read. Platform-level defaults are not agent-editable.",
+    input: { weights: z.record(z.string(), z.unknown()).describe('Partial weight-override object') },
+    returns: z.object({ data: z.object({ version: z.number() }).passthrough() }),
+    handler: async ({ weights }) => {
+      const result = await banter.put('/v1/feed/weights/org', weights);
+      return result.ok ? ok(result.data) : err('setting org feed weights', result.data);
     },
   });
 }

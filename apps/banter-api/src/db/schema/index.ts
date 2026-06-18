@@ -32,3 +32,9 @@ export { banterScheduledMessages } from './scheduled-messages.js';
 export { banterAgentSubscriptions } from './agent-subscriptions.js';
 // Slack workspace import (docs/plans/slack-import-design.md)
 export { banterSlackImports } from './slack-imports.js';
+// Banter Feed (docs/plans/banter-feed-design-document.md)
+export {
+  banterFeedSubscriptions,
+  banterFeedEntries,
+  banterFeedWeights,
+} from './feed.js';

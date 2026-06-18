@@ -16,6 +16,7 @@ import { getEffectiveBanterPermissions } from '../services/org-permissions-bridg
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { loadEnrichedActor, loadEnrichedOrg } from '../lib/bolt-enrich.js';
 import { channelDeepLink, dmDeepLink } from '../lib/notify.js';
+import { clearChannelSubscriptions } from '../services/feed-subscriptions.service.js';
 
 /**
  * Derive a coarse presence label from the user's last_seen_at timestamp.
@@ -1233,6 +1234,14 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           type: 'member.left',
           data: { channel_id: id, user_id: user.id },
           timestamp: new Date().toISOString(),
+        });
+        // Feed: drop any explicit follow/mute row for this channel so a stale
+        // subscription does not linger after leaving (§5.1, §10.3). Best-effort.
+        await clearChannelSubscriptions(user.id, id).catch((err) => {
+          request.log.warn(
+            { err: err instanceof Error ? err.message : String(err), channel_id: id },
+            'feed: failed to clear channel subscriptions on leave',
+          );
         });
       }
 

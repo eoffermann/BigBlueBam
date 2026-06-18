@@ -41,9 +41,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 |---|--:|--:|--:|--:|
 | Bam — Work management | 93 | 86 | 7 | 2 |
 | Bam — Org, auth, admin & integrations | 156 | 37 | 119 | 0 |
-| Banter | 99 | 67 | 32 | 0 |
+| Banter | 112 | 75 | 37 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
-| Brief | 53 | 48 | 5 | 0 |
+| Brief | 54 | 48 | 6 | 0 |
 | Bond | 72 | 70 | 2 | 0 |
 | Bolt | 28 | 27 | 1 | 0 |
 | Bearing | 35 | 33 | 2 | 0 |
@@ -57,7 +57,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bureau | 42 | 37 | 5 | 0 |
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **956** | **710** | **246** | **16** |
+| **Total** | **970** | **718** | **252** | **16** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -813,6 +813,28 @@ All write endpoints return HTTP 410 Gone (calling moved to the Bureau docked-box
 | `DELETE /v1/admin/import/slack/:id` | — _(skip: Slack-import wizard (admin) — UI-only)_ | Abort + cleanup | `apps/api` (Bam settings wizard via proxy) |
 
 
+### Feed (ranked stream, subscriptions, weights)
+
+Banter Feed (`docs/plans/banter-feed-design-document.md`). Ranked cross-app
+stream + the default-on follow/mute hierarchy + two-level tunable weights.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /v1/feed` | `banter_feed_query` | Ranked feed for the caller (read-time scoring) | `apps/banter/src/hooks/use-feed.ts` |
+| `POST /v1/feed/seen` | `banter_feed_mark_seen` | Mark entries seen (id list or seq watermark) | `apps/banter/src/hooks/use-feed.ts` |
+| `POST /v1/feed/:id/dismiss` | `banter_feed_dismiss` | Dismiss a single entry | `apps/banter/src/hooks/use-feed.ts` |
+| `GET /v1/feed/:id` | `banter_feed_explain` | Single hydrated entry / permalink (+ score breakdown) | `apps/banter/src/pages/feed.tsx` |
+| `GET /v1/feed/subscriptions` | `banter_feed_subscription_list` | List explicit opt-out rows | `apps/banter/src/hooks/use-feed.ts` |
+| `PUT /v1/feed/subscriptions` | `banter_feed_subscription_set` | Follow/unfollow/mute a scope | `apps/banter/src/hooks/use-feed.ts` |
+| `DELETE /v1/feed/subscriptions/:id` | — _(skip: covered by banter_feed_subscription_set — 'following' reverts to default)_ | Remove an explicit row | — |
+| `GET /v1/channels/:id/follow` | — _(skip: UI convenience alias over subscriptions; MCP uses banter_feed_subscription_list)_ | Effective channel follow state | `apps/banter/src/components/channels/channel-follow-button.tsx` |
+| `PUT /v1/channels/:id/follow` | — _(skip: UI convenience alias over subscriptions; MCP uses banter_feed_subscription_set)_ | Set channel follow/mute | `apps/banter/src/components/channels/channel-follow-button.tsx` |
+| `GET /v1/feed/weights` | `banter_feed_weights_get` | Effective merged weights + raw overrides | `apps/banter/src/pages/feed-settings.tsx` |
+| `PUT /v1/feed/weights/org` | `banter_feed_weights_set_org` | Set org weight overrides (admin) | `apps/banter/src/pages/feed-settings.tsx` |
+| `PUT /v1/feed/weights/platform` | — _(skip: SuperUser break-glass — deliberately not agent-exposed)_ | Set platform default weights | `apps/banter/src/pages/feed-settings.tsx` |
+| `POST /v1/feed/weights/preview` | — _(skip: UI live-preview dry-run; agents read via banter_feed_query/explain)_ | Re-score the caller's feed against proposed weights | `apps/banter/src/pages/feed-settings.tsx` |
+
+
 ### Internal (service-to-service)
 
 X-Internal-Secret gated; not user-facing, no MCP tools.
@@ -956,6 +978,7 @@ All routes are registered under the `/v1` prefix, so external paths are `/brief/
 | `PATCH /folders/:id` | `brief_folder_update` | Update a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `DELETE /folders/:id` | `brief_folder_delete` | Delete a folder | `apps/brief/src/hooks/use-folders.ts` |
 | `POST /internal/can-read` | — _(skip: internal service-to-service route)_ | Cross-app read preflight (Bureau summon) | — *(internal service-to-service)* |
+| `POST /internal/visibility/can-access` | — _(skip: internal service-to-service route)_ | General (entity_type, entity_id) preflight for service callers (Banter Feed fan-in worker) | — *(internal service-to-service)* |
 
 
 ## Bond (app)
