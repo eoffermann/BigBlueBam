@@ -258,11 +258,14 @@ export function buildFeedFaninDeps(
   return {
     async canAccess(userId, entityType, entityId) {
       try {
-        const res = await fetch(`${opts.apiInternalUrl}/v1/visibility/can_access`, {
+        // Internal service route (service-secret auth, flat result shape). The
+        // public /v1/visibility/can_access requires a user session, which the
+        // worker does not have.
+        const res = await fetch(`${opts.apiInternalUrl}/internal/visibility/can-access`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Internal-Secret': opts.internalServiceSecret,
+            'X-Internal-Service-Secret': opts.internalServiceSecret,
           },
           body: JSON.stringify({
             asker_user_id: userId,
@@ -270,9 +273,15 @@ export function buildFeedFaninDeps(
             entity_id: entityId,
           }),
         });
-        if (!res.ok) return false;
-        const body = (await res.json()) as { data?: { allowed?: boolean } };
-        return body?.data?.allowed === true;
+        if (!res.ok) {
+          logger.warn(
+            { status: res.status, userId, entityType, entityId },
+            'feed-fanin: can_access preflight non-ok; dropping',
+          );
+          return false;
+        }
+        const body = (await res.json()) as { allowed?: boolean };
+        return body?.allowed === true;
       } catch (err) {
         logger.warn({ err, userId, entityType, entityId }, 'feed-fanin: can_access network error');
         return false;
