@@ -322,14 +322,46 @@ export async function listUpdates(goalId: string, orgId: string) {
   const goal = await getGoalById(goalId, orgId);
   if (!goal) throw new BearingError('NOT_FOUND', 'Goal not found', 404);
 
+  // Join the author so the feed can render their name + avatar. Without this
+  // the response carried only author_id and the client (UpdateFeed) crashed on
+  // update.author.avatar_url, blanking the whole goal page. Mirrors the
+  // author/owner joins used elsewhere in this service.
   const rows = await db
-    .select()
+    .select({
+      id: bearingUpdates.id,
+      goal_id: bearingUpdates.goal_id,
+      author_id: bearingUpdates.author_id,
+      status: bearingUpdates.status,
+      body: bearingUpdates.body,
+      status_at_time: bearingUpdates.status_at_time,
+      progress_at_time: bearingUpdates.progress_at_time,
+      created_at: bearingUpdates.created_at,
+      author_display_name: users.display_name,
+      author_avatar_url: users.avatar_url,
+    })
     .from(bearingUpdates)
+    .leftJoin(users, eq(users.id, bearingUpdates.author_id))
     .where(eq(bearingUpdates.goal_id, goalId))
     .orderBy(asc(bearingUpdates.created_at))
     .limit(500);
 
-  return { data: rows };
+  const data = rows.map((r) => ({
+    id: r.id,
+    goal_id: r.goal_id,
+    author_id: r.author_id,
+    status: r.status,
+    body: r.body,
+    status_at_time: r.status_at_time,
+    progress_at_time: r.progress_at_time,
+    created_at: r.created_at,
+    author: {
+      id: r.author_id,
+      display_name: r.author_display_name,
+      avatar_url: r.author_avatar_url,
+    },
+  }));
+
+  return { data };
 }
 
 export async function createUpdate(
