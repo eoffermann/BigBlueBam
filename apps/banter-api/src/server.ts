@@ -36,6 +36,8 @@ import scheduledMessagesRoutes from './routes/scheduled-messages.routes.js';
 import agentSubscriptionsRoutes from './routes/agent-subscriptions.routes.js';
 // Slack workspace import (docs/plans/slack-import-design.md)
 import slackImportRoutes from './routes/slack-import.routes.js';
+// Banter Feed (docs/plans/banter-feed-design-document.md)
+import feedRoutes from './routes/feed.routes.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -184,6 +186,7 @@ await fastify.register(scheduledMessagesRoutes);
 await fastify.register(agentSubscriptionsRoutes);
 // Slack workspace import (docs/plans/slack-import-design.md)
 await fastify.register(slackImportRoutes);
+await fastify.register(feedRoutes);
 
 // WebSocket handler
 await fastify.register(websocketHandler);
