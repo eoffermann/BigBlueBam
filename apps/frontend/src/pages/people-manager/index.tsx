@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { UserPlus, Search, Eye, Download, UserX, UserCheck, Trash2, ChevronDown } from 'lucide-react';
+import { UserPlus, Search, Eye, Download, UserX, UserCheck, Trash2, ChevronDown, Hash } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/common/button';
 import { Select } from '@/components/common/select';
@@ -19,6 +19,7 @@ import {
   type PersonMembership,
 } from '@/lib/api/people-manager';
 import { BulkActionBar, useBulkRun } from '@/components/people/bulk-action-bar';
+import { AddToChannelsDialog } from '@/components/people/add-to-channels-dialog';
 import { formatRelativeTime } from '@/lib/utils';
 import { exportCsv, todayStamp, type CsvColumn } from '@/lib/csv';
 import { InviteDialog } from './invite-dialog';
@@ -117,6 +118,7 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
   // deleted via any org where the caller's caps grant it.
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeletePhrase, setBulkDeletePhrase] = useState('');
+  const [showChannelsDialog, setShowChannelsDialog] = useState(false);
 
   const queryParams = useMemo(
     () => ({
@@ -663,6 +665,19 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
                 Enable
               </button>
 
+              {/* Manage channel membership — add the selected users to Banter
+                  channels en masse. Org-scoped + admin/SU gated server-side;
+                  doesn't need the X-Org-Id pick (uses the caller's session org). */}
+              <button
+                type="button"
+                onClick={() => setShowChannelsDialog(true)}
+                title="Add the selected users to channels"
+                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 px-2.5 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <Hash className="h-3.5 w-3.5" />
+                Channels
+              </button>
+
               <button
                 type="button"
                 disabled={membershipDisabled}
@@ -705,6 +720,16 @@ export function PeopleManagerPage({ onNavigate }: PeopleManagerPageProps) {
           );
         })()}
       </BulkActionBar>
+
+      {/* Bulk channel-membership: add the selected users to channels en masse. */}
+      {showChannelsDialog && (
+        <AddToChannelsDialog
+          userIds={selectedPeople.map((p) => p.user.id)}
+          orgId={effectiveBulkOrg || undefined}
+          targetLabel={`${selectedPeople.length} ${selectedPeople.length === 1 ? 'person' : 'people'}`}
+          onClose={() => setShowChannelsDialog(false)}
+        />
+      )}
 
       {/* Bulk remove-from-org confirmation. */}
       <Dialog

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/common/button';
 import { Dialog } from '@/components/common/dialog';
+import { AddToChannelsDialog } from '@/components/people/add-to-channels-dialog';
 import {
   listMyAdminOrgs,
   listOrgProjects,
@@ -170,6 +171,10 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
 
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ResultRow[] | null>(null);
+  // Unique user ids of everyone successfully invited/added, so the operator can
+  // set them up with default channels right after onboarding (#4).
+  const [invitedUserIds, setInvitedUserIds] = useState<string[]>([]);
+  const [showChannels, setShowChannels] = useState(false);
 
   const { data: adminOrgs, isLoading: orgsLoading } = useQuery({
     queryKey: ['people-manager', 'admin-orgs'],
@@ -217,6 +222,8 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
     setOrgSelections(new Map());
     setResults(null);
     setSubmitting(false);
+    setInvitedUserIds([]);
+    setShowChannels(false);
   }
 
   function close() {
@@ -231,6 +238,7 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
     if (!canSubmit || !adminOrgs) return;
     setSubmitting(true);
     const rows: ResultRow[] = [];
+    const invitedIds = new Set<string>();
 
     // Fan out one bulk-invite call PER selected org, with X-Org-Id set to that
     // org and only that org's selected project ids. Failures are per-org, not
@@ -251,6 +259,7 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
           default_project_ids: Array.from(sel.projectIds),
         });
         for (const s of res.succeeded) {
+          invitedIds.add(s.id);
           rows.push({
             orgName,
             email: s.email,
@@ -274,6 +283,7 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
     }
 
     setResults(rows);
+    setInvitedUserIds([...invitedIds]);
     setSubmitting(false);
     queryClient.invalidateQueries({ queryKey: ['people-manager'] });
     queryClient.invalidateQueries({ queryKey: ['people'] });
@@ -283,6 +293,7 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
   const failCount = results?.filter((r) => r.status === 'failed').length ?? 0;
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(o) => {
@@ -343,6 +354,11 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
             <Button variant="ghost" onClick={resetForm}>
               Invite more
             </Button>
+            {invitedUserIds.length > 0 && (
+              <Button variant="secondary" onClick={() => setShowChannels(true)}>
+                Set up channels
+              </Button>
+            )}
             <Button onClick={close}>Done</Button>
           </div>
         </div>
@@ -453,5 +469,15 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
         </div>
       )}
     </Dialog>
+
+    {showChannels && (
+      <AddToChannelsDialog
+        userIds={invitedUserIds}
+        orgId={selectedOrgIds[0]}
+        targetLabel={`the ${invitedUserIds.length} invited ${invitedUserIds.length === 1 ? 'person' : 'people'}`}
+        onClose={() => setShowChannels(false)}
+      />
+    )}
+    </>
   );
 }

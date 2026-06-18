@@ -99,6 +99,14 @@ const addMembersSchema = z
     message: 'Provide either user_ids or an identifier (email or username)',
   });
 
+// Bulk add many users to many channels (org-onboarding). See the
+// /v1/channels/bulk-add-members route for semantics + gating.
+const bulkAddMembersSchema = z.object({
+  channel_ids: z.array(z.string().uuid()).min(1).max(100),
+  user_ids: z.array(z.string().uuid()).min(1).max(200),
+  role: z.enum(['admin', 'member', 'viewer']).optional(),
+});
+
 /**
  * Resolve a human-friendly identifier (email or synthesized handle) to a
  * single user_id within the given org. Mirrors the matching used by
@@ -1337,6 +1345,84 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       });
 
       return reply.send({ data: { added: addedCount } });
+    },
+  );
+
+  // POST /v1/channels/bulk-add-members — add many users to many channels at once.
+  // Org-onboarding action used by the Bam People Manager (bulk membership) and
+  // the project-invite "set up default channels" flow. Gated to org owners/
+  // admins and SuperUsers (an org-level capability) rather than per-channel
+  // admin, which would be impractical for onboarding. Org-scoped: channels and
+  // users outside the caller's org are silently skipped, never leaked.
+  fastify.post(
+    '/v1/channels/bulk-add-members',
+    { preHandler: [requireAuth, requireScope('read_write')] },
+    async (request, reply) => {
+      const user = request.user!;
+      if (!(user.is_superuser || ['owner', 'admin'].includes(user.role))) {
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Org admin or owner required to bulk-manage channel membership',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const body = bulkAddMembersSchema.parse(request.body);
+
+      // Constrain to channels in the caller's org (non-archived) and users in
+      // the caller's org. Anything else is dropped.
+      const orgChannels = await db
+        .select({ id: banterChannels.id })
+        .from(banterChannels)
+        .where(
+          and(
+            inArray(banterChannels.id, body.channel_ids),
+            eq(banterChannels.org_id, user.org_id),
+            eq(banterChannels.is_archived, false),
+          ),
+        );
+      const orgUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(inArray(users.id, body.user_ids), eq(users.org_id, user.org_id)));
+
+      const channelIds = orgChannels.map((c) => c.id);
+      const userIds = orgUsers.map((u) => u.id);
+
+      let added = 0;
+      if (channelIds.length > 0 && userIds.length > 0) {
+        await db.transaction(async (tx) => {
+          for (const channelId of channelIds) {
+            for (const userId of userIds) {
+              const inserted = await tx
+                .insert(banterChannelMemberships)
+                .values({ channel_id: channelId, user_id: userId, role: body.role ?? 'member' })
+                .onConflictDoNothing()
+                .returning();
+              if (inserted.length > 0) added++;
+            }
+            await tx
+              .update(banterChannels)
+              .set({
+                member_count: sql`(SELECT COUNT(*)::int FROM banter_channel_memberships WHERE channel_id = ${channelId})`,
+              })
+              .where(eq(banterChannels.id, channelId));
+          }
+        });
+      }
+
+      return reply.send({
+        data: {
+          added,
+          channels: channelIds.length,
+          users: userIds.length,
+          skipped_channels: body.channel_ids.length - channelIds.length,
+          skipped_users: body.user_ids.length - userIds.length,
+        },
+      });
     },
   );
 
