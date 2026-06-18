@@ -1,0 +1,390 @@
+{
+  "/screenshots/bam/light/01-board.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bam/light/02-task-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bam/light/03-sprint-create.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bam/light/04-list-view.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bam/light/05-my-work.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bam/light/06-settings-integrations.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bam/light/07-platform-smtp.png": [
+    1440,
+    3403
+  ],
+  "/screenshots/bam/light/08-org-smtp.png": [
+    1440,
+    900
+  ],
+  "/screenshots/banter/light/02-channel-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/banter/light/01-channel-view.png": [
+    1440,
+    900
+  ],
+  "/screenshots/banter/light/03-thread.png": [
+    1440,
+    900
+  ],
+  "/screenshots/banter/light/04-dms.png": [
+    1440,
+    900
+  ],
+  "/screenshots/banter/light/05-search.png": [
+    1440,
+    900
+  ],
+  "/screenshots/banter/light/06-preferences.png": [
+    1440,
+    900
+  ],
+  "/screenshots/beacon/light/01-knowledge-home.png": [
+    1440,
+    900
+  ],
+  "/screenshots/beacon/light/03-browse-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/beacon/light/02-article-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/beacon/light/06-search-results.png": [
+    1440,
+    900
+  ],
+  "/screenshots/beacon/light/04-graph-explorer.png": [
+    1440,
+    900
+  ],
+  "/screenshots/beacon/light/05-governance-dashboard.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bearing/light/01-dashboard.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bearing/light/03-my-goals.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bearing/light/04-at-risk.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bearing/light/05-periods.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bearing/light/02-goal-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bench/light/01-dashboard-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bench/light/02-dashboard-view.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bench/light/04-widget-wizard.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bench/light/03-explorer.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bench/light/05-reports.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bench/light/06-settings.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bill/light/01-dashboard.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bill/light/02-invoice-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bill/light/04-invoice-new.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bill/light/03-invoice-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bill/light/05-expenses.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bill/light/06-reports.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bill/light/07-recurring.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blank/light/01-form-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blank/light/02-form-builder.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blank/light/06-form-settings-dialog.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blank/light/07-access-and-notifications.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blank/light/03-form-preview.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blank/light/04-responses.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blank/light/05-analytics.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blast/light/01-campaigns.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blast/light/02-campaign-new.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blast/light/03-templates.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blast/light/04-template-editor.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blast/light/05-segments.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blast/light/06-segment-builder.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blast/light/07-analytics.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blueprint/light/01-diagram-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blueprint/light/03-new-diagram-dialog.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blueprint/light/02-diagram-editor.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blueprint/light/04-starred-filter.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blueprint/light/05-archived-filter.png": [
+    1440,
+    900
+  ],
+  "/screenshots/blueprint/light/06-comments-collaboration.png": [
+    1440,
+    900
+  ],
+  "/screenshots/board/light/01-all-boards.png": [
+    1440,
+    900
+  ],
+  "/screenshots/board/light/03-templates.png": [
+    1440,
+    900
+  ],
+  "/screenshots/board/light/02-canvas-populated.png": [
+    1440,
+    900
+  ],
+  "/screenshots/board/light/04-version-history.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bolt/light/01-automations.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bolt/light/02-editor.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bolt/light/03-automation-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bolt/light/04-executions.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bolt/light/05-templates.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bond/light/01-pipeline-board.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bond/light/02-deal-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bond/light/03-contacts-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bond/light/04-contact-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bond/light/05-companies-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bond/light/06-analytics.png": [
+    1440,
+    900
+  ],
+  "/screenshots/book/light/01-week-view.png": [
+    1440,
+    900
+  ],
+  "/screenshots/book/light/02-month-view.png": [
+    1440,
+    900
+  ],
+  "/screenshots/book/light/03-timeline.png": [
+    1440,
+    900
+  ],
+  "/screenshots/book/light/04-booking-pages.png": [
+    1440,
+    900
+  ],
+  "/screenshots/book/light/06-calendars.png": [
+    1440,
+    900
+  ],
+  "/screenshots/book/light/05-working-hours.png": [
+    1440,
+    900
+  ],
+  "/screenshots/book/light/07-connections.png": [
+    1440,
+    900
+  ],
+  "/screenshots/brief/light/01-home.png": [
+    1440,
+    900
+  ],
+  "/screenshots/brief/light/02-documents.png": [
+    1440,
+    900
+  ],
+  "/screenshots/brief/light/04-editor.png": [
+    1440,
+    900
+  ],
+  "/screenshots/brief/light/05-templates.png": [
+    1440,
+    900
+  ],
+  "/screenshots/brief/light/03-detail.png": [
+    1440,
+    900
+  ],
+  "/screenshots/brief/light/06-search.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bureau/light/01-floor-directory.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bureau/light/02-live-floor.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bureau/light/03-recent-chats.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bureau/light/06-room-booking.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bureau/light/04-admin-floors.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bureau/light/05-admin-offices.png": [
+    1440,
+    900
+  ],
+  "/screenshots/bureau/light/07-admin-settings.png": [
+    1440,
+    900
+  ],
+  "/screenshots/helpdesk/light/01-portal-entry.png": [
+    1440,
+    900
+  ],
+  "/screenshots/helpdesk/light/02-ticket-list.png": [
+    1440,
+    900
+  ],
+  "/screenshots/helpdesk/light/04-new-ticket.png": [
+    1440,
+    900
+  ],
+  "/screenshots/helpdesk/light/03-ticket-detail.png": [
+    1440,
+    900
+  ]
+}
