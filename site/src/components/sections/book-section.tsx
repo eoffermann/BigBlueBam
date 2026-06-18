@@ -112,13 +112,13 @@ export function BookSection() {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <AnimatedReveal delay={0.3} withScale>
-          <FloatingFrame src="/screenshots/book/light/05-booking-pages.png" alt="Book booking pages with a published public scheduling link" />
+          <FloatingFrame src="/screenshots/book/light/04-booking-pages.png" alt="Book booking pages with a published public scheduling link" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             A public link that lets clients book you — and quietly files them in Bond on the way in.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.35} withScale>
-          <FloatingFrame src="/screenshots/book/light/06-working-hours.png" alt="Book working hours editor with per-day availability windows" />
+          <FloatingFrame src="/screenshots/book/light/05-working-hours.png" alt="Book working hours editor with per-day availability windows" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Tell it when you work once; it does the availability math forever after.
           </p>

@@ -1440,7 +1440,7 @@ const faqs: Faq[] = [
   },
   {
     question: 'How many apps are included?',
-    answer: 'BigBlueBam ships with fourteen integrated applications: Bam (Kanban project management with sprints), Banter (real-time messaging with channels, DMs, threads, voice/video calls, and scheduled posts), Beacon (knowledge base with semantic search and a knowledge graph), Brief (collaborative WYSIWYG documents), Bolt (WHEN/IF/THEN workflow automations with runtime observability), Bearing (goals and OKR tracking), Board (infinite-canvas visual collaboration whiteboards with real-time editing and audio conferencing), Bond (CRM with visual deal pipeline, contact and company management, activity tracking, and dedupe primitives), Blast (email campaigns with templates, segments, and analytics), Bill (invoicing, expenses, PDF generation, and recurring billing), Blank (forms with conditional logic routing), Book (scheduling and public booking pages), Bench (analytics dashboards and scheduled reports), and Helpdesk (customer support ticket portal with similar-ticket lookup). All fourteen apps share a single authentication system, cross-link to each other seamlessly, and surface into a single cross-app search, composite subject views, and a durable entity-links table.',
+    answer: 'BigBlueBam ships with sixteen integrated applications: Bam (Kanban project management with sprints), Banter (real-time messaging with channels, DMs, threads, voice/video calls, and scheduled posts), Beacon (knowledge base with semantic search and a knowledge graph), Brief (collaborative WYSIWYG documents), Bolt (WHEN/IF/THEN workflow automations with runtime observability), Bearing (goals and OKR tracking), Board (infinite-canvas visual collaboration whiteboards with real-time editing and audio conferencing), Bond (CRM with visual deal pipeline, contact and company management, activity tracking, and dedupe primitives), Blast (email campaigns with templates, segments, and analytics), Bill (invoicing, expenses, PDF generation, and recurring billing), Blank (forms with conditional logic routing), Blueprint (structured-diagram editor with typed graph nodes and auto-layout), Book (scheduling and public booking pages), Bench (analytics dashboards and scheduled reports), Bureau (virtual office with rooms, presence, and knock-to-enter), and Helpdesk (customer support ticket portal with similar-ticket lookup). All sixteen apps share a single authentication system, cross-link to each other seamlessly, and surface into a single cross-app search, composite subject views, and a durable entity-links table.',
   },
   {
     question: 'What is the difference between Beacon and Brief?',
@@ -1448,11 +1448,11 @@ const faqs: Faq[] = [
   },
   {
     question: 'How do AI agents work with BigBlueBam?',
-    answer: 'BigBlueBam exposes 340 MCP (Model Context Protocol) tools on a dedicated server endpoint at /mcp/. Any MCP-compatible AI agent -- Claude, GPT, or custom agents -- can connect and manage tasks, post messages, search the knowledge base, write documents, create automations, track goals, collaborate on visual whiteboards, manage the CRM pipeline, invoice clients, run email campaigns, build dashboards, and schedule meetings. Destructive actions require a two-step confirmation flow with Redis-backed tokens to prevent accidental data loss. Service-account agents run behind a fail-closed policy gate (kill switches plus per-agent tool allowlists) and a first-class approval queue routes human-gated actions through a durable inbox. The MCP server supports Streamable HTTP, SSE, and stdio transports.',
+    answer: 'BigBlueBam exposes 720+ MCP (Model Context Protocol) tools on a dedicated server endpoint at /mcp/. Any MCP-compatible AI agent -- Claude, GPT, or custom agents -- can connect and manage tasks, post messages, search the knowledge base, write documents, create automations, track goals, collaborate on visual whiteboards, manage the CRM pipeline, invoice clients, run email campaigns, build dashboards, and schedule meetings. Destructive actions require a two-step confirmation flow with Redis-backed tokens to prevent accidental data loss. Service-account agents run behind a fail-closed policy gate (kill switches plus per-agent tool allowlists) and a first-class approval queue routes human-gated actions through a durable inbox. The MCP server supports Streamable HTTP, SSE, and stdio transports.',
   },
   {
     question: 'What is MCP?',
-    answer: 'MCP stands for Model Context Protocol, an open standard for connecting AI models to external tools and data sources. Instead of building custom integrations for each AI provider, BigBlueBam implements MCP once and any compliant agent can use all 340 tools. You can learn more at modelcontextprotocol.io.',
+    answer: 'MCP stands for Model Context Protocol, an open standard for connecting AI models to external tools and data sources. Instead of building custom integrations for each AI provider, BigBlueBam implements MCP once and any compliant agent can use all 720+ tools. You can learn more at modelcontextprotocol.io.',
   },
   {
     question: 'Can I use my own LLM?',
@@ -1460,11 +1460,11 @@ const faqs: Faq[] = [
   },
   {
     question: 'Is BigBlueBam open source?',
-    answer: 'BigBlueBam is source-available on GitHub. The full codebase -- frontends, fourteen app APIs, Docker Compose stack, Helm chart, and migrations -- is in a single monorepo. You can self-host it on your own infrastructure with no external dependencies beyond the Docker images. Check the repository for the specific license terms.',
+    answer: 'BigBlueBam is source-available on GitHub. The full codebase -- frontends, sixteen app APIs, Docker Compose stack, Helm chart, and migrations -- is in a single monorepo. You can self-host it on your own infrastructure with no external dependencies beyond the Docker images. Check the repository for the specific license terms.',
   },
   {
     question: 'How do I deploy BigBlueBam?',
-    answer: 'The quickest way is to clone the repository, copy .env.example to .env, fill in your secrets, and run docker compose up -d. This starts a full stack including PostgreSQL, Redis, MinIO, Qdrant, all fourteen app APIs, their frontends, the MCP server, and a background worker. Everything is accessible through a single nginx reverse proxy on port 80. For production, a Helm chart is provided at infra/helm/ for Kubernetes deployment. Operators can also skip the CLI admin prompt entirely and have the first visitor create the SuperUser account from the site via the new /b3/bootstrap page.',
+    answer: 'The quickest way is to clone the repository, copy .env.example to .env, fill in your secrets, and run docker compose up -d. This starts a full stack including PostgreSQL, Redis, MinIO, Qdrant, all sixteen app APIs, their frontends, the MCP server, and a background worker. Everything is accessible through a single nginx reverse proxy on port 80. For production, a Helm chart is provided at infra/helm/ for Kubernetes deployment. Operators can also skip the CLI admin prompt entirely and have the first visitor create the SuperUser account from the site via the new /b3/bootstrap page.',
   },
   {
     question: 'What database does it use?',
@@ -1803,7 +1803,7 @@ function UserGuideContent() {
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">User Guide</h1>
         <p className="mt-3 max-w-2xl text-base text-zinc-600">
-          A practical guide to using BigBlueBam's fourteen integrated applications. Whether you are managing sprints,
+          A practical guide to using BigBlueBam's sixteen integrated applications. Whether you are managing sprints,
           messaging your team, building a knowledge base, writing documents, automating workflows, collaborating on whiteboards, managing your CRM pipeline, or handling
           customer support tickets, this guide covers the essentials.
         </p>
@@ -1833,8 +1833,8 @@ function UserGuideContent() {
             <h3 className="mb-3 text-lg font-semibold text-zinc-900">Navigation Overview</h3>
             <p className="mb-3 text-sm text-zinc-600">
               BigBlueBam uses a cross-app navigation system with colored pills at the top of the screen. Each pill
-              represents one of the fourteen apps: Bam, Banter, Beacon, Brief, Bolt, Bearing, Board, Bond,
-              Blast, Bill, Blank, Book, Bench, and Helpdesk. Click any pill to switch apps without losing your place. Within each app, a collapsible
+              represents one of the sixteen apps: Bam, Banter, Beacon, Brief, Bolt, Bearing, Board, Bond,
+              Blast, Bill, Blank, Blueprint, Book, Bench, Bureau, and Helpdesk. Click any pill to switch apps without losing your place. Within each app, a collapsible
               sidebar provides contextual navigation -- projects in Bam, channels in Banter, folders in Brief, and so on.
             </p>
             <p className="text-sm text-zinc-600">
@@ -2165,7 +2165,7 @@ function UserGuideContent() {
               <strong> IF</strong> adds optional conditions that filter when the automation fires -- for example, "if the
               task has the label 'bug'" or "if the message contains '@urgent'." <strong>THEN</strong> defines one or more
               actions to execute -- for example, "post a message in the #releases channel" or "create a Beacon article."
-              Actions are MCP tools, which means automations have access to the full 340-tool catalog.
+              Actions are MCP tools, which means automations have access to the full 720+-tool catalog.
             </p>
           </div>
 
@@ -2282,7 +2282,7 @@ function UserGuideContent() {
               Bearing provides three report types: period reports (summary of all goals in a period with completion
               rates), at-risk reports (all goals currently flagged as at-risk or behind across the organization), and
               owner reports (all goals owned by a specific user). Reports can be generated via the UI or through
-              12 MCP tools that let AI agents produce reports, flag risks, and share summaries in Banter channels.
+              30 MCP tools that let AI agents produce reports, flag risks, and share summaries in Banter channels.
             </p>
           </div>
         </div>
@@ -2343,7 +2343,7 @@ function UserGuideContent() {
           <div className="rounded-lg border border-zinc-200 bg-white p-6">
             <h3 className="mb-3 text-lg font-semibold text-zinc-900">AI Canvas Analysis</h3>
             <p className="text-sm text-zinc-600">
-              Board exposes 14 MCP tools that let AI agents interact with whiteboards programmatically. Agents can
+              Board exposes 40 MCP tools that let AI agents interact with whiteboards programmatically. Agents can
               read the full canvas state as structured data, add and arrange shapes, generate snapshots, upload
               assets, convert stickies to tasks, and embed cross-product content. This enables workflows like
               "analyze this retrospective board and summarize the themes" or "create a task for each action item
@@ -2413,7 +2413,7 @@ function UserGuideContent() {
               Bond provides pipeline analytics including conversion rates between stages, average deal size,
               average stage duration, revenue forecast (weighted by deal probability), and win/loss analysis.
               Reports can be filtered by date range, pipeline, owner, and company. AI agents can generate and
-              share pipeline reports in Banter channels through 23 dedicated MCP tools, including a
+              share pipeline reports in Banter channels through 69 dedicated MCP tools, including a
               contact upsert-by-email endpoint and dedupe primitives that surface likely duplicate
               contacts with confidence scores.
             </p>
@@ -2607,7 +2607,7 @@ function DeploymentContent() {
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Deployment Guide</h1>
         <p className="mt-3 max-w-2xl text-base text-zinc-600">
           Everything you need to deploy, configure, and maintain a BigBlueBam instance. The platform runs
-          as a multi-service Docker Compose stack (fourteen app APIs plus MCP server, worker, voice agent, frontends, and data services) behind a single nginx reverse proxy.
+          as a multi-service Docker Compose stack (sixteen app APIs plus MCP server, worker, voice agent, frontends, and data services) behind a single nginx reverse proxy.
         </p>
       </div>
 
@@ -2789,7 +2789,7 @@ function DeploymentContent() {
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">board-api</td><td className="py-2 pr-4">4008</td><td className="py-2">Board visual collaboration whiteboard API + WebSocket</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">bond-api</td><td className="py-2 pr-4">4009</td><td className="py-2">Bond CRM pipeline and contact management API</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">helpdesk-api</td><td className="py-2 pr-4">4001</td><td className="py-2">Helpdesk support ticket API</td></tr>
-                <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">mcp-server</td><td className="py-2 pr-4">3001</td><td className="py-2">MCP protocol server (340 tools)</td></tr>
+                <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">mcp-server</td><td className="py-2 pr-4">3001</td><td className="py-2">MCP protocol server (720+ tools)</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">worker</td><td className="py-2 pr-4">--</td><td className="py-2">BullMQ background jobs (email, notifications, export, sprint-close)</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">migrate</td><td className="py-2 pr-4">--</td><td className="py-2">Runs SQL migrations on startup, then exits</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">postgres</td><td className="py-2 pr-4">5432</td><td className="py-2">PostgreSQL 16 primary database</td></tr>
@@ -3051,7 +3051,7 @@ interface SidebarSection {
 }
 
 const sidebarSections: SidebarSection[] = [
-  { id: 'mcp-tools', label: 'MCP Tools', sublabel: '340 tools', icon: <Zap className="h-4 w-4" /> },
+  { id: 'mcp-tools', label: 'MCP Tools', sublabel: '720+ tools', icon: <Zap className="h-4 w-4" /> },
   { id: 'api-endpoints', label: 'API Endpoints', icon: <Server className="h-4 w-4" /> },
   { id: 'user-guide', label: 'User Guide', icon: <Users className="h-4 w-4" /> },
   { id: 'deployment', label: 'Deployment', icon: <Rocket className="h-4 w-4" /> },

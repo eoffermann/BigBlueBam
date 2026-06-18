@@ -29,6 +29,13 @@ export interface RunOptions {
   outRoot: string;
   /** console-style logger. */
   log?: (msg: string) => void;
+  /**
+   * Force a theme for every recipe in this run, overriding each recipe's
+   * `capture.theme`. Used to produce a dark-mode pass of light-only recipes
+   * without authoring `-dark` duplicates. The output filename is unchanged
+   * (the caller routes the flat output to the right place).
+   */
+  themeOverride?: 'light' | 'dark';
 }
 
 export interface RunResult {
@@ -216,7 +223,7 @@ async function captureRecipe(
 
     // 5: navigate + interact.
     await page.goto(`${env.baseUrl}${recipe.route}`, { waitUntil: 'domcontentloaded', timeout: 25_000 });
-    await applyTheme(page, recipe.capture.theme);
+    await applyTheme(page, opts.themeOverride ?? recipe.capture.theme);
     await disableAnimations(page);
     for (const step of recipe.interactions) {
       await runStep(page, step, env.baseUrl);
@@ -262,7 +269,7 @@ async function captureRecipe(
       file: path.relative(outRoot, file).split(path.sep).join('/'),
       demonstrates: recipe.demonstrates,
       environment: env.name,
-      theme: recipe.capture.theme,
+      theme: opts.themeOverride ?? recipe.capture.theme,
       viewport: recipe.capture.viewport,
       deviceScaleFactor: recipe.capture.deviceScaleFactor,
       width,

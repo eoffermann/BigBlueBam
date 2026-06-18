@@ -113,11 +113,11 @@ export function BearingSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/bearing/light/04-reports.png"
-            alt="Bearing period report with progress trends and trajectory charts"
+            src="/screenshots/bearing/light/05-periods.png"
+            alt="Bearing time periods and cycles list"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Actual vs. expected trajectory — the chart that ends the &ldquo;how are we doing?&rdquo; meeting.
+            Quarters, sprints, whatever you measure in — the windows your goals answer to.
           </p>
         </AnimatedReveal>
       </div>
