@@ -26,6 +26,8 @@ import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import {
   categoryPolicy,
+  notificationFires,
+  feedOwnsNotification,
   resolveSubscriptionState,
   RELATIONSHIP_FLAGS,
   type BanterFeedFaninJobData,
@@ -49,6 +51,7 @@ export const feedFaninCounters = {
   broad_upserted: 0,
   broad_dropped_access: 0,
   broad_dropped_not_following: 0,
+  notifications_dispatched: 0,
 };
 
 export interface FeedFaninDeps {
@@ -62,9 +65,23 @@ export interface FeedFaninDeps {
     scopeId: string | null,
     orgId: string,
   ) => Promise<string[]>;
-  /** Upsert one feed entry for a (user, entity). */
-  upsertEntry: (params: UpsertEntryParams) => Promise<void>;
+  /** Upsert one feed entry for a (user, entity). Returns the entry id. */
+  upsertEntry: (params: UpsertEntryParams) => Promise<string | null>;
+  /** Write a unified-notification row (§12) deep-linking to the feed permalink. */
+  dispatchNotification: (params: NotifyParams) => Promise<void>;
   logger: Logger;
+}
+
+interface NotifyParams {
+  orgId: string;
+  userId: string;
+  category: string;
+  source: string;
+  entityType: string;
+  entityId: string;
+  entryId: string;
+  title: string;
+  body: string;
 }
 
 interface UpsertEntryParams {
@@ -106,6 +123,37 @@ export async function handleFeedFanin(
   const engagementCount = data.engagement_count ?? 0;
   const handled = new Set<string>(); // user ids already given an entry this job
 
+  // Unified-notification dispatch (§12). Fires only when the producer supplied
+  // notification text, the category fires for this recipient kind, AND the Feed
+  // owns the category's notification (legacy-owned categories are skipped to
+  // avoid duplicate bell dings). Deep-links to the feed permalink (§12.2).
+  const maybeNotify = async (
+    userId: string,
+    category: string,
+    isDirect: boolean,
+    entryId: string | null,
+  ) => {
+    if (!entryId || !data.notification_title) return;
+    if (!feedOwnsNotification(category)) return;
+    if (!notificationFires(category, isDirect)) return;
+    try {
+      await deps.dispatchNotification({
+        orgId: data.org_id,
+        userId,
+        category,
+        source: data.source,
+        entityType: data.entity_type,
+        entityId: data.entity_id,
+        entryId,
+        title: data.notification_title,
+        body: data.notification_body ?? '',
+      });
+      feedFaninCounters.notifications_dispatched += 1;
+    } catch (err) {
+      deps.logger.warn({ err, userId, category }, 'feed-fanin: notification dispatch failed');
+    }
+  };
+
   // -------------------------------------------------------------------------
   // Path A — direct recipients (producer-resolved). Include unless muted.
   // -------------------------------------------------------------------------
@@ -136,7 +184,7 @@ export async function handleFeedFanin(
       continue;
     }
 
-    await deps.upsertEntry({
+    const entryId = await deps.upsertEntry({
       orgId: data.org_id,
       userId: recipient.user_id,
       category: recipient.category,
@@ -154,6 +202,7 @@ export async function handleFeedFanin(
     });
     handled.add(recipient.user_id);
     feedFaninCounters.direct_upserted += 1;
+    await maybeNotify(recipient.user_id, recipient.category, true, entryId);
   }
 
   // -------------------------------------------------------------------------
@@ -197,7 +246,7 @@ export async function handleFeedFanin(
         continue;
       }
 
-      await deps.upsertEntry({
+      const entryId = await deps.upsertEntry({
         orgId: data.org_id,
         userId,
         category: broadCategory,
@@ -215,6 +264,7 @@ export async function handleFeedFanin(
       });
       handled.add(userId);
       feedFaninCounters.broad_upserted += 1;
+      await maybeNotify(userId, broadCategory, false, entryId);
     }
   }
 }
@@ -326,7 +376,7 @@ export function buildFeedFaninDeps(
 
     async upsertEntry(p) {
       const db = getDb();
-      await db.execute(sql`
+      const res = await db.execute(sql`
         INSERT INTO banter_feed_entries (
           org_id, user_id, category, entity_type, entity_id,
           root_entity_type, root_entity_id, source, channel_id, project_id,
@@ -343,6 +393,41 @@ export function buildFeedFaninDeps(
           engagement_count = EXCLUDED.engagement_count,
           relationship_flags = banter_feed_entries.relationship_flags | EXCLUDED.relationship_flags,
           updated_at = now()
+        RETURNING id
+      `);
+      const rows = (Array.isArray(res) ? res : ((res as { rows?: unknown[] }).rows ?? [])) as Array<{
+        id: string;
+      }>;
+      return rows[0]?.id ?? null;
+    },
+
+    async dispatchNotification(p) {
+      const db = getDb();
+      // Mirrors the columns banter-api's emitNotification writes; the bell
+      // (NotificationsBell) already reads this table. metadata carries the
+      // feed permalink target so a click lands on the feed entry (§12.2/§12.3).
+      await db.execute(sql`
+        INSERT INTO notifications (
+          id, user_id, org_id, type, title, body,
+          source_app, deep_link, category, metadata, is_read, created_at
+        ) VALUES (
+          gen_random_uuid(),
+          ${p.userId},
+          ${p.orgId},
+          ${`feed.${p.category}`},
+          ${p.title.slice(0, 500)},
+          ${p.body.slice(0, 2000)},
+          ${p.source},
+          ${`/banter/feed/${p.entryId}`},
+          ${p.category},
+          ${JSON.stringify({
+            feed_entry_id: p.entryId,
+            entity_type: p.entityType,
+            entity_id: p.entityId,
+          })}::jsonb,
+          false,
+          now()
+        )
       `);
     },
 

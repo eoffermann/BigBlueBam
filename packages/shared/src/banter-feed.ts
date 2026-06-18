@@ -120,6 +120,36 @@ export function categoryPolicy(category: string): CategoryPolicy {
   return CATEGORY_POLICY[category] ?? CATEGORY_POLICY['source.generic_activity']!;
 }
 
+/**
+ * Does a notification fire for this (category, recipient-kind)? (§12.1)
+ *   always → every recipient; direct_only → Path A only; never → none.
+ */
+export function notificationFires(category: string, isDirect: boolean): boolean {
+  const p = categoryPolicy(category).notification_policy;
+  if (p === 'always') return true;
+  if (p === 'direct_only') return isDirect;
+  return false;
+}
+
+/**
+ * Categories whose notification is still OWNED by a legacy per-app path, so the
+ * Feed fan-in must NOT also write one (avoids duplicate bell dings). This set
+ * shrinks as the §17.6 migration folds each legacy path onto the substrate:
+ *   - banter.mention / banter.thread.reply / banter.dm → banter-api emitNotification
+ *   - bam.task.assigned_to_me → Bam enqueueNotification
+ */
+export const FEED_NOTIFICATION_LEGACY_OWNED: ReadonlySet<string> = new Set([
+  'banter.mention',
+  'banter.thread.reply',
+  'banter.dm',
+  'bam.task.assigned_to_me',
+]);
+
+/** True when the Feed substrate is the authoritative notifier for a category. */
+export function feedOwnsNotification(category: string): boolean {
+  return !FEED_NOTIFICATION_LEGACY_OWNED.has(category);
+}
+
 // ---------------------------------------------------------------------------
 // Tunable weights (§8) — the JSONB shape
 // ---------------------------------------------------------------------------

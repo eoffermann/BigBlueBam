@@ -60,4 +60,12 @@ export interface BanterFeedFaninJobData {
   broad_scope?: 'channel' | 'project' | 'source' | null;
   /** @mentioned user ids (subset of direct recipients), for notification routing. */
   mentioned_user_ids?: string[];
+  /**
+   * Notification text (§12). When set AND the category fires a notification for
+   * a recipient AND the Feed owns that category's notification, the fan-in
+   * writes a `notifications` row deep-linking to the feed permalink. Producers
+   * leave these unset for categories whose notification a legacy path owns.
+   */
+  notification_title?: string;
+  notification_body?: string;
 }

@@ -29,7 +29,21 @@ deferred work, and gotchas discovered while building, so nothing rots silently.
   enumeration is exercised by these. The remaining sources
   (bond/bell/book/bearing/board/bill/blank/bolt) are a mechanical extension —
   see the template below.
-- **Phase 6 — unified notifications (§12):** PENDING.
+- **Phase 6 — unified notifications (§12):** Incremental step DONE; full legacy
+  retirement DEFERRED. The fan-in now writes a `notifications` row (the table the
+  shared bell already reads) for feed categories whose notification the Feed
+  *owns* and that fire for the recipient (§12.1 policy), deep-linked to the feed
+  permalink `/banter/feed/:id` (§12.2). To avoid duplicate bell dings it skips
+  categories a legacy path still owns (`FEED_NOTIFICATION_LEGACY_OWNED`:
+  banter.mention/thread/dm via emitNotification, bam.task.assigned_to_me via
+  Bam's enqueueNotification). Net new today: bell dings for task
+  comments + state changes, which previously produced none. **Deferred:** folding
+  the legacy banter + bam-assignment paths onto the substrate and removing them
+  (shrinking the skip set to empty) is the remaining §17.6 migration — it touches
+  the shared bell across every app and depends on the mention-resolution fix
+  ([[task #76]]), so it's best done as a focused change with the bell observable,
+  not bundled here. The pre-existing DM double-notification symptom is part of
+  that legacy path and is out of scope until then.
 - **Phase 7 — settings pages (§9):** PENDING.
 
 ### Extending cross-app fan-in to the remaining sources (the §17.5 tail)

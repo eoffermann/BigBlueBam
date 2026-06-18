@@ -51,13 +51,19 @@ interface Upsert {
   category: string;
   relationshipFlags: number;
 }
+interface Notif {
+  userId: string;
+  category: string;
+}
 
 function makeDeps(over: {
   access?: (u: string) => boolean;
   state?: (u: string) => 'following' | 'unfollowed' | 'muted';
   broad?: string[];
-}): { deps: FeedFaninDeps; upserts: Upsert[] } {
+}): { deps: FeedFaninDeps; upserts: Upsert[]; notifs: Notif[] } {
   const upserts: Upsert[] = [];
+  const notifs: Notif[] = [];
+  let n = 0;
   const deps: FeedFaninDeps = {
     canAccess: vi.fn(async (u: string) => (over.access ? over.access(u) : true)),
     resolveState: vi.fn(async (u: string) => (over.state ? over.state(u) : 'following')),
@@ -68,10 +74,14 @@ function makeDeps(over: {
         category: p.category,
         relationshipFlags: p.relationshipFlags,
       });
+      return `entry-${++n}`;
+    }),
+    dispatchNotification: vi.fn(async (p) => {
+      notifs.push({ userId: p.userId, category: p.category });
     }),
     logger,
   };
-  return { deps, upserts };
+  return { deps, upserts, notifs };
 }
 
 beforeEach(() => {
@@ -202,5 +212,80 @@ describe('handleFeedFanin', () => {
     expect(upserts[0]!.relationshipFlags).toBe(
       RELATIONSHIP_FLAGS.COMMENTER | RELATIONSHIP_FLAGS.MENTIONED,
     );
+  });
+
+  describe('unified notifications (§12)', () => {
+    it('dispatches a notification for a feed-owned, firing category with title', async () => {
+      const { deps, notifs } = makeDeps({});
+      await handleFeedFanin(
+        baseJob({
+          source: 'bam',
+          entity_type: 'bam.task',
+          channel_id: null,
+          project_id: 'proj-1',
+          broad_category: null,
+          broad_scope: null,
+          notification_title: 'New comment on: Fix the radio',
+          direct_recipients: [
+            { user_id: MENTIONED, relationship_flags: RELATIONSHIP_FLAGS.WATCHER, category: 'bam.task.comment_on_my_task' },
+          ],
+        }),
+        deps,
+      );
+      expect(notifs).toEqual([{ userId: MENTIONED, category: 'bam.task.comment_on_my_task' }]);
+    });
+
+    it('does NOT dispatch for a legacy-owned category (bam.task.assigned_to_me)', async () => {
+      const { deps, notifs } = makeDeps({});
+      await handleFeedFanin(
+        baseJob({
+          source: 'bam',
+          entity_type: 'bam.task',
+          broad_category: null,
+          broad_scope: null,
+          notification_title: 'Task assigned: Fix the radio',
+          direct_recipients: [
+            { user_id: MENTIONED, relationship_flags: RELATIONSHIP_FLAGS.ASSIGNEE, category: 'bam.task.assigned_to_me' },
+          ],
+        }),
+        deps,
+      );
+      expect(notifs).toEqual([]); // Bam's enqueueNotification owns this one
+    });
+
+    it('does NOT dispatch when no notification_title is supplied', async () => {
+      const { deps, notifs } = makeDeps({});
+      await handleFeedFanin(
+        baseJob({
+          source: 'bam',
+          entity_type: 'bam.task',
+          broad_category: null,
+          broad_scope: null,
+          direct_recipients: [
+            { user_id: MENTIONED, relationship_flags: RELATIONSHIP_FLAGS.WATCHER, category: 'bam.task.comment_on_my_task' },
+          ],
+        }),
+        deps,
+      );
+      expect(notifs).toEqual([]);
+    });
+
+    it('a never-policy category (brief.document.edited) dispatches no notification', async () => {
+      const { deps, notifs } = makeDeps({ broad: [FOLLOWER] });
+      await handleFeedFanin(
+        baseJob({
+          source: 'brief',
+          entity_type: 'brief.document',
+          channel_id: null,
+          project_id: 'proj-1',
+          broad_category: 'brief.document.edited',
+          broad_scope: 'project',
+          notification_title: 'Brief edited: Castaway Plan',
+          direct_recipients: [],
+        }),
+        deps,
+      );
+      expect(notifs).toEqual([]); // notification_policy = never
+    });
   });
 });

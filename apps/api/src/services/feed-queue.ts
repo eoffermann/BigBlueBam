@@ -46,9 +46,15 @@ async function resolveTaskDirectRecipients(
   taskId: string,
   category: string,
   includePriorCommenters: boolean,
-): Promise<{ recipients: FeedDirectRecipient[]; org_id: string | null; project_id: string | null }> {
+): Promise<{
+  recipients: FeedDirectRecipient[];
+  org_id: string | null;
+  project_id: string | null;
+  title: string | null;
+}> {
   const rows = await db
     .select({
+      title: tasks.title,
       assignee_id: tasks.assignee_id,
       reporter_id: tasks.reporter_id,
       watchers: tasks.watchers,
@@ -59,7 +65,7 @@ async function resolveTaskDirectRecipients(
     .where(eq(tasks.id, taskId))
     .limit(1);
   const task = rows[0];
-  if (!task) return { recipients: [], org_id: null, project_id: null };
+  if (!task) return { recipients: [], org_id: null, project_id: null, title: null };
 
   const byUser = new Map<string, FeedDirectRecipient>();
   const add = (userId: string | null | undefined, flag: number) => {
@@ -85,7 +91,22 @@ async function resolveTaskDirectRecipients(
     recipients: [...byUser.values()],
     org_id: task.org_id,
     project_id: task.project_id,
+    title: task.title,
   };
+}
+
+/** Notification title for a task event, or null when a legacy path owns it. */
+function taskNotificationTitle(category: string, title: string | null): string | null {
+  const name = title ?? 'a task';
+  switch (category) {
+    case 'bam.task.comment_on_my_task':
+      return `New comment on: ${name}`;
+    case 'bam.task.state_changed':
+      return `Moved: ${name}`;
+    // bam.task.assigned_to_me is owned by Bam's own enqueueNotification path.
+    default:
+      return null;
+  }
 }
 
 /**
@@ -112,6 +133,7 @@ export async function feedFaninForTask(opts: {
     if (!orgId) return;
     const projectId = opts.projectId ?? resolved.project_id;
     const now = opts.nowIso ?? new Date().toISOString();
+    const notificationTitle = taskNotificationTitle(opts.category, resolved.title);
 
     await enqueueFeedFanin({
       entity_type: 'bam.task',
@@ -125,6 +147,7 @@ export async function feedFaninForTask(opts: {
       direct_recipients: resolved.recipients,
       broad_category: opts.broad ? opts.category : null,
       broad_scope: opts.broad ? 'project' : null,
+      ...(notificationTitle ? { notification_title: notificationTitle } : {}),
     });
   } catch {
     // Non-critical.
