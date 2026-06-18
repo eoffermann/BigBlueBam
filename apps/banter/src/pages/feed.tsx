@@ -9,6 +9,8 @@ import {
   Check,
   Inbox,
   Loader2,
+  ThumbsUp,
+  Send,
 } from 'lucide-react';
 import {
   useFeed,
@@ -18,6 +20,10 @@ import {
   type FeedEntry,
   type FeedFilters,
 } from '@/hooks/use-feed';
+import { useThreadReplies, usePostThreadReply } from '@/hooks/use-threads';
+import { useToggleReaction } from '@/hooks/use-reactions';
+import { useQueryClient } from '@tanstack/react-query';
+import { markdownToHtml, sanitizeHtml } from '@/lib/markdown';
 import { cn } from '@/lib/utils';
 
 interface FeedPageProps {
@@ -111,7 +117,7 @@ export function FeedPage({ entryId, onNavigate }: FeedPageProps) {
                 Your feed is quiet
               </p>
               <p className="text-sm mt-1">
-                Posts in channels you follow and activity that concerns you will show up here.
+                Posts from channels you can see and activity that involves you show up here.
               </p>
             </div>
           )}
@@ -192,22 +198,27 @@ function FeedEntryCard({
   const Icon = meta.icon;
   const initials = (entry.author?.display_name ?? '?').slice(0, 1).toUpperCase();
 
+  // Inline interaction is available for Banter messages: read the replies and
+  // comment/reply right here without leaving the Feed. The thread root is the
+  // message itself (channel posts) or its root (thread replies).
+  const isBanterMessage = entry.entity_type === 'banter.message' && !!entry.channel_id;
+  const threadRootId = entry.root_entity_id ?? entry.entity_id;
+  const [expanded, setExpanded] = useState(false);
+  const toggleReaction = useToggleReaction();
+
   return (
     <div
       className={cn(
-        'group relative rounded-xl border px-4 py-3 transition-colors cursor-pointer',
+        'group relative rounded-xl border px-4 py-3 transition-colors',
         focused
           ? 'border-primary-300 bg-primary-50/50 dark:border-primary-800 dark:bg-primary-950/30'
-          : entry.seen
-            ? 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
-            : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+          : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
       )}
-      onClick={onOpen}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 cursor-pointer" onClick={onOpen}>
         {/* Unseen dot */}
         {!entry.seen && (
-          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-primary-500" />
+          <span className="absolute left-1.5 top-4 h-2 w-2 rounded-full bg-primary-500" />
         )}
 
         {/* Avatar */}
@@ -247,9 +258,6 @@ function FeedEntryCard({
               {entry.preview}
             </p>
           )}
-          {entry.engagement_count > 0 && (
-            <p className="text-xs text-zinc-400 mt-1">{entry.engagement_count} reactions/replies</p>
-          )}
         </div>
 
         {/* Actions */}
@@ -277,6 +285,136 @@ function FeedEntryCard({
             <X className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      {/* Inline interaction footer + expandable thread (Banter messages only) */}
+      {isBanterMessage && (
+        <div className="mt-1.5 pl-12" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 font-medium"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              {entry.engagement_count > 0
+                ? `${entry.engagement_count} ${entry.engagement_count === 1 ? 'reply' : 'replies'}`
+                : 'Reply'}
+            </button>
+            <button
+              title="Like"
+              onClick={() =>
+                entry.channel_id &&
+                toggleReaction.mutate({
+                  channelId: entry.channel_id,
+                  messageId: entry.entity_id,
+                  emoji: '👍',
+                })
+              }
+              disabled={toggleReaction.isPending}
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              <ThumbsUp className="h-3.5 w-3.5" />
+              Like
+            </button>
+          </div>
+          {expanded && <FeedThread threadRootId={threadRootId} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline thread — read the replies and comment without leaving the Feed.
+// ---------------------------------------------------------------------------
+
+function FeedThread({ threadRootId }: { threadRootId: string }) {
+  const replies = useThreadReplies(threadRootId);
+  const postReply = usePostThreadReply();
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState('');
+
+  const submit = () => {
+    const content = draft.trim();
+    if (!content || postReply.isPending) return;
+    postReply.mutate(
+      { messageId: threadRootId, content },
+      {
+        onSuccess: () => {
+          setDraft('');
+          qc.invalidateQueries({ queryKey: ['threads', threadRootId] });
+          qc.invalidateQueries({ queryKey: ['feed'] });
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="mt-2 border-l-2 border-zinc-200 dark:border-zinc-700 pl-3 space-y-2.5">
+      {replies.isLoading && (
+        <div className="flex items-center gap-2 text-xs text-zinc-400 py-1">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading replies…
+        </div>
+      )}
+      {replies.data && replies.data.length === 0 && (
+        <p className="text-xs text-zinc-400">No replies yet. Be the first to comment.</p>
+      )}
+      {replies.data?.map((r) => {
+        const ri = (r.author_display_name ?? '?').slice(0, 1).toUpperCase();
+        return (
+          <div key={r.id} className="flex items-start gap-2">
+            <div className="flex-shrink-0">
+              {r.author_avatar_url ? (
+                <img src={r.author_avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" />
+              ) : (
+                <div className="h-6 w-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-semibold text-zinc-600 dark:text-zinc-300">
+                  {ri}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
+                  {r.author_display_name}
+                </span>
+                <span className="text-[11px] text-zinc-400">{timeAgo(r.created_at)}</span>
+              </div>
+              <div
+                className="text-sm text-zinc-700 dark:text-zinc-300 break-words [&_a]:text-primary-600 [&_a]:underline"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(markdownToHtml(r.content)) }}
+              />
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Composer */}
+      <div className="flex items-end gap-2 pt-0.5">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder="Write a reply…"
+          rows={1}
+          className="flex-1 resize-none rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-zinc-100"
+        />
+        <button
+          onClick={submit}
+          disabled={!draft.trim() || postReply.isPending}
+          title="Send reply"
+          className="flex-shrink-0 p-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {postReply.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </button>
       </div>
     </div>
   );

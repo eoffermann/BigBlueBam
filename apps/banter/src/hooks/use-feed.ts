@@ -55,7 +55,10 @@ export interface FeedEntry {
   source: string;
   entity_type: string;
   entity_id: string;
+  /** For thread entries, the thread-root message id; null when the entity IS the root. */
+  root_entity_id: string | null;
   channel_id: string | null;
+  channel_slug: string | null;
   project_id: string | null;
   published_at: string;
   last_activity_at: string;
