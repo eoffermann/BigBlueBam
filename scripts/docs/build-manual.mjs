@@ -30,6 +30,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const APPS_DIR = path.join(ROOT, 'docs', 'apps');
 const OUT_FILE = path.join(ROOT, 'site', 'src', 'content', 'manual.generated.json');
+const OUT_DIMS = path.join(ROOT, 'site', 'src', 'content', 'manual-image-dims.generated.json');
+const PUBLIC_DIR = path.join(ROOT, 'site', 'public');
+
+/** Read a PNG's intrinsic width/height from its header (IHDR at bytes 16-24). */
+function pngSize(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(24);
+    fs.readSync(fd, buf, 0, 24, 0);
+    fs.closeSync(fd);
+    if (buf.readUInt32BE(0) !== 0x89504e47) return null; // not a PNG
+    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  } catch {
+    return null;
+  }
+}
 
 // The 16 documented apps. bam is pinned first; the rest follow alphabetically.
 const APPS = [
@@ -115,6 +131,25 @@ function build() {
 
   fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
   fs.writeFileSync(OUT_FILE, JSON.stringify(entries, null, 2) + '\n', 'utf8');
+
+  // Intrinsic dimensions for every embedded screenshot. The client reserves
+  // space via aspect-ratio so lazy-loading images don't shift layout — which
+  // is what made anchor-scrolling land short of the target section.
+  const imageDims = {};
+  let dimsMissing = 0;
+  for (const e of entries) {
+    const re = /\]\((\/screenshots\/[^)]+\.png)\)/g;
+    let m;
+    while ((m = re.exec(e.markdown)) !== null) {
+      const src = m[1];
+      if (imageDims[src]) continue;
+      const dim = pngSize(path.join(PUBLIC_DIR, src));
+      if (dim) imageDims[src] = [dim.w, dim.h];
+      else dimsMissing++;
+    }
+  }
+  fs.writeFileSync(OUT_DIMS, JSON.stringify(imageDims, null, 2) + '\n', 'utf8');
+  console.log(`Wrote ${path.relative(ROOT, OUT_DIMS)} with ${Object.keys(imageDims).length} image dimensions${dimsMissing ? ` (${dimsMissing} unreadable)` : ''}.`);
 
   // --- report ---
   // A genuinely-relative leftover is `](screenshots/` or `](./screenshots/`,

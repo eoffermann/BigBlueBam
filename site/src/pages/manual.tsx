@@ -8,6 +8,11 @@ import clsx from 'clsx';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import manual from '@/content/manual.generated.json';
+import imageDimsRaw from '@/content/manual-image-dims.generated.json';
+
+// src -> [width, height], used to reserve image space (no lazy-load layout
+// shift, so anchor-scrolling lands on the clicked section first try).
+const imageDims = imageDimsRaw as Record<string, number[]>;
 
 /* ------------------------------------------------------------------ */
 /*  Manual image — click to enlarge to near-full-window (light only;   */
@@ -31,6 +36,7 @@ function ManualImage({ src, alt }: { src?: string; alt?: string }) {
     };
   }, [open]);
   if (!src) return null;
+  const dim = imageDims[src];
   return (
     <>
       <img
@@ -39,7 +45,10 @@ function ManualImage({ src, alt }: { src?: string; alt?: string }) {
         loading="lazy"
         onClick={() => setOpen(true)}
         title="Click to enlarge"
-        className="my-6 max-w-full cursor-zoom-in rounded-lg border border-zinc-200 shadow-md transition hover:shadow-lg"
+        // Reserve the exact box before the image loads so lazy-loading doesn't
+        // shift the layout (which made far-section anchor scrolls land short).
+        style={dim ? { aspectRatio: `${dim[0]} / ${dim[1]}` } : undefined}
+        className="my-6 w-full cursor-zoom-in rounded-lg border border-zinc-200 shadow-md transition hover:shadow-lg"
       />
       {open &&
         createPortal(
