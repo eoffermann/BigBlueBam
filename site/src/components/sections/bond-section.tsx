@@ -82,7 +82,7 @@ export function BondSection() {
 
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
-        <FloatingFrame src="/screenshots/bond/dark/01-pipeline-board.png" alt="Bond pipeline board with deals across stages" />
+        <FloatingFrame src="/screenshots/bond/light/01-pipeline-board.png" alt="Bond pipeline board with deals across stages" />
         <p className="mt-3 text-center text-sm text-zinc-500">
           A pipeline with deals actually moving through it — weighted value per stage, no wishful thinking.
         </p>
@@ -91,19 +91,19 @@ export function BondSection() {
       {/* Detail screenshots */}
       <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/bond/dark/02-deal-detail.png" alt="Bond deal detail with activity timeline" />
+          <FloatingFrame src="/screenshots/bond/light/02-deal-detail.png" alt="Bond deal detail with activity timeline" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Every call, email, and note on a deal — in order, in one place.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
-          <FloatingFrame src="/screenshots/bond/dark/03-contacts-list.png" alt="Bond contacts list" />
+          <FloatingFrame src="/screenshots/bond/light/03-contacts-list.png" alt="Bond contacts list" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Contacts and companies that know which deals they belong to.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
-          <FloatingFrame src="/screenshots/bond/dark/06-analytics.png" alt="Bond pipeline analytics and forecast" />
+          <FloatingFrame src="/screenshots/bond/light/06-analytics.png" alt="Bond pipeline analytics and forecast" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Forecasts and pipeline health, without a spreadsheet in sight.
           </p>

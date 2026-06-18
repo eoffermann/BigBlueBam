@@ -12,7 +12,7 @@ const CommunicatePage = lazy(() => import('@/pages/communicate').then((m) => ({ 
 const SalesPage = lazy(() => import('@/pages/sales').then((m) => ({ default: m.SalesPage })));
 const OperationsPage = lazy(() => import('@/pages/operations').then((m) => ({ default: m.OperationsPage })));
 const DeployGuidePage = lazy(() => import('@/pages/deploy-guide').then((m) => ({ default: m.DeployGuidePage })));
-const DocsPage = lazy(() => import('@/pages/docs').then((m) => ({ default: m.DocsPage })));
+const ManualPage = lazy(() => import('@/pages/manual').then((m) => ({ default: m.ManualPage })));
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
@@ -74,7 +74,7 @@ export function App() {
   if (path.startsWith('/docs')) {
     return (
       <PageShell>
-        <DocsPage />
+        <ManualPage />
       </PageShell>
     );
   }

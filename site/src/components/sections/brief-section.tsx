@@ -84,13 +84,13 @@ export function BriefSection() {
       {/* Hero screenshots */}
       <div className="grid gap-8 lg:grid-cols-2">
         <AnimatedReveal delay={0.1} withScale>
-          <FloatingFrame src="/screenshots/brief/dark/01-home.png" alt="Brief home with recent documents and quick-create actions" />
+          <FloatingFrame src="/screenshots/brief/light/01-home.png" alt="Brief home with recent documents and quick-create actions" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Home base — recent documents, review counts, and a New Document button that doesn't make you hunt for it.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/brief/dark/02-documents.png" alt="Brief document browser filtered by status" />
+          <FloatingFrame src="/screenshots/brief/light/02-documents.png" alt="Brief document browser filtered by status" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             The full library — filter by status, scan word counts, and see what's still in review.
           </p>
@@ -116,7 +116,7 @@ export function BriefSection() {
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/brief/dark/05-templates.png"
+            src="/screenshots/brief/light/05-templates.png"
             alt="Brief template library across categories"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -125,7 +125,7 @@ export function BriefSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.3} withScale>
           <FloatingFrame
-            src="/screenshots/brief/dark/06-search.png"
+            src="/screenshots/brief/light/06-search.png"
             alt="Brief search across document titles, content, and authors"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">

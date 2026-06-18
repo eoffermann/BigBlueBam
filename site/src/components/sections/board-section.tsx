@@ -83,7 +83,7 @@ export function BoardSection() {
       {/* Hero screenshot — the signature populated canvas */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/board/dark/02-canvas-populated.png"
+          src="/screenshots/board/light/02-canvas-populated.png"
           alt="Board infinite canvas populated with sticky notes, shapes, and freehand sketches"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
@@ -95,7 +95,7 @@ export function BoardSection() {
       <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame
-            src="/screenshots/board/dark/01-all-boards.png"
+            src="/screenshots/board/light/01-all-boards.png"
             alt="Board library showing all whiteboards"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -104,7 +104,7 @@ export function BoardSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame
-            src="/screenshots/board/dark/03-templates.png"
+            src="/screenshots/board/light/03-templates.png"
             alt="Board template picker with retro, brainstorm, planning, and architecture options"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -113,7 +113,7 @@ export function BoardSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/board/dark/04-version-history.png"
+            src="/screenshots/board/light/04-version-history.png"
             alt="Board version history with named snapshots to restore"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">

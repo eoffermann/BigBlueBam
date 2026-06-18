@@ -1,6 +1,6 @@
 import { useState, useEffect, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Maximize2, X } from 'lucide-react';
+import { Maximize2, X, MoonStar } from 'lucide-react';
 import clsx from 'clsx';
 
 interface ScreenshotFrameProps {
@@ -9,8 +9,25 @@ interface ScreenshotFrameProps {
   className?: string;
 }
 
+/**
+ * A browser-chrome framed screenshot. Two things make it more than an <img>:
+ *
+ *  1. Light → dark on hover/touch. The marketing shots are captured in both
+ *     themes; this frame shows the light capture by default and crossfades to
+ *     the dark counterpart (same path with /light/ → /dark/) whenever the
+ *     pointer is over it (or a finger is touching it). The whole point is that
+ *     anyone glancing at the site immediately learns BigBlueBam isn't
+ *     light-mode-only. Falls back to staying light if no dark capture exists.
+ *  2. Click to enlarge. Opens a full-screen lightbox (Escape or click to
+ *     dismiss) that carries the same light→dark-on-hover behaviour.
+ */
 export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
+  const darkSrc = src.replace('/light/', '/dark/');
+  const hasDark = darkSrc !== src;
   const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false); // inline: pointer/touch over the frame
+  const [zoomHover, setZoomHover] = useState(false); // lightbox: pointer/touch over the image
+  const [darkOk, setDarkOk] = useState(true); // dark capture loaded without 404
 
   // Close on Escape + lock body scroll while the lightbox is open.
   useEffect(() => {
@@ -34,6 +51,22 @@ export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
     }
   };
 
+  const showDark = hasDark && darkOk;
+  const darkImg = (visible: boolean) =>
+    showDark ? (
+      <img
+        src={darkSrc}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        onError={() => setDarkOk(false)}
+        className={clsx(
+          'absolute inset-0 block h-full w-full object-cover transition-opacity duration-300',
+          visible ? 'opacity-100' : 'opacity-0',
+        )}
+      />
+    ) : null;
+
   return (
     <>
       <div
@@ -42,6 +75,11 @@ export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
         aria-label={`Enlarge screenshot: ${alt}`}
         onClick={() => setOpen(true)}
         onKeyDown={onTriggerKey}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onTouchStart={() => setHover(true)}
+        onTouchEnd={() => setHover(false)}
+        onTouchCancel={() => setHover(false)}
         className={clsx(
           'group relative block w-full cursor-zoom-in overflow-hidden rounded-xl border border-zinc-200 bg-white text-left shadow-2xl outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
           className,
@@ -57,11 +95,12 @@ export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
         </div>
         <div className="relative">
           <img src={src} alt={alt} className="block w-full" loading="lazy" />
-          {/* Hover affordance — discoverable hint that the shot enlarges. */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-zinc-900/0 opacity-0 transition duration-200 group-hover:bg-zinc-900/10 group-hover:opacity-100">
+          {darkImg(hover)}
+          {/* Hover affordance: enlarge + the light/dark tell. */}
+          <div className="pointer-events-none absolute inset-0 flex items-start justify-end p-3 opacity-0 transition duration-200 group-hover:opacity-100">
             <span className="flex items-center gap-1.5 rounded-full bg-zinc-900/80 px-3 py-1.5 text-xs font-medium text-white shadow-lg">
-              <Maximize2 className="h-3.5 w-3.5" />
-              Click to enlarge
+              {showDark ? <MoonStar className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              {showDark ? 'Dark on hover · click to enlarge' : 'Click to enlarge'}
             </span>
           </div>
         </div>
@@ -76,11 +115,21 @@ export function ScreenshotFrame({ src, alt, className }: ScreenshotFrameProps) {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/85 p-4 backdrop-blur-sm sm:p-8"
           >
-            <img
-              src={src}
-              alt={alt}
-              className="max-h-full max-w-full rounded-lg shadow-2xl ring-1 ring-white/10"
-            />
+            <div
+              className="relative max-h-full max-w-full"
+              onMouseEnter={() => setZoomHover(true)}
+              onMouseLeave={() => setZoomHover(false)}
+              onTouchStart={() => setZoomHover(true)}
+              onTouchEnd={() => setZoomHover(false)}
+              onTouchCancel={() => setZoomHover(false)}
+            >
+              <img
+                src={src}
+                alt={alt}
+                className="block max-h-[88vh] max-w-[95vw] rounded-lg shadow-2xl ring-1 ring-white/10"
+              />
+              {darkImg(zoomHover)}
+            </div>
             <button
               type="button"
               aria-label="Close enlarged screenshot"

@@ -83,7 +83,7 @@ export function BearingSection() {
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/bearing/dark/01-dashboard.png"
+          src="/screenshots/bearing/light/01-dashboard.png"
           alt="Bearing goals dashboard with summary stats and period filtering"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
@@ -95,7 +95,7 @@ export function BearingSection() {
       <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame
-            src="/screenshots/bearing/dark/02-goal-detail.png"
+            src="/screenshots/bearing/light/02-goal-detail.png"
             alt="Bearing goal detail with key results, progress bars, and status updates"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -104,7 +104,7 @@ export function BearingSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame
-            src="/screenshots/bearing/dark/04-at-risk.png"
+            src="/screenshots/bearing/light/04-at-risk.png"
             alt="Bearing At Risk view listing goals that are falling behind pace"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -113,7 +113,7 @@ export function BearingSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/bearing/dark/05-periods.png"
+            src="/screenshots/bearing/light/05-periods.png"
             alt="Bearing time periods and cycles list"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">

@@ -85,7 +85,7 @@ export function BanterStub() {
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/banter/dark/01-channel-view.png"
+          src="/screenshots/banter/light/01-channel-view.png"
           alt="Banter channel view with channel sidebar, message timeline, and direct messages"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
@@ -98,7 +98,7 @@ export function BanterStub() {
       <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame
-            src="/screenshots/banter/dark/03-thread.png"
+            src="/screenshots/banter/light/03-thread.png"
             alt="Banter thread panel open beside a channel"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -107,7 +107,7 @@ export function BanterStub() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame
-            src="/screenshots/banter/dark/04-dms.png"
+            src="/screenshots/banter/light/04-dms.png"
             alt="Banter direct message conversation"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -116,7 +116,7 @@ export function BanterStub() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/banter/dark/06-preferences.png"
+            src="/screenshots/banter/light/06-preferences.png"
             alt="Banter preferences — theme, notifications, and messaging options"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
