@@ -18,7 +18,7 @@ const features = [
     icon: Paintbrush,
     title: 'Visual Builder',
     description:
-      'Drag-and-drop blocks — heading, text, image, button, columns, social — into email-safe HTML, or drop into raw-HTML mode. Preview at desktop, tablet, and phone widths before anyone hits send.',
+      'Drag-and-drop blocks (heading, text, image, button, columns, social) into email-safe HTML, or drop into raw-HTML mode. Preview at desktop, tablet, and phone widths before anyone hits send.',
     color: 'bg-red-100 text-red-600',
   },
   {
@@ -32,7 +32,7 @@ const features = [
     icon: Filter,
     title: 'Segment Builder',
     description:
-      'Saved filters over your Bond CRM contacts — lifecycle stage, lead source, score, location, last contacted — joined with all or any conditions, with a cached match count you can recalculate.',
+      'Saved filters over your Bond CRM contacts (lifecycle stage, lead source, score, location, last contacted) joined with all or any conditions, with a cached match count you can recalculate.',
     color: 'bg-pink-100 text-pink-600',
   },
   {
@@ -53,7 +53,7 @@ const features = [
     icon: Bot,
     title: 'AI Campaign Management',
     description:
-      '28 MCP tools let AI agents draft email content, suggest subject lines, build and preview segments, assemble a campaign, and review results — with blast_draft_email_content, blast_suggest_subject_lines, and blast_preview_segment among them. Sends stay gated behind a human by default.',
+      '28 MCP tools let AI agents draft email content, suggest subject lines, build and preview segments, assemble a campaign, and review results, with blast_draft_email_content, blast_suggest_subject_lines, and blast_preview_segment among them. Sends stay gated behind a human by default.',
     color: 'bg-pink-100 text-pink-600',
   },
 ];
@@ -74,7 +74,7 @@ export function BlastSection() {
             at the black box that is your deliverability. Blast runs campaigns, templates, segments,
             and delivery analytics on the same stack as Bond, so a segment is built straight from
             real CRM data and the open and click rates land next to the deal. 28 MCP tools let an AI
-            agent draft the copy and assemble the send — though the send itself waits for a human by
+            agent draft the copy and assemble the send, though the send itself waits for a human by
             default.
           </p>
         </div>
@@ -84,7 +84,7 @@ export function BlastSection() {
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame src="/screenshots/blast/light/01-campaigns.png" alt="Blast campaigns list with status and open/click rates" />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          Every campaign in one table — status, sent count, and open rates that fill in after the send.
+          Every campaign in one table: status, sent count, and open rates that fill in after the send.
         </p>
       </AnimatedReveal>
 
@@ -99,19 +99,19 @@ export function BlastSection() {
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame src="/screenshots/blast/light/06-segment-builder.png" alt="Blast segment builder filtering Bond CRM contacts" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Filter Bond contacts into a segment — all conditions, any condition, your call.
+            Filter Bond contacts into a segment: all conditions, any condition, your call.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame src="/screenshots/blast/light/07-analytics.png" alt="Blast analytics dashboard with open and click rates" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Opens, clicks, bounces, and a weekly trend — the numbers, without the wishful rounding.
+            Opens, clicks, bounces, and a weekly trend: the numbers, without the wishful rounding.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.3} withScale>
           <FloatingFrame src="/screenshots/blast/light/02-campaign-new.png" alt="Blast new campaign form with content mode toggle" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Name it, pick an audience, and choose your content mode — visual, raw HTML, or a saved template.
+            Name it, pick an audience, and choose your content mode: visual, raw HTML, or a saved template.
           </p>
         </AnimatedReveal>
       </div>
@@ -137,7 +137,7 @@ export function BlastSection() {
             <Mail className="h-6 w-6 text-red-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/blast/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/blast/</code>, a
               dedicated SPA sharing authentication and the contact model with Bond, Bam, and Beacon.
             </p>
           </div>

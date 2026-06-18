@@ -19,14 +19,14 @@ const features = [
     icon: Hash,
     title: 'Channels & Threads',
     description:
-      'Public or private channels with topics, descriptions, and pinned messages. Threaded replies keep a side conversation contextual — and can mirror back to the channel when everyone should see the answer.',
+      'Public or private channels with topics, descriptions, and pinned messages. Threaded replies keep a side conversation contextual, and can mirror back to the channel when everyone should see the answer.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
     icon: MessageSquare,
     title: 'DMs & Group DMs',
     description:
-      'One-to-one direct messages, plus group DMs of three to eight people for the quick huddle that does not need a whole channel. Same people, same identity — no separate contact list to keep in sync.',
+      'One-to-one direct messages, plus group DMs of three to eight people for the quick huddle that does not need a whole channel. Same people, same identity, with no separate contact list to keep in sync.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
@@ -47,14 +47,14 @@ const features = [
     icon: Link2,
     title: 'Share the Work In',
     description:
-      'Drop a Bam task or sprint, or a Helpdesk ticket, straight into a channel as a live reference. Type a task key and it renders as a chip with status — discussion stays next to the thing being discussed.',
+      'Drop a Bam task or sprint, or a Helpdesk ticket, straight into a channel as a live reference. Type a task key and it renders as a chip with status, so discussion stays next to the thing being discussed.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
     icon: Bot,
     title: 'AI-Native Chat',
     description:
-      '69 MCP tools let agents post, reply, react, DM, and search with the same authority as a person — for example banter_post_message, banter_schedule_post (queued for later, honoring per-channel quiet hours), and banter_subscribe_pattern (watch a channel and react when a message matches). Gated by org policy and per-entity visibility checks.',
+      '69 MCP tools let agents post, reply, react, DM, and search with the same authority as a person. Examples include banter_post_message, banter_schedule_post (queued for later, honoring per-channel quiet hours), and banter_subscribe_pattern (watch a channel and react when a message matches). Gated by org policy and per-entity visibility checks.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -73,9 +73,9 @@ export function BanterStub() {
             Where decisions stop getting lost
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Team chat is where decisions go to die in the scrollback — and the "AI" bolted onto it can
-            recap a thread but can't actually <em>do</em> anything in it. Banter is real-time messaging —
-            channels, threads, DMs, reactions, calls, scheduled posts — running on the same stack as your
+            Team chat is where decisions go to die in the scrollback, and the "AI" bolted onto it can
+            recap a thread but can't actually <em>do</em> anything in it. Banter is real-time messaging
+            (channels, threads, DMs, reactions, calls, scheduled posts) running on the same stack as your
             work, sharing one BigBlueBam login with the rest of the suite. Type a task key and it becomes a
             live chip linked to <a href="#bam" className="text-primary-600 underline-offset-2 hover:underline">Bam</a>;
             an agent in the channel can turn a message into a task and move the work, not just summarize it.
@@ -90,7 +90,7 @@ export function BanterStub() {
           alt="Banter channel view with channel sidebar, message timeline, and direct messages"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          Channels down the side, conversation in the middle, the whole org in one place — and yes, the
+          Channels down the side, conversation in the middle, the whole org in one place. And yes, the
           bots have accounts too.
         </p>
       </AnimatedReveal>
@@ -118,10 +118,10 @@ export function BanterStub() {
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
             src="/screenshots/banter/light/06-preferences.png"
-            alt="Banter preferences — theme, notifications, and messaging options"
+            alt="Banter preferences: theme, notifications, and messaging options"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Theme, notifications, enter-to-send, compact mode — tuned to how you like to type.
+            Theme, notifications, enter-to-send, compact mode, all tuned to how you like to type.
           </p>
         </AnimatedReveal>
       </div>
@@ -164,7 +164,7 @@ export function BanterStub() {
             <Search className="hidden h-6 w-6 text-blue-600 sm:block" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/banter/</code> — a dedicated
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/banter/</code>, a dedicated
               SPA (in beta) sharing authentication and the people directory with Bam, Helpdesk, Beacon,
               Brief, and the rest of the suite. We are still polishing; tell us where it creaks.
             </p>

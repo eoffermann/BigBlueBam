@@ -19,7 +19,7 @@ const features = [
     icon: Users,
     title: 'Contacts & Companies',
     description:
-      'A real contact database with company hierarchy, custom fields, tags, and merge/duplicate detection — so the same person stops showing up three times.',
+      'A real contact database with company hierarchy, custom fields, tags, and merge/duplicate detection, so the same person stops showing up three times.',
     color: 'bg-pink-100 text-pink-600',
   },
   {
@@ -54,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI Pipeline Management',
     description:
-      '69 MCP tools let AI agents create and advance deals, log activities, score leads, generate pipeline forecasts, upsert contacts by email, and flag likely duplicates — alongside your reps, not instead of them.',
+      '69 MCP tools let AI agents create and advance deals, log activities, score leads, generate pipeline forecasts, upsert contacts by email, and flag likely duplicates, alongside your reps, not instead of them.',
     color: 'bg-fuchsia-100 text-fuchsia-600',
   },
 ];
@@ -71,7 +71,7 @@ export function BondSection() {
             The CRM nobody updates
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Every CRM is the tool nobody updates, because it lives a continent away from the work —
+            Every CRM is the tool nobody updates, because it lives a continent away from the work,
             and the deal you finally won closes to silence while the kickoff and the invoice sit on
             someone's to-do list. Bond puts the pipeline on the same stack as your projects: a won
             deal can spin up a Bam project and a Bill invoice, and an agent can log the call you
@@ -86,7 +86,7 @@ export function BondSection() {
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame src="/screenshots/bond/light/01-pipeline-board.png" alt="Bond pipeline board with deals across stages" />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          A pipeline with deals actually moving through it — weighted value per stage, no wishful thinking.
+          A pipeline with deals actually moving through it, with weighted value per stage and no wishful thinking.
         </p>
       </AnimatedReveal>
 
@@ -95,7 +95,7 @@ export function BondSection() {
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame src="/screenshots/bond/light/02-deal-detail.png" alt="Bond deal detail with activity timeline" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Every call, email, and note on a deal — in order, in one place.
+            Every call, email, and note on a deal, in order, in one place.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
@@ -133,7 +133,7 @@ export function BondSection() {
             <Handshake className="h-6 w-6 text-pink-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bond/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bond/</code>, a
               dedicated SPA sharing authentication and the project model with Bam, Beacon, Brief, Bolt, Bearing, and Board.
             </p>
           </div>

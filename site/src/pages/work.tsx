@@ -39,7 +39,7 @@ export function WorkPage() {
                 Work Management
               </h1>
               <p className="mt-4 max-w-2xl text-lg text-blue-100">
-                The plan lives in one tool, the work in another, and the status update in a third —
+                The plan lives in one tool, the work in another, and the status update in a third,
                 so nobody quite trusts any of them. Here it's one workflow on one stack: Bam's boards
                 and sprints, Board's infinite canvas, Blueprint's flowcharts and org charts, and
                 Bearing's goals. The brainstorm becomes a board, the board rolls up to the goal, and

@@ -132,6 +132,19 @@ export function Navbar() {
             Human + AI
           </a>
 
+          {/* Technical deep dive */}
+          <a
+            href="/technical"
+            className={clsx(
+              'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              isActive('/technical')
+                ? 'bg-primary-50 text-primary-700'
+                : 'text-zinc-600 hover:text-zinc-900',
+            )}
+          >
+            Talk nerdy to me
+          </a>
+
           {/* Deploy */}
           <a
             href="/deploy"
@@ -207,6 +220,18 @@ export function Navbar() {
               className="block rounded-md px-3 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
             >
               Human + AI
+            </a>
+            <a
+              href="/technical"
+              onClick={() => setMobileOpen(false)}
+              className={clsx(
+                'block rounded-md px-3 py-2.5 text-sm font-medium',
+                isActive('/technical')
+                  ? 'bg-primary-50 text-primary-700'
+                  : 'text-zinc-600 hover:bg-zinc-50',
+              )}
+            >
+              Talk nerdy to me
             </a>
             <a
               href="/deploy"

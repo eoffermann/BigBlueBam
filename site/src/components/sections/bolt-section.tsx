@@ -19,21 +19,21 @@ const features = [
     icon: Workflow,
     title: 'Visual Rule Builder',
     description:
-      'WHEN something happens, IF conditions hold, THEN run an ordered list of actions. Build it in a stacked Simple editor or a node-graph canvas — and flip between the two on the same rule.',
+      'WHEN something happens, IF conditions hold, THEN run an ordered list of actions. Build it in a stacked Simple editor or a node-graph canvas, and flip between the two on the same rule.',
     color: 'bg-amber-100 text-amber-600',
   },
   {
     icon: Radio,
     title: 'Cross-App Triggers',
     description:
-      'Over 130 events from every app in the suite, plus a cron Schedule source. A deal closing in Bond, a ticket breaching SLA, a sprint completing in Bam — Bolt is listening to all of it.',
+      'Over 130 events from every app in the suite, plus a cron Schedule source. A deal closing in Bond, a ticket breaching SLA, a sprint completing in Bam: Bolt is listening to all of it.',
     color: 'bg-violet-100 text-violet-600',
   },
   {
     icon: LayoutTemplate,
     title: 'Templates',
     description:
-      '16 pre-built blueprints for the workflows everyone ends up wanting — overdue-task nudges, SLA escalations, sprint recaps. Pick one, tweak it, ship it.',
+      '16 pre-built blueprints for the workflows everyone ends up wanting: overdue-task nudges, SLA escalations, sprint recaps. Pick one, tweak it, ship it.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
@@ -47,14 +47,14 @@ const features = [
     icon: Activity,
     title: 'Observability',
     description:
-      'Trace any single event to see exactly which rules matched, skipped, or fired — and why. The kind of receipts you want when a rule does something surprising at 3am.',
+      'Trace any single event to see exactly which rules matched, skipped, or fired, and why. The kind of receipts you want when a rule does something surprising at 3am.',
     color: 'bg-rose-100 text-rose-600',
   },
   {
     icon: Bot,
     title: 'AI Automation',
     description:
-      '24 MCP tools let an AI agent author, test, operate, and observe automations — bolt_create to build a rule, bolt_test to dry-run it, bolt_event_trace to explain a match — with the same policy guardrails and approvals as everything else.',
+      '24 MCP tools let an AI agent author, test, operate, and observe automations (bolt_create to build a rule, bolt_test to dry-run it, bolt_event_trace to explain a match) with the same policy guardrails and approvals as everything else.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -72,10 +72,10 @@ export function BoltSection() {
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             Automating across tools usually means duct-taping five apps together with a brittle
-            third-party connector that breaks the moment an API changes — and bills you per task run.
+            third-party connector that breaks the moment an API changes, and bills you per task run.
             Bolt is a visual trigger-condition-action engine that already lives inside the suite:
             events from Bam, Bond, Banter, and the rest are right there, no connectors to buy. WHEN an
-            event fires, IF your conditions hold, THEN run an ordered chain of actions across any app —
+            event fires, IF your conditions hold, THEN run an ordered chain of actions across any app,
             with execution logs you can actually read, and 24 MCP tools so agents can build and inspect
             rules too.
           </p>
@@ -89,7 +89,7 @@ export function BoltSection() {
           alt="Bolt automations dashboard listing active rules with trigger badges"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          The automation dashboard — each rule shows its trigger event, an enable toggle, and when it
+          The automation dashboard. Each rule shows its trigger event, an enable toggle, and when it
           last ran.
         </p>
       </AnimatedReveal>
@@ -112,7 +112,7 @@ export function BoltSection() {
             alt="Bolt visual node-graph canvas wiring a trigger to a condition to an action"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Prefer wires to stacks? Same rule, drawn as a node graph — trigger to condition to action.
+            Prefer wires to stacks? Same rule, drawn as a node graph: trigger to condition to action.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
@@ -153,7 +153,7 @@ export function BoltSection() {
             <Zap className="h-6 w-6 text-primary-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bolt/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bolt/</code>, a
               dedicated SPA sharing authentication and the project model with Bam, Beacon, and Brief.
             </p>
           </div>

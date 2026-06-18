@@ -19,14 +19,14 @@ const features = [
     icon: GitBranch,
     title: 'A typed graph, not a blob',
     description:
-      'Every node and edge is a real row in a real table — styled, nested, searchable across diagrams, and addressable by ID. Diagrams you can query, not just stare at.',
+      'Every node and edge is a real row in a real table: styled, nested, searchable across diagrams, and addressable by ID. Diagrams you can query, not just stare at.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
     icon: Layers,
     title: 'ELK auto-layout',
     description:
-      'The Eclipse Layout Kernel untangles your spaghetti in one click — layered, force-directed, tree, or grid. Pinned nodes stay put; everything else snaps into line.',
+      'The Eclipse Layout Kernel untangles your spaghetti in one click, whether layered, force-directed, tree, or grid. Pinned nodes stay put; everything else snaps into line.',
     color: 'bg-indigo-100 text-indigo-600',
   },
   {
@@ -40,21 +40,21 @@ const features = [
     icon: Workflow,
     title: 'Mermaid in, Mermaid out',
     description:
-      'Export to Mermaid or JSON for embedding in Brief and Beacon docs — and import a Mermaid block straight back into an editable graph. The round trip actually round-trips.',
+      'Export to Mermaid or JSON for embedding in Brief and Beacon docs, and import a Mermaid block straight back into an editable graph. The round trip actually round-trips.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
     icon: ListChecks,
     title: 'Promote to Bam tasks',
     description:
-      'Turn a single node — or a whole graph — into Bam tasks with back-links, or generate a diagram from a project’s tasks. The picture and the work stay in two-way sync.',
+      'Turn a single node (or a whole graph) into Bam tasks with back-links, or generate a diagram from a project’s tasks. The picture and the work stay in two-way sync.',
     color: 'bg-emerald-100 text-emerald-600',
   },
   {
     icon: Bot,
     title: 'AI builds the diagram',
     description:
-      '36 MCP tools let an agent draft a diagram from a process description, lay it out, and link nodes to entities in one go. Try blueprint_add_node, blueprint_apply_layout, and blueprint_generate_from_bam — alongside you, not instead of you.',
+      '36 MCP tools let an agent draft a diagram from a process description, lay it out, and link nodes to entities in one go. Try blueprint_add_node, blueprint_apply_layout, and blueprint_generate_from_bam. They work alongside you, not instead of you.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -71,10 +71,10 @@ export function BlueprintSection() {
             Your diagram died the moment you drew it
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A flowchart, an org chart, an ERD — the instant it's finished it's a dead picture, stuck
+            A flowchart, an org chart, an ERD: the instant it's finished it's a dead picture, stuck
             in yet another diagramming subscription, that no automation and no AI can actually read
             or rebuild. Blueprint stores each one as a typed graph of nodes and edges instead of an
-            opaque image, with one-click ELK auto-layout and Mermaid import and export — so an agent
+            opaque image, with one-click ELK auto-layout and Mermaid import and export, so an agent
             can build, query, and rewrite the diagram with the same authority as a person, and any
             node can become a task in Bam.
           </p>
@@ -101,7 +101,7 @@ export function BlueprintSection() {
             alt="Blueprint Comments panel open with threaded comments anchored to nodes"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Comments, People, and History — pinned to the node they’re actually about.
+            Comments, People, and History, pinned to the node they’re actually about.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
@@ -110,7 +110,7 @@ export function BlueprintSection() {
             alt="Blueprint diagram library grouped by type with starred and archived filters"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            A tidy library, sorted by type — star the ones you live in, archive the rest.
+            A tidy library, sorted by type. Star the ones you live in, archive the rest.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
@@ -151,7 +151,7 @@ export function BlueprintSection() {
             <Network className="h-6 w-6 text-sky-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/blueprint/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/blueprint/</code>, a
               dedicated SPA sharing authentication and the project model with Bam, Beacon, Brief,
               Bond, Bearing, and Board.
             </p>

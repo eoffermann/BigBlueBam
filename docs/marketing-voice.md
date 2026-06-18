@@ -160,6 +160,42 @@ queue, board, pipeline, in plain terms, and yes — agents can do it too.*
 Avoid: *synergy, leverage (as a verb), seamless, robust, cutting-edge,
 unlock (overused), empower, supercharge, "in today's fast-paced world."*
 
+## No em dashes (hard rule)
+
+Do not use the em dash character (the long dash) anywhere in site copy. Because
+LLMs overuse it, it now reads as machine-written, and readers notice. Reword the
+sentence instead: split it into two with a period, use a comma or a colon, wrap
+the aside in parentheses, or join the clauses with "and"/"but". Do not paper over
+it by swapping in a hyphen or a spaced hyphen; rewrite so the dash isn't needed.
+(En dashes in numeric ranges like 1-5 are fine; this rule is about the em dash
+used as a sentence break.) When in doubt, two short sentences beat one with a
+dash in it.
+
+## Gate the deep technical dives ("talk nerdy to me")
+
+The landing page sells the outcome, not the plumbing. Keep the home page and its
+sections approachable: nearly ELI5, warm, and exciting. Name a capability and say
+what it lets you do in plain words ("agents do real work on your boards," "runs
+on your own servers, your data stays yours"), then stop. Anyone who wants the
+architecture clicks through.
+
+- Mention the impressive tech (MCP tools, the stack, parity) in one plain
+  sentence, paired with the benefit. Do not explain the mechanism on the home page.
+- Move the deep dive (scoped API keys, RBAC, audit trails, the JSON tool call,
+  the full stack list, RLS/JSONB/PubSub, scaling) to the technical page reached
+  by a "Talk nerdy to me" button.
+- A non-technical buyer modernizing a traditional company, or a tiny startup,
+  should feel invited, not quizzed. The CTO/CAIO who wants depth has a clear door
+  to it.
+
+Never shy away from the technical details of what makes us better. The depth is a
+real differentiator and we are proud of it. The move is to RELOCATE it, never to
+bury it: the home page earns the click, the technical page delivers the goods in
+full. Most potential customers get freaked out by the plumbing on first contact,
+so we lead with what it does for them and keep an obvious door for the people who
+want to see how the sausage is made. The technical page can be as dense and proud
+as it likes. The home page cannot.
+
 ## Examples (flat → us)
 
 - Flat: "Bond provides robust CRM capabilities for managing customer

@@ -19,14 +19,14 @@ const features = [
     icon: Map,
     title: 'Floors & Rooms',
     description:
-      'Lay out your office as floors on a canvas, with rooms you actually walk into — eight types, from a one-person office to a conference room or an open lounge.',
+      'Lay out your office as floors on a canvas, with rooms you actually walk into. Choose from eight types, from a one-person office to a conference room or an open lounge.',
     color: 'bg-violet-100 text-violet-600',
   },
   {
     icon: Radio,
     title: 'Live Presence',
     description:
-      'A spatial floor map with a dot for every person who is around, their status, and the room they are in. It updates in real time as people move — no roll call required.',
+      'A spatial floor map with a dot for every person who is around, their status, and the room they are in. It updates in real time as people move, so no roll call is required.',
     color: 'bg-purple-100 text-purple-600',
   },
   {
@@ -40,7 +40,7 @@ const features = [
     icon: Mic,
     title: 'Built-in Audio',
     description:
-      'Every room maps one-to-one to a live audio room, powered by LiveKit. Walk in and your mic connects — with camera, screen share, and an ephemeral room chat right in the docked box.',
+      'Every room maps one-to-one to a live audio room, powered by LiveKit. Walk in and your mic connects, with camera, screen share, and an ephemeral room chat right in the docked box.',
     color: 'bg-violet-100 text-violet-600',
   },
   {
@@ -54,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI Occupants',
     description:
-      '37 MCP tools make agents first-class occupants: they read live presence, set status, locate people, knock, summon, and book rooms — bureau_set_status, bureau_book_room, bureau_locate_user — under the same permission checks as everyone else.',
+      '37 MCP tools make agents first-class occupants: they read live presence, set status, locate people, knock, summon, and book rooms (bureau_set_status, bureau_book_room, bureau_locate_user) under the same permission checks as everyone else.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -71,11 +71,11 @@ export function BureauSection() {
             Stop booking a meeting to ask a question
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Remote, you schedule a 30-minute call to ask a 30-second question — because the hallway
+            Remote, you schedule a 30-minute call to ask a 30-second question, because the hallway
             is gone, and there is no way to see who is around or just wander over. Bureau brings it
             back: floors laid out on a map, rooms you walk into, a live dot for everyone who is
             around, and knock-to-enter on a closed door. Where chat tells you what was said, Bureau
-            tells you who is here and whether you can interrupt them — and a presence widget follows
+            tells you who is here and whether you can interrupt them, and a presence widget follows
             you into every other app in the suite. 37 MCP tools mean an AI agent can occupy the
             floor, locate a teammate, or book a room as naturally as you can.
           </p>
@@ -86,7 +86,7 @@ export function BureauSection() {
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame src="/screenshots/bureau/light/02-live-floor.png" alt="Bureau live floor map with rooms and occupant dots" />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          A floor map where the dots are real people — click a room to walk in, audio and all.
+          A floor map where the dots are real people. Click a room to walk in, audio and all.
         </p>
       </AnimatedReveal>
 
@@ -101,13 +101,13 @@ export function BureauSection() {
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame src="/screenshots/bureau/light/08-presence-on-floor.png" alt="Bureau presence and status on the floor map" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Status and room for each person, updating live — no "you around?" pings needed.
+            Status and room for each person, updating live, with no "you around?" pings needed.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame src="/screenshots/bureau/light/06-room-booking.png" alt="Bureau room booking screen with upcoming reservations" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Bookable rooms by floor — pick a window, lock the door, done.
+            Bookable rooms by floor. Pick a window, lock the door, done.
           </p>
         </AnimatedReveal>
       </div>
@@ -133,7 +133,7 @@ export function BureauSection() {
             <Building className="h-6 w-6 text-violet-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bureau/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bureau/</code>, a
               dedicated SPA sharing authentication and the project model with the rest of the suite.
             </p>
           </div>

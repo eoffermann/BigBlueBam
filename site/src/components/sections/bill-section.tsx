@@ -19,14 +19,14 @@ const features = [
     icon: FileText,
     title: 'Invoices, Start to Finish',
     description:
-      'Build a draft with line items, tax, and discounts, then finalize to lock it and assign a permanent number. Every invoice exports to a clean PDF on demand — and a public link lets a client view it without an account.',
+      'Build a draft with line items, tax, and discounts, then finalize to lock it and assign a permanent number. Every invoice exports to a clean PDF on demand, and a public link lets a client view it without an account.',
     color: 'bg-green-100 text-green-600',
   },
   {
     icon: RefreshCw,
     title: 'Recurring Billing',
     description:
-      'Put standing fees on autopilot. Schedules bill a client weekly, monthly, quarterly, or annually from a saved template — auto-finalized or left as drafts to review — with pause, resume, and generate-now in reach.',
+      'Put standing fees on autopilot. Schedules bill a client weekly, monthly, quarterly, or annually from a saved template, auto-finalized or left as drafts to review, with pause, resume, and generate-now in reach.',
     color: 'bg-emerald-100 text-emerald-600',
   },
   {
@@ -47,14 +47,14 @@ const features = [
     icon: Gauge,
     title: 'Revenue & Profitability',
     description:
-      'Revenue by month, outstanding aging, and per-project profitability in one place — pull a won Bond deal or a range of Bam time entries straight into a draft, no re-keying.',
+      'Revenue by month, outstanding aging, and per-project profitability in one place. Pull a won Bond deal or a range of Bam time entries straight into a draft, no re-keying.',
     color: 'bg-emerald-100 text-emerald-600',
   },
   {
     icon: Bot,
     title: 'AI Billing Operations',
     description:
-      '47 MCP tools let AI agents draft invoices from deals or time entries, record payments, run a recurring schedule, and surface overdue, revenue, and profitability — try bill_create_invoice_from_deal, bill_record_payment, and bill_get_profitability.',
+      '47 MCP tools let AI agents draft invoices from deals or time entries, record payments, run a recurring schedule, and surface overdue, revenue, and profitability. Try bill_create_invoice_from_deal, bill_record_payment, and bill_get_profitability.',
     color: 'bg-teal-100 text-teal-600',
   },
 ];
@@ -74,7 +74,7 @@ export function BillSection() {
             Billing usually means re-keying tracked time into yet another app, hoping you caught every
             line, then chasing the payment for a month. Bill skips the retype: it turns a won Bond deal
             into a draft invoice and a range of logged Bam time into priced line items, on the same
-            stack — line items, expenses, recurring billing, PDFs, and honest payment and aging. And
+            stack: line items, expenses, recurring billing, PDFs, and honest payment and aging. And
             with 47 MCP tools, an AI agent can draft and send the whole lifecycle alongside you.
           </p>
         </div>
@@ -87,7 +87,7 @@ export function BillSection() {
           alt="Bill dashboard with outstanding, paid, overdue, and draft totals"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          Outstanding, paid, overdue, and drafts — the four numbers you actually open the app to see.
+          Outstanding, paid, overdue, and drafts: the four numbers you actually open the app to see.
         </p>
       </AnimatedReveal>
 
@@ -99,7 +99,7 @@ export function BillSection() {
             alt="Bill invoice detail with line items, totals, and payment history"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            One invoice, fully assembled — line items, tax, totals, and every payment against it.
+            One invoice, fully assembled: line items, tax, totals, and every payment against it.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
@@ -108,7 +108,7 @@ export function BillSection() {
             alt="Bill recurring billing schedules with cadence and next run date"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Standing fees that bill themselves on a cadence — set it once, stop chasing it.
+            Standing fees that bill themselves on a cadence: set it once, stop chasing it.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
@@ -126,7 +126,7 @@ export function BillSection() {
             alt="Bill financial reports: revenue by month, aging, and profitability"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Revenue, aging, and profitability — the answers, without exporting to a spreadsheet first.
+            Revenue, aging, and profitability: the answers, without exporting to a spreadsheet first.
           </p>
         </AnimatedReveal>
       </div>
@@ -152,7 +152,7 @@ export function BillSection() {
             <DollarSign className="h-6 w-6 text-green-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bill/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bill/</code>, a
               dedicated SPA sharing authentication and the client model with Bond and Bench.
             </p>
           </div>

@@ -27,7 +27,7 @@ const features = [
     icon: LayoutTemplate,
     title: 'Templates',
     description:
-      'Start from a pre-built shape — meeting notes, project briefs, RFCs, post-mortems, status reports — instead of a blinking cursor and good intentions.',
+      'Start from a pre-built shape (meeting notes, project briefs, RFCs, post-mortems, status reports) instead of a blinking cursor and good intentions.',
     color: 'bg-violet-100 text-violet-600',
   },
   {
@@ -74,8 +74,8 @@ export function BriefSection() {
           <p className="mt-4 text-lg text-zinc-600">
             Your spec lives in an editor that has no idea the work exists, so the doc and the
             tasks drift apart and you end up with final_v3_FINAL and three people editing
-            different copies. Brief is a real-time collaborative editor — rich text, threaded
-            comments, version history, live co-editing — on the same stack as the work. A doc
+            different copies. Brief is a real-time collaborative editor (rich text, threaded
+            comments, version history, live co-editing) on the same stack as the work. A doc
             links to (or graduates into) Bam tasks and Beacon knowledge, and agents can draft and
             edit it through 48 MCP tools.
           </p>
@@ -87,13 +87,13 @@ export function BriefSection() {
         <AnimatedReveal delay={0.1} withScale>
           <FloatingFrame src="/screenshots/brief/light/01-home.png" alt="Brief home with recent documents and quick-create actions" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Home base — recent documents, review counts, and a New Document button that doesn't make you hunt for it.
+            Home base: recent documents, review counts, and a New Document button that doesn't make you hunt for it.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame src="/screenshots/brief/light/02-documents.png" alt="Brief document browser filtered by status" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            The full library — filter by status, scan word counts, and see what's still in review.
+            The full library: filter by status, scan word counts, and see what's still in review.
           </p>
         </AnimatedReveal>
       </div>
@@ -121,7 +121,7 @@ export function BriefSection() {
             alt="Brief template library across categories"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            A template for every meeting that should've been a doc — pick one and skip the empty page.
+            A template for every meeting that should've been a doc: pick one and skip the empty page.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.3} withScale>
@@ -130,7 +130,7 @@ export function BriefSection() {
             alt="Brief search across document titles, content, and authors"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Search by title, content, or author — the note you swear you wrote is findable again.
+            Search by title, content, or author. The note you swear you wrote is findable again.
           </p>
         </AnimatedReveal>
       </div>
@@ -143,15 +143,15 @@ export function BriefSection() {
               <Bot className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-zinc-900">And yes — agents can do it too</h3>
+              <h3 className="text-base font-semibold text-zinc-900">And yes, agents can do it too</h3>
               <p className="mt-2 text-sm text-zinc-600">
                 Brief exposes <span className="font-semibold text-zinc-900">48 MCP tools</span> so an
-                AI agent can author, edit, and curate documents the same way you do — create a doc
+                AI agent can author, edit, and curate documents the same way you do. It can create a doc
                 (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_create</code>),
                 stream content into it
                 (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_append_content</code>),
                 and graduate the keepers into your knowledge base
-                (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_promote_to_beacon</code>) —
+                (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_promote_to_beacon</code>),
                 plus comments, versions, links, collaborators, templates, and search.
               </p>
             </div>
@@ -165,7 +165,7 @@ export function BriefSection() {
             <FileText className="h-6 w-6 text-primary-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/brief/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/brief/</code>, a
               dedicated SPA sharing authentication and the project model with Bam and Beacon.
             </p>
           </div>

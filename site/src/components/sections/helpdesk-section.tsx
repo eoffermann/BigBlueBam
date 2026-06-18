@@ -54,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI Triage',
     description:
-      '11 MCP tools let AI agents search and triage tickets, find similar open ones before a duplicate piles up, reconcile requesters by email, post replies, and move status — helpdesk_search_tickets, helpdesk_find_similar_tickets, helpdesk_upsert_user, and more.',
+      '11 MCP tools let AI agents search and triage tickets, find similar open ones before a duplicate piles up, reconcile requesters by email, post replies, and move status, including helpdesk_search_tickets, helpdesk_find_similar_tickets, helpdesk_upsert_user, and more.',
     color: 'bg-green-100 text-green-600',
   },
 ];
@@ -87,7 +87,7 @@ export function HelpdeskSection() {
           alt="Helpdesk customer sign-in portal"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          A clean, branded front door &mdash; the only part of the suite your customers ever see.
+          A clean, branded front door. The only part of the suite your customers ever see.
         </p>
       </AnimatedReveal>
 
@@ -99,7 +99,7 @@ export function HelpdeskSection() {
             alt="Helpdesk My Tickets list with status, priority, and category"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Customers track their own tickets &mdash; status, priority, and category, no email follow-ups.
+            Customers track their own tickets: status, priority, and category, with no email follow-ups.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
@@ -108,7 +108,7 @@ export function HelpdeskSection() {
             alt="Helpdesk ticket detail with threaded customer and agent conversation"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            One thread for the whole conversation &mdash; agent replies show, internal notes don&rsquo;t.
+            One thread for the whole conversation. Agent replies show, internal notes don&rsquo;t.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
@@ -148,7 +148,7 @@ export function HelpdeskSection() {
             <Headset className="h-6 w-6 text-primary-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/helpdesk/</code> &mdash; a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/helpdesk/</code>, a
               separate customer-facing SPA that shares authentication and the project model with Bam,
               so tickets land on the same board as the rest of your work. Customers never see it.
             </p>

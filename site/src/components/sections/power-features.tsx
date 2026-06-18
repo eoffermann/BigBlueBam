@@ -8,9 +8,9 @@ const features = [
     icon: Command,
     title: 'Command Palette',
     description:
-      'Hit Cmd+K to jump to any project, task, or action. Fuzzy search across your entire workspace — your mouse can take a coffee break.',
+      'Hit Cmd+K to jump to any project, task, or action. Fuzzy search across your entire workspace, so your mouse can take a coffee break.',
     screenshot: '/screenshots/bam/light/05-my-work.png',
-    screenshotAlt: 'My Work — every task assigned to you, in one place',
+    screenshotAlt: 'My Work, every task assigned to you, in one place',
   },
   {
     icon: Keyboard,
@@ -73,7 +73,7 @@ export function PowerFeatures() {
             <div>
               <FloatingFrame src={features[0].screenshot!} alt={features[0].screenshotAlt!} />
               <p className="mt-3 text-center text-sm text-zinc-500">
-                One keystroke from here to anywhere — every task you own, a few letters away.
+                One keystroke from here to anywhere, with every task you own a few letters away.
               </p>
             </div>
           </div>

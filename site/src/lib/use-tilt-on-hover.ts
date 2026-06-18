@@ -21,7 +21,7 @@ export function useTiltOnHover<T extends HTMLElement = HTMLElement>(): UseTiltOn
   const prefersReduced = useReducedMotion();
 
   const { enabled, maxDegrees, perspective } = EFFECTS.hoverTilt;
-  // Don't gate on touch detection — Windows 11 touchscreen laptops report
+  // Don't gate on touch detection. Windows 11 touchscreen laptops report
   // ontouchstart yet still use a mouse. Hover tilt only fires on mousemove
   // events so there's no conflict with touch input.
   const isActive = enabled && !prefersReduced;

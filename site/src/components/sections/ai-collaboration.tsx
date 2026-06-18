@@ -7,11 +7,12 @@ import {
   Code,
   ClipboardCheck,
   MessageSquare,
-  ShieldCheck,
+  ArrowRight,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 const roles = [
   {
@@ -40,29 +41,6 @@ const roles = [
   },
 ];
 
-const capabilities = [
-  'Project & sprint planning',
-  'Task management & bulk operations',
-  'Reports & analytics (velocity, burndown, cycle time)',
-  'Team collaboration & notifications',
-  'Banter messaging (channels, DMs, threads, calls, scheduled posts)',
-  'Brief document collaboration & graduation',
-  'Bolt workflow automations & runtime observability',
-  'Bearing goals & OKR tracking',
-  'Board visual collaboration & canvas analysis',
-  'Bond CRM pipeline, contact management & dedupe',
-  'Helpdesk ticket operations & similar-ticket lookup',
-  'Beacon knowledge base & graph search',
-  'Blast email campaigns, segments & analytics',
-  'Bill invoicing, expenses & revenue reporting',
-  'Blank forms, submissions & conditional routing',
-  'Book scheduling & mixed-roster availability',
-  'Bench analytics dashboards & scheduled reports',
-  'Cross-app search, composite views, entity linking',
-  'Agent identity, proposals, policies & audit',
-  'Platform administration',
-];
-
 export function AiCollaboration() {
   return (
     <SectionWrapper id="ai-collaboration" dividerTop>
@@ -77,16 +55,14 @@ export function AiCollaboration() {
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             Most "AI" in a productivity tool is a chat box in the corner that summarizes the doc you
-            just wrote — and 73% of vendors now charge extra for it. We took the other approach.
-            BigBlueBam was architected from day one so agents operate at full parity with people:
-            every action a person can take — creating tasks, managing sprints, responding to tickets
-            — an agent does through the same system, with the same permissions and the same audit
-            trail. No sidebar. No upcharge. It's the architecture.
+            just wrote, and a lot of vendors charge extra for it. We took the other approach. Agents
+            here do real work on your actual boards, tickets, and deals, with the same permissions a
+            person has. No sidebar. No upcharge.
           </p>
         </div>
       </AnimatedReveal>
 
-      {/* Human ↔ AI role parity */}
+      {/* Human and AI role parity */}
       <AnimatedReveal delay={0.1}>
         <div className="mt-14 mb-14">
           <h3 className="mb-8 text-center text-sm font-semibold tracking-wider text-zinc-400 uppercase">
@@ -125,80 +101,26 @@ export function AiCollaboration() {
         </div>
       </AnimatedReveal>
 
-      {/* How it works */}
-      <AnimatedReveal delay={0.2}>
-        <div className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-50 via-white to-primary-50/30 p-8 md:p-10">
-          <div className="grid gap-10 lg:grid-cols-2">
-            <div>
-              <h3 className="text-xl font-bold text-zinc-900">Full parity through MCP</h3>
-              <p className="mt-3 text-zinc-600">
-                The built-in Model Context Protocol server exposes 720+ structured tools that mirror
-                every UI action across all sixteen apps plus cross-cutting platform capabilities
-                (agent identity, approval queues, visibility preflight, unified activity, cross-app
-                search, composite views, entity linking, scheduled posts, upserts, attachment
-                metadata, agent policies, outbound webhooks). AI agents authenticate with scoped
-                API keys, operate under the same role-based permissions as humans, and leave the
-                same audit trail in the activity log — no special back door, same rules as everyone.
-              </p>
-              <div className="mt-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                <p className="text-sm text-amber-800">
-                  <strong>Guardrails built in.</strong> Destructive actions (deleting tasks, completing
-                  sprints, removing members) require a two-step confirmation flow with time-limited
-                  tokens — for AI agents and humans alike.
-                </p>
-              </div>
-            </div>
-            <div>
-              <h3 className="mb-4 text-sm font-semibold text-zinc-500 uppercase tracking-wider">
-                720+ MCP tools across 16 apps + platform
-              </h3>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {capabilities.map((cap) => (
-                  <div key={cap} className="flex items-center gap-2 text-sm text-zinc-700">
-                    <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500" />
-                    {cap}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-900 p-4">
-                <p className="mb-2 text-xs font-medium text-zinc-400">Example: AI agent moves a task</p>
-                <pre className="overflow-x-auto text-xs leading-relaxed">
-                  <code className="text-primary-300">
-{`{
-  "tool": "move_task",
-  "task_id": "PROJ-142",
-  "to_phase": "In Review",
-  "comment": "PR merged, moving to review"
-}`}
-                  </code>
-                </pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      </AnimatedReveal>
-
       {/* Escalation flow */}
-      <AnimatedReveal delay={0.3}>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+      <AnimatedReveal delay={0.2}>
+        <div className="grid gap-5 md:grid-cols-3">
           {[
             {
               step: '1',
               title: 'Agent picks up work',
-              description: 'AI agents monitor the board, pick up assigned tasks, and begin executing — logging progress as they go.',
+              description: 'AI agents watch the board, pick up assigned tasks, and start working, logging progress as they go.',
               color: 'bg-primary-600',
             },
             {
               step: '2',
               title: 'Escalates when needed',
-              description: 'When an agent hits ambiguity, needs approval, or encounters something outside its scope, it escalates to a human.',
+              description: 'When an agent hits ambiguity, needs approval, or runs into something outside its lane, it hands off to a human.',
               color: 'bg-amber-500',
             },
             {
               step: '3',
               title: 'Human resolves, agent continues',
-              description: 'The human teammate weighs in, and the agent picks right back up where it left off — full context preserved, nothing dropped on the floor.',
+              description: 'The human teammate weighs in, and the agent picks right back up where it left off. Full context preserved, nothing dropped on the floor.',
               color: 'bg-emerald-500',
             },
           ].map((item) => (
@@ -213,20 +135,42 @@ export function AiCollaboration() {
         </div>
       </AnimatedReveal>
 
-      {/* AI Provider Configuration callout */}
+      {/* "How does that actually work" gate to the technical page */}
+      <AnimatedReveal delay={0.3}>
+        <div className="mt-10 rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-50 via-white to-primary-50/30 p-8 text-center md:p-10">
+          <h3 className="text-xl font-bold text-zinc-900">
+            "But how does an agent do all that safely?"
+          </h3>
+          <p className="mx-auto mt-3 max-w-2xl text-zinc-600">
+            Short version: agents use the exact same tools your team's buttons use, under the same
+            role-based permissions, and everything they touch shows up in the same audit log. The
+            risky moves (deleting things, closing out a sprint) need a human to confirm. There is no
+            special back door.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Button href="/technical#mcp-parity" variant="outline">
+              Talk nerdy to me <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="mt-3 text-xs text-zinc-400">
+            The long version has the API keys, the permission model, the audit trail, and the actual
+            tool calls. We will show you all of it.
+          </p>
+        </div>
+      </AnimatedReveal>
+
+      {/* Bring your own LLM (kept light; details live on the technical page) */}
       <AnimatedReveal delay={0.4}>
-        <div className="mt-10 rounded-xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-              <ShieldCheck className="h-5 w-5" />
+              <Bot className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-zinc-900">Bring Your Own LLM</h3>
+              <h3 className="text-base font-semibold text-zinc-900">Use whatever AI you want</h3>
               <p className="mt-1 text-sm text-zinc-600">
-                Configure AI providers at the system, organization, or project level. Supports
-                <strong> Anthropic</strong>, <strong>OpenAI</strong>, and any{' '}
-                <strong>OpenAI API-compatible endpoint</strong> — including Azure OpenAI, Together AI,
-                Ollama, and local LLMs. API keys are encrypted at rest and never exposed in full.
+                Bring your own model. It works with the major providers and with private or local
+                models, so you are never locked to one AI vendor any more than you are locked to us.
               </p>
             </div>
           </div>

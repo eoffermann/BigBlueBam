@@ -18,7 +18,7 @@ const features = [
     icon: ClipboardList,
     title: 'Form Builder',
     description:
-      'Drag fields from a palette of 20-plus types — text, email, number, date, select, rating, NPS, file upload, page break — and watch a live preview build itself as you go.',
+      'Drag fields from a palette of 20-plus types (text, email, number, date, select, rating, NPS, file upload, page break) and watch a live preview build itself as you go.',
     color: 'bg-violet-100 text-violet-600',
   },
   {
@@ -39,7 +39,7 @@ const features = [
     icon: MailCheck,
     title: 'Notify on Submit',
     description:
-      'Every submission can email a confirmation to the respondent and a heads-up to your team — and, if you like, drop a note in a Banter channel. No inbox to babysit.',
+      'Every submission can email a confirmation to the respondent and a heads-up to your team, and, if you like, drop a note in a Banter channel. No inbox to babysit.',
     color: 'bg-violet-100 text-violet-600',
   },
   {
@@ -70,7 +70,7 @@ export function BlankSection() {
             Where form responses stop dying
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Form answers fall into a tab someone's supposed to read and turn into work — and nobody
+            Form answers fall into a tab someone's supposed to read and turn into work, and nobody
             does. Blank is a visual form builder with conditional logic that lives on the same stack
             as the work, so a submission can route straight into it: spin up a Bam task or a Helpdesk
             ticket the moment someone hits Submit, instead of waiting in a sheet forever. And because
@@ -92,25 +92,25 @@ export function BlankSection() {
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame src="/screenshots/blank/light/03-form-preview.png" alt="Blank published form preview as a respondent sees it" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            What your respondents actually see — clean, themed, and ready to fill in.
+            What your respondents actually see: clean, themed, and ready to fill in.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame src="/screenshots/blank/light/04-responses.png" alt="Blank responses table with uploaded-file download links" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Every answer in a table — uploaded files included, one click to download.
+            Every answer in a table, uploaded files included, one click to download.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame src="/screenshots/blank/light/05-analytics.png" alt="Blank form analytics with submission trend and per-field breakdown" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Totals, a 30-day trend, and per-field breakdowns — no spreadsheet required.
+            Totals, a 30-day trend, and per-field breakdowns, no spreadsheet required.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.3} withScale>
           <FloatingFrame src="/screenshots/blank/light/07-access-and-notifications.png" alt="Blank access gating and submission notification settings" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Decide who can submit and who gets pinged — sign-in, allowed domains, and email alerts.
+            Decide who can submit and who gets pinged: sign-in, allowed domains, and email alerts.
           </p>
         </AnimatedReveal>
       </div>
@@ -136,7 +136,7 @@ export function BlankSection() {
             <ClipboardList className="h-6 w-6 text-violet-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/blank/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/blank/</code>, a
               dedicated SPA sharing authentication and the workspace model with Bam and Beacon.
             </p>
           </div>

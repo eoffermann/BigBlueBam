@@ -36,7 +36,7 @@ export function CommunicatePage() {
                 Team chat is where decisions go to get lost in the scrollback, and the "AI" in it
                 can summarize a thread but can't actually <em>do</em> anything. Different here: Banter
                 for real-time chat, Helpdesk for customer support, Beacon for a searchable knowledge
-                base, and Brief for documents — all on the same stack, so a message becomes a task, a
+                base, and Brief for documents, all on the same stack, so a message becomes a task, a
                 ticket links to the deal, and an agent in the channel can move the work, not just
                 recap it.
               </p>

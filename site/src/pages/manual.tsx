@@ -15,7 +15,7 @@ import imageDimsRaw from '@/content/manual-image-dims.generated.json';
 const imageDims = imageDimsRaw as Record<string, number[]>;
 
 /* ------------------------------------------------------------------ */
-/*  Manual image — click to enlarge to near-full-window (light only;   */
+/*  Manual image: click to enlarge to near-full-window (light only;    */
 /*  the docs deliberately don't do the marketing site's dark hover).   */
 /*  Rendered as an inline <img> + a body-portal overlay so it stays    */
 /*  valid inside markdown <p> wrappers.                                */
@@ -102,7 +102,7 @@ interface ManualEntry {
 const entries = manual as ManualEntry[];
 
 /* ------------------------------------------------------------------ */
-/*  Slug helper — MUST match scripts/help/build-help-index.mjs         */
+/*  Slug helper: MUST match scripts/help/build-help-index.mjs          */
 /*  so sidebar links (#<app>-<anchor>) land on rendered heading ids.   */
 /* ------------------------------------------------------------------ */
 
@@ -469,7 +469,7 @@ export function ManualPage() {
           <p className="mt-3 max-w-2xl text-lg text-zinc-600">
             Everything about every app, in one place. Use the sidebar to jump between products and
             sections, the filter box for quick navigation, or your browser's find (Ctrl/Cmd+F) to
-            search the full text. Every section has a shareable deep link — hover a heading and
+            search the full text. Every section has a shareable deep link. Hover a heading and
             click the link icon.
           </p>
           <p className="mt-4 text-sm text-zinc-500">
@@ -497,7 +497,7 @@ export function ManualPage() {
             </div>
           </aside>
 
-          {/* Content — all 16 apps stacked */}
+          {/* Content: all 16 apps stacked */}
           <div ref={contentRef} className="min-w-0">
             {entries.map((entry) => (
               <section

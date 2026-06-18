@@ -25,7 +25,7 @@ export function Integrations() {
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             Import existing projects in seconds. Give your AI agents scoped API keys and let them
-            start contributing immediately — same permissions model, same audit trail as human users.
+            start contributing immediately, with the same permissions model and the same audit trail as human users.
           </p>
         </div>
       </AnimatedReveal>
@@ -71,7 +71,7 @@ export function Integrations() {
               composite views, entity linking, scheduled posts, upserts, agent policies, outbound
               webhooks) to AI agents. Manage projects, search knowledge, automate workflows, track
               goals, collaborate visually, manage CRM pipelines, invoice clients, send campaigns,
-              message your team, triage tickets — all through structured tool calls.
+              message your team, and triage tickets, all through structured tool calls.
             </p>
             <div className="rounded-lg border border-primary-200 bg-primary-100/50 p-3">
               <p className="text-xs font-medium text-primary-800">

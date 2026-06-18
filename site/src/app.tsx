@@ -13,6 +13,7 @@ const SalesPage = lazy(() => import('@/pages/sales').then((m) => ({ default: m.S
 const OperationsPage = lazy(() => import('@/pages/operations').then((m) => ({ default: m.OperationsPage })));
 const DeployGuidePage = lazy(() => import('@/pages/deploy-guide').then((m) => ({ default: m.DeployGuidePage })));
 const ManualPage = lazy(() => import('@/pages/manual').then((m) => ({ default: m.ManualPage })));
+const TechnicalPage = lazy(() => import('@/pages/technical').then((m) => ({ default: m.TechnicalPage })));
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
@@ -75,6 +76,14 @@ export function App() {
     return (
       <PageShell>
         <ManualPage />
+      </PageShell>
+    );
+  }
+
+  if (path.startsWith('/technical')) {
+    return (
+      <PageShell>
+        <TechnicalPage />
       </PageShell>
     );
   }

@@ -26,7 +26,7 @@ const features = [
     icon: Database,
     title: 'Curated Data Sources',
     description:
-      'A compile-time registry allowlists exactly which tables Bench may read — tasks in Bam, deals in Bond, campaigns in Blast, goals in Bearing, and more. Every query is automatically scoped to your org. No warehouse, no copy-paste.',
+      'A compile-time registry allowlists exactly which tables Bench may read: tasks in Bam, deals in Bond, campaigns in Blast, goals in Bearing, and more. Every query is automatically scoped to your org. No warehouse, no copy-paste.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
@@ -47,14 +47,14 @@ const features = [
     icon: Clock,
     title: 'Scheduled Reports',
     description:
-      'Cron-driven dashboard snapshots aimed at Email, a Banter channel, or a Brief document, in PDF, PNG, or CSV. Heads up: delivery is wired but still a stub this release — the schedule stamps status, no artifact ships yet.',
+      'Cron-driven dashboard snapshots aimed at Email, a Banter channel, or a Brief document, in PDF, PNG, or CSV. Heads up: delivery is wired but still a stub this release. The schedule stamps status, no artifact ships yet.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
     icon: Bot,
     title: 'AI Analytics',
     description:
-      '32 MCP tools let AI agents discover sources, run ad-hoc queries, build dashboards and widgets, and summarize a whole board in one call — plus anomaly detection and period comparison that have no UI equivalent. Try bench_summarize_dashboard, bench_query_ad_hoc, and bench_detect_anomalies.',
+      '32 MCP tools let AI agents discover sources, run ad-hoc queries, build dashboards and widgets, and summarize a whole board in one call, plus anomaly detection and period comparison that have no UI equivalent. Try bench_summarize_dashboard, bench_query_ad_hoc, and bench_detect_anomalies.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -74,7 +74,7 @@ export function BenchSection() {
             A "real" dashboard usually means standing up a separate BI tool, hiring someone who
             speaks SQL, and feeding it last week's CSV exports from the apps that actually hold your
             numbers. Bench skips all of it: it builds dashboards, widgets, ad-hoc queries, and
-            scheduled reports straight from the live data already in the suite — your Bam tasks and
+            scheduled reports straight from the live data already in the suite: your Bam tasks and
             Bond deals as they stand right now, not as they looked at export time, all scoped to
             your org. And with 32 MCP tools, an AI agent can query and summarize a whole dashboard
             without anyone touching a chart.
@@ -89,7 +89,7 @@ export function BenchSection() {
           alt="Bench dashboard with charts, KPI cards, and tables"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          A dashboard that pulls from five apps at once — and tells you how long each widget took.
+          A dashboard that pulls from five apps at once, and tells you how long each widget took.
         </p>
       </AnimatedReveal>
 
@@ -101,7 +101,7 @@ export function BenchSection() {
             alt="Bench ad-hoc explorer with a source picker and results table"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Ask a source a question, get a table back — row count and timing included.
+            Ask a source a question, get a table back, row count and timing included.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
@@ -119,7 +119,7 @@ export function BenchSection() {
             alt="Bench dashboards list"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Every dashboard in one place — pick one and the numbers are already waiting.
+            Every dashboard in one place. Pick one and the numbers are already waiting.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
@@ -154,7 +154,7 @@ export function BenchSection() {
             <BarChart3 className="h-6 w-6 text-blue-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bench/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bench/</code>, a
               dedicated SPA with cross-product data access for unified analytics.
             </p>
           </div>

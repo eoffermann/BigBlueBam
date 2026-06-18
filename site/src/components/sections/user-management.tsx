@@ -8,7 +8,7 @@ const features = [
     icon: Users,
     title: 'People at the top level',
     description:
-      'Search, filter, and bulk-act on every member of your org. Invite, disable, change roles, export to CSV — all from a dedicated page, not buried in Settings.',
+      'Search, filter, and bulk-act on every member of your org. Invite, disable, change roles, and export to CSV, all from a dedicated page, not buried in Settings.',
   },
   {
     icon: Building2,
@@ -32,7 +32,7 @@ const features = [
     icon: ShieldAlert,
     title: 'Strictly-below rank rule',
     description:
-      'Admins can only act on users at ranks strictly below them. A compromised admin account can never lock out its peers — only an owner or SuperUser can rotate them.',
+      'Admins can only act on users at ranks strictly below them. A compromised admin account can never lock out its peers. Only an owner or SuperUser can rotate them.',
   },
   {
     icon: History,
@@ -68,7 +68,7 @@ export function UserManagement() {
         <div className="mt-14">
           <FloatingFrame
             src="/screenshots/bam/light/04-people.png"
-            alt="People roster — searchable, filterable, bulk-selectable"
+            alt="People roster that is searchable, filterable, and bulk-selectable"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Everyone in your org, on one page that actually wants to be found.
@@ -82,7 +82,7 @@ export function UserManagement() {
             Four tabs per user
           </h3>
           <p className="mt-3 text-center text-zinc-600">
-            Open any person and everything an admin needs is right there — no hunting through screens.
+            Open any person and everything an admin needs is right there, with no hunting through screens.
           </p>
           <div className="mx-auto mt-10 grid max-w-4xl gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {userDetailTabs.map((tab) => (
@@ -119,12 +119,12 @@ export function UserManagement() {
         <div className="mt-20 grid items-center gap-10 lg:grid-cols-2">
           <div>
             <h3 className="text-2xl font-semibold text-zinc-900">
-              SuperUser console — cross-org visibility
+              SuperUser console for cross-org visibility
             </h3>
             <p className="mt-4 text-zinc-600">
               Platform operators see every user across every org on the server. Search
               globally, add users to arbitrary orgs, change their default, revoke
-              sessions, or impersonate — with every action written to an append-only
+              sessions, or impersonate, with every action written to an append-only
               audit log.
             </p>
             <p className="mt-3 text-zinc-600">
@@ -136,10 +136,10 @@ export function UserManagement() {
           <div>
             <FloatingFrame
               src="/screenshots/bam/light/05-settings.png"
-              alt="Org settings — the operator's control surface"
+              alt="Org settings, the operator's control surface"
             />
             <p className="mt-3 text-center text-sm text-zinc-500">
-              The same settings every org configures — operators just get the keys to all of them.
+              The same settings every org configures. Operators just get the keys to all of them.
             </p>
           </div>
         </div>
@@ -156,7 +156,7 @@ export function UserManagement() {
           <p className="mt-4 text-zinc-600">
             A persistent red banner calls out when a SuperUser is viewing an org
             they're not a native member of, and the current org chip in the header turns
-            red — the privileged state is impossible to miss. Writes made in this state are tagged{' '}
+            red, so the privileged state is impossible to miss. Writes made in this state are tagged{' '}
             <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">
               via_superuser_context
             </code>{' '}

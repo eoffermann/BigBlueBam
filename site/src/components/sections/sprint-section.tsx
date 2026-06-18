@@ -42,7 +42,7 @@ export function SprintSection() {
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             Time-boxed iterations done right. When a sprint closes, unfinished work doesn't just
-            disappear — it gets a formal review.
+            disappear. It gets a formal review.
           </p>
         </div>
       </AnimatedReveal>
@@ -75,7 +75,7 @@ export function SprintSection() {
       <AnimatedReveal delay={0.4}>
         <div className="mt-10 rounded-xl border border-primary-200 bg-primary-50 p-6 text-center">
           <p className="text-sm font-medium text-primary-800">
-            Tasks track their <strong>carry_forward_count</strong> and display a badge on the card — so
+            Tasks track their <strong>carry_forward_count</strong> and display a badge on the card, so
             your team always knows which work has been deferred and how many times.
           </p>
         </div>

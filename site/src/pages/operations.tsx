@@ -33,7 +33,7 @@ export function OperationsPage() {
                 Operations & Automation
               </h1>
               <p className="mt-4 max-w-2xl text-lg text-amber-100">
-                Invoicing, forms, scheduling, analytics, automation — five more subscriptions that
+                Invoicing, forms, scheduling, analytics, and automation: five more subscriptions that
                 each live in their own corner and have never heard of your projects. Here they're
                 part of the same stack: Bolt automates across every app, Bench charts data straight
                 from your boards and deals, Book schedules against real calendars, Blank routes form

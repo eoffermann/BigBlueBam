@@ -19,14 +19,14 @@ const features = [
     icon: Maximize2,
     title: 'Infinite Canvas',
     description:
-      'An Excalidraw-powered canvas with sticky notes, shapes, connectors, frames, freehand drawing, text, and images. Zoom out as far as the idea goes; it never runs out of room.',
+      'An Excalidraw-powered canvas with sticky notes, shapes, connectors, frames, freehand drawing, text, and images. Zoom out as far as the idea goes, and it never runs out of room.',
     color: 'bg-cyan-100 text-cyan-600',
   },
   {
     icon: Users,
     title: 'Real-Time + Audio',
     description:
-      'Multi-user editing with live cursors, presence, and reconnect replay — plus a LiveKit voice huddle right on the board, so you can talk while you draw without opening another tab.',
+      'Multi-user editing with live cursors, presence, and reconnect replay, plus a LiveKit voice huddle right on the board, so you can talk while you draw without opening another tab.',
     color: 'bg-violet-100 text-violet-600',
   },
   {
@@ -40,7 +40,7 @@ const features = [
     icon: Layers,
     title: 'Live Embeds',
     description:
-      'Drop Bam tasks, Beacon articles, Brief docs, and Bearing goals onto the canvas as live cards — the workshop sits next to the work it is about, not a screenshot of it.',
+      'Drop Bam tasks, Beacon articles, Brief docs, and Bearing goals onto the canvas as live cards, so the workshop sits next to the work it is about, not a screenshot of it.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
@@ -54,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI Canvas Reading',
     description:
-      '40 MCP tools let AI agents read and summarize the canvas, drop stickies and text, arrange shapes, and run the sticky-to-task pipeline — board_add_sticky, board_promote_to_tasks, board_read_elements, and more.',
+      '40 MCP tools let AI agents read and summarize the canvas, drop stickies and text, arrange shapes, and run the sticky-to-task pipeline, including board_add_sticky, board_promote_to_tasks, board_read_elements, and more.',
     color: 'bg-emerald-100 text-emerald-600',
   },
 ];
@@ -71,25 +71,25 @@ export function BoardSection() {
             The whiteboard that doesn't die in a screenshot
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            The best ideas of the week show up on a workshop whiteboard — then get photographed into a
+            The best ideas of the week show up on a workshop whiteboard, then get photographed into a
             slide and quietly forgotten, because the canvas is a different tool from where the work
             actually happens. Board is an infinite canvas with real-time editing and a voice huddle
             right on the board, where any sticky promotes into a tracked Bam task in the project and
-            phase you name — so the workshop turns into work instead of a snapshot. It shares your login
+            phase you name, so the workshop turns into work instead of a snapshot. It shares your login
             and projects with the rest of the suite, and 40 MCP tools let an AI agent read and summarize
             the canvas, drop stickies, and promote them to tasks alongside you.
           </p>
         </div>
       </AnimatedReveal>
 
-      {/* Hero screenshot — the signature populated canvas */}
+      {/* Hero screenshot: the signature populated canvas */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
           src="/screenshots/board/light/02-canvas-populated.png"
           alt="Board infinite canvas populated with sticky notes, shapes, and freehand sketches"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          A canvas that earns its keep — sticky notes, sketches, and shapes, no real-estate limit in sight.
+          A canvas that earns its keep: sticky notes, sketches, and shapes, no real-estate limit in sight.
         </p>
       </AnimatedReveal>
 
@@ -101,7 +101,7 @@ export function BoardSection() {
             alt="Board library showing all whiteboards"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Every board in one library — starred, archived, and scoped to the project it belongs to.
+            Every board in one library: starred, archived, and scoped to the project it belongs to.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
@@ -110,7 +110,7 @@ export function BoardSection() {
             alt="Board template picker with retro, brainstorm, planning, and architecture options"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Templates for retros, brainstorms, planning, and architecture — skip the blank-page stare.
+            Templates for retros, brainstorms, planning, and architecture, so you skip the blank-page stare.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
@@ -145,7 +145,7 @@ export function BoardSection() {
             <PenTool className="h-6 w-6 text-primary-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/board/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/board/</code>, a
               dedicated SPA sharing authentication and the project model with Bam, Beacon, Brief, Bolt, Bearing, and Bond.
             </p>
           </div>

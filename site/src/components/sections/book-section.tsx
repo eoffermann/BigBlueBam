@@ -19,7 +19,7 @@ const features = [
     icon: CalendarRange,
     title: 'Week, Day, Month & Timeline',
     description:
-      'Four ways to look at the same time. Week, day, and month for the calendar grid — plus a cross-app timeline that lines up Book events with Bam task due dates and Bond deal close dates, day by day.',
+      'Four ways to look at the same time. Week, day, and month for the calendar grid, plus a cross-app timeline that lines up Book events with Bam task due dates and Bond deal close dates, day by day.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
@@ -33,7 +33,7 @@ const features = [
     icon: Clock,
     title: 'Working Hours = Availability',
     description:
-      'Set the hours you actually work, per day of the week. Book subtracts your busy events from those windows to compute real free slots — the same math your booking pages offer to visitors.',
+      'Set the hours you actually work, per day of the week. Book subtracts your busy events from those windows to compute real free slots, the same math your booking pages offer to visitors.',
     color: 'bg-indigo-100 text-indigo-600',
   },
   {
@@ -47,14 +47,14 @@ const features = [
     icon: Plug,
     title: 'External Calendar Sync',
     description:
-      'Subscribe to any public iCalendar (.ics) feed — webcal links included — and its events mirror onto a Book calendar, refreshed on a recurring sweep. Google and Outlook two-way sync run on the same engine, ready to flip on once an operator adds OAuth.',
+      'Subscribe to any public iCalendar (.ics) feed (webcal links included) and its events mirror onto a Book calendar, refreshed on a recurring sweep. Google and Outlook two-way sync run on the same engine, ready to flip on once an operator adds OAuth.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
     icon: Bot,
     title: 'AI Scheduling',
     description:
-      '25 MCP tools let AI agents create, update, cancel, and RSVP to events, find a meeting time across a roster, and read team availability — book_find_meeting_time, book_create_event, book_get_team_availability, and the rest — right next to your reps, not instead of them.',
+      '25 MCP tools let AI agents create, update, cancel, and RSVP to events, find a meeting time across a roster, and read team availability (book_find_meeting_time, book_create_event, book_get_team_availability, and the rest) right next to your reps, not instead of them.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -72,10 +72,10 @@ export function BookSection() {
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             The scheduling link everyone pastes in their signature is one more monthly bill, living
-            off in its own tab — it has no idea when your team is actually free or what any of this is
+            off in its own tab. It has no idea when your team is actually free or what any of this is
             even for. Book does availability rules, public booking pages, and timezone-aware events on
             the same stack as the work, so what gets booked links straight to the Bam task or Bond
-            deal it's for. It finds time across a whole roster, not just one calendar — and through 25
+            deal it's for. It finds time across a whole roster, not just one calendar, and through 25
             MCP tools, an AI agent can find the slot and book it too.
           </p>
         </div>
@@ -85,7 +85,7 @@ export function BookSection() {
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame src="/screenshots/book/light/01-week-view.png" alt="Book week view with events laid across a seven-day grid" />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          A week you can actually read — events in their lanes, drag-to-reschedule, no spreadsheet cosplay.
+          A week you can actually read: events in their lanes, drag-to-reschedule, no spreadsheet cosplay.
         </p>
       </AnimatedReveal>
 
@@ -100,13 +100,13 @@ export function BookSection() {
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame src="/screenshots/book/light/03-timeline.png" alt="Book cross-app timeline grouping events by day" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            One timeline, three apps — Book events beside Bam due dates and Bond close dates.
+            One timeline, three apps: Book events beside Bam due dates and Bond close dates.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame src="/screenshots/book/light/07-connections.png" alt="Book external calendar connections with an active ICS subscription" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Subscribe to an outside .ics feed and watch its events arrive — Google and Outlook are next in line.
+            Subscribe to an outside .ics feed and watch its events arrive. Google and Outlook are next in line.
           </p>
         </AnimatedReveal>
       </div>
@@ -115,7 +115,7 @@ export function BookSection() {
         <AnimatedReveal delay={0.3} withScale>
           <FloatingFrame src="/screenshots/book/light/04-booking-pages.png" alt="Book booking pages with a published public scheduling link" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            A public link that lets clients book you — and quietly files them in Bond on the way in.
+            A public link that lets clients book you, and quietly files them in Bond on the way in.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.35} withScale>
@@ -147,7 +147,7 @@ export function BookSection() {
             <Calendar className="h-6 w-6 text-blue-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/book/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/book/</code>, a
               dedicated SPA sharing authentication and the calendar model with Bam, Banter, and Board.
             </p>
           </div>

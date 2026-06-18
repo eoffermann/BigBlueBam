@@ -202,7 +202,7 @@ export function DeployGuidePage() {
             {[
               {
                 label: 'A place to run it',
-                desc: 'Any machine with Docker, or a Railway account for managed cloud — both fully automated',
+                desc: 'Any machine with Docker, or a Railway account for managed cloud (both fully automated)',
               },
               {
                 label: 'A database',
@@ -237,7 +237,7 @@ export function DeployGuidePage() {
             Two paths, same result. Pick the one that fits your team.
           </p>
           <div className="grid gap-6 sm:grid-cols-2">
-            {/* Docker Compose card — currently the recommended path */}
+            {/* Docker Compose card: currently the recommended path */}
             <div className="rounded-xl border-2 border-primary-200 bg-white p-6 shadow-sm">
               <div className="mb-3 flex items-center gap-2">
                 <Server className="h-5 w-5 text-primary-600" />
@@ -249,7 +249,7 @@ export function DeployGuidePage() {
               <ul className="space-y-2 text-sm text-zinc-600">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                  Run on any machine with Docker — Linux, macOS, Windows
+                  Run on any machine with Docker: Linux, macOS, Windows
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
@@ -292,8 +292,8 @@ export function DeployGuidePage() {
               </ul>
               <p className="mt-4 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-500 italic">
                 Best for: Teams that want managed cloud hosting with zero server admin. The
-                deploy script provisions the entire stack via Railway's public GraphQL API
-                — project creation, all 19 services, env vars, and deploys in about
+                deploy script provisions the entire stack via Railway's public GraphQL API:
+                project creation, all 19 services, env vars, and deploys in about
                 5–10 minutes.
               </p>
             </div>
@@ -321,7 +321,7 @@ cd BigBlueBam`}</CodeBlock>
             <Callout type="info">
               The script checks for Node.js and Docker, installing them if needed.
               On first run it may ask for permission to install dependencies.
-              Docker is only required if you choose the Docker Compose deployment path — Railway
+              Docker is only required if you choose the Docker Compose deployment path. Railway
               deployments run entirely in the cloud.
             </Callout>
           </Step>
@@ -332,11 +332,11 @@ cd BigBlueBam`}</CodeBlock>
             </p>
             <CodeBlock>{`Where are you deploying?
 
-  1. Docker Compose — Run locally or on any server with Docker (recommended)
-  2. Railway — Managed cloud containers, fully automated`}</CodeBlock>
+  1. Docker Compose: Run locally or on any server with Docker (recommended)
+  2. Railway: Managed cloud containers, fully automated`}</CodeBlock>
             <Callout type="tip">
               Not sure? Docker Compose is great for local development and self-hosted
-              production. Railway is simpler when you want managed cloud — both are
+              production. Railway is simpler when you want managed cloud, and both are
               fully automated by the deploy script.
             </Callout>
           </Step>
@@ -407,7 +407,7 @@ cd BigBlueBam`}</CodeBlock>
 
           <Step n={5} title="Create your admin account">
             <p className="text-sm text-zinc-600 leading-relaxed">
-              Once services are running, the script walks you through creating the first user — a SuperUser
+              Once services are running, the script walks you through creating the first user, a SuperUser
               with full admin access. You can choose to have a strong password generated for you, or type your own.
             </p>
             <CodeBlock>{`Let's create your admin account.
@@ -423,7 +423,7 @@ Password:
 
     Falcon-Copper-Ribbon-Sage42!
 
-  ⚠  Copy this now — it will not be shown again.
+  ⚠  Copy this now. It will not be shown again.
 
   ✓ Password saved to macOS Keychain
     Service: "BigBlueBam"  Account: "you@yourcompany.com"
@@ -441,7 +441,7 @@ Verifying login... ✓`}</CodeBlock>
               automatically save it to your system keychain so you don't need to write it down.
             </Callout>
             <Callout type="warning">
-              This is a SuperUser account with full access to everything — all organizations, all settings,
+              This is a SuperUser account with full access to everything: all organizations, all settings,
               all data. Keep the password secure. You can create regular admin and member accounts from
               within the app once you're logged in.
             </Callout>
@@ -615,7 +615,7 @@ Verifying login... ✓`}</CodeBlock>
 
             <FaqItem q="Can I migrate between Railway and self-hosted?">
               <p>
-                Yes — in either direction. Your data lives in PostgreSQL and Redis, both of which support standard
+                Yes, in either direction. Your data lives in PostgreSQL and Redis, both of which support standard
                 backup/restore. Export your Postgres database with{' '}
                 <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">pg_dump</code>,
                 import it into the destination, copy your{' '}
@@ -632,13 +632,13 @@ Verifying login... ✓`}</CodeBlock>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 <li>
                   <strong><code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">stable</code></strong>{' '}
-                  — the production branch. Every commit has been validated on{' '}
+                  is the production branch. Every commit has been validated on{' '}
                   <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">main</code> first.{' '}
                   <strong>This is the default.</strong> Pick it unless you specifically want the latest unreleased code.
                 </li>
                 <li>
                   <strong><code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">main</code></strong>{' '}
-                  — the bleeding-edge integration branch. New features and fixes land here first. Choose this only if you're comfortable with the occasional rough edge.
+                  is the bleeding-edge integration branch. New features and fixes land here first. Choose this only if you're comfortable with the occasional rough edge.
                 </li>
               </ul>
               <p className="mt-2">
@@ -662,7 +662,7 @@ Verifying login... ✓`}</CodeBlock>
                 <CodeBlock>{`./scripts/deploy.sh   # or deploy.ps1 on Windows`}</CodeBlock>
               </div>
               <p className="mt-2">
-                If you'd rather drive the update manually, use the full sequence — a plain{' '}
+                If you'd rather drive the update manually, use the full sequence. A plain{' '}
                 <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">docker compose up -d --build</code>{' '}
                 is <em>not</em> enough on an existing stack, because the{' '}
                 <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">migrate</code> sidecar

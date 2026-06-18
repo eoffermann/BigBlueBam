@@ -19,14 +19,14 @@ const features = [
     icon: Clock,
     title: 'Knowledge with a shelf life',
     description:
-      'Every article carries an expiry date and a freshness signal — Verified recently, Content is stale, Expiring soon, or Needs verification. Verify an article to reset the clock; the rot never sneaks up on you.',
+      'Every article carries an expiry date and a freshness signal: Verified recently, Content is stale, Expiring soon, or Needs verification. Verify an article to reset the clock; the rot never sneaks up on you.',
     color: 'bg-amber-100 text-amber-600',
   },
   {
     icon: Search,
     title: 'Hybrid search',
     description:
-      'Find knowledge by meaning, not just keywords. Semantic vectors, tag expansion, link traversal, and a keyword fallback all run together — and each result tells you why it matched.',
+      'Find knowledge by meaning, not just keywords. Semantic vectors, tag expansion, link traversal, and a keyword fallback all run together, and each result tells you why it matched.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
@@ -40,7 +40,7 @@ const features = [
     icon: ShieldCheck,
     title: 'Fridge Cleanout',
     description:
-      'A freshness-focused governance dashboard with Overview, At-Risk, Archived, and Agent Activity tabs. Verify what is about to expire and retire stale articles in bulk — yes, that is really what we named it.',
+      'A freshness-focused governance dashboard with Overview, At-Risk, Archived, and Agent Activity tabs. Verify what is about to expire and retire stale articles in bulk. Yes, that is really what we named it.',
     color: 'bg-teal-100 text-teal-600',
   },
   {
@@ -54,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'Agent-native knowledge',
     description:
-      '38 MCP tools let AI agents author, verify, challenge, and idempotently upsert entries by slug, plus run grounding retrieval and traverse the graph — beacon_search_context, beacon_verify, and beacon_upsert_by_slug among them, all gated by a visibility preflight.',
+      '38 MCP tools let AI agents author, verify, challenge, and idempotently upsert entries by slug, plus run grounding retrieval and traverse the graph. Among them are beacon_search_context, beacon_verify, and beacon_upsert_by_slug, all gated by a visibility preflight.',
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -74,7 +74,7 @@ export function BeaconSection() {
             The company wiki goes stale the week it's written, search returns either nothing or
             everything, and the one answer you need is stranded three tools away from where you're
             actually working. Beacon is a knowledge base with real full-text and semantic search, a
-            typed Knowledge Graph, access policies, and built-in freshness governance — so the answer
+            typed Knowledge Graph, access policies, and built-in freshness governance, so the answer
             lives next to the work and stops rotting when the facts change. It shares your platform
             login and pulls projects from Bam, and 38 MCP tools let an AI agent read and write
             knowledge as naturally as it files a task.
@@ -89,7 +89,7 @@ export function BeaconSection() {
           alt="Beacon Knowledge Home with stats, quick actions, and recent activity"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          Knowledge Home — total beacons, what is at risk this week, and quick ways in.
+          Knowledge Home: total beacons, what is at risk this week, and quick ways in.
         </p>
       </AnimatedReveal>
 
@@ -101,7 +101,7 @@ export function BeaconSection() {
             alt="Beacon hybrid search results with match-source badges"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Search by meaning — and every result owns up to why it matched.
+            Search by meaning, and every result owns up to why it matched.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
@@ -110,7 +110,7 @@ export function BeaconSection() {
             alt="Beacon Knowledge Graph explorer showing connected articles"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            The Knowledge Graph — how your articles connect, links and shared tags alike.
+            The Knowledge Graph: how your articles connect, links and shared tags alike.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
@@ -119,7 +119,7 @@ export function BeaconSection() {
             alt="Beacon Fridge Cleanout governance dashboard with freshness score"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Fridge Cleanout — freshness score, at-risk articles, and what to clear out.
+            Fridge Cleanout: freshness score, at-risk articles, and what to clear out.
           </p>
         </AnimatedReveal>
       </div>
@@ -145,7 +145,7 @@ export function BeaconSection() {
             <BookOpen className="h-6 w-6 text-primary-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/beacon/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/beacon/</code>, a
               dedicated SPA sharing authentication and the project model with Bam.
             </p>
           </div>

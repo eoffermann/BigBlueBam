@@ -69,7 +69,7 @@ const categories: Category[] = [
       {
         name: 'Blueprint',
         subtitle: 'Structured Diagrams',
-        description: 'Typed graph diagrams — flowcharts, org charts, ERDs, mindmaps — with ELK auto-layout and agent-buildable structure.',
+        description: 'Typed graph diagrams (flowcharts, org charts, ERDs, mindmaps) with ELK auto-layout and agent-buildable structure.',
         icon: GitBranch,
         color: 'bg-sky-100 text-sky-600',
         borderColor: 'border-l-sky-500',
@@ -131,7 +131,7 @@ const categories: Category[] = [
       {
         name: 'Bureau',
         subtitle: 'Virtual Office',
-        description: 'A spatial floor map with rooms, presence, and knock-to-enter — drop by a desk instead of scheduling a meeting.',
+        description: 'A spatial floor map with rooms, presence, and knock-to-enter, so you can drop by a desk instead of scheduling a meeting.',
         icon: Building2,
         color: 'bg-purple-100 text-purple-600',
         borderColor: 'border-l-purple-500',
@@ -223,7 +223,7 @@ const categories: Category[] = [
 const mcpServer: Product = {
   name: 'MCP Server',
   subtitle: '720+ AI Tools',
-  description: 'One Model Context Protocol server that hands AI agents every app plus cross-cutting platform powers (search, composite views, proposals, policies, webhooks) — the front door the whole suite shares.',
+  description: 'One Model Context Protocol server that hands AI agents every app plus cross-cutting platform powers (search, composite views, proposals, policies, webhooks). It is the front door the whole suite shares.',
   icon: Bot,
   color: 'bg-slate-100 text-slate-600',
   borderColor: 'border-l-slate-400',
@@ -260,12 +260,12 @@ export function ProductGrid() {
             16 Apps + MCP Platform, One Stack
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Not a 17th tab — the sixteen you stop opening tabs for
+            Not a 17th tab. The sixteen you stop opening tabs for.
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             "All-in-one" usually means a pile of shallow features that don't quite replace the
             specialist tools you're already paying for. This isn't that. Sixteen genuinely capable
-            apps — work, communication, sales, operations — built as one system, self-hosted, and
+            apps (work, communication, sales, operations), built as one system, self-hosted, and
             wired together through a single MCP server with 720+ tools. No tab-switching, no
             integration spreadsheet, no app that didn't get the memo.
           </p>

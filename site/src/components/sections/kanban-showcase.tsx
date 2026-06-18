@@ -18,7 +18,7 @@ const highlights = [
   {
     icon: ArrowRightLeft,
     title: 'Configurable Phases',
-    description: 'Define exactly the workflow columns your project needs — from two to twenty.',
+    description: 'Define exactly the workflow columns your project needs, from two to twenty.',
   },
 ];
 

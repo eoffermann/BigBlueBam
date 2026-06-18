@@ -16,7 +16,7 @@ export function Cta() {
           </h2>
           <p className="mt-4 text-lg text-primary-200">
             The next decade of work runs on people and agents sharing the same boards, the same
-            tickets, the same data — and we're built for exactly that. Open source, self-hosted,
+            tickets, and the same data, and we're built for exactly that. Open source, self-hosted,
             AI-native from day one. Spin it up with one command and meet your newest teammates. They
             don't need a desk, a seat license, or a tour of where things live.
           </p>
@@ -26,7 +26,7 @@ export function Cta() {
               Sign up to test <ArrowRight className="h-4 w-4" />
             </Button>
             <Button
-              href="https://github.com/eoffermann/BigBlueBam/blob/main/README.md"
+              href="/docs"
               variant="outline"
               size="lg"
               className="!border-primary-400/30 !text-zinc-200 hover:!bg-primary-900/50 hover:!text-zinc-100"

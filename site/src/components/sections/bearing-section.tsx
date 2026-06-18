@@ -19,7 +19,7 @@ const features = [
     icon: Target,
     title: 'Objectives & Key Results',
     description:
-      'Every goal carries measurable key results — Number, Percentage, Currency, or Yes/No — each with a start, target, and current value. The goal score is the average of its KRs, so progress is math, not vibes.',
+      'Every goal carries measurable key results (Number, Percentage, Currency, or Yes/No), each with a start, target, and current value. The goal score is the average of its KRs, so progress is math, not vibes.',
     color: 'bg-indigo-100 text-indigo-600',
   },
   {
@@ -54,7 +54,7 @@ const features = [
     icon: Bot,
     title: 'AI Goal-Keeping',
     description:
-      '30 MCP tools let AI agents provision a whole quarter of objectives, wire key results to real Bam delivery, run a weekly at-risk sweep, and post the period report to Banter — alongside your team, not instead of it. Try bearing_goal_create, bearing_kr_link, and bearing_at_risk.',
+      '30 MCP tools let AI agents provision a whole quarter of objectives, wire key results to real Bam delivery, run a weekly at-risk sweep, and post the period report to Banter, alongside your team, not instead of it. Try bearing_goal_create, bearing_kr_link, and bearing_at_risk.',
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -71,12 +71,12 @@ export function BearingSection() {
             OKRs that survive past January
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Goals get set in a spreadsheet, presented once, and never opened again — goal theater
+            Goals get set in a spreadsheet, presented once, and never opened again. It is goal theater
             disconnected from the daily work, so nobody can actually tell if a key result is moving.
             Bearing puts your objectives and key results on the same stack as the boards and deals
             that drive them: link a key result to a Bam epic, project, sprint, or task and it
             advances as that work reaches done, while a status engine flags goals on-track, at-risk,
-            or behind before the quarter quietly slips. And yes — agents can update progress too,
+            or behind before the quarter quietly slips. And yes, agents can update progress too,
             through 30 MCP tools.
           </p>
         </div>
@@ -89,7 +89,7 @@ export function BearingSection() {
           alt="Bearing goals dashboard with summary stats and period filtering"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          The quarter at a glance — every objective, its real percentage, and who is on the hook.
+          The quarter at a glance: every objective, its real percentage, and who is on the hook.
         </p>
       </AnimatedReveal>
 
@@ -119,7 +119,7 @@ export function BearingSection() {
             alt="Bearing time periods and cycles list"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Quarters, sprints, whatever you measure in — the windows your goals answer to.
+            Quarters, sprints, whatever you measure in: the windows your goals answer to.
           </p>
         </AnimatedReveal>
       </div>
@@ -145,7 +145,7 @@ export function BearingSection() {
             <Target className="h-6 w-6 text-indigo-600" />
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bearing/</code> — a
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/bearing/</code>, a
               dedicated SPA sharing authentication and the project model with Bam, Beacon, Brief, Bolt, Board, and Bond.
             </p>
           </div>

@@ -12,7 +12,7 @@ const bullets = [
   {
     icon: Shield,
     title: 'Role-based Access',
-    description: 'Five roles — Owner, Admin, Member, Viewer, Guest — plus platform SuperUser. Rank-gated actions contain credential compromise.',
+    description: 'Five roles (Owner, Admin, Member, Viewer, Guest) plus platform SuperUser. Rank-gated actions contain credential compromise.',
   },
   {
     icon: Activity,
@@ -36,14 +36,14 @@ export function Collaboration() {
             alt="People roster with roles across the team"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            The whole roster in one view — humans and agents, same roles, same audit trail.
+            The whole roster in one view: humans and agents, same roles, same audit trail.
           </p>
         </AnimatedReveal>
 
         <AnimatedReveal direction="left">
           <div>
             <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-              Built for teams — human and AI
+              Built for teams, human and AI
             </h2>
             <p className="mt-4 text-lg text-zinc-600">
               Multi-user from day one. Humans and AI agents see updates the moment they happen,

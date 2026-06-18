@@ -26,7 +26,7 @@ const features = [
   {
     icon: Settings2,
     title: 'Configurable Phases',
-    description: 'Define your own workflow stages per project — nothing is hardcoded.',
+    description: 'Define your own workflow stages per project. Nothing is hardcoded.',
   },
   {
     icon: IterationCcw,
@@ -46,7 +46,7 @@ const features = [
   {
     icon: Radio,
     title: 'Real-time Collaboration',
-    description: 'Live updates via WebSocket — see card moves, edits, and comments instantly.',
+    description: 'Live updates via WebSocket let you see card moves, edits, and comments instantly.',
   },
   {
     icon: Keyboard,
@@ -56,7 +56,7 @@ const features = [
   {
     icon: Shield,
     title: 'Role-Based Access',
-    description: 'Owner, Admin, Member, and Viewer roles — the same model governs humans and AI agents.',
+    description: 'Owner, Admin, Member, and Viewer roles, where the same model governs humans and AI agents.',
   },
   {
     icon: Clock,
@@ -90,11 +90,11 @@ export function FeaturesOverview() {
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             Keeping a project tool current is a second job: status re-keyed across three apps, sprint
-            ceremonies that are mostly copy-paste, and a board that's always a little out of date — so
+            ceremonies that are mostly copy-paste, and a board that's always a little out of date, so
             nobody opens it. Bam is sprint-based Kanban with configurable phases, custom fields, and
             carry-forward mechanics, and because agents drive it through the same MCP tools you do, they
-            keep the board honest — moving cards, logging time, generating sprint reports — current
-            without the busywork.
+            keep the board honest. They move cards, log time, and generate sprint reports, keeping it
+            current without the busywork.
           </p>
         </div>
       </AnimatedReveal>
