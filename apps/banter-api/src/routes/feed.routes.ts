@@ -17,7 +17,14 @@ import {
   markSeen,
   dismissEntry,
   bustFeedCache,
+  previewFeed,
 } from '../services/feed-read.service.js';
+import {
+  getWeightsView,
+  upsertOrgWeights,
+  upsertPlatformWeights,
+} from '../services/feed-weights.service.js';
+import { effectiveWeights, type FeedWeightsOverride } from '@bigbluebam/shared';
 
 /**
  * Banter Feed routes (banter-feed-design-document.md §13).
@@ -54,6 +61,42 @@ const markSeenSchema = z
   .refine((v) => (v.entry_ids && v.entry_ids.length > 0) || typeof v.before_seq === 'number', {
     message: 'provide entry_ids or before_seq',
   });
+
+// Partial weight-override shape (§8). Every field is optional so a writer can
+// override just the knobs it cares about; the rest inherit.
+const weightsOverrideSchema = z
+  .object({
+    categories: z.record(z.string(), z.number()).optional(),
+    gravity: z.number().positive().optional(),
+    recency_offset: z.number().nonnegative().optional(),
+    engagement_weight: z.number().nonnegative().optional(),
+    interaction_boost: z
+      .object({
+        commented: z.number(),
+        reacted: z.number(),
+        authored: z.number(),
+        mentioned: z.number(),
+      })
+      .partial()
+      .optional(),
+    affinity_boost: z
+      .object({ assignee: z.number(), watcher: z.number(), contributor: z.number() })
+      .partial()
+      .optional(),
+    seen_multiplier: z.number().min(0).max(1).optional(),
+    candidate_window_days: z.number().int().positive().max(365).optional(),
+    must_see_floor: z.number().nonnegative().optional(),
+  })
+  .strict();
+
+const previewSchema = z.object({
+  weights: weightsOverrideSchema,
+  scope: z.enum(['org', 'platform']).optional(),
+});
+
+function isOrgAdmin(role: string | undefined, isSuperuser: boolean): boolean {
+  return isSuperuser || role === 'owner' || role === 'admin';
+}
 
 function validationError(request: { id: string }, issues: { field: string; issue: string }[]) {
   return {
@@ -166,6 +209,112 @@ export default async function feedRoutes(fastify: FastifyInstance) {
         });
       }
       return reply.send({ data: entry });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // Weights (§9, §13) — the tunable ranking knobs.
+  // -------------------------------------------------------------------------
+
+  // GET /v1/feed/weights — effective merged weights + the raw overrides.
+  fastify.get(
+    '/v1/feed/weights',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+      const view = await getWeightsView(user.org_id);
+      return reply.send({ data: view });
+    },
+  );
+
+  // PUT /v1/feed/weights/org — upsert this org's overrides (admin/owner/SU).
+  fastify.put(
+    '/v1/feed/weights/org',
+    { preHandler: [requireAuth, requireScope('admin')] },
+    async (request, reply) => {
+      const user = request.user!;
+      if (!isOrgAdmin(user.role, user.is_superuser)) {
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Org admin or owner required',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      const parsed = weightsOverrideSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send(
+          validationError(
+            request,
+            parsed.error.issues.map((i) => ({ field: i.path.join('.'), issue: i.message })),
+          ),
+        );
+      }
+      const result = await upsertOrgWeights(user.org_id, parsed.data as FeedWeightsOverride, user.id);
+      return reply.send({ data: result });
+    },
+  );
+
+  // PUT /v1/feed/weights/platform — upsert the deployment defaults (SuperUser).
+  fastify.put(
+    '/v1/feed/weights/platform',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+      if (!user.is_superuser) {
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'SuperUser required',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      const parsed = weightsOverrideSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send(
+          validationError(
+            request,
+            parsed.error.issues.map((i) => ({ field: i.path.join('.'), issue: i.message })),
+          ),
+        );
+      }
+      const result = await upsertPlatformWeights(
+        parsed.data as FeedWeightsOverride,
+        user.id,
+        user.org_id,
+      );
+      return reply.send({ data: result });
+    },
+  );
+
+  // POST /v1/feed/weights/preview — dry-run re-score against proposed weights.
+  fastify.post(
+    '/v1/feed/weights/preview',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+      const parsed = previewSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send(
+          validationError(
+            request,
+            parsed.error.issues.map((i) => ({ field: i.path.join('.'), issue: i.message })),
+          ),
+        );
+      }
+      const view = await getWeightsView(user.org_id);
+      const proposed = parsed.data.weights as FeedWeightsOverride;
+      // Merge the proposed override at the editing level over the other level.
+      const proposedEffective =
+        parsed.data.scope === 'platform'
+          ? effectiveWeights(proposed, view.org?.weights ?? null)
+          : effectiveWeights(view.platform?.weights ?? null, proposed);
+      const result = await previewFeed(user.id, proposedEffective, Date.now(), 20);
+      return reply.send({ data: result.data, effective: proposedEffective });
     },
   );
 

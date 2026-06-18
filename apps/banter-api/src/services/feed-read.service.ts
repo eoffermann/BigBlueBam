@@ -268,6 +268,38 @@ export async function getRankedFeed(
   return { data, next_cursor: nextCursor };
 }
 
+/**
+ * Dry-run: re-score the caller's feed against a PROPOSED weight set without
+ * persisting or caching. Powers the settings live-preview tuning loop (§9).
+ */
+export async function previewFeed(
+  userId: string,
+  proposedWeights: FeedWeights,
+  nowMs: number,
+  limit = 20,
+): Promise<{ data: HydratedFeedEntry[] }> {
+  const windowStart = new Date(nowMs - proposedWeights.candidate_window_days * 86_400_000);
+  const rows = await db
+    .select()
+    .from(banterFeedEntries)
+    .where(
+      and(
+        eq(banterFeedEntries.user_id, userId),
+        isNull(banterFeedEntries.dismissed_at),
+        gte(banterFeedEntries.last_activity_at, windowStart),
+      ),
+    )
+    .limit(CANDIDATE_CEILING);
+
+  const ordered = scoreCandidates(rows, proposedWeights, nowMs).slice(0, limit);
+  if (ordered.length === 0) return { data: [] };
+  const scoreById = new Map(ordered.map((r) => [r.id, r.score]));
+  const pageRows = rows.filter((r) => scoreById.has(r.id));
+  const hydrated = await hydrateEntries(pageRows, proposedWeights, nowMs, true, scoreById);
+  const byId = new Map(hydrated.map((h) => [h.id, h]));
+  return { data: ordered.map((r) => byId.get(r.id)).filter((x): x is HydratedFeedEntry => !!x) };
+}
+
 /** A single hydrated entry for the permalink view (GET /v1/feed/:id). */
 export async function getFeedEntry(
   userId: string,

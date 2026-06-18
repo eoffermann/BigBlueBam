@@ -48,6 +48,8 @@ function breadcrumbsFor(route: ActiveRoute, channelName?: string): Crumb[] {
       return [{ label: 'Search' }];
     case 'settings':
       return [{ label: 'Settings' }];
+    case 'feed-settings':
+      return [{ label: 'Settings', href: '/settings' }, { label: 'Feed ranking' }];
     case 'admin':
       return [{ label: 'Admin' }];
     case 'admin-calling':

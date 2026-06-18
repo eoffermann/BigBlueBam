@@ -8,6 +8,7 @@ import { ChannelBrowser } from '@/pages/channel-browser';
 import { BookmarksPage } from '@/pages/bookmarks';
 import { SearchPage } from '@/pages/search';
 import { PreferencesPage } from '@/pages/preferences';
+import { FeedSettingsPage } from '@/pages/feed-settings';
 import { AdminPage } from '@/pages/admin';
 import { AdminCallingSettingsPage } from '@/pages/admin-calling-settings';
 import { CallPlaybackPage } from '@/pages/call-playback';
@@ -25,6 +26,7 @@ type Route =
   | { page: 'bookmarks' }
   | { page: 'search' }
   | { page: 'settings' }
+  | { page: 'feed-settings' }
   | { page: 'admin' }
   | { page: 'admin-calling' }
   | { page: 'call'; id: string }
@@ -76,6 +78,7 @@ function parseRoute(path: string): Route {
   if (p === '/browse') return { page: 'browse' };
   if (p === '/bookmarks') return { page: 'bookmarks' };
   if (p === '/search') return { page: 'search' };
+  if (p === '/settings/feed') return { page: 'feed-settings' };
   if (p === '/settings') return { page: 'settings' };
   if (p === '/admin/calling') return { page: 'admin-calling' };
   if (p === '/admin') return { page: 'admin' };
@@ -255,6 +258,8 @@ export function App() {
         return <SearchPage onNavigate={navigate} />;
       case 'settings':
         return <PreferencesPage onNavigate={navigate} />;
+      case 'feed-settings':
+        return <FeedSettingsPage onNavigate={navigate} />;
       case 'admin':
         return <AdminPage onNavigate={navigate} />;
       case 'admin-calling':

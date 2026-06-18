@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Sun, Moon, Monitor } from 'lucide-react';
+import { ArrowLeft, Sun, Moon, Monitor, Sparkles, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -103,6 +103,27 @@ export function PreferencesPage({ onNavigate }: PreferencesPageProps) {
                 <p className="text-sm text-zinc-500">{user?.email}</p>
               </div>
             </div>
+          </section>
+
+          {/* Feed ranking */}
+          <section>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
+              Feed
+            </h3>
+            <button
+              onClick={() => onNavigate('/settings/feed')}
+              className="w-full flex items-center gap-3 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-left"
+            >
+              <Sparkles className="h-5 w-5 text-primary-500 flex-shrink-0" />
+              <span className="flex-1">
+                <span className="block font-medium text-zinc-900 dark:text-zinc-100">Feed ranking</span>
+                <span className="block text-sm text-zinc-500">
+                  Tune what floats to the top of the Feed, with a live preview. Org admins set org
+                  overrides; SuperUsers set platform defaults.
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+            </button>
           </section>
 
           {/* Theme */}
