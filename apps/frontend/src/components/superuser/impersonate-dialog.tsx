@@ -5,6 +5,7 @@ import { Button } from '@/components/common/button';
 import { Input } from '@/components/common/input';
 import { Dialog } from '@/components/common/dialog';
 import { superuserUsersApi } from '@/lib/api/superuser-users';
+import { setImpersonation } from '@/lib/impersonation';
 
 /**
  * SuperUser impersonation dialog. Starts a time-limited impersonation session
@@ -33,8 +34,9 @@ export function ImpersonateDialog({
   const impersonate = useMutation({
     mutationFn: () => superuserUsersApi.impersonate(user.id, reason.trim() || undefined),
     onSuccess: () => {
-      // Reload into Bam as the impersonated user; the session cookie now carries
-      // the impersonation, and every app's auth honors X-Impersonating.
+      // Persist the target so the api client echoes X-Impersonate-User on every
+      // subsequent request, then reload into Bam as that user.
+      setImpersonation({ user_id: user.id, display_name: user.display_name || user.email });
       window.location.href = '/b3/';
     },
   });

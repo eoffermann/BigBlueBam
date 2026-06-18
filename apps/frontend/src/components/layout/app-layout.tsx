@@ -14,6 +14,7 @@ import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { Sidebar } from './sidebar';
 import { CommandPalette } from '@/components/common/command-palette';
 import { SuperuserContextBanner } from '@/components/superuser-context-banner';
+import { ImpersonationBanner } from '@/components/superuser/impersonation-banner';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCan } from '@bigbluebam/ui/use-can';
@@ -122,6 +123,7 @@ export function AppLayout({ children, currentProjectId, breadcrumbs = [], onNavi
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+      <ImpersonationBanner />
       <UpdateBanner />
       <div className="flex flex-1 overflow-hidden">
       <a

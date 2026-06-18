@@ -392,10 +392,16 @@ export default async function platformRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // POST /v1/platform/stop-impersonation — stop impersonating
+  // POST /v1/platform/stop-impersonation — stop impersonating.
+  // Authorization is "you are currently impersonating" (enforced by the
+  // isImpersonating check below), NOT a permission the impersonated identity
+  // holds: during impersonation request.user is the TARGET, who by design has
+  // only the target's (non-platform) permissions, so a requireCan gate here is
+  // unsatisfiable and would trap the operator in the impersonated view. Starting
+  // a session already required SuperUser rights, so this escape hatch is safe.
   fastify.post(
     '/v1/platform/stop-impersonation',
-    { preHandler: [requireAuth, fastify.requireCan('bam.platform_stop_impersonation.create')] },
+    { preHandler: [requireAuth] },
     async (request, reply) => {
       if (!request.isImpersonating) {
         return reply.status(400).send({

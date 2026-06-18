@@ -1,3 +1,5 @@
+import { getImpersonation } from './impersonation';
+
 // HB-52: Read the csrf_token cookie set by the API on login/register and
 // echo it back in the X-CSRF-Token header on state-changing requests.
 // The cookie is httpOnly=false precisely so this function can read it.
@@ -60,6 +62,12 @@ class ApiClient {
       const csrfToken = readCsrfToken();
       if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
     }
+
+    // SuperUser impersonation: when an "act as" session is active, echo the
+    // target user id so the API swaps request.user to the target. Absent for
+    // normal sessions, so this is inert unless impersonating.
+    const impersonation = getImpersonation();
+    if (impersonation) headers['X-Impersonate-User'] = impersonation.user_id;
 
     const response = await fetch(url.toString(), {
       method,

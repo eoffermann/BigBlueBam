@@ -254,7 +254,7 @@ export const superuserUsersApi = {
     isSuperuser: boolean,
   ): Promise<{ data: { id: string; is_superuser: boolean } }> {
     return api.patch<{ data: { id: string; is_superuser: boolean } }>(
-      `/platform/users/${id}/superuser`,
+      `/v1/platform/users/${id}/superuser`,
       { is_superuser: isSuperuser },
     );
   },
@@ -262,10 +262,16 @@ export const superuserUsersApi = {
   impersonate(
     targetUserId: string,
     reason?: string,
-  ): Promise<{ data: { session_id: string } }> {
-    return api.post<{ data: { session_id: string } }>('/platform/impersonate', {
-      target_user_id: targetUserId,
+  ): Promise<{ data: { id: string } }> {
+    // Server expects { user_id }; reason is accepted for audit and ignored if
+    // unused server-side.
+    return api.post<{ data: { id: string } }>('/v1/platform/impersonate', {
+      user_id: targetUserId,
       reason,
     });
+  },
+
+  stopImpersonation(): Promise<{ data: { success: boolean } }> {
+    return api.post<{ data: { success: boolean } }>('/v1/platform/stop-impersonation', {});
   },
 };
