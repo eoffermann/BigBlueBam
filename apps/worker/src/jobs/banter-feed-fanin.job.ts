@@ -417,7 +417,7 @@ export function buildFeedFaninDeps(
           ${`feed.${p.category}`},
           ${p.title.slice(0, 500)},
           ${p.body.slice(0, 2000)},
-          ${p.source},
+          ${'banter'},
           ${`/banter/feed/${p.entryId}`},
           ${p.category},
           ${JSON.stringify({
