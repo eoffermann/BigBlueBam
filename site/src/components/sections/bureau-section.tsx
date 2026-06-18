@@ -82,7 +82,7 @@ export function BureauSection() {
 
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
-        <FloatingFrame src="/screenshots/bureau/light/02-live-floor.png" alt="Bureau live floor map with rooms and occupant dots" />
+        <FloatingFrame src="/screenshots/bureau/dark/02-live-floor.png" alt="Bureau live floor map with rooms and occupant dots" />
         <p className="mt-3 text-center text-sm text-zinc-500">
           A floor map where the dots are real people — click a room to walk in, audio and all.
         </p>
@@ -91,19 +91,19 @@ export function BureauSection() {
       {/* Detail screenshots */}
       <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/bureau/light/01-floor-directory.png" alt="Bureau floor directory with live occupancy counts" />
+          <FloatingFrame src="/screenshots/bureau/dark/01-floor-directory.png" alt="Bureau floor directory with live occupancy counts" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Every floor at a glance, with live head counts so you know where the day is happening.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
-          <FloatingFrame src="/screenshots/bureau/light/08-presence-on-floor.png" alt="Bureau presence and status on the floor map" />
+          <FloatingFrame src="/screenshots/bureau/dark/08-presence-on-floor.png" alt="Bureau presence and status on the floor map" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Status and room for each person, updating live — no "you around?" pings needed.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
-          <FloatingFrame src="/screenshots/bureau/light/06-room-booking.png" alt="Bureau room booking screen with upcoming reservations" />
+          <FloatingFrame src="/screenshots/bureau/dark/06-room-booking.png" alt="Bureau room booking screen with upcoming reservations" />
           <p className="mt-3 text-center text-sm text-zinc-500">
             Bookable rooms by floor — pick a window, lock the door, done.
           </p>

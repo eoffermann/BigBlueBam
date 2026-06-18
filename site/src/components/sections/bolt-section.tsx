@@ -82,7 +82,7 @@ export function BoltSection() {
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/bolt/light/01-automations.png"
+          src="/screenshots/bolt/dark/01-automations.png"
           alt="Bolt automations dashboard listing active rules with trigger badges"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
@@ -95,7 +95,7 @@ export function BoltSection() {
       <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame
-            src="/screenshots/bolt/light/02-editor.png"
+            src="/screenshots/bolt/dark/02-editor.png"
             alt="Bolt Simple editor showing WHEN trigger, IF conditions, THEN actions"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -105,7 +105,7 @@ export function BoltSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame
-            src="/screenshots/bolt/light/03-automation-detail.png"
+            src="/screenshots/bolt/dark/03-automation-detail.png"
             alt="Bolt visual node-graph canvas wiring a trigger to a condition to an action"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -114,7 +114,7 @@ export function BoltSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/bolt/light/05-templates.png"
+            src="/screenshots/bolt/dark/05-templates.png"
             alt="Bolt templates gallery of pre-built automation blueprints"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">

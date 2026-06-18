@@ -82,7 +82,7 @@ export function BillSection() {
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/bill/light/01-dashboard.png"
+          src="/screenshots/bill/dark/01-dashboard.png"
           alt="Bill dashboard with outstanding, paid, overdue, and draft totals"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
@@ -94,7 +94,7 @@ export function BillSection() {
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <AnimatedReveal delay={0.15} withScale>
           <FloatingFrame
-            src="/screenshots/bill/light/03-invoice-detail.png"
+            src="/screenshots/bill/dark/03-invoice-detail.png"
             alt="Bill invoice detail with line items, totals, and payment history"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -103,7 +103,7 @@ export function BillSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame
-            src="/screenshots/bill/light/07-recurring.png"
+            src="/screenshots/bill/dark/07-recurring.png"
             alt="Bill recurring billing schedules with cadence and next run date"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -112,7 +112,7 @@ export function BillSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/bill/light/05-expenses.png"
+            src="/screenshots/bill/dark/05-expenses.png"
             alt="Bill expenses list with category, vendor, and approval status"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
@@ -121,7 +121,7 @@ export function BillSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.3} withScale>
           <FloatingFrame
-            src="/screenshots/bill/light/06-reports.png"
+            src="/screenshots/bill/dark/06-reports.png"
             alt="Bill financial reports: revenue by month, aging, and profitability"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
