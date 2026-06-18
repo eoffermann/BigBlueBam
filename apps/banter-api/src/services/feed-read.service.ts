@@ -13,6 +13,8 @@ import {
   effectiveWeights,
   weightsVersion,
   scoreEntry,
+  RELATIONSHIP_FLAGS,
+  INTERACTION_FLAGS,
   type FeedWeights,
   type ScoreBreakdown,
 } from '@bigbluebam/shared';
@@ -40,6 +42,9 @@ const CACHE_TTL_SECONDS = 60;
 const tasksStub = pgTable('tasks', {
   id: uuid('id').primaryKey(),
   title: varchar('title', { length: 500 }),
+  // For the §80 ownership boosts: who it's assigned to / who created it.
+  assignee_id: uuid('assignee_id'),
+  reporter_id: uuid('reporter_id'),
 });
 const briefDocumentsStub = pgTable('brief_documents', {
   id: uuid('id').primaryKey(),
@@ -172,6 +177,10 @@ async function getOrderedRefs(
     )
     .limit(CANDIDATE_CEILING);
 
+  // Compute the viewer's relevance boosts (mention/comment/assignee/author) on
+  // this candidate set before scoring, so the boost tier ranks forward.
+  await enrichBoostFlags(rows, userId);
+
   const refs = scoreCandidates(rows, weights, nowMs);
 
   if (redis) {
@@ -206,7 +215,10 @@ export interface HydratedFeedEntry {
   source: string;
   entity_type: string;
   entity_id: string;
+  /** For thread entries, the thread-root message id; null when the entity IS the root. */
+  root_entity_id: string | null;
   channel_id: string | null;
+  channel_slug: string | null;
   project_id: string | null;
   published_at: Date;
   last_activity_at: Date;
@@ -222,49 +234,50 @@ export interface HydratedFeedEntry {
   score_breakdown?: ScoreBreakdown;
 }
 
+/** How often an already-populated feed re-tops-up from all visible channels. */
+const BACKFILL_THROTTLE_SECONDS = 180;
+
 /**
- * Seed the candidate index from recent posts in the channels the user follows,
- * so the feed is never empty for anyone with accessible recent activity (the
- * Facebook/Instagram model: your feed is your sources' recent content, not just
- * events that happened after you existed). Idempotent (ON CONFLICT DO NOTHING).
- * Membership IS the access gate (you only get channels you belong to), so no
- * separate can_access pass.
+ * Seed/top-up the candidate index from recent posts in every channel the user
+ * can READ — i.e. every channel they belong to (public or private). This is what
+ * makes the feed "surface everything visible" (the Facebook model: your feed is
+ * your sources' recent content). In Banter today visibility == membership for
+ * reads (requireChannelMember 403s a non-member even of a public channel), so an
+ * unjoined public channel is deliberately NOT sourced — surfacing it would leak
+ * previews of messages the user cannot open. DMs never feed (the DM view owns
+ * them). A per-channel mute/unfollow still vetoes. Idempotent (ON CONFLICT
+ * DO NOTHING).
  *
- * Gating, and why it is NOT a bare time flag: the seed runs ONLY when the user's
- * feed is actually empty. A populated feed needs nothing (live fan-in keeps it
- * fresh and the early-return below is one cheap indexed lookup). Gating on real
- * emptiness — rather than "have I attempted this recently?" — means a 0-yield or
- * failed seed can never keep an empty feed quiet. The original implementation set
- * a 1h flag even when the INSERT matched 0 rows (e.g. a transient error, or the
- * earlier JS-Date-param bug that silently matched nothing), which permanently
- * quieted the feed for an impersonated/new user until the flag expired. The flag
- * here is now a short negative-cache that ONLY guards the empty-feed branch.
+ * Gating — empty feeds ALWAYS run; populated feeds throttle:
+ *  - Empty feed → always seed now, ignoring any flag. A stale flag must never
+ *    keep an empty feed quiet (the bug the never-empty fix addressed). If the
+ *    seed yields nothing (genuinely-empty org), a short flag avoids hammering
+ *    but it self-heals the moment readable posts exist.
+ *  - Populated feed → re-top-up at most once per BACKFILL_THROTTLE_SECONDS, so a
+ *    channel the user JOINS after they last read flows in (with recent history)
+ *    within a few minutes, without an INSERT on every read.
  */
-async function ensureChannelBackfill(
+async function ensureVisibleBackfill(
   redis: Redis | undefined,
   userId: string,
   windowDays: number,
 ): Promise<void> {
-  // Populated feed → nothing to do. Indexed point lookup on user_id.
+  const flagKey = `bfeed:bf:${userId}`;
+
+  // Is the feed already populated? Cheap indexed point lookup on user_id.
   const existing = await db
     .select({ one: sql<number>`1` })
     .from(banterFeedEntries)
     .where(eq(banterFeedEntries.user_id, userId))
     .limit(1);
-  if (existing.length > 0) return;
+  const isEmpty = existing.length === 0;
 
-  // Feed is empty. Rate-limit the seed attempt with a SHORT-lived flag so rapid
-  // reads for a genuinely-empty org don't hammer the INSERT, but it self-heals
-  // within seconds once seedable posts exist — never the hour-long suppression
-  // the old flag caused. Once the insert below seeds rows, the next read takes
-  // the early return above, so this flag never suppresses a populated feed.
-  const flagKey = `bfeed:bf:${userId}`;
-  if (redis) {
+  // Populated feeds throttle the top-up; an empty feed always runs (never-empty).
+  if (!isEmpty && redis) {
     try {
       if (await redis.get(flagKey)) return;
     } catch {
-      // Redis unavailable — fall through and seed (correctness over the
-      // perf optimization the flag provides).
+      // Redis unavailable — fall through (correctness over the throttle).
     }
   }
 
@@ -282,7 +295,6 @@ async function ensureChannelBackfill(
         m.created_at, COALESCE(m.last_reply_at, m.created_at),
         0, 0, COALESCE(m.reply_count, 0)
       FROM banter_messages m
-      JOIN banter_channel_memberships mem ON mem.channel_id = m.channel_id AND mem.user_id = ${userId}
       JOIN banter_channels bc ON bc.id = m.channel_id
       WHERE m.created_at >= now() - (${windowDays} * interval '1 day')
         AND m.is_deleted = false
@@ -290,6 +302,16 @@ async function ensureChannelBackfill(
         AND m.author_id <> ${userId}
         AND bc.is_archived = false
         AND bc.type IN ('public', 'private')
+        -- Visibility == membership for READS in Banter today: requireChannelMember
+        -- 403s a non-member even of a public channel, so surfacing an unjoined
+        -- public channel's content would leak previews of unreadable messages.
+        -- Source only from channels the user belongs to (public or private).
+        -- (Discovering unjoined public channels needs the read-gate to open
+        -- first — see docs/banter-feed-notes.md.)
+        AND EXISTS (
+          SELECT 1 FROM banter_channel_memberships mem
+           WHERE mem.channel_id = m.channel_id AND mem.user_id = ${userId}
+        )
         AND NOT EXISTS (
           SELECT 1 FROM banter_feed_subscriptions s
            WHERE s.user_id = ${userId}
@@ -306,14 +328,81 @@ async function ensureChannelBackfill(
 
   if (redis) {
     try {
-      // Short TTL: guards only the empty-feed case. If the insert seeded rows,
-      // the next read returns early at the existing-entries check and never
-      // reaches this flag; if it seeded nothing (genuinely empty org), we retry
-      // in ~2 minutes rather than staying quiet for an hour.
-      await redis.set(flagKey, '1', 'EX', 120);
+      // Empty: short TTL so an empty org self-heals fast once posts appear.
+      // Populated: the throttle window for the next visible-channel top-up.
+      await redis.set(flagKey, '1', 'EX', isEmpty ? 60 : BACKFILL_THROTTLE_SECONDS);
     } catch {
       // Non-fatal.
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Read-time boost enrichment (§80) — compute the viewer-specific relevance
+// flags for the candidate page so the boosts the user asked for actually rank
+// forward. Done at READ time (not stored at write time) so "I already commented
+// in this thread" stays correct as the viewer interacts; the 60s ordering cache
+// bounds how long a brand-new interaction takes to re-rank.
+// ---------------------------------------------------------------------------
+async function enrichBoostFlags(rows: CandidateRow[], userId: string): Promise<void> {
+  // Best-effort: the boosts are an enhancement to ordering, so a failure here
+  // must degrade to "no boost this read", never break the feed read itself.
+  try {
+  // (1) Banter threads the viewer has already replied in → COMMENTED +
+  //     COMMENTER. reply_user_ids is the denormalized set of repliers on the
+  //     thread-root message, so membership in it is exactly "I commented here".
+  const msgIds = rows
+    .filter((r) => r.entity_type === 'banter.message')
+    .map((r) => r.entity_id);
+  if (msgIds.length > 0) {
+    // Fetch the repliers array and test membership in JS. A SQL
+    // `${userId}::uuid = ANY(col)` bound-param form silently matches nothing
+    // under postgres.js (the array/param-cast gotcha), so do the check here.
+    const msgs = await db
+      .select({ id: banterMessages.id, repliers: banterMessages.reply_user_ids })
+      .from(banterMessages)
+      .where(inArray(banterMessages.id, msgIds));
+    const repliedSet = new Set(
+      msgs.filter((m) => Array.isArray(m.repliers) && m.repliers.includes(userId)).map((m) => m.id),
+    );
+    if (repliedSet.size > 0) {
+      for (const r of rows) {
+        if (r.entity_type === 'banter.message' && repliedSet.has(r.entity_id)) {
+          r.relationship_flags |= RELATIONSHIP_FLAGS.COMMENTER;
+          r.interaction_flags |= INTERACTION_FLAGS.COMMENTED;
+        }
+      }
+    }
+  }
+
+  // (2) Bam tasks the viewer owns → ASSIGNEE (assigned to me) and/or AUTHOR +
+  //     AUTHORED (I created it).
+  const taskIds = rows
+    .filter((r) => r.entity_type === 'bam.task')
+    .map((r) => r.entity_id);
+  if (taskIds.length > 0) {
+    const owned = await db
+      .select({
+        id: tasksStub.id,
+        assignee_id: tasksStub.assignee_id,
+        reporter_id: tasksStub.reporter_id,
+      })
+      .from(tasksStub)
+      .where(inArray(tasksStub.id, taskIds));
+    const byId = new Map(owned.map((t) => [t.id, t]));
+    for (const r of rows) {
+      if (r.entity_type !== 'bam.task') continue;
+      const t = byId.get(r.entity_id);
+      if (!t) continue;
+      if (t.assignee_id === userId) r.relationship_flags |= RELATIONSHIP_FLAGS.ASSIGNEE;
+      if (t.reporter_id === userId) {
+        r.relationship_flags |= RELATIONSHIP_FLAGS.AUTHOR;
+        r.interaction_flags |= INTERACTION_FLAGS.AUTHORED;
+      }
+    }
+  }
+  } catch {
+    // Non-fatal — leave the stored flags as-is for this read.
   }
 }
 
@@ -330,11 +419,11 @@ export async function getRankedFeed(
 
   const { weights, version } = await loadEffectiveWeights(orgId);
 
-  // Never-empty guarantee (§10.3): seed the per-user index from recent posts in
-  // the channels this user follows, so the feed shows relevant activity instantly
-  // — for brand-new users and for content that predates the live fan-in — rather
-  // than only events the fan-in caught after this user existed.
-  await ensureChannelBackfill(redis, userId, weights.candidate_window_days);
+  // Surface-everything-visible + never-empty (§10.3): seed/top-up the per-user
+  // index from recent posts in every channel this user can SEE (joined + public),
+  // so the feed shows relevant activity instantly — for brand-new users and for
+  // content that predates the live fan-in.
+  await ensureVisibleBackfill(redis, userId, weights.candidate_window_days);
 
   const ordered = await getOrderedRefs(
     redis,
@@ -362,6 +451,11 @@ export async function getRankedFeed(
     .select()
     .from(banterFeedEntries)
     .where(inArray(banterFeedEntries.id, pageRefs.map((r) => r.id)));
+
+  // Re-apply the read-time boosts on the page rows so the explain breakdown
+  // matches the (already-boosted) ordering score; the boosts are computed in
+  // memory, not stored, so this re-fetch would otherwise show stored flags = 0.
+  await enrichBoostFlags(rows, userId);
 
   const hydrated = await hydrateEntries(rows, weights, nowMs, opts.explain ?? false, scoreById);
   // Preserve the ranked order (inArray does not guarantee it).
@@ -584,6 +678,7 @@ async function hydrateEntries(
     let title = r.category;
     let preview: string | null = null;
     let author: HydratedFeedEntry['author'] = null;
+    let channel_slug: string | null = null;
     // Every Feed entry's primary link is its permalink in the Feed (§12.2);
     // open_in_app is the secondary "jump to the source app" link.
     const deep_link = `/banter/feed/${r.id}`;
@@ -592,6 +687,7 @@ async function hydrateEntries(
     if (r.entity_type === 'banter.message') {
       const m = msgMap.get(r.entity_id);
       if (m) {
+        channel_slug = m.channel_slug;
         author = { id: m.author_id, display_name: m.author_name, avatar_url: m.author_avatar };
         preview = m.content_plain;
         title =
@@ -636,7 +732,9 @@ async function hydrateEntries(
       source: r.source,
       entity_type: r.entity_type,
       entity_id: r.entity_id,
+      root_entity_id: r.root_entity_id,
       channel_id: r.channel_id,
+      channel_slug,
       project_id: r.project_id,
       published_at: r.published_at,
       last_activity_at: r.last_activity_at,

@@ -125,3 +125,59 @@ The pattern is identical for every app and proven across Banter/Bam/Brief:
   is not published). CI runs it against a reachable container; locally, verify
   new tables/columns by dumping `information_schema.columns` via
   `docker compose exec postgres psql`.
+
+## 2026-06-18 — surface-everything-visible, relevance boosts, inline interaction
+
+Three changes (feed-read.service.ts + feed.tsx), all live-verified on the
+Gilligan stack.
+
+- **"Surface everything visible" == every channel you can READ.** The backfill
+  was widened to top up from all of a user's channels (public + private) and
+  re-runs on a throttle (`BACKFILL_THROTTLE_SECONDS = 180`) for populated feeds,
+  not only when empty — so a channel you JOIN later flows in (with recent
+  history) within a few minutes. **It is intentionally scoped to channels the
+  user is a member of.** A first cut also surfaced *unjoined public* channels,
+  but `requireChannelMember` (apps/banter-api/src/middleware/channel-auth.ts:108)
+  returns **403 to a non-member even of a public channel** — reading a public
+  channel's messages requires joining it. Surfacing unjoined public channels
+  therefore leaked previews of unreadable messages, so it was reverted.
+
+- **DEFERRED — public-channel discovery (a product decision).** True
+  Facebook-style discovery (seeing content from public channels you have not
+  joined) requires Banter's read-gate to change: public channels would need to
+  be readable by any org member (today they are browse/join-able but not
+  readable until joined). That is a platform-wide change to `requireChannelMember`
+  + the `banter.message`/`banter.channel` branch of can_access in
+  apps/api/src/services/visibility.service.ts, with blast radius beyond the Feed.
+  Not done here; awaiting a call on whether public == org-readable.
+
+- **Relevance boosts now computed (were hardcoded 0).** `enrichBoostFlags` in
+  feed-read.service.ts computes the viewer's flags on the scored candidate page
+  at READ time (so "I already commented" stays correct as the user interacts;
+  the 60s ordering cache bounds re-rank latency): COMMENTED/COMMENTER from
+  `banter_messages.reply_user_ids` (membership tested in JS — the SQL
+  `${id}::uuid = ANY(col)` bound-param form silently matches nothing under
+  postgres.js), and ASSIGNEE / AUTHOR+AUTHORED from `tasks.assignee_id` /
+  `tasks.reporter_id`. It is applied in BOTH getOrderedRefs (for ordering) and on
+  the re-fetched page rows in getRankedFeed (so the explain breakdown matches the
+  ordering score), and is wrapped best-effort so a failure degrades to "no boost"
+  rather than breaking the read. The "tagged" boost is NOT recomputed here — live
+  @mentions already arrive as boosted `banter.mention` entries via the fan-in
+  (category W=3.0 + must_see_floor); a mentions table does not exist (see the
+  @mention resolution note / display_name-vs-handle ambiguity), so historical
+  backfilled mentions land as plain channel_post.
+
+- **Inline interaction (feed.tsx).** `banter.message` cards gained an expandable
+  thread (read replies via `useThreadReplies`), an inline reply composer
+  (`usePostThreadReply` → POST /v1/messages/:id/thread), and a 👍 react
+  (`useToggleReaction`) — reusing the channel view's existing hooks/endpoints, no
+  new API. The hydrated entry now exposes `root_entity_id` + `channel_slug` so the
+  card can drive the thread. Replying invalidates `['feed']` so the engagement
+  count and the now-earned COMMENTED boost refresh. Non-banter entries keep
+  open-in-app.
+
+- **Scaling note (write amplification).** The throttled top-up runs one
+  INSERT...SELECT over the user's channels' 30-day window per active user per
+  ~3min; the materialized-per-user index is O(users × messages). Fine at the
+  2-50-user target; if a deployment grows, move the top-up off the read path
+  (fire-and-forget for populated feeds) or shorten the window.
