@@ -1,77 +1,53 @@
 {
-  "generated_at": "2026-06-18T00:49:53.965Z",
+  "generated_at": "2026-06-18T04:26:01.173Z",
   "screenshots": [
     {
-      "app": "bam",
+      "app": "bearing",
       "theme": "light",
-      "file": "01-board.png",
-      "path": "docs/apps/bam/screenshots/light/01-board.png",
-      "size": 64480,
-      "hash": "faaf255040666f5ecbc184ba8f5447158151a0336380ffec07ab1e17b6958b8e"
+      "file": "01-dashboard.png",
+      "path": "docs/apps/bearing/screenshots/light/01-dashboard.png",
+      "size": 86834,
+      "hash": "57a6b977332171d932c95008824682219f9822cbfa9383fabb5e7ab884293bc8"
     },
     {
-      "app": "bam",
+      "app": "bearing",
       "theme": "light",
-      "file": "02-task-detail.png",
-      "path": "docs/apps/bam/screenshots/light/02-task-detail.png",
-      "size": 97403,
-      "hash": "25a1356b8299312ac91f8d40b9e627197a9dba25a241a0141a109f2885c898ce"
+      "file": "02-goal-detail.png",
+      "path": "docs/apps/bearing/screenshots/light/02-goal-detail.png",
+      "size": 98107,
+      "hash": "986f1f9a7988aff95b574c0e558fe5a054b8f0faebdb93900842cc0adcafcd52"
     },
     {
-      "app": "bam",
+      "app": "bearing",
       "theme": "light",
-      "file": "03-sprint-create.png",
-      "path": "docs/apps/bam/screenshots/light/03-sprint-create.png",
-      "size": 73218,
-      "hash": "8e9f5c9483d6e04bcc2a4ad895c537f11a96dcf1aa3acc925a970dd74f7fecef"
+      "file": "03-my-goals.png",
+      "path": "docs/apps/bearing/screenshots/light/03-my-goals.png",
+      "size": 79621,
+      "hash": "d760a41789d03c3972b0ab9671e934a733455ff024b2337a014916b317caa91b"
     },
     {
-      "app": "bam",
+      "app": "bearing",
       "theme": "light",
-      "file": "04-list-view.png",
-      "path": "docs/apps/bam/screenshots/light/04-list-view.png",
-      "size": 83417,
-      "hash": "d9d57dcc324b9031b71b78bf1a1ceee033506d64907fb743a724abbabe9aed58"
+      "file": "04-at-risk.png",
+      "path": "docs/apps/bearing/screenshots/light/04-at-risk.png",
+      "size": 78445,
+      "hash": "0288fdbe40bc3707e7419128a7ecce57eb95545b49c250acaf517c3de6d335df"
     },
     {
-      "app": "bam",
+      "app": "bearing",
       "theme": "light",
-      "file": "05-my-work.png",
-      "path": "docs/apps/bam/screenshots/light/05-my-work.png",
-      "size": 70315,
-      "hash": "38fd66b909f554c2adaecb4e4f4226c3414b94d813a17bfb366c3e164373df05"
+      "file": "05-periods.png",
+      "path": "docs/apps/bearing/screenshots/light/05-periods.png",
+      "size": 40385,
+      "hash": "0529c65aa1174fe417692b66457cf89e9f85c01eaca1e77fba2b238b412e0516"
     },
     {
-      "app": "bam",
-      "theme": "light",
-      "file": "06-settings-integrations.png",
-      "path": "docs/apps/bam/screenshots/light/06-settings-integrations.png",
-      "size": 98465,
-      "hash": "109fccf6a1944eb5fb09bcd1a34b9ce1bd7b40104d372f13b01e0736e76ea0a2"
-    },
-    {
-      "app": "bam",
-      "theme": "light",
-      "file": "07-platform-smtp.png",
-      "path": "docs/apps/bam/screenshots/light/07-platform-smtp.png",
-      "size": 255040,
-      "hash": "15ae26637d0326abdffde3693cde6476192da4b9a896f14143794c74835e65a6"
-    },
-    {
-      "app": "bam",
-      "theme": "light",
-      "file": "08-org-smtp.png",
-      "path": "docs/apps/bam/screenshots/light/08-org-smtp.png",
-      "size": 84277,
-      "hash": "2acaf2540741f97d1c5ba9a9900a9b9bbf71581ff34c96037feedb6b9a4c3b89"
-    },
-    {
-      "app": "bam",
+      "app": "bearing",
       "theme": "dark",
-      "file": "01-board.png",
-      "path": "docs/apps/bam/screenshots/dark/01-board.png",
-      "size": 172018,
-      "hash": "fd0afeda6d0fe370b1d56b948d50841ca9b21d22852ede00314e2b4fbb57d4ca"
+      "file": "01-dashboard.png",
+      "path": "docs/apps/bearing/screenshots/dark/01-dashboard.png",
+      "size": 217278,
+      "hash": "7703ccec9ef137d327c5a0f8caf3c6cccce2d52a7c03801873dde0bf079f0dcc"
     }
   ]
 }

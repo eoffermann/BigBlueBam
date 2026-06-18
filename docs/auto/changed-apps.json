@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-06-18T00:49:53.750Z",
+  "generated_at": "2026-06-18T04:26:00.953Z",
   "changed": [
     {
-      "app": "bam",
+      "app": "bearing",
       "reason": "src_hash_changed",
-      "new_hash": "d2da36f2f4bdeb1ea50a3d5545473c2b2c6bd95332e938c29f2b1bcd07325b8d"
+      "new_hash": "ad6e7064c7c61fe46b2c01ca1e27c0f90bcea4fe37ed14824a058e652f9b699d"
     }
   ]
 }

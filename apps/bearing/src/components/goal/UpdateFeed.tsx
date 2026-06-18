@@ -11,11 +11,11 @@ interface UpdateFeedProps {
 function UpdateEntry({ update }: { update: GoalUpdate }) {
   return (
     <div className="flex gap-3 py-3 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
-      <Avatar src={update.author.avatar_url} name={update.author.display_name} size="sm" />
+      <Avatar src={update.author?.avatar_url} name={update.author?.display_name ?? 'Unknown'} size="sm" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            {update.author.display_name}
+            {update.author?.display_name ?? 'Unknown'}
           </span>
           <span className="text-xs text-zinc-400">{formatRelativeTime(update.created_at)}</span>
         </div>

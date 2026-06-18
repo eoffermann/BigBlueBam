@@ -45,8 +45,14 @@
   interactions:
     - { action: waitFor, selector: "div.group.cursor-pointer" }
     - { action: click, selector: "div.group.cursor-pointer", optional: true }
-    - { action: wait, ms: 2000 }
+    - { action: waitFor, selector: "text=Status Updates" }
+    - { action: wait, ms: 1500 }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  # Guard against a blank capture: the detail page must actually render its
+  # content (Status Updates section) before snapping. This previously captured
+  # white because a missing author crashed the page.
+  expect:
+    - "text=Status Updates"
   doc: { order: 2, label: "Goal detail" }
   masks:
     - "[data-testid='relative-timestamp']"

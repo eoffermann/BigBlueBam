@@ -458,13 +458,13 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 ---
 
 <!-- AUTODOCS:APP_SECTIONS:START -->
-### Bam (Project Management)
+### Bearing (Goals & OKRs)
 
-66 routes, 54 schemas, 123 MCP tools
+4 routes, 9 schemas, 30 MCP tools
 
-<img src="docs/apps/bam/screenshots/light/01-board.png" width="400" alt="Bam (Project Management)">
+<img src="docs/apps/bearing/screenshots/light/01-dashboard.png" width="400" alt="Bearing (Goals & OKRs)">
 
-[Guide](docs/apps/bam/guide.md) | [Overview](docs/apps/bam/marketing.md) | [MCP Tools](docs/apps/bam/mcp-tools.md)
+[Guide](docs/apps/bearing/guide.md) | [Overview](docs/apps/bearing/marketing.md) | [MCP Tools](docs/apps/bearing/mcp-tools.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
 ---
 
@@ -779,7 +779,7 @@ site/               → Marketing site (served at /)
 | [Agent Conventions](docs/reference/agent-conventions.md) | Rules agents must follow (visibility preflight, audit) |
 | | |
 | **Per-App Guides** | |
-| [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
+| [Bearing (Goals & OKRs) Guide](docs/apps/bearing/guide.md) | User guide and MCP tool reference |
 
 <!-- AUTODOCS:DOCS_INDEX:END -->
 ---
