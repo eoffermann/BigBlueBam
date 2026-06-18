@@ -41,7 +41,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 |---|--:|--:|--:|--:|
 | Bam — Work management | 93 | 86 | 7 | 2 |
 | Bam — Org, auth, admin & integrations | 156 | 37 | 119 | 0 |
-| Banter | 112 | 75 | 37 | 0 |
+| Banter | 113 | 75 | 38 | 0 |
 | Beacon | 40 | 38 | 2 | 0 |
 | Brief | 54 | 48 | 6 | 0 |
 | Bond | 72 | 70 | 2 | 0 |
@@ -57,7 +57,7 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bureau | 42 | 37 | 5 | 0 |
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **970** | **718** | **252** | **16** |
+| **Total** | **971** | **718** | **253** | **16** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -667,6 +667,7 @@ External URL = `/banter/api/` + the path column. WebSocket realtime at `/banter/
 | `POST /v1/channels/:id/leave` | `banter_leave_channel` | Leave a channel | `apps/banter/src/hooks/use-channels.ts` |
 | `GET /v1/channels/:id/members` | `banter_list_channel_members` | List channel members | `apps/banter/src/hooks/use-channels.ts` |
 | `POST /v1/channels/:id/members` | `banter_add_channel_members` | Add members | `apps/banter/src/components/channels/channel-settings.tsx` |
+| `POST /v1/channels/bulk-add-members` | — _(skip: org-onboarding bulk action (org-admin/SU), UI-driven from Bam People Manager + invite flow; agents use banter_add_channel_members per channel)_ | Add many users to many channels at once | `apps/frontend/src/components/people/add-to-channels-dialog.tsx` |
 | `DELETE /v1/channels/:id/members/:userId` | `banter_remove_channel_member` | Remove a member | `apps/banter/src/components/channels/channel-settings.tsx` |
 | `PATCH /v1/channels/:id/members/:userId` | — _(skip: member-role admin — not wrapped)_ | Update member role | `apps/banter/src/hooks/use-channels.ts` |
 | `POST /v1/channels/:id/mark-read` | `banter_mark_read` | Update last-read cursor | `apps/banter/src/hooks/use-unread.ts` |
