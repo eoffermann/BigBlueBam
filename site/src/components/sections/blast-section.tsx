@@ -3,12 +3,12 @@ import {
   ArrowRight,
   Paintbrush,
   Filter,
-  FlaskConical,
   Send,
   BarChart3,
   Bot,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,44 +16,44 @@ import { Badge } from '@/components/ui/badge';
 const features = [
   {
     icon: Paintbrush,
-    title: 'Template Builder',
+    title: 'Visual Builder',
     description:
-      'Drag-and-drop email template editor with reusable blocks, brand colors, and responsive preview across devices.',
+      'Drag-and-drop blocks — heading, text, image, button, columns, social — into email-safe HTML, or drop into raw-HTML mode. Preview at desktop, tablet, and phone widths before anyone hits send.',
     color: 'bg-red-100 text-red-600',
   },
   {
-    icon: Filter,
-    title: 'Smart Segments',
+    icon: Mail,
+    title: 'Versioned Templates',
     description:
-      'Build dynamic audience segments based on contact fields, tags, engagement history, and cross-product activity.',
+      'Save a house style once and reuse it. Every edit bumps the version automatically, and the footer ships with an unsubscribe link so your sends clear the CAN-SPAM gate.',
     color: 'bg-rose-100 text-rose-600',
   },
   {
-    icon: FlaskConical,
-    title: 'Template Variables',
+    icon: Filter,
+    title: 'Segment Builder',
     description:
-      'Personalize with {{first_name}}, {{company}}, and custom merge fields. Live preview shows interpolated values as you build.',
+      'Saved filters over your Bond CRM contacts — lifecycle stage, lead source, score, location, last contacted — joined with all or any conditions, with a cached match count you can recalculate.',
     color: 'bg-pink-100 text-pink-600',
   },
   {
     icon: Send,
     title: 'Delivery & Tracking',
     description:
-      'Open pixel, click redirect, bounce handling, and unsubscribe management with full deliverability monitoring.',
+      'Open pixels, click redirects, bounce and complaint handling, and org-wide unsubscribe suppression all run on their own. Sends go through one shared platform SMTP relay, with SPF/DKIM/DMARC domain verification.',
     color: 'bg-red-100 text-red-600',
   },
   {
     icon: BarChart3,
-    title: 'Analytics Dashboard',
+    title: 'Analytics',
     description:
-      'Real-time campaign metrics -- opens, clicks, bounces, unsubscribes -- with per-link click maps and engagement trends.',
+      'Opens, clicks, bounces, and unsubscribes roll up per campaign and across the org, with a weekly engagement trend, top-clicked-links table, and a per-recipient delivery log.',
     color: 'bg-rose-100 text-rose-600',
   },
   {
     icon: Bot,
     title: 'AI Campaign Management',
     description:
-      '14 MCP tools let AI agents create campaigns, build segments, generate templates, schedule sends, and analyze results.',
+      '28 MCP tools let AI agents draft email content, suggest subject lines, build and preview segments, assemble a campaign, and review results — with blast_draft_email_content, blast_suggest_subject_lines, and blast_preview_segment among them. Sends stay gated behind a human by default.',
     color: 'bg-pink-100 text-pink-600',
   },
 ];
@@ -67,16 +67,53 @@ export function BlastSection() {
             Email Campaigns
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Campaigns that convert
+            Send it. Track it. No spreadsheets.
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Design email campaigns with a visual drag-and-drop block builder, target the right
-            audience with smart segments, personalize with merge fields, and measure everything with
-            real-time analytics. Blast includes 14 MCP tools so AI agents can orchestrate your
-            entire email marketing workflow.
+            Blast turns your Bond CRM contacts into an audience. Design an email in a drag-and-drop
+            block builder, target it with saved segments, send through the suite's shared SMTP
+            relay, then watch opens, clicks, bounces, and unsubscribes roll up per campaign and
+            across the org. 28 MCP tools let an AI agent draft the copy and assemble the send —
+            though the send itself waits for a human by default.
           </p>
         </div>
       </AnimatedReveal>
+
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame src="/screenshots/blast/light/01-campaigns.png" alt="Blast campaigns list with status and open/click rates" />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          Every campaign in one table — status, sent count, and open rates that fill in after the send.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-2">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame src="/screenshots/blast/light/04-template-editor.png" alt="Blast template editor with drag-and-drop blocks and live preview" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Build the email with blocks, preview it across devices, and let the version number sort itself out.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame src="/screenshots/blast/light/06-segment-builder.png" alt="Blast segment builder filtering Bond CRM contacts" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Filter Bond contacts into a segment — all conditions, any condition, your call.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame src="/screenshots/blast/light/07-analytics.png" alt="Blast analytics dashboard with open and click rates" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Opens, clicks, bounces, and a weekly trend — the numbers, without the wishful rounding.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.3} withScale>
+          <FloatingFrame src="/screenshots/blast/light/02-campaign-new.png" alt="Blast new campaign form with content mode toggle" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Name it, pick an audience, and choose your content mode — visual, raw HTML, or a saved template.
+          </p>
+        </AnimatedReveal>
+      </div>
 
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>

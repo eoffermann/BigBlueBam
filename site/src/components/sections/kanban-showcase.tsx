@@ -52,7 +52,7 @@ export function KanbanShowcase() {
         </AnimatedReveal>
 
         <AnimatedReveal direction="right" delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/swimlanes.png" alt="Kanban board with swimlanes" />
+          <FloatingFrame src="/screenshots/bam/light/01-board.png" alt="Kanban board grouped into phase swimlanes" />
         </AnimatedReveal>
       </div>
 

@@ -5,55 +5,56 @@ import {
   CalendarRange,
   FolderKanban,
   AlertTriangle,
-  BarChart3,
+  MessageSquare,
   Bot,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const features = [
   {
-    icon: TrendingUp,
-    title: 'Automatic Progress',
+    icon: Target,
+    title: 'Objectives & Key Results',
     description:
-      'Key Results linked to Bam epics update their progress as tasks complete. No manual slider dragging.',
+      'Every goal carries measurable key results — Number, Percentage, Currency, or Yes/No — each with a start, target, and current value. The goal score is the average of its KRs, so progress is math, not vibes.',
     color: 'bg-indigo-100 text-indigo-600',
   },
   {
-    icon: CalendarRange,
-    title: 'Time-Boxed Periods',
+    icon: TrendingUp,
+    title: 'Progress That Rolls Itself Up',
     description:
-      'Organize goals by quarters, halves, or custom periods with automatic status tracking.',
+      'Link a key result to a Bam epic, project, sprint, or task and it advances as that work reaches done. No quarterly slider-dragging ritual, no stale numbers.',
     color: 'bg-purple-100 text-purple-600',
   },
   {
-    icon: FolderKanban,
-    title: 'Cross-Project Rollup',
-    description:
-      'A single goal can draw progress from multiple Bam projects for org-level visibility.',
-    color: 'bg-violet-100 text-violet-600',
-  },
-  {
     icon: AlertTriangle,
-    title: 'At-Risk Detection',
+    title: 'At-Risk Triage',
     description:
-      'Goals automatically flagged when progress falls behind the expected pace.',
+      'A status engine compares where a goal is against where it should be by now and flags it on track, at risk, or behind. The At Risk view sorts the worst offenders to the top.',
     color: 'bg-rose-100 text-rose-600',
   },
   {
-    icon: BarChart3,
-    title: 'Progress Charts',
+    icon: MessageSquare,
+    title: 'Check-Ins & Status Updates',
     description:
-      'Daily snapshots power progress-over-time charts showing actual vs. expected trajectories.',
+      'Record new key-result values and post a status narrative to the team. Each update snapshots progress at that moment, so the history reads like a story instead of a guess.',
+    color: 'bg-violet-100 text-violet-600',
+  },
+  {
+    icon: CalendarRange,
+    title: 'Time Periods & Watchers',
+    description:
+      'Organize goals into quarters, halves, years, or custom ranges with a draft → active → completed → archived lifecycle. Watchers get an email the moment a goal’s status turns.',
     color: 'bg-indigo-100 text-indigo-600',
   },
   {
     icon: Bot,
-    title: 'AI Reporting',
+    title: 'AI Goal-Keeping',
     description:
-      '12 MCP tools let AI agents generate reports, flag risks, and post summaries to Banter.',
+      '30 MCP tools let AI agents provision a whole quarter of objectives, wire key results to real Bam delivery, run a weekly at-risk sweep, and post the period report to Banter — alongside your team, not instead of it. Try bearing_goal_create, bearing_kr_link, and bearing_at_risk.',
     color: 'bg-purple-100 text-purple-600',
   },
 ];
@@ -67,31 +68,59 @@ export function BearingSection() {
             Goals &amp; OKRs
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Strategy meets execution
+            Goals that update themselves
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Connect quarterly objectives to daily work. Bearing provides hierarchical time-boxed
-            periods, measurable key results with automatic progress tracking from linked Bam tasks,
-            and a status engine that auto-classifies goals as on-track, at-risk, behind, or achieved
-            — giving leadership real-time visibility without manual updates.
+            Set objectives, attach measurable key results, and watch progress roll up from the work
+            your team is already doing. Bearing links key results to Bam epics, projects, and tasks,
+            organizes everything into time periods, and runs a status engine that flags goals as
+            on-track, at-risk, or behind before the quarter quietly slips away — backed by 30 MCP
+            tools, so an AI agent can stand up a full quarter and run the Friday status sweep for you.
           </p>
         </div>
       </AnimatedReveal>
 
       {/* Hero screenshot */}
-      <AnimatedReveal delay={0.15}>
-        <div className="mt-8 overflow-hidden rounded-xl border border-zinc-200 shadow-lg">
-          <img
-            src="/screenshots/bearing-dashboard.png"
-            alt="Bearing Goals Dashboard — dark mode"
-            className="w-full"
-            loading="lazy"
-          />
-        </div>
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame
+          src="/screenshots/bearing/light/01-dashboard.png"
+          alt="Bearing goals dashboard with summary stats and period filtering"
+        />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          Goals Dashboard — summary stats, scope filtering, and period management
+          The quarter at a glance — every objective, its real percentage, and who is on the hook.
         </p>
       </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame
+            src="/screenshots/bearing/light/02-goal-detail.png"
+            alt="Bearing goal detail with key results, progress bars, and status updates"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            One goal, its key results, and the check-in history that got it there.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/bearing/light/04-at-risk.png"
+            alt="Bearing At Risk view listing goals that are falling behind pace"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            The goals raising their hand for help, worst-off sorted to the top.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame
+            src="/screenshots/bearing/light/04-reports.png"
+            alt="Bearing period report with progress trends and trajectory charts"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Actual vs. expected trajectory — the chart that ends the &ldquo;how are we doing?&rdquo; meeting.
+          </p>
+        </AnimatedReveal>
+      </div>
 
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>
@@ -105,38 +134,6 @@ export function BearingSection() {
               <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
             </div>
           ))}
-        </div>
-      </AnimatedReveal>
-
-      {/* Detail screenshots */}
-      <AnimatedReveal delay={0.25}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
-          <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-lg">
-            <img
-              src="/screenshots/bearing-goal-detail.png"
-              alt="Goal Detail — key results with progress bars, status updates, watchers"
-              className="w-full"
-              loading="lazy"
-            />
-            <div className="bg-white px-4 py-3">
-              <p className="text-sm text-zinc-600">
-                Goal detail — key results with progress bars, status updates, watchers
-              </p>
-            </div>
-          </div>
-          <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-lg">
-            <img
-              src="/screenshots/bearing-at-risk.png"
-              alt="At Risk Goals — goals behind schedule that need attention"
-              className="w-full"
-              loading="lazy"
-            />
-            <div className="bg-white px-4 py-3">
-              <p className="text-sm text-zinc-600">
-                At Risk view — goals behind schedule that need attention
-              </p>
-            </div>
-          </div>
         </div>
       </AnimatedReveal>
 

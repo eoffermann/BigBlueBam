@@ -40,9 +40,9 @@ export function Hero() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl lg:text-6xl"
           >
-            Your Team Just Got{' '}
+            Sixteen apps. One stack.{' '}
             <span className="bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent">
-              A Lot Bigger
+              Your newest hires are AI.
             </span>
           </motion.h1>
 
@@ -52,10 +52,11 @@ export function Hero() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600"
           >
-            The first project management suite built from the ground up for Human + AI collaboration.
-            AI agents work alongside your team as engineers, project managers, and customer service
-            reps with full access to the same boards, sprints, tickets, and tools as their human
-            counterparts.
+            A self-hosted productivity suite — boards, chat, CRM, docs, helpdesk, and a dozen more —
+            that behaves like a single product. It was built from day one so AI agents work right
+            alongside your team, with the same boards, sprints, tickets, and tools as the humans.
+            All sixteen apps speak to agents through one MCP server with 720+ tools, so the new hires
+            never ask where anything lives.
           </motion.p>
 
           <motion.div
@@ -79,7 +80,7 @@ export function Hero() {
           transition={{ duration: 0.7, delay: 0.4, ease: [0.21, 0.47, 0.32, 0.98] }}
           className="mt-16 md:mt-20"
         >
-          <FloatingFrame src="/screenshots/board.png" alt="Bam Kanban board" />
+          <FloatingFrame src="/screenshots/bam/light/01-board.png" alt="Bam Kanban board" />
         </motion.div>
       </div>
     </section>

@@ -1,51 +1,61 @@
 import {
   Calendar,
   ArrowRight,
+  CalendarRange,
+  Link2,
+  Clock,
   Users,
-  RefreshCw,
-  Globe,
+  Plug,
   Bot,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const features = [
   {
-    icon: Calendar,
-    title: 'Calendar Views',
+    icon: CalendarRange,
+    title: 'Week, Day, Month & Timeline',
     description:
-      'Day, week, month, and agenda views with drag-to-reschedule, color-coded event types, and mini-map navigation.',
+      'Four ways to look at the same time. Week, day, and month for the calendar grid — plus a cross-app timeline that lines up Book events with Bam task due dates and Bond deal close dates, day by day.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
-    icon: Users,
-    title: 'Resource Booking',
+    icon: Link2,
+    title: 'Public Booking Pages',
     description:
-      'Book meeting rooms, equipment, and team availability with conflict detection and approval workflows.',
+      'Publish a scheduling link at /book/meet/<slug> with durations, buffers, and your brand. Outside people pick a slot and book themselves; each booking creates or updates a matching Bond contact by email.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
-    icon: RefreshCw,
-    title: 'Recurring Events',
+    icon: Clock,
+    title: 'Working Hours = Availability',
     description:
-      'Daily, weekly, monthly, or custom recurrence rules with exception handling and series editing.',
+      'Set the hours you actually work, per day of the week. Book subtracts your busy events from those windows to compute real free slots — the same math your booking pages offer to visitors.',
     color: 'bg-indigo-100 text-indigo-600',
   },
   {
-    icon: Globe,
-    title: 'Timezone Support',
+    icon: Users,
+    title: 'Team Meeting-Time Finder',
     description:
-      'Timezone-aware scheduling with automatic conversion, world clock overlay, and team availability heatmaps.',
+      'Ask for a time that works across several people and Book finds the overlap. It handles mixed human-and-agent rosters too: agents bring unlimited virtual availability, humans bring their working hours.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
-    icon: Bot,
-    title: 'AI Scheduling Operations',
+    icon: Plug,
+    title: 'External Calendar Sync',
     description:
-      '11 MCP tools let AI agents create, update, cancel, and RSVP to events, and find meeting times across mixed human-plus-agent rosters where agents have unlimited virtual availability and humans carry their working hours.',
+      'Subscribe to any public iCalendar (.ics) feed — webcal links included — and its events mirror onto a Book calendar, refreshed on a recurring sweep. Google and Outlook two-way sync run on the same engine, ready to flip on once an operator adds OAuth.',
     color: 'bg-sky-100 text-sky-600',
+  },
+  {
+    icon: Bot,
+    title: 'AI Scheduling',
+    description:
+      '25 MCP tools let AI agents create, update, cancel, and RSVP to events, find a meeting time across a roster, and read team availability — book_find_meeting_time, book_create_event, book_get_team_availability, and the rest — right next to your reps, not instead of them.',
+    color: 'bg-indigo-100 text-indigo-600',
   },
 ];
 
@@ -58,19 +68,66 @@ export function BookSection() {
             Scheduling
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Time, organized
+            Find the time
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A full-featured calendar with event scheduling, resource booking, timezone-aware
-            coordination, and recurring event support. Book integrates with every BigBlueBam product
-            so deadlines, meetings, and milestones live in one place.
+            A calendar that lives where your work already does. Book runs week, day, month, and a
+            cross-app timeline; turns your working hours into bookable slots; and now subscribes to
+            outside calendars so the meeting your client added shows up next to your deadlines. Public
+            booking pages, a team meeting-time finder, and 25 MCP tools mean a person — or an AI
+            agent — can lock in a slot without playing email tag.
           </p>
         </div>
       </AnimatedReveal>
 
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame src="/screenshots/book/light/01-week-view.png" alt="Book week view with events laid across a seven-day grid" />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          A week you can actually read — events in their lanes, drag-to-reschedule, no spreadsheet cosplay.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame src="/screenshots/book/light/02-month-view.png" alt="Book month view with events on each day" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            The whole month at a glance, for when "sometime next week" needs a date.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame src="/screenshots/book/light/03-timeline.png" alt="Book cross-app timeline grouping events by day" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            One timeline, three apps — Book events beside Bam due dates and Bond close dates.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame src="/screenshots/book/light/07-connections.png" alt="Book external calendar connections with an active ICS subscription" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Subscribe to an outside .ics feed and watch its events arrive — Google and Outlook are next in line.
+          </p>
+        </AnimatedReveal>
+      </div>
+
+      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+        <AnimatedReveal delay={0.3} withScale>
+          <FloatingFrame src="/screenshots/book/light/05-booking-pages.png" alt="Book booking pages with a published public scheduling link" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            A public link that lets clients book you — and quietly files them in Bond on the way in.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.35} withScale>
+          <FloatingFrame src="/screenshots/book/light/06-working-hours.png" alt="Book working hours editor with per-day availability windows" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Tell it when you work once; it does the availability math forever after.
+          </p>
+        </AnimatedReveal>
+      </div>
+
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <div key={feature.title} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
               <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}>

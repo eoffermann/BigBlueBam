@@ -1,9 +1,63 @@
-import { Headset, ArrowRight, Ticket, Bot, ArrowRightLeft } from 'lucide-react';
+import {
+  Headset,
+  ArrowRight,
+  Ticket,
+  MessagesSquare,
+  ArrowRightLeft,
+  GaugeCircle,
+  KeyRound,
+  Bot,
+} from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+const features = [
+  {
+    icon: KeyRound,
+    title: 'Branded Portal & Sign-In',
+    description:
+      'Every org gets its own support site at /helpdesk/<org>/, with customer accounts that are completely separate from your staff login. Customers never need a Bam account, and never see your internal board.',
+    color: 'bg-emerald-100 text-emerald-600',
+  },
+  {
+    icon: Ticket,
+    title: 'Ticket Lifecycle',
+    description:
+      'Open → In Progress → Waiting on Customer → Resolved → Closed, with Low/Medium/High priorities (and an agent-only Critical) plus optional categories. Customers watch the status move in real time.',
+    color: 'bg-teal-100 text-teal-600',
+  },
+  {
+    icon: MessagesSquare,
+    title: 'Threaded Conversations',
+    description:
+      'Customer replies and agent replies in one thread, with internal agent notes that stay invisible to the customer, inline images, and file attachments. No reply-all chains, no lost context.',
+    color: 'bg-green-100 text-green-600',
+  },
+  {
+    icon: ArrowRightLeft,
+    title: 'Tickets Become Bam Tasks',
+    description:
+      'Every ticket spawns a linked task in the portal’s default project, so support work lives next to your other project work. Close the ticket and its task lands in a terminal state automatically.',
+    color: 'bg-emerald-100 text-emerald-600',
+  },
+  {
+    icon: GaugeCircle,
+    title: 'Per-Org SLA & Settings',
+    description:
+      'Configure each portal’s default project, categories, welcome message, signup rules, and verification. SLA badges and similar-ticket search keep the agent queue honest.',
+    color: 'bg-teal-100 text-teal-600',
+  },
+  {
+    icon: Bot,
+    title: 'AI Triage',
+    description:
+      '11 MCP tools let AI agents search and triage tickets, find similar open ones before a duplicate piles up, reconcile requesters by email, post replies, and move status — helpdesk_search_tickets, helpdesk_find_similar_tickets, helpdesk_upsert_user, and more.',
+    color: 'bg-green-100 text-green-600',
+  },
+];
 
 export function HelpdeskSection() {
   return (
@@ -11,104 +65,92 @@ export function HelpdeskSection() {
       <AnimatedReveal>
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <Badge variant="green" className="mb-4">
-            Included
+            Support Portal
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Customer-facing helpdesk
+            Support that doesn&rsquo;t live in your inbox
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A separate portal where customers submit and track support tickets. Every ticket
-            auto-creates a linked task on your board — and AI agents can triage, respond, and
-            resolve without human intervention.
+            Give every organization its own branded portal where customers file tickets and follow
+            each one as a threaded conversation. Behind the scenes, every ticket becomes a Bam task
+            on your board, so support work sits right next to the rest of your project work. With 11
+            MCP tools, an AI agent can triage, dedupe, and reply to a ticket as naturally as your
+            team does.
           </p>
         </div>
       </AnimatedReveal>
 
-      {/* Portal screenshots */}
-      <div className="grid gap-8 lg:grid-cols-2">
-        <AnimatedReveal delay={0.1} withScale>
-          <FloatingFrame src="/screenshots/helpdesk-login.png" alt="Helpdesk login portal" />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Clean, branded portal — separate from your internal tools
-          </p>
-        </AnimatedReveal>
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame
+          src="/screenshots/helpdesk/light/01-portal-entry.png"
+          alt="Helpdesk customer sign-in portal"
+        />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          A clean, branded front door &mdash; the only part of the suite your customers ever see.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/helpdesk-tickets.png" alt="Helpdesk ticket list" />
+          <FloatingFrame
+            src="/screenshots/helpdesk/light/02-ticket-list.png"
+            alt="Helpdesk My Tickets list with status, priority, and category"
+          />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Customers track ticket status with real-time updates
+            Customers track their own tickets &mdash; status, priority, and category, no email follow-ups.
           </p>
         </AnimatedReveal>
-      </div>
-
-      {/* Ticket-to-task pipeline */}
-      <AnimatedReveal delay={0.2}>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
-          <div className="relative rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="absolute -top-3 left-6 flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white">
-              1
-            </div>
-            <Ticket className="mb-3 h-5 w-5 text-primary-600" />
-            <h3 className="text-base font-semibold text-zinc-900">Customer submits ticket</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Client reports an issue through the helpdesk portal with category, priority, and description.
-            </p>
-          </div>
-          <div className="relative rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="absolute -top-3 left-6 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">
-              2
-            </div>
-            <Bot className="mb-3 h-5 w-5 text-amber-600" />
-            <h3 className="text-base font-semibold text-zinc-900">AI agent triages</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              A task is auto-created on the board. An AI agent sets priority, checks for similar
-              open tickets via the dedupe primitives, upserts the requester by email, and
-              responds to the customer.
-            </p>
-          </div>
-          <div className="relative rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="absolute -top-3 left-6 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">
-              3
-            </div>
-            <ArrowRightLeft className="mb-3 h-5 w-5 text-emerald-600" />
-            <h3 className="text-base font-semibold text-zinc-900">Board syncs ticket</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Moving the task through board phases automatically updates the ticket status. Clients
-              see progress without your team lifting a finger.
-            </p>
-          </div>
-        </div>
-      </AnimatedReveal>
-
-      {/* Conversation screenshots */}
-      <div className="mt-10 grid gap-8 lg:grid-cols-2">
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/helpdesk/light/03-ticket-detail.png"
+            alt="Helpdesk ticket detail with threaded customer and agent conversation"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            One thread for the whole conversation &mdash; agent replies show, internal notes don&rsquo;t.
+          </p>
+        </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/helpdesk-conversation.png"
-            alt="Helpdesk ticket detail with description and metadata"
+            src="/screenshots/helpdesk/light/04-new-ticket.png"
+            alt="Helpdesk new ticket form with subject, category, priority, and description"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Ticket detail with full description and metadata
-          </p>
-        </AnimatedReveal>
-        <AnimatedReveal delay={0.3} withScale>
-          <FloatingFrame
-            src="/screenshots/helpdesk-detail-conversation.png"
-            alt="Client and agent conversation thread"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Threaded conversations — agent replies visible to clients, internal notes stay private
+            Filing a ticket: subject, category, priority, and a rich-text box for the details.
           </p>
         </AnimatedReveal>
       </div>
 
-      <AnimatedReveal delay={0.35}>
-        <div className="mt-10 flex flex-col items-center gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
+      {/* Feature highlights */}
+      <AnimatedReveal delay={0.2}>
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+            >
+              <div
+                className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}
+              >
+                <feature.icon className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-semibold text-zinc-900">{feature.title}</h3>
+              <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
+            </div>
+          ))}
+        </div>
+      </AnimatedReveal>
+
+      <AnimatedReveal delay={0.3}>
+        <div className="mt-10 flex flex-col items-center gap-4 rounded-xl border border-zinc-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
           <div className="flex items-center gap-3">
             <Headset className="h-6 w-6 text-primary-600" />
             <p className="text-sm font-medium text-zinc-700">
-              Separate SPA served at{' '}
-              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/helpdesk/</code> — customers
-              never see your internal project board.
+              Served at{' '}
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/helpdesk/</code> &mdash; a
+              separate customer-facing SPA that shares authentication and the project model with Bam,
+              so tickets land on the same board as the rest of your work. Customers never see it.
             </p>
           </div>
           <Button href="/helpdesk/" variant="primary" size="sm">

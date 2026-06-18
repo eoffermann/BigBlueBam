@@ -31,7 +31,13 @@ export function Collaboration() {
     <SectionWrapper id="collaboration" alternate dividerTop>
       <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
         <AnimatedReveal direction="right" delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/members.png" alt="Team member settings" />
+          <FloatingFrame
+            src="/screenshots/bam/light/04-people.png"
+            alt="People roster with roles across the team"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            The whole roster in one view — humans and agents, same roles, same audit trail.
+          </p>
         </AnimatedReveal>
 
         <AnimatedReveal direction="left">

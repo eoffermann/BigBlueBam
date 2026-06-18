@@ -130,13 +130,13 @@ export function AiCollaboration() {
             <div>
               <h3 className="text-xl font-bold text-zinc-900">Full parity through MCP</h3>
               <p className="mt-3 text-zinc-600">
-                The built-in Model Context Protocol server exposes 340 structured tools that mirror
-                every UI action across all fourteen apps plus cross-cutting platform capabilities
+                The built-in Model Context Protocol server exposes 720+ structured tools that mirror
+                every UI action across all sixteen apps plus cross-cutting platform capabilities
                 (agent identity, approval queues, visibility preflight, unified activity, cross-app
                 search, composite views, entity linking, scheduled posts, upserts, attachment
                 metadata, agent policies, outbound webhooks). AI agents authenticate with scoped
                 API keys, operate under the same role-based permissions as humans, and leave the
-                same audit trail in the activity log.
+                same audit trail in the activity log — no special back door, same rules as everyone.
               </p>
               <div className="mt-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
@@ -149,7 +149,7 @@ export function AiCollaboration() {
             </div>
             <div>
               <h3 className="mb-4 text-sm font-semibold text-zinc-500 uppercase tracking-wider">
-                340 tools across 14 apps + platform
+                720+ MCP tools across 16 apps + platform
               </h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {capabilities.map((cap) => (
@@ -196,7 +196,7 @@ export function AiCollaboration() {
             {
               step: '3',
               title: 'Human resolves, agent continues',
-              description: 'The human teammate provides guidance, and the agent picks back up — seamless handoff, full context preserved.',
+              description: 'The human teammate weighs in, and the agent picks right back up where it left off — full context preserved, nothing dropped on the floor.',
               color: 'bg-emerald-500',
             },
           ].map((item) => (

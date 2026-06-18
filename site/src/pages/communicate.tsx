@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Rocket } from 'lucide-react';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import { BanterStub } from '@/components/sections/banter-stub';
+import { BureauSection } from '@/components/sections/bureau-section';
 import { HelpdeskSection } from '@/components/sections/helpdesk-section';
 import { BeaconSection } from '@/components/sections/beacon-section';
 import { BriefSection } from '@/components/sections/brief-section';
@@ -41,6 +42,7 @@ export function CommunicatePage() {
         </section>
 
         <BanterStub />
+        <BureauSection />
         <HelpdeskSection />
         <BeaconSection />
         <BriefSection />

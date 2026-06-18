@@ -2,13 +2,14 @@ import {
   BarChart3,
   ArrowRight,
   LayoutDashboard,
-  PieChart,
   Search,
   Clock,
   Database,
+  Wand2,
   Bot,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,44 +17,44 @@ import { Badge } from '@/components/ui/badge';
 const features = [
   {
     icon: LayoutDashboard,
-    title: 'Dashboard Builder',
+    title: 'Dashboards & Widgets',
     description:
-      'Drag-and-drop canvas editor with resizable widgets, auto-layout, and shareable dashboard links.',
+      'Assemble named, shareable dashboards from chart, KPI, counter, and table widgets. Set each one Private, by Project, or Org-wide, add an auto-refresh for the wall-board, and drag widgets into the order you want.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
-    icon: PieChart,
-    title: 'Widget Library',
+    icon: Database,
+    title: 'Curated Data Sources',
     description:
-      'Charts, tables, KPI cards, and gauges fed by cross-product data sources with configurable refresh intervals.',
+      'A compile-time registry allowlists exactly which tables Bench may read — tasks in Bam, deals in Bond, campaigns in Blast, goals in Bearing, and more. Every query is automatically scoped to your org. No warehouse, no copy-paste.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
-    icon: Search,
-    title: 'Ad-hoc Explorer',
+    icon: Wand2,
+    title: 'Widget Wizard & Templates',
     description:
-      'Write queries against your data, visualize results instantly, and save useful explorations as dashboard widgets.',
+      'A four-step wizard (Data Source → Measures & Dimensions → Chart Type → Name & Style) builds a custom widget, or grab one from the prebuilt gallery and skip straight to the chart.',
     color: 'bg-indigo-100 text-indigo-600',
+  },
+  {
+    icon: Search,
+    title: 'Ad-hoc Explorer & Saved Queries',
+    description:
+      'Pick a source and get a results table with row count and timing on the spot. When a query earns its keep, save its definition and re-run it whenever you like.',
+    color: 'bg-blue-100 text-blue-600',
   },
   {
     icon: Clock,
     title: 'Scheduled Reports',
     description:
-      'Automatic PDF or CSV report generation on a cron schedule, delivered via email or Banter message.',
-    color: 'bg-blue-100 text-blue-600',
-  },
-  {
-    icon: Database,
-    title: 'Materialized Views',
-    description:
-      'Pre-computed aggregations that refresh on schedule for fast dashboard loads, even on large datasets.',
+      'Cron-driven dashboard snapshots aimed at Email, a Banter channel, or a Brief document, in PDF, PNG, or CSV. Heads up: delivery is wired but still a stub this release — the schedule stamps status, no artifact ships yet.',
     color: 'bg-sky-100 text-sky-600',
   },
   {
     icon: Bot,
     title: 'AI Analytics',
     description:
-      '11 MCP tools let AI agents create dashboards, add widgets, run ad-hoc queries, and schedule reports.',
+      '32 MCP tools let AI agents discover sources, run ad-hoc queries, build dashboards and widgets, and summarize a whole board in one call — plus anomaly detection and period comparison that have no UI equivalent. Try bench_summarize_dashboard, bench_query_ad_hoc, and bench_detect_anomalies.',
     color: 'bg-indigo-100 text-indigo-600',
   },
 ];
@@ -67,15 +68,68 @@ export function BenchSection() {
             Analytics
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Data-driven decisions
+            The numbers were here all along
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Build custom dashboards with drag-and-drop widgets, explore data with an ad-hoc query
-            runner, schedule recurring reports, and accelerate large datasets with materialized views.
-            Bench provides 11 MCP tools for AI-powered analytics workflows.
+            Bench turns the data your team already creates across the suite — deals, campaigns,
+            goals, tasks, knowledge-base activity — into shared dashboards, ad-hoc queries, and
+            scheduled reports. No warehouse, no exports, no copy-paste: it charts the live tables
+            through a curated registry, scoped to your org. And with 32 MCP tools, an AI agent can
+            summarize a whole dashboard or sniff out an anomaly without anyone touching a chart.
           </p>
         </div>
       </AnimatedReveal>
+
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame
+          src="/screenshots/bench/light/02-dashboard-view.png"
+          alt="Bench dashboard with charts, KPI cards, and tables"
+        />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          A dashboard that pulls from five apps at once — and tells you how long each widget took.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-2">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame
+            src="/screenshots/bench/light/03-explorer.png"
+            alt="Bench ad-hoc explorer with a source picker and results table"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Ask a source a question, get a table back — row count and timing included.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/bench/light/04-widget-wizard.png"
+            alt="Bench widget wizard stepping through source, fields, chart type, and style"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Four steps from "I have a hunch" to a chart on the board.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/bench/light/06-saved-queries.png"
+            alt="Bench saved queries list with run and edit actions"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            The good queries, kept — one click to run them again next quarter.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame
+            src="/screenshots/bench/light/05-reports.png"
+            alt="Bench scheduled reports list with delivery methods and cadences"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Snapshots on a cadence, headed for email, a channel, or a doc.
+          </p>
+        </AnimatedReveal>
+      </div>
 
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>

@@ -5,12 +5,59 @@ import {
   Search,
   Bot,
   GitFork,
+  History,
+  ShieldCheck,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+const features = [
+  {
+    icon: Clock,
+    title: 'Knowledge with a shelf life',
+    description:
+      'Every article carries an expiry date and a freshness signal — Verified recently, Content is stale, Expiring soon, or Needs verification. Verify an article to reset the clock; the rot never sneaks up on you.',
+    color: 'bg-amber-100 text-amber-600',
+  },
+  {
+    icon: Search,
+    title: 'Hybrid search',
+    description:
+      'Find knowledge by meaning, not just keywords. Semantic vectors, tag expansion, link traversal, and a keyword fallback all run together — and each result tells you why it matched.',
+    color: 'bg-blue-100 text-blue-600',
+  },
+  {
+    icon: GitFork,
+    title: 'Knowledge Graph',
+    description:
+      'Typed links (Related To, Supersedes, Depends On, Conflicts With, See Also) plus implicit tag-affinity edges form a navigable map. Walk neighbors out three hops and see what changed recently.',
+    color: 'bg-emerald-100 text-emerald-600',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Fridge Cleanout',
+    description:
+      'A freshness-focused governance dashboard with Overview, At-Risk, Archived, and Agent Activity tabs. Verify what is about to expire and retire stale articles in bulk — yes, that is really what we named it.',
+    color: 'bg-teal-100 text-teal-600',
+  },
+  {
+    icon: History,
+    title: 'Versioned lifecycle',
+    description:
+      'Articles move through Draft, Active, Pending Review, Archived, and Retired, with a version snapshot on every edit and per-scope expiry policies for how long knowledge stays trusted.',
+    color: 'bg-rose-100 text-rose-600',
+  },
+  {
+    icon: Bot,
+    title: 'Agent-native knowledge',
+    description:
+      '38 MCP tools let AI agents author, verify, challenge, and idempotently upsert entries by slug, plus run grounding retrieval and traverse the graph — beacon_search_context, beacon_verify, and beacon_upsert_by_slug among them, all gated by a visibility preflight.',
+    color: 'bg-purple-100 text-purple-600',
+  },
+];
 
 export function BeaconSection() {
   return (
@@ -21,102 +68,76 @@ export function BeaconSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Knowledge that stays fresh
+            A knowledge base that keeps itself honest
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A curated knowledge base with expiry governance, semantic search, a Knowledge Graph
-            Explorer, and agent-native verification. Every Beacon has a shelf life — stale
-            knowledge gets surfaced, challenged, and renewed automatically.
+            A curated knowledge base where every article has a shelf life. Beacon blends hybrid
+            search, a typed Knowledge Graph, and built-in freshness governance, so the library never
+            quietly rots as the facts change — stale knowledge gets surfaced, challenged, and renewed
+            instead. It shares your platform login and pulls projects from Bam, and 38 MCP tools let
+            an AI agent author, verify, or traverse knowledge as naturally as it files a task.
           </p>
         </div>
       </AnimatedReveal>
 
-      {/* Hero screenshots */}
-      <div className="grid gap-8 lg:grid-cols-2">
-        <AnimatedReveal delay={0.1} withScale>
-          <FloatingFrame src="/screenshots/beacon-home.png" alt="Beacon Knowledge Home" />
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame
+          src="/screenshots/beacon/light/01-knowledge-home.png"
+          alt="Beacon Knowledge Home with stats, quick actions, and recent activity"
+        />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          Knowledge Home — total beacons, what is at risk this week, and quick ways in.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame
+            src="/screenshots/beacon/light/06-search-results.png"
+            alt="Beacon hybrid search results with match-source badges"
+          />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Knowledge Home — stats, recent activity, and quick-action cards
+            Search by meaning — and every result owns up to why it matched.
           </p>
         </AnimatedReveal>
-        <AnimatedReveal delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/beacon-list.png" alt="Beacon browse list" />
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/beacon/light/04-graph-explorer.png"
+            alt="Beacon Knowledge Graph explorer showing connected articles"
+          />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Browse beacons by status, project, and tags with infinite scroll
+            The Knowledge Graph — how your articles connect, links and shared tags alike.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame
+            src="/screenshots/beacon/light/05-governance-dashboard.png"
+            alt="Beacon Fridge Cleanout governance dashboard with freshness score"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Fridge Cleanout — freshness score, at-risk articles, and what to clear out.
           </p>
         </AnimatedReveal>
       </div>
 
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-              <Clock className="h-5 w-5" />
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
+            <div key={feature.title} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}>
+                <feature.icon className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-semibold text-zinc-900">{feature.title}</h3>
+              <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
             </div>
-            <h3 className="text-base font-semibold text-zinc-900">Expiry-aware</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Every Beacon has a shelf life. Stale knowledge is surfaced on the governance
-              dashboard before it misleads your team.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-              <Search className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Semantic + graph search</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Find knowledge by meaning, not just keywords. The hybrid search pipeline expands
-              queries through tag affinity and link traversal.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 text-purple-600">
-              <Bot className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Agent verification</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              30 MCP tools let AI agents publish, verify, challenge, and upsert entries by slug
-              within confidence bounds. Freshness scores track how much of your knowledge base
-              stays current.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-              <GitFork className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Knowledge Graph</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Explore connections between your team's knowledge. Explicit links and implicit tag
-              affinities form a navigable graph of related Beacons.
-            </p>
-          </div>
+          ))}
         </div>
       </AnimatedReveal>
 
-      {/* Graph + Dashboard screenshots */}
-      <div className="mt-10 grid gap-8 lg:grid-cols-2">
-        <AnimatedReveal delay={0.25} withScale>
-          <FloatingFrame
-            src="/screenshots/beacon-graph.png"
-            alt="Knowledge Graph explorer showing connected Beacons"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Knowledge Graph — visualize how Beacons connect through links and shared tags
-          </p>
-        </AnimatedReveal>
-        <AnimatedReveal delay={0.3} withScale>
-          <FloatingFrame
-            src="/screenshots/beacon-dashboard.png"
-            alt="Governance dashboard with freshness score and at-risk beacons"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Governance dashboard — freshness score, at-risk beacons, and agent activity
-          </p>
-        </AnimatedReveal>
-      </div>
-
-      <AnimatedReveal delay={0.35}>
+      <AnimatedReveal delay={0.3}>
         <div className="mt-10 flex flex-col items-center gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
           <div className="flex items-center gap-3">
             <BookOpen className="h-6 w-6 text-primary-600" />

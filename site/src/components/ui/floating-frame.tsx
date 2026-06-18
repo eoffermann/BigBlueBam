@@ -15,8 +15,8 @@ interface FloatingFrameProps {
 
 export function FloatingFrame({ src, alt, className, parallaxIntensity }: FloatingFrameProps) {
   const prefersReduced = useReducedMotion();
-  const { ref: parallaxRef, y } = useScrollParallax();
-  const tilt = useTiltOnHover();
+  const { ref: parallaxRef, y } = useScrollParallax<HTMLDivElement>();
+  const tilt = useTiltOnHover<HTMLDivElement>();
   const gyro = useGyroTilt();
 
   const parallaxEnabled = EFFECTS.parallaxLift.enabled && !prefersReduced;
