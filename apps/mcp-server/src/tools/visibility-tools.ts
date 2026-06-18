@@ -25,7 +25,7 @@ export function registerVisibilityTools(server: McpServer, api: ApiClient): void
   registerTool(server, {
     name: 'can_access',
     description:
-      "Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed. Supported entity_type values: bam.task, bam.project, bam.sprint, helpdesk.ticket, bond.deal, bond.contact, bond.company, brief.document, beacon.entry. Unsupported types return reason='unsupported_entity_type' and MUST NOT be surfaced.",
+      "Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed. Supported entity_type values: bam.task, bam.project, bam.sprint, helpdesk.ticket, bond.deal, bond.contact, bond.company, brief.document, beacon.entry, blueprint.diagram, blueprint.node, banter.message, banter.channel, bearing.goal, bearing.kr, board.board, book.event, bill.invoice, blank.form, bolt.rule. Unsupported types return reason='unsupported_entity_type' (with a supported_entity_types hint) and MUST NOT be surfaced.",
     input: {
       asker_user_id: z
         .string()

@@ -16,6 +16,17 @@ import {
   beaconEntriesStub,
   blueprintDiagramsStub,
   blueprintNodesStub,
+  banterChannelsStub,
+  banterMessagesStub,
+  banterChannelMembershipsStub,
+  bearingGoalsStub,
+  bearingKeyResultsStub,
+  boardsStub,
+  boardCollaboratorsStub,
+  bookEventsStub,
+  billInvoicesStub,
+  blankFormsStub,
+  boltAutomationsStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -54,7 +65,17 @@ export type VisibilityEntityType =
   | 'brief.document'
   | 'beacon.entry'
   | 'blueprint.diagram'
-  | 'blueprint.node';
+  | 'blueprint.node'
+  // Banter Feed entity-type registration (banter-feed-design-document.md §16)
+  | 'banter.message'
+  | 'banter.channel'
+  | 'bearing.goal'
+  | 'bearing.kr'
+  | 'board.board'
+  | 'book.event'
+  | 'bill.invoice'
+  | 'blank.form'
+  | 'bolt.rule';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -68,6 +89,16 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'beacon.entry',
   'blueprint.diagram',
   'blueprint.node',
+  // Banter Feed entity-type registration (banter-feed-design-document.md §16)
+  'banter.message',
+  'banter.channel',
+  'bearing.goal',
+  'bearing.kr',
+  'board.board',
+  'book.event',
+  'bill.invoice',
+  'blank.form',
+  'bolt.rule',
 ] as const;
 
 export type PreflightReason =
@@ -79,6 +110,8 @@ export type PreflightReason =
   | 'bond_restricted_role_not_owner'
   | 'beacon_private_not_owner'
   | 'beacon_project_not_member'
+  | 'banter_not_channel_member'
+  | 'board_private_no_collaborator'
   | 'unsupported_entity_type';
 
 export interface PreflightResult {
@@ -95,6 +128,7 @@ interface AskerContext {
   id: string;
   org_id: string;
   role: string;
+  is_superuser: boolean;
 }
 
 async function loadAsker(askerUserId: string): Promise<AskerContext | null> {
@@ -102,6 +136,7 @@ async function loadAsker(askerUserId: string): Promise<AskerContext | null> {
     .select({
       id: users.id,
       org_id: users.org_id,
+      is_superuser: users.is_superuser,
     })
     .from(users)
     .where(eq(users.id, askerUserId))
@@ -110,7 +145,12 @@ async function loadAsker(askerUserId: string): Promise<AskerContext | null> {
   const row = rows[0]!;
   // Wave E.F: role is resolved from the user's home-org group membership.
   const role = (await resolveUserOrgRole(row.id, row.org_id)) ?? 'member';
-  return { id: row.id, org_id: row.org_id, role };
+  return {
+    id: row.id,
+    org_id: row.org_id,
+    role,
+    is_superuser: row.is_superuser,
+  };
 }
 
 function isOrgAdmin(role: string): boolean {
@@ -658,6 +698,414 @@ async function preflightBlueprintNode(
   return { allowed: true, reason: 'ok', entity_org_id: node.org_id };
 }
 
+// ===========================================================================
+// Banter Feed entity-type registration (banter-feed-design-document.md §16)
+// ===========================================================================
+// These branches let the Feed's can_access gate (§4.1) admit entities from the
+// rest of the suite. Without them, those sources deny-by-default and the
+// cross-app half of the feed is dark.
+
+// ---------------------------------------------------------------------------
+// banter.channel / banter.message
+// ---------------------------------------------------------------------------
+//
+// Mirrors apps/banter-api/src/middleware/channel-auth.ts :: requireChannelMember:
+//  - cross-org → not_found (do not leak existence).
+//  - archived channel → not_found for non-SuperUsers (archived channels are
+//     invisible to members; SuperUsers bypass to inspect/un-archive).
+//  - SuperUsers bypass the membership requirement entirely.
+//  - otherwise membership in banter_channel_memberships is required for EVERY
+//     channel type. Public channels merely 403 (vs 404 for private) in the
+//     middleware; either way a non-member cannot read content.
+//  - NB: org admins/owners who are NOT channel members are NOT elevated here
+//     (the P2-15 finding: requireChannelMember blocks non-member org admins),
+//     so we deliberately do NOT apply the generic isOrgAdmin bypass.
+//
+// A banter.message inherits its parent channel's access (and must not be
+// soft-deleted).
+
+interface BanterChannelRow {
+  id: string;
+  org_id: string;
+  type: string;
+  is_archived: boolean;
+}
+
+async function banterChannelAccess(
+  asker: AskerContext,
+  channel: BanterChannelRow,
+): Promise<PreflightResult> {
+  if (channel.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  // SuperUsers bypass membership and the archived gate.
+  if (asker.is_superuser) {
+    return { allowed: true, reason: 'ok', entity_org_id: channel.org_id };
+  }
+  if (channel.is_archived) {
+    return { allowed: false, reason: 'not_found' };
+  }
+
+  const memberRows = await db
+    .select({ id: banterChannelMembershipsStub.id })
+    .from(banterChannelMembershipsStub)
+    .where(
+      and(
+        eq(banterChannelMembershipsStub.channel_id, channel.id),
+        eq(banterChannelMembershipsStub.user_id, asker.id),
+      ),
+    )
+    .limit(1);
+
+  if (memberRows.length > 0) {
+    return { allowed: true, reason: 'ok', entity_org_id: channel.org_id };
+  }
+
+  // Non-member. Private/DM channels return not_found (leak-safe); a public
+  // channel returns the specific "not a member" reason. Either way: deny.
+  if (channel.type === 'public') {
+    return {
+      allowed: false,
+      reason: 'banter_not_channel_member',
+      entity_org_id: channel.org_id,
+    };
+  }
+  return { allowed: false, reason: 'not_found' };
+}
+
+async function preflightBanterChannel(
+  asker: AskerContext,
+  channelId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: banterChannelsStub.id,
+      org_id: banterChannelsStub.org_id,
+      type: banterChannelsStub.type,
+      is_archived: banterChannelsStub.is_archived,
+    })
+    .from(banterChannelsStub)
+    .where(eq(banterChannelsStub.id, channelId))
+    .limit(1);
+
+  const channel = rows[0];
+  if (!channel) return { allowed: false, reason: 'not_found' };
+  return banterChannelAccess(asker, channel);
+}
+
+async function preflightBanterMessage(
+  asker: AskerContext,
+  messageId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: banterMessagesStub.id,
+      is_deleted: banterMessagesStub.is_deleted,
+      channel_id: banterChannelsStub.id,
+      org_id: banterChannelsStub.org_id,
+      type: banterChannelsStub.type,
+      is_archived: banterChannelsStub.is_archived,
+    })
+    .from(banterMessagesStub)
+    .innerJoin(
+      banterChannelsStub,
+      eq(banterChannelsStub.id, banterMessagesStub.channel_id),
+    )
+    .where(eq(banterMessagesStub.id, messageId))
+    .limit(1);
+
+  const msg = rows[0];
+  if (!msg || msg.is_deleted) return { allowed: false, reason: 'not_found' };
+  return banterChannelAccess(asker, {
+    id: msg.channel_id,
+    org_id: msg.org_id,
+    type: msg.type,
+    is_archived: msg.is_archived,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// bearing.goal / bearing.kr
+// ---------------------------------------------------------------------------
+//
+// Bearing has no per-goal visibility enum: apps/bearing-api/src/middleware/
+// authorize.ts gates reads on org match only, so any org member can read any
+// goal in their org. A key result inherits its parent goal's visibility.
+
+async function preflightBearingGoal(
+  asker: AskerContext,
+  goalId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bearingGoalsStub.id,
+      organization_id: bearingGoalsStub.organization_id,
+    })
+    .from(bearingGoalsStub)
+    .where(eq(bearingGoalsStub.id, goalId))
+    .limit(1);
+
+  const goal = rows[0];
+  if (!goal) return { allowed: false, reason: 'not_found' };
+  if (goal.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: goal.organization_id };
+}
+
+async function preflightBearingKr(
+  asker: AskerContext,
+  krId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bearingKeyResultsStub.id,
+      organization_id: bearingGoalsStub.organization_id,
+    })
+    .from(bearingKeyResultsStub)
+    .innerJoin(
+      bearingGoalsStub,
+      eq(bearingGoalsStub.id, bearingKeyResultsStub.goal_id),
+    )
+    .where(eq(bearingKeyResultsStub.id, krId))
+    .limit(1);
+
+  const kr = rows[0];
+  if (!kr) return { allowed: false, reason: 'not_found' };
+  if (kr.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: kr.organization_id };
+}
+
+// ---------------------------------------------------------------------------
+// board.board
+// ---------------------------------------------------------------------------
+//
+// Mirrors apps/board-api/src/services/board.service.ts :: visibilityFilter:
+//  - visibility='organization': any org member.
+//  - visibility='private':      creator or explicit collaborator (NO org-admin
+//     bypass, matching brief.document private semantics).
+//  - visibility='project':      creator, collaborator, or project member.
+// Archive is a list-hiding state, not an access gate: an early contributor can
+// still open an archived board, so archived_at does not deny here.
+
+async function preflightBoardBoard(
+  asker: AskerContext,
+  boardId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: boardsStub.id,
+      org_id: boardsStub.organization_id,
+      project_id: boardsStub.project_id,
+      created_by: boardsStub.created_by,
+      visibility: boardsStub.visibility,
+    })
+    .from(boardsStub)
+    .where(eq(boardsStub.id, boardId))
+    .limit(1);
+
+  const board = rows[0];
+  if (!board) return { allowed: false, reason: 'not_found' };
+  if (board.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+
+  if (board.visibility === 'organization') {
+    return { allowed: true, reason: 'ok', entity_org_id: board.org_id };
+  }
+  if (board.created_by === asker.id) {
+    return { allowed: true, reason: 'ok', entity_org_id: board.org_id };
+  }
+
+  const collabRows = await db
+    .select({ id: boardCollaboratorsStub.id })
+    .from(boardCollaboratorsStub)
+    .where(
+      and(
+        eq(boardCollaboratorsStub.board_id, board.id),
+        eq(boardCollaboratorsStub.user_id, asker.id),
+      ),
+    )
+    .limit(1);
+  const isCollaborator = collabRows.length > 0;
+
+  if (board.visibility === 'private') {
+    if (isCollaborator) {
+      return { allowed: true, reason: 'ok', entity_org_id: board.org_id };
+    }
+    return {
+      allowed: false,
+      reason: 'board_private_no_collaborator',
+      entity_org_id: board.org_id,
+    };
+  }
+
+  // visibility === 'project'
+  if (isCollaborator) {
+    return { allowed: true, reason: 'ok', entity_org_id: board.org_id };
+  }
+  if (board.project_id) {
+    const member = await isProjectMember(board.project_id, asker.id);
+    if (member) {
+      return { allowed: true, reason: 'ok', entity_org_id: board.org_id };
+    }
+  }
+  return {
+    allowed: false,
+    reason: 'not_project_member',
+    entity_org_id: board.org_id,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// book.event
+// ---------------------------------------------------------------------------
+//
+// book_events.visibility is a free/busy status, not a privacy enum. The list
+// route scopes on org, so any org member can read any event in their org
+// (creator and attendees are subsets). Org match is the entire gate.
+
+async function preflightBookEvent(
+  asker: AskerContext,
+  eventId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bookEventsStub.id,
+      organization_id: bookEventsStub.organization_id,
+    })
+    .from(bookEventsStub)
+    .where(eq(bookEventsStub.id, eventId))
+    .limit(1);
+
+  const event = rows[0];
+  if (!event) return { allowed: false, reason: 'not_found' };
+  if (event.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: event.organization_id };
+}
+
+// ---------------------------------------------------------------------------
+// bill.invoice
+// ---------------------------------------------------------------------------
+//
+// No per-invoice visibility enum: any org member can read any invoice in their
+// org. Org match is the entire rule.
+
+async function preflightBillInvoice(
+  asker: AskerContext,
+  invoiceId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: billInvoicesStub.id,
+      organization_id: billInvoicesStub.organization_id,
+    })
+    .from(billInvoicesStub)
+    .where(eq(billInvoicesStub.id, invoiceId))
+    .limit(1);
+
+  const invoice = rows[0];
+  if (!invoice) return { allowed: false, reason: 'not_found' };
+  if (invoice.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return {
+    allowed: true,
+    reason: 'ok',
+    entity_org_id: invoice.organization_id,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// blank.form
+// ---------------------------------------------------------------------------
+//
+// Mirrors apps/blank-api/src/services/form.service.ts visibility enforcement:
+//  - visibility='public': readable by anyone (within the org for our purposes).
+//  - visibility='org':    any org member.
+//  - visibility='project': project member when project_id is set, else org.
+
+async function preflightBlankForm(
+  asker: AskerContext,
+  formId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: blankFormsStub.id,
+      organization_id: blankFormsStub.organization_id,
+      project_id: blankFormsStub.project_id,
+      visibility: blankFormsStub.visibility,
+    })
+    .from(blankFormsStub)
+    .where(eq(blankFormsStub.id, formId))
+    .limit(1);
+
+  const form = rows[0];
+  if (!form) return { allowed: false, reason: 'not_found' };
+  if (form.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+
+  if (form.visibility === 'public' || form.visibility === 'org') {
+    return { allowed: true, reason: 'ok', entity_org_id: form.organization_id };
+  }
+
+  // visibility === 'project'
+  if (isOrgAdmin(asker.role)) {
+    return { allowed: true, reason: 'ok', entity_org_id: form.organization_id };
+  }
+  if (form.project_id) {
+    const member = await isProjectMember(form.project_id, asker.id);
+    if (member) {
+      return {
+        allowed: true,
+        reason: 'ok',
+        entity_org_id: form.organization_id,
+      };
+    }
+    return {
+      allowed: false,
+      reason: 'not_project_member',
+      entity_org_id: form.organization_id,
+    };
+  }
+  // 'project' visibility with no project set behaves as org-visible.
+  return { allowed: true, reason: 'ok', entity_org_id: form.organization_id };
+}
+
+// ---------------------------------------------------------------------------
+// bolt.rule
+// ---------------------------------------------------------------------------
+//
+// Bolt automations are org-level infrastructure with no per-rule visibility
+// enum: any org member can read any rule in their org. Note the org column is
+// org_id (not organization_id).
+
+async function preflightBoltRule(
+  asker: AskerContext,
+  ruleId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: boltAutomationsStub.id,
+      org_id: boltAutomationsStub.org_id,
+    })
+    .from(boltAutomationsStub)
+    .where(eq(boltAutomationsStub.id, ruleId))
+    .limit(1);
+
+  const rule = rows[0];
+  if (!rule) return { allowed: false, reason: 'not_found' };
+  if (rule.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: rule.org_id };
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -709,6 +1157,25 @@ export async function preflightAccess(
       return preflightBlueprintDiagram(asker, entityId);
     case 'blueprint.node':
       return preflightBlueprintNode(asker, entityId);
+    // Banter Feed entity-type registration (banter-feed-design-document.md §16)
+    case 'banter.message':
+      return preflightBanterMessage(asker, entityId);
+    case 'banter.channel':
+      return preflightBanterChannel(asker, entityId);
+    case 'bearing.goal':
+      return preflightBearingGoal(asker, entityId);
+    case 'bearing.kr':
+      return preflightBearingKr(asker, entityId);
+    case 'board.board':
+      return preflightBoardBoard(asker, entityId);
+    case 'book.event':
+      return preflightBookEvent(asker, entityId);
+    case 'bill.invoice':
+      return preflightBillInvoice(asker, entityId);
+    case 'blank.form':
+      return preflightBlankForm(asker, entityId);
+    case 'bolt.rule':
+      return preflightBoltRule(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -736,4 +1203,13 @@ export const __test__ = {
   preflightBeaconEntry,
   preflightBlueprintDiagram,
   preflightBlueprintNode,
+  preflightBanterChannel,
+  preflightBanterMessage,
+  preflightBearingGoal,
+  preflightBearingKr,
+  preflightBoardBoard,
+  preflightBookEvent,
+  preflightBillInvoice,
+  preflightBlankForm,
+  preflightBoltRule,
 };
