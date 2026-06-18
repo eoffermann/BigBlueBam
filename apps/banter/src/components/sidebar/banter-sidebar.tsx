@@ -8,6 +8,7 @@ import {
   Bookmark,
   Settings,
   Compass,
+  Sparkles,
   MessageCircle,
   X,
   MoreHorizontal,
@@ -139,6 +140,15 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
             onClick={() => onNavigate('/admin/calling')}
           />
         )}
+        {/* Feed — the ranked activity stream. Lives here, just above the
+            channels section, as a sibling of the channel/DM navigation (it's a
+            way to view activity), not as a top-bar action. */}
+        <SidebarButton
+          icon={<Sparkles className="h-4 w-4" />}
+          label="Feed"
+          active={activeRoute.page === 'feed'}
+          onClick={() => onNavigate('/feed')}
+        />
       </div>
 
       {/* Scrollable channel/DM list */}
