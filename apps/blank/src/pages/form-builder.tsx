@@ -120,6 +120,16 @@ function SortableField({ field, isSelected, onSelect, onDelete }: SortableFieldP
 /*  Live preview renderer                                              */
 /* ------------------------------------------------------------------ */
 
+/** Field options may be plain strings or { label, value } objects depending on
+ *  how the form was created. Render the human label for either shape — rendering
+ *  the raw object as a React child throws React error #31 and blanks the whole
+ *  preview panel. */
+function optionLabel(opt: unknown): string {
+  if (typeof opt === 'string') return opt;
+  if (opt && typeof opt === 'object' && 'label' in opt) return String((opt as { label: unknown }).label);
+  return String(opt ?? '');
+}
+
 function FieldPreviewInput({ field }: { field: BlankField }) {
   const baseClass =
     'w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100';
@@ -143,7 +153,7 @@ function FieldPreviewInput({ field }: { field: BlankField }) {
       return <input type="time" disabled className={baseClass} />;
     case 'single_select':
     case 'multi_select': {
-      const options = Array.isArray(field.options) ? (field.options as string[]) : [];
+      const options = Array.isArray(field.options) ? field.options : [];
       return (
         <div className="space-y-1.5">
           {options.length > 0 ? (
@@ -154,7 +164,7 @@ function FieldPreviewInput({ field }: { field: BlankField }) {
                   disabled
                   className="rounded"
                 />
-                {opt}
+                {optionLabel(opt)}
               </label>
             ))
           ) : (
@@ -164,12 +174,12 @@ function FieldPreviewInput({ field }: { field: BlankField }) {
       );
     }
     case 'dropdown': {
-      const opts = Array.isArray(field.options) ? (field.options as string[]) : [];
+      const opts = Array.isArray(field.options) ? field.options : [];
       return (
         <select disabled className={baseClass}>
           <option value="">{field.placeholder ?? 'Select an option...'}</option>
           {opts.map((opt, i) => (
-            <option key={i}>{opt}</option>
+            <option key={i}>{optionLabel(opt)}</option>
           ))}
         </select>
       );
