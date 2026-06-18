@@ -9,6 +9,7 @@ import {
   Bot,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,42 +19,42 @@ const features = [
     icon: Users,
     title: 'Contacts & Companies',
     description:
-      'Full contact database with company hierarchy, custom fields, tags, and merge/duplicate detection.',
+      'A real contact database with company hierarchy, custom fields, tags, and merge/duplicate detection — so the same person stops showing up three times.',
     color: 'bg-pink-100 text-pink-600',
   },
   {
     icon: TrendingUp,
     title: 'Pipeline Board',
     description:
-      'Kanban-style deal board with configurable stages, drag-and-drop, and weighted pipeline value per stage.',
+      'A Kanban deal board with configurable stages, drag-and-drop, and weighted pipeline value per stage. The forecast does the multiplication for you.',
     color: 'bg-rose-100 text-rose-600',
   },
   {
     icon: CalendarClock,
     title: 'Activity Timeline',
     description:
-      'Log calls, emails, meetings, notes, and tasks against contacts, companies, or deals.',
+      'Log calls, emails, meetings, notes, and tasks against any contact, company, or deal. Stale deals raise their hand before they go cold.',
     color: 'bg-fuchsia-100 text-fuchsia-600',
   },
   {
     icon: Building2,
     title: 'Cross-Product Links',
     description:
-      'Link deals to Bam projects, Helpdesk tickets, Beacon articles, and Brief documents.',
+      'Link a deal to its Bam project, Helpdesk tickets, Beacon articles, and Brief documents. The whole story of an account, in one place.',
     color: 'bg-pink-100 text-pink-600',
   },
   {
     icon: Search,
     title: 'Smart Search',
     description:
-      'Full-text and semantic search across contacts, companies, deals, and activity notes.',
+      'Full-text and semantic search across contacts, companies, deals, and every activity note you ever dashed off.',
     color: 'bg-rose-100 text-rose-600',
   },
   {
     icon: Bot,
     title: 'AI Pipeline Management',
     description:
-      '23 MCP tools let AI agents manage contacts, advance deals, log activities, generate pipeline reports, upsert by email, and surface likely duplicates.',
+      '69 MCP tools let AI agents create and advance deals, log activities, score leads, generate pipeline forecasts, upsert contacts by email, and flag likely duplicates — alongside your reps, not instead of them.',
     color: 'bg-fuchsia-100 text-fuchsia-600',
   },
 ];
@@ -70,14 +71,44 @@ export function BondSection() {
             Relationships, tracked
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A visual deal pipeline that lives alongside your project board, helpdesk, and knowledge
-            base. Bond tracks contacts, companies, and deals through configurable pipeline stages --
-            with activity logging, cross-product links, and 23 MCP tools so AI agents can manage
-            your CRM pipeline, upsert contacts by email, and detect likely duplicates as naturally
-            as they manage tasks.
+            A visual deal pipeline that lives next to your project board, helpdesk, and knowledge
+            base — not in a separate tab you forget to open. Bond moves contacts, companies, and
+            deals through configurable stages with activity logging, cross-product links, and 69 MCP
+            tools, so an AI agent can advance a deal or surface a duplicate as naturally as it files
+            a task.
           </p>
         </div>
       </AnimatedReveal>
+
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame src="/screenshots/bond/light/01-pipeline-board.png" alt="Bond pipeline board with deals across stages" />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          A pipeline with deals actually moving through it — weighted value per stage, no wishful thinking.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame src="/screenshots/bond/light/02-deal-detail.png" alt="Bond deal detail with activity timeline" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Every call, email, and note on a deal — in order, in one place.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame src="/screenshots/bond/light/03-contacts-list.png" alt="Bond contacts list" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Contacts and companies that know which deals they belong to.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame src="/screenshots/bond/light/06-analytics.png" alt="Bond pipeline analytics and forecast" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Forecasts and pipeline health, without a spreadsheet in sight.
+          </p>
+        </AnimatedReveal>
+      </div>
 
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>

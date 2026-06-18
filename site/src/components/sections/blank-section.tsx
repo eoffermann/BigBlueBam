@@ -1,12 +1,14 @@
 import {
   ClipboardList,
   ArrowRight,
-  Globe,
   GitBranch,
-  BarChart3,
+  Paperclip,
+  MailCheck,
+  ShieldCheck,
   Bot,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,36 +18,43 @@ const features = [
     icon: ClipboardList,
     title: 'Form Builder',
     description:
-      'Drag-and-drop builder with text, number, date, select, file upload, rating, and matrix field types.',
+      'Drag fields from a palette of 20-plus types — text, email, number, date, select, rating, NPS, file upload, page break — and watch a live preview build itself as you go.',
     color: 'bg-violet-100 text-violet-600',
-  },
-  {
-    icon: Globe,
-    title: 'Public Forms',
-    description:
-      'Share forms via link or embed. Public submissions flow into your workspace without requiring authentication.',
-    color: 'bg-purple-100 text-purple-600',
   },
   {
     icon: GitBranch,
     title: 'Conditional Logic',
     description:
-      'Show, hide, or skip fields and pages based on previous answers for dynamic, personalized experiences.',
+      'Show, hide, or skip fields and whole pages based on earlier answers. Respondents only see the questions that actually apply to them.',
+    color: 'bg-purple-100 text-purple-600',
+  },
+  {
+    icon: Paperclip,
+    title: 'Real File Uploads',
+    description:
+      'File-upload fields store the actual files in object storage, checked by a worker against a type allowlist and size cap. Downloads land right on the responses table.',
     color: 'bg-fuchsia-100 text-fuchsia-600',
   },
   {
-    icon: BarChart3,
-    title: 'Response Analytics',
+    icon: MailCheck,
+    title: 'Notify on Submit',
     description:
-      'Real-time response charts, completion funnels, and CSV export for every form and survey you create.',
+      'Every submission can email a confirmation to the respondent and a heads-up to your team — and, if you like, drop a note in a Banter channel. No inbox to babysit.',
     color: 'bg-violet-100 text-violet-600',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Sign-In & Domain Gating',
+    description:
+      'Keep a form public, or require sign-in and lock submissions to an allowed list of email domains. Stack it with per-email, max-response, and expiration limits.',
+    color: 'bg-purple-100 text-purple-600',
   },
   {
     icon: Bot,
     title: 'AI Form Operations',
     description:
-      '11 MCP tools let AI agents generate form definitions from a prompt, publish forms, list and export submissions, pull per-form analytics, and summarize free-text responses.',
-    color: 'bg-purple-100 text-purple-600',
+      '20 MCP tools let AI agents generate a form from a plain-language brief, add and reorder fields, publish it, export submissions, and summarize the free-text answers for you.',
+    color: 'bg-fuchsia-100 text-fuchsia-600',
   },
 ];
 
@@ -58,19 +67,57 @@ export function BlankSection() {
             Forms
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Collect anything
+            Ask nicely, collect anything
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Build forms and surveys with a visual editor, share them publicly or internally, add
-            conditional logic for dynamic flows, and analyze responses with built-in charts and
-            exports. Blank connects to Bolt automations for post-submission workflows.
+            Build a form in a visual editor, publish it to a shareable link, and watch real
+            responses — and real file uploads — roll in. Add conditional logic for forms that
+            adapt, gate submissions behind sign-in or an allowed domain when you need to, and let
+            email notifications tell you the moment someone hits Submit. 20 MCP tools mean an AI
+            agent can draft, build, and publish a form for you, then summarize what came back.
           </p>
         </div>
       </AnimatedReveal>
 
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame src="/screenshots/blank/light/02-form-builder.png" alt="Blank form builder with field palette and live preview" />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          Drag a field, see it appear. The preview keeps up with you, not the other way around.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 md:grid-cols-2">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame src="/screenshots/blank/light/03-form-preview.png" alt="Blank published form preview as a respondent sees it" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            What your respondents actually see — clean, themed, and ready to fill in.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame src="/screenshots/blank/light/04-responses.png" alt="Blank responses table with uploaded-file download links" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Every answer in a table — uploaded files included, one click to download.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame src="/screenshots/blank/light/05-analytics.png" alt="Blank form analytics with submission trend and per-field breakdown" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Totals, a 30-day trend, and per-field breakdowns — no spreadsheet required.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.3} withScale>
+          <FloatingFrame src="/screenshots/blank/light/07-access-and-notifications.png" alt="Blank access gating and submission notification settings" />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Decide who can submit and who gets pinged — sign-in, allowed domains, and email alerts.
+          </p>
+        </AnimatedReveal>
+      </div>
+
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <div key={feature.title} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
               <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}>

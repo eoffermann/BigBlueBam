@@ -7,10 +7,10 @@ import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 
 const views = [
-  { key: 'board', label: 'Board', icon: Columns3, src: '/screenshots/board.png', alt: 'Board view' },
-  { key: 'list', label: 'List', icon: List, src: '/screenshots/list-view.png', alt: 'List view' },
-  { key: 'timeline', label: 'Timeline', icon: GanttChart, src: '/screenshots/timeline.png', alt: 'Timeline view' },
-  { key: 'calendar', label: 'Calendar', icon: Calendar, src: '/screenshots/calendar.png', alt: 'Calendar view' },
+  { key: 'board', label: 'Board', icon: Columns3, src: '/screenshots/bam/light/01-board.png', alt: 'Board view' },
+  { key: 'list', label: 'List', icon: List, src: '/screenshots/bam/light/04-list-view.png', alt: 'List view' },
+  { key: 'timeline', label: 'Timeline', icon: GanttChart, src: '/screenshots/bam/light/09-timeline.png', alt: 'Timeline view' },
+  { key: 'calendar', label: 'Calendar', icon: Calendar, src: '/screenshots/bam/light/10-calendar.png', alt: 'Calendar view' },
 ];
 
 export function ViewsShowcase() {

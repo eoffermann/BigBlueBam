@@ -16,6 +16,7 @@ import {
   Bot,
   ArrowRight,
   GitBranch,
+  Building2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
@@ -127,6 +128,15 @@ const categories: Category[] = [
         borderColor: 'border-l-amber-500',
         anchor: 'brief',
       },
+      {
+        name: 'Bureau',
+        subtitle: 'Virtual Office',
+        description: 'A spatial floor map with rooms, presence, and knock-to-enter — drop by a desk instead of scheduling a meeting.',
+        icon: Building2,
+        color: 'bg-purple-100 text-purple-600',
+        borderColor: 'border-l-purple-500',
+        anchor: 'bureau',
+      },
     ],
   },
   {
@@ -212,8 +222,8 @@ const categories: Category[] = [
 
 const mcpServer: Product = {
   name: 'MCP Server',
-  subtitle: '360 AI Tools',
-  description: 'Unified Model Context Protocol server exposing every product plus cross-cutting platform capabilities (search, composite views, proposals, policies, webhooks) to AI agents.',
+  subtitle: '720+ AI Tools',
+  description: 'One Model Context Protocol server that hands AI agents every app plus cross-cutting platform powers (search, composite views, proposals, policies, webhooks) — the front door the whole suite shares.',
   icon: Bot,
   color: 'bg-slate-100 text-slate-600',
   borderColor: 'border-l-slate-400',
@@ -247,14 +257,15 @@ export function ProductGrid() {
       <AnimatedReveal>
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <Badge variant="blue" className="mb-4">
-            14 Apps + MCP Platform, One Stack
+            16 Apps + MCP Platform, One Stack
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
             Everything your team needs
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Work management, communication, sales, and operations — all self-hosted, all connected
-            through a unified MCP server for AI-native workflows.
+            Work, communication, sales, and operations — sixteen apps, all self-hosted, all wired
+            together through a single MCP server with 720+ tools. No tab-switching, no integration
+            spreadsheet, no app that didn't get the memo.
           </p>
         </div>
       </AnimatedReveal>

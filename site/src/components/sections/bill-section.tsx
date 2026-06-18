@@ -3,11 +3,13 @@ import {
   ArrowRight,
   FileText,
   CreditCard,
-  Users,
+  Receipt,
   RefreshCw,
+  Gauge,
   Bot,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,38 +17,45 @@ import { Badge } from '@/components/ui/badge';
 const features = [
   {
     icon: FileText,
-    title: 'Invoice Builder',
+    title: 'Invoices, Start to Finish',
     description:
-      'Professional invoice editor with line items, tax calculations, discounts, and customizable templates.',
+      'Build a draft with line items, tax, and discounts, then finalize to lock it and assign a permanent number. Every invoice exports to a clean PDF on demand — and a public link lets a client view it without an account.',
     color: 'bg-green-100 text-green-600',
-  },
-  {
-    icon: CreditCard,
-    title: 'Payment Tracking',
-    description:
-      'Track payment status, send reminders, record partial payments, and reconcile against bank transactions.',
-    color: 'bg-emerald-100 text-emerald-600',
-  },
-  {
-    icon: Users,
-    title: 'Client Portal',
-    description:
-      'Clients view invoices, download PDFs, and submit payments through a branded self-service portal.',
-    color: 'bg-teal-100 text-teal-600',
   },
   {
     icon: RefreshCw,
     title: 'Recurring Billing',
     description:
-      'Set up recurring invoices on any schedule with automatic generation, sending, and overdue escalation.',
+      'Put standing fees on autopilot. Schedules bill a client weekly, monthly, quarterly, or annually from a saved template — auto-finalized or left as drafts to review — with pause, resume, and generate-now in reach.',
+    color: 'bg-emerald-100 text-emerald-600',
+  },
+  {
+    icon: CreditCard,
+    title: 'Payments & Aging',
+    description:
+      'Record receipts by method and date and watch each invoice move from sent to partially paid to paid. Overdue is computed from the due date, so the past-due list is always honest.',
+    color: 'bg-teal-100 text-teal-600',
+  },
+  {
+    icon: Receipt,
+    title: 'Expenses & Rates',
+    description:
+      'Log project costs with a category, vendor, and billable flag through a pending → approved review. Hourly, daily, or fixed rates resolve most-specific-wins, so tracked Bam time prices itself.',
     color: 'bg-green-100 text-green-600',
+  },
+  {
+    icon: Gauge,
+    title: 'Revenue & Profitability',
+    description:
+      'Revenue by month, outstanding aging, and per-project profitability in one place — pull a won Bond deal or a range of Bam time entries straight into a draft, no re-keying.',
+    color: 'bg-emerald-100 text-emerald-600',
   },
   {
     icon: Bot,
     title: 'AI Billing Operations',
     description:
-      '16 MCP tools let AI agents create invoices from deals or time entries, add line items, record payments, send reminders, and surface profitability and revenue summaries.',
-    color: 'bg-emerald-100 text-emerald-600',
+      '47 MCP tools let AI agents draft invoices from deals or time entries, record payments, run a recurring schedule, and surface overdue, revenue, and profitability — try bill_create_invoice_from_deal, bill_record_payment, and bill_get_profitability.',
+    color: 'bg-teal-100 text-teal-600',
   },
 ];
 
@@ -59,19 +68,71 @@ export function BillSection() {
             Invoicing
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Get paid faster
+            Get paid without the dread
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Create professional invoices, track payments, manage clients, and automate recurring
-            billing. Bill integrates with Bond contacts and Bench analytics for a complete financial
-            picture.
+            Invoices, expenses, recurring billing, and PDFs — generated from the work you already
+            tracked. Bill pulls billable time out of Bam, drafts an invoice from a won Bond deal, and
+            keeps revenue, aging, and profitability in one honest place. And with 47 MCP tools, an AI
+            agent can draft, send, and reconcile the whole lifecycle alongside you.
           </p>
         </div>
       </AnimatedReveal>
 
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame
+          src="/screenshots/bill/light/01-dashboard.png"
+          alt="Bill dashboard with outstanding, paid, overdue, and draft totals"
+        />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          Outstanding, paid, overdue, and drafts — the four numbers you actually open the app to see.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-2">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame
+            src="/screenshots/bill/light/03-invoice-detail.png"
+            alt="Bill invoice detail with line items, totals, and payment history"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            One invoice, fully assembled — line items, tax, totals, and every payment against it.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/bill/light/07-recurring.png"
+            alt="Bill recurring billing schedules with cadence and next run date"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Standing fees that bill themselves on a cadence — set it once, stop chasing it.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame
+            src="/screenshots/bill/light/05-expenses.png"
+            alt="Bill expenses list with category, vendor, and approval status"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Project costs with a category, a vendor, and an approval step before anyone gets reimbursed.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.3} withScale>
+          <FloatingFrame
+            src="/screenshots/bill/light/06-reports.png"
+            alt="Bill financial reports: revenue by month, aging, and profitability"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Revenue, aging, and profitability — the answers, without exporting to a spreadsheet first.
+          </p>
+        </AnimatedReveal>
+      </div>
+
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <div key={feature.title} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
               <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}>

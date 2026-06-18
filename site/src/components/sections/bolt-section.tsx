@@ -5,12 +5,59 @@ import {
   Radio,
   Bot,
   ClipboardList,
+  LayoutTemplate,
+  Activity,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+const features = [
+  {
+    icon: Workflow,
+    title: 'Visual Rule Builder',
+    description:
+      'WHEN something happens, IF conditions hold, THEN run an ordered list of actions. Build it in a stacked Simple editor or a node-graph canvas — and flip between the two on the same rule.',
+    color: 'bg-amber-100 text-amber-600',
+  },
+  {
+    icon: Radio,
+    title: 'Cross-App Triggers',
+    description:
+      'Over 130 events from every app in the suite, plus a cron Schedule source. A deal closing in Bond, a ticket breaching SLA, a sprint completing in Bam — Bolt is listening to all of it.',
+    color: 'bg-violet-100 text-violet-600',
+  },
+  {
+    icon: LayoutTemplate,
+    title: 'Templates',
+    description:
+      '16 pre-built blueprints for the workflows everyone ends up wanting — overdue-task nudges, SLA escalations, sprint recaps. Pick one, tweak it, ship it.',
+    color: 'bg-sky-100 text-sky-600',
+  },
+  {
+    icon: ClipboardList,
+    title: 'Execution Log & Retries',
+    description:
+      'Every run is recorded with its trigger event, condition trail, and step-by-step timeline. Something fail? Retry it with one click instead of re-creating the world.',
+    color: 'bg-emerald-100 text-emerald-600',
+  },
+  {
+    icon: Activity,
+    title: 'Observability',
+    description:
+      'Trace any single event to see exactly which rules matched, skipped, or fired — and why. The kind of receipts you want when a rule does something surprising at 3am.',
+    color: 'bg-rose-100 text-rose-600',
+  },
+  {
+    icon: Bot,
+    title: 'AI Automation',
+    description:
+      '24 MCP tools let an AI agent author, test, operate, and observe automations — bolt_create to build a rule, bolt_test to dry-run it, bolt_event_trace to explain a match — with the same policy guardrails and approvals as everything else.',
+    color: 'bg-indigo-100 text-indigo-600',
+  },
+];
 
 export function BoltSection() {
   return (
@@ -21,105 +68,79 @@ export function BoltSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Automate everything, visually
+            If this, then handled
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Define trigger-condition-action rules that span every product in the BigBlueBam suite.
-            Rules compile down to MCP tool calls, execute with full audit trails, and can be authored
-            by humans or AI agents alike. No code required — just wire up events, set conditions, and
-            pick actions.
+            Bolt is the suite's automation engine and its event hub. Every other app reports what it
+            does to Bolt, so one place can watch the whole suite and react: WHEN an event fires, IF
+            your conditions hold, THEN run an ordered chain of actions across any app. Build it
+            visually, no code required — and yes, with 24 MCP tools, agents can build it too.
           </p>
         </div>
       </AnimatedReveal>
 
-      {/* Automation list */}
+      {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
-        <FloatingFrame src="/screenshots/bolt-automations.png" alt="Bolt Automation Dashboard" />
+        <FloatingFrame
+          src="/screenshots/bolt/light/01-automations.png"
+          alt="Bolt automations dashboard listing active rules with trigger badges"
+        />
         <p className="mt-3 text-center text-sm text-zinc-500">
-          Automation dashboard — 12 active rules with trigger badges, enable toggles, and execution history
+          The automation dashboard — each rule shows its trigger event, an enable toggle, and when it
+          last ran.
         </p>
       </AnimatedReveal>
 
-      {/* Builder screenshots */}
-      <div className="mt-10 grid gap-8 lg:grid-cols-2">
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
         <AnimatedReveal delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/bolt-editor-existing.png" alt="Bolt Visual Builder — editing existing" />
+          <FloatingFrame
+            src="/screenshots/bolt/light/02-editor.png"
+            alt="Bolt Simple editor showing WHEN trigger, IF conditions, THEN actions"
+          />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Editing "Notify on Critical Task" — WHEN/IF/THEN flow with live event catalog
+            Pick a trigger, gate it with conditions, then stack the actions to run. WHEN / IF / THEN,
+            top to bottom.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
-          <FloatingFrame src="/screenshots/bolt-editor-new.png" alt="Bolt Visual Builder — new" />
+          <FloatingFrame
+            src="/screenshots/bolt/light/03-automation-detail.png"
+            alt="Bolt visual node-graph canvas wiring a trigger to a condition to an action"
+          />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            New automation — pick a trigger, add conditions, select actions from grouped menu
+            Prefer wires to stacks? Same rule, drawn as a node graph — trigger to condition to action.
           </p>
         </AnimatedReveal>
-      </div>
-
-      {/* Templates + Executions */}
-      <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <AnimatedReveal delay={0.25} withScale>
-          <FloatingFrame src="/screenshots/bolt-templates.png" alt="Bolt Automation Templates" />
+          <FloatingFrame
+            src="/screenshots/bolt/light/05-templates.png"
+            alt="Bolt templates gallery of pre-built automation blueprints"
+          />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            10 pre-built templates — start from a proven pattern and customize
-          </p>
-        </AnimatedReveal>
-        <AnimatedReveal delay={0.3} withScale>
-          <FloatingFrame src="/screenshots/bolt-executions.png" alt="Bolt Execution Log" />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Execution log — every run traced with status, duration, and step detail
+            Sixteen pre-built blueprints, because you are not the first person to want an overdue-task
+            nudge.
           </p>
         </AnimatedReveal>
       </div>
 
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-              <Workflow className="h-5 w-5" />
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+            >
+              <div
+                className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}
+              >
+                <feature.icon className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-semibold text-zinc-900">{feature.title}</h3>
+              <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
             </div>
-            <h3 className="text-base font-semibold text-zinc-900">Visual Rule Builder</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Drag-and-drop trigger-condition-action editor with live preview, validation, and
-              plain-English summaries of what each rule does.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
-              <Radio className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Cross-Product Events</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              109 events across every app plus platform-level signals — task moves, new messages,
-              stale knowledge, ticket creation, scheduled posts, proposals, upserts, webhook
-              failures, and runtime catalog-drift alerts. A CI drift guard keeps producers and
-              the catalog in lockstep.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
-              <Bot className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">MCP-Native</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Every action compiles to MCP tool calls from the full 340-tool catalog — same
-              permissions model, same audit trail. AI agents create and manage automations
-              through 13 dedicated tools.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Runtime Observability</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Every run is recorded with trigger context, condition evaluation trail, action
-              outcomes, and duration. bolt_event_trace explains why each rule matched or skipped,
-              bolt_recent_events surfaces live ingest, and a catalog.drift_detected event fires
-              on producer/catalog mismatch with 24h Redis-backed suppression.
-            </p>
-          </div>
+          ))}
         </div>
       </AnimatedReveal>
 

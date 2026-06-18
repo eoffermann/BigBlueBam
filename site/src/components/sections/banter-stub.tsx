@@ -1,17 +1,11 @@
 import {
-  MessageCircle,
-  Phone,
-  Mic,
-  Bot,
+  MessageSquare,
   Hash,
-  AtSign,
-  Search,
-  Paperclip,
   Pin,
-  Bookmark,
-  Users,
-  Eye,
+  Phone,
+  Search,
   Link2,
+  Bot,
   ArrowRight,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
@@ -20,21 +14,49 @@ import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
-const featureTable = [
-  { label: 'Channels', status: 'Stable', icon: Hash },
-  { label: 'Direct Messages', status: 'Stable', icon: MessageCircle },
-  { label: 'Threads', status: 'Stable', icon: MessageCircle },
-  { label: 'Rich Text', status: 'Stable', icon: AtSign },
-  { label: 'Reactions', status: 'Stable', icon: MessageCircle },
-  { label: 'Mentions', status: 'Stable', icon: AtSign },
-  { label: 'Search', status: 'Stable', icon: Search },
-  { label: 'File Sharing', status: 'Stable', icon: Paperclip },
-  { label: 'Pins & Bookmarks', status: 'Stable', icon: Pin },
-  { label: 'Presence', status: 'Stable', icon: Eye },
-  { label: 'Bam Integration', status: 'Stable', icon: Link2 },
-  { label: '53 MCP Tools', status: 'Stable', icon: Bot },
-  { label: 'Voice Calls', status: 'Alpha', icon: Phone },
-  { label: 'AI Voice Agent', status: 'Planned', icon: Mic },
+const features = [
+  {
+    icon: Hash,
+    title: 'Channels & Threads',
+    description:
+      'Public or private channels with topics, descriptions, and pinned messages. Threaded replies keep a side conversation contextual — and can mirror back to the channel when everyone should see the answer.',
+    color: 'bg-sky-100 text-sky-600',
+  },
+  {
+    icon: MessageSquare,
+    title: 'DMs & Group DMs',
+    description:
+      'One-to-one direct messages, plus group DMs of three to eight people for the quick huddle that does not need a whole channel. Same people, same identity — no separate contact list to keep in sync.',
+    color: 'bg-blue-100 text-blue-600',
+  },
+  {
+    icon: Pin,
+    title: 'Reactions, Pins & Bookmarks',
+    description:
+      'Emoji reactions so a thumbs-up does not need its own message. Pin the decision to the top of the channel, bookmark the thing you will need later, and stop scrolling for it.',
+    color: 'bg-indigo-100 text-indigo-600',
+  },
+  {
+    icon: Phone,
+    title: 'Calls & Transcripts',
+    description:
+      'Live audio for a channel runs through the suite-wide Bureau call box, powered by LiveKit. Banter keeps the read-only history of past calls and their transcripts, searchable right where the talking happened.',
+    color: 'bg-sky-100 text-sky-600',
+  },
+  {
+    icon: Link2,
+    title: 'Share the Work In',
+    description:
+      'Drop a Bam task or sprint, or a Helpdesk ticket, straight into a channel as a live reference. Type a task key and it renders as a chip with status — discussion stays next to the thing being discussed.',
+    color: 'bg-blue-100 text-blue-600',
+  },
+  {
+    icon: Bot,
+    title: 'AI-Native Chat',
+    description:
+      '69 MCP tools let agents post, reply, react, DM, and search with the same authority as a person — for example banter_post_message, banter_schedule_post (queued for later, honoring per-channel quiet hours), and banter_subscribe_pattern (watch a channel and react when a message matches). Gated by org policy and per-entity visibility checks.',
+    color: 'bg-indigo-100 text-indigo-600',
+  },
 ];
 
 export function BanterStub() {
@@ -42,17 +64,20 @@ export function BanterStub() {
     <SectionWrapper id="banter" alternate dividerTop>
       {/* Header */}
       <AnimatedReveal>
-        <div className="mx-auto mb-6 max-w-3xl text-center">
-          <Badge variant="orange" className="mb-4">
-            Alpha
-          </Badge>
+        <div className="mx-auto mb-10 max-w-2xl text-center">
+          <div className="mb-4 flex items-center justify-center gap-2">
+            <Badge variant="blue">Team Chat</Badge>
+            <Badge variant="orange">Beta</Badge>
+          </div>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Banter — team messaging, built in
+            Chat that sits next to the work
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Real-time channels, DMs, threads, voice calls, and AI agent participation — all
-            natively integrated with your project board, knowledge base, and helpdesk. No webhooks.
-            No bridges. No sync lag.
+            Channels, threads, DMs, reactions, and pins — the chat app you already know how to use,
+            sharing one BigBlueBam login with the rest of the suite. Type a task key and it becomes a
+            live chip; an agent can post the sprint report to <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">#standup</code> on
+            schedule. 69 MCP tools mean your bots talk in the same room as your team, not over a
+            webhook bridge.
           </p>
         </div>
       </AnimatedReveal>
@@ -60,168 +85,91 @@ export function BanterStub() {
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/banter-channels.png"
-          alt="Banter channel view with sidebar, messages, and member list"
+          src="/screenshots/banter/light/01-channels.png"
+          alt="Banter channel view with channel sidebar, message timeline, and direct messages"
         />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          Channels down the side, conversation in the middle, the whole org in one place — and yes, the
+          bots have accounts too.
+        </p>
       </AnimatedReveal>
 
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame
+            src="/screenshots/banter/light/03-thread.png"
+            alt="Banter thread panel open beside a channel"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Threads tuck the tangent off to the side so the channel stays readable.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/banter/light/04-dms.png"
+            alt="Banter direct message conversation"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Direct messages for the conversation that does not need an audience.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame
+            src="/screenshots/banter/light/06-preferences.png"
+            alt="Banter preferences — theme, notifications, and messaging options"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Theme, notifications, enter-to-send, compact mode — tuned to how you like to type.
+          </p>
+        </AnimatedReveal>
+      </div>
+
       {/* Why not Slack? */}
-      <AnimatedReveal delay={0.15}>
+      <AnimatedReveal delay={0.2}>
         <div className="mt-10 rounded-xl border border-primary-200 bg-gradient-to-br from-primary-50 to-white p-6 md:p-8">
-          <h3 className="text-lg font-bold text-zinc-900">Why not just use Slack?</h3>
+          <h3 className="text-lg font-bold text-zinc-900">Why not just keep using Slack?</h3>
           <p className="mt-2 text-zinc-600">
-            Because Banter shares authentication, database, and deep cross-linking with BigBlueBam.
-            When someone types <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">BAM-247</code> in
-            a channel, it links directly to the task. When an AI agent triages a helpdesk ticket, it
-            can post the update to <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">#support-triage</code>.
-            Sprint reports can be shared to channels with one click. Same users, same permissions,
-            same audit trail.
+            Because Banter shares authentication, the people directory, and deep cross-linking with the
+            rest of BigBlueBam. Type{' '}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">BAM-247</code> in a channel and
+            it links straight to the task. When an agent triages a Helpdesk ticket, it can post the
+            update to <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">#support-triage</code>{' '}
+            on the same audit trail your team posts on. Same users, same permissions, no second
+            directory to keep in sync.
           </p>
         </div>
       </AnimatedReveal>
 
-      {/* Feature grid */}
-      <AnimatedReveal delay={0.2}>
-        <div className="mt-10">
-          <h3 className="mb-6 text-center text-sm font-semibold tracking-wider text-zinc-400 uppercase">
-            Feature status
-          </h3>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {featureTable.map((f) => (
-              <div
-                key={f.label}
-                className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3"
-              >
-                <div className="flex items-center gap-2.5">
-                  <f.icon className="h-4 w-4 text-zinc-400" />
-                  <span className="text-sm font-medium text-zinc-700">{f.label}</span>
-                </div>
-                <Badge
-                  variant={
-                    f.status === 'Stable' ? 'green' : f.status === 'Alpha' ? 'orange' : 'default'
-                  }
-                >
-                  {f.status}
-                </Badge>
+      {/* Feature highlights */}
+      <AnimatedReveal delay={0.25}>
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
+            <div key={feature.title} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}>
+                <feature.icon className="h-5 w-5" />
               </div>
-            ))}
-          </div>
-        </div>
-      </AnimatedReveal>
-
-      {/* Screenshot grid */}
-      <AnimatedReveal delay={0.25} withScale>
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
-          <div>
-            <FloatingFrame
-              src="/screenshots/banter-search.png"
-              alt="Banter search with channel, author, and date filters"
-            />
-            <p className="mt-3 text-center text-sm text-zinc-500">
-              Full-text search across channels with author, date, and attachment filters
-            </p>
-          </div>
-          <div>
-            <FloatingFrame
-              src="/screenshots/banter-browse.png"
-              alt="Browse and join public channels"
-            />
-            <p className="mt-3 text-center text-sm text-zinc-500">
-              Browse and join public channels with member counts and descriptions
-            </p>
-          </div>
-        </div>
-      </AnimatedReveal>
-
-      {/* Capabilities breakdown */}
-      <AnimatedReveal delay={0.3}>
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-              <Hash className="h-5 w-5" />
+              <h3 className="text-base font-semibold text-zinc-900">{feature.title}</h3>
+              <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
             </div>
-            <h3 className="text-base font-semibold text-zinc-900">Channels & DMs</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Public and private channels with topics, member management, and role hierarchy. 1:1 and
-              group DMs with presence indicators. Threaded replies keep conversations organized.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 text-purple-600">
-              <Link2 className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Deep Integration</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Task references render as interactive chips with status tooltips. Share tasks, sprints,
-              and tickets to channels with rich embed cards. Activity feed bots auto-post project
-              updates.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 text-primary-600">
-              <Bot className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">AI-Native</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              53 dedicated MCP tools let AI agents post messages, schedule deferred posts that
-              respect channel quiet hours, manage channels, react, search conversations,
-              subscribe to message patterns, and even join voice calls as spoken participants
-              with STT/TTS pipelines.
-            </p>
-          </div>
-        </div>
-      </AnimatedReveal>
-
-      {/* Voice & calls */}
-      <AnimatedReveal delay={0.35} withScale>
-        <div className="mt-10 grid items-center gap-8 lg:grid-cols-2">
-          <div>
-            <Badge variant="orange" className="mb-3">
-              Alpha
-            </Badge>
-            <h3 className="text-xl font-bold text-zinc-900">Voice, video & huddles</h3>
-            <p className="mt-3 text-zinc-600">
-              Start a voice or video call from any channel. Huddles are lightweight persistent audio
-              rooms — drop in and out without a formal meeting. Screen sharing, recording, and live
-              transcription are built in.
-            </p>
-            <p className="mt-3 text-zinc-600">
-              The AI Voice Agent pipeline (STT &rarr; LLM &rarr; TTS) lets AI agents participate in
-              calls as spoken participants, with graceful fallback to text when voice services aren't
-              configured.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {[
-                'LiveKit SFU',
-                'Screen Share',
-                'Recording',
-                'Transcription',
-                'AI Voice Agent',
-              ].map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-          <FloatingFrame
-            src="/screenshots/banter-admin.png"
-            alt="Banter admin panel — voice and video configuration"
-          />
+          ))}
         </div>
       </AnimatedReveal>
 
       {/* CTA */}
-      <AnimatedReveal delay={0.4}>
-        <div className="mt-10 flex items-center justify-center gap-4 text-center">
-          <Button href="/banter/" variant="primary" size="md">
-            Try Banter <ArrowRight className="h-4 w-4" />
-          </Button>
-          <Button href="#cta" variant="outline" size="md">
-            <Users className="h-4 w-4" /> Get Started
+      <AnimatedReveal delay={0.3}>
+        <div className="mt-10 flex flex-col items-center gap-4 rounded-xl border border-zinc-200 bg-gradient-to-r from-sky-50 to-blue-50 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div className="flex items-center gap-3">
+            <Search className="hidden h-6 w-6 text-blue-600 sm:block" />
+            <p className="text-sm font-medium text-zinc-700">
+              Served at{' '}
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/banter/</code> — a dedicated
+              SPA (in beta) sharing authentication and the people directory with Bam, Helpdesk, Beacon,
+              Brief, and the rest of the suite. We are still polishing; tell us where it creaks.
+            </p>
+          </div>
+          <Button href="/banter/" variant="primary" size="sm">
+            Try Banter <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </div>
       </AnimatedReveal>

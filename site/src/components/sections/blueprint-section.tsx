@@ -1,7 +1,63 @@
-import { GitBranch, Layers, Workflow, Bot, ArrowRight } from 'lucide-react';
+import {
+  GitBranch,
+  Layers,
+  MessageSquare,
+  Workflow,
+  ListChecks,
+  Bot,
+  Network,
+  ArrowRight,
+} from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+const features = [
+  {
+    icon: GitBranch,
+    title: 'A typed graph, not a blob',
+    description:
+      'Every node and edge is a real row in a real table — styled, nested, searchable across diagrams, and addressable by ID. Diagrams you can query, not just stare at.',
+    color: 'bg-sky-100 text-sky-600',
+  },
+  {
+    icon: Layers,
+    title: 'ELK auto-layout',
+    description:
+      'The Eclipse Layout Kernel untangles your spaghetti in one click — layered, force-directed, tree, or grid. Pinned nodes stay put; everything else snaps into line.',
+    color: 'bg-indigo-100 text-indigo-600',
+  },
+  {
+    icon: MessageSquare,
+    title: 'Comments, People & History',
+    description:
+      'Three panels right on the canvas: comments anchored to a node or the whole diagram, per-diagram collaborators at owner/editor/commenter/viewer roles, and a version timeline you can browse and roll back.',
+    color: 'bg-amber-100 text-amber-600',
+  },
+  {
+    icon: Workflow,
+    title: 'Mermaid in, Mermaid out',
+    description:
+      'Export to Mermaid or JSON for embedding in Brief and Beacon docs — and import a Mermaid block straight back into an editable graph. The round trip actually round-trips.',
+    color: 'bg-sky-100 text-sky-600',
+  },
+  {
+    icon: ListChecks,
+    title: 'Promote to Bam tasks',
+    description:
+      'Turn a single node — or a whole graph — into Bam tasks with back-links, or generate a diagram from a project’s tasks. The picture and the work stay in two-way sync.',
+    color: 'bg-emerald-100 text-emerald-600',
+  },
+  {
+    icon: Bot,
+    title: 'AI builds the diagram',
+    description:
+      '36 MCP tools let an agent draft a diagram from a process description, lay it out, and link nodes to entities in one go. Try blueprint_add_node, blueprint_apply_layout, and blueprint_generate_from_bam — alongside you, not instead of you.',
+    color: 'bg-indigo-100 text-indigo-600',
+  },
+];
 
 export function BlueprintSection() {
   return (
@@ -12,136 +68,96 @@ export function BlueprintSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Diagrams that an agent can read and write
+            Diagrams that are data, not drawings
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Blueprint is the structured-diagram product in the BigBlueBam suite. Where Board
-            is a freeform whiteboard, Blueprint produces deliberate flowcharts, org charts,
-            ERDs, mindmaps, swimlanes, and decision trees with auto-layout — and stores the
-            graph as a queryable relational structure so an AI agent can build or refactor a
-            whole diagram in a single call.
+            Where Board is a freeform whiteboard, Blueprint makes deliberate flowcharts, graphs,
+            sequence, class, and mind maps — and stores each one as a typed relational graph instead
+            of an opaque image. Every node and edge is a real, auditable object your team can comment
+            on, version, and turn into work, with one-click ELK auto-layout and 36 MCP tools so an AI
+            agent can build or rewrite a whole diagram in a single call.
           </p>
         </div>
       </AnimatedReveal>
+
+      {/* Hero screenshot */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame
+          src="/screenshots/blueprint/light/02-diagram-editor.png"
+          alt="Blueprint editor with a laid-out node graph, inspector, and top toolbar"
+        />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          A canvas with a shape palette, an inspector, and a one-click layout that does the tidying
+          for you.
+        </p>
+      </AnimatedReveal>
+
+      {/* Detail screenshots */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-3">
+        <AnimatedReveal delay={0.15} withScale>
+          <FloatingFrame
+            src="/screenshots/blueprint/light/06-comments-collaboration.png"
+            alt="Blueprint Comments panel open with threaded comments anchored to nodes"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Comments, People, and History — pinned to the node they’re actually about.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.2} withScale>
+          <FloatingFrame
+            src="/screenshots/blueprint/light/01-diagram-list.png"
+            alt="Blueprint diagram library grouped by type with starred and archived filters"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            A tidy library, sorted by type — star the ones you live in, archive the rest.
+          </p>
+        </AnimatedReveal>
+        <AnimatedReveal delay={0.25} withScale>
+          <FloatingFrame
+            src="/screenshots/blueprint/light/03-new-diagram-dialog.png"
+            alt="Blueprint new-diagram dialog with type, project, visibility, and template options"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Pick a type, a visibility, and a starting template. Blank canvas is always an option.
+          </p>
+        </AnimatedReveal>
+      </div>
 
       {/* Feature highlights */}
-      <AnimatedReveal delay={0.1}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
-              <GitBranch className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Typed graph, not a blob</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Nodes and edges live in relational tables. Every shape, every connection, every
-              container is its own auditable row — searchable across diagrams and addressable
-              by ID.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
-              <Layers className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">ELK auto-layout</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              The Eclipse Layout Kernel arranges layered flowcharts, force-directed graphs,
-              radial trees, and rectangle-packed clusters. Pinned nodes stay put; everything
-              else snaps into place.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-              <Workflow className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Cross-product references</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              A node can BE a Bam task, a Beacon entry, a Bond deal, or a Bearing goal.
-              "Promote to task" creates a Bam task from a node and back-links it; the diagram
-              becomes a live view of the work in flight.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-              <Bot className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">20 MCP tools</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              <code className="rounded bg-emerald-50 px-1 text-xs">blueprint_generate</code>
-              {' '}builds a whole diagram from a structured spec or natural-language description
-              in one call, then auto-lays it out. Read-only tools surface the graph for context
-              in any agent prompt.
-            </p>
-          </div>
-        </div>
-      </AnimatedReveal>
-
-      {/* Use-cases */}
       <AnimatedReveal delay={0.2}>
-        <div className="mx-auto mt-16 max-w-4xl">
-          <div className="rounded-2xl border border-zinc-200 bg-gradient-to-br from-sky-50 to-indigo-50 p-8 shadow-sm">
-            <h3 className="text-xl font-semibold text-zinc-900">What you can build</h3>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Flowcharts</div>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Branching processes with decision diamonds, parallelograms, and labeled flow
-                  edges. Layered TD/LR layout.
-                </p>
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
+            >
+              <div
+                className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}
+              >
+                <feature.icon className="h-5 w-5" />
               </div>
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Org charts</div>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Reporting hierarchies generated from the org's actual membership in one
-                  <code className="ml-1 rounded bg-white/70 px-1 text-xs">blueprint_generate</code>
-                  {' '}call.
-                </p>
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Entity-relationship diagrams</div>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Container nodes with column rows; one-to-one, one-to-many, and many-to-many
-                  edge kinds.
-                </p>
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Mindmaps</div>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Branch-by-branch idea explorations with radial-tree layout, exportable as
-                  Mermaid for embedding in Brief and Beacon docs.
-                </p>
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Swimlane processes</div>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Lane containers partitioning the canvas; nodes lay out into their owner's
-                  swimlane.
-                </p>
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-zinc-900">Decision trees & architecture diagrams</div>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Labeled yes/no branches, hexagonal infrastructure nodes, cylinder data
-                  stores — same canvas, different shape palettes.
-                </p>
-              </div>
+              <h3 className="text-base font-semibold text-zinc-900">{feature.title}</h3>
+              <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
             </div>
-          </div>
+          ))}
         </div>
       </AnimatedReveal>
 
-      {/* CTA */}
-      <AnimatedReveal delay={0.25}>
-        <div className="mt-12 flex flex-col items-center gap-3 text-center">
-          <p className="text-sm text-zinc-500">
-            Reuses the suite's auth, project visibility, collaborators, comments, and Bolt-event
-            stream. No new infrastructure.
-          </p>
-          <a
-            href="/docs"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-600 hover:text-sky-800"
-          >
-            Read the developer docs <ArrowRight className="h-3.5 w-3.5" />
-          </a>
+      {/* CTA bar */}
+      <AnimatedReveal delay={0.3}>
+        <div className="mt-10 flex flex-col items-center gap-4 rounded-xl border border-zinc-200 bg-gradient-to-r from-sky-50 to-indigo-50 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div className="flex items-center gap-3">
+            <Network className="h-6 w-6 text-sky-600" />
+            <p className="text-sm font-medium text-zinc-700">
+              Served at{' '}
+              <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/blueprint/</code> — a
+              dedicated SPA sharing authentication and the project model with Bam, Beacon, Brief,
+              Bond, Bearing, and Board.
+            </p>
+          </div>
+          <Button href="/blueprint/" variant="primary" size="sm">
+            Try Blueprint <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </AnimatedReveal>
     </SectionWrapper>

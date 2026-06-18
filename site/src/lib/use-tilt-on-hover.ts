@@ -2,8 +2,8 @@ import { useRef, useMemo, type MouseEvent } from 'react';
 import { useMotionValue, useSpring, useReducedMotion, type MotionStyle } from 'motion/react';
 import { EFFECTS } from '@/lib/animation-config';
 
-interface UseTiltOnHoverReturn {
-  ref: React.RefObject<HTMLElement | null>;
+interface UseTiltOnHoverReturn<T extends HTMLElement = HTMLElement> {
+  ref: React.RefObject<T | null>;
   style: MotionStyle;
   handlers: {
     onMouseMove: (e: MouseEvent) => void;
@@ -16,8 +16,8 @@ const EMPTY_HANDLERS = {
   onMouseLeave: () => {},
 };
 
-export function useTiltOnHover(): UseTiltOnHoverReturn {
-  const ref = useRef<HTMLElement | null>(null);
+export function useTiltOnHover<T extends HTMLElement = HTMLElement>(): UseTiltOnHoverReturn<T> {
+  const ref = useRef<T | null>(null);
   const prefersReduced = useReducedMotion();
 
   const { enabled, maxDegrees, perspective } = EFFECTS.hoverTilt;

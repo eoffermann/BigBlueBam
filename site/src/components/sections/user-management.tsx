@@ -42,27 +42,11 @@ const features = [
   },
 ];
 
-const tabs = [
-  {
-    title: 'Overview',
-    src: '/screenshots/people-detail-overview.png',
-    caption: 'Identity, membership, and disable controls',
-  },
-  {
-    title: 'Projects',
-    src: '/screenshots/people-detail-projects.png',
-    caption: 'Per-project roles with bulk assign',
-  },
-  {
-    title: 'Access',
-    src: '/screenshots/people-detail-access.png',
-    caption: 'Password reset, force-change, and API keys on behalf',
-  },
-  {
-    title: 'Activity',
-    src: '/screenshots/people-detail-activity.png',
-    caption: 'Per-user audit trail',
-  },
+const userDetailTabs = [
+  { title: 'Overview', caption: 'Identity, membership, and disable controls' },
+  { title: 'Projects', caption: 'Per-project roles with bulk assign' },
+  { title: 'Access', caption: 'Password reset, force-change, and API keys on behalf' },
+  { title: 'Activity', caption: 'Per-user audit trail' },
 ];
 
 export function UserManagement() {
@@ -83,9 +67,12 @@ export function UserManagement() {
       <AnimatedReveal delay={0.1} withScale>
         <div className="mt-14">
           <FloatingFrame
-            src="/screenshots/people-list.png"
-            alt="People list — searchable, filterable, bulk-selectable"
+            src="/screenshots/bam/light/04-people.png"
+            alt="People roster — searchable, filterable, bulk-selectable"
           />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Everyone in your org, on one page that actually wants to be found.
+          </p>
         </div>
       </AnimatedReveal>
 
@@ -95,15 +82,16 @@ export function UserManagement() {
             Four tabs per user
           </h3>
           <p className="mt-3 text-center text-zinc-600">
-            Everything an admin needs without hunting through screens.
+            Open any person and everything an admin needs is right there — no hunting through screens.
           </p>
-          <div className="mt-10 grid gap-8 lg:grid-cols-2">
-            {tabs.map((tab) => (
-              <div key={tab.title}>
-                <FloatingFrame src={tab.src} alt={tab.caption} />
-                <p className="mt-3 text-center text-sm font-medium text-zinc-600">
-                  <span className="text-zinc-900">{tab.title}</span> — {tab.caption}
-                </p>
+          <div className="mx-auto mt-10 grid max-w-4xl gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {userDetailTabs.map((tab) => (
+              <div
+                key={tab.title}
+                className="rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm"
+              >
+                <p className="text-sm font-semibold text-zinc-900">{tab.title}</p>
+                <p className="mt-1.5 text-sm text-zinc-600">{tab.caption}</p>
               </div>
             ))}
           </div>
@@ -145,33 +133,35 @@ export function UserManagement() {
               miss.
             </p>
           </div>
-          <FloatingFrame
-            src="/screenshots/superuser-people-list.png"
-            alt="SuperUser cross-org people list"
-          />
+          <div>
+            <FloatingFrame
+              src="/screenshots/bam/light/05-settings.png"
+              alt="Org settings — the operator's control surface"
+            />
+            <p className="mt-3 text-center text-sm text-zinc-500">
+              The same settings every org configures — operators just get the keys to all of them.
+            </p>
+          </div>
         </div>
       </AnimatedReveal>
 
-      <AnimatedReveal delay={0.3} withScale>
-        <div className="mt-14 grid items-center gap-10 lg:grid-cols-2">
-          <FloatingFrame
-            src="/screenshots/superuser-context-banner.png"
-            alt="SuperUser context banner"
-          />
-          <div>
-            <h3 className="text-2xl font-semibold text-zinc-900">
-              Never operate blind
-            </h3>
-            <p className="mt-4 text-zinc-600">
-              A persistent red banner calls out when a SuperUser is viewing an org
-              they're not a native member of. The current org chip in the header turns
-              red. Writes made in this state are tagged{' '}
-              <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">
-                via_superuser_context
-              </code>{' '}
-              in the activity log, so the audit trail is unambiguous.
-            </p>
+      <AnimatedReveal delay={0.3}>
+        <div className="mt-14 rounded-xl border border-zinc-200 bg-white p-8">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <h3 className="text-2xl font-semibold text-zinc-900">Never operate blind</h3>
           </div>
+          <p className="mt-4 text-zinc-600">
+            A persistent red banner calls out when a SuperUser is viewing an org
+            they're not a native member of, and the current org chip in the header turns
+            red — the privileged state is impossible to miss. Writes made in this state are tagged{' '}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">
+              via_superuser_context
+            </code>{' '}
+            in the activity log, so the audit trail is unambiguous about who reached in.
+          </p>
         </div>
       </AnimatedReveal>
     </SectionWrapper>

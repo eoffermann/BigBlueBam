@@ -4,13 +4,61 @@ import {
   LayoutTemplate,
   Bot,
   PenTool,
-  List,
+  History,
+  MessageSquare,
+  Link2,
+  GraduationCap,
 } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+
+const features = [
+  {
+    icon: PenTool,
+    title: 'Rich-Text Editor',
+    description:
+      'A Tiptap editor with headings, tables, code blocks, images, highlights, task lists, and slash commands. A live word count and Table of Contents keep long documents honest.',
+    color: 'bg-sky-100 text-sky-600',
+  },
+  {
+    icon: LayoutTemplate,
+    title: 'Templates',
+    description:
+      'Start from a pre-built shape — meeting notes, project briefs, RFCs, post-mortems, status reports — instead of a blinking cursor and good intentions.',
+    color: 'bg-violet-100 text-violet-600',
+  },
+  {
+    icon: History,
+    title: 'Version History',
+    description:
+      'Numbered snapshots of every document, with one-click rollback. The draft you liked better on Tuesday is still right there.',
+    color: 'bg-amber-100 text-amber-600',
+  },
+  {
+    icon: MessageSquare,
+    title: 'Comments & Review',
+    description:
+      'Threaded, text-anchored comments you can reply to and resolve. Feedback lands on the exact sentence it is about, not in a separate doc nobody reads.',
+    color: 'bg-rose-100 text-rose-600',
+  },
+  {
+    icon: Link2,
+    title: 'Linked to the Work',
+    description:
+      'Link a document to its Bam tasks for requirements and specs, and to Beacon articles for related knowledge. The spec and the backlog finally know about each other.',
+    color: 'bg-teal-100 text-teal-600',
+  },
+  {
+    icon: GraduationCap,
+    title: 'Promote to Beacon',
+    description:
+      'When a document graduates from working draft to lasting knowledge, send it to your Beacon knowledge base in one step. No copy-paste, no second source of truth.',
+    color: 'bg-emerald-100 text-emerald-600',
+  },
+];
 
 export function BriefSection() {
   return (
@@ -21,13 +69,14 @@ export function BriefSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Documents that live next to your code
+            Docs that grow up to be knowledge
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A rich-text collaborative editor with a formatting toolbar, auto-generated table of
-            contents, and slash commands. 33 built-in templates across 7 categories, real-time
-            co-editing, version history, and a graduation path that lets polished documents become
-            Beacons when they mature into lasting knowledge.
+            A real-time collaborative editor that lives alongside your board, not in a separate
+            wiki you forget exists. Brief gives you rich text, templates, threaded comments, and
+            version history — then lets the documents that matter graduate into Beacon. Link a doc
+            to its Bam tasks, search across the suite, and let agents author and tidy it through 48
+            MCP tools.
           </p>
         </div>
       </AnimatedReveal>
@@ -35,137 +84,79 @@ export function BriefSection() {
       {/* Hero screenshots */}
       <div className="grid gap-8 lg:grid-cols-2">
         <AnimatedReveal delay={0.1} withScale>
-          <FloatingFrame src="/screenshots/brief-home.png" alt="Brief Home" />
+          <FloatingFrame src="/screenshots/brief/light/01-home.png" alt="Brief home with recent documents and quick-create actions" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Brief Home -- recent documents, templates, and quick-create actions
+            Home base — recent documents, review counts, and a New Document button that doesn't make you hunt for it.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.15} withScale>
-          <FloatingFrame src="/screenshots/brief-documents.png" alt="Brief document browser" />
+          <FloatingFrame src="/screenshots/brief/light/02-documents.png" alt="Brief document browser filtered by status" />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Document browser -- filter by project, author, template, and status
+            The full library — filter by status, scan word counts, and see what's still in review.
           </p>
         </AnimatedReveal>
       </div>
 
       {/* Feature highlights */}
       <AnimatedReveal delay={0.2}>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-600">
-              <PenTool className="h-5 w-5" />
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
+            <div key={feature.title} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${feature.color}`}>
+                <feature.icon className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-semibold text-zinc-900">{feature.title}</h3>
+              <p className="mt-2 text-sm text-zinc-600">{feature.description}</p>
             </div>
-            <h3 className="text-base font-semibold text-zinc-900">WYSIWYG Editor</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Tiptap-based rich text with a formatting toolbar, heading dropdown, tables, code
-              blocks, task lists, slash commands, and syntax highlighting.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
-              <LayoutTemplate className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">33 Templates</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Meeting notes, PRDs, RFCs, post-mortems, onboarding guides, and more across 7
-              categories -- business operations, engineering, strategy, HR, communications, sales,
-              and creative.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-              <List className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">Auto Table of Contents</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              Generated in real-time from document headings. Clickable navigation that updates as
-              you type, keeping long documents easy to browse.
-            </p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-              <Bot className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-semibold text-zinc-900">AI Co-authoring</h3>
-            <p className="mt-2 text-sm text-zinc-600">
-              AI agents create, edit, comment on, upsert by slug, and graduate documents through
-              18 MCP tools. Attachment metadata surfaces through a federated dispatcher so agents
-              see mime, size, scan verdict, and uploader without reaching into object storage.
-            </p>
-          </div>
+          ))}
         </div>
       </AnimatedReveal>
 
-      {/* Editor screenshots */}
+      {/* Detail screenshots */}
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <AnimatedReveal delay={0.25} withScale>
           <FloatingFrame
-            src="/screenshots/brief-editor.png"
-            alt="Brief WYSIWYG Editor — new document"
+            src="/screenshots/brief/light/05-templates.png"
+            alt="Brief template library across categories"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            WYSIWYG editor with formatting toolbar and Table of Contents
+            A template for every meeting that should've been a doc — pick one and skip the empty page.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.3} withScale>
           <FloatingFrame
-            src="/screenshots/brief-editor-with-content.png"
-            alt="Brief WYSIWYG Editor — editing"
+            src="/screenshots/brief/light/06-search.png"
+            alt="Brief search across document titles, content, and authors"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Editing an existing document with rich text
+            Search by title, content, or author — the note you swear you wrote is findable again.
           </p>
         </AnimatedReveal>
       </div>
 
-      {/* Templates screenshot */}
-      <AnimatedReveal delay={0.35} withScale>
-        <div className="mt-10">
-          <FloatingFrame
-            src="/screenshots/brief-templates.png"
-            alt="Brief Template Library"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            33 built-in templates across 7 categories -- business operations, engineering, strategy,
-            HR, communications, sales, and creative
-          </p>
+      {/* AI / MCP callout */}
+      <AnimatedReveal delay={0.35}>
+        <div className="mt-10 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-zinc-900">And yes — agents can do it too</h3>
+              <p className="mt-2 text-sm text-zinc-600">
+                Brief exposes <span className="font-semibold text-zinc-900">48 MCP tools</span> so an
+                AI agent can author, edit, and curate documents the same way you do — create a doc
+                (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_create</code>),
+                stream content into it
+                (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_append_content</code>),
+                and graduate the keepers into your knowledge base
+                (<code className="rounded bg-zinc-100 px-1 py-0.5 text-xs">brief_promote_to_beacon</code>) —
+                plus comments, versions, links, collaborators, templates, and search.
+              </p>
+            </div>
+          </div>
         </div>
       </AnimatedReveal>
-
-      {/* Templates in editor */}
-      <div className="mt-10 grid gap-8 lg:grid-cols-2">
-        <AnimatedReveal delay={0.4} withScale>
-          <FloatingFrame
-            src="/screenshots/brief-template-meeting-notes.png"
-            alt="Meeting Notes template loaded in the editor"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Meeting Notes template — agenda, attendees, and action items
-          </p>
-        </AnimatedReveal>
-        <AnimatedReveal delay={0.45} withScale>
-          <FloatingFrame
-            src="/screenshots/brief-template-prd.png"
-            alt="PRD template loaded in the editor"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            PRD template — metadata, problem statement, requirements, rollout
-          </p>
-        </AnimatedReveal>
-      </div>
-
-      {/* Detail screenshot */}
-      <div className="mt-10 grid gap-8 lg:grid-cols-2">
-        <AnimatedReveal delay={0.4} withScale>
-          <FloatingFrame
-            src="/screenshots/brief-detail.png"
-            alt="Brief document detail with inline comments"
-          />
-          <p className="mt-3 text-center text-sm text-zinc-500">
-            Document detail -- inline comments, version history, and metadata sidebar
-          </p>
-        </AnimatedReveal>
-      </div>
 
       <AnimatedReveal delay={0.45}>
         <div className="mt-10 flex flex-col items-center gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center sm:flex-row sm:justify-between sm:text-left">

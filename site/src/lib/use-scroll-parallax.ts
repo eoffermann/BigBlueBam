@@ -2,13 +2,13 @@ import { useRef } from 'react';
 import { useScroll, useTransform, useReducedMotion, type MotionValue } from 'motion/react';
 import { EFFECTS } from '@/lib/animation-config';
 
-interface UseScrollParallaxReturn {
-  ref: React.RefObject<HTMLElement | null>;
+interface UseScrollParallaxReturn<T extends HTMLElement = HTMLElement> {
+  ref: React.RefObject<T | null>;
   y: MotionValue<number>;
 }
 
-export function useScrollParallax(): UseScrollParallaxReturn {
-  const ref = useRef<HTMLElement | null>(null);
+export function useScrollParallax<T extends HTMLElement = HTMLElement>(): UseScrollParallaxReturn<T> {
+  const ref = useRef<T | null>(null);
   const prefersReduced = useReducedMotion();
 
   const { scrollYProgress } = useScroll({

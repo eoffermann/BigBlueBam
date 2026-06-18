@@ -4,7 +4,7 @@ import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
 
 const stack = [
-  { icon: Container, label: 'Docker Compose', description: '19 services, single command to spin up' },
+  { icon: Container, label: 'Docker Compose', description: 'The whole stack, one command to spin up' },
   { icon: Database, label: 'PostgreSQL 16', description: 'RLS, JSONB, partitioned tables' },
   { icon: Server, label: 'Redis 7', description: 'Sessions, cache, PubSub, job queues' },
   { icon: Layers, label: 'MinIO / S3', description: 'Attachment storage, swap for any S3 provider' },
@@ -51,16 +51,17 @@ export function Architecture() {
       <AnimatedReveal delay={0.5}>
         <div className="mt-10 rounded-xl border border-zinc-200 bg-zinc-50 p-6">
           <div className="mb-4 flex flex-wrap justify-center gap-2">
-            <Badge variant="blue">340 MCP Tools</Badge>
+            <Badge variant="blue">720+ MCP Tools</Badge>
+            <Badge variant="blue">16 Apps</Badge>
             <Badge variant="blue">900+ Tests</Badge>
-            <Badge variant="blue">19 Docker Services</Badge>
             <Badge variant="blue">MIT License</Badge>
           </div>
           <p className="text-center text-sm text-zinc-600">
-            Application containers (Bam, Banter, Beacon, Bearing, Bench, Bill, Blank, Blast, Board,
-            Bolt, Bond, Book, Brief, Helpdesk APIs plus MCP server, worker, voice agent, and their
-            frontends) are stateless. Data services (PostgreSQL, Redis, MinIO, Qdrant, LiveKit)
-            can be swapped for managed cloud equivalents by changing environment variables only.
+            Application containers (Bam, Banter, Beacon, Bearing, Bench, Bill, Blank, Blast, Blueprint,
+            Board, Bolt, Bond, Book, Brief, Bureau, Helpdesk APIs plus the MCP server, worker, voice
+            agent, and their frontends) are stateless and scale freely. Data services (PostgreSQL,
+            Redis, MinIO, Qdrant, LiveKit) can be swapped for managed cloud equivalents by changing
+            environment variables only — your laptop today, someone else's cloud tomorrow.
           </p>
         </div>
       </AnimatedReveal>
