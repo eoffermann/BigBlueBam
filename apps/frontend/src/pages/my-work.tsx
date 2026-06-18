@@ -127,7 +127,10 @@ export function MyWorkPage({ onNavigate }: MyWorkPageProps) {
           try {
             const res = await api.get<PaginatedResponse<Task>>(
               `/projects/${project.id}/tasks`,
-              { assignee_id: user.id },
+              // The list endpoint filters via the `filter[<field>]` param shape;
+              // a bare `assignee_id` is ignored, which made My Work show ALL
+              // tasks regardless of assignee.
+              { 'filter[assignee_id]': user.id },
             );
             return res.data.map((t) => ({
               ...t,

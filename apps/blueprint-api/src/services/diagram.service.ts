@@ -235,14 +235,20 @@ export async function restoreVersion(orgId: string, diagramId: string, versionNu
   await db.transaction(async (tx) => {
     await tx.delete(blueprintEdges).where(eq(blueprintEdges.diagram_id, diagramId));
     await tx.delete(blueprintNodes).where(eq(blueprintNodes.diagram_id, diagramId));
+    // The snapshot is JSONB, so its `created_at` / `updated_at` come back as
+    // ISO strings. Re-inserting them straight into timestamp columns makes
+    // Drizzle call `.toISOString()` on a string and throw, so we drop those
+    // server-managed fields and let `defaultNow()` re-stamp them. We KEEP each
+    // row's original `id`: nodes and edges are restored together, and edges
+    // reference node ids, so the ids must survive for the wiring to resolve.
     if (snap.nodes.length > 0) {
       await tx.insert(blueprintNodes).values(
-        snap.nodes.map((n) => ({ ...n, diagram_id: diagramId })),
+        snap.nodes.map(({ created_at, updated_at, ...n }) => ({ ...n, diagram_id: diagramId })),
       );
     }
     if (snap.edges.length > 0) {
       await tx.insert(blueprintEdges).values(
-        snap.edges.map((e) => ({ ...e, diagram_id: diagramId })),
+        snap.edges.map(({ created_at, updated_at, ...e }) => ({ ...e, diagram_id: diagramId })),
       );
     }
     await tx

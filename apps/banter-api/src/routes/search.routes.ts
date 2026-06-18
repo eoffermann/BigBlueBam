@@ -98,34 +98,44 @@ export default async function searchRoutes(fastify: FastifyInstance) {
 
       const whereClause = sql.join(conditions, sql` AND `);
 
-      // Query with ts_headline for highlighted snippets
+      // Query with ts_headline for highlighted snippets.
+      //
+      // NOTE: the dynamic `conditions` above are built with Drizzle column
+      // refs (e.g. ${banterMessages.channel_id}), which render as the
+      // fully-qualified "banter_messages"."channel_id". We therefore must NOT
+      // alias banter_messages in the FROM clause — an alias (e.g. `m`) makes
+      // those qualified refs an "invalid reference to FROM-clause entry" and
+      // the whole query 500s. The banter_channels/users joins keep their c/u
+      // aliases because the conditions only reference those tables inside
+      // self-contained subqueries, never at this query's top level.
       const results = await db.execute(sql`
         SELECT
-          m.id,
-          m.channel_id,
-          m.author_id,
-          m.thread_parent_id,
-          m.created_at,
-          m.attachment_count,
+          banter_messages.id,
+          banter_messages.channel_id,
+          banter_messages.author_id,
+          banter_messages.thread_parent_id,
+          banter_messages.created_at,
+          banter_messages.attachment_count,
+          banter_messages.content,
           ts_headline(
             'english',
-            m.content_plain,
+            banter_messages.content_plain,
             plainto_tsquery('english', ${params.q}),
             'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20'
           ) AS snippet,
           c.name AS channel_name,
           c.slug AS channel_slug,
-          u.display_name AS author_name,
+          u.display_name AS author_display_name,
           u.avatar_url AS author_avatar_url,
           ts_rank(
-            to_tsvector('english', m.content_plain),
+            to_tsvector('english', banter_messages.content_plain),
             plainto_tsquery('english', ${params.q})
           ) AS rank
-        FROM banter_messages m
-        INNER JOIN banter_channels c ON c.id = m.channel_id
-        INNER JOIN users u ON u.id = m.author_id
+        FROM banter_messages
+        INNER JOIN banter_channels c ON c.id = banter_messages.channel_id
+        INNER JOIN users u ON u.id = banter_messages.author_id
         WHERE ${whereClause}
-        ORDER BY rank DESC, m.created_at DESC
+        ORDER BY rank DESC, banter_messages.created_at DESC
         LIMIT ${params.limit}
         OFFSET ${params.offset}
       `);
@@ -133,7 +143,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
       // Get total count
       const countResult = await db.execute(sql`
         SELECT count(*)::int AS total
-        FROM banter_messages m
+        FROM banter_messages
         WHERE ${whereClause}
       `);
 

@@ -1,92 +1,13 @@
-[
-  {
-    "id": "01-board",
-    "label": "Kanban board",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\01-board.png",
-    "sha256": "fa50323400cf47b0edd3d42e319cec12176d87cdc7e5bf0ae46e3662aca47ba2",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:42:42.249Z"
-  },
-  {
-    "id": "02-sprint-board",
-    "label": "Sprint board",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\02-sprint-board.png",
-    "sha256": "a839746e8626c246ea98f5499216cacac9309484e838dec3f78e1044727807b2",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:42:50.126Z"
-  },
-  {
-    "id": "03-task-detail",
-    "label": "Task detail",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\03-task-detail.png",
-    "sha256": "605522a1cc165dcac57c3521ecfa75033c829a1d5a53c2dd55f8e413cb53f320",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:42:58.041Z"
-  },
-  {
-    "id": "04-people",
-    "label": "People management",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\04-people.png",
-    "sha256": "29db61aaad03917c85193724feffc020f7e7c0be7e0a02ba88f397feaa4833aa",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:00.846Z"
-  },
-  {
-    "id": "05-settings",
-    "label": "Project settings",
-    "theme": "light",
-    "file": "docs\\apps\\bam\\screenshots\\light\\05-settings.png",
-    "sha256": "cabf44adee9baa818e75ea2d0430aa0665707aa9dea63b8d4921b56596dfe839",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:03.586Z"
-  },
-  {
-    "id": "01-board",
-    "label": "Kanban board",
-    "theme": "dark",
-    "file": "docs\\apps\\bam\\screenshots\\dark\\01-board.png",
-    "sha256": "8c7f56b8a9389bda47da2e680d3f7103a3646903f6a69503ccbbbd848fe8942e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:14.125Z"
-  },
-  {
-    "id": "03-task-detail",
-    "label": "Task detail",
-    "theme": "dark",
-    "file": "docs\\apps\\bam\\screenshots\\dark\\03-task-detail.png",
-    "sha256": "b5c1ca50bd26d981284bdd8199b14097908e097a6e174e335a244b75d558ad7e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:42.067Z"
-  },
-  {
-    "id": "04-people",
-    "label": "People management",
-    "theme": "dark",
-    "file": "docs\\apps\\bam\\screenshots\\dark\\04-people.png",
-    "sha256": "3ddfcbdc15e568c7b29b1a85278ebe71dde0b66ab59075bcd28bb123ad7a7dc0",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:44.823Z"
-  },
-  {
-    "id": "05-settings",
-    "label": "Project settings",
-    "theme": "dark",
-    "file": "docs\\apps\\bam\\screenshots\\dark\\05-settings.png",
-    "sha256": "e7c51755d2d80047e3fcebfa23190fb6bdc6d05a65e1ef435465be0fa274c4c7",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:47.583Z"
-  }
-]
+{
+  "app": "bam",
+  "nginx_path": "/b3/",
+  "api_port": 4000,
+  "api_dir": "api",
+  "route_files": 66,
+  "schema_modules": 54,
+  "has_seeder": false,
+  "has_frontend": false,
+  "src_hash": "d2da36f2f4bdeb1ea50a3d5545473c2b2c6bd95332e938c29f2b1bcd07325b8d",
+  "generated_at": "2026-06-18T00:49:53.733Z",
+  "mcp_tool_count": 123
+}

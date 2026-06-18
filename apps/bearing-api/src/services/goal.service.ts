@@ -370,28 +370,75 @@ export async function listWatchers(goalId: string, orgId: string) {
   if (!goal) throw new BearingError('NOT_FOUND', 'Goal not found', 404);
 
   const rows = await db
-    .select()
+    .select({
+      id: bearingGoalWatchers.id,
+      user_id: bearingGoalWatchers.user_id,
+      created_at: bearingGoalWatchers.created_at,
+      display_name: users.display_name,
+      avatar_url: users.avatar_url,
+    })
     .from(bearingGoalWatchers)
+    .leftJoin(users, eq(users.id, bearingGoalWatchers.user_id))
     .where(eq(bearingGoalWatchers.goal_id, goalId))
     .limit(200);
 
   return { data: rows };
 }
 
-export async function addWatcher(goalId: string, userId: string, orgId: string) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve a "user ID or email" reference (as typed in the Add-watcher field)
+ * to an active user id in the caller's org. Throws BAD_REQUEST if the ref does
+ * not name a user the caller is allowed to add.
+ */
+async function resolveUserRefInOrg(ref: string, orgId: string): Promise<{ id: string; display_name: string; avatar_url: string | null }> {
+  const trimmed = ref.trim();
+  const condition = UUID_RE.test(trimmed)
+    ? eq(users.id, trimmed)
+    : eq(users.email, trimmed.toLowerCase());
+
+  const [user] = await db
+    .select({ id: users.id, display_name: users.display_name, avatar_url: users.avatar_url })
+    .from(users)
+    .where(and(condition, eq(users.org_id, orgId), eq(users.is_active, true)))
+    .limit(1);
+
+  if (!user) {
+    throw new BearingError('BAD_REQUEST', 'No active user in this organization matches that ID or email', 400);
+  }
+
+  return user;
+}
+
+/**
+ * Add a watcher. `userRef` is the user ID or email entered in the UI; it is
+ * resolved to an active org member before insert.
+ */
+export async function addWatcher(goalId: string, userRef: string, orgId: string) {
   const goal = await getGoalById(goalId, orgId);
   if (!goal) throw new BearingError('NOT_FOUND', 'Goal not found', 404);
+
+  const user = await resolveUserRefInOrg(userRef, orgId);
 
   const [watcher] = await db
     .insert(bearingGoalWatchers)
     .values({
       goal_id: goalId,
-      user_id: userId,
+      user_id: user.id,
     })
     .onConflictDoNothing()
     .returning();
 
-  return watcher ?? { goal_id: goalId, user_id: userId };
+  // onConflictDoNothing returns nothing when the watcher already exists; fall
+  // back to the resolved user so the response is still well-formed.
+  return {
+    id: watcher?.id,
+    user_id: user.id,
+    display_name: user.display_name,
+    avatar_url: user.avatar_url,
+    created_at: watcher?.created_at,
+  };
 }
 
 export async function removeWatcher(goalId: string, userId: string, orgId: string) {

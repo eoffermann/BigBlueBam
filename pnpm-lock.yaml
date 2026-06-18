@@ -1193,6 +1193,9 @@ importers:
       '@fastify/cors':
         specifier: ^10.0.0
         version: 10.1.0
+      '@fastify/multipart':
+        specifier: ^9.0.0
+        version: 9.4.0
       '@fastify/rate-limit':
         specifier: ^10.0.0
         version: 10.3.0
@@ -1211,9 +1214,15 @@ importers:
       fastify-plugin:
         specifier: ^5.0.0
         version: 5.1.0
+      file-type:
+        specifier: ^22.0.1
+        version: 22.0.1
       ioredis:
         specifier: ^5.4.0
         version: 5.10.1
+      minio:
+        specifier: ^8.0.0
+        version: 8.0.7
       nanoid:
         specifier: ^5.0.0
         version: 5.1.7
@@ -3289,6 +3298,12 @@ importers:
       playwright:
         specifier: ^1.59.1
         version: 1.59.1
+      yaml:
+        specifier: ^2.5.0
+        version: 2.8.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -3296,6 +3311,9 @@ importers:
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+      tsx:
+        specifier: ^4.16.0
+        version: 4.21.0
       typescript:
         specifier: ^5.4.0
         version: 5.9.3

@@ -290,12 +290,20 @@ const DATA_SOURCES: BenchDataSource[] = [
     product: 'bench',
     entity: 'daily_task_throughput',
     label: 'Daily Task Throughput',
-    description: 'Pre-computed daily task completion rates by project',
+    description: 'Pre-computed daily task throughput by project',
     baseTable: 'bench_mv_daily_task_throughput',
+    // NOTE: the measure fields below match the actual MV columns (total_tasks /
+    // with_state / total_points — see infra/postgres/migrations/0035_bench_tables.sql),
+    // not the historical completed/in_progress/points_completed names which never
+    // existed on the view. ⚠ This MV is still NOT org-isolated: it has no
+    // organization_id column (it groups by project_id only), so the query builder's
+    // mandatory `organization_id = $org` filter 42703s against it. Until a migration
+    // rebuilds the MV with an organization_id column, widgets cannot use this source;
+    // the "Daily Task Throughput" gallery preset queries bam.tasks directly instead.
     measures: [
-      { field: 'completed', label: 'Completed Tasks', aggregations: ['sum', 'avg'], type: 'integer' },
-      { field: 'in_progress', label: 'In-Progress Tasks', aggregations: ['sum', 'avg'], type: 'integer' },
-      { field: 'points_completed', label: 'Points Completed', aggregations: ['sum', 'avg'], type: 'integer' },
+      { field: 'total_tasks', label: 'Total Tasks', aggregations: ['sum', 'avg'], type: 'integer' },
+      { field: 'with_state', label: 'Tasks With State', aggregations: ['sum', 'avg'], type: 'integer' },
+      { field: 'total_points', label: 'Total Points', aggregations: ['sum', 'avg'], type: 'integer' },
     ],
     dimensions: [
       { field: 'project_id', label: 'Project', type: 'categorical' },

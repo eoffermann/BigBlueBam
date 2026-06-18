@@ -464,17 +464,35 @@ describe('addWatcher', () => {
     addWatcher = mod.addWatcher;
   });
 
-  it('should add a watcher to a goal', async () => {
+  it('should add the resolved user as a watcher (not the caller)', async () => {
     const goal = makeGoal();
-    const watcher = { goal_id: GOAL_ID, user_id: USER_ID };
+    const resolvedUser = { id: USER_ID, display_name: 'Watcher User', avatar_url: null };
+    const watcherRow = { id: 'w-1', goal_id: GOAL_ID, user_id: USER_ID, created_at: new Date() };
 
-    mockSelect.mockReturnValue(chainable([goal]));
-    mockInsert.mockReturnValue(chainable([watcher]));
+    // select #1: getGoalById; select #2: resolveUserRefInOrg
+    mockSelect
+      .mockReturnValueOnce(chainable([goal]))
+      .mockReturnValueOnce(chainable([resolvedUser]));
+    mockInsert.mockReturnValue(chainable([watcherRow]));
 
+    // userRef is the entered user (a UUID here); it must be the one inserted.
     const result = await addWatcher(GOAL_ID, USER_ID, ORG_ID);
 
-    expect(result.goal_id).toBe(GOAL_ID);
     expect(result.user_id).toBe(USER_ID);
+    expect(result.display_name).toBe('Watcher User');
+  });
+
+  it('should reject a user ref that is not an active org member', async () => {
+    const goal = makeGoal();
+
+    // select #1: goal found; select #2: no matching user in org
+    mockSelect
+      .mockReturnValueOnce(chainable([goal]))
+      .mockReturnValueOnce(chainable([]));
+
+    await expect(addWatcher(GOAL_ID, USER_ID, ORG_ID)).rejects.toThrow(
+      'No active user in this organization',
+    );
   });
 
   it('should throw NOT_FOUND when goal does not exist', async () => {

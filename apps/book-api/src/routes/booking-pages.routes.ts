@@ -39,6 +39,19 @@ export default async function bookingPageRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // GET /booking-pages/:id — load a single page (used by the editor)
+  fastify.get<{ Params: { id: string } }>(
+    '/booking-pages/:id',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const page = await bookingPageService.getBookingPage(
+        request.params.id,
+        request.user!.org_id,
+      );
+      return reply.send({ data: page });
+    },
+  );
+
   // POST /booking-pages
   fastify.post(
     '/booking-pages',

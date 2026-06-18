@@ -1,4 +1,4 @@
-# Blank - Forms and submissions
+# Blank - Forms and surveys
 
 > Blank is the forms and surveys app in BigBlueBam. Build a form with drag-and-drop fields, publish it to a public URL, and collect and review responses without writing any code.
 
@@ -15,11 +15,12 @@ Authoring happens in the Blank SPA, which requires a BigBlueBam login. Filling o
 ### Key concepts
 
 - **Form** - the top-level object you build and share. It has a name, a slug (used in its public URL), a description, fields, and behavior settings.
-- **Field** - a single input or element on the form. Fields are ordered, can be marked required, and each has a stable **field key** (letters, digits, and underscores) used as the storage key for answers.
-- **Field type** - what kind of input a field is, for example Short Text, Email, Rating, NPS, or Dropdown. You pick the type from the builder palette when you add a field.
+- **Field** - a single input or element on the form. Fields are ordered, can be marked required, and each has a stable **field key** (letters, digits, and underscores; must start with a letter or underscore) used as the storage key for answers.
+- **Field type** - what kind of input a field is, for example Short Text, Email, Rating, NPS, or Dropdown. You pick the type from the builder palette when you add a field. A few layout-only types (Section Header, Paragraph, Hidden Field, and Page Break) carry no submitted answer.
 - **Form status** - the lifecycle state of a form: **draft** (still being built), **published** (live and accepting responses), or **closed** (no longer accepting responses). New forms start as draft.
 - **Form type** - a label on the form (Public, Internal, or Embedded) found on the per-form Settings page.
 - **Visibility** - who can reach the form through its URL: **Public** (anyone with the link), **Organization** (members of your org), or **Project members** (members of a chosen Bam project).
+- **Logic (conditional display)** - a field can be configured to show only when another field meets a condition (for example, equals or contains a value). This is stored on the field and is available to agents through the MCP field tools; the visual builder does not yet expose a conditional editor.
 - **Submission** - one response to a form. Submissions are listed in the Responses view and aggregated in Analytics.
 - **Confirmation** - what a respondent sees after submitting: a message, a redirect, or a custom page.
 - **Public form URL** - the shareable link to your published form, in the form `https://YOUR-DOMAIN/forms/<slug>`. This is the server-rendered page the Publish dialog hands you.
@@ -42,7 +43,7 @@ Prerequisites:
 
 The Forms list at `/blank/` is the home screen. It is headed **Forms** with the subtitle "Build forms and surveys to capture responses from anyone." Each form appears as a card showing its name, description, a status pill (draft, published, or closed), the field count, the submission count, and a relative "updated" time.
 
-See `screenshots/light/01-form-list.png` for the Forms list with cards.
+![Forms list](screenshots/light/01-form-list.png)
 
 To create a form:
 
@@ -67,11 +68,11 @@ If you have no forms yet, the list shows an empty state: "No forms yet" with "Cr
 
 The builder at `/blank/forms/<id>/edit` is where you design a form. It has a left field palette, a center canvas, an optional right field-config panel, and an optional live-preview panel.
 
-See `screenshots/light/02-form-builder.png` for the builder with the palette and canvas.
+![Form builder](screenshots/light/02-form-builder.png)
 
 The left palette is headed **Add Field**. Click any type to append a field of that type to the canvas. The available types are:
 
-Short Text, Long Text, Email, Phone, URL, Number, Single Select, Multi Select, Dropdown, Date, Time, Rating, Scale, NPS, Checkbox, Toggle, File Upload, Section Header, Paragraph, and Hidden Field.
+Short Text, Long Text, Email, Phone, URL, Number, Single Select, Multi Select, Dropdown, Date, Time, Rating, Scale, NPS, Checkbox, Toggle, File Upload, Section Header, Paragraph, Hidden Field, and Page Break.
 
 To name the form:
 
@@ -100,7 +101,7 @@ The top-right action bar of the builder has these controls:
 
 If the form has no fields, the canvas shows "Click a field type on the left to add it".
 
-> Note: the palette also lists a **Page Break** item, but adding one currently fails because the API does not accept the page-break field type. To create a multi-page form, set the **Page Number** on individual fields in Field Settings instead. See "Multi-page forms" below.
+The palette's **Page Break** item splits a form into pages. Adding one inserts a layout-only divider in the builder rather than a stray input, and the public form pages at that boundary. See "Multi-page forms" below. You can also page a form by setting the **Page Number** on individual fields in Field Settings.
 
 ### Field Settings
 
@@ -123,9 +124,13 @@ Type-specific controls:
 - **Scale Min** and **Scale Max** - for Scale fields.
 - **Regex Pattern** - an optional validation pattern applied to string answers.
 
+Layout-only fields (Section Header, Paragraph, Hidden Field, and Page Break) do not show validation controls like the regex pattern, because they collect no answer.
+
 ### Form Settings dialog
 
-The **Settings** button in the builder action bar opens the Form Settings dialog, titled **Form Settings**. It covers visibility, expiration, and project scoping.
+The **Settings** button in the builder action bar opens the Form Settings dialog, titled **Form Settings**. It covers visibility, expiration, project scoping, who may submit (sign-in and allowed email domains), and submission notifications (email and Banter).
+
+![Form settings](screenshots/light/06-form-settings-dialog.png)
 
 To set visibility:
 
@@ -144,6 +149,33 @@ To set an expiration:
 3. Click **Save**.
 
 Use **Cancel** to close the dialog without saving.
+
+#### Access control and notifications
+
+Below visibility and expiration, the Form Settings dialog has controls for who may submit and what happens when they do. These are enforced and delivered for real.
+
+![Access control and notifications](screenshots/light/07-access-and-notifications.png)
+
+- **Require sign-in to submit** - a checkbox. When on, a visitor must be signed in to a BigBlueBam account before they can submit (or upload a file). An anonymous attempt is rejected with a "You must be signed in to submit this form" error.
+- **Allowed email domains** - a comma-separated list, for example `acme.com, example.org`. When set, only a submitter whose email is on one of these domains may submit; everyone else is rejected with a "Submissions from ... are not allowed" error. The submitter's email is taken from their signed-in account, the form's email field, or an explicit email in the response, in that order. Leave the field blank to allow any domain. A leading `@` is tolerated and stripped.
+- **Email me on new submissions** - a checkbox that turns on notification emails for this form.
+- **Notification recipients** - a comma-separated list of email addresses to notify on each new submission. Used together with **Email me on new submissions**.
+- **Post to Banter channel** - an optional picker. When a channel is chosen, each new submission also posts a short message to that Banter channel.
+
+To gate who can submit:
+
+1. Click **Settings** in the builder.
+2. Check **Require sign-in to submit** to force authentication, and/or enter one or more domains under **Allowed email domains**.
+3. Click **Save**.
+
+To get notified of submissions:
+
+1. Click **Settings** in the builder.
+2. Check **Email me on new submissions** and enter one or more addresses under **Notification recipients**.
+3. (Optional) Pick a **Post to Banter channel** target.
+4. Click **Save**.
+
+> Note: the sign-in and allowed-domain gates are enforced on the public submit and file-upload paths. Combine them with **Visibility** (org or project membership) for layered access control. Notification and confirmation emails are dispatched through your deployment's SMTP transport; where SMTP is not configured, the worker logs the message instead of delivering it.
 
 ### Publish dialog
 
@@ -169,16 +201,18 @@ To share a published form:
 
 Preview shows the form exactly as a respondent would see it, without accepting input.
 
-See `screenshots/light/03-form-preview.png` for the full-page preview.
+![Live preview](screenshots/light/03-form-preview.png)
 
 There are two ways to preview:
 
-- In the builder, click **Preview** (eye icon) to toggle the live-preview panel on the right. The panel renders the form as you edit.
+- In the builder, click **Preview** (eye icon) to toggle the live-preview panel on the right. The panel renders the form as you edit and splits a multi-page form at page boundaries with Previous and Next controls and a progress bar.
 - From the Forms list overflow menu, click **Preview**, or go to `/blank/forms/<id>/preview`, for the full-page Form Preview. The header has a "Back to Builder" link and a "PREVIEW MODE" label, and all inputs are disabled.
 
 ### Responses
 
 The Responses view lists every submission for a form. Open it from a form card's overflow menu (**Responses**) or at `/blank/forms/<id>/responses`. The page is titled "<form name> - Responses" and shows the submission count. The back chevron returns you to the builder.
+
+![Responses table](screenshots/light/04-responses.png)
 
 Actions on the Responses page:
 
@@ -191,6 +225,8 @@ To filter by attachment processing state:
 
 The table columns are: a row number (#), **Email**, the first five display fields' answers, **Files** (a processing-status pill), and **Date**. If there are no submissions, the table shows "No responses yet."
 
+File uploads are real. When a respondent attaches a file to a File Upload field, the bytes are uploaded to object storage (MinIO/S3) before the form is submitted, and the submission carries a stored-object reference. A background worker then validates each stored file (extension and MIME allowlist, confirming the object actually landed in storage), records the verified file on the submission, and mints a short-lived download link. The **Files** pill reflects that real outcome: **pending** (awaiting the worker), **processing**, **complete** (every file validated and stored), or **failed** (a file was rejected, for example a disallowed type or a missing object). Uploads are constrained to a size cap and an allowlist of image, document, spreadsheet, CSV, plain-text, and zip types; SVG is always blocked.
+
 To export responses:
 
 1. Open the Responses view for the form.
@@ -199,6 +235,8 @@ To export responses:
 ### Analytics
 
 The Analytics view aggregates the responses to a form. Open it with the **Analytics** button on the Responses page or at `/blank/forms/<id>/analytics`. The page is titled "<form name> - Analytics" and shows the total submission count.
+
+![Form analytics](screenshots/light/05-analytics.png)
 
 It contains:
 
@@ -219,35 +257,65 @@ The per-form Settings page has these sections:
 
 Each control saves immediately when you change it.
 
+Email on submit is real. When a form has **Email on Submit** turned on (with recipients configured) or a respondent supplies their email, a background worker sends two kinds of message: a confirmation email to the respondent (using the form's confirmation message) and a notification email to each configured recipient summarizing the new submission. Delivery goes out through the configured SMTP transport; if SMTP is not configured in your deployment, the worker logs the message it would have sent instead of dropping it silently, so the wiring is the same whether or not mail is delivered. The richer access and notification controls (recipient list, Banter channel, sign-in requirement, allowed domains) live in the in-builder **Form Settings** dialog described above; this page exposes the single **Email on Submit** toggle.
+
+### Multi-page forms
+
+A longer form can be split across pages so respondents work through it a section at a time.
+
+There are two ways to page a form:
+
+- **Page Break field.** In the builder, click **Page Break** in the **Add Field** palette wherever you want a page boundary. It appears as a divider in the builder (it collects no answer) and the public form starts a new page there.
+- **Page Number.** Select a field in the canvas and set its **Page Number** in Field Settings, assigning each field to the page you want it on.
+
+To show a progress bar across the pages, open the per-form Settings page at `/blank/forms/<id>/settings` and enable **Show Progress Bar** under Branding. Use **Preview** to confirm the pages before you publish.
+
 ### Blank Settings (app-level)
 
 The **Blank Settings** item in the sidebar opens a read-only information page at `/blank/settings`, headed **Settings**. It displays the app defaults (default form type Public, default theme color #3b82f6), the rate-limiting policy (10 submissions per hour), and the events Blank emits. Nothing on this page is editable.
-
-See `screenshots/light/04-settings.png` for the app-level Blank Settings page.
 
 ### Public form
 
 A published form is served as a self-contained HTML page at `https://YOUR-DOMAIN/forms/<slug>`. This is the page the Publish dialog gives you and the one respondents fill out. It renders the form's fields, splits a multi-page form across pages with Back and Next controls and a progress bar, optionally collects the respondent's email, and shows the confirmation (message, redirect, or page) after a successful submission.
 
-Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission.
+Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission. The public submit endpoint is rate-limited to 10 submissions per hour per IP, and a form can also enforce a per-email limit, a maximum response count, and an expiration date.
+
+A form can additionally require sign-in and restrict submitters to an allowed set of email domains, both enforced on the public submit and file-upload paths (see "Access control and notifications" under Form Settings dialog). With **Require sign-in to submit** on, an unauthenticated submit or upload is rejected. With **Allowed email domains** set, a submitter whose email is not on an allowed domain is rejected. These gates stack with visibility, the per-email limit, the maximum response count, and the expiration date.
+
+File Upload fields are accepted on the public form: the respondent's file is uploaded to object storage before the form is submitted, the submission references the stored object, and a background worker validates the file (type allowlist, and confirming the object landed) and records it with a download link. The **Files** pill on the Responses table reflects that real outcome.
 
 ### Working with AI agents
 
-Agents can drive much of Blank through MCP tools that proxy to the same API the SPA uses. The tools share your permissions, so an agent can only do what you could do.
+Agents drive Blank through MCP tools that proxy to the same API the SPA uses. The tools share your permissions, so an agent can only do what you could do. There are 20 Blank MCP tools, and together they cover the full authoring lifecycle: generate, create, edit fields, publish, close, duplicate, delete, and read or export responses.
 
-Common agent actions and the tools that perform them:
+Generate and create:
 
-- Draft a form from a description with **`blank_generate_form`**, which returns a suggested form specification (it does not save anything), then create it with **`blank_create_form`** (which accepts inline field definitions).
-- List and inspect forms with **`blank_list_forms`** and **`blank_get_form`**.
-- Update form settings with **`blank_update_form`**.
-- Publish a draft with **`blank_publish_form`**.
-- Read responses with **`blank_list_submissions`** and **`blank_get_submission`**.
-- Summarize and report on results with **`blank_summarize_responses`** and **`blank_get_form_analytics`** (these return the same analytics payload the Analytics view uses).
-- Export raw responses with **`blank_export_submissions`** (returns CSV text).
+- Draft a form from a description with **`blank_generate_form`**, which returns a suggested form specification (it does not save anything). Its heuristics seed fields when the description mentions name, email, phone, NPS, rating or satisfaction, feedback or comment, and bug or issue.
+- Create the draft with **`blank_create_form`**, which accepts inline field definitions.
 
-There are 11 Blank MCP tools in total. Some have no matching screen in the SPA: `blank_generate_form` and `blank_get_submission` are agent-only, since the builder has no AI-draft entry point and the Responses table has no per-submission detail view. There is also no MCP tool to add, edit, reorder, or delete fields after a form is created; an agent that needs specific fields should supply them inline when calling `blank_create_form`.
+Edit structure:
 
-When reviewing agent work, check the form's fields and visibility in the builder before publishing, and confirm the public URL from the **Your form is live** dialog. For the full tool catalog and argument shapes, see the MCP-tools reference in `docs/apps/blank/mcp-tools.md`.
+- Add a field with **`blank_add_field`** (it accepts the conditional-display arguments `conditional_on_field_id`, `conditional_operator`, and `conditional_value`).
+- Change a field with **`blank_update_field`**, remove one with **`blank_delete_field`**, and reorder them with **`blank_reorder_fields`**.
+
+Inspect, publish, and manage lifecycle:
+
+- List and read forms with **`blank_list_forms`** and **`blank_get_form`**.
+- Update form metadata with **`blank_update_form`**.
+- Publish a draft with **`blank_publish_form`** and stop new responses with **`blank_close_form`**.
+- Clone a form with **`blank_duplicate_form`**, get its iframe snippet with **`blank_get_embed_code`**, and remove a form with **`blank_delete_form`** (destructive).
+
+Read and report on responses:
+
+- List and read submissions with **`blank_list_submissions`** and **`blank_get_submission`**.
+- Summarize and report on results with **`blank_summarize_responses`** and **`blank_get_form_analytics`** (both return the same analytics payload the Analytics view uses).
+- Export raw responses with **`blank_export_submissions`** (returns CSV text), and remove a single response with **`blank_delete_submission`** (destructive).
+
+Some tools have no matching screen in the SPA: `blank_generate_form` (the builder has no AI-draft entry point), `blank_get_submission` (the Responses table has no per-submission detail view), `blank_add_field` / `blank_update_field` / `blank_delete_field` / `blank_reorder_fields` (an agent can edit fields directly, whereas a person does the same work in the builder canvas), `blank_close_form`, `blank_get_embed_code`, and `blank_delete_submission`. When reviewing agent work, check the form's fields and visibility in the builder before publishing, and confirm the public URL from the **Your form is live** dialog.
+
+Blank also participates in the suite-wide agent platform. Agent activity is attributed to an agent identity and surfaced in the unified activity feed; long-running agents send heartbeats. Destructive or sensitive steps (publishing, closing, or deleting) can be routed through the approval-queue tools so a human decides before the action lands. Per-agent policies (kill switch plus a `blank.*` tool allowlist) gate which Blank tools a service account may call, and subscribed Blank events can be pushed to agent runners through signed outbound webhooks. Before an agent quotes a submission's contents into a shared surface it should call the visibility preflight (`can_access`) for that entity and drop anything the asker is not allowed to see.
+
+For the full tool catalog and argument shapes, see the MCP-tools reference in `docs/apps/blank/mcp-tools.md`.
 
 ## User Stories
 
@@ -323,6 +391,8 @@ When reviewing agent work, check the form's fields and visibility in the builder
 
 **Result:** A new draft form with the same fields, ready to edit and publish independently of the original.
 
+**Related:** An agent can clone a form with `blank_duplicate_form`.
+
 ### Story: Restrict a form to your organization or a project
 
 **Who:** An author who wants the form limited to internal people.
@@ -338,6 +408,45 @@ When reviewing agent work, check the form's fields and visibility in the builder
 
 **Result:** People who are not in the org (or not members of the chosen project) get a forbidden response when they open the public URL. Members can view and submit as normal.
 
+**Related:** "Gate a public form by sign-in and email domain" covers the complementary `requires_login` and `allowed_domains` gates, which are enforced on the public submit and file-upload paths and stack with visibility.
+
+### Story: Gate a public form by sign-in and email domain, and get notified
+
+**Who:** An author who wants only known people to submit and wants to hear about each response.
+**Goal:** Require sign-in and an allowed email domain to submit, and email the right people when a submission arrives.
+**Before you start:** You are editing the form in the builder.
+
+**Steps**
+
+1. Click **Settings** in the builder action bar.
+2. Check **Require sign-in to submit** to force authentication (optional but recommended for internal forms).
+3. Under **Allowed email domains**, enter the domains you accept, comma separated, for example `acme.com, example.org`. Leave it blank to allow any domain.
+4. Check **Email me on new submissions** and, under **Notification recipients**, enter the addresses to notify, comma separated.
+5. (Optional) Pick a **Post to Banter channel** target to also post each submission to a channel.
+6. Click **Save**, then **Publish**.
+
+**Result:** An unauthenticated visitor is turned away with a sign-in error, a submitter on a disallowed domain is rejected, and every accepted submission triggers a confirmation email to the submitter plus a notification email to your recipients (and a Banter post if configured). Where SMTP is not configured, the worker logs the messages instead of delivering them.
+
+**Related:** "Restrict a form to your organization or a project" covers the visibility gate that stacks with these. An agent can set the same fields with `blank_update_form` (`requires_login`, `allowed_domains`, `notify_on_submit`, `notify_emails`).
+
+### Story: Collect file uploads on a form
+
+**Who:** An author who needs respondents to attach a document or image.
+**Goal:** Add a file-upload field and review the stored files that come in.
+**Before you start:** You are editing the form in the builder.
+
+**Steps**
+
+1. In the **Add Field** palette, click **File Upload**. The field appears in the canvas; set its **Label** and mark it **Required** if needed.
+2. Publish the form and share the public URL.
+3. A respondent attaches a file; it is uploaded to object storage before they submit, and the submission references the stored object.
+4. Open the form's **Responses** view. Watch the **Files** pill move from **pending** to **complete** as the background worker validates and stores each file (or to **failed** if a file is rejected).
+5. Use the **Attachment status:** filter pills to find submissions whose files are still pending or that failed validation.
+
+**Result:** Respondents can attach files, the files are stored for real, and the Responses table tells you which submissions have validated attachments.
+
+**Related:** Uploads are limited to a size cap and an allowlist of image, document, spreadsheet, CSV, plain-text, and zip types (SVG is always blocked).
+
 ### Story: Build a multi-page survey
 
 **Who:** An author with a longer survey to split across pages.
@@ -346,26 +455,25 @@ When reviewing agent work, check the form's fields and visibility in the builder
 
 **Steps**
 
-1. In the builder, click a field in the canvas to open **Field Settings**.
-2. Set the field's **Page Number** to the page you want it on.
-3. Repeat for the other fields, assigning each a page number.
-4. (Optional) Open the per-form Settings page at `/blank/forms/<id>/settings` and enable **Show Progress Bar** under Branding.
-5. Click **Preview** to confirm the pages, then **Publish**.
+1. In the builder, click **Page Break** in the **Add Field** palette wherever you want a page boundary. It appears as a divider in the canvas.
+2. Add or arrange the fields for each page around the page breaks. (Alternatively, select a field, open **Field Settings**, and set its **Page Number**.)
+3. (Optional) Open the per-form Settings page at `/blank/forms/<id>/settings` and enable **Show Progress Bar** under Branding.
+4. Click **Preview** to confirm the pages, then **Publish**.
 
 **Result:** The public form shows fields grouped by page with Back and Next controls and, if enabled, a progress bar.
 
-> Note: do not use the palette's **Page Break** item to split pages. It currently fails because the API does not accept the page-break field type. Use **Page Number** on each field instead.
+**Related:** Page breaks and per-field Page Number both page a form; use whichever fits how you build.
 
-### Story: Close a form to stop accepting responses (API or agent)
+### Story: Close a form to stop accepting responses
 
 **Who:** An author or agent wrapping up a collection.
 **Goal:** Stop new submissions on a published form.
-**Before you start:** You have the `blank.form.close` permission. There is no button for this in the SPA; close is performed through the API.
+**Before you start:** You have the `blank.form.close` permission. There is no Close button in the SPA; closing is done through the API or an agent.
 
 **Steps**
 
-1. Call `POST /blank/api/v1/forms/<id>/close` with your session cookie or API key.
-2. Blank sets the form's status to closed, turns off **Accept Responses**, and emits a `form.closed` event.
+1. Call `POST /blank/api/v1/forms/<id>/close` with your session cookie or API key, or have an agent call `blank_close_form`.
+2. Blank sets the form's status to closed, turns off **Accept Responses**, and emits a `form.closed` event (source `blank`).
 
 **Result:** The form's public page no longer accepts submissions, and its status pill reads "closed" on the Forms list. There is no in-app control to reopen or un-publish a form.
 
@@ -375,14 +483,14 @@ When reviewing agent work, check the form's fields and visibility in the builder
 
 **Who:** A user delegating form creation to an AI agent.
 **Goal:** Go from a plain-language description to a published, shareable form.
-**Before you start:** The agent runs with your credentials and your publish permission.
+**Before you start:** The agent runs with your credentials and your publish permission. Its `blank.*` policy allowlist must permit the tools below.
 
 **Steps**
 
 1. Ask the agent to draft the form. It calls `blank_generate_form` with your description and returns a suggested specification of fields. Nothing is saved yet.
 2. Review the suggested fields with the agent and adjust.
-3. The agent calls `blank_create_form` with the field definitions inline to create the draft.
-4. The agent calls `blank_publish_form` to publish it.
+3. The agent calls `blank_create_form` with the field definitions inline to create the draft. It can refine the structure further with `blank_add_field`, `blank_update_field`, `blank_delete_field`, and `blank_reorder_fields`.
+4. The agent calls `blank_publish_form` to publish it. If publishing is routed through the approval queue, you approve the proposal first.
 5. Open the form in the builder to confirm the fields and visibility, then copy the public URL from the **Your form is live** dialog (open it with the **Share** button).
 6. Later, ask the agent to report on results with `blank_summarize_responses`.
 

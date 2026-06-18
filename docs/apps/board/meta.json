@@ -1,62 +1,13 @@
-[
-  {
-    "id": "01-list",
-    "label": "Board grid view",
-    "theme": "light",
-    "file": "docs\\apps\\board\\screenshots\\light\\01-list.png",
-    "sha256": "10808b846769ae6a47fe4a03ec53ee937546278440c794f5ad1046bcbadd3a38",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:25.572Z"
-  },
-  {
-    "id": "02-canvas",
-    "label": "Board canvas",
-    "theme": "light",
-    "file": "docs\\apps\\board\\screenshots\\light\\02-canvas.png",
-    "sha256": "8217e512e7fc38561d5b47f7ae4f536deb33578c486f002747bd117ee3efadb9",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:41.539Z"
-  },
-  {
-    "id": "03-templates",
-    "label": "Board templates",
-    "theme": "light",
-    "file": "docs\\apps\\board\\screenshots\\light\\03-templates.png",
-    "sha256": "58e32239a68e46d8fa64dd8b5a0e801796be34bd5190b5e2428587213c53f9a8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:44.240Z"
-  },
-  {
-    "id": "01-list",
-    "label": "Board grid view",
-    "theme": "dark",
-    "file": "docs\\apps\\board\\screenshots\\dark\\01-list.png",
-    "sha256": "f42610702148aafdf277bbbe0bf510d1f5ec5c151e79e0c739f401c276e75efa",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:35:51.977Z"
-  },
-  {
-    "id": "02-canvas",
-    "label": "Board canvas",
-    "theme": "dark",
-    "file": "docs\\apps\\board\\screenshots\\dark\\02-canvas.png",
-    "sha256": "fca2e2e86cb91716c65d7fadddf71246205da37191fb03ca926a3360db8deb7d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:36:07.937Z"
-  },
-  {
-    "id": "03-templates",
-    "label": "Board templates",
-    "theme": "dark",
-    "file": "docs\\apps\\board\\screenshots\\dark\\03-templates.png",
-    "sha256": "05307280c3bfb75963f704e3aae0083a66f229bb633dd0ff88f6e184f182eabe",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:36:10.615Z"
-  }
-]
+{
+  "app": "board",
+  "nginx_path": "/board/",
+  "api_port": 4008,
+  "api_dir": "board-api",
+  "route_files": 9,
+  "schema_modules": 11,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "746a12ec7546ced270a6ccbbb7e55d68e6857b3d1f7827e776492dfbdfde6069",
+  "generated_at": "2026-06-17T22:16:23.300Z",
+  "mcp_tool_count": 40
+}

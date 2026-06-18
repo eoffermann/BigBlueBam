@@ -415,12 +415,26 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // POST /invoices/from-time-entries — create invoice from Bam time entries
-  const fromTimeEntriesSchema = z.object({
-    project_id: z.string().uuid(),
-    time_entry_ids: z.array(z.string().uuid()).min(1),
-    client_id: z.string().uuid(),
-  });
+  // POST /invoices/from-time-entries — create invoice from Bam time entries.
+  // Accepts EITHER an explicit list of `time_entry_ids` OR a `date_from`/
+  // `date_to` range; with a range the service resolves the matching entries
+  // for the project itself. Both the in-app "Invoice from Time Entries"
+  // wizard and the bill_create_invoice_from_time MCP tool use the range form.
+  const fromTimeEntriesSchema = z
+    .object({
+      project_id: z.string().uuid(),
+      client_id: z.string().uuid(),
+      time_entry_ids: z.array(z.string().uuid()).min(1).optional(),
+      date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    })
+    .refine(
+      (b) => (b.time_entry_ids && b.time_entry_ids.length > 0) || (b.date_from && b.date_to),
+      {
+        message:
+          'Provide either time_entry_ids[] or both date_from and date_to to select time entries.',
+      },
+    );
 
   fastify.post(
     '/invoices/from-time-entries',

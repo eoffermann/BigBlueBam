@@ -27,6 +27,30 @@ export function useBamUsers() {
   });
 }
 
+export interface BamProject {
+  id: string;
+  name: string;
+}
+
+// Bam projects, fetched cross-app from the shared Bam API on the same origin
+// (the user's Bam session cookie is shared). Powers the project picker in the
+// "Invoice from Time Entries" wizard.
+export function useBamProjects() {
+  return useQuery({
+    queryKey: ['bill', 'bam-projects'],
+    queryFn: async () => {
+      const res = await fetch('/b3/api/v1/projects?limit=200', {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return { data: [] as BamProject[] };
+      const json = (await res.json()) as { data?: BamProject[] };
+      return { data: json.data ?? [] };
+    },
+    staleTime: 60_000,
+  });
+}
+
 interface ApprovalRequest {
   approver_id: string;
   subject_type: string;

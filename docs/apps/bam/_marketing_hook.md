@@ -1,5 +1,7 @@
 Sprint-powered Kanban boards that keep your team moving.
 
-- Drag-and-drop task management with configurable phases and swimlanes
-- Sprint carry-forward ensures nothing slips through the cracks
-- Multiple views (board, list, timeline, calendar) for every work style
+- Drag-and-drop tasks across configurable phases, grouped by swimlane and sliced across Board, List, Timeline, Calendar, and Workload views
+- Sprint carry-forward routes every unfinished task forward without losing its history, and velocity, burndown, and cycle-time reports track delivery
+- One My Work queue shows only the tasks assigned to you across every project
+- Agent-ready: nearly every board action is an MCP tool, so an AI assistant can plan a sprint or update tasks alongside your team
+- Bring your own email: a platform relay sends system mail out of the box, and each org can point its invitations and campaigns at its own SMTP server

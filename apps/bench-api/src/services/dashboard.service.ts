@@ -113,7 +113,29 @@ export async function getDashboard(id: string, orgId: string) {
     .where(eq(benchWidgets.dashboard_id, id))
     .orderBy(asc(benchWidgets.created_at));
 
-  return { ...dashboard, widgets };
+  return { ...dashboard, widgets: orderWidgetsByLayout(widgets, dashboard.layout) };
+}
+
+/**
+ * The dashboard `layout` jsonb stores the persisted widget order as an array of
+ * `{ widget_id }` entries. Sort the widgets to match it; widgets not present in
+ * the layout (e.g. just-created, not yet reordered) keep their creation order
+ * and sort after the laid-out ones. When `layout` is empty we fall back to the
+ * incoming (created_at) order untouched.
+ */
+function orderWidgetsByLayout<T extends { id: string }>(widgets: T[], layout: unknown): T[] {
+  if (!Array.isArray(layout) || layout.length === 0) return widgets;
+  const order = new Map<string, number>();
+  layout.forEach((item, i) => {
+    const wid = (item as { widget_id?: string })?.widget_id;
+    if (typeof wid === 'string') order.set(wid, i);
+  });
+  if (order.size === 0) return widgets;
+  return [...widgets].sort((a, b) => {
+    const ai = order.has(a.id) ? order.get(a.id)! : Number.MAX_SAFE_INTEGER;
+    const bi = order.has(b.id) ? order.get(b.id)! : Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
 }
 
 // ---------------------------------------------------------------------------

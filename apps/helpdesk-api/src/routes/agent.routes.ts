@@ -8,6 +8,7 @@ import { ticketMessages } from '../db/schema/ticket-messages.js';
 import { projects, users, tasks } from '../db/schema/bbb-refs.js';
 import { helpdeskUsers } from '../db/schema/helpdesk-users.js';
 import { helpdeskAgentApiKeys } from '../db/schema/helpdesk-agent-api-keys.js';
+import { helpdeskSettings } from '../db/schema/helpdesk-settings.js';
 
 /** Escape LIKE/ILIKE metacharacters so user input is treated as literal text. */
 function escapeLike(s: string): string {
@@ -1392,8 +1393,14 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       .limit(limit)
       .offset(offset);
 
-    // Default SLA target: 4 hours for first response.
-    const SLA_TARGET_MS = 4 * 60 * 60 * 1000;
+    // SLA target: the org's configured first-response window (default 8h),
+    // not a hardcoded 4h.
+    const [hdSettings] = await db
+      .select({ slaMinutes: helpdeskSettings.sla_first_response_minutes })
+      .from(helpdeskSettings)
+      .where(eq(helpdeskSettings.org_id, scopeOrgId))
+      .limit(1);
+    const SLA_TARGET_MS = (hdSettings?.slaMinutes ?? 480) * 60 * 1000;
     const SLA_IMMINENT_THRESHOLD = 0.75;
     const now = Date.now();
 

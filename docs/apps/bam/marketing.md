@@ -1,7 +1,7 @@
 ---
 title: "Bam (Project Management)"
 app: bam
-generated: "2026-04-17T16:45:01.839Z"
+generated: "2026-06-18T00:49:53.860Z"
 ---
 
 # Bam (Project Management)
@@ -9,9 +9,11 @@ generated: "2026-04-17T16:45:01.839Z"
 
 Sprint-powered Kanban boards that keep your team moving.
 
-- Drag-and-drop task management with configurable phases and swimlanes
-- Sprint carry-forward ensures nothing slips through the cracks
-- Multiple views (board, list, timeline, calendar) for every work style
+- Drag-and-drop tasks across configurable phases, grouped by swimlane and sliced across Board, List, Timeline, Calendar, and Workload views
+- Sprint carry-forward routes every unfinished task forward without losing its history, and velocity, burndown, and cycle-time reports track delivery
+- One My Work queue shows only the tasks assigned to you across every project
+- Agent-ready: nearly every board action is an MCP tool, so an AI assistant can plan a sprint or update tasks alongside your team
+- Bring your own email: a platform relay sends system mail out of the box, and each org can point its invitations and campaigns at its own SMTP server
 
 ## See It in Action
 
@@ -19,9 +21,9 @@ Sprint-powered Kanban boards that keep your team moving.
 ![Board](screenshots/light/01-board.png)
 
 
-![Sprint Board](screenshots/light/02-sprint-board.png)
+![Task Detail](screenshots/light/02-task-detail.png)
 
-![Task Detail](screenshots/light/03-task-detail.png)
+![Sprint Create](screenshots/light/03-sprint-create.png)
 
 ---
 

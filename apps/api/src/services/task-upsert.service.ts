@@ -157,6 +157,15 @@ export async function upsertTaskByExternalId(
     }
     const humanId = `${updated.task_id_prefix}-${updated.task_id_sequence}`;
 
+    // Resolve the project's owning org so the inserted task carries org_id
+    // (Bench analytics + RLS gate). Webhook/import callers never pass it.
+    const [orgRow] = await db
+      .select({ org_id: projects.org_id })
+      .from(projects)
+      .where(eq(projects.id, input.project_id))
+      .limit(1);
+    const upsertOrgId = orgRow?.org_id ?? null;
+
     // Insert with ON CONFLICT for race safety. If another writer inserted
     // the same (project_id, external_id) tuple between our pre-check and
     // the insert, the conflict branch updates the title/description so the
@@ -167,6 +176,7 @@ export async function upsertTaskByExternalId(
         .insert(tasks)
         .values({
           project_id: input.project_id,
+          org_id: upsertOrgId,
           human_id: humanId,
           external_id: input.external_id,
           title: input.title,

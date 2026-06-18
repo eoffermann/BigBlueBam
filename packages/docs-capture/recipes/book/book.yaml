@@ -1,0 +1,124 @@
+# Book — scheduling and calendar for your team.
+# Recipes mined from docs/apps/book/help.md (Feature reference + User Stories)
+# and verified against apps/book/src/App.tsx parseRoute.
+#
+# Routes (parseRoute, BASE_PATH=/book):
+#   /                        -> week (default landing)
+#   /month                   -> month
+#   /day                     -> day
+#   /timeline                -> timeline
+#   /booking-pages           -> booking-pages list
+#   /settings/working-hours  -> working-hours
+#   /settings/calendars      -> calendars
+#   /settings/connections    -> connections
+# All scene routes matched parseRoute as written; no corrections needed.
+#
+# Content is seeded by the local stack, so every recipe omits `content`.
+# The frozen clock (SHOTS_FROZEN_TIME) makes "Today"/current-week deterministic,
+# but the live current-time indicator and the highlighted "today" column/cell
+# still derive from wall-vs-frozen rendering, so they are masked on the time-grid
+# views (week/day) where a stray now-line would vary the pixels.
+# The Bureau presence widget is hidden globally by the capture engine.
+
+- id: book-week-view
+  app: book
+  demonstrates: "The default Book landing — a 7-day week grid with event blocks placed by time"
+  route: /book/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Week view" }
+  masks:
+    - "[data-testid='current-time-indicator']"
+    - ".now-line"
+
+- id: book-week-view-dark
+  app: book
+  demonstrates: "The week grid in dark theme at retina scale (marketing/retina)"
+  route: /book/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Week view" }
+  masks:
+    - "[data-testid='current-time-indicator']"
+    - ".now-line"
+
+- id: book-month-view
+  app: book
+  demonstrates: "The full-month grid of day cells with event chips"
+  route: /book/month
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Month view" }
+
+- id: book-day-view
+  app: book
+  demonstrates: "A single day shown as one hourly column"
+  route: /book/day
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='current-time-indicator']"
+    - ".now-line"
+
+- id: book-timeline
+  app: book
+  demonstrates: "The cross-app Timeline aggregating Book events, Bam task due dates, and Bond deal close dates by day"
+  route: /book/timeline
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Cross-app timeline" }
+
+- id: book-booking-pages
+  app: book
+  demonstrates: "The Booking Pages list — public scheduling links with Active/Disabled pills and /meet/<slug> URLs"
+  route: /book/booking-pages
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Booking pages" }
+
+- id: book-working-hours
+  app: book
+  demonstrates: "The Working Hours settings — seven day rows that drive availability and booking-page slots"
+  route: /book/settings/working-hours
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Working hours" }
+
+- id: book-calendars
+  app: book
+  demonstrates: "The Calendars settings — the per-user calendar list with Default pill, type, and description"
+  route: /book/settings/calendars
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Calendars" }
+
+- id: book-connections
+  app: book
+  demonstrates: "The external Calendar Connections page — the working .ics feed subscribe form, the Google/Outlook OAuth provider cards (gated on operator credentials), and a connected feed showing an Active pill with its synced event count"
+  route: /book/settings/connections
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "text=External Calendar Connections" }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  expect:
+    - "text=External Calendar Connections"
+    - "text=Subscribe to an .ics feed"
+    - "text=Your connections"
+  doc: { order: 7, label: "Calendar connections" }

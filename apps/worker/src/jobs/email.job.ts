@@ -3,39 +3,50 @@ import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import type { Env } from '../env.js';
 import { getDb } from '../utils/db.js';
-import { getSmtpConfig, type ResolvedSmtpConfig } from '../utils/smtp-config.js';
+import {
+  getSmtpConfig,
+  getSmtpConfigForOrg,
+  type ResolvedSmtpConfig,
+} from '../utils/smtp-config.js';
 
 export interface EmailJobData {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  /**
+   * Optional originating org. When set, the worker resolves the SMTP relay
+   * org-first (org override → platform → env) so transactional mail an org
+   * triggered (e.g. a member invitation) rides that org's own relay if it
+   * configured one. Platform-level mail with no org context (system alerts,
+   * the first-org bootstrap invite) omits this and uses the platform relay.
+   */
+  org_id?: string;
 }
 
-// Cached transport keyed by a fingerprint of the resolved config. When the
+// Cached transports keyed by a fingerprint of the resolved config. When the
 // operator updates SMTP settings in the UI, the resolver cache (30s TTL)
 // drops first, then the next call produces a new fingerprint and we build
-// a fresh transport. Old transports are gc'd naturally.
-let cachedTransport: nodemailer.Transporter | null = null;
-let cachedFingerprint: string | null = null;
+// a fresh transport. Old transports are gc'd naturally. We keep one slot
+// per fingerprint so different orgs' relays don't thrash a single slot.
+const transportCache = new Map<string, nodemailer.Transporter>();
 
 function fingerprintConfig(cfg: ResolvedSmtpConfig): string {
   return [cfg.host, cfg.port, cfg.user ?? '', cfg.pass ?? '', cfg.secure].join('|');
 }
 
-async function resolveTransport(env: Env): Promise<nodemailer.Transporter | null> {
-  const cfg = await getSmtpConfig(getDb(), env);
-  if (!cfg) return null;
+function transportFor(cfg: ResolvedSmtpConfig): nodemailer.Transporter {
   const fp = fingerprintConfig(cfg);
-  if (cachedTransport && fp === cachedFingerprint) return cachedTransport;
-  cachedTransport = nodemailer.createTransport({
+  const existing = transportCache.get(fp);
+  if (existing) return existing;
+  const transport = nodemailer.createTransport({
     host: cfg.host,
     port: cfg.port,
     secure: cfg.secure,
     auth: cfg.user && cfg.pass ? { user: cfg.user, pass: cfg.pass } : undefined,
   });
-  cachedFingerprint = fp;
-  return cachedTransport;
+  transportCache.set(fp, transport);
+  return transport;
 }
 
 export async function processEmailJob(
@@ -43,12 +54,16 @@ export async function processEmailJob(
   env: Env,
   logger: Logger,
 ): Promise<void> {
-  const { to, subject, html, text } = job.data;
+  const { to, subject, html, text, org_id } = job.data;
 
-  logger.info({ jobId: job.id, to, subject }, 'Processing email job');
+  logger.info({ jobId: job.id, to, subject, org_id }, 'Processing email job');
 
-  const cfg = await getSmtpConfig(getDb(), env);
-  const transport = await resolveTransport(env);
+  // Org-scoped jobs resolve org → platform → env; platform-level jobs use
+  // the platform → env resolver. Both share the same env fallback.
+  const cfg = org_id
+    ? await getSmtpConfigForOrg(getDb(), org_id, env)
+    : await getSmtpConfig(getDb(), env);
+  const transport = cfg ? transportFor(cfg) : null;
 
   if (!transport || !cfg) {
     logger.warn(

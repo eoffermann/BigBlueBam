@@ -33,17 +33,20 @@ import {
   CopyPlus,
   Download,
   Grid3x3,
+  History,
   Layers,
   Layout,
   Link2,
   Loader2,
   Magnet,
+  MessageSquare,
   Pin,
   PinOff,
   Plus,
   RotateCcw,
   Square,
   Trash2,
+  Users,
   Workflow,
   X,
 } from 'lucide-react';
@@ -67,6 +70,7 @@ import {
 } from '@/hooks/use-graph';
 import { nodeTypes } from '@/components/canvas/node-types';
 import { Inspector } from '@/components/canvas/inspector';
+import { EditorPanels, type EditorPanelTab } from '@/components/canvas/editor-panels';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { api } from '@/lib/api';
 import { downloadBlob } from '@/lib/utils';
@@ -212,6 +216,9 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   });
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  // Right-side collaboration panel (comments / collaborators / versions).
+  // null = closed; the Inspector takes the right column when no panel is open.
+  const [panelTab, setPanelTab] = useState<EditorPanelTab | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
   // Exact viewport-transformed coordinates for "create node here"
   // gestures (pane right-click, connection dropped on empty canvas).
@@ -1130,6 +1137,28 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
           </button>
         </div>
 
+        {/* Collaboration panels: comments / people / version history */}
+        <div className="flex items-center gap-0.5 pl-2 border-l border-zinc-200 dark:border-zinc-700">
+          <PanelToggleButton
+            label="Comments"
+            icon={<MessageSquare className="h-3.5 w-3.5" />}
+            active={panelTab === 'comments'}
+            onClick={() => setPanelTab((t) => (t === 'comments' ? null : 'comments'))}
+          />
+          <PanelToggleButton
+            label="People"
+            icon={<Users className="h-3.5 w-3.5" />}
+            active={panelTab === 'collaborators'}
+            onClick={() => setPanelTab((t) => (t === 'collaborators' ? null : 'collaborators'))}
+          />
+          <PanelToggleButton
+            label="History"
+            icon={<History className="h-3.5 w-3.5" />}
+            active={panelTab === 'versions'}
+            onClick={() => setPanelTab((t) => (t === 'versions' ? null : 'versions'))}
+          />
+        </div>
+
         {/* Snapshot + export + archive */}
         <div className="flex items-center gap-1.5 pl-2 border-l border-zinc-200 dark:border-zinc-700">
           <PresenceChipStrip
@@ -1385,8 +1414,51 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
           onLinkEntity={onLinkEntity}
           onPromoteToTask={onPromoteToTask}
         />
+        {panelTab && (
+          <EditorPanels
+            diagramId={diagramId}
+            activeTab={panelTab}
+            onTabChange={setPanelTab}
+            onClose={() => setPanelTab(null)}
+            selectedNodeId={selectedNodeId}
+            nodesById={nodesById}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  PanelToggleButton — top-bar toggles for the collaboration panels   */
+/* ------------------------------------------------------------------ */
+
+function PanelToggleButton({
+  label,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-pressed={active}
+      className={
+        active
+          ? 'inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300 font-medium'
+          : 'inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+      }
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

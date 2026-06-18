@@ -6,6 +6,7 @@ import {
   banterChannels,
   banterChannelMemberships,
   banterMessages,
+  banterMessageAttachments,
   banterBookmarks,
   banterPins,
   users,
@@ -39,12 +40,30 @@ import {
   ScheduledPostError,
 } from '../services/scheduled-post.service.js';
 
-const createMessageSchema = z.object({
-  content: z.string().min(1).max(40000),
-  content_format: z.enum(['html', 'markdown', 'plain']).default('html'),
-  thread_parent_id: z.string().uuid().optional(),
-  metadata: z.record(z.unknown()).optional(),
-  edit_permission: z.enum(['own', 'thread_starter', 'none']).optional(),
+// Attachment descriptors handed back by POST /v1/files/upload. There is no
+// pre-message attachment id; the upload stores the object in MinIO and returns
+// its storage key + metadata. We turn each descriptor into a
+// banter_message_attachments row after the message insert.
+const messageAttachmentSchema = z.object({
+  key: z.string().min(1).max(1024),
+  filename: z.string().min(1).max(255),
+  content_type: z.string().min(1).max(100),
+  size_bytes: z.number().int().nonnegative(),
+  url: z.string().max(2048).optional(),
+  thumbnail_key: z.string().max(1024).optional(),
+});
+
+const createMessageSchema = z
+  .object({
+    // Content may be empty when the message carries attachments (an
+    // image-only post). The .min(1) is enforced via the refine below so an
+    // attachment-only message is valid but a truly empty post is not.
+    content: z.string().max(40000).default(''),
+    content_format: z.enum(['html', 'markdown', 'plain']).default('html'),
+    thread_parent_id: z.string().uuid().optional(),
+    metadata: z.record(z.unknown()).optional(),
+    edit_permission: z.enum(['own', 'thread_starter', 'none']).optional(),
+    attachments: z.array(messageAttachmentSchema).max(20).optional(),
   // §13 Wave 4 scheduled banter — optional scheduling and quiet-hours opts.
   scheduled_at: z
     .string()
@@ -63,7 +82,11 @@ const createMessageSchema = z.object({
     .describe(
       'If true AND the channel policy.urgency_override is true, bypass quiet-hours rejection.',
     ),
-});
+  })
+  .refine((b) => b.content.trim().length > 0 || (b.attachments?.length ?? 0) > 0, {
+    message: 'Message must have content or at least one attachment',
+    path: ['content'],
+  });
 
 const updateMessageSchema = z.object({
   content: z.string().min(1).max(40000),
@@ -209,6 +232,39 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             )
           : new Set<string>();
 
+      // Attachments for the whole page in one query, grouped by message. The
+      // list previously hardcoded attachments:[] so uploaded files never
+      // rendered on re-render. Field names match the frontend Attachment shape
+      // (id, filename, mime_type, size, url).
+      const attachmentsByMessage = new Map<
+        string,
+        Array<{ id: string; filename: string; mime_type: string; size: number; url: string }>
+      >();
+      if (pageMessageIds.length > 0) {
+        const attRows = await db
+          .select({
+            id: banterMessageAttachments.id,
+            message_id: banterMessageAttachments.message_id,
+            filename: banterMessageAttachments.filename,
+            content_type: banterMessageAttachments.content_type,
+            size_bytes: banterMessageAttachments.size_bytes,
+            storage_key: banterMessageAttachments.storage_key,
+          })
+          .from(banterMessageAttachments)
+          .where(inArray(banterMessageAttachments.message_id, pageMessageIds));
+        for (const a of attRows) {
+          const list = attachmentsByMessage.get(a.message_id) ?? [];
+          list.push({
+            id: a.id,
+            filename: a.filename,
+            mime_type: a.content_type,
+            size: a.size_bytes,
+            url: `/files/${a.storage_key}`,
+          });
+          attachmentsByMessage.set(a.message_id, list);
+        }
+      }
+
       const data = messages.map((row) => ({
         ...row.message,
         author_id: row.message.author_id,
@@ -221,7 +277,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         thread_reply_count: row.message.reply_count ?? 0,
         thread_latest_reply_at: row.message.last_reply_at ?? null,
         reactions: [],
-        attachments: [],
+        attachments: attachmentsByMessage.get(row.message.id) ?? [],
       }));
 
       // Cursor for pagination: use the last message's ID
@@ -480,6 +536,47 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         })
         .returning();
 
+      // Persist any uploaded attachments now that we have the message id.
+      // Each descriptor came from POST /v1/files/upload (storage key +
+      // metadata). We insert one banter_message_attachments row per file and
+      // stamp attachment_count so list/read endpoints can surface them.
+      let createdAttachments: Array<{
+        id: string;
+        filename: string;
+        mime_type: string;
+        size: number;
+        url: string;
+      }> = [];
+      if (message && body.attachments && body.attachments.length > 0) {
+        const inserted = await db
+          .insert(banterMessageAttachments)
+          .values(
+            body.attachments.map((a) => ({
+              message_id: message.id,
+              uploader_id: user.id,
+              filename: a.filename,
+              content_type: a.content_type,
+              size_bytes: a.size_bytes,
+              storage_key: a.key,
+              thumbnail_key: a.thumbnail_key ?? null,
+            })),
+          )
+          .returning();
+
+        await db
+          .update(banterMessages)
+          .set({ attachment_count: inserted.length })
+          .where(eq(banterMessages.id, message.id));
+
+        createdAttachments = inserted.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          mime_type: a.content_type,
+          size: a.size_bytes,
+          url: `/files/${a.storage_key}`,
+        }));
+      }
+
       // Update channel denormalized fields
       await db
         .update(banterChannels)
@@ -512,6 +609,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         data: {
           message: {
             ...message,
+            attachment_count: createdAttachments.length,
+            attachments: createdAttachments,
             author: {
               id: user.id,
               display_name: user.display_name,
@@ -763,7 +862,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       })();
 
-      return reply.status(201).send({ data: message });
+      return reply.status(201).send({
+        data: {
+          ...message,
+          attachment_count: createdAttachments.length,
+          attachments: createdAttachments,
+        },
+      });
     },
   );
 
@@ -838,10 +943,28 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       }
 
+      const attRows = await db
+        .select({
+          id: banterMessageAttachments.id,
+          filename: banterMessageAttachments.filename,
+          content_type: banterMessageAttachments.content_type,
+          size_bytes: banterMessageAttachments.size_bytes,
+          storage_key: banterMessageAttachments.storage_key,
+        })
+        .from(banterMessageAttachments)
+        .where(eq(banterMessageAttachments.message_id, row.message.id));
+
       return reply.send({
         data: {
           ...row.message,
           author: row.author,
+          attachments: attRows.map((a) => ({
+            id: a.id,
+            filename: a.filename,
+            mime_type: a.content_type,
+            size: a.size_bytes,
+            url: `/files/${a.storage_key}`,
+          })),
         },
       });
     },

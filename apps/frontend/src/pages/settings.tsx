@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Moon, Sun, Monitor, User, Bell, Users, Trash2, Plug, Copy, Check, Plus, Headset, Pencil, Lock, Zap, Bot, RefreshCw, LayoutGrid, ListChecks } from 'lucide-react';
+import { Moon, Sun, Monitor, User, Bell, Users, Trash2, Plug, Copy, Check, Plus, Headset, Pencil, Lock, Zap, Bot, RefreshCw, LayoutGrid, ListChecks, Info, KeyRound } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { PaginatedResponse, ApiResponse, Project } from '@bigbluebam/shared';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -8,10 +8,11 @@ import { Input } from '@/components/common/input';
 import { Select } from '@/components/common/select';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCan } from '@bigbluebam/ui/use-can';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { changePassword } from '@/lib/api/people';
 import { formatDate } from '@/lib/utils';
 import { SettingsLlmProviders } from '@/pages/settings-llm-providers';
-import { SmtpSettingsForm } from '@/components/settings/smtp-settings-form';
+import { OrgSmtpSettingsForm } from '@/components/settings/org-smtp-settings-form';
 import { SlackImportCard } from '@/components/settings/slack-import-card';
 import { PriorityManager } from '@/components/settings/priority-manager';
 import { usePriorities, priorityInlineStyle } from '@/hooks/use-priorities';
@@ -113,7 +114,7 @@ interface SettingsPageProps {
 export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: SettingsPageProps) {
   const { user, patchUser } = useAuthStore();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'members' | 'tasks' | 'integrations' | 'helpdesk' | 'permissions' | 'launchpad' | 'ai-providers'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'appearance' | 'notifications' | 'members' | 'tasks' | 'integrations' | 'helpdesk' | 'permissions' | 'launchpad' | 'ai-providers'>('profile');
   const [priorityManagerOpen, setPriorityManagerOpen] = useState(false);
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [timezone, setTimezone] = useState(user?.timezone ?? 'UTC');
@@ -131,6 +132,14 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Password tab state (self-service change-password form)
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaved, setPwSaved] = useState(false);
 
   // Integrations tab state
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
@@ -653,6 +662,46 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
     }
   };
 
+  const handleChangePassword = async () => {
+    setPwError(null);
+    setPwSaved(false);
+    if (newPassword.length < 12) {
+      setPwError('New password must be at least 12 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New password and confirmation do not match.');
+      return;
+    }
+    if (currentPassword.length === 0) {
+      setPwError('Current password is required.');
+      return;
+    }
+    setPwSubmitting(true);
+    try {
+      await changePassword({ current_password: currentPassword, new_password: newPassword });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPwSaved(true);
+      setTimeout(() => setPwSaved(false), 3000);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 401 && err.code === 'INVALID_CREDENTIALS') {
+          setPwError('Current password is incorrect.');
+        } else if (err.code === 'VALIDATION_ERROR') {
+          setPwError('The new password does not meet the requirements.');
+        } else {
+          setPwError(err.message || 'Could not change password. Please try again.');
+        }
+      } else {
+        setPwError('Could not change password. Please try again.');
+      }
+    } finally {
+      setPwSubmitting(false);
+    }
+  };
+
   const handleSaveNotifications = async () => {
     setSavingNotif(true);
     try {
@@ -675,6 +724,7 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
 
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
+    { id: 'password' as const, label: 'Password', icon: KeyRound },
     { id: 'appearance' as const, label: 'Appearance', icon: Sun },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     { id: 'members' as const, label: 'Members', icon: Users },
@@ -747,6 +797,62 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                   <Button onClick={handleSaveProfile} loading={saving}>Save Changes</Button>
                   {saved && <span className="text-sm text-green-600">Saved!</span>}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'password' && (
+              <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Password</h2>
+                  <p className="text-sm text-zinc-500">Change the password you use to sign in.</p>
+                </div>
+                <form
+                  className="space-y-6"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!pwSubmitting) void handleChangePassword();
+                  }}
+                >
+                  <Input
+                    id="current-password"
+                    label="Current password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    disabled={pwSubmitting}
+                  />
+                  <div className="space-y-1.5">
+                    <Input
+                      id="new-password"
+                      label="New password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={pwSubmitting}
+                    />
+                    <p className="text-xs text-zinc-500">Must be at least 12 characters.</p>
+                  </div>
+                  <Input
+                    id="confirm-password"
+                    label="Confirm new password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={pwSubmitting}
+                  />
+                  {pwError && (
+                    <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-300">
+                      {pwError}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <Button type="submit" loading={pwSubmitting}>Update Password</Button>
+                    {pwSaved && <span className="text-sm text-green-600">Password updated!</span>}
+                  </div>
+                </form>
               </div>
             )}
 
@@ -1818,8 +1924,27 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                     non-admins. */}
                 <SlackImportCard onNavigate={onNavigate} />
 
-                {/* Email Configuration — editable SMTP form, SuperUser only */}
-                <SmtpSettingsForm isSuperuser={Boolean(user?.is_superuser)} />
+                {/* Per-org SMTP override. The platform-wide relay now lives in
+                    the SuperUser Console → Platform tab; this org-level form
+                    overrides it for this org's outbound mail. */}
+                <OrgSmtpSettingsForm canEdit={canEditPermissions} />
+                {user?.is_superuser === true && (
+                  <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      The platform-wide SMTP relay (used for new-org invitations,
+                      password-reset fallback, and system alerts) now lives in the{' '}
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('/superuser')}
+                        className="font-medium underline hover:no-underline"
+                      >
+                        SuperUser Console &rarr; Platform
+                      </button>{' '}
+                      tab.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             {activeTab === 'permissions' && (

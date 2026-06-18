@@ -1,0 +1,119 @@
+# Bolt — workflow automation (WHEN this happens, IF these hold, THEN run these).
+# Recipes mined from docs/apps/bolt/help.md (Feature reference + User Stories)
+# and verified against apps/bolt/src/App.tsx parseRoute. Routes (after the
+# /bolt base): "/" home, "/new" new-rule editor, "/automations/:id" editor
+# (doubles as the automation-detail view — there is no separate detail page),
+# "/automations/:id/executions" per-automation runs, "/executions" org-wide log,
+# "/executions/:id" execution detail, "/templates" gallery.
+#
+# Selector notes (no runtime data-testid coverage in Bolt — tracked gap):
+#  - Home automation cards are the whole row `div.cursor-pointer` (onClick opens
+#    the editor at /automations/:id), so the "detail" capture is reached by
+#    clicking a card.
+#  - Execution-log rows are `tr.cursor-pointer` (onClick opens /executions/:id).
+#  - Relative "Last run" / "Started" times render via formatRelativeTime and the
+#    execution-detail subheader prints "started <relative time>"; the capture
+#    pipeline freezes the clock so these are deterministic, but the live-time
+#    strings are masked anyway per the live-run-timestamp rule.
+# Bureau presence widget is hidden globally by the capture engine.
+
+- id: bolt-automations
+  app: bolt
+  demonstrates: "The Automations home: stat cards, source filter chips, and the automation list"
+  route: /bolt/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Automations home" }
+  masks:
+    - "div.cursor-pointer p.text-xs.text-zinc-600"
+
+- id: bolt-editor
+  app: bolt
+  demonstrates: "The automation builder (Simple mode) with the WHEN / IF / THEN sections and the Settings sidebar"
+  route: /bolt/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Automation editor" }
+
+- id: bolt-automation-detail
+  app: bolt
+  demonstrates: "Opening an existing automation in the editor (Bolt's automation-detail view) by clicking a card on the home list"
+  route: /bolt/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.cursor-pointer" }
+    - { action: click, selector: "div.cursor-pointer", optional: true }
+    - { action: wait, ms: 2000 }
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Automation detail" }
+
+- id: bolt-executions
+  app: bolt
+  demonstrates: "The organization-wide Execution Log: status filter chips and the run table"
+  route: /bolt/executions
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Execution log" }
+  masks:
+    - "tbody tr td:last-child"
+
+- id: bolt-execution-detail
+  app: bolt
+  demonstrates: "A single run's execution detail: trigger event, condition evaluation, and the step timeline, reached from a log row"
+  route: /bolt/executions
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "tbody tr.cursor-pointer" }
+    - { action: click, selector: "tbody tr.cursor-pointer", optional: true }
+    - { action: wait, ms: 2000 }
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  # Not in the doc set: opening a run needs a real execution, and the demo
+  # automations have no run history yet (the executions log is empty).
+  masks:
+    - "main > div > div > div > p.text-sm.text-zinc-500"
+
+- id: bolt-automation-executions
+  app: bolt
+  demonstrates: "One automation's own run history (View Executions), reached via the card more-menu"
+  route: /bolt/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.cursor-pointer" }
+    - { action: click, selector: "button:has(svg.lucide-ellipsis-vertical), button:has(svg.lucide-more-vertical)", optional: true }
+    - { action: wait, ms: 500 }
+    - { action: click, selector: "text=View Executions", optional: true }
+    - { action: wait, ms: 2000 }
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "tbody tr td:last-child"
+
+- id: bolt-templates
+  app: bolt
+  demonstrates: "The Templates gallery of pre-built automations, each with a source badge and Use Template button"
+  route: /bolt/templates
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Template gallery" }
+
+- id: bolt-automations-dark
+  app: bolt
+  demonstrates: "The Automations home list in dark theme (marketing/retina)"
+  route: /bolt/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Automations home" }
+  masks:
+    - "div.cursor-pointer p.text-xs.text-zinc-300"

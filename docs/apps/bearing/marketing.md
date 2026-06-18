@@ -1,17 +1,18 @@
 ---
 title: "Bearing (Goals & OKRs)"
 app: bearing
-generated: "2026-04-17T16:45:02.009Z"
+generated: "2026-06-17T22:16:23.469Z"
 ---
 
 # Bearing (Goals & OKRs)
 
 
-Track objectives and key results with progress rollup and at-risk alerts.
+Set objectives, measure key results, and catch the goals slipping behind before the period ends.
 
-- Set goals with measurable key results across teams and time periods
-- At-risk dashboard flags goals that are falling behind early
-- Progress rolls up automatically from key results to objectives
+- Break objectives into measurable key results with start, target, and current values across teams and time periods
+- Progress rolls up automatically from key results to the goal, and renders the real percentage at every step
+- Automatic status flags goals on track, at risk, or behind, with an At Risk view that surfaces the worst first
+- AI agents can provision a whole quarter of goals, link key results to real Bam delivery, and run weekly status sweeps
 
 ## See It in Action
 
@@ -21,7 +22,7 @@ Track objectives and key results with progress rollup and at-risk alerts.
 
 ![Goal Detail](screenshots/light/02-goal-detail.png)
 
-![Periods](screenshots/light/03-periods.png)
+![My Goals](screenshots/light/03-my-goals.png)
 
 ---
 

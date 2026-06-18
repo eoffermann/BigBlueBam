@@ -625,6 +625,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         .returning({
           task_id_prefix: projects.task_id_prefix,
           task_id_sequence: projects.task_id_sequence,
+          org_id: projects.org_id,
         });
 
       if (!updated) {
@@ -639,6 +640,9 @@ export default async function taskRoutes(fastify: FastifyInstance) {
       }
 
       const humanId = `${updated.task_id_prefix}-${updated.task_id_sequence}`;
+      // Resolve org from the project (authoritative even if `original` predates
+      // the org_id backfill) and stamp it on the duplicate + its subtasks.
+      const dupOrgId = updated.org_id;
 
       // Get next position
       const posResult = await db
@@ -652,6 +656,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
         .insert(tasks)
         .values({
           project_id: original.project_id,
+          org_id: dupOrgId,
           human_id: humanId,
           parent_task_id: original.parent_task_id,
           title: original.title,
@@ -709,6 +714,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
           await db.insert(tasks).values({
             project_id: sub.project_id,
+            org_id: dupOrgId,
             human_id: subHumanId,
             parent_task_id: newTask.id,
             title: sub.title,

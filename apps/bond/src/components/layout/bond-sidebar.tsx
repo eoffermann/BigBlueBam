@@ -46,6 +46,15 @@ function PipelineScopeSelector() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
+  // Auto-select the default pipeline (or the first) once pipelines load, so a
+  // fresh visit to the board isn't stuck on "No pipeline selected".
+  useEffect(() => {
+    if (!activePipelineId && pipelines.length > 0) {
+      const def = pipelines.find((p) => p.is_default) ?? pipelines[0];
+      if (def) setActivePipeline(def.id);
+    }
+  }, [activePipelineId, pipelines, setActivePipeline]);
+
   const activePipeline = pipelines.find((p) => p.id === activePipelineId);
   const displayLabel = activePipeline ? activePipeline.name : 'Default Pipeline';
 

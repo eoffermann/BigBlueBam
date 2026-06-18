@@ -1,61 +1,10 @@
 {
-  "generated_at": "2026-04-17T06:14:35.033Z",
+  "generated_at": "2026-06-18T00:49:53.750Z",
   "changed": [
     {
       "app": "bam",
-      "reason": "new"
-    },
-    {
-      "app": "banter",
-      "reason": "new"
-    },
-    {
-      "app": "beacon",
-      "reason": "new"
-    },
-    {
-      "app": "bearing",
-      "reason": "new"
-    },
-    {
-      "app": "bench",
-      "reason": "new"
-    },
-    {
-      "app": "bill",
-      "reason": "new"
-    },
-    {
-      "app": "blank",
-      "reason": "new"
-    },
-    {
-      "app": "blast",
-      "reason": "new"
-    },
-    {
-      "app": "board",
-      "reason": "new"
-    },
-    {
-      "app": "bolt",
-      "reason": "new"
-    },
-    {
-      "app": "bond",
-      "reason": "new"
-    },
-    {
-      "app": "book",
-      "reason": "new"
-    },
-    {
-      "app": "brief",
-      "reason": "new"
-    },
-    {
-      "app": "helpdesk",
-      "reason": "new"
+      "reason": "src_hash_changed",
+      "new_hash": "d2da36f2f4bdeb1ea50a3d5545473c2b2c6bd95332e938c29f2b1bcd07325b8d"
     }
   ]
 }

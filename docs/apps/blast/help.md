@@ -99,7 +99,7 @@ To send a campaign immediately:
 
 > No screenshot exists for the campaign detail page or the **Send Now** button yet.
 
-> What Send Now does not expose: scheduling, pausing, cancelling, editing, and deleting a campaign all exist in the API and MCP tools, but the detail page only renders **Send Now**. To schedule, pause, cancel, edit, or delete a campaign today you must use the API or an MCP tool.
+> What Send Now does not expose: scheduling, pausing, cancelling, editing, and deleting a campaign all exist in the API and MCP tools, but the detail page only renders **Send Now**. To schedule, pause, cancel, edit, or delete a campaign today you must use the API or an MCP tool (`blast_update_campaign`, `blast_pause_campaign`, `blast_cancel_campaign`, and the schedule path inside `blast_send_campaign`).
 
 ### Visual builder
 
@@ -186,13 +186,13 @@ After creating, return to the segment list and click **Recalculate count** to se
 
 ![Segment builder](./screenshots/light/06-segment-builder.png)
 
-> The builder UI exposes six fields and seven operators. The backend supports more (it can also filter on `email`, `first_name`, `last_name`, and use the `is_set` and `is_not_set` operators), but those are reachable only through the API or the `blast_create_segment` MCP tool, not through the builder UI.
+> The builder UI exposes six fields and seven operators. The backend supports more (it can also filter on `email`, `first_name`, `last_name`, and use the `is_set` and `is_not_set` operators), but those are reachable only through the API or the `blast_create_segment` / `blast_update_segment` MCP tools, not through the builder UI.
 
 > Segments filter only on Bond contact columns. There is no targeting by tags, activity history, or custom fields.
 
 ### Analytics
 
-The analytics dashboard is at `/blast/analytics`, titled **Email Analytics**. It rolls up performance across all sent campaigns in your org. Only campaigns in the `sent` state are counted.
+The analytics dashboard is at `/blast/analytics`, titled **Email Analytics** with the subtitle "Overview of your email campaign performance". It rolls up performance across all sent campaigns in your org. Only campaigns in the `sent` state are counted.
 
 To review org-wide email performance:
 
@@ -256,19 +256,27 @@ There is no warning before you click **Send Now**; the error surfaces from the s
 
 ### Working with AI agents
 
-Agents drive Blast through 14 MCP tools backed by the same Blast API the UI uses. Tools resolve campaigns, templates, and segments by human-readable name as well as by UUID, so an agent can say "send the April Product Launch campaign" without knowing the ID.
+Agents drive Blast through 28 MCP tools backed by the same Blast API the UI uses. Most action tools resolve campaigns, templates, and segments by human-readable name as well as by UUID, so an agent can say "send the April Product Launch campaign" without knowing the ID. Name resolution prefers an exact match, accepts a single fuzzy match, and returns a clean error when a name is ambiguous.
 
 Common agent actions and their tools:
 
-- Draft and reuse content: `blast_create_template`, `blast_get_template`, `blast_list_templates`.
-- Create a campaign draft: `blast_draft_campaign` (resolves a template or segment by name or UUID and creates a `draft`).
-- Build and check audiences: `blast_create_segment` (full field and operator set, including the ones the builder UI hides), `blast_list_segments`, `blast_preview_segment` (returns the first 50 matching contacts), and `blast_check_unsubscribed` (confirm an address is not suppressed before targeting it).
-- Review results: `blast_get_campaign`, `blast_get_campaign_analytics`, `blast_get_engagement_summary`.
-- Send: `blast_send_campaign`.
+- **Draft and reuse content**: `blast_create_template`, `blast_get_template`, `blast_list_templates`, `blast_update_template`, `blast_duplicate_template`, and `blast_preview_template` (renders a template with sample merge data without sending).
+- **Create and edit a campaign draft**: `blast_draft_campaign` (resolves a template or segment by name or UUID and creates a `draft`), `blast_update_campaign`, `blast_list_campaigns`, and `blast_get_campaign`.
+- **Build and check audiences**: `blast_create_segment` and `blast_update_segment` (full field and operator set, including the ones the builder UI hides), `blast_list_segments`, `blast_get_segment`, `blast_preview_segment` (first 50 matching contacts), `blast_evaluate_segment` (the full resolved send list, read-only), `blast_recalculate_segment_count`, and `blast_check_unsubscribed` (confirm an address is not suppressed before targeting it).
+- **Send and control a send**: `blast_send_campaign`, `blast_pause_campaign`, and `blast_cancel_campaign`.
+- **Review results**: `blast_get_campaign_analytics`, `blast_get_campaign_device_analytics`, `blast_list_campaign_recipients`, `blast_get_engagement_summary`, and `blast_get_engagement_trend`.
 
 The key human-in-the-loop control is on sending. `blast_send_campaign` takes `require_human_approval`, which defaults to `true`. With the default, the tool does not send immediately; it schedules the campaign about an hour out and returns a note that a human must confirm before it goes. Only `require_human_approval: false` triggers an immediate send. When you review agent work, expect agent-initiated sends to land as scheduled campaigns awaiting a person, and treat any immediate send as an explicit override.
 
 Two tools named like AI features are not wired to a model. `blast_draft_email_content` and `blast_suggest_subject_lines` return hard-coded templated strings, not model-generated copy. Use them as scaffolding, not as a writing assistant.
+
+Blast agents also run on the platform-wide agentic surface that spans every app:
+
+- **Identity and heartbeat**: every agent action is tagged with the actor's kind (`human`, `agent`, or `service`) on the activity log, and agent runners post `agent_heartbeat` so operators can see which agents are live.
+- **Proposals (approval queues)**: an agent can stage a campaign send or a segment change as a durable proposal with `proposal_create`, and a human clears it with `proposal_decide`. This is the recommended pattern for sends beyond the per-tool `require_human_approval` gate.
+- **Unified activity and search**: `activity_query`, `activity_by_actor`, and `search_everything` let an agent (or a reviewer) trace what an agent did across Blast, Bond, and the rest of the suite.
+- **Visibility preflight**: before an agent posts campaign results into a shared surface, it calls `can_access` for each cited entity and drops anything the asking user is not allowed to see.
+- **Agent policies and webhooks**: a per-agent kill switch and tool allowlist (the `blast.*` prefix) gate which Blast tools a given service account may call, and outbound webhooks push subscribed Blast Bolt events to agent runners.
 
 For the full tool catalog and schemas, see [mcp-tools.md](./mcp-tools.md).
 
@@ -283,14 +291,14 @@ For the full tool catalog and schemas, see [mcp-tools.md](./mcp-tools.md).
 **Steps**
 
 1. Open Blast at `/blast/` and click **SMTP** under **Blast Settings** in the sidebar.
-2. Read the **Platform SMTP** card. It explains that Blast uses one platform-wide relay, not its own credentials.
+2. Read the **SMTP Settings** card. It explains that Blast uses one platform-wide relay, not its own credentials.
 3. As a SuperUser, click **Open Account Settings**. (As an org admin, click **View in Account Settings** to confirm the relay is set, then ask a SuperUser if it is not.)
 4. In the Bam app at `/b3/settings`, open the **Integrations** tab and enter or confirm the SMTP relay details.
 5. Return to Blast.
 
 **Result:** The platform relay is configured, so future **Send Now** actions can actually deliver email.
 
-**Related:** Sender Domains story below, which improves deliverability once SMTP works.
+**Related:** "Verify a sending domain for deliverability" below, which improves deliverability once SMTP works.
 
 ### Story: Send a one-off campaign from scratch
 
@@ -349,7 +357,7 @@ For the full tool catalog and schemas, see [mcp-tools.md](./mcp-tools.md).
 
 **Result:** A versioned, reusable template is available in the gallery and selectable in **From Template** when creating a campaign.
 
-**Related:** Agents do this with `blast_create_template`.
+**Related:** Agents do this with `blast_create_template`, `blast_update_template`, and `blast_duplicate_template`.
 
 ### Story: Build a targeted segment from CRM data
 
@@ -368,7 +376,7 @@ For the full tool catalog and schemas, see [mcp-tools.md](./mcp-tools.md).
 
 **Result:** A saved segment with a contact count, selectable in the **Segment** dropdown on the campaign create form.
 
-**Related:** Agents do this with `blast_create_segment` (which also exposes the `email`, `first_name`, `last_name` fields and the `is_set`/`is_not_set` operators) and can preview matches with `blast_preview_segment`. Remember the sender does not yet honor the chosen segment at send time.
+**Related:** Agents do this with `blast_create_segment` (which also exposes the `email`, `first_name`, `last_name` fields and the `is_set`/`is_not_set` operators) and can preview matches with `blast_preview_segment` or resolve the full send list with `blast_evaluate_segment`. Remember the sender does not yet honor the chosen segment at send time.
 
 ### Story: Review campaign performance
 
@@ -385,7 +393,7 @@ For the full tool catalog and schemas, see [mcp-tools.md](./mcp-tools.md).
 
 **Result:** You can see open, click, bounce, and unsubscribe performance for one campaign and for the org as a whole.
 
-**Related:** Agents read the same data with `blast_get_campaign_analytics` and `blast_get_engagement_summary`.
+**Related:** Agents read the same data with `blast_get_campaign_analytics`, `blast_get_campaign_device_analytics`, `blast_get_engagement_summary`, and `blast_get_engagement_trend`.
 
 ### Story: Verify a sending domain for deliverability
 
@@ -418,7 +426,24 @@ For the full tool catalog and schemas, see [mcp-tools.md](./mcp-tools.md).
 
 **Result:** Suppressions and bounce/complaint counts update automatically and appear in the campaign and analytics metrics. Suppressed addresses are excluded from future sends.
 
-**Related:** "Review campaign performance" to see the resulting counters.
+**Related:** "Review campaign performance" to see the resulting counters. An agent can confirm an address is not suppressed before targeting it with `blast_check_unsubscribed`.
+
+### Story: Let an agent draft a campaign for your approval
+
+**Who:** An operator working with an AI agent.
+**Goal:** Have an agent assemble a campaign draft and a target audience, then approve the send yourself.
+**Before you start:** The agent's service account has the `blast.*` tool allowlist enabled, the SMTP relay works, and your org has Bond contacts.
+
+**Steps**
+
+1. Ask the agent to build the audience. It calls `blast_create_segment` over Bond contact fields and can sanity-check the size with `blast_preview_segment` or `blast_evaluate_segment`.
+2. Ask the agent to draft the campaign. It calls `blast_draft_campaign`, resolving your template and segment by name, and the campaign lands as a `draft`.
+3. The agent calls `blast_send_campaign` with the default `require_human_approval: true`. The campaign is scheduled about an hour out and the tool returns a note that a human must confirm.
+4. You review the draft in Blast (open it from the campaigns list), check the body for the unsubscribe link and physical address, then either click **Send Now** to send it now or let the scheduled time pass after confirming.
+
+**Result:** The agent did the assembly work, but no mail left the system without your review. The audit log shows the agent as the actor on the draft and you as the actor on the send.
+
+**Related:** "Send a one-off campaign from scratch". Agents can also stage the send as a `proposal_create` for an explicit approval queue, and you clear it with `proposal_decide`.
 
 ### Story: Nurture a Bond contact group, then react in Bolt
 
@@ -442,5 +467,5 @@ For the full tool catalog and schemas, see [mcp-tools.md](./mcp-tools.md).
 - **Bond** - The CRM that owns the contacts Blast sends to. Segments filter on Bond contact fields, and campaign engagement flows back to Bond contact activity timelines.
 - **Bolt** - The automation engine that reacts to Blast events (`campaign.sent`, `engagement.opened`, and the rest) to create tasks or update records.
 - **Bam (the core app)** - Hosts your login and the platform SMTP relay. Configure outbound email at `/b3/settings` under **Account Settings -> Integrations**.
-- [Blast MCP tools reference](./mcp-tools.md) - The full catalog of the 14 Blast MCP tools agents use.
+- [Blast MCP tools reference](./mcp-tools.md) - The full catalog of the 28 Blast MCP tools agents use.
 - [Blast guide](./guide.md) - Additional product context. Note: the guide mentions an "archived" campaign state and "A/B testing" that the current build does not implement; treat this help doc's feature list as authoritative.

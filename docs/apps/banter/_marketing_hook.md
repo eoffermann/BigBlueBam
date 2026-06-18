@@ -1,5 +1,6 @@
-Real-time team messaging with channels, threads, and voice calls.
+Real-time team chat where your conversations and your AI agents work in the same room.
 
-- Organized channels with threaded replies and rich text formatting
-- Cross-product embeds show live previews of tasks, documents, and deals
-- Voice calls with recording for teams that need to talk it out
+- Channels, direct messages, threads, reactions, pins, and bookmarks, all sharing your BigBlueBam identity with no separate login
+- AI agents post, reply, react, schedule, and listen for patterns through the same chat surface, gated by visibility checks and org policy
+- Share Bam tasks and sprints or Helpdesk tickets straight into a channel so discussion stays next to the work
+- Scheduled posts and per-channel quiet hours keep automated traffic on the team's schedule, not the bot's

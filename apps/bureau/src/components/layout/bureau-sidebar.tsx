@@ -1,4 +1,13 @@
-import { Building2, DoorOpen, LayoutGrid, MessageSquareText, Settings, Users } from 'lucide-react';
+import {
+  Building2,
+  CalendarRange,
+  DoorOpen,
+  LayoutGrid,
+  MessageSquareText,
+  Settings,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
 import { SidebarPlatformFooter } from '@bigbluebam/ui/sidebar-footer';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -10,7 +19,7 @@ interface BureauSidebarProps {
   /** True when the user is on /admin/* — used to highlight the admin section. */
   isOnAdmin: boolean;
   /** Which admin sub-page is active (if any). Drives the Admin row highlight. */
-  adminSection?: 'floors' | 'offices' | null;
+  adminSection?: 'floors' | 'offices' | 'settings' | null;
 }
 
 function NavItem({
@@ -104,6 +113,16 @@ export function BureauSidebar({
         ))}
 
         <div className="px-2 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          Rooms
+        </div>
+        <NavItem
+          active={window.location.pathname.startsWith('/bureau/booking')}
+          onClick={() => onNavigate('/booking')}
+          icon={CalendarRange}
+          label="Book a room"
+        />
+
+        <div className="px-2 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
           History
         </div>
         <NavItem
@@ -119,7 +138,7 @@ export function BureauSidebar({
               Admin
             </div>
             <NavItem
-              active={isOnAdmin && adminSection !== 'offices'}
+              active={adminSection === 'floors'}
               onClick={() => onNavigate('/admin/floors')}
               icon={Settings}
               label="Edit floors"
@@ -129,6 +148,12 @@ export function BureauSidebar({
               onClick={() => onNavigate('/admin/offices')}
               icon={Users}
               label="Offices"
+            />
+            <NavItem
+              active={adminSection === 'settings'}
+              onClick={() => onNavigate('/admin/settings')}
+              icon={SlidersHorizontal}
+              label="Settings"
             />
           </>
         ) : null}

@@ -411,13 +411,16 @@ export async function createTask(
   // be scoped to the caller's org.
   let links: TaskLink[] = [];
   let linkMirrors: TaskLinkMirror[] = [];
-  let createOrgId: string | null = null;
+  // Resolve the project's owning org up-front. We set tasks.org_id on EVERY
+  // insert (not just the links path) so Bench analytics over Bam tasks and the
+  // future RLS org-scoping gate see a populated column. Reused below for
+  // internal-link title resolution when links are present.
+  const createOrgId: string | null = await getProjectOrgId(projectId);
   if (data.links && data.links.length > 0) {
     const normalized = normalizeTaskLinks(data.links, reporterId);
     if (normalized.truncated) {
       console.warn('[task.service] task links truncated to cap:', { projectId });
     }
-    createOrgId = await getProjectOrgId(projectId);
     if (createOrgId) {
       const resolved = await resolveInternalLinkTitles(normalized.links, createOrgId);
       links = resolved.links;
@@ -432,6 +435,7 @@ export async function createTask(
     .insert(tasks)
     .values({
       project_id: projectId,
+      org_id: createOrgId,
       human_id: humanId,
       parent_task_id: data.parent_task_id ?? null,
       title: data.title,

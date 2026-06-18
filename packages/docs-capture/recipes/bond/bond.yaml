@@ -1,0 +1,133 @@
+# Bond — CRM for contacts, companies, and deals.
+# Recipes mined from docs/apps/bond/help.md (Feature reference + User Stories)
+# and packages/docs-capture/src/apps/bond.scenes.ts (pipeline-selector +
+# deal-card click setup).
+#
+# Routes are confirmed against apps/bond/src/App.tsx parseRoute:
+#   /            -> pipeline  (Pipeline Board)
+#   /contacts    -> contacts list
+#   /contacts/:id-> contact detail   (needs a runtime id -> reached by clicking a row)
+#   /companies   -> companies list
+#   /companies/:id-> company detail
+#   /analytics   -> analytics
+#   /deals/:id   -> deal detail      (needs a runtime id -> reached by clicking a card)
+#   /settings/:tab (pipelines|fields|scoring|email)
+# None of the routes below are invented; detail pages are reached via clicks
+# because their ids are only known at runtime.
+#
+# Selector note: deal cards render as `div[role="button"]` with the classes
+# `group ... cursor-pointer` and an <h4> title. They carry NO data-deal-id (the
+# scenes' `[data-deal-id]` selector never matches), so the working hook is
+# `div.group.cursor-pointer` / `[role="button"]:has(h4)` — same family as board.yaml.
+# Contact rows are `<tr>` (no testid); company rows likewise.
+#
+# The local stack is already seeded, so no `content` blocks — every view
+# captures existing realistic data. Live, clock-dependent values are masked so
+# re-runs stay byte-stable: deal-card close date + "Nd" days-in-stage, the
+# Contacts "Last Contact" column, and the Analytics stale-deal "Nd / Nd" badge.
+# The floating Bureau presence widget is hidden globally by the capture engine.
+
+- id: bond-pipeline-board
+  app: bond
+  demonstrates: "The Pipeline Board: deals as cards in stage columns with count + total/weighted summary"
+  route: /bond/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer, main", optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Pipeline board" }
+  masks:
+    - "div.group.cursor-pointer span:has(svg.lucide-clock)"
+    - "div.group.cursor-pointer span:has(svg.lucide-calendar)"
+
+- id: bond-pipeline-board-dark
+  app: bond
+  demonstrates: "The Pipeline Board in dark theme (marketing/retina)"
+  route: /bond/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer, main", optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Pipeline board" }
+  masks:
+    - "div.group.cursor-pointer span:has(svg.lucide-clock)"
+    - "div.group.cursor-pointer span:has(svg.lucide-calendar)"
+
+- id: bond-deal-detail
+  app: bond
+  demonstrates: "A deal detail page: status badge, value, Log Activity + timeline, Details, Related, and Stage History"
+  route: /bond/
+  identity: admin
+  interactions:
+    # The pipeline now auto-selects on load, so deal cards render — wait for a
+    # card, then open it (was capturing the empty "No pipeline selected" board).
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: wait, ms: 2500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Deal detail" }
+  masks:
+    - "time"
+    - "td:has-text('/')"
+
+- id: bond-contacts-list
+  app: bond
+  demonstrates: "The Contacts list: lifecycle filter pills, search, and rows with Name, Company, Stage, Score, Owner, Last Contact"
+  route: /bond/contacts
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Contacts list" }
+  masks:
+    - "tbody tr td:last-child"
+
+- id: bond-contact-detail
+  app: bond
+  demonstrates: "A contact detail page: avatar, lifecycle badge, lead score, and the activity / details / deals tabs"
+  route: /bond/contacts
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "tbody tr, main", optional: true }
+    - { action: click, selector: "tbody tr", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Contact detail" }
+  masks:
+    - "time"
+
+- id: bond-companies-list
+  app: bond
+  demonstrates: "The Companies list: search and rows with Domain, Industry, Size, Revenue, Contacts, Deals, Owner"
+  route: /bond/companies
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Companies list" }
+
+- id: bond-company-detail
+  app: bond
+  demonstrates: "A company detail page: industry badge, employee count, revenue, and the activity / details / contacts / deals tabs"
+  route: /bond/companies
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "tbody tr, main", optional: true }
+    - { action: click, selector: "tbody tr", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "time"
+
+- id: bond-analytics
+  app: bond
+  demonstrates: "The Analytics dashboard: Total Pipeline / Weighted Forecast / Win Rate / Stale Deals tiles, stage bars, velocity, transitions, forecast buckets"
+  route: /bond/analytics
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Analytics dashboard" }

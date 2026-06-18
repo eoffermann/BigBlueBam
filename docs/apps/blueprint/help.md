@@ -1,6 +1,6 @@
 # Blueprint - Structured diagrams backed by a typed graph
 
-> Blueprint is a diagram editor whose diagrams are a typed relational graph of nodes and edges, not an opaque drawing. Reach for it when you want a flowchart, org chart, mind map, or system map that every teammate (and every AI agent) can read, edit, and turn into Bam tasks with full audit history.
+> Blueprint is a diagram editor whose diagrams are a typed relational graph of nodes and edges, not an opaque drawing. Reach for it when you want a flowchart, graph, org chart, mind map, or system map that every teammate, and every AI agent, can read, edit, version, and turn into Bam tasks with a full audit trail.
 
 ## Overview
 
@@ -10,67 +10,73 @@ You work with three kinds of object. A **diagram** is the top-level artifact (a 
 
 Blueprint is wired into Bam, the Kanban and sprint tool. You can generate a diagram from an existing Bam project (one node per task, edges drawn from parent/child links), and you can promote a diagram into Bam (one task per node, parent links from the edges). A node linked to a Bam task stays in two-way sync: rename the node and the task title updates, rename the task and the node updates.
 
-Several capabilities in Blueprint are agent-driven or API-driven rather than point-and-click. Anything an agent can do to a diagram, it does through a named tool, so an agent can read a process description and emit a fully wired diagram in a single call. Where a backend capability has no rendered screen yet, this document says so plainly rather than promising a button that does not exist.
+Several capabilities in Blueprint are agent-driven or API-driven rather than point-and-click. Anything an agent can do to a diagram, it does through a named tool, so an agent can read a process description and emit a fully wired diagram in a single call, with the same permissions and the same audit trail as a person. A few backend capabilities still have no rendered screen (Mermaid import, image export, template seeding); where that is the case this document says so plainly rather than promising a button that does not exist.
 
 ### Key concepts
 
 - **Diagram** - the top-level artifact. Has a name, a type, a layout algorithm, a visibility level, an optional project, and an archived flag.
-- **Diagram type** - a tag that picks the icon and default palette. The New diagram dialog offers Flowchart, Graph, Sequence, Class, and Mind map. Generate from Bam writes the type org_chart.
+- **Diagram type** - a tag that picks the type icon and the sidebar grouping. The New diagram dialog offers Flowchart, Graph, Sequence, Class, and Mind map. Generate from Bam writes the type org_chart.
 - **Node** - a vertex on the canvas. Carries a shape, label, markdown description, position, width and height, a pinned flag, fill color, an optional parent (for nesting), and an optional cross-product link.
 - **Shape** - the visual form of a node. The palette offers Rounded, Rectangle, Diamond, Ellipse, and Hexagon.
-- **Edge** - a connection between two nodes. Carries a kind (Default, Dependency, Flow, Reference, Inherits) and an end marker (Filled arrow, Open arrow, No arrow).
+- **Edge** - a connection between two nodes. Carries a kind (Default, Dependency, Flow, Reference, Inherits) and an end marker (Filled arrow, Open arrow, No arrow / None).
 - **Pinned** - a node excluded from auto-layout. A pinned node keeps the position you set by hand when you run a layout pass.
-- **Layout algorithm** - the auto-arrange engine. The working algorithms are Layered, Force-directed, and (through the API or an agent) mrtree, radial, and rectpacking. See the note under Auto-layout about the Tree and Grid menu entries.
+- **Layout algorithm** - the auto-arrange engine, run server-side by ELK. The layout dropdown offers Layered, Force-directed, Tree, and Grid, and all four apply a layout. Tree maps to ELK's mrtree and Grid maps to ELK's rectpacking. The radial algorithm is reachable only through the API or an agent.
 - **Linked entity** - a cross-product reference from a node to an object in another app, such as a Bam task, a Beacon entry, a Bond deal, or a Bearing goal. Only Bam tasks have live two-way sync.
 - **Visibility** - who can see the diagram. Private (you, plus collaborators), Project (project members, or the org if there is no project), or Organization (everyone in your org).
-- **Snapshot (version)** - a saved, immutable copy of the whole graph that you can restore later.
+- **Collaborator** - a user granted explicit access to one diagram at a role of owner, editor, commenter, or viewer, on top of any project- or org-level visibility. Managed in the editor's **People** panel, or by an agent through the API.
+- **Snapshot (version)** - a saved, immutable copy of the whole graph that you can restore later. Browsed and restored from the editor's **History** panel.
+- **Comment** - a note attached to the whole diagram or anchored to a single node, with a resolved flag for review threads. Read, written, and resolved in the editor's **Comments** panel, or by an agent through the API.
 - **Star** - your personal favorite flag on a diagram, used to filter the list.
 
 ### Where to find it
 
 Blueprint is served at `/blueprint/`. Reach it from the platform Launchpad in the top header of any BigBlueBam app.
 
-You need a signed-in BigBlueBam account; the app refuses to load when you are not authenticated and links you to `/b3/` to log in. To use the Bam-integration features (generate from Bam, promote to tasks, two-way sync), you also need a Bam project with tasks, because those flows talk to Bam directly using your shared session.
+You need a signed-in BigBlueBam account; the app refuses to load when you are not authenticated and links you to `/b3/` to log in with the message "Please log in to BigBlueBam first to access Blueprint." To use the Bam-integration features (generate from Bam, promote to tasks, two-way sync), you also need a Bam project with tasks, because those flows talk to Bam directly using your shared session.
+
+Press the `?` key from the diagram list or the editor (when no field is focused) to open the in-app help viewer at `/blueprint/help`.
 
 ## Feature reference
 
 ### Browse and filter diagrams
 
-![Diagram list](screenshots/light/01-diagrams.png)
+![Diagram list](screenshots/light/01-diagram-list.png)
 
-The diagram list at `/blueprint/` shows every diagram you can see, as a grid of cards. Each card shows the type icon, the diagram name, the type label, a Star toggle, and a More menu. The card footer shows the visibility (Private, Project, or Organization, each with its own icon) and the relative time the diagram was last updated.
+The diagram list at `/blueprint/` shows every diagram you can see, as a grid of cards. Each card shows the type icon, the diagram name, the lowercase type label, a Star toggle, and a More menu. The card footer shows the visibility (Private, Project, or Organization, each with its own icon) and the relative time the diagram was last updated.
 
 To find a diagram:
 
 1. Use the left sidebar to filter. Under **Library**, click **All diagrams**, **Starred**, or **Archived**. Under **By type**, click **Flowcharts**, **Graphs**, **Sequence**, **Class**, or **Mind maps**. Each pill shows a count.
 2. Type in the **Search diagrams...** box to filter the visible cards by name or description.
-3. Click a card to open it in the editor.
+3. Click a card to open it in the editor, or open the card's More menu and choose **Open editor**.
 
 The page heading reflects the active filter (for example All diagrams, Starred diagrams, or Flowchart diagrams). When nothing matches, an empty state appears with a New diagram button.
 
 ### Create a diagram
 
+![New diagram dialog](screenshots/light/03-new-diagram-dialog.png)
+
 To create a blank diagram:
 
 1. Click **New diagram** at the top right of the list, or **New diagram** in the sidebar.
-2. In the **New diagram** dialog, enter a **Name** (required, up to 200 characters).
+2. In the **New diagram** dialog, enter a **Name** (required, up to 200 characters). The placeholder suggests "System architecture, user flow...".
 3. Choose a **Type**: Flowchart, Graph, Sequence, Class, or Mind map.
 4. Optionally choose a **Project (optional)**. Leave it on **None - org-wide** for a diagram that is not tied to a project.
-5. Pick a **Visibility**: **Private** (Only you), **Project** (Project members, or Org if no project), or **Organization** (Everyone in org).
-6. Optionally pick a **Template (optional)**. See the note below before relying on this.
+5. Pick a **Visibility**: **Private** (Only you), **Project** (Project members, or Org if no project), or **Organization** (Everyone in org). The dialog defaults to **Project**; if you choose Project without a project, the diagram is created Private.
+6. Optionally pick a **Template (optional)**. The empty option is labeled **Blank canvas**, and system templates show a "system" suffix. See the note below before relying on this.
 7. Click **Create diagram**. The new diagram opens in the editor.
 
 The split button next to New diagram has a chevron menu with two entries: **Blank diagram or template** (opens the same dialog) and **From Bam project tasks...** (opens the Generate from Bam dialog, described later).
 
-Note on templates: the Template select is present, but a chosen template does not seed any nodes or edges into the new diagram. The backend accepts a template id and ignores it, and there is no way to create templates today, so the list is empty unless rows were inserted directly into the database. Treat every new diagram as a blank canvas regardless of the template you pick.
+Note on templates: the Template select is present, but a chosen template does not seed any nodes or edges into the new diagram. The backend accepts a template id and ignores its content, and there is no UI to create templates today, so the list is effectively empty unless rows were inserted directly into the database. Treat every new diagram as a blank canvas regardless of the template you pick.
 
 ### The editor canvas
 
-![Diagram editor](screenshots/light/02-editor.png)
+![Diagram editor](screenshots/light/02-diagram-editor.png)
 
 Opening a diagram shows the editor at `/blueprint/d/<id>`. The canvas is an infinite, pannable React Flow surface with a dotted background, zoom and fit controls at the bottom left, and a minimap at the bottom right. The top bar shows a Back arrow (titled **Back to diagrams**), the diagram name, an uppercase type chip, and a count line reading `N nodes · M edges`.
 
-The right side of the screen is the **Inspector**, which shows the properties of whatever node or edge you have selected. When nothing is selected it reads **Nothing selected** with the hint to click a node or edge, or press **N** to add one.
+The right side of the screen is the **Inspector**, which shows the properties of whatever node or edge you have selected. When nothing is selected it reads **Nothing selected** with the hint "Click a node or edge to edit it. Press **N** to add a new node."
 
 ### Add nodes
 
@@ -81,7 +87,7 @@ You can add a node four ways:
 - Right-click empty canvas and pick a shape under **Add node** in the pane menu.
 - Drag a connection out of a node handle and release it on empty canvas. An **Add connected node** palette opens at the drop point; pick a shape and the new node is created already wired to the origin node, with the arrow following the direction you dragged.
 
-Every new node starts with the label **New node** and is selected immediately so the Inspector is open and ready for you to type.
+Every new node starts with the label **New node** and is selected immediately so the Inspector is open and ready for you to type. The last-used shape is remembered per browser.
 
 ### Edit a node
 
@@ -91,7 +97,7 @@ To edit a node:
 
 1. Select the node on the canvas.
 2. Edit the **Label** field; the change saves when you leave the field or press Enter.
-3. Edit the **Description** using the rich-text editor (it supports bold, italic, code, and links). The placeholder reads `Describe this node… **bold**, *italic*, `code`, [links](url) all work.`.
+3. Edit the **Description** using the rich-text editor (it supports bold, italic, code, and links). The placeholder reads "Describe this node... **bold**, *italic*, `code`, [links](url) all work."
 4. Change the **Shape** with the dropdown.
 5. Set **Width** (40 to 2000) and **Height** (30 to 2000).
 6. Pick a **Fill color** swatch, or click **Clear** to remove the fill.
@@ -112,7 +118,7 @@ To copy a node, select it and press **Cmd/Ctrl+D**, or right-click it and choose
 
 ### Delete a node
 
-To delete a node, select it and press **Delete**, or right-click it and choose **Delete node**, or click the trash button in the Inspector. A confirmation appears asking to delete the node and its connected edges; deleting a node removes every edge attached to it.
+To delete a node, select it and press **Delete**, or right-click it and choose **Delete node**, or click the trash button in the Inspector. A confirmation appears asking "Delete this node and its connected edges?"; deleting a node removes every edge attached to it.
 
 If the node is linked to a Bam task, a richer dialog appears titled **Delete "<label>"?**. It explains that the node is linked to a Bam task and offers three buttons: **Cancel**, **Delete node only**, and **Delete node + task**. The last option also deletes the linked Bam task, including its subtasks, comments, time entries, and activity.
 
@@ -120,7 +126,7 @@ If the node is linked to a Bam task, a richer dialog appears titled **Delete "<l
 
 To draw an edge, hover a node to reveal its connection handles (top, left, right, bottom), then drag from a handle to a handle on another node. Releasing on a valid handle creates the edge. Releasing on empty canvas opens the **Add connected node** palette so you can create the target node and the edge in one gesture.
 
-New edges use a smooth line with a closed arrowhead by default.
+New edges use a smooth line with a closed (filled) arrowhead by default.
 
 ### Edit an edge
 
@@ -145,7 +151,7 @@ To line nodes up on a grid, right-click empty canvas and choose **Snap to grid**
 
 ### Auto-layout
 
-Auto-layout arranges the graph automatically using the ELK engine. Pinned nodes keep their hand-set positions.
+Auto-layout arranges the graph automatically using the ELK engine, server-side. Pinned nodes keep their hand-set positions.
 
 To run a layout:
 
@@ -155,7 +161,7 @@ To run a layout:
 
 You can also right-click empty canvas and pick an algorithm under **Reorganize**, where the current algorithm carries a **Current** badge.
 
-Important caveat about the algorithm choices: only **Layered** and **Force-directed** actually run. The backend accepts the algorithm names layered, mrtree, force, radial, rectpacking, and manual. The dropdown's **Tree** and **Grid** entries send names the backend does not recognize, so choosing either one causes the layout request to fail without rearranging the diagram. Use **Layered** or **Force-directed** in the UI. The additional algorithms mrtree, radial, and rectpacking are reachable only through the API or an agent using `blueprint_apply_layout`.
+All four dropdown choices apply a layout. **Layered** and **Force-directed** map to ELK's layered and force algorithms. **Tree** maps to ELK's mrtree (a tree layout) and **Grid** maps to ELK's rectpacking (a compact grid-like packing). The radial algorithm is not in the dropdown and is reachable only through the API or an agent using `blueprint_apply_layout`.
 
 ### Export a diagram
 
@@ -163,25 +169,29 @@ To export, click the **Export** dropdown in the top bar. It offers **Mermaid (.m
 
 You can also export from the pane right-click menu via **Export as Mermaid** and **Export as JSON**.
 
-Only Mermaid and JSON export work today. The underlying tool advertises SVG and PNG, but the export service rejects those formats in the running app, so do not rely on image export.
+Only Mermaid and JSON export are offered in the editor. The underlying tool advertises SVG and PNG, but those are deferred to a worker render job and the in-process export service rejects them with "Format ... is not supported in-process", so image export is not available from the editor today.
 
 ### Mermaid import
 
-The backend can import a Mermaid flowchart and turn it into a Blueprint graph. There is no rendered screen for pasting Mermaid into the editor yet, so this is currently an API or agent capability rather than a button. When import lands, it can replace the existing graph or append to it.
+The backend can import a Mermaid source string and turn it into a Blueprint graph, materializing its nodes and edges into the typed tables. There is no rendered screen for pasting Mermaid into the editor yet, so this is currently an API or agent capability rather than a button. Import can replace the existing graph or append to it, and you can run a layout pass afterward to position the new nodes.
 
 ### Snapshots (versions)
 
 A snapshot saves the entire graph so you can return to it later.
 
-To save a snapshot, click **Save snapshot** (the camera button) in the top bar, or choose **Save snapshot** from the pane right-click menu. You can enter an optional label when prompted. Each snapshot is numbered automatically.
+To save a snapshot, click **Save snapshot** (the camera button) in the top bar, choose **Save snapshot** from the pane right-click menu, or use the **Save snapshot** button at the top of the **History** panel. You can enter an optional label when prompted ("Snapshot label (optional)"). Each snapshot is numbered automatically, one higher than the latest.
 
-Restoring a snapshot is supported by the backend but has no rendered screen yet. Restoring (and listing versions for browsing) is available only through the API or an agent today.
+To browse and restore versions, open the **History** panel from the top bar (the clock icon). Each entry shows its version number (for example `v2`), its label or "Unlabeled", who saved it, and how long ago. Click **Restore** on a version, then **Confirm** the prompt ("Replace the current graph with v<n>?") to roll the diagram back to that snapshot. See the [Comments, People, and version History panels](#comments-people-and-version-history-panels) section for the full panel walkthrough.
 
 ### Star and archive
 
 To star a diagram, click the **Star** toggle on its card in the list (the title reads Star or Unstar). Starred diagrams show under the **Starred** sidebar filter.
 
-To archive a diagram, use the card's More menu and choose **Archive**, or in the editor click **Archive** in the top bar, or choose **Archive diagram** from the pane right-click menu. Archiving is a soft delete: the diagram is hidden from the default list but its nodes, edges, and snapshots are preserved. You confirm before it archives. Archived diagrams show under the **Archived** sidebar filter. Archiving requires admin scope on your API key when done by an agent.
+To archive a diagram, use the card's More menu and choose **Archive**, or in the editor click **Archive** in the top bar, or choose **Archive diagram** from the pane right-click menu. Archiving is a soft delete: the diagram is hidden from the default list but its nodes, edges, comments, and snapshots are preserved. You confirm before it archives ("Archive this diagram? It will be hidden from the default list."). Archived diagrams show under the **Archived** sidebar filter. Archiving requires admin scope on your API key when done by an agent.
+
+![Starred diagrams](screenshots/light/04-starred-filter.png)
+
+![Archived diagrams](screenshots/light/05-archived-filter.png)
 
 ### Link a node to another app's entity
 
@@ -214,7 +224,7 @@ To turn an entire diagram into a Bam project plan:
 2. If the diagram has no project, enter a Bam project id (a UUID) when prompted.
 3. Choose an edge direction when prompted: `source-parent` (default; an edge A to B means A is the parent of B), `target-parent` (A to B means B is the parent of A), or `none` (skip parent links).
 4. Watch the progress overlay. It creates one task per node, reuses any task a node is already linked to, then wires parent and child links from the edges.
-5. When it finishes, the summary reads `Created N tasks`, plus `reused M existing` and `wired K parent links` where applicable. Any failures are listed.
+5. When it finishes, the summary reads "Created N task(s)", plus "reused M existing" and "wired K parent link(s)" where applicable. Any failures are listed.
 
 As with single-node promotion, the backend returns a plan and the app executes it against Bam; the diagram itself does not create tasks server-side. After promotion, each node is linked to its new task, so the badges appear and two-way sync is active.
 
@@ -236,22 +246,38 @@ Once a node is linked to a Bam task (through generation, promotion, or a manual 
 
 ### Live collaboration refresh
 
-When more than one person has a diagram open, Blueprint keeps everyone's canvas current. When anyone adds, moves, edits, or deletes a node or edge, every other open editor refetches the graph and updates. Your own zoom and pan position are not affected by other people's edits. The presence strip in the top bar shows who else is on the diagram.
+When more than one person has a diagram open, Blueprint keeps everyone's canvas current. When anyone adds, moves, edits, or deletes a node or edge, every other open editor refetches the graph and updates. Your own zoom and pan position are not affected by other people's edits. The presence strip in the top bar shows who else is on the diagram, and the selected node is URL-addressable (`?node=<id>`) so a follower can be brought to the same node.
+
+### Comments, People, and version History panels
+
+![Comments & collaboration](screenshots/light/06-comments-collaboration.png)
+
+The editor's top bar carries three toggle buttons, just left of the snapshot and export controls, that open a panel on the right side of the canvas: **Comments**, **People**, and **History**. Each button opens its panel and highlights while active; click it again, or the panel's close (X) button, to dismiss it. The three tabs share one panel, so you can switch between them without losing your place. Comments, collaborators, and snapshots are all preserved when a diagram is archived.
+
+**Comments.** Open the **Comments** panel (the speech-bubble icon) to read, write, and resolve notes on the diagram. Each comment shows its author, the relative time it was posted, and the rendered markdown body; a comment anchored to a node shows an "on <node label>" chip. To add one, type in the composer at the bottom (markdown works) and click **Comment** or press **Cmd/Ctrl+Enter**. The composer's checkbox controls anchoring: with a node selected on the canvas it reads **Pin to <node>** and attaches the comment to that node; with nothing selected it posts a diagram-level comment. Click **Resolve** to close a review thread (or **Reopen** to undo); resolved comments are hidden until you click **Show N resolved**.
+
+**People (collaborators).** Open the **People** panel (the people icon) to grant explicit per-diagram access on top of project- or org-level visibility. Search by name or email in the **Add by name or email** box and pick a person to add them (as an editor by default). Each collaborator row shows their name, a **role** dropdown (**Owner**, **Editor**, **Commenter**, or **Viewer**), and a trash button to remove them. Change a role from the dropdown. When a diagram has no direct collaborators the panel explains that people with project or org access can still see it.
+
+**History (versions).** Open the **History** panel (the clock icon) to browse and restore snapshots. The **Save snapshot** button at the top captures the current graph as a new version. Each entry shows its version number, its label or "Unlabeled", who saved it, and how long ago. Click **Restore** then **Confirm** to roll the graph back to that version. See [Snapshots (versions)](#snapshots-versions) for how snapshots are numbered and what they capture.
+
+All three panels are also fully agent- and API-driven, so an agent manages comments, collaborators, and versions through the same MCP tools described under [Working with AI agents](#working-with-ai-agents).
 
 ### Working with AI agents
 
-Blueprint is built to be driven by AI agents. Every structural change is exposed as an MCP tool, so an agent acts on a diagram with the same permissions and the same audit trail as a person. There are 23 Blueprint tools.
+Blueprint is built to be driven by AI agents. Every structural change is exposed as an MCP tool, so an agent acts on a diagram with the same permissions and the same audit trail as a person. There are 36 Blueprint MCP tools, covering the full surface: diagram read and write, nodes, edges, layout and generation, the Bam round-trip, versions, comments, collaborators, stars, Mermaid import, and templates.
 
 Common agent flows:
 
-- **Author a whole diagram in one call.** An agent reads a process description, org roster, or task list and calls `blueprint_create` to make the diagram, then `blueprint_generate` with a list of node specs and edge specs. The server materializes the ids, wires up parent containers, and runs auto-layout. This is the headline path; `blueprint_generate` accepts 1 to 500 node specs and up to 2000 edge specs.
-- **Edit incrementally.** `blueprint_add_node`, `blueprint_update_node`, `blueprint_move_node`, `blueprint_duplicate_node`, and `blueprint_delete_node` cover nodes; `blueprint_add_edge`, `blueprint_update_edge`, and `blueprint_delete_edge` cover edges; `blueprint_apply_layout` re-arranges. Through `blueprint_apply_layout` an agent can use the mrtree, radial, and rectpacking algorithms that the UI dropdown does not reach.
-- **Read the graph.** `blueprint_list`, `blueprint_get`, `blueprint_read_nodes`, `blueprint_read_edges`, `blueprint_search`, and `blueprint_export`. Note `blueprint_search` matches only on name and description and filters the visible list client-side; it does not search node labels.
-- **Round-trip with Bam.** `blueprint_generate_from_bam` turns a project's tasks into a diagram; `blueprint_promote_graph_to_tasks` and `blueprint_promote_node_to_task` return a plan the caller executes against Bam; `blueprint_link_entity` attaches a cross-product reference.
+- **Author a whole diagram in one call.** An agent reads a process description, org roster, or task list and calls `blueprint_create` to make the diagram, then `blueprint_generate` with a list of node specs and edge specs. The server materializes the ids, wires up parent containers, and runs auto-layout. This is the headline path; `blueprint_generate` accepts 1 to 500 node specs and up to 2000 edge specs, with `replace: true` to wipe the existing graph first or `auto_layout: false` to skip the post-generate pass.
+- **Turn a Mermaid block into an editable graph.** `blueprint_import_mermaid` parses a Mermaid source string (for example from a Brief, a Beacon entry, or an LLM draft) into the typed node/edge graph, then `blueprint_apply_layout` positions it.
+- **Edit incrementally.** `blueprint_add_node`, `blueprint_update_node`, `blueprint_move_node`, `blueprint_duplicate_node`, and `blueprint_delete_node` cover nodes; `blueprint_add_edge`, `blueprint_update_edge`, and `blueprint_delete_edge` cover edges; `blueprint_apply_layout` re-arranges. Through `blueprint_apply_layout` an agent can use the radial algorithm that the UI dropdown does not reach.
+- **Read the graph.** `blueprint_list`, `blueprint_get`, `blueprint_read_nodes`, `blueprint_read_edges`, `blueprint_search`, and `blueprint_export`. Note `blueprint_search` matches only on name and description and filters the visible list client-side; it does not search node labels yet.
+- **Round-trip with Bam.** `blueprint_generate_from_bam` turns a project's tasks into a diagram; `blueprint_promote_graph_to_tasks` and `blueprint_promote_node_to_task` return a plan the caller executes against Bam; `blueprint_link_entity` attaches a cross-product reference so the two-way sync hook fires.
+- **Version, review, and share.** `blueprint_snapshot_version` / `blueprint_list_versions` / `blueprint_restore_version` manage restore points; `blueprint_list_comments` / `blueprint_add_comment` / `blueprint_update_comment` (set `resolved: true` to resolve a thread) drive review; `blueprint_list_collaborators` / `blueprint_add_collaborator` / `blueprint_remove_collaborator` manage explicit access; `blueprint_star` / `blueprint_unstar` set the caller's personal favorite; `blueprint_list_templates` lists templates.
 
-Destructive tools follow a preview-then-commit pattern: `blueprint_archive`, `blueprint_delete_node`, and `blueprint_delete_edge` first return a confirmation prompt and act only when called again with `confirm_action: true`. `blueprint_archive` also requires admin scope. Service-account calls are checked against the platform agent policy kill switch and the `blueprint.*` allowlist before they run.
+Destructive tools follow a preview-then-commit pattern: `blueprint_archive`, `blueprint_delete_node`, `blueprint_delete_edge`, `blueprint_restore_version`, and `blueprint_remove_collaborator` first return a confirmation prompt and act only when called again with `confirm_action: true`. `blueprint_archive` also requires admin scope. Service-account calls are checked against the platform agent policy kill switch and the `blueprint.*` allowlist before they run, and an agent posting cited entities into shared surfaces should call the platform `can_access` tool first. Agent runs are recorded in the unified activity feed under the agent identity, surface a heartbeat, and can route work through the platform proposal queue for human approval.
 
-A few tool descriptions describe roadmap behavior that the running app does not yet deliver. `blueprint_create` claims a template seeds the diagram, but template content is never applied. `blueprint_export` advertises svg and png, which the export service rejects. `blueprint_promote_node_to_task` and `blueprint_promote_graph_to_tasks` return a payload or plan only; the caller performs the actual task creation in Bam. Plan for these gaps when reviewing agent work.
+A few tool descriptions describe roadmap behavior that the running app does not yet deliver. `blueprint_create` claims a template seeds the diagram, but template content is never applied. `blueprint_export` advertises svg and png, which the in-process export service rejects. `blueprint_promote_node_to_task` and `blueprint_promote_graph_to_tasks` return a payload or plan only; the caller performs the actual task creation in Bam and then back-links the node with `blueprint_link_entity`. Plan for these gaps when reviewing agent work.
 
 For the full tool catalog and schemas, see the Blueprint MCP-tools reference in `docs/apps/blueprint/`.
 
@@ -343,13 +369,13 @@ For the full tool catalog and schemas, see the Blueprint MCP-tools reference in 
 **Steps**
 
 1. Pin the nodes you want to keep in place: select each one and click the Pin toggle in the Inspector, or right-click and choose **Pin position**.
-2. In the layout dropdown, choose **Layered** or **Force-directed**. Do not choose Tree or Grid; those do not apply.
+2. In the layout dropdown, choose an algorithm: **Layered** or **Force-directed** for edge-aware arrangements, **Tree** for a hierarchy, or **Grid** for a compact packing.
 3. Pick a direction and click **Apply layout**.
 4. If you want everything aligned to a grid afterward, right-click empty canvas and choose **Snap nodes to grid now**.
 
 **Result:** The unpinned nodes are arranged by the chosen algorithm; the pinned nodes stay where you put them.
 
-**Related:** For mrtree, radial, or rectpacking layouts, use an agent with `blueprint_apply_layout`, since the UI dropdown does not offer them.
+**Related:** For a radial layout, use an agent with `blueprint_apply_layout`, since the UI dropdown does not offer it.
 
 ### Story: Have an agent draft a diagram from a document
 
@@ -361,13 +387,30 @@ For the full tool catalog and schemas, see the Blueprint MCP-tools reference in 
 
 1. Give the agent the source text (a process description, a roster, or a task list) and ask it to build a Blueprint diagram.
 2. The agent calls `blueprint_create` to make the diagram.
-3. The agent calls `blueprint_generate` with node specs and edge specs extracted from your text. The server creates the nodes, wires the edges and any parent containers, and runs auto-layout.
+3. The agent calls `blueprint_generate` with node specs and edge specs extracted from your text. The server creates the nodes, wires the edges and any parent containers, and runs auto-layout. (If the source is already a Mermaid block, the agent can use `blueprint_import_mermaid` instead, then `blueprint_apply_layout`.)
 4. Open the diagram from `/blueprint/` to review it.
 5. Adjust labels, shapes, and layout in the editor as needed.
 
 **Result:** A fully wired, laid-out diagram you can refine by hand, created in a single agent call.
 
 **Related:** The agent can then call `blueprint_promote_graph_to_tasks` to turn the diagram into a Bam plan. Every agent mutation is audited like a human edit.
+
+### Story: Review and snapshot before an agent rewrite
+
+**Who:** A diagram owner who wants a safe restore point before an agent reworks the graph.
+**Goal:** Capture the current graph, let the agent rewrite it, and roll back if needed.
+**Before you start:** Have a diagram open, and an agent with `blueprint.*` access.
+
+**Steps**
+
+1. In the editor, click **Save snapshot** and label it (for example "before agent rewrite").
+2. Ask the agent to make its changes. It can read the graph with `blueprint_read_nodes` and `blueprint_read_edges`, and rewrite with `blueprint_generate` (`replace: true`) or incremental node/edge tools.
+3. Have the agent add a comment summarizing what it changed with `blueprint_add_comment`, and read review feedback with `blueprint_list_comments`.
+4. If the result is wrong, ask the agent to restore the labeled snapshot with `blueprint_restore_version` (it lists versions with `blueprint_list_versions` first).
+
+**Result:** The diagram is either the agent's improved version or rolled back to your snapshot, with the review thread recorded.
+
+**Related:** Listing and restoring versions, and reading comments, are also in the editor's **History** and **Comments** panels; an agent does the same with `blueprint_list_versions`, `blueprint_restore_version`, and `blueprint_list_comments`.
 
 ### Story: Curate your diagram library
 
@@ -385,11 +428,11 @@ For the full tool catalog and schemas, see the Blueprint MCP-tools reference in 
 
 **Result:** Your most-used diagrams are one filter click away, and stale ones are hidden from the default list without being destroyed.
 
-**Related:** Archiving is reversible at the data level since nodes, edges, and snapshots are preserved. An agent archives with `blueprint_archive` (which requires admin scope and a confirmation step).
+**Related:** Archiving is reversible at the data level since nodes, edges, comments, and snapshots are preserved. An agent archives with `blueprint_archive` (which requires admin scope and a confirmation step).
 
 ## Related
 
 - **Bam** (`/b3/`) - the Kanban and sprint tool Blueprint exchanges work with. Generate a diagram from a Bam project, promote a diagram or node into Bam tasks, and rely on two-way sync between a node and its linked task.
 - **Beacon, Bearing, Bond, Helpdesk** - nodes can carry cross-product links to a Beacon entry, a Bearing goal, a Bond deal or contact, or a Helpdesk ticket via the Inspector's **Linked entity** section or the node menu's **Link to entity...**.
-- **Brief** - Mermaid export from Blueprint produces a source string you can embed elsewhere.
-- Blueprint MCP-tools reference and guide in `docs/apps/blueprint/` for the full catalog of the 23 agent tools.
+- **Brief** - Mermaid export from Blueprint produces a source string you can embed elsewhere, and `blueprint_import_mermaid` turns a Mermaid block back into an editable graph.
+- Blueprint MCP-tools reference and guide in `docs/apps/blueprint/` for the full catalog of the 36 agent tools.

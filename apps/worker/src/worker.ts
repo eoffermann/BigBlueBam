@@ -40,6 +40,10 @@ import {
   type BillOverdueReminderJobData,
 } from './jobs/bill-overdue-reminder.job.js';
 import {
+  processBillRecurringGenerateJob,
+  type BillRecurringGenerateJobData,
+} from './jobs/bill-recurring-generate.job.js';
+import {
   processBlankConfirmationEmailJob,
   type BlankConfirmationEmailJobData,
 } from './jobs/blank-confirmation-email.job.js';
@@ -146,6 +150,12 @@ import {
   processBureauAnalyticsRollupJob,
   type BureauAnalyticsRollupJobData,
 } from './jobs/bureau-analytics-rollup.js';
+// Book task #63: external-calendar sync sweep — triggers the Book API's
+// internal sync engine for every due connection (ICS feeds today).
+import {
+  processBookCalendarSyncJob,
+  type BookCalendarSyncJobData,
+} from './jobs/book-calendar-sync.job.js';
 
 const env = loadEnv();
 
@@ -863,11 +873,44 @@ billOverdueReminderQueue
   )
   .catch((err) => logger.error({ err }, 'Failed to register bill-overdue-reminder scheduler'));
 
+// Bill recurring-invoice generation sweep (daily at 06:00 UTC). Finds active
+// schedules due (next_run_at <= now), materialises a draft/finalized invoice
+// from each template, and advances next_run_at by the cadence.
+const billRecurringGenerateWorker = new Worker<BillRecurringGenerateJobData>(
+  'bill-recurring-generate',
+  async (job: Job<BillRecurringGenerateJobData>) => {
+    await processBillRecurringGenerateJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+billRecurringGenerateWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bill-recurring-generate' }, 'Job completed');
+});
+billRecurringGenerateWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bill-recurring-generate', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'bill-recurring-generate',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const billRecurringGenerateQueue = new Queue('bill-recurring-generate', { connection: redis });
+billRecurringGenerateQueue
+  .upsertJobScheduler(
+    'bill-recurring-generate-daily',
+    { pattern: '0 6 * * *' }, // 6 AM UTC daily
+    { name: 'daily-sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bill-recurring-generate scheduler'));
+
 // Blank confirmation-email worker.
 const blankConfirmationEmailWorker = new Worker<BlankConfirmationEmailJobData>(
   'blank-confirmation-email',
   async (job: Job<BlankConfirmationEmailJobData>) => {
-    await processBlankConfirmationEmailJob(job, env, logger);
+    await processBlankConfirmationEmailJob(job, env, redis, logger);
   },
   { ...connection, concurrency: 1 },
 );
@@ -1547,6 +1590,39 @@ bureauAnalyticsRollupQueue
   )
   .catch((err) => logger.error({ err }, 'Failed to register bureau-analytics-rollup scheduler'));
 
+// Book external-calendar sync sweep (every 15 minutes). Triggers the Book API
+// internal sync engine for every connection due for a refresh. Offset to :09
+// so it does not pile onto the on-the-hour / :00 / :05 jobs.
+const bookCalendarSyncWorker = new Worker<BookCalendarSyncJobData>(
+  'book-calendar-sync',
+  async (job: Job<BookCalendarSyncJobData>) => {
+    await processBookCalendarSyncJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bookCalendarSyncWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'book-calendar-sync' }, 'Job completed');
+});
+bookCalendarSyncWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'book-calendar-sync', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'book-calendar-sync',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const bookCalendarSyncQueue = new Queue('book-calendar-sync', { connection: redis });
+bookCalendarSyncQueue
+  .upsertJobScheduler(
+    'book-calendar-sync-tick',
+    { pattern: '9,24,39,54 * * * *' }, // every 15 minutes, offset to :09
+    { name: 'sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register book-calendar-sync scheduler'));
+
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(
   'analytics',
@@ -1668,6 +1744,8 @@ const workers = [
   bureauBookingReleaseWorker,
   // Workstream 14 Bureau analytics rollup
   bureauAnalyticsRollupWorker,
+  // Book task #63 external-calendar sync sweep
+  bookCalendarSyncWorker,
   analyticsWorker,
 ];
 
@@ -1726,6 +1804,8 @@ logger.info(
       'bureau-booking-release',
       // Workstream 14 Bureau analytics rollup
       'bureau-analytics-rollup',
+      // Book task #63 external-calendar sync sweep
+      'book-calendar-sync',
       'analytics',
       // LiveKit advertised-address drift watchdog (hourly)
       'livekit-ip-drift',

@@ -1,82 +1,13 @@
-[
-  {
-    "id": "01-channels",
-    "label": "Channel list",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\01-channels.png",
-    "sha256": "8b7e8029faa2c110306298821b504d208e9b2ed5e32d38b906de4a7c941d6f7a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:29:44.090Z"
-  },
-  {
-    "id": "02-channel-view",
-    "label": "Channel conversation",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\02-channel-view.png",
-    "sha256": "8b7e8029faa2c110306298821b504d208e9b2ed5e32d38b906de4a7c941d6f7a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:29:46.929Z"
-  },
-  {
-    "id": "03-threads",
-    "label": "Thread view",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\03-threads.png",
-    "sha256": "f1ec268a1f314bfc2d2a7e1288049891e78aebd9862cc907cd2a72917620e8ff",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:29:49.707Z"
-  },
-  {
-    "id": "04-dms",
-    "label": "Direct messages",
-    "theme": "light",
-    "file": "docs\\apps\\banter\\screenshots\\light\\04-dms.png",
-    "sha256": "152ba670db703f8d96b4345d94042b084ed3742161f6306e280dadd07091ba70",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:29:54.576Z"
-  },
-  {
-    "id": "01-channels",
-    "label": "Channel list",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\01-channels.png",
-    "sha256": "c8b8e356aa6211a163253e68dafbe321a99690f6faded59ccaa9063b497a2a7b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:30:02.198Z"
-  },
-  {
-    "id": "02-channel-view",
-    "label": "Channel conversation",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\02-channel-view.png",
-    "sha256": "11105ff48699c044184765c43702b921da4de4e312cb6a28569143207948916e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:30:04.966Z"
-  },
-  {
-    "id": "03-threads",
-    "label": "Thread view",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\03-threads.png",
-    "sha256": "27fa45c399b45d8fd109a2507b4ab09f8ecc956182c1efb3bf795197a956e281",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:30:07.682Z"
-  },
-  {
-    "id": "04-dms",
-    "label": "Direct messages",
-    "theme": "dark",
-    "file": "docs\\apps\\banter\\screenshots\\dark\\04-dms.png",
-    "sha256": "0e8b7f5ba8a75061f7969cf3fa048711d1180459c67ac23cd5d6c8d533267604",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:30:12.517Z"
-  }
-]
+{
+  "app": "banter",
+  "nginx_path": "/banter/",
+  "api_port": 4002,
+  "api_dir": "banter-api",
+  "route_files": 21,
+  "schema_modules": 22,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "9d6cd9b8f6f1cd40d3e0d82c01dc06f4f1c3032cc6ae4af569b5b9baf1ca77c6",
+  "generated_at": "2026-06-17T22:16:23.261Z",
+  "mcp_tool_count": 69
+}

@@ -4,8 +4,10 @@
  * Routes:
  *   '/'                   → floor list (user-facing landing)
  *   '/floors/:id'         → live floor view (canvas + WS presence)
+ *   '/booking'            → room booking (view / book / cancel reservations)
  *   '/admin/floors'       → admin floor list (create / edit / archive / restore)
  *   '/admin/floors/:id'   → admin floor editor (canvas room placement)
+ *   '/admin/settings'     → org-wide Bureau settings
  *
  * The router is intentionally simple (no react-router): the suite uses
  * matching hand-rolled routers across every SPA. Pattern mirrors
@@ -21,15 +23,19 @@ import { FloorViewPage } from '@/pages/floor-view';
 import { AdminFloorListPage } from '@/pages/admin/floor-list';
 import { FloorEditorPage } from '@/pages/admin/floor-editor';
 import { AdminOfficesPage } from '@/pages/admin/offices';
+import { AdminSettingsPage } from '@/pages/admin/settings';
 import { ChatsPage } from '@/pages/chats';
+import { BookingPage } from '@/pages/booking';
 
 export type Route =
   | { page: 'floor-list' }
   | { page: 'floor'; id: string }
   | { page: 'chats' }
+  | { page: 'booking' }
   | { page: 'admin-floor-list' }
   | { page: 'admin-floor'; id: string }
-  | { page: 'admin-offices' };
+  | { page: 'admin-offices' }
+  | { page: 'admin-settings' };
 
 const BASE_PATH = '/bureau';
 
@@ -44,6 +50,7 @@ export function parseRoute(path: string): Route {
   const p = stripBase(path);
   if (p === '/' || p === '') return { page: 'floor-list' };
   if (p === '/chats' || p === '/chats/') return { page: 'chats' };
+  if (p === '/booking' || p === '/booking/') return { page: 'booking' };
   const floorMatch = p.match(/^\/floors\/([^/]+)$/);
   if (floorMatch) return { page: 'floor', id: floorMatch[1]! };
   if (p === '/admin/floors' || p === '/admin/floors/') {
@@ -53,6 +60,9 @@ export function parseRoute(path: string): Route {
   if (adminFloorMatch) return { page: 'admin-floor', id: adminFloorMatch[1]! };
   if (p === '/admin/offices' || p === '/admin/offices/') {
     return { page: 'admin-offices' };
+  }
+  if (p === '/admin/settings' || p === '/admin/settings/') {
+    return { page: 'admin-settings' };
   }
   return { page: 'floor-list' };
 }
@@ -146,6 +156,8 @@ export function App({ onRouteChange }: AppProps = {}) {
         return <FloorListPage onNavigate={navigate} />;
       case 'chats':
         return <ChatsPage />;
+      case 'booking':
+        return <BookingPage />;
       case 'floor':
         return (
           <FloorViewPage
@@ -159,6 +171,8 @@ export function App({ onRouteChange }: AppProps = {}) {
         return <FloorEditorPage floorId={route.id} onNavigate={navigate} />;
       case 'admin-offices':
         return <AdminOfficesPage />;
+      case 'admin-settings':
+        return <AdminSettingsPage />;
       default:
         return null;
     }

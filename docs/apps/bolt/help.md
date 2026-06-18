@@ -4,11 +4,11 @@
 
 ## Overview
 
-Bolt is the suite's event-driven automation engine. You build an **automation** (also called a rule) out of three parts: a **trigger** (the event to watch for), optional **conditions** (extra tests the event must pass), and an ordered list of **actions** (what to do when it fires). The shape is "WHEN this happens, IF these conditions hold, THEN run these steps."
+Bolt is the suite's event-driven automation engine, and its event hub. You build an **automation** (also called a rule) out of three parts: a **trigger** (the event to watch for), optional **conditions** (extra tests the event must pass), and an ordered list of **actions** (what to do when it fires). The shape is "WHEN this happens, IF these conditions hold, THEN run these steps."
 
-Other BigBlueBam apps publish events as people work: Bam emits task and sprint events, Bond emits deal events, Helpdesk emits ticket events, and so on. Bolt receives those events, matches them against your enabled automations, and runs the matching rules. Each action is an MCP tool call (for example "create a task in Bam" or "send a webhook"), so Bolt can act inside any app in the suite without you wiring up integrations by hand.
+Other BigBlueBam apps publish events as people work: Bam emits task and sprint events, Bond emits deal events, Helpdesk emits ticket events, and so on. Every one of those apps reports its events to Bolt through a shared helper, so Bolt is the single place where the suite's activity converges. Bolt matches each event against your enabled automations and runs the matching rules. Each action is an MCP tool call (for example "create a task in Bam" or "send a webhook"), so Bolt can act inside any app in the suite without you wiring up integrations by hand.
 
-Every run is recorded as an **execution** with per-action steps, so you can see exactly what fired, what passed, what failed, and why. You can browse runs for a single automation or across the whole organization in the Execution Log.
+Every run is recorded as an **execution** with per-action steps, so you can see exactly what fired, what passed, what failed, and why. You can browse runs for a single automation or across the whole organization in the Execution Log, and you can trace one ingested event through every rule it touched.
 
 Bolt is currently marked BETA (a yellow "beta" pill sits next to the brand in the sidebar). This document describes what the Bolt web app actually does today. Where a capability exists only through the API or an MCP tool and is not wired into the in-app UI, that is called out so you do not go looking for a button that is not there.
 
@@ -16,7 +16,7 @@ Bolt is currently marked BETA (a yellow "beta" pill sits next to the brand in th
 
 - **Automation (rule)** - the top-level object: a trigger, optional conditions, an ordered list of actions, and limit settings. The UI calls these "Automations".
 - **Trigger** - what starts an automation. It has a **Trigger Source** (the app that emits the event, such as Bam or Bond) and an **Event Type** (the bare event name, such as `task.created`). A trigger can also carry an optional filter.
-- **Trigger Source** - the emitting app. The trigger dropdowns offer 14 sources: Bam, Banter, Beacon, Brief, Helpdesk, Schedule, Bond, Blast, Board, Bench, Bearing, Bill, Book, and Blank.
+- **Event source** - the emitting app, stored alongside the bare event name. Bolt uses bare-name-plus-explicit-source naming, so the event is `deal.rotting` with `bond` as a separate source field, not `bond.deal.rotting`. The trigger dropdowns offer 14 sources: Bam, Banter, Beacon, Brief, Helpdesk, Schedule, Bond, Blast, Board, Bench, Bearing, Bill, Book, and Blank.
 - **Trigger filter** - an optional set of equality rules (key matches value) checked against the raw event payload before the automation fires.
 - **Condition** - an extra test on the event: a field, an operator, and a value, grouped with AND or OR logic. Conditions gate the whole automation; if they are not met, the run is skipped. There are 13 operators (equals, not_equals, contains, not_contains, starts_with, ends_with, greater_than, less_than, is_empty, is_not_empty, in, not_in, matches_regex). Fields that read the event body must be prefixed `event.` (for example `event.task.priority`).
 - **Action** - one step Bolt runs when the automation fires. Each action calls an allowlisted MCP tool with parameters you supply. Actions run in order; this is a linear list, not a branching flow (see the note under Actions).
@@ -57,7 +57,7 @@ To browse and filter automations:
 
 The home list, stats, and filters are shown in the screenshot below.
 
-![Automation list - the home page with stat cards, source filters, and automation cards](screenshots/light/01-automations.png)
+![Automations home - stat cards, source filter chips, and the automation list](screenshots/light/01-automations.png)
 
 ### Enabling and disabling an automation
 
@@ -72,7 +72,7 @@ You can also set the state from inside the editor with the **Enabled** toggle in
 
 ### Creating and editing an automation
 
-The editor (`/new` for a new rule, `/automations/:id` for an existing one) is where you define the trigger, conditions, actions, and limits. It has two modes, **Simple** and **Visual**, switched with the toggle near the top.
+The editor (`/new` for a new rule, `/automations/:id` for an existing one) is where you define the trigger, conditions, actions, and limits. It has two modes, **Simple** and **Visual**, switched with the toggle near the top. There is no separate automation-detail page; opening a card from the home list takes you into the editor, which doubles as the detail view.
 
 To start a new automation:
 
@@ -81,7 +81,11 @@ To start a new automation:
 
 The editor with its WHEN / IF / THEN sections and the Settings sidebar is shown below.
 
-![Automation builder - the editor with the WHEN, IF, and THEN sections and the Settings sidebar](screenshots/light/02-editor.png)
+![Automation editor - the WHEN, IF, and THEN sections and the Settings sidebar](screenshots/light/02-editor.png)
+
+Opening an existing automation from a home-list card lands you in the same editor, pre-filled with that rule's trigger, conditions, and actions.
+
+![Automation detail - an existing rule opened in the editor from a home-list card](screenshots/light/03-automation-detail.png)
 
 #### Simple mode
 
@@ -102,13 +106,13 @@ To add conditions (optional):
 
 To add actions:
 
-1. In the **THEN - Actions** section, click **Add Action**. You must add at least one ("Add at least one action...").
+1. In the **THEN - Actions** section, click **Add Action**. You must add at least one ("Add at least one action to define what happens.").
 2. For each action (numbered #N), pick a tool from the action select. Tools are grouped by source and each option shows the tool's description.
 3. Fill in the **Parameters**. Required parameters are marked with "*". Some are enum or boolean selects; text parameters accept `{{ }}` templates. Click "Add optional parameter (N available)" to expose optional ones.
 4. To control failure handling, click "Show advanced" and set **On Error** (Stop, Continue, or Retry) and a **Retry Count**.
 5. Actions run top to bottom in the order listed.
 
-Note on flow: Bolt runs actions as a single linear ordered list. Conditions decide whether the whole automation runs; they do not branch to different actions. Despite any "branching" language in marketing, there are no per-edge branches. Variable interpolation between steps is real: a later action can reference an earlier one with `{{ step[N].result.* }}`.
+Note on flow: Bolt runs actions as a single linear ordered list. Conditions decide whether the whole automation runs; they do not branch to different actions. Despite any "branching" language in older marketing, there are no per-edge branches. Variable interpolation between steps is real: a later action can reference an earlier one with `{{ step[N].result.* }}`.
 
 #### Visual mode
 
@@ -138,9 +142,15 @@ If the form has problems, a banner reads "Please fix the following errors before
 
 ### Test Run
 
-The editor shows a **Test Run** button in the Settings sidebar for an already-saved automation (it does not appear while creating a new one). It is meant to evaluate the automation's conditions against a sample event without running any actions.
+The editor shows a **Test Run** button in the Settings sidebar for an already-saved automation (it does not appear while creating a new one). It evaluates the automation's conditions against a sample event without running any actions.
 
-Known issue: Test Run does not work reliably in the current build. The button sends the request without the event body that the test endpoint requires, so the call is rejected as a validation error, and the success message reads a field (`execution_id`) that the test endpoint never returns. Do not rely on Test Run to verify a rule today. To confirm an automation behaves as intended, enable it and inspect the resulting runs in the Execution Log, or use the `bolt_test` MCP tool with a simulated event (see Working with AI agents). Note that even when it works, a test only evaluates conditions; it never executes actions.
+To use it:
+
+1. Open a saved automation in the editor.
+2. Click **Test Run** in the Settings sidebar. Bolt sends a simulated event, seeded from the trigger filter when you have one, to the test endpoint.
+3. Read the result box that appears under the button. A green box means the conditions passed (the actions would run on a real event); an amber box means they did not. The box shows a human-readable summary message.
+
+The test only evaluates conditions; it never executes actions. To confirm an automation's actions actually run, enable it and inspect the resulting runs in the Execution Log. Agents can run the same conditions-only dry run with the `bolt_test` MCP tool, passing an explicit simulated event (see Working with AI agents).
 
 ### Duplicating an automation
 
@@ -165,7 +175,7 @@ Each automation has its own run history.
 To view one automation's runs:
 
 1. On its card, open the more-menu and click **View Executions** (or open it from the editor).
-2. The page heading reads "<name> - Executions" with a "Back to <name>" link.
+2. The page heading reads "<name> - Executions" with a "Back to <name>" link and the subtitle "Execution history for this automation."
 3. Filter with the status chips: All, Success, Failed, Partial, Running, Skipped.
 4. The table lists Status, Duration, Conditions Met, Error, and Started. Click a row to open the execution detail.
 
@@ -196,10 +206,6 @@ To inspect a run:
 5. The "Trigger Event" panel shows the raw event JSON, and "Condition Evaluation" shows how each condition was scored.
 6. The "Execution Steps" timeline lists each action attempt in order with its result.
 
-This page is shown in the screenshot below (the file is named for an automation detail view, but it shows the execution-detail page; Bolt has no separate automation-detail page, since the editor doubles as it).
-
-![Execution detail - a single run with its trigger event, condition evaluation, and step timeline](screenshots/light/03-detail.png)
-
 ### Retrying a failed run
 
 A failed or partial run can be re-queued from its detail page.
@@ -222,29 +228,38 @@ To start from a template:
 
 The template gallery is shown below.
 
-![Automation templates - the gallery of pre-built templates](screenshots/light/05-templates.png)
+![Template gallery - the grid of pre-built templates, each with a source badge and Use Template button](screenshots/light/05-templates.png)
 
 Note that some templates are starting points rather than turnkey rules. A few are labeled "(requires agent)" and wire a working notify step but leave the cross-app part (for example creating an invoice from a closed deal) for an AI agent to complete. Others need a value only you can supply (a cron schedule, a project and phase for a created task). Read each template's actions after instantiating and fill in anything marked required before you enable it.
 
 ### Working with AI agents
 
-Bolt is built so an AI agent can author and operate automations the same way a person does, and so agents can serve as the execution substrate for the rules themselves.
+Bolt is built so an AI agent can author and operate automations the same way a person does, and so agents can serve as the execution substrate for the rules themselves. Bolt is also the suite's event hub: every app reports its activity here, which makes Bolt the natural place for an agent to observe what is happening across BigBlueBam.
 
-Bolt exposes 15 MCP tools: 13 core tools plus 2 observability tools.
+Bolt exposes 26 MCP tools: 24 in the core Bolt tool module plus 2 observability tools.
 
-- **Authoring and operating:** `bolt_create`, `bolt_update`, `bolt_get`, `bolt_get_automation_by_name`, `bolt_list`, `bolt_enable`, `bolt_disable`, and `bolt_delete`. Mutating tools accept a name as well as a UUID and resolve it through `bolt_get_automation_by_name`, returning a clean "Automation not found" on a miss. This lets an agent run meta-automation tasks like "disable the Nightly Deploys rule" by name.
-- **Inspecting and testing:** `bolt_executions` (runs for an automation), `bolt_execution_detail` (one run with its steps), and `bolt_test` (evaluate an automation's conditions against a simulated `event`). As in the UI, `bolt_test` only evaluates conditions; it does not execute actions.
-- **Catalogs:** `bolt_events` (the trigger event catalog) and `bolt_actions` (the action allowlist with parameter schemas).
-- **Observability:** `bolt_event_trace` returns the full evaluation trail for one ingested event id (every automation it matched and what happened), and `bolt_recent_events` lists recent ingested events that matched at least one automation, filtered by source, event, since, and limit.
+- **Authoring and operating:** `bolt_create`, `bolt_update`, `bolt_patch` (metadata-only: name, description, enabled), `bolt_get`, `bolt_get_automation_by_name`, `bolt_list`, `bolt_stats`, `bolt_enable`, `bolt_disable`, `bolt_duplicate`, and `bolt_delete`. Mutating tools accept a name as well as a UUID and resolve it through `bolt_get_automation_by_name`, returning a clean "Automation not found" on a miss. This lets an agent run meta-automation tasks like "disable the Nightly Deploys rule" by name.
+- **Templates:** `bolt_list_templates` and `bolt_instantiate_template` (with optional name, description, project, and cron overrides) let an agent stand up a rule from a built-in blueprint.
+- **Versions:** `bolt_list_versions` and `bolt_restore_version` read and roll back the snapshots that every save records. This history has no in-app UI; agents and the REST API are the only way to use it (see below).
+- **Inspecting and testing:** `bolt_executions` (runs for an automation), `bolt_list_executions` (org-wide runs), `bolt_execution_detail` (one run with its steps), `bolt_retry_execution` (re-queue a failed or partial run), and `bolt_test` (evaluate an automation's conditions against a simulated `event`). As in the UI, `bolt_test` only evaluates conditions; it does not execute actions. It returns `passed` (whether the actions would run), a per-condition `log`, and a human-readable `message`. The tool requires an explicit simulated `event` payload, so an agent can dry-check a rule against any payload it wants to imagine.
+- **Catalogs:** `bolt_events` (the trigger event catalog, optionally filtered by source) and `bolt_actions` (the action allowlist with parameter schemas). An agent discovers valid triggers and actions here before building a rule.
+- **AI drafting:** `bolt_generate` turns a natural-language prompt into a draft automation (it does not save; pass the result to `bolt_create`), and `bolt_explain` renders an automation definition in plain English. Both require an LLM provider configured in Bam Settings and return `AI_NOT_CONFIGURED` otherwise. This drafting has no in-app UI; it is agent and API only.
+- **Observability:** `bolt_event_trace` returns the full evaluation trail for one ingested event id (every automation it matched, each condition outcome, and each action outcome), and `bolt_recent_events` lists recent ingested events that matched at least one automation, filtered by source, event, since, and limit.
 
 Agents are also the execution substrate. Every action Bolt runs is an MCP tool call the background worker makes on the automation's behalf, so the same authority that lets an agent build a rule also powers the rule's steps.
 
-There is no MCP tool for duplicating an automation, for version history and restore, or for AI generation. Those capabilities are either UI-only (duplicate) or API-only (versions, AI authoring), as noted below.
+Two capabilities exist in the backend and through MCP tools but have no in-app UI today, so do not look for them in the web app or present them to users as in-app buttons:
 
-Two capabilities exist in the backend but have no in-app UI today, so do not look for them in the web app or present them to users as in-app features:
+- **AI drafting** - the API and the `bolt_generate` / `bolt_explain` tools can draft an automation from a prompt and explain one in plain English, but no screen in the Bolt web app calls them.
+- **Versioning** - every save snapshots a restorable version, and the API and the `bolt_list_versions` / `bolt_restore_version` tools can list and restore them, but the web app does not surface version history or a restore button.
 
-- **AI authoring** - the API can generate an automation from a natural-language prompt and explain an existing automation in plain English, but no screen in the Bolt web app calls these. AI authoring is backend and agent only right now.
-- **Versioning** - every save snapshots a restorable version, and the API can list and restore them, but the web app does not surface version history or a restore button.
+Agent runs ride the suite's shared agentic platform, which sits alongside the Bolt-specific tools:
+
+- **Identity and heartbeat.** Agents are first-class actors (`users.kind` of `agent` or `service`), so their writes are attributed in the activity log, and they report liveness with `agent_heartbeat`. Service-account tool calls fail closed against per-agent kill switches and glob allowlists (`bolt.*`), so an operator can revoke an agent's Bolt access centrally without editing any rule.
+- **Approvals.** When a flow needs a human in the loop, an agent files a proposal with `proposal_create`, which a reviewer resolves with `proposal_list` and `proposal_decide`. Those decisions themselves emit `proposal.created` and `proposal.decided` platform events, which Bolt can trigger on.
+- **Visibility.** Before an agent surfaces a cited entity into a shared place, it calls `can_access` to confirm the asker is allowed to see it, and drops anything that is not. Bolt automations that post cross-app results should respect the same gate.
+- **Cross-app read plane.** `search_everything` and `activity_query` let an agent pull context from across the suite, including the unified activity view, before deciding how to build or change a Bolt rule.
+- **Outbound webhooks.** Bolt fans subscribed events to agent runners over HMAC-signed webhooks with retry-and-backoff and auto-disable on repeated failure, and it emits a platform `catalog.drift_detected` event when an unknown event name is ingested, so an agent can notice and react to drift.
 
 For the full tool catalog and parameter schemas, see the MCP-tools reference and guide in `docs/apps/bolt/`.
 
@@ -266,7 +281,7 @@ For the full tool catalog and parameter schemas, see the MCP-tools reference and
 
 **Result:** The rule appears on the Automations home page as Enabled and will run the next time a matching event is published.
 
-**Related:** Build a rule by hand with "Create an automation by hand". An agent can do the same with `bolt_create` followed by `bolt_enable`.
+**Related:** Build a rule by hand with "Create an automation by hand". An agent can do the same with `bolt_instantiate_template` then `bolt_enable`, or `bolt_create` then `bolt_enable`.
 
 ### Story: Create an automation by hand
 
@@ -282,11 +297,11 @@ For the full tool catalog and parameter schemas, see the MCP-tools reference and
 4. In **IF - Conditions** (optional), click **Add Condition** and build each row: a field, an operator, and a value. Remember that fields reading the event body start with `event.` (for example `event.task.priority`).
 5. In **THEN - Actions**, click **Add Action**, pick a tool, and fill in its Parameters. Use `{{ event.* }}` and `{{ step[N].result.* }}` templates where you need values from the event or a previous step. Use "Show advanced" to set **On Error** and **Retry Count**.
 6. In the Settings sidebar, set **Max Executions / Hour** and **Cooldown (seconds)**.
-7. Click **Save Draft** to keep it off for now, or **Save & Enable** to turn it on.
+7. Save the rule, then click **Test Run** to dry-check its conditions against a sample event. When you are satisfied, click **Save & Enable** to turn it on (or **Save Draft** to keep it off for now).
 
 **Result:** The automation is saved. If you used Save & Enable, it will fire on the next matching event; if you saved a draft, enable it later from the home list power toggle.
 
-**Related:** Confirm runs with "Watch a run and read its detail". An agent can author the same rule with `bolt_create`.
+**Related:** Confirm runs with "Watch a run and read its detail". An agent can author the same rule with `bolt_create` and ask `bolt_explain` to describe it in plain English.
 
 ### Story: Auto-create a Bam task when a Bond deal goes stale
 
@@ -355,7 +370,7 @@ For the full tool catalog and parameter schemas, see the MCP-tools reference and
 
 **Result:** A new run is queued and appears in the Execution Log. Open it to confirm it succeeded this time.
 
-**Related:** Adjust the rule's limits in the editor's Settings sidebar if retries are being throttled.
+**Related:** Adjust the rule's limits in the editor's Settings sidebar if retries are being throttled. An agent can re-queue the same run with `bolt_retry_execution`.
 
 ### Story: Schedule a recurring automation
 
@@ -379,17 +394,18 @@ For the full tool catalog and parameter schemas, see the MCP-tools reference and
 
 **Who:** An operator running an AI agent that needs to build, toggle, or audit automations programmatically.
 **Goal:** Manage rules and inspect firings through MCP tools instead of the web UI.
-**Before you start:** The agent runs with a service account that passes Bolt's policy allowlist. Know the automation by name or id.
+**Before you start:** The agent runs with a service account that passes Bolt's policy allowlist (`bolt.*`) and reports liveness with `agent_heartbeat`. Know the automation by name or id.
 
 **Steps**
 
 1. List or find the rule with `bolt_list` or `bolt_get_automation_by_name`.
-2. Create or modify rules with `bolt_create` and `bolt_update`, discovering valid triggers and actions through `bolt_events` and `bolt_actions`.
-3. Turn rules on or off with `bolt_enable` and `bolt_disable`, addressing them by name.
-4. Dry-check a rule's conditions against a simulated event with `bolt_test` (no actions run).
-5. Audit behavior with `bolt_executions`, `bolt_execution_detail`, `bolt_event_trace` (one event's full trail), and `bolt_recent_events` (recent matched events).
+2. Discover valid triggers and actions with `bolt_events` and `bolt_actions`, then create or modify rules with `bolt_create`, `bolt_update`, or the metadata-only `bolt_patch`. To draft from a prompt, use `bolt_generate` and pass the result to `bolt_create`.
+3. Turn rules on or off with `bolt_enable` and `bolt_disable`, addressing them by name. Clone with `bolt_duplicate` (the copy starts disabled).
+4. Dry-check a rule's conditions against a simulated event with `bolt_test` (no actions run); read the returned `passed`, `log`, and `message`.
+5. Audit behavior with `bolt_executions`, `bolt_list_executions`, `bolt_execution_detail`, `bolt_event_trace` (one event's full trail), and `bolt_recent_events` (recent matched events). Re-queue a failure with `bolt_retry_execution`.
+6. When a change needs sign-off, file a `proposal_create` and let a human resolve it with `proposal_decide`.
 
-**Result:** The agent manages and observes automations end to end without touching the UI. There is no MCP tool for duplicate, versions, or AI generation; use the UI to duplicate and the REST API for version history.
+**Result:** The agent manages and observes automations end to end without touching the UI, with its writes attributed to its agent identity and gated by the org's agent policy.
 
 **Related:** See the MCP-tools reference in `docs/apps/bolt/` for parameter schemas.
 

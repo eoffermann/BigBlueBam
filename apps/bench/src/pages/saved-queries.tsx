@@ -20,16 +20,35 @@ interface SavedQueriesPageProps {
 interface FormData {
   name: string;
   description: string;
-  data_source: string;
-  entity: string;
+  data_source: string; // "product:entity" composite key
+  measures: string[]; // measure field names
+  dimensions: string[]; // dimension field names
 }
 
 const INITIAL_FORM: FormData = {
   name: '',
   description: '',
   data_source: '',
-  entity: '',
+  measures: [],
+  dimensions: [],
 };
+
+/**
+ * Reconstruct the dialog's measure/dimension selections from a stored
+ * query_config so editing/re-saving a query preserves its real definition.
+ */
+function configToSelections(config: Record<string, unknown> | undefined): {
+  measures: string[];
+  dimensions: string[];
+} {
+  const measures = Array.isArray(config?.measures)
+    ? (config!.measures as { field?: string }[]).map((m) => m.field).filter((f): f is string => !!f)
+    : [];
+  const dimensions = Array.isArray(config?.dimensions)
+    ? (config!.dimensions as { field?: string }[]).map((d) => d.field).filter((f): f is string => !!f)
+    : [];
+  return { measures, dimensions };
+}
 
 function SavedQueryDialog({
   open,
@@ -40,16 +59,17 @@ function SavedQueryDialog({
   editing: SavedQuery | null;
   onClose: () => void;
 }) {
-  const [form, setForm] = useState<FormData>(() =>
-    editing
-      ? {
-          name: editing.name,
-          description: editing.description ?? '',
-          data_source: editing.data_source,
-          entity: editing.entity,
-        }
-      : { ...INITIAL_FORM },
-  );
+  const [form, setForm] = useState<FormData>(() => {
+    if (!editing) return { ...INITIAL_FORM };
+    const sel = configToSelections(editing.query_config);
+    return {
+      name: editing.name,
+      description: editing.description ?? '',
+      data_source: `${editing.data_source}:${editing.entity}`,
+      measures: sel.measures,
+      dimensions: sel.dimensions,
+    };
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: sourcesData } = useDataSources();
@@ -57,6 +77,8 @@ function SavedQueryDialog({
 
   const createMutation = useCreateSavedQuery();
   const updateMutation = editing ? useUpdateSavedQuery(editing.id) : null;
+
+  const currentSource = sources.find((s) => `${s.product}:${s.entity}` === form.data_source);
 
   function updateField<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -67,10 +89,34 @@ function SavedQueryDialog({
     });
   }
 
+  function toggleMeasure(field: string) {
+    setForm((prev) => ({
+      ...prev,
+      measures: prev.measures.includes(field)
+        ? prev.measures.filter((f) => f !== field)
+        : [...prev.measures, field],
+    }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.measures;
+      return next;
+    });
+  }
+
+  function toggleDimension(field: string) {
+    setForm((prev) => ({
+      ...prev,
+      dimensions: prev.dimensions.includes(field)
+        ? prev.dimensions.filter((f) => f !== field)
+        : [...prev.dimensions, field],
+    }));
+  }
+
   function validate(): boolean {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = 'Name is required';
     if (!form.data_source) errs.data_source = 'Data source is required';
+    if (form.data_source && form.measures.length === 0) errs.measures = 'Pick at least one measure';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -79,28 +125,33 @@ function SavedQueryDialog({
     e.preventDefault();
     if (!validate()) return;
 
-    const selectedSource = sources.find(
-      (s) => `${s.product}:${s.entity}` === form.data_source,
-    );
+    const selectedSource = currentSource;
+
+    // Build a real query_config from the selected measures/dimensions, using
+    // each measure's first declared aggregation. This is the same shape the
+    // explorer and widget query endpoints consume.
+    const query_config: Record<string, unknown> = {
+      measures: form.measures.map((field) => {
+        const def = selectedSource?.measures.find((m) => m.field === field);
+        return { field, agg: def?.aggregations?.[0] ?? 'count', alias: field };
+      }),
+      dimensions: form.dimensions.map((field) => ({ field })),
+      limit: 50,
+    };
 
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
       data_source: selectedSource?.product ?? form.data_source,
-      entity: selectedSource?.entity ?? form.entity,
-      query_config: editing?.query_config ?? {},
+      entity: selectedSource?.entity ?? '',
+      query_config,
     };
 
     try {
       if (editing && updateMutation) {
         await updateMutation.mutateAsync(payload);
       } else {
-        await createMutation.mutateAsync({
-          ...payload,
-          data_source: payload.data_source,
-          entity: payload.entity,
-          query_config: payload.query_config,
-        });
+        await createMutation.mutateAsync(payload);
       }
       onClose();
     } catch {
@@ -160,7 +211,11 @@ function SavedQueryDialog({
             </label>
             <select
               value={form.data_source}
-              onChange={(e) => updateField('data_source', e.target.value)}
+              onChange={(e) =>
+                // Changing the source invalidates the previously-picked
+                // measures/dimensions (they belong to the old source).
+                setForm((prev) => ({ ...prev, data_source: e.target.value, measures: [], dimensions: [] }))
+              }
               className="w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">Select a data source...</option>
@@ -172,6 +227,55 @@ function SavedQueryDialog({
             </select>
             {errors.data_source && <p className="text-xs text-red-500 mt-1">{errors.data_source}</p>}
           </div>
+
+          {/* Measures & Dimensions */}
+          {currentSource && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Measures
+                </label>
+                <div className="space-y-1 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-2">
+                  {currentSource.measures.map((m) => (
+                    <label
+                      key={m.field}
+                      className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.measures.includes(m.field)}
+                        onChange={() => toggleMeasure(m.field)}
+                        className="rounded"
+                      />
+                      <span className="text-xs text-zinc-900 dark:text-zinc-100">{m.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {errors.measures && <p className="text-xs text-red-500 mt-1">{errors.measures}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Dimensions
+                </label>
+                <div className="space-y-1 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 p-2">
+                  {currentSource.dimensions.map((d) => (
+                    <label
+                      key={d.field}
+                      className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.dimensions.includes(d.field)}
+                        onChange={() => toggleDimension(d.field)}
+                        className="rounded"
+                      />
+                      <span className="text-xs text-zinc-900 dark:text-zinc-100">{d.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">

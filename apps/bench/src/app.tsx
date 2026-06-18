@@ -35,7 +35,9 @@ function stripBase(path: string): string {
 }
 
 function parseRoute(path: string): Route {
-  const p = stripBase(path);
+  // Drop any query string before matching path segments; pages that need query
+  // params (e.g. the explorer's saved_query_id) read window.location.search.
+  const p = stripBase(path).split('?')[0]!;
 
   if (p === '/' || p === '') return { page: 'dashboards' };
   if (p === '/explorer') return { page: 'explorer' };

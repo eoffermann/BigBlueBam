@@ -1,82 +1,13 @@
-[
-  {
-    "id": "01-form-list",
-    "label": "Form list",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\01-form-list.png",
-    "sha256": "fc6487a39b66b0ca847e6c11017431acb8b54acf9fcf32a6a8cab42b529946c2",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:53.185Z"
-  },
-  {
-    "id": "02-form-builder",
-    "label": "Form builder",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\02-form-builder.png",
-    "sha256": "e9fc74fea79d51a1b89faf89d69e1dc6fdb1a331a85c748d53fc2be59a7c4c0d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:33:57.890Z"
-  },
-  {
-    "id": "03-form-preview",
-    "label": "Form preview",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\03-form-preview.png",
-    "sha256": "e05bd266c9ddf9995357ef5da75cc55a783f4897861772d3e5d44d986bad3f9f",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:34:05.193Z"
-  },
-  {
-    "id": "04-settings",
-    "label": "Settings",
-    "theme": "light",
-    "file": "docs\\apps\\blank\\screenshots\\light\\04-settings.png",
-    "sha256": "a60a47321e5e76e4459f3512d284c3dd8ea195916aeaab8c4a9db1418cdc10c5",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:34:07.894Z"
-  },
-  {
-    "id": "01-form-list",
-    "label": "Form list",
-    "theme": "dark",
-    "file": "docs\\apps\\blank\\screenshots\\dark\\01-form-list.png",
-    "sha256": "fd4ef4fe45133046244ba4592251c8540f3d9118e65ed53512a6cdb751f5e5be",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:34:15.349Z"
-  },
-  {
-    "id": "02-form-builder",
-    "label": "Form builder",
-    "theme": "dark",
-    "file": "docs\\apps\\blank\\screenshots\\dark\\02-form-builder.png",
-    "sha256": "34696e66895789fd0af6634dc173b1a01390674cbffab3632d15ba6d8ace38a7",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:34:20.125Z"
-  },
-  {
-    "id": "03-form-preview",
-    "label": "Form preview",
-    "theme": "dark",
-    "file": "docs\\apps\\blank\\screenshots\\dark\\03-form-preview.png",
-    "sha256": "0fda936e0f259b314735cc4fee14fd19394a23b2ada39fc0feaf7947fd5fe892",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:34:27.372Z"
-  },
-  {
-    "id": "04-settings",
-    "label": "Settings",
-    "theme": "dark",
-    "file": "docs\\apps\\blank\\screenshots\\dark\\04-settings.png",
-    "sha256": "35ee23c7d62c8d77953423549cf28140a1e5c3c8d905709f39d1da62e383c5c7",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:34:30.033Z"
-  }
-]
+{
+  "app": "blank",
+  "nginx_path": "/blank/",
+  "api_port": 4013,
+  "api_dir": "blank-api",
+  "route_files": 4,
+  "schema_modules": 5,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "ce51f934501b7fd8e7ff5b19b74101661df1c5ea0ffc20a13065c4a2db3e6692",
+  "generated_at": "2026-06-18T00:43:58.232Z",
+  "mcp_tool_count": 20
+}

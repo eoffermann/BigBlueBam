@@ -128,7 +128,7 @@ export function useSetKrValue() {
 
   return useMutation({
     mutationFn: ({ id, goalId: _goalId, value, note }: { id: string; goalId: string; value: number; note?: string }) =>
-      api.post<SingleResponse>(`/key-results/${id}/set-value`, { value, note }),
+      api.post<SingleResponse>(`/key-results/${id}/value`, { value, note }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['key-results', 'list', variables.goalId] });
       qc.invalidateQueries({ queryKey: ['key-results', 'detail', variables.id] });

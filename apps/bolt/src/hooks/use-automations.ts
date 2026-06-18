@@ -216,9 +216,35 @@ export function useDuplicateAutomation() {
   });
 }
 
+/**
+ * Result of a dry-run test against the `/automations/:id/test` route. The
+ * route only EVALUATES CONDITIONS against the simulated event; it does not
+ * execute actions. It returns whether the conditions passed, a per-condition
+ * evaluation log, and a human-readable summary message.
+ */
+export interface AutomationTestResult {
+  passed: boolean;
+  log: Array<{
+    field: string;
+    operator: string;
+    expected: unknown;
+    actual: unknown;
+    result: boolean;
+  }>;
+  message: string;
+}
+
+/**
+ * Test-run an automation. The `/test` route requires an `event` object (the
+ * simulated event payload) in the body — omitting it returns 400. We default
+ * to an empty object so the route validates even when the caller has no
+ * specific payload to simulate.
+ */
 export function useTestAutomation() {
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<{ data: { execution_id: string; status: ExecutionStatus } }>(`/automations/${id}/test`),
+    mutationFn: ({ id, event }: { id: string; event?: Record<string, unknown> }) =>
+      api.post<{ data: AutomationTestResult }>(`/automations/${id}/test`, {
+        event: event ?? {},
+      }),
   });
 }

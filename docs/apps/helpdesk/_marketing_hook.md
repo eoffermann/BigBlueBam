@@ -1,5 +1,6 @@
-A customer support portal with ticket tracking and conversation threads.
+Give every organization its own branded support portal, where customers file tickets and your team resolves them on the project board.
 
-- Multi-tenant support portal scoped to your organization and projects
-- Threaded conversations between customers and support agents
-- Browser notifications and offline support for reliable ticket tracking
+- Org-scoped portals with their own customer sign-in, separate from your staff single sign-on
+- Threaded ticket conversations through Open, In Progress, Waiting on Customer, Resolved, and Closed
+- Every ticket mirrored to a Bam task so support work lives next to your other project work
+- AI-ready: agents triage, search, find similar tickets, and reconcile customers through MCP tools

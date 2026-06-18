@@ -16,6 +16,15 @@ import {
   isSmtpConfigured,
 } from '../lib/email-queue.js';
 import {
+  SMTP_SETTING_KEYS,
+  clearOrgSmtpConfigCache,
+  resolveSmtpHierarchy,
+  type OrgSmtpOverride,
+} from '@bigbluebam/smtp-resolver';
+import nodemailer from 'nodemailer';
+import { systemSettings } from '../db/schema/system-settings.js';
+import { env } from '../env.js';
+import {
   checkAdminDeletionEligibility,
   softDeleteUser,
   CannotDeleteSelfError,
@@ -77,6 +86,286 @@ export default async function orgRoutes(fastify: FastifyInstance) {
       }
 
       return reply.send({ data: org });
+    },
+  );
+
+  // ─── Per-org SMTP override (org admins/owners) ─────────────────────────
+  // An org can configure its own outbound SMTP relay. When set, the org's
+  // mail (Blast campaigns, member/guest invitations) sends through it; when
+  // absent, it falls back to the platform relay (SuperUser Console → Platform
+  // → SMTP) and finally the server env vars. Resolution lives in
+  // @bigbluebam/smtp-resolver::resolveSmtpHierarchy.
+  //
+  // Stored in organizations.settings.smtp as a JSONB sub-object. These
+  // dedicated routes are used INSTEAD of the generic PATCH /org so the
+  // password never leaks on GET /org (which every member can read): the
+  // password is masked on read and write-through here, behind the same
+  // admin guard.
+
+  // The mask sentinel echoed back on read; a PUT that sends this back
+  // verbatim means "keep the stored password unchanged".
+  const SMTP_PASSWORD_MASK = '••••••••';
+
+  fastify.get(
+    '/org/smtp-settings',
+    { preHandler: [requireAuth, fastify.requireCan('bam.org.update'), requireScope('admin')] },
+    async (request, reply) => {
+      const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
+      if (!org) {
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Organization not found', details: [], request_id: request.id },
+        });
+      }
+      const smtp = ((org.settings ?? {}) as Record<string, unknown>).smtp as
+        | Record<string, unknown>
+        | undefined;
+      const has = Boolean(smtp && typeof smtp.host === 'string' && smtp.host.length > 0);
+      return reply.send({
+        data: {
+          configured: has,
+          host: has ? (smtp!.host as string) : '',
+          port:
+            smtp && (typeof smtp.port === 'number' || typeof smtp.port === 'string')
+              ? Number(smtp.port)
+              : 587,
+          user: has && typeof smtp!.user === 'string' ? (smtp!.user as string) : '',
+          // Never return the stored password — surface a mask so the form
+          // can render a "leave blank to keep" placeholder.
+          password:
+            smtp && typeof smtp.password === 'string' && smtp.password.length > 0
+              ? SMTP_PASSWORD_MASK
+              : '',
+          from: has && typeof smtp!.from === 'string' ? (smtp!.from as string) : '',
+          secure: Boolean(smtp && smtp.secure === true),
+        },
+      });
+    },
+  );
+
+  fastify.put(
+    '/org/smtp-settings',
+    { preHandler: [requireAuth, fastify.requireCan('bam.org.update'), requireScope('admin')] },
+    async (request, reply) => {
+      const schema = z.object({
+        host: z.string().max(255),
+        port: z.union([
+          z.number().int().min(1).max(65535),
+          z.string().regex(/^\d+$/),
+        ]),
+        user: z.string().max(255).optional().default(''),
+        // May be the mask sentinel (keep existing), empty (clear), or a new value.
+        password: z.string().max(512).optional().default(''),
+        from: z.string().max(320).optional().default(''),
+        secure: z.boolean().optional().default(false),
+      });
+      const data = schema.parse(request.body);
+
+      const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
+      if (!org) {
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Organization not found', details: [], request_id: request.id },
+        });
+      }
+      const existingSettings = (org.settings ?? {}) as Record<string, unknown>;
+      const existingSmtp = (existingSettings.smtp ?? {}) as Record<string, unknown>;
+
+      // Password handling: the mask sentinel means keep the stored value; an
+      // empty string means clear it; anything else replaces it.
+      let password: string;
+      if (data.password === SMTP_PASSWORD_MASK) {
+        password = typeof existingSmtp.password === 'string' ? existingSmtp.password : '';
+      } else {
+        password = data.password;
+      }
+
+      const nextSmtp = {
+        host: data.host.trim(),
+        port: Number(data.port),
+        user: data.user,
+        password,
+        from: data.from,
+        secure: data.secure,
+      };
+
+      await orgService.updateOrganization(request.user!.org_id, {
+        settings: { ...existingSettings, smtp: nextSmtp },
+      });
+      orgService.invalidateOrgCache(request.user!.org_id, fastify.redis);
+      // Drop the per-org SMTP resolver cache so the next send sees the change
+      // immediately rather than at the 30s TTL boundary.
+      clearOrgSmtpConfigCache(request.user!.org_id);
+
+      request.log.info(
+        { event: 'org.smtp_override_updated', org_id: request.user!.org_id, host: nextSmtp.host },
+        'Org SMTP override updated',
+      );
+
+      return reply.send({
+        data: {
+          configured: nextSmtp.host.length > 0,
+          host: nextSmtp.host,
+          port: nextSmtp.port,
+          user: nextSmtp.user,
+          password: password.length > 0 ? SMTP_PASSWORD_MASK : '',
+          from: nextSmtp.from,
+          secure: nextSmtp.secure,
+        },
+      });
+    },
+  );
+
+  fastify.delete(
+    '/org/smtp-settings',
+    { preHandler: [requireAuth, fastify.requireCan('bam.org.update'), requireScope('admin')] },
+    async (request, reply) => {
+      const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
+      if (!org) {
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Organization not found', details: [], request_id: request.id },
+        });
+      }
+      const existingSettings = (org.settings ?? {}) as Record<string, unknown>;
+      // Drop the smtp key entirely so resolution falls back to the platform.
+      const { smtp: _removed, ...rest } = existingSettings;
+      void _removed;
+      await orgService.updateOrganization(request.user!.org_id, { settings: rest });
+      orgService.invalidateOrgCache(request.user!.org_id, fastify.redis);
+      clearOrgSmtpConfigCache(request.user!.org_id);
+      request.log.info(
+        { event: 'org.smtp_override_cleared', org_id: request.user!.org_id },
+        'Org SMTP override cleared — reverting to platform relay',
+      );
+      return reply.send({ data: { configured: false } });
+    },
+  );
+
+  // POST /org/smtp-settings/test — verify the EFFECTIVE org relay connects.
+  // Resolves org → platform → env exactly the way the worker will, then runs
+  // a transport.verify() (login + TLS handshake) so an admin can confirm
+  // their relay works before a campaign rides it. Connection-only by default;
+  // pass `{ to }` to also send a one-line test message.
+  fastify.post(
+    '/org/smtp-settings/test',
+    { preHandler: [requireAuth, fastify.requireCan('bam.org.update'), requireScope('admin')] },
+    async (request, reply) => {
+      const bodySchema = z.object({ to: z.string().email().max(320).optional() });
+      const parsed = bodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Body validation failed',
+            details: parsed.error.errors.map((e) => ({ path: e.path.join('.'), message: e.message })),
+            request_id: request.id,
+          },
+        });
+      }
+      const { to } = parsed.data;
+
+      const org = await orgService.getOrganizationCached(fastify.redis, request.user!.org_id);
+      const orgSmtp = ((org?.settings ?? {}) as Record<string, unknown>).smtp as
+        | OrgSmtpOverride
+        | undefined;
+
+      // Load the platform smtp_* rows so the fallback layer resolves the same
+      // way the worker sees it.
+      const rows = await db
+        .select({ key: systemSettings.key, value: systemSettings.value })
+        .from(systemSettings)
+        .where(inArray(systemSettings.key, [...SMTP_SETTING_KEYS]));
+      const platformSettings: Record<string, unknown> = {};
+      for (const r of rows) platformSettings[r.key] = r.value;
+
+      const cfg = resolveSmtpHierarchy(orgSmtp, platformSettings, {
+        SMTP_HOST: env.SMTP_HOST,
+        SMTP_PORT: env.SMTP_PORT,
+        SMTP_USER: env.SMTP_USER,
+        SMTP_PASS: env.SMTP_PASS,
+        EMAIL_FROM: env.EMAIL_FROM,
+      });
+
+      if (!cfg) {
+        return reply.status(400).send({
+          data: {
+            ok: false,
+            stage: 'config',
+            error:
+              'No SMTP relay resolves for this org (no org override, no platform relay, no env vars). Configure an org relay above or ask a SuperUser to set the platform relay.',
+          },
+        });
+      }
+
+      const transport = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: cfg.user && cfg.pass ? { user: cfg.user, pass: cfg.pass } : undefined,
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 10_000,
+      });
+
+      try {
+        await transport.verify();
+      } catch (err) {
+        const e = err as Error & { code?: string };
+        request.log.warn({ err: e, stage: 'verify', smtp_layer: cfg.layer }, 'Org SMTP test failed (verify)');
+        return reply.send({
+          data: {
+            ok: false,
+            stage: 'verify',
+            error_code: e.code ?? null,
+            error: e.message,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, layer: cfg.layer },
+          },
+        });
+      }
+
+      if (!to) {
+        transport.close();
+        return reply.send({
+          data: {
+            ok: true,
+            stage: 'verify',
+            message: `Connected to ${cfg.host}:${cfg.port} (${cfg.secure ? 'TLS' : 'STARTTLS'}) via the ${cfg.layer} relay.`,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, layer: cfg.layer },
+          },
+        });
+      }
+
+      try {
+        const info = await transport.sendMail({
+          from: cfg.from,
+          to,
+          subject: 'BigBlueBam org SMTP test',
+          text:
+            'This is a test message from your BigBlueBam organization SMTP settings. ' +
+            'If you received it, your org relay is configured correctly.\n',
+        });
+        return reply.send({
+          data: {
+            ok: true,
+            stage: 'send',
+            message: `Test email accepted by ${cfg.host} for delivery to ${to}. Message id: ${info.messageId}`,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, layer: cfg.layer },
+          },
+        });
+      } catch (err) {
+        const e = err as Error & { code?: string; response?: string };
+        request.log.warn({ err: e, stage: 'send', smtp_layer: cfg.layer }, 'Org SMTP test failed (send)');
+        return reply.send({
+          data: {
+            ok: false,
+            stage: 'send',
+            error_code: e.code ?? null,
+            error: e.message,
+            server_response: e.response ?? null,
+            resolved: { host: cfg.host, port: cfg.port, secure: cfg.secure, layer: cfg.layer },
+          },
+        });
+      } finally {
+        transport.close();
+      }
     },
   );
 
@@ -890,6 +1179,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
             isNewUser: needsOnboarding,
             onboardingToken,
             onboardingExpiresInMinutes: onboardingTtl,
+            orgId: request.user!.org_id,
           });
           if (!email_sent) {
             const smtpReady = await isSmtpConfigured();
@@ -1092,6 +1382,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
               isNewUser: needsOnboarding,
               onboardingToken,
               onboardingExpiresInMinutes: onboardingTtl,
+              orgId: request.user!.org_id,
             });
           } catch (emailErr) {
             request.log.error(
@@ -1324,6 +1615,7 @@ export default async function orgRoutes(fastify: FastifyInstance) {
           token: minted.token,
           userName: target.display_name || target.email,
           expiresInMinutes: ttlMinutes,
+          orgId: request.user!.org_id,
         });
       } catch (emailErr) {
         request.log.error(

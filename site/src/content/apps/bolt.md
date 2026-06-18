@@ -1,17 +1,18 @@
 ---
 title: "Bolt (Workflow Automation)"
 app: bolt
-generated: "2026-04-17T16:45:02.279Z"
+generated: "2026-06-17T22:16:23.494Z"
 ---
 
 # Bolt (Workflow Automation)
 
 
-Event-driven workflow automation that connects all your BigBlueBam apps.
+Event-driven workflow automation that connects every BigBlueBam app: WHEN this happens, IF these hold, THEN run these steps.
 
-- Visual node-graph editor for building automations without code
-- Triggers from every BigBlueBam app with cross-app action chains
-- Detailed execution logs with per-step traces for debugging
+- Build rules with a Simple WHEN / IF / THEN editor or a Visual node-graph canvas, no code required
+- Trigger off over 130 events across the suite and run cross-app action chains with variable interpolation between steps
+- Detailed execution logs with per-step traces, single-event tracing, and one-click retry of failed runs
+- Built for AI agents too: 26 MCP tools to author, test, and observe automations, with policy guardrails and approvals
 
 ## See It in Action
 
@@ -21,7 +22,7 @@ Event-driven workflow automation that connects all your BigBlueBam apps.
 
 ![Editor](screenshots/light/02-editor.png)
 
-![Detail](screenshots/light/03-detail.png)
+![Automation Detail](screenshots/light/03-automation-detail.png)
 
 ---
 

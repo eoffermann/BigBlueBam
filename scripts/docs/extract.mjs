@@ -42,11 +42,13 @@ const APP_REGISTRY = {
   bill:     { nginxPath: '/bill/',     apiPort: 4014, apiDir: 'bill-api',     toolsFile: 'bill-tools' },
   blank:    { nginxPath: '/blank/',    apiPort: 4013, apiDir: 'blank-api',    toolsFile: 'blank-tools' },
   blast:    { nginxPath: '/blast/',    apiPort: 4010, apiDir: 'blast-api',    toolsFile: 'blast-tools' },
+  blueprint:{ nginxPath: '/blueprint/',apiPort: 4015, apiDir: 'blueprint-api',toolsFile: 'blueprint-tools' },
   board:    { nginxPath: '/board/',    apiPort: 4008, apiDir: 'board-api',    toolsFile: 'board-tools' },
   bolt:     { nginxPath: '/bolt/',     apiPort: 4006, apiDir: 'bolt-api',     toolsFile: 'bolt-tools' },
   bond:     { nginxPath: '/bond/',     apiPort: 4009, apiDir: 'bond-api',     toolsFile: 'bond-tools' },
   book:     { nginxPath: '/book/',     apiPort: 4012, apiDir: 'book-api',     toolsFile: 'book-tools' },
   brief:    { nginxPath: '/brief/',    apiPort: 4005, apiDir: 'brief-api',    toolsFile: 'brief-tools' },
+  bureau:   { nginxPath: '/bureau/',   apiPort: 4015, apiDir: 'bureau-api',   toolsFile: 'bureau-tools' },
   helpdesk: { nginxPath: '/helpdesk/', apiPort: 4001, apiDir: 'helpdesk-api', toolsFile: 'helpdesk-tools' },
 };
 

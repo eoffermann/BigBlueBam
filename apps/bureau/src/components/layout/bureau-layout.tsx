@@ -41,10 +41,14 @@ function breadcrumbsFor(
         { label: 'Admin', href: '/admin/floors' },
         { label: activeFloorName ?? 'Floor' },
       ];
+    case 'booking':
+      return [{ label: 'Book a room' }];
     case 'admin-floor-list':
       return [{ label: 'Admin' }, { label: 'Floors' }];
     case 'admin-offices':
       return [{ label: 'Admin' }, { label: 'Offices' }];
+    case 'admin-settings':
+      return [{ label: 'Admin' }, { label: 'Settings' }];
     default:
       return [];
   }
@@ -67,10 +71,13 @@ export function BureauLayout({
   const isOnAdmin =
     activeRoute.page === 'admin-floor' ||
     activeRoute.page === 'admin-floor-list' ||
-    activeRoute.page === 'admin-offices';
-  const adminSection: 'floors' | 'offices' | null =
+    activeRoute.page === 'admin-offices' ||
+    activeRoute.page === 'admin-settings';
+  const adminSection: 'floors' | 'offices' | 'settings' | null =
     activeRoute.page === 'admin-offices'
       ? 'offices'
+      : activeRoute.page === 'admin-settings'
+      ? 'settings'
       : activeRoute.page === 'admin-floor' || activeRoute.page === 'admin-floor-list'
       ? 'floors'
       : null;

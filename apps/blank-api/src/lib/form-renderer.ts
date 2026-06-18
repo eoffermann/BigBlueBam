@@ -131,6 +131,7 @@ body {
 .blank-radio-item input, .blank-checkbox-item input { accent-color: var(--theme); width: 16px; height: 16px; }
 .blank-section-header { font-size: 1.125rem; font-weight: 700; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid #e5e7eb; color: #111827; }
 .blank-paragraph { color: #6b7280; margin-bottom: 16px; font-size: 0.875rem; }
+.blank-page-break { border: none; border-top: 2px dashed #d1d5db; margin: 24px 0; }
 .blank-submit {
   display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem;
   font-weight: 600; color: #fff; background: var(--theme); cursor: pointer; margin-top: 8px;
@@ -169,6 +170,11 @@ function renderField(f: FormField): string {
 
     case 'paragraph':
       return `    <div class="blank-paragraph">${esc(f.label)}</div>`;
+
+    case 'page_break':
+      // Layout-only: this single-page renderer flattens pages, so a page
+      // break shows as a horizontal divider rather than a stray input.
+      return `    <hr class="blank-page-break" data-field-type="page_break">`;
 
     case 'short_text':
     case 'email':
@@ -452,7 +458,7 @@ function fisherYatesShuffle<T>(arr: T[]): T[] {
 function clientScript(form: FormData): string {
   // Build a minimal field-definition array for client-side validation
   const fieldDefs = form.fields
-    .filter((f) => !['section_header', 'paragraph', 'hidden'].includes(f.field_type))
+    .filter((f) => !['section_header', 'paragraph', 'hidden', 'page_break'].includes(f.field_type))
     .map((f) => ({
       key: f.field_key,
       type: f.field_type,
@@ -529,7 +535,8 @@ function clientScript(form: FormData): string {
           data[key] = inp.value !== '' ? Number(inp.value) : '';
         }
       } else if (f.type === 'file_upload' || f.type === 'image_upload') {
-        // File uploads handled separately; store filename for now
+        // Store the filename in response_data; the bytes are uploaded
+        // separately in uploadFiles() and attached as descriptors on submit.
         var fileInp = form.querySelector('input[name="' + key + '"]');
         data[key] = fileInp && fileInp.files.length ? fileInp.files[0].name : '';
       } else {
@@ -579,6 +586,32 @@ function clientScript(form: FormData): string {
     return errors;
   }
 
+  // Upload all selected files to MinIO via the public upload endpoint and
+  // return an array of attachment descriptors to attach to the submission.
+  function uploadFiles() {
+    var uploads = [];
+    for (var i = 0; i < FIELDS.length; i++) {
+      var f = FIELDS[i];
+      if (f.type !== 'file_upload' && f.type !== 'image_upload') continue;
+      var inp = form.querySelector('input[name="' + f.key + '"]');
+      if (!inp || !inp.files || !inp.files.length) continue;
+      (function(fieldKey, file) {
+        var fd = new FormData();
+        fd.append('field_key', fieldKey);
+        fd.append('file', file, file.name);
+        var p = fetch('/forms/' + encodeURIComponent(SLUG) + '/upload', {
+          method: 'POST',
+          body: fd
+        }).then(function(res) {
+          if (!res.ok) return res.json().then(function(b) { throw b; });
+          return res.json();
+        }).then(function(r) { return r.data; });
+        uploads.push(p);
+      })(f.key, inp.files[0]);
+    }
+    return Promise.all(uploads);
+  }
+
   form.addEventListener('submit', function(e) {
     e.preventDefault();
     clearErrors();
@@ -605,10 +638,14 @@ function clientScript(form: FormData): string {
       if (token) payload.captcha_token = token;
     }
 
-    fetch('/forms/' + encodeURIComponent(SLUG) + '/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    uploadFiles()
+    .then(function(attachments) {
+      if (attachments && attachments.length) payload.attachments = attachments;
+      return fetch('/forms/' + encodeURIComponent(SLUG) + '/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
     })
     .then(function(res) {
       if (!res.ok) return res.json().then(function(body) { throw body; });

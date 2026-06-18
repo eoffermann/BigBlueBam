@@ -1,4 +1,4 @@
-# Banter - Team messaging for your organization
+# Banter - Team chat for your organization
 
 > Banter is the chat layer of BigBlueBam. It gives your team channels, direct messages, threads, reactions, pins, and bookmarks so conversations live alongside the rest of the suite. Reach for it when work needs a back-and-forth instead of a ticket or a task.
 
@@ -8,38 +8,39 @@ Banter is a real-time messaging app shared by everyone in your organization. You
 
 Banter does not have its own login or its own user list. You sign in to BigBlueBam (Bam) first, and Banter uses that same identity and the same people. Everyone you can message is already a member of your org. If you open Banter while signed out, you see "Please log in to BigBlueBam first to access Banter" with a link back to the main app.
 
-Banter is in **BETA**. A "beta" pill appears next to the wordmark in the sidebar. The most useful features are stable: posting, threading, reacting, pinning, bookmarking, mentions, DMs, and scheduled posts driven by automation or AI agents. A few areas are still rough and are called out explicitly in this guide so you do not waste time on them.
+Banter is in **BETA**. A "beta" pill appears next to the **Banter** wordmark in the sidebar. Posting, threading, reacting, pinning, bookmarking, mentions, DMs, search, attachments, and scheduled posts driven by automation or AI agents are all working.
 
-Live audio is **not** part of Banter. Voice and video calls were removed; the only call write actions return an error, and live audio for a channel now happens in the suite-wide Bureau docked box. Banter keeps a read-only view of past calls and their transcripts, but you do not start or join a call from inside Banter. See "Past calls and audio" below.
+Live audio is **not** started from inside Banter. The voice and video write actions were retired; every call write endpoint returns HTTP 410 Gone, and live audio for a channel now happens in the suite-wide Bureau docked box (which joins a shared room derived from the channel). Banter keeps a read-only view of past calls and their transcripts, but you do not start or join a call from inside Banter. See "Past calls and audio" below.
 
 ### Key concepts
 
-- **Channel** - a named conversation space. Channels are `public` (anyone in the org can find and join), `private` (invite only), or a DM type. Each channel has a name, an optional topic and description, and members with roles.
-- **#general** - the default channel. The first time anyone opens Banter in an org that has no channels, Banter creates `#general`, marks it the default, and auto-joins every active member. You cannot delete or leave the default channel.
+- **Channel** - a named conversation space. Channels are `public` (anyone in the org can find and join), `private` (invite only), or a DM type (`dm` / `group_dm`). Each channel has a name, an optional topic and description, members with roles, and a slug that is unique within your org.
+- **#general** - the default channel. The first time anyone opens Banter in an org that has no channels, Banter creates `#general`, marks it the default, and auto-joins every active member (the creator becomes owner). You cannot delete or leave the default channel.
 - **Channel role** - your standing inside one channel: `owner`, `admin`, `member`, or `viewer`. A **viewer** is read-only and cannot post. Channel admins manage pins, members, and settings.
 - **Direct message (DM)** - a private conversation with one other person. A **group DM** is a private conversation with 3 to 8 people total.
-- **Message** - a single post. Messages support rich text (bold, italic, code, links), @mentions, and emoji. You can edit or delete your own messages.
-- **Thread** - replies attached to a parent message. A reply stays in the thread unless you tick "Also send to channel", which also mirrors it into the main timeline.
+- **Message** - a single post. Messages support rich text (bold, italic, code, links), @mentions, and emoji, up to 40,000 characters. You can edit or delete your own messages.
+- **Thread** - replies attached to a parent message. A reply stays in the thread unless you tick **Also send to channel**, which also mirrors it into the main timeline.
 - **Reaction** - an emoji you toggle on a message. Click once to add, click again to remove.
 - **Pin** - a channel-wide marker that any member can see in the channel's pinned list. Only channel admins can pin or unpin.
 - **Bookmark** - your own private save of a message, with an optional note. Bookmarks are visible only to you and live on the Bookmarks page.
-- **Mention** - typing `@` plus a name notifies that person. Org admins can also define @mention groups (for example `@engineering`) that notify everyone in the group.
+- **Mention** - typing `@` plus a name notifies that person. Org admins can also define @mention user groups (for example `@engineering`) that notify everyone in the group.
 - **Presence** - your live status: online, idle, in a call, do not disturb, or offline.
 - **Scheduled message** - a message queued to post later at a set time, or deferred automatically when a channel is inside its quiet hours.
 - **Quiet hours** - a per-channel policy that holds non-urgent posts until the channel's allowed hours. Used mostly by automated and agent posts.
+- **Agent pattern subscription** - a rule that lets an agent or service account listen to a channel and react when messages match a pattern.
 
 ### Where to find it
 
-Banter is served at `/banter/`. Reach it from the Launchpad app switcher in the top-left of any BigBlueBam app. The default landing channel is `#general` (`/banter/channels/general`).
+Banter is served at `/banter/`. Reach it from the Launchpad app switcher in the top-left of any BigBlueBam app. The default landing channel is `#general` (`/banter/channels/general`); a bare `/banter/` visit redirects there.
 
 Prerequisites:
 
 - You must be signed in to BigBlueBam. Banter has no separate login.
 - You must belong to an organization. Everyone you can message is a member of that org.
-- To create channels, your org's policy must allow it for your role (set under "Banter Administration").
+- To create channels, your org's policy must allow it for your role (set under **Banter Administration**).
 - To manage org settings, channel groups, @mention groups, or a Slack import, you need org admin or owner access.
 
-![Channel list](screenshots/light/01-channels.png)
+![Channels & sidebar](screenshots/light/02-channel-list.png)
 
 ## Feature reference
 
@@ -57,7 +58,9 @@ To post a message:
 
 Your draft is saved per channel, so switching channels does not lose what you were typing.
 
-Note on attachments: the compose toolbar has an **Attach file** button and shows "N files attached" once a file is selected, but file attachment from the compose box is currently unreliable (the uploaded file's identifier is not captured, so the file may not attach to the posted message). Treat attaching from compose as not yet dependable. Files themselves do upload to storage; the gap is in linking the upload to the message.
+To attach a file: click **Attach file**, pick one or more files, and they upload to storage. While the upload runs you see "Uploading...". Once a file is selected, the box shows "N files attached" with each filename and a **Remove all** link. The file is linked to the message when you send it, so the recipients see the attachment in the channel. You can send a message that is only an attachment with no text.
+
+![Channel conversation](screenshots/light/01-channel-view.png)
 
 ### Reply in a thread
 
@@ -71,16 +74,16 @@ To reply in a thread:
 4. To also post your reply into the main channel timeline, tick **Also send to channel** before sending.
 5. Press **Enter** or click the send button.
 
-The parent message shows a "N reply" / "N replies" link that reopens the thread.
+The parent message shows a "N reply" / "N replies" link that reopens the thread. Replying notifies the parent author and prior repliers.
 
-![Thread view](screenshots/light/03-threads.png)
+![Threaded replies](screenshots/light/03-thread.png)
 
 ### React to a message
 
 To add or remove a reaction:
 
 1. Hover over a message and click **Add reaction**.
-2. Choose an emoji. Quick reactions include thumbs up, heart, laughing, party, eyes, and rocket.
+2. Choose an emoji. The quick reactions are thumbs up, heart, laughing, party, eyes, and rocket.
 3. Click the same emoji badge again to remove your reaction.
 
 Reaction badges under a message show the emoji and a running count.
@@ -130,17 +133,19 @@ Deletes are soft (the message is removed from view). Channel and org admins can 
 To create a single channel:
 
 1. In the sidebar, find the **Channels** section and click the **+** button.
-2. In the inline **New Channel** box, type a name in the `channel-name` field (lowercase letters, numbers, and hyphens).
+2. In the inline **New Channel** box, type a name in the `channel-name` field (lowercase letters, numbers, and hyphens, up to 80 characters).
 3. Click **Create**. You are taken to the new channel.
 
-Whether you can create channels depends on your org policy ("Who can create channels"). If the org allows only admins, the **+** button create still respects that rule on the server.
+Whether you can create channels depends on your org policy ("Who can create channels"). The server enforces that policy on every create: with **Everyone** any member can create, with **Admins only** only org admins and owners can, and with **Organization owners only** only owners can. Channel creation is rate-limited to 5 per hour.
 
 To add many channels at once (org admins):
 
 1. Right-click the **+** button. The tooltip reads "Create channel - right-click to add many".
 2. In the **Add many channels** dialog, paste one channel name per line. The dialog notes "Paste one channel name per line. Up to 50 at a time." and summarizes how many are valid, duplicate, or invalid.
 3. Choose **Public** or **Private**.
-4. Click **Create N channels**. Each row reports back as created, duplicate, invalid, or error.
+4. Click **Create N channels**. Each row reports back as created, duplicate, invalid, or error. If any rows are left, **Create remaining** continues.
+
+Note: the **Add many channels** dialog uses a coarser permission gate than the single **+** create. It admits any org admin or owner (and any member when your org's policy allows members to create channels) but does not apply the **Organization owners only** distinction. If your org is set to owners-only, create those channels one at a time with the **+** button to be sure the policy is honored, or have an owner run the bulk dialog.
 
 ### Browse and join channels
 
@@ -148,10 +153,10 @@ To find and join open channels:
 
 1. Click **Browse channels** in the sidebar. The **Browse Channels** page opens.
 2. Type in the `Search channels...` box to filter.
-3. Each result shows the channel name, a **Private** pill if applicable, the topic, the member count, and when it was last active.
+3. Each result shows the channel name, a **Private** pill if applicable, the topic, the member count ("N members"), and when it was last active ("Last active ...").
 4. Click **Join** on a channel you want. Channels you already belong to show **Joined**.
 
-When nothing matches you see "No channels found" and "Try a different search term".
+When nothing matches you see "No channels found" and "Try a different search term". Joining is only allowed on public channels; private channels require an invitation.
 
 ### Start a direct message or group DM
 
@@ -160,7 +165,7 @@ To start a one-to-one DM:
 1. In the sidebar, open the **Direct Messages** section.
 2. Click a team member listed there. A DM opens (or reuses an existing one).
 
-A group DM holds 3 to 8 people total and must be allowed by your org's group-DM setting.
+A group DM holds 3 to 8 people total and must be allowed by your org's group-DM setting. If the people list fails to load, the sidebar shows "Couldn't load people - tap to retry"; with no teammates it shows "No team members found".
 
 ![Direct messages](screenshots/light/04-dms.png)
 
@@ -176,7 +181,7 @@ To change channel settings:
 4. Click **Save Changes**. A "Saved!" confirmation appears.
 5. Under **Members (N)**, review the member list.
 
-Note: the add-member input in this modal ("Email or username") is currently unreliable; adding a member from this form may fail because it sends a different field than the server expects. To add members dependably, an org admin or an agent can use the channel members API or the MCP tool `banter_add_channel_members`.
+To add a member from this modal, type an email or username into the **Email or username** field and click **Add**. The server resolves the identifier to a person in your org (exact email first, then a handle built from the display name) and adds them. If no active member matches, you get a "No active user in this organization matches ..." error.
 
 To archive (delete) a channel:
 
@@ -197,26 +202,35 @@ Hover a channel in the sidebar to reveal its menu:
 
 ### Mark a channel read
 
-Banter tracks your read position automatically. Opening a channel clears its unread badge, and your read cursor syncs across devices, so a channel you read on your laptop is not flagged unread on your phone. Unread channels show a dot, and channels with unread mentions show a count badge.
+Banter tracks your read position automatically. Opening a channel clears its unread badge, and your read cursor syncs across devices, so a channel you read on your laptop is not flagged unread on your phone. Unread channels show a dot, and channels with unread mentions show a count badge. The read cursor is also broadcast (`channel.read_cursor_synced`) so open tabs update live.
 
 ### Search messages
 
-There is a **Search** page (reached from the header search box or the sidebar) with a query box and **Filters** for **Channel**, **Author**, **From date**, **To date**, and **Has attachments**.
+The **Search** page (reached from the header search box or the sidebar) has a query box (`Search messages...`) and **Filters** for **Channel** (`All channels`), **Author** (`Anyone`), **From date**, **To date**, and **Has attachments**. Use **Clear all filters** to reset.
 
-Important: the in-app Search page is currently broken. It calls the wrong server path, so it returns no results even when matching messages exist. Until this is fixed, do not rely on the Search page or the header search bar.
+To search:
 
-Message search does work through the API and through AI agents. The working endpoint is `GET /banter/api/v1/search/messages` (full-text search over message text with highlighted snippets, filterable by channel, author, date range, and attachments). An agent can run the same search with the MCP tool `banter_search_messages`. If you need to find a message now and the UI is failing you, ask an agent to search, or query that endpoint directly.
+1. Open Search from the header search box or the sidebar.
+2. Type at least two characters in the `Search messages...` box and press Enter.
+3. Optionally click **Filters** and narrow by **Channel**, **Author**, **From date**, **To date**, or **Has attachments**.
+4. Read the result rows; each shows the channel, author, time, and a snippet with the matched terms highlighted. Click a row to jump to that channel.
+
+When nothing matches you see "No results found" and "Try different keywords". Search runs Postgres full-text search over message text and is scoped to channels you can see.
+
+The same search is available to AI agents through the MCP tool `banter_search_messages`, and there are companion endpoints for channel search (`GET /v1/search/channels`) and call-transcript search (`GET /v1/search/transcripts`).
+
+![Message search](screenshots/light/05-search.png)
 
 ### Past calls and audio
 
-Banter no longer hosts live voice or video. Live audio for a channel happens in the suite-wide **Bureau** docked box (which joins a shared room derived from the channel), not inside Banter. There is no "start call" button in a Banter channel, and the call write actions in the API and the related MCP tools are retired and will fail if invoked.
+Banter no longer hosts the live call experience. Live audio for a channel happens in the suite-wide **Bureau** docked box, which joins a shared room derived from the channel (`huddle-banter-<channel_id>`), not inside Banter. There is no "start call" button in a Banter channel, and every call write endpoint in the API returns HTTP 410 Gone with `X-Deprecated-Replacement: bureau-docked-box`. The matching MCP write call tools target those retired endpoints and will fail if invoked.
 
 What remains in Banter is read-only history:
 
 1. Open a past call's playback page at `/banter/calls/:id`.
 2. Review its type (voice, video, or huddle), duration, participants, and transcript.
 
-Do not document or expect to start, join, or end a call from Banter. For live audio, use the Bureau docked box.
+Do not expect to start, join, or end a call from Banter. For live audio, use the Bureau docked box.
 
 ### Keyboard shortcuts
 
@@ -230,7 +244,9 @@ Do not document or expect to start, join, or end a call from Banter. For live au
 
 Open the **Preferences** page from the user menu. Sections include **Profile**, **Theme** (`Light`, `Dark`, `System`), **Notifications** (`Desktop notifications`, `Notification sound`), and **Messaging** (`Enter to send`, `Show typing indicators`, `Compact mode`). Click **Save Preferences** to apply.
 
-Be aware that not every toggle here is stored on the server. Your theme choice is saved locally in your browser. Some notification and messaging toggles do not yet round-trip to the backend, so they may not persist across devices or fully take effect. Set them, but do not assume each one changes server behavior.
+Your theme choice (`Light`, `Dark`, `System`) is saved locally in your browser (`bbam-theme`). The five other toggles - **Notification sound**, **Desktop notifications**, **Enter to send**, **Show typing indicators**, and **Compact mode** - are stored on the server, so they round-trip and follow you across devices.
+
+![Preferences](screenshots/light/06-preferences.png)
 
 ### Admin: organization policy
 
@@ -241,10 +257,10 @@ To set org-wide policy:
 1. Go to **Banter Administration**.
 2. Under **Channel Settings**, set **Who can create channels** (`Everyone`, `Admins only`, or `Organization owners only`) and the **Default Channel**.
 3. Under **Message Settings**, set message retention days and the maximum file size.
-4. The **Voice & Video** and Voice Agent / STT / TTS / LLM sections configure external audio integrations used by the Bureau audio layer; set these only if you run that integration.
+4. The **Voice & Video** section and the Voice Agent / STT / TTS / LLM block configure the external audio integration used by the Bureau audio layer (LiveKit host/key/secret, plus STT, TTS, and LLM providers). Set these only if you run that integration. **Test Connection** validates LiveKit credentials.
 5. Save your changes.
 
-Note: the "Who can create channels" control offers three options, but the server accepts only two policies: members or admins. The backend PATCH only stores `members` or `admins`, so an option that maps to neither (such as "Organization owners only") does not take effect; it falls back to the admin-level rule rather than being stored as its own setting.
+All three **Who can create channels** options take effect: **Everyone** lets any member create channels, **Admins only** limits it to org admins and owners, and **Organization owners only** limits it to owners. The single **+** create in the sidebar enforces whichever you choose. (The bulk **Add many channels** dialog applies a coarser admin-or-owner gate; see "Create a channel".)
 
 ### Admin: organize the sidebar with channel groups
 
@@ -254,6 +270,8 @@ To manage groups:
 
 1. As an org admin, open the channel-groups admin area.
 2. Create a group with a name, reorder groups, edit, or delete them.
+
+Channel groups carry a name, a position, and a default collapsed state, and can optionally be tied to a project.
 
 ### Admin: define @mention groups
 
@@ -275,22 +293,24 @@ To run an import:
 
 1. Open the Slack import area under admin.
 2. Upload your Slack export `.zip`. Banter parses it and shows a preview of users and channels.
-3. Map each user (auto-match, send invite, create a stub, map to an existing user, or skip) and each channel (import as new, merge into an existing channel, or skip).
+3. Map each user (`auto_match`, `send_invite`, create a `stub`, `map_existing` to an existing user, or `skip`) and each channel (`import_new`, `merge_existing`, or `skip`).
 4. Choose options such as preserving timestamps and whether to bring over attachments, reactions, pins, and DMs. A dry-run option is available.
 5. Start the import and poll its status until it completes.
 6. You can abort an in-progress import and optionally clean up any stub users it created.
 
 ### Working with AI agents
 
-Agents and service accounts drive a large share of Banter activity through the MCP tool set (53 core Banter tools plus 3 subscription tools). The full catalog is in the Banter MCP-tools reference; the most common flows are below.
+Agents and service accounts drive a large share of Banter activity through the MCP tool set: over 50 core Banter tools (54 as of this writing) plus 3 subscription tools. The full catalog is in the Banter MCP-tools reference; the most common flows are below. Channel and user arguments accept a UUID, a bare name or `#name`, or an email or `@handle`, resolved server-side.
 
-- **Post, schedule, DM, react, pin.** Agents post with `banter_post_message` (a channel can be given by `#name`), reply with `banter_reply_to_thread`, react with `banter_react`, pin with `banter_pin_message`, and DM with `banter_send_dm` or `banter_send_group_dm`. Destructive tools (`banter_delete_channel`, `banter_delete_message`) require an explicit confirm step.
-- **Scheduled posts and quiet hours.** Use `banter_schedule_post` with a required `scheduled_at` to queue a message for later. If a channel has a quiet-hours policy, a normal post inside the quiet window is held and delivered later (or rejected, depending on flags). A worker delivers scheduled and deferred messages at the right time. Banter emits `message.scheduled` and `message.quiet_hours_deferred` events so automations can react.
-- **Passive listening (pattern subscriptions).** An agent can subscribe a channel to a pattern with `banter_subscribe_pattern` (kinds: interrogative, keyword, regex which is admin only, and mention). Matches fire a `message.matched` event that the agent can act on. Manage subscriptions with `banter_unsubscribe_pattern` and `banter_list_subscriptions`. Subscriptions are gated by the channel's agent-subscription policy and by org-level agent policies; a blocked subscription is recorded but marked not effective with a reason.
-- **Share suite entities.** Agents can drop a Bam task or sprint or a Helpdesk ticket into a channel with `banter_share_task`, `banter_share_sprint`, and `banter_share_ticket`.
-- **Read and resolve.** `banter_list_messages`, `banter_search_messages`, `banter_browse_channels`, `banter_find_user_by_email`, `banter_find_user_by_handle`, and `banter_get_unread` let an agent read context before acting.
+- **Post, schedule, DM, react, pin.** Agents post with `banter_post_message` (a channel can be given by `#name`), reply with `banter_reply_to_thread`, react with `banter_react`, pin with `banter_pin_message` and unpin with `banter_unpin_message`, and DM with `banter_send_dm` or `banter_send_group_dm` (each creates-or-reuses the conversation and posts in one call). Edits use `banter_edit_message`. Destructive tools (`banter_delete_channel`, `banter_delete_message`) require an explicit confirm step via the `confirm_action` flow.
+- **Scheduled posts and quiet hours.** Use `banter_schedule_post` with a required `scheduled_at` to queue a message for later. If a channel has a quiet-hours policy, a normal post inside the quiet window is held and delivered later (when `defer_if_quiet` is set) or rejected with `QUIET_HOURS`. A worker delivers scheduled and deferred messages at the right time. List pending ones with `banter_list_scheduled_messages` and cancel one with `banter_cancel_scheduled_message`. Banter emits `message.scheduled` and `message.quiet_hours_deferred` events so automations can react.
+- **Passive listening (pattern subscriptions).** An agent can subscribe a channel to a pattern with `banter_subscribe_pattern` (kinds: `interrogative`, `keyword`, `regex` which is admin only, and `mention`). Matches fire a `message.matched` event (on source `banter`) that the agent can act on. Manage subscriptions with `banter_unsubscribe_pattern` and `banter_list_subscriptions`. Subscriptions are gated by the channel's `agent_subscription_policy` and by org-level agent policies; a blocked subscription is recorded but marked not effective (`effective:false`) with a reason.
+- **Share suite entities.** Agents can drop a Bam task or sprint, or a Helpdesk ticket, into a channel with `banter_share_task`, `banter_share_sprint`, and `banter_share_ticket`.
+- **Read and resolve.** `banter_list_messages`, `banter_search_messages`, `banter_search_channels`, `banter_browse_channels`, `banter_list_channel_members`, `banter_get_unread`, `banter_mark_read`, `banter_find_user_by_email`, and `banter_find_user_by_handle` let an agent read context before acting.
 
-What a human should know when reviewing agent work: agents posting into shared Banter surfaces honor per-entity visibility (they drop anything the asker is not allowed to see), and replies route human-in-the-loop follow-ups to the thread author. Scheduled and deferred posts will appear later than the moment the agent ran, which is expected. Banter emits Bolt events on the `banter` source (`channel.created`, `message.posted`, `message.mentioned`, `message.edited`, `reaction.added`, `message.scheduled`, `message.quiet_hours_deferred`, and `message.matched`) that you can wire into automations or audit.
+These per-app tools sit on top of the cross-cutting agentic platform. Agents identify themselves and prove liveness with `agent_heartbeat`; high-impact actions can be routed through an approval queue with `proposal_create` / `proposal_list` / `proposal_decide`. Cross-app discovery uses `search_everything` and `resolve_references` (canonical mention syntax) rather than per-app search alone, and the unified activity view stitches Banter posts in with the rest of the suite. Every service-account tool call is checked against the org's `agent_policies` (per-agent kill switch plus glob allowlist, for example `banter.*`), and subscribed Bolt events can be pushed to agent runners via signed outbound webhooks.
+
+What a human should know when reviewing agent work: agents posting into shared Banter surfaces honor per-entity visibility (they call `can_access` for each cited entity and drop anything the asker is not allowed to see), and replies route human-in-the-loop follow-ups to the thread author. Scheduled and deferred posts will appear later than the moment the agent ran, which is expected. Banter emits Bolt events on the `banter` source (`channel.created`, `message.posted`, `message.mentioned`, `message.edited`, `reaction.added`, `message.scheduled`, `message.quiet_hours_deferred`, and `message.matched`) that you can wire into automations or audit.
 
 ## User Stories
 
@@ -328,9 +348,24 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 **Result:** Your message appears in the timeline, the mentioned person is notified, and your draft is cleared.
 
-**Related:** React to a message; Reply in a thread. An agent can post the same way with `banter_post_message`.
+**Related:** React to a message; Reply in a thread; Attach a file. An agent can post the same way with `banter_post_message`.
 
-![Channel conversation](screenshots/light/02-channel-view.png)
+### Story: Attach a file to a message
+
+**Who:** Any member of the channel.
+**Goal:** Share a file alongside a message.
+**Before you start:** The file is within your org's maximum file size.
+
+**Steps**
+
+1. Open the channel and click **Attach file** in the compose toolbar.
+2. Pick one or more files. While they upload, the box shows "Uploading...".
+3. Confirm the "N files attached" preview lists your files. Use **Remove all** to clear them and start over.
+4. Type a message if you want one, then press **Enter** to send. An attachment-only message with no text is allowed.
+
+**Result:** The message posts with its attachments, and everyone in the channel can see and open them.
+
+**Related:** Search supports a **Has attachments** filter to find messages with files later.
 
 ### Story: Create a channel for a new topic
 
@@ -347,7 +382,7 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 **Result:** The channel exists, you own it, and it shows in your sidebar.
 
-**Related:** To create several at once, an org admin can right-click the **+** for **Add many channels**. Agents create channels with `banter_create_channel`.
+**Related:** To create several at once, an org admin can right-click the **+** for **Add many channels** (which uses a coarser admin-or-owner gate). Agents create channels with `banter_create_channel`.
 
 ### Story: Find and join an existing channel
 
@@ -364,7 +399,7 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 **Result:** You are a member; the channel appears in your sidebar and shows **Joined** in the browser.
 
-**Related:** Agents can list public channels with `banter_browse_channels`.
+**Related:** Agents can list public channels with `banter_browse_channels` and join with `banter_join_channel`.
 
 ### Story: Start a direct message
 
@@ -413,7 +448,7 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 **Result:** Your reaction shows under the message, the pin (if you added one) is visible to all members, and the bookmark is saved to your Bookmarks page.
 
-**Related:** Edit or delete your message. Agents use `banter_react`, `banter_pin_message`, and `banter_unpin_message`.
+**Related:** Edit or delete your message. Agents use `banter_react`, `banter_pin_message`, `banter_unpin_message`, and `banter_create_bookmark`.
 
 ### Story: Edit or delete something you posted
 
@@ -431,10 +466,27 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 **Related:** Agents use `banter_edit_message` and `banter_delete_message` (delete requires confirmation).
 
+### Story: Find an old message with search
+
+**Who:** Any member.
+**Goal:** Locate a past message across the channels you can see.
+**Before you start:** You are in Banter.
+
+**Steps**
+
+1. Click the header search box or open **Search** from the sidebar.
+2. Type at least two characters of what you remember and press Enter.
+3. Click **Filters** and narrow by **Channel**, **Author**, **From date**, **To date**, or **Has attachments** if the results are broad.
+4. Click a result row to jump to that message's channel.
+
+**Result:** You see matching messages with the search terms highlighted, scoped to channels you belong to.
+
+**Related:** An agent can run the same search with `banter_search_messages`.
+
 ### Story: Configure and tidy a channel
 
 **Who:** A channel admin.
-**Goal:** Set a channel's name, topic, and behavior, and manage its lifecycle.
+**Goal:** Set a channel's name, topic, and behavior, add a member, and manage its lifecycle.
 **Before you start:** You are an admin or owner of the channel.
 
 **Steps**
@@ -443,11 +495,12 @@ What a human should know when reviewing agent work: agents posting into shared B
 2. Edit **Channel name**, **Topic**, and **Description**.
 3. Toggle **Allow bots** and **Allow huddles** as needed.
 4. Click **Save Changes** and confirm the "Saved!" message.
-5. To archive the channel, open the **Danger Zone**, click **Delete Channel**, and confirm with **Yes, delete channel**.
+5. To add a member, type an email or username into the **Email or username** field and click **Add**.
+6. To archive the channel, open the **Danger Zone**, click **Delete Channel**, and confirm with **Yes, delete channel**.
 
-**Result:** The channel reflects your changes, or is archived and removed from the active list.
+**Result:** The channel reflects your changes, the new member is added, or the channel is archived and removed from the active list.
 
-**Related:** Adding members from this modal is currently unreliable; use the members API or `banter_add_channel_members`. Agents update channels with `banter_update_channel` and archive with `banter_archive_channel`.
+**Related:** Agents update channels with `banter_update_channel`, add members with `banter_add_channel_members`, and archive with `banter_archive_channel`.
 
 ### Story: Schedule a message for later (automation and agents)
 
@@ -458,9 +511,9 @@ What a human should know when reviewing agent work: agents posting into shared B
 **Steps**
 
 1. The agent calls `banter_schedule_post` with the channel, the content, and a future `scheduled_at`.
-2. If the channel has a quiet-hours policy and the post lands inside the quiet window, it is deferred automatically (or held according to the post's flags).
+2. If the channel has a quiet-hours policy and the post lands inside the quiet window, it is deferred automatically when `defer_if_quiet` is set, or rejected with `QUIET_HOURS` otherwise.
 3. A worker delivers the message at the scheduled time.
-4. Pending scheduled messages for a channel can be listed and cancelled before they send.
+4. Pending scheduled messages for a channel can be listed with `banter_list_scheduled_messages` and cancelled with `banter_cancel_scheduled_message` before they send.
 
 **Result:** The message posts at the right time. Banter emits `message.scheduled` (and `message.quiet_hours_deferred` when deferred) for downstream automations.
 
@@ -470,16 +523,16 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 **Who:** An AI agent or service account, plus a channel admin to allow it.
 **Goal:** Trigger agent action whenever messages in a channel match a pattern.
-**Before you start:** The channel's agent-subscription policy and the org's agent policies allow the agent.
+**Before you start:** The channel's `agent_subscription_policy` and the org's agent policies allow the agent.
 
 **Steps**
 
-1. The agent subscribes with `banter_subscribe_pattern`, choosing a kind: interrogative, keyword, mention, or regex (regex is admin only).
-2. When a message matches, Banter fires a `message.matched` event.
-3. The agent acts on the match (for example, replies in the thread, routes to a human, or shares a suite entity).
+1. The agent subscribes with `banter_subscribe_pattern`, choosing a kind: `interrogative`, `keyword`, `mention`, or `regex` (regex is admin only).
+2. When a message matches, Banter fires a `message.matched` event (on source `banter`).
+3. The agent acts on the match (for example, replies in the thread, routes to a human, or shares a suite entity), honoring `can_access` on anything it cites.
 4. Remove the subscription with `banter_unsubscribe_pattern`; review active ones with `banter_list_subscriptions`.
 
-**Result:** The agent reacts automatically to matching traffic. Blocked subscriptions are recorded as not effective with a reason, so you can see why an agent is not listening.
+**Result:** The agent reacts automatically to matching traffic. Blocked subscriptions are recorded as not effective (`effective:false`) with a reason, so you can see why an agent is not listening.
 
 **Related:** Share a suite entity into the channel after a match.
 
@@ -514,7 +567,7 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 **Result:** New channels follow your policy, the sidebar is organized, and teams can be mentioned as a group.
 
-**Related:** Migrate an existing Slack workspace with the Slack import.
+**Related:** Migrate an existing Slack workspace with the Slack import. All three "Who can create channels" options are enforced on the single **+** create; the bulk **Add many channels** dialog uses a coarser admin-or-owner gate.
 
 ### Story: Migrate a Slack workspace
 
@@ -526,7 +579,7 @@ What a human should know when reviewing agent work: agents posting into shared B
 
 1. Open the Slack import area under admin and upload the `.zip`.
 2. Review the preview of users and channels.
-3. Map each user (auto-match, send invite, stub, map existing, or skip) and each channel (import new, merge existing, or skip).
+3. Map each user (`auto_match`, `send_invite`, `stub`, `map_existing`, or `skip`) and each channel (`import_new`, `merge_existing`, or `skip`).
 4. Choose options such as preserving timestamps and importing attachments, reactions, pins, and DMs. Run a dry run first if you want to validate.
 5. Start the import and poll its status to completion.
 
@@ -543,7 +596,7 @@ What a human should know when reviewing agent work: agents posting into shared B
 **Steps**
 
 1. Open the call's playback page at `/banter/calls/:id`.
-2. Review the call type, duration, and participants.
+2. Review the call type (voice, video, or huddle), duration, and participants.
 3. Read the transcript.
 
 **Result:** You have a read-only record of the call. You cannot start, join, or end a call from Banter; use the Bureau docked box for live audio.
@@ -555,6 +608,6 @@ What a human should know when reviewing agent work: agents posting into shared B
 - **BigBlueBam (Bam)** at `/b3/` - the host app that owns your identity, organizations, and people. You sign in there before using Banter, and tasks and sprints shared into Banter come from Bam.
 - **Helpdesk** at `/helpdesk/` - tickets shared into a Banter channel come from here.
 - **Bureau docked box** - the suite-wide live-audio layer that replaced Banter calls. Use it for voice and video; Banter keeps only the read-only call history.
-- **Bolt** at `/bolt/` - the automation engine that consumes Banter events (`message.posted`, `message.mentioned`, `reaction.added`, `message.scheduled`, `message.quiet_hours_deferred`, `channel.created`, and `message.matched`) and can drive Banter actions.
-- **Banter MCP-tools reference** in `docs/apps/banter/` - the full catalog of the 53 Banter tools plus the 3 subscription tools used by AI agents.
-- **Banter guide** in `docs/apps/banter/` - product-level overview. Where it advertises live voice calls, follow this help doc instead: those calls are retired in Banter.
+- **Bolt** at `/bolt/` - the automation engine that consumes Banter events (`channel.created`, `message.posted`, `message.mentioned`, `message.edited`, `reaction.added`, `message.scheduled`, `message.quiet_hours_deferred`, and `message.matched`, all on source `banter`) and can drive Banter actions.
+- **Banter MCP-tools reference** in `docs/apps/banter/` - the full catalog of the Banter tools (over 50 core tools plus the 3 subscription tools) used by AI agents.
+- **Banter guide** in `docs/apps/banter/` - product-level overview. Where it advertises live voice calls, follow this help doc instead: those calls are retired in Banter, and live audio is handled by the Bureau docked box.

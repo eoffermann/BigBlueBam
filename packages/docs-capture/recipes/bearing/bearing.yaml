@@ -1,0 +1,85 @@
+# Bearing — goals & OKR tracker.
+# Recipes mined from docs/apps/bearing/help.md (Feature reference + User Stories)
+# and packages/docs-capture/src/apps/bearing.scenes.ts.
+#
+# Route note: the scenes file lists `/bearing/timeline` and `/bearing/reports`,
+# but apps/bearing/src/app.tsx::parseRoute exposes ONLY `/`, `/periods`,
+# `/at-risk`, `/my-goals`, and `/goals/:id` — both `timeline` and `reports`
+# fall through to the Dashboard. help.md confirms there is no human reports
+# screen and the timeline is a card on the goal-detail page, not a route. Those
+# two scenes are therefore not real views and are intentionally not captured.
+#
+# Goal cards are `div.group.cursor-pointer` with an inner `h3` (no anchor —
+# GoalCard.tsx navigates via onClick), so the goal-detail setup clicks that
+# selector rather than the scenes file's `a[href*="/bearing/goals/"]`.
+# Content is omitted everywhere (the local stack is already seeded). Live
+# relative timestamps on the goal-detail status-update feed are masked.
+
+- id: bearing-dashboard
+  app: bearing
+  demonstrates: "The Goals Dashboard for the selected period — stats row, scope tabs, and the grouped goal-card grid"
+  route: /bearing/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Goal dashboard" }
+
+- id: bearing-dashboard-dark
+  app: bearing
+  demonstrates: "The Goals Dashboard in dark theme (marketing/retina)"
+  route: /bearing/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Goal dashboard" }
+
+- id: bearing-goal-detail
+  app: bearing
+  demonstrates: "A goal's detail page — key results, progress bar, status updates, and the watchers card"
+  route: /bearing/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Goal detail" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+- id: bearing-my-goals
+  app: bearing
+  demonstrates: "My Goals — every goal owned by the viewer across all periods, split into Active and Completed"
+  route: /bearing/my-goals
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "My goals" }
+
+- id: bearing-at-risk
+  app: bearing
+  demonstrates: "At Risk Goals — the triage list of goals behind expected progress, sorted by gap"
+  route: /bearing/at-risk
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "At-risk goals" }
+
+- id: bearing-periods
+  app: bearing
+  demonstrates: "The Periods page — the table of time boxes with Name, Type, Date Range, Status, and Goals columns"
+  route: /bearing/periods
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Periods" }

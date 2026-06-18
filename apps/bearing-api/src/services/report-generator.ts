@@ -1,11 +1,13 @@
-import { eq, and, or, inArray } from 'drizzle-orm';
+import { eq, and, or, inArray, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   bearingPeriods,
   bearingGoals,
   bearingKeyResults,
+  bearingKrSnapshots,
 } from '../db/schema/index.js';
 import { BearingError } from './period.service.js';
+import { computeGoalProgress } from './progress-engine.js';
 
 /** Group key results by goal_id for batch-loaded results */
 function groupKrsByGoal(krs: Array<{ goal_id: string; [key: string]: unknown }>) {
@@ -16,6 +18,146 @@ function groupKrsByGoal(krs: Array<{ goal_id: string; [key: string]: unknown }>)
     map.set(kr.goal_id, list);
   }
   return map;
+}
+
+// ---------------------------------------------------------------------------
+// Structured period report (powers the dashboard stat cards + progress chart)
+// ---------------------------------------------------------------------------
+
+export interface PeriodReportData {
+  period_id: string;
+  period_name: string;
+  total_goals: number;
+  avg_progress: number;
+  on_track: number;
+  at_risk: number;
+  behind: number;
+  achieved: number;
+  missed: number;
+  progress_over_time: Array<{ date: string; actual: number; expected: number }>;
+}
+
+/** Format a Date as a UTC YYYY-MM-DD key. */
+function dayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Generate the structured period report consumed by the Bearing dashboard
+ * (ProgressSummary stat cards) and the goal/period progress chart
+ * (ProgressChart "Progress Over Time").
+ *
+ * Summary counts come from the goals' current status. The `progress_over_time`
+ * series is reconstructed from KR snapshots: for every day on which any KR in
+ * the period recorded a snapshot, we carry forward the latest snapshot value
+ * per KR and average them to an "actual" line, alongside a linear "expected"
+ * ramp from 0% at the period start to 100% at the period end.
+ */
+export async function generatePeriodReportData(periodId: string, orgId: string): Promise<PeriodReportData> {
+  const [period] = await db
+    .select()
+    .from(bearingPeriods)
+    .where(and(eq(bearingPeriods.id, periodId), eq(bearingPeriods.organization_id, orgId)))
+    .limit(1);
+
+  if (!period) throw new BearingError('NOT_FOUND', 'Period not found', 404);
+
+  const goals = await db
+    .select()
+    .from(bearingGoals)
+    .where(and(eq(bearingGoals.period_id, periodId), eq(bearingGoals.organization_id, orgId)))
+    .limit(500);
+
+  const totalGoals = goals.length;
+  const countByStatus = (s: string) => goals.filter((g) => g.status === s).length;
+
+  // Average progress is computed live from each goal's key results (the stored
+  // bearing_goals.progress column is a lazily-cached value that can lag behind
+  // KR check-ins), so the dashboard stat reflects current KR values.
+  const liveProgress = await Promise.all(goals.map((g) => computeGoalProgress(g.id)));
+  const avgProgress =
+    totalGoals > 0 ? liveProgress.reduce((sum, p) => sum + p, 0) / totalGoals : 0;
+
+  // Build the progress-over-time series from KR snapshots across all goals.
+  const goalIds = goals.map((g) => g.id);
+  const krs =
+    goalIds.length > 0
+      ? await db
+          .select({ id: bearingKeyResults.id })
+          .from(bearingKeyResults)
+          .where(inArray(bearingKeyResults.goal_id, goalIds))
+      : [];
+  const krIds = krs.map((k) => k.id);
+
+  const snapshots =
+    krIds.length > 0
+      ? await db
+          .select({
+            key_result_id: bearingKrSnapshots.key_result_id,
+            progress: bearingKrSnapshots.progress,
+            recorded_at: bearingKrSnapshots.recorded_at,
+          })
+          .from(bearingKrSnapshots)
+          .where(inArray(bearingKrSnapshots.key_result_id, krIds))
+          .orderBy(asc(bearingKrSnapshots.recorded_at))
+      : [];
+
+  const progressOverTime: Array<{ date: string; actual: number; expected: number }> = [];
+
+  if (snapshots.length > 0) {
+    const start = new Date(`${period.starts_at}T00:00:00.000Z`).getTime();
+    const end = new Date(`${period.ends_at}T00:00:00.000Z`).getTime();
+    const span = end > start ? end - start : 1;
+
+    // Distinct snapshot days, in order.
+    const days: string[] = [];
+    const seen = new Set<string>();
+    for (const s of snapshots) {
+      const key = dayKey(new Date(s.recorded_at));
+      if (!seen.has(key)) {
+        seen.add(key);
+        days.push(key);
+      }
+    }
+
+    // Carry-forward latest progress per KR as we advance through the days.
+    const latestByKr = new Map<string, number>();
+    let cursor = 0;
+    for (const day of days) {
+      // Apply every snapshot recorded on or before the end of this day.
+      const dayEnd = new Date(`${day}T23:59:59.999Z`).getTime();
+      while (cursor < snapshots.length && new Date(snapshots[cursor]!.recorded_at).getTime() <= dayEnd) {
+        latestByKr.set(snapshots[cursor]!.key_result_id, parseFloat(snapshots[cursor]!.progress));
+        cursor++;
+      }
+
+      const values = [...latestByKr.values()];
+      const actual = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+
+      const dayMid = new Date(`${day}T12:00:00.000Z`).getTime();
+      const expectedRaw = ((dayMid - start) / span) * 100;
+      const expected = Math.max(0, Math.min(100, expectedRaw));
+
+      progressOverTime.push({
+        date: day,
+        actual: Number(actual.toFixed(2)),
+        expected: Number(expected.toFixed(2)),
+      });
+    }
+  }
+
+  return {
+    period_id: periodId,
+    period_name: period.name,
+    total_goals: totalGoals,
+    avg_progress: Number(avgProgress.toFixed(2)),
+    on_track: countByStatus('on_track'),
+    at_risk: countByStatus('at_risk'),
+    behind: countByStatus('behind'),
+    achieved: countByStatus('achieved'),
+    missed: countByStatus('missed'),
+    progress_over_time: progressOverTime,
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,82 +1,13 @@
-[
-  {
-    "id": "01-dashboard",
-    "label": "Goal dashboard",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\01-dashboard.png",
-    "sha256": "f3d819cbed768fa7a94d21c4d1ae0ef9f5ac6259824b5a624da3f4645e28c5af",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:31:23.585Z"
-  },
-  {
-    "id": "02-goal-detail",
-    "label": "Goal detail",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\02-goal-detail.png",
-    "sha256": "ada1c8335b7e4c00ac861c0c41861a40aef73910e88f343280760e9c22fdbf9e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:31:38.364Z"
-  },
-  {
-    "id": "03-periods",
-    "label": "Period list",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\03-periods.png",
-    "sha256": "9e358d7e52470cc89af4a885433f178485a1be72fa18ea3121a91d3efe9e8208",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:31:41.021Z"
-  },
-  {
-    "id": "04-at-risk",
-    "label": "At-risk goals",
-    "theme": "light",
-    "file": "docs\\apps\\bearing\\screenshots\\light\\04-at-risk.png",
-    "sha256": "ae8740cbdc3e842a1a45abc2a47604880c50f005617ac81707f6fbe9d30ec562",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:31:43.669Z"
-  },
-  {
-    "id": "01-dashboard",
-    "label": "Goal dashboard",
-    "theme": "dark",
-    "file": "docs\\apps\\bearing\\screenshots\\dark\\01-dashboard.png",
-    "sha256": "6a2e43a618e0d805d1d33e0f833dab4c11261865b20f634ac4877e35b1a0d1d6",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:31:51.495Z"
-  },
-  {
-    "id": "02-goal-detail",
-    "label": "Goal detail",
-    "theme": "dark",
-    "file": "docs\\apps\\bearing\\screenshots\\dark\\02-goal-detail.png",
-    "sha256": "da853562f5c0c097acd4131c409c7df8b9c7a6672b3bef1230ebaebbea1ea572",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:06.259Z"
-  },
-  {
-    "id": "03-periods",
-    "label": "Period list",
-    "theme": "dark",
-    "file": "docs\\apps\\bearing\\screenshots\\dark\\03-periods.png",
-    "sha256": "a70f8cba6850eefc1bb5cd99a739e70c3b5cd3e1562ad25e5530648734429450",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:08.906Z"
-  },
-  {
-    "id": "04-at-risk",
-    "label": "At-risk goals",
-    "theme": "dark",
-    "file": "docs\\apps\\bearing\\screenshots\\dark\\04-at-risk.png",
-    "sha256": "df55d39a7db53437e730c5aef509e7ecc5707a5ae1d34431f5571da31bbb196e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:32:11.572Z"
-  }
-]
+{
+  "app": "bearing",
+  "nginx_path": "/bearing/",
+  "api_port": 4007,
+  "api_dir": "bearing-api",
+  "route_files": 4,
+  "schema_modules": 9,
+  "has_seeder": true,
+  "has_frontend": true,
+  "src_hash": "f0432f85dddf912212d9f9f149cfa8100cd28e426b885f7390f805f94123de91",
+  "generated_at": "2026-06-17T22:16:23.271Z",
+  "mcp_tool_count": 30
+}

@@ -63,7 +63,6 @@ const ticketStatusEnum = z.enum([
   'open',
   'in_progress',
   'waiting_on_customer',
-  'waiting_on_client',
   'resolved',
   'closed',
 ]);

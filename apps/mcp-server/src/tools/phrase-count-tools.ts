@@ -101,7 +101,6 @@ export function registerPhraseCountTools(
           'open',
           'in_progress',
           'waiting_on_customer',
-          'waiting_on_client',
           'resolved',
           'closed',
         ])

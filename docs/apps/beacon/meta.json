@@ -1,122 +1,13 @@
-[
-  {
-    "id": "01-home",
-    "label": "Knowledge Home",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\01-home.png",
-    "sha256": "53ab28fdaee5d81581c72af121b674db9bf6f4835554e9bb6a5289b046380af9",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:56.124Z"
-  },
-  {
-    "id": "02-browse",
-    "label": "Article list",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\02-browse.png",
-    "sha256": "1517f1c3c5a21a7acc529f8b605e0a4d3d86262fb4dc5ecd4235f0c32c34c6e6",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:43:58.838Z"
-  },
-  {
-    "id": "03-detail",
-    "label": "Article detail",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\03-detail.png",
-    "sha256": "aa39e801b7fc9178c10c38ba83aa7941af4748ca802ab14ec0c4ed79ddffc9b8",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:03.630Z"
-  },
-  {
-    "id": "04-graph",
-    "label": "Knowledge graph explorer",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\04-graph.png",
-    "sha256": "57c8150989947655c98dbbdd7f36e99e3a72c4461b284b7222b4fd4d26e78044",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:06.408Z"
-  },
-  {
-    "id": "05-dashboard",
-    "label": "Governance dashboard",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\05-dashboard.png",
-    "sha256": "721ac8d63bd5170d7dc079c88558f3bc5fcc467f28e418352e84e181ac51a0eb",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:09.171Z"
-  },
-  {
-    "id": "06-search",
-    "label": "Search results",
-    "theme": "light",
-    "file": "docs\\apps\\beacon\\screenshots\\light\\06-search.png",
-    "sha256": "61733d15632f1fe7bc7bb4e6f4a6e6f9643383d426090d21da14098512ab0d04",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:11.961Z"
-  },
-  {
-    "id": "01-home",
-    "label": "Knowledge Home",
-    "theme": "dark",
-    "file": "docs\\apps\\beacon\\screenshots\\dark\\01-home.png",
-    "sha256": "cb0c7556873baee0aebc360b00b13c48851641e8be49d19b7c490b050c1cac1e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:19.839Z"
-  },
-  {
-    "id": "02-browse",
-    "label": "Article list",
-    "theme": "dark",
-    "file": "docs\\apps\\beacon\\screenshots\\dark\\02-browse.png",
-    "sha256": "d4b7dbfe6dba3c64c7f01544c7a878ea691461db2c1a37baee9d9b0cdfc85120",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:22.564Z"
-  },
-  {
-    "id": "03-detail",
-    "label": "Article detail",
-    "theme": "dark",
-    "file": "docs\\apps\\beacon\\screenshots\\dark\\03-detail.png",
-    "sha256": "0502474db6ebbf7c662942308c192fc0224449365415ce3ae81f51a634f07c20",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:27.344Z"
-  },
-  {
-    "id": "04-graph",
-    "label": "Knowledge graph explorer",
-    "theme": "dark",
-    "file": "docs\\apps\\beacon\\screenshots\\dark\\04-graph.png",
-    "sha256": "41ea4a10c8532de61c752de8f0ae85d82bf40d4324fd08fafa090dcb918084e5",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:30.001Z"
-  },
-  {
-    "id": "05-dashboard",
-    "label": "Governance dashboard",
-    "theme": "dark",
-    "file": "docs\\apps\\beacon\\screenshots\\dark\\05-dashboard.png",
-    "sha256": "2639dc978a657a2eee25279c9d8de50d8a4247aae92b436d94a57f8a6e027c19",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:32.677Z"
-  },
-  {
-    "id": "06-search",
-    "label": "Search results",
-    "theme": "dark",
-    "file": "docs\\apps\\beacon\\screenshots\\dark\\06-search.png",
-    "sha256": "8a6ce4ca666717a83ae103a8e0279754664bdf57a3e8b953bf0c9ba68342c795",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-04-17T16:44:35.398Z"
-  }
-]
+{
+  "app": "beacon",
+  "nginx_path": "/beacon/",
+  "api_port": 4004,
+  "api_dir": "beacon-api",
+  "route_files": 9,
+  "schema_modules": 12,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "d938a5945f77df950f9547299cc5ab8b0a39f8857b56bc94aa38aff60c86938e",
+  "generated_at": "2026-06-17T22:16:23.267Z",
+  "mcp_tool_count": 38
+}

@@ -1,5 +1,6 @@
-A knowledge base with semantic search and a visual knowledge graph.
+A knowledge base that keeps itself honest: hybrid search, a knowledge graph, and built-in freshness governance.
 
-- Write and organize team documentation with rich text and version history
-- Find answers instantly with AI-powered semantic search
-- Explore connections between articles through an interactive knowledge graph
+- Write articles in Markdown and find them by meaning with hybrid search (semantic, tags, links, and keyword fallback)
+- Explore how knowledge connects through a typed knowledge graph of links and shared-tag affinity
+- Stay current with per-article expiry, verify and challenge lifecycle, and a Fridge Cleanout governance dashboard
+- Let AI agents create, search, verify, and traverse knowledge through 30 MCP tools, gated by visibility preflight and agent policies

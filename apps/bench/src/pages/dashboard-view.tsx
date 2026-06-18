@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Edit2, RefreshCw, Maximize2, Clock } from 'lucide-react';
 import { useDashboard } from '@/hooks/use-dashboards';
-import { useWidgetQuery } from '@/hooks/use-widgets';
+import { useWidgetQuery, type WidgetQueryDateRange } from '@/hooks/use-widgets';
 import { ChartRenderer } from '@/components/widgets/chart-renderer';
 import { DateRangePicker, type DateRange } from '@/components/dashboards/date-range-picker';
 
@@ -10,8 +10,19 @@ interface DashboardViewPageProps {
   onNavigate: (path: string) => void;
 }
 
-function WidgetCard({ widget }: { widget: any }) {
-  const { data, isLoading } = useWidgetQuery(widget.id);
+/**
+ * Map the picker's DateRange ({ preset, from, to }) onto the API's expected
+ * shape ({ preset, start, end }). Returns undefined when nothing is selected so
+ * widgets run their own saved range.
+ */
+function toQueryDateRange(range: DateRange): WidgetQueryDateRange | undefined {
+  if (range.preset) return { preset: range.preset };
+  if (range.from || range.to) return { start: range.from, end: range.to };
+  return undefined;
+}
+
+function WidgetCard({ widget, dateRange }: { widget: any; dateRange?: WidgetQueryDateRange }) {
+  const { data, isLoading } = useWidgetQuery(widget.id, dateRange);
   const queryResult = data?.data;
 
   return (
@@ -50,6 +61,7 @@ export function DashboardViewPage({ dashboardId, onNavigate }: DashboardViewPage
   const dashboard = data?.data;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>({});
+  const queryDateRange = toQueryDateRange(dateRange);
 
   // Auto-refresh
   useEffect(() => {
@@ -114,7 +126,7 @@ export function DashboardViewPage({ dashboardId, onNavigate }: DashboardViewPage
       {dashboard.widgets && dashboard.widgets.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {dashboard.widgets.map((widget: any) => (
-            <WidgetCard key={widget.id} widget={widget} />
+            <WidgetCard key={widget.id} widget={widget} dateRange={queryDateRange} />
           ))}
         </div>
       ) : (

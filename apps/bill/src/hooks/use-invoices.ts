@@ -86,6 +86,19 @@ export function useDuplicateInvoice() {
   });
 }
 
+export function useCreateInvoiceFromTime() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      project_id: string;
+      client_id: string;
+      date_from: string;
+      date_to: string;
+    }) => api.post<{ data: any }>('/v1/invoices/from-time-entries', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+  });
+}
+
 export function useAddLineItem() {
   const qc = useQueryClient();
   return useMutation({

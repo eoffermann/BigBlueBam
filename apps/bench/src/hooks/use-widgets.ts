@@ -30,10 +30,27 @@ export function useWidget(widgetId: string | undefined) {
   });
 }
 
-export function useWidgetQuery(widgetId: string | undefined) {
+/** Date range payload as the API expects it (preset OR explicit start/end). */
+export interface WidgetQueryDateRange {
+  preset?: string;
+  start?: string;
+  end?: string;
+}
+
+export function useWidgetQuery(
+  widgetId: string | undefined,
+  dateRange?: WidgetQueryDateRange,
+) {
+  const hasRange = !!(dateRange && (dateRange.preset || dateRange.start || dateRange.end));
   return useQuery({
-    queryKey: ['bench', 'widget-query', widgetId],
-    queryFn: () => api.post<{ data: WidgetQueryResult }>(`/v1/widgets/${widgetId}/query`),
+    // The range is part of the key so changing the dashboard date-range picker
+    // refetches each widget with the new window instead of serving the old one.
+    queryKey: ['bench', 'widget-query', widgetId, hasRange ? dateRange : null],
+    queryFn: () =>
+      api.post<{ data: WidgetQueryResult }>(
+        `/v1/widgets/${widgetId}/query`,
+        hasRange ? { date_range: dateRange } : undefined,
+      ),
     enabled: !!widgetId,
     staleTime: 60_000,
   });

@@ -1,14 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  clearOrgSmtpConfigCache,
   clearSmtpConfigCache,
   getSmtpConfig,
+  getSmtpConfigForOrg,
   isSmtpConfigured,
   resolveSmtpFromSettings,
+  resolveSmtpHierarchy,
 } from './index.js';
 
 const EMPTY_ENV = {};
 
-afterEach(() => clearSmtpConfigCache());
+afterEach(() => {
+  clearSmtpConfigCache();
+  clearOrgSmtpConfigCache();
+});
 
 describe('resolveSmtpFromSettings', () => {
   it('returns null when neither DB nor env has a host', () => {
@@ -193,5 +199,120 @@ describe('isSmtpConfigured', () => {
 
   it('returns false when neither has a host', async () => {
     expect(await isSmtpConfigured(async () => ({}), EMPTY_ENV)).toBe(false);
+  });
+});
+
+describe('resolveSmtpHierarchy (org → platform → env)', () => {
+  it('uses the org override when the org has its own host', () => {
+    const r = resolveSmtpHierarchy(
+      { host: 'mail.acme.test', port: 2525, user: 'acme', password: 'secret', from: 'hi@acme.test' },
+      { smtp_host: 'platform-relay', smtp_from: 'noreply@platform.test' },
+      { SMTP_HOST: 'env-relay' },
+    );
+    expect(r).toMatchObject({
+      host: 'mail.acme.test',
+      port: 2525,
+      user: 'acme',
+      pass: 'secret',
+      from: 'hi@acme.test',
+      layer: 'org',
+    });
+  });
+
+  it('falls through to the platform layer when the org has no override', () => {
+    const r = resolveSmtpHierarchy(
+      null,
+      { smtp_host: 'platform-relay', smtp_from: 'noreply@platform.test' },
+      EMPTY_ENV,
+    );
+    expect(r).toMatchObject({ host: 'platform-relay', layer: 'platform' });
+  });
+
+  it('treats a blank-host org override as no override', () => {
+    const r = resolveSmtpHierarchy(
+      { host: '   ', user: 'ignored' },
+      { smtp_host: 'platform-relay' },
+      EMPTY_ENV,
+    );
+    expect(r).toMatchObject({ host: 'platform-relay', layer: 'platform' });
+  });
+
+  it('reports layer=env when only env vars supply the platform host', () => {
+    const r = resolveSmtpHierarchy(null, {}, { SMTP_HOST: 'env-relay' });
+    expect(r).toMatchObject({ host: 'env-relay', layer: 'env' });
+  });
+
+  it('org host inherits platform from-address and user when org leaves them blank', () => {
+    // Realistic: the platform has a full relay (host+user+from); the org
+    // only redirects to its own host and inherits the rest.
+    const r = resolveSmtpHierarchy(
+      { host: 'mail.acme.test' },
+      {
+        smtp_host: 'platform-relay',
+        smtp_from: 'noreply@platform.test',
+        smtp_user: 'platformuser',
+        smtp_password: 'pw',
+      },
+      EMPTY_ENV,
+    );
+    expect(r).toMatchObject({
+      host: 'mail.acme.test',
+      from: 'noreply@platform.test',
+      user: 'platformuser',
+      pass: 'pw',
+      layer: 'org',
+    });
+  });
+
+  it('returns null when no layer has a host', () => {
+    expect(resolveSmtpHierarchy({ user: 'x' }, {}, EMPTY_ENV)).toBeNull();
+  });
+
+  it('peels JSON-string wrappers on org override fields', () => {
+    const r = resolveSmtpHierarchy(
+      { host: '"mail.acme.test"', port: '2525', secure: 'true' },
+      {},
+      EMPTY_ENV,
+    );
+    expect(r).toMatchObject({ host: 'mail.acme.test', port: 2525, secure: true, layer: 'org' });
+  });
+});
+
+describe('getSmtpConfigForOrg + per-org cache', () => {
+  it('caches per org id and re-reads after clear', async () => {
+    let orgCalls = 0;
+    const loadOrg = async () => {
+      orgCalls += 1;
+      return { host: 'mail.acme.test' };
+    };
+    const loadPlatform = async () => ({});
+    await getSmtpConfigForOrg('org-1', loadOrg, loadPlatform, EMPTY_ENV);
+    await getSmtpConfigForOrg('org-1', loadOrg, loadPlatform, EMPTY_ENV);
+    expect(orgCalls).toBe(1);
+    clearOrgSmtpConfigCache('org-1');
+    await getSmtpConfigForOrg('org-1', loadOrg, loadPlatform, EMPTY_ENV);
+    expect(orgCalls).toBe(2);
+  });
+
+  it('keeps two orgs isolated', async () => {
+    const loadOrg = async (orgId: string) =>
+      orgId === 'org-a' ? { host: 'a.relay.test' } : null;
+    const loadPlatform = async () => ({ smtp_host: 'platform-relay' });
+    const a = await getSmtpConfigForOrg('org-a', loadOrg, loadPlatform, EMPTY_ENV);
+    const b = await getSmtpConfigForOrg('org-b', loadOrg, loadPlatform, EMPTY_ENV);
+    expect(a).toMatchObject({ host: 'a.relay.test', layer: 'org' });
+    expect(b).toMatchObject({ host: 'platform-relay', layer: 'platform' });
+  });
+
+  it('falls through to platform/env when the org loader throws', async () => {
+    const r = await getSmtpConfigForOrg(
+      'org-x',
+      async () => {
+        throw new Error('db down');
+      },
+      async () => ({}),
+      { SMTP_HOST: 'env-relay' },
+    );
+    expect(r).toMatchObject({ host: 'env-relay', layer: 'env' });
   });
 });

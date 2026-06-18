@@ -1,0 +1,128 @@
+# Blueprint — structured diagrams backed by a typed node/edge graph.
+# Recipes mined from docs/apps/blueprint/help.md (Feature reference + User Stories)
+# and the inline blueprint: scenes in scripts/docs/capture.mjs.
+#
+# Routes verified against apps/blueprint/src/App.tsx parseRoute:
+#   /              -> diagram list
+#   /d/<uuid>      -> editor (React Flow canvas + inspector + toolbar)
+#   /help          -> help viewer (not captured here)
+# The list's Starred / Archived / by-type views are sidebar CLIENT STATE, not
+# URL routes, so we reach them by clicking the sidebar filter pills.
+#
+# Selectors:
+#   - Diagram cards use `div.group.cursor-pointer` (the rounded card; no
+#     data-testid yet — tracked as a test-id gap to close).
+#   - The React Flow surface renders as `.react-flow` (default @xyflow/react
+#     class); we wait for it before capturing the editor so nodes/edges/minimap
+#     have painted.
+#   - Sidebar filter pills are <button> with their label as text.
+# Content is omitted everywhere — the local stack ships a seeded Blueprint org.
+# The Bureau presence widget is hidden globally by the capture engine.
+
+- id: blueprint-diagram-list
+  app: blueprint
+  demonstrates: "The diagram library: a grid of diagram cards with type icons, star toggles, visibility, and the sidebar filters (All / Starred / Archived / by type)"
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "div.group.cursor-pointer", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Diagram list" }
+
+- id: blueprint-diagram-editor
+  app: blueprint
+  demonstrates: "The diagram editor: React Flow canvas with nodes and edges, the top toolbar (Add node, layout, snapshot, export, Promote to Bam), zoom/fit controls, and the minimap"
+  # Open a real seeded diagram via the list (the previous hardcoded id was from
+  # another environment and rendered "Diagram not found").
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: waitFor, selector: ".react-flow", optional: true }
+    - { action: wait, ms: 3500 }
+  expect: [".react-flow"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Diagram editor" }
+
+- id: blueprint-editor-via-card
+  app: blueprint
+  demonstrates: "Opening a diagram in the editor by clicking a card from the list — the id-free path into the React Flow canvas"
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer", optional: true }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: waitFor, selector: ".react-flow", optional: true }
+    - { action: wait, ms: 3500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: blueprint-new-diagram-dialog
+  app: blueprint
+  demonstrates: "The New diagram dialog: name, type (Flowchart/Graph/Sequence/Class/Mind map), optional project, visibility (Private/Project/Organization), and template picker"
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('New diagram')", optional: true }
+    - { action: waitFor, selector: "input#bp-new-name", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "New diagram" }
+
+- id: blueprint-starred-filter
+  app: blueprint
+  demonstrates: "The Starred sidebar filter applied — the curated set of favorited diagrams"
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Starred')", optional: true }
+    - { action: wait, ms: 1200 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Starred diagrams" }
+
+- id: blueprint-archived-filter
+  app: blueprint
+  demonstrates: "The Archived sidebar filter applied — soft-deleted diagrams hidden from the default list"
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Archived')", optional: true }
+    - { action: wait, ms: 1200 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Archived diagrams" }
+
+- id: blueprint-comments-collaboration
+  app: blueprint
+  demonstrates: "The editor's collaboration panels: open a diagram, then toggle the Comments panel from the top bar to show anchored/diagram-level comments, the People (collaborators) and History (version) tabs, and the comment composer"
+  # Open a real seeded diagram via the list, then click the Comments toggle in
+  # the top bar (PanelToggleButton renders its label as button text, so
+  # `button:has-text('Comments')` matches — see apps/blueprint/src/pages/editor.tsx).
+  # The right-side EditorPanels aside hosts the Comments / People / History tabs.
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: waitFor, selector: ".react-flow", optional: true }
+    - { action: wait, ms: 2500 }
+    - { action: click, selector: "button:has-text('Comments')", optional: true }
+    - { action: waitFor, selector: "aside textarea", optional: true }
+    - { action: wait, ms: 1200 }
+  expect: ["aside"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Comments & collaboration" }
+
+- id: blueprint-diagram-list-dark
+  app: blueprint
+  demonstrates: "The diagram library in dark theme (marketing/retina)"
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "div.group.cursor-pointer", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Diagram list" }

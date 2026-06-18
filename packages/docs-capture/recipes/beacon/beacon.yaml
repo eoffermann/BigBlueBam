@@ -1,0 +1,123 @@
+# Beacon — knowledge base with freshness governance (route prefix /beacon/).
+# Recipes mined from docs/apps/beacon/help.md (Feature reference + User Stories)
+# and packages/docs-capture/src/apps/beacon.scenes.ts (known-working routes +
+# setup selectors).
+#
+# Beacon is a single-page app: every view loads at /beacon/ and the left sidebar
+# (`aside button:has-text("...")`) switches views client-side, so each recipe
+# routes to /beacon/ and reaches its view via optional setup clicks lifted from
+# the scenes file. No content blocks — the local stack is already seeded.
+# Live timestamps (Recent Activity on Home, Last Verified on detail, Agent
+# Activity on the dashboard) are masked. The Bureau presence widget is hidden
+# globally by the engine.
+
+- id: beacon-knowledge-home
+  app: beacon
+  demonstrates: "Knowledge Home — stat cards, quick-action cards, and Recent Activity"
+  route: /beacon/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Knowledge home" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: beacon-knowledge-home-dark
+  app: beacon
+  demonstrates: "Knowledge Home in dark theme (marketing/retina)"
+  route: /beacon/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Knowledge home" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: beacon-browse-list
+  app: beacon
+  demonstrates: "Browse — the filterable article list with status chips and search"
+  route: /beacon/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has-text('Browse')", optional: true }
+    - { action: wait, ms: 2500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Browse articles" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: beacon-article-detail
+  app: beacon
+  demonstrates: "Article detail — body, lifecycle actions, freshness, and metadata sidebar"
+  route: /beacon/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has-text('Browse')", optional: true }
+    - { action: wait, ms: 2000 }
+    # Scope the article-card click to the content area: a bare button.w-full.text-left
+    # also matched a sidebar/launchpad item (it navigated to the Bam People page).
+    - { action: click, selector: "main button.w-full.text-left" }
+    - { action: wait, ms: 2500 }
+  expect: ["main button:has-text('Verify'), main button:has-text('Challenge'), main button:has-text('Edit')"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Article detail" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: beacon-graph-explorer
+  app: beacon
+  demonstrates: "Knowledge Graph — Hub Beacons canvas with At Risk and Recently Updated"
+  route: /beacon/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has-text('Graph')", optional: true }
+    - { action: wait, ms: 3000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Knowledge graph" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: beacon-governance-dashboard
+  app: beacon
+  demonstrates: "Fridge Cleanout — the freshness/governance dashboard Overview"
+  route: /beacon/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has-text('Dashboard')", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Freshness dashboard" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: beacon-search-results
+  app: beacon
+  demonstrates: "Search — hybrid query results with match-source badges and the QueryBuilder"
+  route: /beacon/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "aside button:has-text('Search')", optional: true }
+    - { action: wait, ms: 1500 }
+    # "radio" matches the seeded island articles (coconut radio, etc.); the old
+    # "deployment" query returned nothing, so the page looked empty.
+    - { action: fill, selector: "input[placeholder*='earch']", value: "radio", optional: true }
+    - { action: press, selector: "input[placeholder*='earch']", value: "Enter", optional: true }
+    - { action: wait, ms: 2500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Hybrid search" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"

@@ -1,17 +1,19 @@
 ---
 title: "Book (Scheduling)"
 app: book
-generated: "2026-04-17T16:45:02.398Z"
+generated: "2026-06-18T00:43:58.378Z"
 ---
 
 # Book (Scheduling)
 
 
-Team calendar and public booking pages in one place.
+Team calendars, availability, and public booking links in one place.
 
-- Week, day, month, and timeline views with drag-to-create events
-- Public booking pages that let external contacts schedule time with you
-- Working hours and external calendar sync for accurate availability
+- Week, day, month, and a cross-app timeline that pulls Book events alongside Bam task and Bond deal dates
+- Working hours that feed availability and public booking pages at /book/meet/<slug>
+- Find-a-meeting-time across several people, including mixed human-and-agent rosters
+- Subscribe to any external `.ics` calendar feed and have its events flow into Book automatically
+- Driven by 25 MCP tools so AI agents can create events, find times, and manage booking pages
 
 ## See It in Action
 
@@ -21,7 +23,7 @@ Team calendar and public booking pages in one place.
 
 ![Month View](screenshots/light/02-month-view.png)
 
-![Day View](screenshots/light/03-day-view.png)
+![Timeline](screenshots/light/03-timeline.png)
 
 ---
 

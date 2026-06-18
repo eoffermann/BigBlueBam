@@ -83,7 +83,7 @@ function PeriodScopeSelector() {
                   'text-[10px] px-1.5 py-0.5 rounded-full',
                   period.status === 'active' ? 'bg-green-900/30 text-green-400' :
                   period.status === 'completed' ? 'bg-blue-900/30 text-blue-400' :
-                  period.status === 'draft' ? 'bg-zinc-800 text-zinc-400' :
+                  period.status === 'planning' ? 'bg-zinc-800 text-zinc-400' :
                   'bg-zinc-800 text-zinc-500',
                 )}>
                   {period.status}

@@ -26,6 +26,17 @@ const envSchema = z.object({
 
   PUBLIC_URL: z.string().default('http://localhost'),
 
+  // MinIO/S3 object storage for submission file uploads. Shares the platform
+  // bucket with Bam attachments; Blank objects are namespaced under `blank/`.
+  S3_ENDPOINT: z.string().default('http://minio:9000'),
+  S3_ACCESS_KEY: z.string().default('minioadmin'),
+  S3_SECRET_KEY: z.string().default('minioadmin'),
+  S3_BUCKET: z.string().default('bigbluebam-uploads'),
+  S3_REGION: z.string().default('us-east-1'),
+
+  // Max size per uploaded submission file (default 25MB, matches Bam).
+  UPLOAD_MAX_FILE_SIZE: z.coerce.number().int().positive().default(25 * 1024 * 1024),
+
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),
 

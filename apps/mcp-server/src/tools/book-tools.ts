@@ -671,23 +671,40 @@ export function registerBookTools(server: McpServer, api: ApiClient, bookApiUrl:
   // ===== 21. book_list_connections =====
   registerTool(server, {
     name: 'book_list_connections',
-    description: "List the caller's external calendar connections (Google/Microsoft) and their sync status. Does not expose access tokens.",
+    description: "List the caller's external calendar connections (ICS feeds / Google / Microsoft) and their sync status. Tokens and feed URLs are never exposed.",
     input: {},
-    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), provider: z.string().optional(), sync_direction: z.string().optional() }).passthrough()) }),
+    returns: z.object({ data: z.array(z.object({ id: z.string().uuid(), provider: z.string().optional(), sync_direction: z.string().optional(), sync_status: z.string().optional(), last_sync_at: z.string().nullable().optional(), last_sync_event_count: z.number().optional() }).passthrough()) }),
     handler: async () => {
       const result = await client.request('GET', '/connections');
       return result.ok ? ok(result.data) : err('listing connections', result.data);
     },
   });
 
+  // ===== 21b. book_create_connection =====
+  registerTool(server, {
+    name: 'book_create_connection',
+    description:
+      'Subscribe to an external calendar feed by .ics URL (the no-OAuth provider path). The feed is pulled into a Book calendar on creation-time sync and on the worker schedule. Google/Microsoft connections require operator OAuth credentials and are not created here.',
+    input: {
+      feed_url: z.string().describe('Public iCalendar (.ics) URL, including webcal:// links'),
+      name: z.string().max(255).optional().describe('Human-friendly label for the connection'),
+      calendar_id: z.string().uuid().optional().describe('Target Book calendar to mirror events into (auto-selected if omitted)'),
+    },
+    returns: z.object({ data: z.object({ id: z.string().uuid(), provider: z.string(), sync_status: z.string() }).passthrough() }),
+    handler: async (params) => {
+      const result = await client.request('POST', '/connections/ics', params);
+      return result.ok ? ok(result.data) : err('creating connection', result.data);
+    },
+  });
+
   // ===== 22. book_sync_connection =====
   registerTool(server, {
     name: 'book_sync_connection',
-    description: 'Force an immediate sync of an existing external calendar connection.',
+    description: 'Force an immediate sync of an existing external calendar connection. Returns the import result counts (imported/created/updated/removed).',
     input: {
       id: z.string().uuid().describe('Connection UUID'),
     },
-    returns: z.object({ data: z.object({}).passthrough() }),
+    returns: z.object({ data: z.object({ status: z.string(), imported: z.number(), created: z.number(), updated: z.number(), removed: z.number() }).passthrough() }),
     handler: async ({ id }) => {
       const result = await client.request('POST', `/connections/${id}/sync`);
       return result.ok ? ok(result.data) : err('syncing connection', result.data);

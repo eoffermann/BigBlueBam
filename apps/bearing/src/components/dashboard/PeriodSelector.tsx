@@ -85,7 +85,7 @@ export function PeriodSelector() {
 
 function PeriodStatusDot({ status }: { status: BearingPeriod['status'] }) {
   const colors: Record<string, string> = {
-    draft: 'bg-zinc-400',
+    planning: 'bg-zinc-400',
     active: 'bg-green-500',
     completed: 'bg-blue-500',
     archived: 'bg-zinc-300',

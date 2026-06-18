@@ -175,10 +175,12 @@ export function TaskDetailDrawer({
 
   const descriptionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch members for assignee picker
+  // Assignee picker lists ORG members, not just this project's members:
+  // task assignment is not gated on project membership server-side, and any
+  // org member (including the current user) should be assignable.
   const { data: membersRes } = useQuery({
-    queryKey: ['project-members', projectId],
-    queryFn: () => api.get<PaginatedResponse<Member>>(`/projects/${projectId}/members`),
+    queryKey: ['org-members'],
+    queryFn: () => api.get<PaginatedResponse<Member>>(`/org/members`),
     enabled: !!projectId,
   });
   const members = membersRes?.data ?? [];

@@ -55,7 +55,7 @@ export function SearchPage({ onNavigate }: SearchPageProps) {
     queryKey: ['search', searchTerm, channelFilter, authorFilter, dateFrom, dateTo, hasAttachments],
     queryFn: () =>
       api
-        .get<{ data: SearchResult[] }>('/search', {
+        .get<{ data: SearchResult[] }>('/search/messages', {
           q: searchTerm,
           channel_id: channelFilter || undefined,
           author_id: authorFilter || undefined,

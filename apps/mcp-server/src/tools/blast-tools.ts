@@ -42,6 +42,94 @@ function createBlastClient(blastApiUrl: string, api: ApiClient) {
 
 type BlastClient = ReturnType<typeof createBlastClient>;
 
+// ---------------------------------------------------------------------------
+// LLM generation helper (real Claude/OpenAI generation for the AI tools)
+// ---------------------------------------------------------------------------
+//
+// The two AI tools (blast_draft_email_content, blast_suggest_subject_lines)
+// resolve the org's effective LLM provider via the Bam API and then proxy a
+// chat completion through /internal/llm/chat (which holds the decrypted
+// provider key). This mirrors the bolt-api ai-assist pattern. Default model
+// is whatever the configured provider stores in model_id — the suite ships
+// the latest Claude as the recommended default. When no provider is
+// configured (or the proxy is unreachable), the tools fall back to the
+// previous deterministic heuristic so they never hard-fail.
+
+interface BlastLlmConfig {
+  apiInternalUrl?: string;
+  internalSecret?: string;
+}
+
+interface ResolvedLlmProvider {
+  id: string;
+  provider_type: string;
+  model_id: string;
+}
+
+/**
+ * Generate text via the suite's configured LLM. Returns the raw model text,
+ * or null when no provider is configured or the proxy is unavailable (the
+ * caller then falls back to its heuristic). Uses the caller's bearer token to
+ * resolve the org's provider, and the internal service secret to invoke the
+ * decrypt-and-proxy endpoint.
+ */
+async function generateWithLlm(
+  api: ApiClient,
+  cfg: BlastLlmConfig,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string | null> {
+  if (!cfg.apiInternalUrl) return null;
+  const baseUrl = cfg.apiInternalUrl.replace(/\/$/, '');
+  const token = (api as unknown as { token?: string }).token;
+  if (!token) return null;
+
+  // 1. Resolve the org's effective LLM provider (project -> org -> system).
+  let provider: ResolvedLlmProvider | null = null;
+  try {
+    const res = await fetch(`${baseUrl}/llm-providers/resolve`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data: ResolvedLlmProvider | null };
+    if (!body.data) return null;
+    provider = body.data;
+  } catch {
+    return null;
+  }
+
+  // 2. Proxy the chat completion through the internal LLM endpoint.
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (cfg.internalSecret) headers['x-internal-secret'] = cfg.internalSecret;
+    const res = await fetch(`${baseUrl}/internal/llm/chat`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        provider_id: provider.id,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: { content?: string } };
+    const text = body.data?.content?.trim();
+    return text && text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Strip a ```json ... ``` (or bare ```) fence if the model wrapped its JSON. */
+function stripCodeFence(text: string): string {
+  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  return fenced ? fenced[1]!.trim() : text.trim();
+}
+
 function ok(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
 }
@@ -164,7 +252,12 @@ const segmentShape = z.object({
   updated_at: z.string(),
 }).passthrough();
 
-export function registerBlastTools(server: McpServer, api: ApiClient, blastApiUrl: string): void {
+export function registerBlastTools(
+  server: McpServer,
+  api: ApiClient,
+  blastApiUrl: string,
+  llmConfig: BlastLlmConfig = {},
+): void {
   const client = createBlastClient(blastApiUrl, api);
 
   // ===== TEMPLATES (3) =====
@@ -404,13 +497,46 @@ export function registerBlastTools(server: McpServer, api: ApiClient, blastApiUr
     },
     returns: z.object({ subject: z.string(), html_body: z.string(), note: z.string().optional() }),
     handler: async ({ description, tone, audience }) => {
-      // This would integrate with an LLM in production
+      const toneLabel = tone ?? 'professional';
+      const systemPrompt = [
+        'You are an expert email marketing copywriter for the BigBlueBam Blast email tool.',
+        'Write a complete marketing email from the brief.',
+        `Use a ${toneLabel} tone.`,
+        audience ? `Write for this audience: ${audience}.` : '',
+        'Return ONLY a JSON object with exactly two string fields: "subject" (a compelling subject line, no more than 80 characters) and "html_body" (clean, email-safe HTML using simple inline-friendly tags like <h1>, <p>, <a>, <ul>).',
+        'You may use the merge fields {{first_name}}, {{last_name}}, and {{unsubscribe_url}} where natural. Do not wrap the JSON in markdown fences.',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const userPrompt = `Brief: ${description}`;
+
+      const generated = await generateWithLlm(api, llmConfig, systemPrompt, userPrompt);
+      if (generated) {
+        try {
+          const parsed = JSON.parse(stripCodeFence(generated)) as {
+            subject?: unknown;
+            html_body?: unknown;
+          };
+          if (typeof parsed.subject === 'string' && typeof parsed.html_body === 'string') {
+            return ok({
+              subject: parsed.subject,
+              html_body: parsed.html_body,
+              note: 'AI-generated. Review and edit before sending.',
+            });
+          }
+        } catch {
+          // Model did not return parseable JSON — fall through to heuristic.
+        }
+      }
+
+      // Fallback heuristic when no LLM provider is configured or the proxy is
+      // unavailable. Keeps the tool usable without an AI provider.
       const subject = `[Draft] ${description.substring(0, 60)}`;
-      const html = `<h1>Email Draft</h1><p>${description}</p><p style="color: #666;">Tone: ${tone ?? 'professional'}${audience ? `. Audience: ${audience}` : ''}</p>`;
+      const html = `<h1>Email Draft</h1><p>${description}</p><p style="color: #666;">Tone: ${toneLabel}${audience ? `. Audience: ${audience}` : ''}</p>`;
       return ok({
         subject,
         html_body: html,
-        note: 'This is a draft. Review and edit before sending.',
+        note: 'No AI provider is configured (Settings -> AI Providers), so this is a placeholder draft. Review and edit before sending.',
       });
     },
   });
@@ -422,9 +548,35 @@ export function registerBlastTools(server: McpServer, api: ApiClient, blastApiUr
       topic: z.string().min(5).max(500).describe('Email topic or campaign description'),
       tone: z.enum(['professional', 'casual', 'urgent', 'friendly', 'formal']).optional().describe('Desired tone'),
     },
-    returns: z.object({ suggestions: z.array(z.string()), tone: z.string() }),
+    returns: z.object({ suggestions: z.array(z.string()), tone: z.string(), note: z.string().optional() }),
     handler: async ({ topic, tone }) => {
       const toneLabel = tone ?? 'professional';
+      const systemPrompt = [
+        'You are an expert email subject-line copywriter for the BigBlueBam Blast email tool.',
+        `Write 5 distinct, high-open-rate subject lines in a ${toneLabel} tone for the given topic.`,
+        'Keep each under 80 characters. Vary the angle (curiosity, benefit, urgency, personalization, direct).',
+        'Return ONLY a JSON array of exactly 5 strings. Do not wrap it in markdown fences.',
+      ].join(' ');
+      const userPrompt = `Topic: ${topic}`;
+
+      const generated = await generateWithLlm(api, llmConfig, systemPrompt, userPrompt);
+      if (generated) {
+        try {
+          const parsed = JSON.parse(stripCodeFence(generated));
+          if (Array.isArray(parsed)) {
+            const suggestions = parsed
+              .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+              .slice(0, 5);
+            if (suggestions.length > 0) {
+              return ok({ suggestions, tone: toneLabel, note: 'AI-generated.' });
+            }
+          }
+        } catch {
+          // Model did not return a parseable array — fall through to heuristic.
+        }
+      }
+
+      // Fallback heuristic when no LLM provider is configured.
       const suggestions = [
         `[${toneLabel}] ${topic} - Option A`,
         `Don't miss: ${topic.substring(0, 40)}`,
@@ -432,7 +584,11 @@ export function registerBlastTools(server: McpServer, api: ApiClient, blastApiUr
         `Quick update: ${topic.substring(0, 45)}`,
         `[New] ${topic.substring(0, 45)} inside`,
       ];
-      return ok({ suggestions, tone: toneLabel });
+      return ok({
+        suggestions,
+        tone: toneLabel,
+        note: 'No AI provider is configured (Settings -> AI Providers), so these are placeholder variants.',
+      });
     },
   });
 

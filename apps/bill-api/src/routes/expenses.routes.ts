@@ -102,6 +102,19 @@ export default async function expenseRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // POST /expenses/:id/reimburse — mark an approved expense as reimbursed
+  fastify.post<{ Params: { id: string } }>(
+    '/expenses/:id/reimburse',
+    { preHandler: [requireAuth, fastify.requireCan('bill.expense.reimburse'), requireScope('read_write')] },
+    async (request, reply) => {
+      const expense = await expenseService.reimburseExpense(
+        request.params.id,
+        request.user!.org_id,
+      );
+      return reply.send({ data: expense });
+    },
+  );
+
   // POST /expenses/:id/receipt -- Upload receipt file to MinIO
   fastify.post<{ Params: { id: string } }>(
     '/expenses/:id/receipt',

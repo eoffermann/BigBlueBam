@@ -7,6 +7,7 @@ import { InvoiceNewPage } from '@/pages/invoice-new';
 import { InvoiceFromTimePage } from '@/pages/invoice-from-time';
 import { InvoiceDetailPage } from '@/pages/invoice-detail';
 import { InvoiceEditPage } from '@/pages/invoice-edit';
+import { RecurringListPage } from '@/pages/recurring-list';
 import { ClientListPage } from '@/pages/client-list';
 import { ClientDetailPage } from '@/pages/client-detail';
 import { ExpenseListPage } from '@/pages/expense-list';
@@ -24,6 +25,7 @@ type Route =
   | { page: 'invoice-from-time' }
   | { page: 'invoice-detail'; id: string }
   | { page: 'invoice-edit'; id: string }
+  | { page: 'recurring' }
   | { page: 'clients' }
   | { page: 'client-detail'; id: string }
   | { page: 'expenses' }
@@ -43,12 +45,15 @@ function stripBase(path: string): string {
 }
 
 function parseRoute(path: string): Route {
-  const p = stripBase(path);
+  // Strip any query string / hash before matching — pages read it separately
+  // (e.g. the invoice list reads ?status=overdue from window.location.search).
+  const p = stripBase(path).split('?')[0]!.split('#')[0]!;
 
   if (p === '/' || p === '') return { page: 'dashboard' };
   if (p === '/invoices') return { page: 'invoices' };
   if (p === '/invoices/new') return { page: 'invoice-new' };
   if (p === '/invoices/from-time') return { page: 'invoice-from-time' };
+  if (p === '/recurring') return { page: 'recurring' };
   if (p === '/clients') return { page: 'clients' };
   if (p === '/expenses') return { page: 'expenses' };
   if (p === '/expenses/new') return { page: 'expense-new' };
@@ -161,6 +166,8 @@ export function App() {
         return <InvoiceDetailPage invoiceId={(route as any).id} onNavigate={navigate} />;
       case 'invoice-edit':
         return <InvoiceEditPage invoiceId={(route as any).id} onNavigate={navigate} />;
+      case 'recurring':
+        return <RecurringListPage onNavigate={navigate} />;
       case 'clients':
         return <ClientListPage onNavigate={navigate} />;
       case 'client-detail':

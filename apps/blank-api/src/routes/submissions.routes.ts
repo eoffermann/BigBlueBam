@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../plugins/auth.js';
 import * as submissionService from '../services/submission.service.js';
+import { getFileStream } from '../lib/storage.js';
+
+interface ProcessedFileEntry {
+  filename?: string;
+  storage_key?: string | null;
+  content_type?: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -34,6 +41,58 @@ export default async function submissionRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const submission = await submissionService.getSubmission(request.params.id, request.user!.org_id);
       return reply.send({ data: submission });
+    },
+  );
+
+  // GET /submissions/:id/files/:idx — Stream a stored submission attachment.
+  // Org-scoped (the submission lookup enforces request.user.org_id), so only
+  // members of the owning org can download files. The :idx indexes into the
+  // worker-populated processed_files.files array.
+  fastify.get<{ Params: { id: string; idx: string } }>(
+    '/submissions/:id/files/:idx',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const submission = await submissionService.getSubmission(
+        request.params.id,
+        request.user!.org_id,
+      );
+
+      const processed = (submission.processed_files ?? {}) as { files?: ProcessedFileEntry[] };
+      const files = Array.isArray(processed.files) ? processed.files : [];
+      const idx = Number.parseInt(request.params.idx, 10);
+      const entry = Number.isInteger(idx) ? files[idx] : undefined;
+
+      if (!entry || !entry.storage_key) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'File not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      try {
+        const { stream, contentType, size } = await getFileStream(entry.storage_key);
+        reply.header('Content-Type', entry.content_type ?? contentType);
+        reply.header('Content-Length', size);
+        reply.header(
+          'Content-Disposition',
+          `inline; filename="${(entry.filename ?? 'download').replace(/[^a-zA-Z0-9._-]/g, '_')}"`,
+        );
+        reply.header('Cache-Control', 'private, max-age=3600');
+        return reply.send(stream);
+      } catch {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'File not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
     },
   );
 

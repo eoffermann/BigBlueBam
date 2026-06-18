@@ -9980,6 +9980,23 @@
       ]
     },
     {
+      "id": "bill.expense.reimburse",
+      "app": "bill",
+      "resource": "expense",
+      "verb": "reimburse",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /expenses/:id/reimburse",
+          "file": "expenses.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bill.expense.update",
       "app": "bill",
       "resource": "expense",

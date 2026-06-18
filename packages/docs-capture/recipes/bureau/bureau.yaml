@@ -1,0 +1,214 @@
+# Bureau — virtual office, presence, and live floor maps.
+# Recipes mined from docs/apps/bureau/help.md (Feature reference + User Stories)
+# and verified against apps/bureau/src/App.tsx parseRoute. Known-good routes
+# also confirmed against the inline `bureau:` scenes in scripts/docs/capture.mjs.
+#
+# Route notes (parseRoute in App.tsx):
+#   /bureau/                       → Floors landing (floor directory)
+#   /bureau/floors/:id             → live floor view (Canvas2D presence map)
+#   /bureau/chats                  → Recent chats
+#   /bureau/admin/floors           → Admin · Floors list
+#   /bureau/admin/offices          → Admin · Offices
+# Every page is wrapped in <main> by BureauLayout, so `waitFor main` is a
+# reliable readiness gate. The live floor view renders a <canvas class="floor-canvas">
+# — wait for that plus a short paint pause for the room rectangles to draw.
+#
+# IMPORTANT: bureau IS the source of the floating presence widget that the
+# capture engine hides globally on OTHER apps. Here the floor canvas IS the
+# content, so we do NOT rely on that hiding — we capture the real floor/office UI.
+#
+# Live-presence caveat: occupant dots on the floor view are PAINTED ON THE CANVAS,
+# so they cannot be element-masked. What we can mask is DOM that varies with live
+# presence: the per-floor occupancy counts on the directory and the connection
+# status chip on the floor view. Those masks are best-effort (no data-testid yet
+# in this app — tracked as a test-id gap).
+
+# --- Floor directory -------------------------------------------------------
+- id: bureau-floor-directory
+  app: bureau
+  demonstrates: "The Floors landing — pick a floor to drop in, with live occupancy counts and the Default pill"
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Floor directory" }
+  masks:
+    # "N people here now" occupancy row — varies with live presence.
+    - "div:has(> svg.lucide-users)"
+
+# Required dark + retina variant for the floor directory (marketing/retina).
+- id: bureau-floor-directory-dark
+  app: bureau
+  demonstrates: "The Floors landing in dark theme (marketing/retina)"
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Floor directory" }
+  masks:
+    - "div:has(> svg.lucide-users)"
+
+# --- Live floor view (presence canvas) -------------------------------------
+- id: bureau-live-floor
+  app: bureau
+  demonstrates: "The live floor view — the spatial map drawing one rectangle per room with occupant dots and the Live connection chip"
+  # Open the org's real floor via the directory — the hardcoded sentinel floor id
+  # belonged to another environment and rendered "failed to load".
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button.group", optional: true }
+    # The canvas is the floor map; wait for it, then let the room rectangles paint.
+    - { action: waitFor, selector: "canvas.floor-canvas", optional: true }
+    - { action: wait, ms: 3500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Live floor" }
+  masks:
+    # Connection status chip ("Live" / connecting / reconnecting) varies with the WS link.
+    - "span.text-emerald-600"
+    - "span.text-amber-600"
+
+# Reaching a live floor by clicking a directory card (the user click-through),
+# as a fallback in case the seeded floor id ever changes. Best-effort throughout.
+- id: bureau-live-floor-from-directory
+  app: bureau
+  demonstrates: "Entering a floor's live view by clicking a floor card from the directory"
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "canvas.floor-canvas", optional: true }
+    - { action: wait, ms: 3500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "span.text-emerald-600"
+    - "span.text-amber-600"
+
+# --- Recent chats ----------------------------------------------------------
+- id: bureau-recent-chats
+  app: bureau
+  demonstrates: "Recent chats — recover ephemeral room chat threads, searchable by room or message text, with admin retention controls"
+  route: /bureau/chats
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  # No masks: the only timestamps are deterministic under the frozen clock, and the
+  # prior mask selector matched the "Recent chats" header icon (covered the title).
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Recent chats" }
+
+# --- Admin · Floors --------------------------------------------------------
+- id: bureau-admin-floors
+  app: bureau
+  demonstrates: "Admin · Floors — manage live and archived floors with Edit, Preview as member, Archive, and New floor"
+  route: /bureau/admin/floors
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Manage floors" }
+  masks:
+    # Per-floor live occupancy counts vary with presence.
+    - "div:has(> svg.lucide-users)"
+
+# --- Admin · Offices -------------------------------------------------------
+- id: bureau-admin-offices
+  app: bureau
+  demonstrates: "Admin · Offices — the Floor/Office, Owner, and Actions table for assigning who owns each personal office"
+  route: /bureau/admin/offices
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Office assignments" }
+
+# --- Room booking ----------------------------------------------------------
+# /bureau/booking (parseRoute in App.tsx). Left column lists the org's bookable
+# rooms grouped by floor; selecting one shows its schedule + a "Book this room"
+# form. The Gilligan seed marks Radio Hut, Mary Ann's Kitchen, and The Lagoon
+# bookable, and scripts/seed-gilligan/bureau-presence.mjs adds two upcoming
+# bookings so the "Upcoming bookings" panel is populated, not the empty state.
+# We click the first room card so the detail panel + booking form are in frame.
+- id: bureau-room-booking
+  app: bureau
+  demonstrates: "Room booking — pick a bookable room, see its upcoming reservations, and book a slot with a locked/open access toggle"
+  route: /bureau/booking
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    # The booking route is lazy-loaded; wait for the heading itself (not just
+    # the layout <main>) before selecting a room, or the assertion can fire
+    # before the chunk mounts.
+    - { action: waitFor, selector: "h1:has-text('Book a room')" }
+    # Select the room that has a seeded reservation so the schedule + the
+    # Book-this-room form render (The Lagoon carries "All-hands raft launch").
+    # Match on the capacity subtext ("up to 12"), which is unique to the room
+    # card: the sidebar floor-nav entries also carry door-open icons and a
+    # similar name ("The Lagoon HQ"), so a name/icon match would hit the nav
+    # button and navigate away from /booking. Waiting on this selector also
+    # gates until the async room list has populated.
+    - { action: waitFor, selector: "button:has-text('up to 12')" }
+    - { action: click, selector: "button:has-text('up to 12')", optional: true }
+    - { action: wait, ms: 1200 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  expect:
+    # Target the page heading specifically. A bare text= match also hits the
+    # top-bar route title, whose element is the first DOM match but gets hidden
+    # by the volatile-overlay pass before verification, so .first() would read
+    # as not-visible even though the heading is on screen.
+    - "h1:has-text('Book a room')"
+  expectNot:
+    - "text=No bookable rooms"
+  doc: { order: 6, label: "Room booking" }
+
+# --- Admin · Settings ------------------------------------------------------
+# /bureau/admin/settings. Org-wide toggles (continuous audio, auto-follow,
+# members-can-book, members-can-create-rooms) + the default-office-privacy
+# select. The settings row auto-creates on first read; the Gilligan seed PATCHes
+# it to a deliberate non-default state so the toggles read as a real config.
+- id: bureau-admin-settings
+  app: bureau
+  demonstrates: "Admin · Settings — org-wide Bureau defaults for spatial audio, auto-follow, member booking/room-creation, and default office privacy"
+  route: /bureau/admin/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button[role=switch]", optional: true }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  expect:
+    - "text=Bureau settings"
+  doc: { order: 7, label: "Admin settings" }
+
+# --- Live floor with seeded presence --------------------------------------
+# The same live floor view as bureau-live-floor (order 2), but specifically to
+# showcase the seeded presence: scripts/seed-gilligan/bureau-presence.mjs places
+# four castaways in rooms with statuses (Skipper available, Professor dnd,
+# Mary Ann available, Ginger busy), so the canvas paints occupant dots and the
+# floor/office cards show who is in. Occupant dots are painted on the <canvas>
+# (not maskable); the Live connection chip is masked as before.
+- id: bureau-presence-on-floor
+  app: bureau
+  demonstrates: "Live presence on the floor — castaways shown in their rooms with status, the spatial map painting occupant dots in real time"
+  route: /bureau/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "canvas.floor-canvas", optional: true }
+    - { action: wait, ms: 3500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 8, label: "Live presence" }
+  masks:
+    # Connection status chip ("Live" / connecting / reconnecting) varies with the WS link.
+    - "span.text-emerald-600"
+    - "span.text-amber-600"

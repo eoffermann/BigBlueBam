@@ -1,5 +1,6 @@
 import {
   FileText,
+  Repeat,
   Users,
   Receipt,
   DollarSign,
@@ -20,6 +21,7 @@ interface BillSidebarProps {
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/', page: 'dashboard' },
   { label: 'Invoices', icon: FileText, path: '/invoices', page: 'invoices' },
+  { label: 'Recurring', icon: Repeat, path: '/recurring', page: 'recurring' },
   { label: 'Clients', icon: Users, path: '/clients', page: 'clients' },
   { label: 'Expenses', icon: Receipt, path: '/expenses', page: 'expenses' },
   { label: 'Rates', icon: DollarSign, path: '/rates', page: 'rates' },

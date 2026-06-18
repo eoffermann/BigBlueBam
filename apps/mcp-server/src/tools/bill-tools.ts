@@ -222,7 +222,12 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
   // ===== 4. bill_create_invoice_from_time =====
   registerTool(server, {
     name: 'bill_create_invoice_from_time',
-    description: 'Generate an invoice from Bam time entries for a project and date range.',
+    description:
+      'Generate a draft invoice from Bam time entries for a project over a date range. ' +
+      'The Bill API resolves every time entry on the project between date_from and date_to ' +
+      '(inclusive), groups them by user + task, prices each group via the resolved billing ' +
+      'rate, and writes one line item per group. Requires a billing rate configured for each ' +
+      'contributing user on the project.',
     input: {
       project_id: z
         .string()
@@ -879,6 +884,196 @@ export function registerBillTools(server: McpServer, api: ApiClient, billApiUrl:
     handler: async (params) => {
       const result = await client.request('PUT', '/settings', params);
       return result.ok ? ok(result.data) : err('updating settings', result.data);
+    },
+  });
+
+  // ===== Recurring / subscription billing =====
+
+  const recurringShape = z
+    .object({
+      id: z.string().uuid(),
+      name: z.string(),
+      status: z.string(),
+      cadence: z.string(),
+      client_id: z.string().uuid(),
+      next_run_at: z.string(),
+      created_at: z.string(),
+    })
+    .passthrough();
+
+  const recurringLineItemSchema = z.object({
+    description: z.string().min(1).max(1000).describe('Line item description'),
+    quantity: z.number().positive().optional().describe('Quantity (default 1)'),
+    unit: z.string().max(20).optional().describe('Unit type: hours, days, units, fixed'),
+    unit_price: z.number().int().min(0).describe('Unit price in cents'),
+  });
+
+  // ===== 39. bill_list_recurring_invoices =====
+  registerTool(server, {
+    name: 'bill_list_recurring_invoices',
+    description:
+      'List recurring/subscription invoice schedules for the org, optionally filtered by status (active, paused, cancelled).',
+    input: {
+      status: z.enum(['active', 'paused', 'cancelled']).optional().describe('Filter by lifecycle status'),
+    },
+    returns: z.object({ data: z.array(recurringShape) }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/recurring-invoices${buildQs(params)}`);
+      return result.ok ? ok(result.data) : err('listing recurring schedules', result.data);
+    },
+  });
+
+  // ===== 40. bill_get_recurring_invoice =====
+  registerTool(server, {
+    name: 'bill_get_recurring_invoice',
+    description: 'Get a recurring invoice schedule with its line-item template.',
+    input: {
+      recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
+    },
+    returns: z.object({ data: recurringShape.extend({ line_items: z.array(z.object({}).passthrough()).optional() }) }),
+    handler: async (params) => {
+      const result = await client.request('GET', `/recurring-invoices/${params.recurring_id}`);
+      return result.ok ? ok(result.data) : err('getting recurring schedule', result.data);
+    },
+  });
+
+  // ===== 41. bill_create_recurring_invoice =====
+  registerTool(server, {
+    name: 'bill_create_recurring_invoice',
+    description:
+      'Create a recurring/subscription invoice schedule. The daily worker generates an invoice from the line-item template each cadence period and advances next_run_at. Set auto_finalize to issue real numbered invoices instead of drafts.',
+    input: {
+      client_id: z
+        .string()
+        .describe('Billing client — UUID, exact client name, or client email'),
+      name: z.string().min(1).max(255).describe('Schedule name (e.g. "Acme monthly retainer")'),
+      cadence: z
+        .enum(['weekly', 'monthly', 'quarterly', 'annually'])
+        .describe('How often to generate an invoice'),
+      project_id: z.string().optional().describe('Link to a Bam project — UUID or exact project name'),
+      auto_finalize: z
+        .boolean()
+        .optional()
+        .describe('When true, generated invoices are finalized (numbered + sent); otherwise left as drafts (default false)'),
+      currency: z.string().length(3).optional().describe('ISO 4217 currency code (defaults to org setting)'),
+      tax_rate: z.number().min(0).max(100).optional().describe('Tax rate percentage'),
+      discount_amount: z.number().int().min(0).optional().describe('Discount amount in cents'),
+      payment_terms_days: z.number().int().min(0).max(365).optional().describe('Net payment terms in days'),
+      start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('First eligible run date (YYYY-MM-DD, default today)'),
+      end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Optional last date the series may run (YYYY-MM-DD)'),
+      notes: z.string().max(5000).optional().describe('Internal notes copied onto each generated invoice'),
+      line_items: z.array(recurringLineItemSchema).optional().describe('Line-item template copied onto each generated invoice'),
+    },
+    returns: z.object({ data: recurringShape }),
+    handler: async (params) => {
+      const clientId = await resolveBillClientId(client, params.client_id);
+      if (!clientId) return notFound('Billing client', params.client_id);
+
+      let projectId: string | undefined;
+      if (params.project_id !== undefined) {
+        const resolved = await resolveBamProjectId(api, params.project_id);
+        if (!resolved) return notFound('Project', params.project_id);
+        projectId = resolved;
+      }
+
+      const body = {
+        ...params,
+        client_id: clientId,
+        ...(projectId !== undefined ? { project_id: projectId } : {}),
+      };
+      const result = await client.request('POST', '/recurring-invoices', body);
+      return result.ok ? ok(result.data) : err('creating recurring schedule', result.data);
+    },
+  });
+
+  // ===== 42. bill_update_recurring_invoice =====
+  registerTool(server, {
+    name: 'bill_update_recurring_invoice',
+    description:
+      'Update a recurring invoice schedule. Provide only the fields to change. Passing line_items replaces the whole template.',
+    input: {
+      recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
+      name: z.string().min(1).max(255).optional().describe('Schedule name'),
+      cadence: z.enum(['weekly', 'monthly', 'quarterly', 'annually']).optional().describe('Generation cadence'),
+      auto_finalize: z.boolean().optional().describe('Auto-finalize generated invoices'),
+      currency: z.string().length(3).optional().describe('ISO 4217 currency code'),
+      tax_rate: z.number().min(0).max(100).optional().describe('Tax rate percentage'),
+      discount_amount: z.number().int().min(0).optional().describe('Discount amount in cents'),
+      payment_terms_days: z.number().int().min(0).max(365).optional().describe('Net payment terms in days'),
+      start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('First eligible run date'),
+      end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Optional last run date'),
+      next_run_at: z.string().optional().describe('Override the next scheduled generation time (ISO datetime)'),
+      notes: z.string().max(5000).optional().describe('Internal notes'),
+      line_items: z.array(recurringLineItemSchema).optional().describe('Replacement line-item template'),
+    },
+    returns: z.object({ data: recurringShape }),
+    handler: async ({ recurring_id, ...body }) => {
+      const result = await client.request('PATCH', `/recurring-invoices/${recurring_id}`, body);
+      return result.ok ? ok(result.data) : err('updating recurring schedule', result.data);
+    },
+  });
+
+  // ===== 43. bill_pause_recurring_invoice =====
+  registerTool(server, {
+    name: 'bill_pause_recurring_invoice',
+    description: 'Pause a recurring schedule — stops invoice generation until resumed.',
+    input: {
+      recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
+    },
+    returns: z.object({ data: recurringShape }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/recurring-invoices/${params.recurring_id}/pause`);
+      return result.ok ? ok(result.data) : err('pausing recurring schedule', result.data);
+    },
+  });
+
+  // ===== 44. bill_resume_recurring_invoice =====
+  registerTool(server, {
+    name: 'bill_resume_recurring_invoice',
+    description: 'Resume a paused recurring schedule — generation continues at next_run_at.',
+    input: {
+      recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
+    },
+    returns: z.object({ data: recurringShape }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/recurring-invoices/${params.recurring_id}/resume`);
+      return result.ok ? ok(result.data) : err('resuming recurring schedule', result.data);
+    },
+  });
+
+  // ===== 45. bill_cancel_recurring_invoice =====
+  registerTool(server, {
+    name: 'bill_cancel_recurring_invoice',
+    description: 'Cancel a recurring schedule permanently. Already-generated invoices are unaffected.',
+    input: {
+      recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
+    },
+    returns: z.object({ data: recurringShape }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/recurring-invoices/${params.recurring_id}/cancel`);
+      return result.ok ? ok(result.data) : err('cancelling recurring schedule', result.data);
+    },
+  });
+
+  // ===== 46. bill_generate_recurring_invoice_now =====
+  registerTool(server, {
+    name: 'bill_generate_recurring_invoice_now',
+    description:
+      'Generate an invoice from a recurring schedule immediately, without waiting for the next scheduled run. Advances next_run_at by one cadence step. Returns the new invoice id, number, and status.',
+    input: {
+      recurring_id: z.string().uuid().describe('Recurring schedule UUID'),
+    },
+    returns: z.object({
+      data: z.object({
+        invoice_id: z.string().uuid(),
+        invoice_number: z.string(),
+        status: z.string(),
+        next_run_at: z.string(),
+      }),
+    }),
+    handler: async (params) => {
+      const result = await client.request('POST', `/recurring-invoices/${params.recurring_id}/generate-now`);
+      return result.ok ? ok(result.data) : err('generating invoice from schedule', result.data);
     },
   });
 }

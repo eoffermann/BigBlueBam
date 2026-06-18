@@ -17,6 +17,12 @@ export const banterUserPreferences = pgTable('banter_user_preferences', {
   show_message_timestamps: varchar('show_message_timestamps', { length: 20 })
     .notNull()
     .default('hover'),
+  // Notification + messaging toggles surfaced on the Banter Preferences page
+  // (migration 0193). Previously the page sent these but there were no
+  // columns, so they silently failed to persist.
+  notification_sound: boolean('notification_sound').notNull().default(true),
+  desktop_notifications: boolean('desktop_notifications').notNull().default(true),
+  show_typing_indicators: boolean('show_typing_indicators').notNull().default(true),
   compact_mode: boolean('compact_mode').notNull().default(false),
   auto_join_huddles: boolean('auto_join_huddles').notNull().default(false),
   noise_suppression: boolean('noise_suppression').notNull().default(true),

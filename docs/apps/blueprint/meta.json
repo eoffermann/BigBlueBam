@@ -1,42 +1,13 @@
-[
-  {
-    "id": "01-diagrams",
-    "label": "Diagram list",
-    "theme": "light",
-    "file": "docs\\apps\\blueprint\\screenshots\\light\\01-diagrams.png",
-    "sha256": "d9e0e77544b19ffb58cafc0586a090872ce3e4f49c08f791d3868df485b725d4",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T22:53:45.813Z"
-  },
-  {
-    "id": "02-editor",
-    "label": "Diagram editor",
-    "theme": "light",
-    "file": "docs\\apps\\blueprint\\screenshots\\light\\02-editor.png",
-    "sha256": "66b3951165796166d53f1b47e0c269b980fe931f367cf44b7c71b1e471739f1a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T22:53:51.421Z"
-  },
-  {
-    "id": "01-diagrams",
-    "label": "Diagram list",
-    "theme": "dark",
-    "file": "docs\\apps\\blueprint\\screenshots\\dark\\01-diagrams.png",
-    "sha256": "c085329173c8d3ffbee11c2f4d0ff767fc4c52925266e0e9507c05ca834766bb",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T22:54:05.546Z"
-  },
-  {
-    "id": "02-editor",
-    "label": "Diagram editor",
-    "theme": "dark",
-    "file": "docs\\apps\\blueprint\\screenshots\\dark\\02-editor.png",
-    "sha256": "6140468a1cb8e1cf8ee34b318166db98151db5f6295a31bd998608bd453943ac",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-14T22:54:11.209Z"
-  }
-]
+{
+  "app": "blueprint",
+  "nginx_path": "/blueprint/",
+  "api_port": 4015,
+  "api_dir": "blueprint-api",
+  "route_files": 6,
+  "schema_modules": 11,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "c4c502e3d3cf51003edc01033afbf6f76e2de0ab7630bff01341534dc89bc3b2",
+  "generated_at": "2026-06-18T00:43:58.238Z",
+  "mcp_tool_count": 36
+}

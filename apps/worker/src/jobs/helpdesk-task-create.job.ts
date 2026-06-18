@@ -86,11 +86,12 @@ export async function processHelpdeskTaskCreateJob(
   const inserted = await db.execute<{ id: string }>(sql`
     WITH new_task AS (
       INSERT INTO tasks (
-        id, project_id, human_id, title, description, description_plain,
+        id, project_id, org_id, human_id, title, description, description_plain,
         phase_id, priority, labels, custom_fields, created_at, updated_at
       ) VALUES (
         gen_random_uuid(),
         ${data.project_id},
+        (SELECT org_id FROM projects WHERE id = ${data.project_id}),
         ${data.human_id},
         ${data.title},
         ${data.description},

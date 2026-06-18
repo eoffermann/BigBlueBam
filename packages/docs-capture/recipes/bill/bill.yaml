@@ -1,0 +1,144 @@
+# Bill — invoicing and billing for client work.
+# Recipes mined from docs/apps/bill/help.md (Feature reference + User Stories)
+# and packages/docs-capture/src/apps/bill.scenes.ts (known-working routes).
+# All routes are confirmed against apps/bill/src/app.tsx parseRoute — none invented.
+# The local stack is already seeded, so no `content` blocks: every view captures
+# existing realistic data. Live dates (invoice Date/Due, expense Date, "Saved!"
+# timestamps) are masked so re-runs stay byte-stable. The floating Bureau
+# presence widget is hidden globally by the capture engine.
+#
+# Note on routes: scene 01-invoice-list points at /bill/, which is actually the
+# Dashboard; the true Invoices list lives at /bill/invoices (a real route in
+# app.tsx). Both are captured below under their honest names. Invoice detail
+# (/bill/invoices/:id) needs a runtime id, so it is reached by clicking a list
+# row via optional interactions rather than a hardcoded path.
+
+- id: bill-dashboard
+  app: bill
+  demonstrates: "The Bill Dashboard with Outstanding / Paid / Overdue / Drafts tiles and a recent-activity table"
+  route: /bill/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Billing dashboard" }
+  masks:
+    - "table td:has-text('/')"
+
+- id: bill-invoice-list
+  app: bill
+  demonstrates: "The Invoices list with status filter pills and per-row PDF / Finalize / Request approval actions"
+  route: /bill/invoices
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Invoice list" }
+  masks:
+    - "table td:has-text('/')"
+
+- id: bill-invoice-list-dark
+  app: bill
+  demonstrates: "The Invoices list in dark theme (marketing/retina)"
+  route: /bill/invoices
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 2, label: "Invoice list" }
+  masks:
+    - "table td:has-text('/')"
+
+- id: bill-invoice-new
+  app: bill
+  demonstrates: "The New Invoice form: client select, editable line items, and the live totals box"
+  route: /bill/invoices/new
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "New invoice" }
+
+- id: bill-invoice-detail
+  app: bill
+  demonstrates: "An invoice detail page: From/To panels, totals tiles, line items, payments, and the PDF preview"
+  route: /bill/invoices
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: waitFor, selector: "table tbody td.cursor-pointer", optional: true }
+    # The row's navigate-to-detail onClick lives on the cells (td.cursor-pointer),
+    # not the <tr> — clicking the tr missed it and re-captured the list. Prefer the
+    # S.S. Wanderer invoice; fall back to the first row.
+    - { action: click, selector: "tr:has-text('Wanderer') td.cursor-pointer", optional: true }
+    - { action: click, selector: "table tbody td.cursor-pointer", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Invoice detail" }
+  masks:
+    - "table td:has-text('/')"
+
+- id: bill-clients
+  app: bill
+  demonstrates: "The Clients list with Name, Email, Phone, and Terms columns"
+  route: /bill/clients
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bill-expenses
+  app: bill
+  demonstrates: "The Expenses list with status pills and per-row Approve / Reject actions"
+  route: /bill/expenses
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Expense list" }
+  masks:
+    - "table td:has-text('/')"
+
+- id: bill-rates
+  app: bill
+  demonstrates: "The Billing Rates list showing rate, type, scope, and effective-from columns"
+  route: /bill/rates
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "table td:has-text('/')"
+
+- id: bill-reports
+  app: bill
+  demonstrates: "The Financial Reports view: Revenue by Month, Outstanding Aging, Project Profitability, and Overdue Invoices"
+  route: /bill/reports
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Financial reports" }
+  masks:
+    - "table td:has-text('/')"
+
+- id: bill-settings
+  app: bill
+  demonstrates: "Billing Settings: Company Information and Invoice Defaults"
+  route: /bill/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bill-recurring
+  app: bill
+  demonstrates: "The Recurring page: subscription schedules with cadence, next-run, generated count, mode (auto-finalize vs draft), and per-row Generate now / Pause / Cancel actions"
+  route: /bill/recurring
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Recurring billing" }
+  masks:
+    - "table td:has-text('/')"

@@ -30,6 +30,14 @@ export interface EmailJobData {
   subject: string;
   html: string;
   text?: string;
+  /**
+   * Originating org. When present, the worker resolves SMTP org-first (org
+   * override → platform → env) so an org that configured its own relay sends
+   * its own transactional mail (e.g. member invitations) through it. Omit
+   * for platform-level mail (bootstrap, system alerts) to use the platform
+   * relay directly.
+   */
+  org_id?: string;
 }
 
 let _queue: Queue<EmailJobData> | null = null;
@@ -102,6 +110,8 @@ export interface GuestInvitationEmailParams {
   token: string;
   orgName: string;
   inviterName: string;
+  /** Org that sent the invite, so the worker can use that org's SMTP relay. */
+  orgId?: string;
 }
 
 /**
@@ -113,7 +123,7 @@ export interface GuestInvitationEmailParams {
 export async function sendGuestInvitationEmail(
   params: GuestInvitationEmailParams,
 ): Promise<boolean> {
-  const { to, token, orgName, inviterName } = params;
+  const { to, token, orgName, inviterName, orgId } = params;
   const acceptUrl = `${spaBase()}/guests/accept/${token}`;
 
   const safeOrg = escapeHtml(orgName);
@@ -144,7 +154,7 @@ If you weren't expecting this invitation, you can safely ignore this email.`;
   try {
     await getQueue().add(
       'guest-invitation',
-      { to, subject, html, text },
+      { to, subject, html, text, org_id: orgId },
       {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
@@ -285,6 +295,12 @@ export interface PasswordResetEmailParams {
   token: string;
   userName: string;
   expiresInMinutes: number;
+  /**
+   * Org that triggered the reset (admin "send reset link" from an org
+   * context). When set, the worker uses that org's SMTP relay if configured.
+   * Self-service forgot-password has no org context and omits it.
+   */
+  orgId?: string;
 }
 
 /**
@@ -298,7 +314,7 @@ export interface PasswordResetEmailParams {
 export async function sendPasswordResetEmail(
   params: PasswordResetEmailParams,
 ): Promise<boolean> {
-  const { to, token, userName, expiresInMinutes } = params;
+  const { to, token, userName, expiresInMinutes, orgId } = params;
   const resetUrl = `${spaBase()}/password-reset?token=${encodeURIComponent(token)}`;
 
   const safeName = escapeHtml(userName);
@@ -332,7 +348,7 @@ If you didn't request this, ignore this email.`;
   try {
     await getQueue().add(
       'password-reset',
-      { to, subject, html, text },
+      { to, subject, html, text, org_id: orgId },
       {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
@@ -360,6 +376,8 @@ export interface MemberInvitationEmailParams {
   onboardingToken?: string;
   /** TTL for the onboarding link, in minutes. */
   onboardingExpiresInMinutes?: number;
+  /** Org the member is being invited to, so the worker uses that org's SMTP relay. */
+  orgId?: string;
 }
 
 /**
@@ -380,6 +398,7 @@ export async function sendMemberInvitationEmail(
     isNewUser,
     onboardingToken,
     onboardingExpiresInMinutes,
+    orgId,
   } = params;
 
   const loginUrl = `${spaBase()}/login`;
@@ -452,7 +471,7 @@ If you weren't expecting this invitation, you can safely ignore this email.`;
   try {
     await getQueue().add(
       'member-invitation',
-      { to, subject, html, text },
+      { to, subject, html, text, org_id: orgId },
       {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },

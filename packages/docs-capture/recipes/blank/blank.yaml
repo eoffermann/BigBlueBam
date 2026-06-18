@@ -1,0 +1,163 @@
+# Blank — forms and surveys (route prefix /blank/).
+# Recipes mined from docs/apps/blank/help.md (Feature reference + User Stories)
+# and packages/docs-capture/src/apps/blank.scenes.ts (known-working routes +
+# setup selectors).
+#
+# Routing model: the SPA pushes id-bearing paths (/blank/forms/<id>/edit,
+# /responses, /analytics, /settings) via an internal onNavigate, so a recipe
+# can't hardcode a form id. Every id-bearing view is therefore reached id-free
+# from the Forms list:
+#   - the builder, its live Preview panel, and the Form Settings dialog all
+#     open by clicking a form card (the [class*="rounded-xl"][class*="cursor-pointer"]
+#     pattern from the scenes file — no data-testid yet, tracked as a gap) and
+#     then an in-builder button (Preview / Settings).
+#   - Responses (and Analytics off it) open from the card's hover-revealed
+#     overflow menu (the MoreHorizontal button → the "Responses" Radix item),
+#     then the Analytics button on the Responses page.
+# All card/menu/button setup steps are optional: true so a sparse seed can't
+# fail the run. No content blocks — the local stack is already seeded.
+# Live "updated"/submission timestamps and dates are masked. The Bureau
+# presence widget is hidden globally by the engine.
+
+- id: blank-form-list
+  app: blank
+  demonstrates: "The Forms list — cards with status pills, field and response counts"
+  route: /blank/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Forms list" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: blank-form-list-dark
+  app: blank
+  demonstrates: "The Forms list in dark theme (marketing/retina)"
+  route: /blank/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Forms list" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: blank-form-builder
+  app: blank
+  demonstrates: "The Form Builder — Add Field palette, canvas, and Field Settings"
+  route: /blank/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']" }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']", optional: true }
+    - { action: wait, ms: 2000 }
+    - { action: waitFor, selector: "h3:has-text('Add Field')", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Form builder" }
+
+- id: blank-form-preview
+  app: blank
+  demonstrates: "The builder's Live Preview panel rendering the form as a respondent sees it"
+  route: /blank/
+  identity: admin
+  interactions:
+    # Open a form that actually has fields (Howell Luau RSVP) so the preview
+    # renders content, not a blank panel.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')" }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')", optional: true }
+    - { action: wait, ms: 2000 }
+    - { action: click, selector: "button:has-text('Preview')", optional: true }
+    - { action: wait, ms: 2500 }
+    - { action: waitFor, selector: "span:has-text('Live Preview')", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Live preview" }
+
+- id: blank-form-settings-dialog
+  app: blank
+  demonstrates: "The Form Settings dialog — visibility, expiration, and project scoping"
+  route: /blank/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']" }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']", optional: true }
+    - { action: wait, ms: 1500 }
+    - { action: click, selector: "button:has-text('Settings')", optional: true }
+    - { action: wait, ms: 1000 }
+    - { action: waitFor, selector: "h2:has-text('Form Settings')", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Form settings" }
+
+- id: blank-responses
+  app: blank
+  demonstrates: "The Responses table — email, answers, attachment-status pills, and dates"
+  route: /blank/
+  identity: admin
+  interactions:
+    # Target the Howell Luau RSVP form (5 submissions) so the table isn't empty.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')" }
+    - { action: hover, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')", optional: true }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau') button.p-1", optional: true }
+    - { action: wait, ms: 500 }
+    - { action: click, selector: "[role='menuitem']:has-text('Responses')", optional: true }
+    - { action: wait, ms: 2000 }
+    - { action: waitFor, selector: "h1:has-text('Responses')", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Responses table" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: blank-analytics
+  app: blank
+  demonstrates: "The Analytics view — summary cards, 30-day trend, and Per-Field Breakdown"
+  route: /blank/
+  identity: admin
+  interactions:
+    # Target the Howell Luau RSVP form (5 submissions) so analytics has data.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')" }
+    - { action: hover, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')", optional: true }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau') button.p-1", optional: true }
+    - { action: wait, ms: 500 }
+    - { action: click, selector: "[role='menuitem']:has-text('Responses')", optional: true }
+    - { action: wait, ms: 1500 }
+    - { action: click, selector: "button:has-text('Analytics')", optional: true }
+    - { action: wait, ms: 2500 }
+    - { action: waitFor, selector: "h1:has-text('Analytics')", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Form analytics" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+    - "time"
+
+- id: blank-app-settings
+  app: blank
+  demonstrates: "The app-level Blank Settings — defaults, rate-limit policy, and emitted events"
+  route: /blank/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "main" }
+    - { action: waitFor, selector: "h1:has-text('Settings')", optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: blank-access-and-notifications
+  app: blank
+  demonstrates: "The Form Settings dialog's access + notification controls — Require sign-in to submit, Allowed email domains, and Email-on-submit recipients — on a gated form"
+  route: /blank/
+  interactions:
+    # Open the Castaway Rescue Request form (requires_login + allowed_domains +
+    # notify_on_submit are all set on it by the blank-submissions seed) so the
+    # access-control and notification sections render with real values.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Castaway Rescue Request')" }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Castaway Rescue Request')", optional: true }
+    - { action: wait, ms: 1500 }
+    - { action: click, selector: "button:has-text('Settings')", optional: true }
+    - { action: wait, ms: 1000 }
+    - { action: waitFor, selector: "h2:has-text('Form Settings')", optional: true }
+    # Scroll the access-control + notification controls into the frame.
+    - { action: scrollTo, selector: "label:has-text('Require sign-in to submit')", optional: true }
+    - { action: wait, ms: 500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Access control and notifications" }

@@ -158,6 +158,11 @@
       "level": 3
     },
     {
+      "anchor": "email-delivery-smtp",
+      "title": "Email delivery (SMTP)",
+      "level": 3
+    },
+    {
       "anchor": "command-palette-and-keyboard-shortcuts",
       "title": "Command palette and keyboard shortcuts",
       "level": 3
@@ -243,6 +248,11 @@
       "level": 3
     },
     {
+      "anchor": "story-sync-tasks-from-an-external-system-with-an-agent",
+      "title": "Story: Sync tasks from an external system with an agent",
+      "level": 3
+    },
+    {
       "anchor": "related",
       "title": "Related",
       "level": 2
@@ -252,17 +262,17 @@
     {
       "anchor": "overview",
       "title": "Overview",
-      "text": "Bam is where work gets planned and tracked. Each project is a board with its own phases (columns), task states, labels, epics, sprints, custom fields, and templates. You move tasks across the board by dragging cards, group them into time-boxed sprints, and carry unfinished work forward when a sprint closes. Cards carry a full task record: assignee, priority, story points, due dates, subtasks, comments, attachments, time entries, and custom fields. Bam is built for small-to-medium teams. It supports many concurrent projects, and every project can be shaped differently because phases, states, and custom fields are all configurable per project (and priorities per org). The same data is reachable through MCP tools, so an AI agent can create tasks, run reports, or plan a sprint with the same authority a human has in the UI. Bam connects to the rest of the suite. Helpdesk tickets can spawn Bam tasks (a Helpdesk tab then appears on the task), GitHub commits and pull requests can link back to a task, Slack receives sprint and task notifications, and Banter messages can reference a task by its human id so a deep link opens the right board with the task drawer open. The core objects you work with are projects, phases, task states, tasks, sprints, epics, labels, custom fields, and saved views."
+      "text": "Bam is where work gets planned and tracked. Each project is a board with its own phases (columns), task states, labels, epics, sprints, custom fields, and templates. You move tasks across the board by dragging cards, group them into time-boxed sprints, and carry unfinished work forward when a sprint closes. Cards carry a full task record: assignee, priority, story points, start and due dates, subtasks, comments, attachments, time entries, and custom fields. Bam is built for small-to-medium teams. It supports many concurrent projects, and every project can be shaped differently because phases, states, and custom fields are all configurable per project (and priorities per org). The same data is reachable through MCP tools, so an AI agent can create tasks, run reports, or plan a sprint with nearly the same authority a human has in the UI. Bam connects to the rest of the suite. Helpdesk tickets can spawn Bam tasks (a Helpdesk tab then appears on the task), GitHub commits and pull requests can link back to a task, Slack receives sprint and task notifications, and Banter messages can reference a task by its human id so a deep link opens the right board with the task drawer open. The core objects you work with are projects, phases, task states, tasks, sprints, epics, labels, custom fields, and saved views."
     },
     {
       "anchor": "key-concepts",
       "title": "Key concepts",
-      "text": "- Organization (org) - The top-level tenant. Org roles are owner, admin, and member, plus a guest role. Priorities are configured at the org level. - Project - A board with its own phases, states, labels, epics, sprints, custom fields, and templates. Every project has a task id prefix (2 to 6 uppercase letters, for example MAGE or FRND) that prefixes every task id. Project roles are admin, member, and viewer. - Phase - A board column. A phase can carry a WIP limit, a color, start and terminal flags, and an auto-state that is applied when a task enters the phase. - Task state - The status of a task, orthogonal to its phase. Each state belongs to a category (todo, active, blocked, review, done, or cancelled) and may be a closed state. Tasks in a closed state count toward velocity. - Task - The unit of work. Each task has a human id in the form PREFIX-N (for example MAGE-38). A task holds a title, rich-text description, phase, state, sprint, epic, assignee, reporter, priority, story points, time estimate and logged time, start and due dates, labels, custom fields, links, parents and subtasks, comments, and attachments. - Priority - A per-org configurable value. The default set is Critical, High, Medium, Low, and None. New tasks default to Medium. - Sprint - A time-boxed iteration with a status of planned, active, completed, or cancelled. Only one sprint can be active per project at a time. The default sprint length is 14 days. A sprint carries a goal, start and end dates, velocity, and retrospective notes. - Carry-forward - When you complete an active sprint, each incomplete task can be carried forward to a target sprint, moved to the backlog, or cancelled. Carried tasks show a carry-forward badge and remember their original sprint for reporting. - Epic - A grouping of tasks across sprints, with a status of open, in progress, or closed. Epics roll up task counts and story points. - Label - A project-scoped tag with a name and color. - Custom field - A project-scoped field stored on each task. The seven field types are text, number, date, select, multi-select, checkbox, and url. A field can be required and can be shown on the card. - Saved view - A saved filter, sort, swimlane, and view-type preset. It can be private to you or shared with the project. Saved views persist the Board, List, Timeline, and Calendar view types. - Swimlane - A horizontal grouping of the board. The options are No Swimlanes, By Assignee, By Priority, and By Epic. - Watcher - A user subscribed to a task's notifications. Watchers are populated by the system as people get involved with a task. There is no manual add-watcher or remove-watcher control in the Bam UI. - Done-gate - A task cannot move into a closed state while it still has open subtasks. The board surfaces this as an alert and the API returns an INCOMPLETESUBTASKS error."
+      "text": "- Organization (org) - The top-level tenant. Org roles are owner, admin, and member, plus a guest role. Priorities are configured at the org level. - Project - A board with its own phases, states, labels, epics, sprints, custom fields, and templates. Every project has a task id prefix (2 to 6 uppercase letters, for example MAGE or FRND) that prefixes every task id. Project roles are admin, member, and viewer. - Phase - A board column. A phase can carry a WIP limit, a color, start and terminal flags, and an auto-state that is applied when a task enters the phase. - Task state - The status of a task, orthogonal to its phase. Each state belongs to a category (todo, active, blocked, review, done, or cancelled) and may be a closed state. Tasks in a closed state count toward velocity. - Task - The unit of work. Each task has a human id in the form PREFIX-N (for example MAGE-38). A task holds a title, rich-text description, phase, state, sprint, epic, assignee, reporter, priority, story points, time estimate and logged time, start and due dates, labels, custom fields, links, parents and subtasks, comments, and attachments. - Priority - A per-org configurable value. The default set is Critical, High, Medium, Low, and None. New tasks default to Medium. - Sprint - A time-boxed iteration with a status of planned, active, completed, or cancelled. Only one sprint can be active per project at a time. The default sprint length is 14 days. A sprint carries a goal, start and end dates, velocity, and retrospective notes. - Carry-forward - When you complete an active sprint, each incomplete task can be carried forward to a target sprint, moved to the backlog, or cancelled. Carried tasks show a carry-forward badge and remember their original sprint for reporting. - Epic - A grouping of tasks across sprints, with a status of open, in progress, or closed. Epics roll up task counts and story points. - Label - A project-scoped tag with a name and color. - Custom field - A project-scoped field stored on each task. The seven field types are text, number, date, select, multi-select, checkbox, and url. A field can be required and can be shown on the card. - Saved view - A saved filter, sort, swimlane, and view-type preset. It can be private to you or shared with the project. Saved views persist the Board, List, Timeline, and Calendar view types. - Swimlane - A horizontal grouping of the board. The options are No Swimlanes, By Assignee, By Priority, and By Epic. - Start and due dates - Each task can carry a start date and a due date. These drive the Timeline (Gantt) and Calendar views and feed the overdue and My Work groupings. - Watcher - A user subscribed to a task's notifications. Watchers are populated by the system as people get involved with a task. There is no manual add-watcher or remove-watcher control in the Bam UI. - Done-gate - A task cannot move into a closed state while it still has open subtasks. The board surfaces this as an alert and the API returns an INCOMPLETESUBTASKS error."
     },
     {
       "anchor": "where-to-find-it",
       "title": "Where to find it",
-      "text": "Bam is served at /b3/. From the left sidebar you reach Dashboard (the project list), My Work (your personal task queues), and the Projects list with a plus button to create a project. Opening a project lands you on its board at /projects/:id/board. To use Bam you need an authenticated session (a login cookie or a bbam API key) and membership in at least one project. Some actions require a project admin role or an org owner or admin role. On a brand-new install, Bam routes you to /b3/bootstrap to create the first account until a SuperUser exists."
+      "text": "Bam is served at /b3/. From the left sidebar you reach Dashboard (the project list), My Work (your personal task queue), and the Projects list with a plus button to create a project. Opening a project lands you on its board at /projects/:id/board. To use Bam you need an authenticated session (a login cookie or a bbam API key) and membership in at least one project. Some actions require a project admin role or an org owner or admin role. On a brand-new install, Bam routes you to /b3/bootstrap to create the first account until a SuperUser exists."
     },
     {
       "anchor": "feature-reference",
@@ -277,17 +287,17 @@
     {
       "anchor": "kanban-board",
       "title": "Kanban board",
-      "text": "The board is the primary view. Phases are columns and tasks are cards you drag between them. The board header carries the sprint selector, a filter bar, the swimlane selector (No Swimlanes, By Assignee, By Priority, By Epic), a lane-sort control (used with the epic swimlane), the view switcher (Board, List, Timeline, Calendar, Workload), and action icons for the dashboard, Import tasks, Task templates, Saved views, Manage epics, and a Project options three-dot menu. To add a task to a column, use the column's add control to open the create dialog, or type into the inline add input under a column. To move a task, drag its card to another column or to a new position. The board persists the new position immediately. If you drag a task with open subtasks into a closed state, the move is blocked and you see an alert. To act on a single card, right-click it. The context menu offers Open detail, Add subtask..., Duplicate, Priority (Critical, High, Medium, Low, None), Move to phase, Set state, Assign to... (Unassigned plus members), Change parent task (searchable), and Delete task (which warns that deletion is irreversible). The Project options menu holds Manage Phases, Custom Fields, Export, and Delete Project."
+      "text": "The board is the primary view. Phases are columns and tasks are cards you drag between them. The board header carries the sprint selector, a filter bar, the swimlane selector (No Swimlanes, By Assignee, By Priority, By Epic), a lane-sort control (used with the epic swimlane), the view switcher (Board, List, Timeline, Calendar, Workload), and action icons for the dashboard, Import tasks, Task templates, Saved views, Manage epics, and a Project options three-dot menu. To add a task to a column, use the column's add control to open the create dialog, or type into the inline add input under a column. To move a task, drag its card to another column or to a new position. The board persists the new position immediately. If you drag a task with open subtasks into a closed state, the move is blocked and you see an alert. To act on a single card, right-click it. The context menu offers Open detail, Add subtask..., Duplicate, Priority (Critical, High, Medium, Low, None), Move to phase, Set state, Assign to... (Unassigned plus org members), Change parent task (searchable), and Delete task (which warns that deletion is irreversible). The Project options menu holds Manage Phases, Custom Fields, Export, and Delete Project."
     },
     {
       "anchor": "task-detail-drawer",
       "title": "Task detail drawer",
-      "text": "Opening a task slides in a detail drawer with everything about that task. To open a task, click its card or choose Open detail from the card's context menu. The drawer header shows the task's human id (click it to copy), a state selector, and a priority selector, plus controls to Share to Banter, Duplicate task, and close. The drawer body has tabs: Details, Comments, Activity, and a Helpdesk tab that appears only when the task was created from a Helpdesk ticket. On the Details tab you can edit the title and rich-text description, manage parent tasks and subtasks, add labels, upload attachments, and add task links. The right sidebar holds Assignee, Reporter, Sprint, Phase, Epic, Story Points, Time Logged, Start Date, Due Date, Labels, and Custom Fields, and a Delete Task action at the bottom. To edit a field, change its control in the sidebar; the drawer saves the change as you go. The description auto-saves shortly after you stop typing. A task's watchers are maintained automatically as people get involved (for example, being assigned or commenting). There is no watcher list or add-watcher control in the drawer."
+      "text": "Opening a task slides in a detail drawer with everything about that task. To open a task, click its card or choose Open detail from the card's context menu. The drawer header shows the task's human id (click it to copy), a state selector, and a priority selector, plus controls to Share to Banter, Duplicate task, and close. The drawer body has tabs: Details, Comments, Activity, and a Helpdesk tab that appears only when the task was created from a Helpdesk ticket. On the Details tab you can edit the title and rich-text description, manage parent tasks and subtasks, add labels, upload attachments, and add task links. The right sidebar holds Assignee, Reporter, Sprint, Phase, Epic, Story Points, Time Logged, Start Date, Due Date, Labels, and Custom Fields, and a Delete Task action at the bottom. The Assignee picker lists all members of the org, not just members of the current project, so you can assign work to anyone in the org. To edit any field, change its control in the sidebar; the drawer saves the change as you go. The description auto-saves shortly after you stop typing. A task's watchers are maintained automatically as people get involved (for example, being assigned or commenting). There is no watcher list or add-watcher control in the drawer."
     },
     {
       "anchor": "creating-and-editing-tasks",
       "title": "Creating and editing tasks",
-      "text": "To create a task from the create dialog: 1. Trigger the dialog from a column's add control or press the N shortcut. 2. Fill in Title (placeholder \"What needs to be done?\"), and optionally Phase, Priority, Story Points, Assignee, Due Date, Labels, and a description. 3. Click Create Task. To edit a task, open its drawer and change fields inline, or use the card context menu for quick priority, phase, state, and assignee changes. To duplicate a task, use Duplicate task in the drawer header or Duplicate in the card context menu. You can include subtasks when duplicating. Bam blocks moving or updating a task into a closed state while it has open subtasks. Parent-child links are guarded against self-parenting and cycles."
+      "text": "To create a task from the create dialog: 1. Trigger the dialog from a column's add control or press the N shortcut. 2. Fill in Title (placeholder \"What needs to be done?\"), and optionally Phase, Priority, Story Points, Assignee, Due Date, Labels, and a description. The Assignee picker lists every org member. 3. Click Create Task. To edit a task, open its drawer and change fields inline, or use the card context menu for quick priority, phase, state, and assignee changes. To duplicate a task, use Duplicate task in the drawer header or Duplicate in the card context menu. You can include subtasks when duplicating. Bam blocks moving or updating a task into a closed state while it has open subtasks. Parent-child links are guarded against self-parenting and cycles."
     },
     {
       "anchor": "subtasks-and-parent-tasks",
@@ -337,7 +347,7 @@
     {
       "anchor": "alternate-views-list-timeline-calendar-workload",
       "title": "Alternate views (List, Timeline, Calendar, Workload)",
-      "text": "The view switcher in the board header toggles between five views: Board, List, Timeline, Calendar, and Workload. To change view, click the matching icon in the view switcher. Workload shows load per user; clicking a user there filters the board to that user."
+      "text": "The view switcher in the board header toggles between five views: Board, List, Timeline, Calendar, and Workload. To change view, click the matching icon in the view switcher. - List is a flat, sortable table of the project's tasks. - Timeline lays tasks out by date as a Gantt chart, using each task's start and due dates. - Calendar places tasks on their due dates. - Workload shows load per user; clicking a user there filters the board to that user."
     },
     {
       "anchor": "task-templates",
@@ -392,22 +402,27 @@
     {
       "anchor": "people-and-members",
       "title": "People and members",
-      "text": "Manage the people in your org and projects. To manage people, open /people (org admins and owners) for the people list and each person's detail page at /people/:userId. The detail page has tabs Overview, Projects, Access, and Activity. From Overview you edit identity (display name, timezone) and membership (role, default org). From Projects you add the user to projects with a role. From Access you manage API keys, sessions, and password resets. Platform SuperUsers use /superuser/people. To add a member to a project, use the project's member controls (project admin only) or add the user to projects from their Projects tab."
+      "text": "Manage the people in your org and projects. To manage people, open /people (org admins and owners) for the people list and each person's detail page at /people/:userId. The detail page has tabs Overview, Projects, Access, and Activity. From Overview you edit identity (display name, timezone) and membership (role, default org). From Projects you add the user to projects with a role. From Access you manage API keys, sessions, and password resets. Platform SuperUsers use /superuser/people. To add a member to a project, use the project's member controls (project admin only) or add the user to projects from their Projects tab. Note that assignment is not gated on project membership: the task Assignee picker lists every org member, so you can assign a task to someone who is not yet a project member."
     },
     {
       "anchor": "my-work",
       "title": "My Work",
-      "text": "My Work is your personal queue across every project. To open it, click My Work in the sidebar. The page groups your tasks into Overdue, Due This Week, In Progress, and All My Tasks."
+      "text": "My Work is your personal queue across every project. It lists only the tasks assigned to you (it queries each project's task list filtered to your user id), so it never shows another person's work. To open it, click My Work in the sidebar. The page groups your open tasks into Overdue, Due This Week, In Progress, and All My Tasks. Tasks land in Overdue or Due This Week based on their due date, in In Progress if they have a start date, and in All My Tasks otherwise. Completed tasks are hidden, and when nothing is assigned you see \"All caught up!\"."
     },
     {
       "anchor": "settings",
       "title": "Settings",
-      "text": "Settings control your profile and the org's configuration. To open settings, go to /settings. The tabs are Profile, Appearance (system, light, dark), Notifications, Members, Tasks (which includes Manage Priorities), Permissions, Launchpad, Integrations (API keys, agents and service accounts, webhooks, Slack, SMTP), AI Providers, and Helpdesk. Use the Tasks tab's Manage Priorities to configure the org's priority set."
+      "text": "Settings control your profile and the org's configuration. To open settings, go to /settings. The ten tabs are Profile, Appearance (System, Light, Dark), Notifications, Members, Tasks (which includes Manage Priorities), Permissions, Launchpad, Integrations (API keys, agents and service accounts, webhooks, Slack, and the per-org SMTP override), AI Providers, and Helpdesk. Use the Tasks tab's Manage Priorities to configure the org's priority set. The per-org email relay lives on the Integrations tab; the platform-wide relay it falls back to is set in the SuperUser Console (see Email delivery (SMTP) below)."
+    },
+    {
+      "anchor": "email-delivery-smtp",
+      "title": "Email delivery (SMTP)",
+      "text": "BigBlueBam sends outbound mail (org invitations, password resets, system and reporting alerts, and Blast campaigns) through an SMTP relay. There are two levels of configuration, and the system always picks the most specific one that is set. The resolution order is: the org override first, then the platform relay, then the server's environment default. In plain terms: if your organization has set its own relay, your org's mail goes through it; if it has not, your org's mail falls back to the platform relay a SuperUser configured; and if neither is set, the system uses the SMTP values baked into the server's environment variables. This used to live under Account Settings Integrations; the platform relay has since moved to the SuperUser Console, and the per-org override now sits in its own card on the Integrations tab. Platform email (SMTP). The platform relay is the system-wide, fallback sender. It is what the platform uses for new-org-setup invitations, the password-reset fallback, and system and reporting alerts, and it is the relay any organization falls back to when it has not configured its own. Only a platform SuperUser can set it. To configure the platform relay, open the SuperUser Console at /superuser, click the Platform tab, and scroll to the Platform SMTP relay card. Fill in SMTP Host, SMTP Port (587 for STARTTLS, 465 for TLS-only), SMTP Username, SMTP Password, and From Address, set Use TLS (secure) for port 465, and save. Any field you leave blank falls back to the matching server environment variable (SMTPHOST, SMTPPORT, SMTPUSER, SMTPPASS, EMAILFROM). Use Test connection to verify login and TLS, or enter an address and click Send test email to confirm end-to-end delivery. Changes take effect within 30 seconds. Organization email (SMTP). An org admin or owner can give their organization its own relay, which overrides the platform relay for that org's outbound mail (Blast campaigns and member or guest invitations). Leaving it blank keeps the org on the platform relay. To configure the org override, open /settings, select the Integrations tab, and scroll to the Organization Email (SMTP) card. Fill in the same fields and save; the card confirms whether the org is using its own relay or falling back to the platform relay. The relay password is masked on read, so leaving the dots in place keeps the stored password unchanged. Test relay checks whichever relay will actually send (your org override if set, otherwise the platform fallback). To stop using the org relay, click Use platform relay, which clears the override. Changes take effect within 30 seconds."
     },
     {
       "anchor": "command-palette-and-keyboard-shortcuts",
       "title": "Command palette and keyboard shortcuts",
-      "text": "Bam has power-user navigation built in. Press Ctrl/Cmd+K to open the command palette. Other shortcuts: N creates a task, S or / focuses search, F toggles the filter, Esc closes the current overlay, and ? opens the keyboard shortcuts overlay and Help."
+      "text": "Bam has power-user navigation built in. Press Ctrl/Cmd+K to open the command palette. Other shortcuts: N creates a task, S or / focuses search, F toggles the filter, Esc closes the current overlay, and ? opens the Keyboard Shortcuts overlay and Help."
     },
     {
       "anchor": "notifications",
@@ -422,7 +437,7 @@
     {
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
-      "text": "Agents drive Bam through its MCP tools, which accept natural identifiers (project, phase, sprint, and label names, a user's email, or a human id like FRND-42) as well as UUIDs. Bam exposes tools across nine areas: - Tasks - searchtasks, gettask, bamgettaskbyhumanid, createtask, updatetask, movetask, deletetask, bulkupdatetasks, logtime, duplicatetask, importcsv, taskupsertbyexternalid, bamaddtaskparent, bamremovetaskparent, bamlisttaskparents, bamlisttasksubtasks. - Sprints - listsprints, createsprint, startsprint, completesprint, getsprintreport. - Projects - listprojects, getproject, createproject, testslackwebhook, disconnectgithubintegration. - Epics - bamcreateepic, bamupdateepic, bamgetepic, bamlistepics. - Members and users - listmembers, getmytasks, bamfinduserbyemail, bamfinduser, baminvitemember, bamadminresetpassword, bamsendpasswordresetlink. - Reports - getvelocityreport, getburndown, getcumulativeflow, getoverduetasks, getworkload, getstatusdistribution, getcycletimereport, gettimetrackingreport. - Templates - listtemplates, createfromtemplate. - Comments - listcomments, addcomment. - Import - importgithubissues, suggestbranchname, bamimportcsv. Resolver helpers (bamlistlabels, bamlistphases, bamliststates) and identity tools (getme, updateme, listmyorgs, switchactiveorg) round out the catalog. Destructive tools require human review. deletetask and disconnectgithubintegration use the two-step confirmaction token flow: the tool stages the action and returns a token, and a second call confirms it. Tokens are time-limited. The idempotent taskupsertbyexternalid keys on the project plus an external id and emits a task.upserted event with a created flag, so agents can sync from an external system without creating duplicates. When reviewing agent work, watch the project audit log and the task Activity tab."
+      "text": "Agents drive Bam through its MCP tools, which accept natural identifiers (project, phase, sprint, and label names, a user's email, or a human id like FRND-42) as well as UUIDs. The catalog spans nine Bam tool files and lets an agent do nearly everything a human can on the board: - Tasks - searchtasks, gettask, bamgettaskbyhumanid, createtask, updatetask, movetask, deletetask, bulkupdatetasks, logtime, duplicatetask, importcsv, taskupsertbyexternalid, bamaddtaskparent, bamremovetaskparent, bamlisttaskparents, bamlisttasksubtasks. - Sprints - listsprints, createsprint, startsprint, completesprint, getsprintreport. - Projects - listprojects, getproject, createproject, testslackwebhook, disconnectgithubintegration. - Epics - bamcreateepic, bamupdateepic, bamgetepic, bamlistepics. - Members and users - listmembers, getmytasks, bamfinduserbyemail, bamfinduser, baminvitemember, bamadminresetpassword, bamsendpasswordresetlink. - Reports - getvelocityreport, getburndown, getcumulativeflow, getoverduetasks, getworkload, getstatusdistribution, getcycletimereport, gettimetrackingreport. - Templates - listtemplates, createfromtemplate. - Comments - listcomments, addcomment. - Import - importgithubissues, suggestbranchname, bamimportcsv. Resolver helpers (bamlistlabels, bamlistphases, bamliststates) and identity tools (getme, updateme, listmyorgs, switchactiveorg) round out the Bam-specific catalog. On top of the Bam tools, agents reach Bam through the cross-cutting agentic platform that every app shares: - Identity, audit, heartbeat - An agent identifies itself and reports liveness with agentheartbeat, reviews its own recent actions with agentaudit, and describes its capabilities with agentselfreport. Every write an agent makes is recorded with an agent actor type in the activity log. - Approval queues - For work that needs a human sign-off, an agent files a proposal with proposalcreate, a human or another agent lists pending items with proposallist, and a decision is recorded with proposaldecide. - Cross-app read plane - searcheverything fans a query out across apps (Bam tasks included) with normalized scoring, resolvereferences turns mentions like FRND-42 into resolved entities, and activityquery reads the unified cross-app activity view. Composite views projectview and accountview assemble a rounded picture of a project or account spanning multiple apps. - Idempotent upserts - taskupsertbyexternalid keys on the project plus an external id and emits a task.upserted event with a created flag, so an agent can sync tasks from an external system without creating duplicates. - Visibility preflight - Before an agent posts a Bam task into a shared surface, it calls canaccess(askeruserid, entitytype, entityid) and drops anything the asker is not allowed to see. - Agent policies and webhooks - A per-agent kill switch and tool allowlist (bam., task., and so on) gate every service-account call, and subscribed Bolt events are pushed to agent runners via signed outbound webhooks. Destructive tools require human review. deletetask and disconnectgithubintegration use the two-step confirmaction token flow: the tool stages the action and returns a time-limited token, and a second call confirms it. When reviewing agent work, watch the project audit log and the task Activity tab; both record the agent actor. See docs/apps/bam/mcp-tools.md for the full tool catalog."
     },
     {
       "anchor": "user-stories",
@@ -437,12 +452,12 @@
     {
       "anchor": "story-create-and-work-a-task-end-to-end",
       "title": "Story: Create and work a task end to end",
-      "text": "Who: A team member doing the day-to-day work. Goal: Take a task from creation to done with full detail along the way. Before you start: Membership in a project. Steps 1. Press N or use a column's add control to open the create dialog. 2. Fill in Title, then optionally Phase, Priority, Story Points, Assignee, Due Date, and Labels, and click Create Task. 3. Drag the card across phases as work progresses. 4. Open the task, log time in Time Logged with Log Time, write a note on the Comments tab, react to a teammate's comment, and upload a file under Attachments. 5. When finished, set a closed state. If the task still has open subtasks, the move is blocked until you finish them. Result: The task moves to a closed state and counts toward sprint velocity, with its time, discussion, and files attached. Related: Subtasks, the done-gate, and createtask / updatetask / logtime for agents."
+      "text": "Who: A team member doing the day-to-day work. Goal: Take a task from creation to done with full detail along the way. Before you start: Membership in a project. Steps 1. Press N or use a column's add control to open the create dialog. 2. Fill in Title, then optionally Phase, Priority, Story Points, Assignee (any org member), Due Date, and Labels, and click Create Task. 3. Drag the card across phases as work progresses. 4. Open the task, log time in Time Logged with Log Time, write a note on the Comments tab, react to a teammate's comment, and upload a file under Attachments. 5. When finished, set a closed state. If the task still has open subtasks, the move is blocked until you finish them. Result: The task moves to a closed state and counts toward sprint velocity, with its time, discussion, and files attached. Related: Subtasks, the done-gate, and createtask / updatetask / logtime for agents."
     },
     {
       "anchor": "story-track-your-personal-load",
       "title": "Story: Track your personal load",
-      "text": "Who: Anyone with assigned tasks. Goal: See what you owe and what is overdue across all projects. Before you start: Tasks assigned to you. Steps 1. Click My Work in the sidebar. 2. Scan the Overdue, Due This Week, In Progress, and All My Tasks groups. 3. Click any task to open its drawer and act on it. Result: You have a single, cross-project view of your own work. Related: Agents use getmytasks."
+      "text": "Who: Anyone with assigned tasks. Goal: See what you owe and what is overdue across all projects. Before you start: Tasks assigned to you. Steps 1. Click My Work in the sidebar. 2. Scan the Overdue, Due This Week, In Progress, and All My Tasks groups. Only tasks assigned to you appear here. 3. Click any task to jump to its project board and act on it. Result: You have a single, cross-project view of your own work, with completed tasks hidden. Related: Agents use getmytasks."
     },
     {
       "anchor": "story-plan-and-run-a-sprint",
@@ -467,7 +482,7 @@
     {
       "anchor": "story-slice-the-board-with-views",
       "title": "Story: Slice the board with views",
-      "text": "Who: Anyone who wants a focused cut of the board. Goal: Filter and group the board, then save the cut for reuse. Before you start: A project with tasks. Steps 1. In the view switcher, pick Board, List, Timeline, Calendar, or Workload. 2. Apply swimlanes (By Assignee, By Priority, or By Epic) and set filters. 3. Click Saved views and save the configuration, optionally sharing it with the project. Result: Your filtered, grouped view is saved and reusable. (Workload is a view mode you can switch to but cannot save as a view type.) Related: Saved views, Alternate views."
+      "text": "Who: Anyone who wants a focused cut of the board. Goal: Filter and group the board, then save the cut for reuse. Before you start: A project with tasks. Steps 1. In the view switcher, pick Board, List, Timeline, Calendar, or Workload. 2. Apply swimlanes (By Assignee, By Priority, or By Epic) and set filters. 3. Click Saved views and save the configuration, optionally sharing it with the project. Result: Your filtered, grouped view is saved and reusable. (Workload is a view mode you can switch to but cannot save as a view type.) Related: Saved views, Alternate views. Tasks need start and due dates for the Timeline and Calendar views to place them."
     },
     {
       "anchor": "story-import-an-existing-backlog",
@@ -487,7 +502,12 @@
     {
       "anchor": "story-deep-link-a-task-across-apps",
       "title": "Story: Deep-link a task across apps",
-      "text": "Who: Anyone who shares a task reference in another app. Goal: Open a task directly from a reference like MAGE-38. Before you start: Access to the project that owns the task. Steps 1. From a Banter message or email that references a task (for example MAGE-38), open /b3/tasks/ref/MAGE-38. 2. Bam resolves the reference to the task. Result: The project board opens with that task's drawer open. Related: Share to Banter; the bamgettaskbyhumanid tool."
+      "text": "Who: Anyone who shares a task reference in another app. Goal: Open a task directly from a reference like MAGE-38. Before you start: Access to the project that owns the task. Steps 1. From a Banter message or email that references a task (for example MAGE-38), open /b3/tasks/ref/MAGE-38. 2. Bam resolves the reference to the task. Result: The project board opens with that task's drawer open. Related: Share to Banter; the bamgettaskbyhumanid and resolvereferences tools."
+    },
+    {
+      "anchor": "story-sync-tasks-from-an-external-system-with-an-agent",
+      "title": "Story: Sync tasks from an external system with an agent",
+      "text": "Who: An AI agent keeping a Bam project in step with an external tracker. Goal: Create or update tasks idempotently without making duplicates. Before you start: A service-account API key whose agent policy allows the Bam task tools, and an external id per source record. Steps 1. The agent resolves the project by name or id and confirms write access. 2. For each external record, the agent calls taskupsertbyexternalid with the project, the external id, and the task fields. 3. Bam creates the task on first sight and updates it on subsequent calls, emitting a task.upserted event with a created flag each time. 4. For any task the agent intends to surface in a shared channel, it first calls canaccess and drops entities the asker may not see. Result: The project stays mirrored to the external system with no duplicate tasks, and every change is recorded under the agent actor in the audit log. Related: The Working with AI agents section; taskupsertbyexternalid, canaccess, agentaudit."
     },
     {
       "anchor": "related",
@@ -501,12 +521,15 @@
     "/people": "people-and-members",
     "/people/:userId": "people-and-members",
     "/settings": "settings",
+    "/superuser": "email-delivery-smtp",
     "/superuser/people": "people-and-members",
     "AI Providers": "settings",
     "Access": "people-and-members",
     "Activity": "task-detail-drawer",
+    "Agent policies and webhooks": "working-with-ai-agents",
     "All My Tasks": "my-work",
     "Appearance": "settings",
+    "Approval queues": "working-with-ai-agents",
     "Assignee": "task-detail-drawer",
     "Attachments": "attachments",
     "Banter": "cross-app-integrations",
@@ -528,6 +551,7 @@
     "Create Project": "project-dashboard-and-project-list",
     "Create Task": "creating-and-editing-tasks",
     "Create sprint": "sprints",
+    "Cross-app read plane": "working-with-ai-agents",
     "Ctrl/Cmd+K": "command-palette-and-keyboard-shortcuts",
     "Custom Fields": "kanban-board",
     "Custom field": "key-concepts",
@@ -542,17 +566,21 @@
     "Due This Week": "my-work",
     "Duplicate": "kanban-board",
     "Duplicate task": "task-detail-drawer",
+    "Email delivery (SMTP)": "settings",
     "Epic": "key-concepts",
     "Epics": "working-with-ai-agents",
     "Esc": "command-palette-and-keyboard-shortcuts",
     "Export": "kanban-board",
     "Format": "export",
+    "From Address": "email-delivery-smtp",
     "GitHub": "cross-app-integrations",
     "Helpdesk": "task-detail-drawer",
+    "Idempotent upserts": "working-with-ai-agents",
     "Import": "working-with-ai-agents",
     "Import tasks": "kanban-board",
     "In Progress": "my-work",
     "Integrations": "settings",
+    "Keyboard Shortcuts": "command-palette-and-keyboard-shortcuts",
     "Label": "key-concepts",
     "Labels": "task-detail-drawer",
     "Launchpad": "settings",
@@ -573,11 +601,13 @@
     "Notifications": "settings",
     "Open detail": "kanban-board",
     "Organization (org)": "key-concepts",
+    "Organization Email (SMTP)": "email-delivery-smtp",
     "Overdue": "my-work",
     "Overview": "people-and-members",
     "Parent tasks": "subtasks-and-parent-tasks",
     "Permissions": "settings",
     "Phase": "key-concepts",
+    "Platform": "email-delivery-smtp",
     "Priority": "key-concepts",
     "Profile": "settings",
     "Project": "key-concepts",
@@ -586,30 +616,40 @@
     "Reporter": "task-detail-drawer",
     "Reports": "working-with-ai-agents",
     "Retrospective Notes (optional)": "sprints",
+    "SMTP Password": "email-delivery-smtp",
+    "SMTP Username": "email-delivery-smtp",
     "Saved view": "key-concepts",
     "Saved views": "saved-views",
+    "Send test email": "email-delivery-smtp",
     "Set state": "kanban-board",
     "Share to Banter": "task-detail-drawer",
     "Slack": "cross-app-integrations",
     "Sprint": "key-concepts",
     "Sprints": "working-with-ai-agents",
     "Start Date": "task-detail-drawer",
+    "Start and due dates": "key-concepts",
     "Start this sprint": "sprints",
     "Story Points": "task-detail-drawer",
+    "SuperUser Console": "email-delivery-smtp",
     "Swimlane": "key-concepts",
     "Task": "key-concepts",
     "Task state": "key-concepts",
     "Task templates": "task-templates",
     "Tasks": "settings",
     "Templates": "working-with-ai-agents",
+    "Test connection": "email-delivery-smtp",
+    "Test relay": "email-delivery-smtp",
     "Time Logged": "task-detail-drawer",
     "Timeline": "alternate-views-list-timeline-calendar-workload",
     "Title": "creating-and-editing-tasks",
     "Upload File": "attachments",
     "View sprint report": "sprints",
+    "Visibility preflight": "working-with-ai-agents",
     "Watcher": "key-concepts",
     "Workload": "alternate-views-list-timeline-calendar-workload",
+    "card. Fill in": "email-delivery-smtp",
     "name": "project-dashboard-and-project-list",
+    "org override": "email-delivery-smtp",
     "task id prefix": "project-dashboard-and-project-list"
   },
   "crossrefs": [

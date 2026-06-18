@@ -16,6 +16,8 @@ import { Avatar } from '@/components/common/avatar';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/components/common/dropdown-menu';
 import { ActivityTimeline } from '@/components/contacts/activity-timeline';
 import { LogActivityForm } from '@/components/contacts/log-activity-form';
+import { EditContactDialog } from '@/components/contacts/edit-contact-dialog';
+import { CreateDealForContactDialog } from '@/components/contacts/create-deal-for-contact-dialog';
 import { useContact, contactDisplayName, useDeleteContact } from '@/hooks/use-contacts';
 import { useContactActivities } from '@/hooks/use-activities';
 import { cn, lifecycleStageLabel, lifecycleStageColor, formatDate, formatRelativeTime } from '@/lib/utils';
@@ -38,6 +40,8 @@ export function ContactDetailPage({ contactId, onNavigate }: ContactDetailPagePr
 
   const deleteContact = useDeleteContact();
   const [showLogActivity, setShowLogActivity] = useState(false);
+  const [showEditContact, setShowEditContact] = useState(false);
+  const [showCreateDeal, setShowCreateDeal] = useState(false);
   const [activeTab, setActiveTab] = useState<'activity' | 'details' | 'deals'>('activity');
 
   if (isLoading) {
@@ -135,11 +139,11 @@ export function ContactDetailPage({ contactId, onNavigate }: ContactDetailPagePr
                 </button>
               }
             >
-              <DropdownMenuItem onSelect={() => {}}>
+              <DropdownMenuItem onSelect={() => setShowEditContact(true)}>
                 <Edit2 className="h-4 w-4" />
                 Edit Contact
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => {}}>
+              <DropdownMenuItem onSelect={() => setShowCreateDeal(true)}>
                 <Handshake className="h-4 w-4" />
                 Create Deal
               </DropdownMenuItem>
@@ -233,6 +237,15 @@ export function ContactDetailPage({ contactId, onNavigate }: ContactDetailPagePr
           </div>
         )}
       </div>
+
+      <EditContactDialog open={showEditContact} onOpenChange={setShowEditContact} contact={contact} />
+      <CreateDealForContactDialog
+        open={showCreateDeal}
+        onOpenChange={setShowCreateDeal}
+        contactId={contact.id}
+        companyId={contact.company_id}
+        onSuccess={(dealId) => onNavigate(`/deals/${dealId}`)}
+      />
     </div>
   );
 }

@@ -129,12 +129,31 @@ export default async function widgetRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // POST /widgets/:id/query — Execute widget query
+  // POST /widgets/:id/query — Execute widget query.
+  // Accepts an optional `date_range` body that overrides the widget's stored
+  // range for this request only (used by the dashboard date-range picker).
+  const widgetQueryBodySchema = z
+    .object({
+      date_range: z
+        .object({
+          preset: z.string().optional(),
+          start: z.string().optional(),
+          end: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional();
+
   fastify.post<{ Params: { id: string } }>(
     '/widgets/:id/query',
     { preHandler: [requireAuth] },
     async (request, reply) => {
-      const result = await widgetService.executeWidgetQuery(request.params.id, request.user!.org_id);
+      const body = widgetQueryBodySchema.parse(request.body ?? {});
+      const result = await widgetService.executeWidgetQuery(
+        request.params.id,
+        request.user!.org_id,
+        body?.date_range,
+      );
       return reply.send({ data: result });
     },
   );

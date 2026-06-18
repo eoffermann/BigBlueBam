@@ -176,3 +176,24 @@ export async function rejectExpense(id: string, orgId: string, userId: string) {
 
   return rejected!;
 }
+
+// ---------------------------------------------------------------------------
+// Reimburse — mark an approved expense as reimbursed (paid back to the
+// submitter). The terminal step of the expense lifecycle:
+// pending -> approved -> reimbursed.
+// ---------------------------------------------------------------------------
+
+export async function reimburseExpense(id: string, orgId: string) {
+  const existing = await getExpense(id, orgId);
+  if (existing.status !== 'approved') {
+    throw badRequest('Only approved expenses can be marked reimbursed');
+  }
+
+  const [reimbursed] = await db
+    .update(billExpenses)
+    .set({ status: 'reimbursed', updated_at: new Date() })
+    .where(and(eq(billExpenses.id, id), eq(billExpenses.organization_id, orgId)))
+    .returning();
+
+  return reimbursed!;
+}

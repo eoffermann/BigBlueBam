@@ -12,6 +12,7 @@ import {
   index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { organizations } from './organizations.js';
 import { projects } from './projects.js';
 import { phases } from './phases.js';
 import { taskStates } from './task-states.js';
@@ -22,6 +23,13 @@ export const tasks = pgTable(
   'tasks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // Denormalized org owner of the task (mirrors projects.org_id). Populated
+    // on every insert path and backfilled by migration 0193. Nullable to match
+    // the existing DB column; used by Bench analytics fan-out and the future
+    // RLS org-scoping gate. FK matches the DB tasks_org_id_fkey (ON DELETE CASCADE).
+    org_id: uuid('org_id').references(() => organizations.id, {
+      onDelete: 'cascade',
+    }),
     project_id: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
@@ -84,6 +92,7 @@ export const tasks = pgTable(
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index('tasks_org_id_idx').on(table.org_id),
     index('tasks_project_id_idx').on(table.project_id),
     index('tasks_human_id_idx').on(table.human_id),
     index('tasks_phase_id_idx').on(table.phase_id),

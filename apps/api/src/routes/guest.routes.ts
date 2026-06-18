@@ -127,6 +127,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
           token,
           orgName: org?.name ?? 'BigBlueBam',
           inviterName: inviter?.display_name ?? 'A teammate',
+          orgId: request.user!.org_id,
         });
       } else {
         request.log.warn(
@@ -308,6 +309,7 @@ export default async function guestRoutes(fastify: FastifyInstance) {
           token: invitation.token,
           orgName: org?.name ?? 'BigBlueBam',
           inviterName: inviter?.display_name ?? 'A teammate',
+          orgId: invitation.org_id,
         });
       } else {
         request.log.warn(

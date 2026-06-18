@@ -143,7 +143,71 @@ async function fetchOrgRoom(
   return room ?? null;
 }
 
+const listRoomsQuery = z.object({
+  // '1' restricts to bookable rooms (the booking screen's default view).
+  bookable: z.union([z.literal('1'), z.literal('0')]).optional(),
+  floor_id: z.string().uuid().optional(),
+});
+
 export default async function roomsRoutes(fastify: FastifyInstance) {
+  // GET /v1/rooms — list org rooms (live, non-archived), joined with floor
+  // name and live occupancy. ?bookable=1 restricts to reservable rooms;
+  // ?floor_id=<uuid> restricts to one floor. Backs the room-booking screen
+  // (it needs the bookable flag + floor name, which the floor-detail room
+  // summary intentionally omits).
+  fastify.get(
+    '/rooms',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+      const parsed = listRoomsQuery.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid query parameters',
+            details: parsed.error.issues.map((i) => ({
+              field: i.path.join('.'),
+              issue: i.message,
+            })),
+            request_id: request.id,
+          },
+        });
+      }
+
+      const conditions = [
+        eq(bureauRooms.org_id, user.org_id),
+        isNull(bureauRooms.archived_at),
+        isNull(bureauFloors.archived_at),
+      ];
+      if (parsed.data.bookable === '1') {
+        conditions.push(eq(bureauRooms.bookable, true));
+      }
+      if (parsed.data.floor_id) {
+        conditions.push(eq(bureauRooms.floor_id, parsed.data.floor_id));
+      }
+
+      const rows = await db
+        .select({
+          id: bureauRooms.id,
+          floor_id: bureauRooms.floor_id,
+          floor_name: bureauFloors.name,
+          name: bureauRooms.name,
+          type: bureauRooms.type,
+          privacy_default: bureauRooms.privacy_default,
+          capacity: bureauRooms.capacity,
+          bookable: bureauRooms.bookable,
+          zone_id: bureauRooms.zone_id,
+          owner_id: bureauRooms.owner_id,
+        })
+        .from(bureauRooms)
+        .innerJoin(bureauFloors, eq(bureauFloors.id, bureauRooms.floor_id))
+        .where(and(...conditions));
+
+      return reply.send({ data: rows });
+    },
+  );
+
   // GET /v1/rooms/:id — room detail + occupants
   fastify.get(
     '/rooms/:id',

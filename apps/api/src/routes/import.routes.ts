@@ -67,6 +67,17 @@ async function getNextPosition(phaseId: string): Promise<number> {
   return (result[0]?.maxPos ?? 0) + 1024;
 }
 
+/** Resolve a project's owning org so imported tasks carry org_id (Bench
+ *  analytics + RLS gate). Returns null only if the project vanished. */
+async function getProjectOrgId(projectId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ org_id: projects.org_id })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  return row?.org_id ?? null;
+}
+
 // ── routes ──────────────────────────────────────────────────────────────
 
 // ── CSV import body schema (extended, backward-compatible) ────────────────
@@ -213,6 +224,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
       const { lists } = bodySchema.parse(request.body);
       const projectId = request.params.id;
       const userId = request.user!.id;
+      const orgId = await getProjectOrgId(projectId);
 
       let imported = 0;
       let skipped = 0;
@@ -243,6 +255,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
 
               const [task] = await db.insert(tasks).values({
                 project_id: projectId,
+                org_id: orgId,
                 human_id: humanId,
                 title: card.name.trim(),
                 description: card.desc || null,
@@ -266,6 +279,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
 
                     await db.insert(tasks).values({
                       project_id: projectId,
+                      org_id: orgId,
                       human_id: subHumanId,
                       parent_task_id: task.id,
                       title: item.name,
@@ -316,6 +330,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
       const { rows } = bodySchema.parse(request.body);
       const projectId = request.params.id;
       const userId = request.user!.id;
+      const orgId = await getProjectOrgId(projectId);
 
       const defaultPhase = await getDefaultPhase(projectId);
       if (!defaultPhase) {
@@ -376,6 +391,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
 
           await db.insert(tasks).values({
             project_id: projectId,
+            org_id: orgId,
             human_id: humanId,
             title,
             description: row['Description'] ?? null,
@@ -423,6 +439,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
       const { issues } = bodySchema.parse(request.body);
       const projectId = request.params.id;
       const userId = request.user!.id;
+      const orgId = await getProjectOrgId(projectId);
 
       const defaultPhase = await getDefaultPhase(projectId);
       if (!defaultPhase) {
@@ -476,6 +493,7 @@ export default async function importRoutes(fastify: FastifyInstance) {
 
           const [task] = await db.insert(tasks).values({
             project_id: projectId,
+            org_id: orgId,
             human_id: humanId,
             title: issue.title.trim(),
             description: issue.body ?? null,

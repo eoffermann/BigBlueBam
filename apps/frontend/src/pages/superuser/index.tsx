@@ -15,6 +15,7 @@ import { PermissionsDivergencesPage } from './permissions-divergences';
 import { PermissionsGroupsListPage } from './permissions/groups-list';
 import { DeploySettingsCard } from '@/components/superuser/deploy-settings-card';
 import { PasswordPolicyCard } from '@/components/superuser/password-policy-card';
+import { SmtpSettingsCard } from '@/components/superuser/smtp-settings-card';
 import { SuperuserLogsTab } from './logs';
 
 interface SuperuserPageProps {
@@ -987,6 +988,7 @@ function PlatformTab() {
       </section>
 
       <LaunchpadDefaultsCard />
+      <SmtpSettingsCard />
       <PasswordPolicyCard />
       <DeploySettingsCard />
     </div>

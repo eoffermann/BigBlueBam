@@ -1,8 +1,20 @@
 import { useState } from 'react';
 import { Plus, Filter, FileDown } from 'lucide-react';
 import { useInvoices, useFinalizeInvoice } from '@/hooks/use-invoices';
+import { useOverdue } from '@/hooks/use-reports';
 import { useRequestApproval, useBamUsers } from '@/hooks/use-approvals';
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
+
+// Read an initial status filter from the URL (e.g. the dashboard Overdue tile
+// deep-links to /bill/invoices?status=overdue).
+function initialStatusFilter(): string {
+  try {
+    const s = new URLSearchParams(window.location.search).get('status');
+    return s ?? '';
+  } catch {
+    return '';
+  }
+}
 
 function pdfHref(pdfUrl: string | null | undefined): string | null {
   if (!pdfUrl) return null;
@@ -19,8 +31,17 @@ interface Props {
 }
 
 export function InvoiceListPage({ onNavigate }: Props) {
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const { data: invoices, isLoading } = useInvoices(statusFilter ? { status: statusFilter } : undefined);
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter);
+  const isOverdueFilter = statusFilter === 'overdue';
+  // "overdue" is computed server-side (unpaid, finalized, past-due) rather than
+  // a stored status — route it to the /reports/overdue set. Every other filter
+  // is a real stored status and goes through the normal invoice list query.
+  const invoiceQuery = useInvoices(
+    statusFilter && !isOverdueFilter ? { status: statusFilter } : undefined,
+  );
+  const overdueQuery = useOverdue();
+  const invoices = isOverdueFilter ? overdueQuery.data : invoiceQuery.data;
+  const isLoading = isOverdueFilter ? overdueQuery.isLoading : invoiceQuery.isLoading;
   const finalizeInvoice = useFinalizeInvoice();
   const requestApproval = useRequestApproval();
   const { data: bamUsers } = useBamUsers();

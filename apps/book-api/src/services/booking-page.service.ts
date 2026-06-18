@@ -216,8 +216,10 @@ export async function getPublicSlots(slug: string, startDate: string, endDate: s
     return duration >= minDuration;
   });
 
-  // Split into meeting-sized chunks
-  const meetingSlots: Array<{ start: string; end: string }> = [];
+  // Split into meeting-sized chunks. Field names are `start_at`/`end_at` to
+  // match the public MeetPage UI (apps/book/src/pages/meet.tsx) and the
+  // POST /meet/:slug/book request body, which both key on `start_at`.
+  const meetingSlots: Array<{ start_at: string; end_at: string }> = [];
   for (const slot of availableSlots) {
     let cursor = new Date(slot.start).getTime() + page.buffer_before_min * 60 * 1000;
     const slotEnd = new Date(slot.end).getTime() - page.buffer_after_min * 60 * 1000;
@@ -225,8 +227,8 @@ export async function getPublicSlots(slug: string, startDate: string, endDate: s
 
     while (cursor + meetingMs <= slotEnd) {
       meetingSlots.push({
-        start: new Date(cursor).toISOString(),
-        end: new Date(cursor + meetingMs).toISOString(),
+        start_at: new Date(cursor).toISOString(),
+        end_at: new Date(cursor + meetingMs).toISOString(),
       });
       cursor += 30 * 60 * 1000; // 30-minute increments
     }
@@ -275,8 +277,12 @@ export async function bookSlot(
         and(
           eq(bookEvents.calendar_id, calendar.id),
           eq(bookEvents.status, 'confirmed'),
-          sql`${bookEvents.start_at} < ${end}`,
-          sql`${bookEvents.end_at} > ${start}`,
+          // Bind the bounds as ISO strings: the postgres driver cannot bind a
+          // raw Date object as a parameter inside a sql`` comparison template
+          // (it throws ERR_INVALID_ARG_TYPE). Casting to timestamptz keeps the
+          // comparison correct.
+          sql`${bookEvents.start_at} < ${end.toISOString()}::timestamptz`,
+          sql`${bookEvents.end_at} > ${start.toISOString()}::timestamptz`,
         ),
       )
       .for('update')

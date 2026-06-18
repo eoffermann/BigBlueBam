@@ -1,0 +1,355 @@
+# Bam — sprint-based Kanban project & task management (route prefix /b3/).
+# Recipes mined from docs/apps/bam/help.md (Feature reference + User Stories) and
+# packages/docs-capture/src/apps/bam.scenes.ts (known-working routes + setup).
+#
+# Routing note: Bam's per-project views (board, dashboard, reports, audit log)
+# live under /projects/:id/... and need a project UUID we can't hardcode. Every
+# project-scoped recipe therefore lands on the dashboard (/b3/) and clicks the
+# first project card (`button.group`, which navigates to /projects/:id/board),
+# then drives the board header controls from there. All such setup clicks are
+# marked `optional: true` so a quirk in the seeded stack can't fail the run.
+#
+# Selector basis (verified against the frontend source):
+#   - project cards on the dashboard: `button.group` (h3 = project name)
+#   - task cards on the board: `[data-task-id]` (opens the detail drawer)
+#   - view switcher: `button[aria-label="List view"]` etc. (Board/List/Timeline/
+#     Calendar/Workload)
+#   - board header action icons carry stable `title=` attrs: "Manage epics",
+#     "Import tasks", "Task templates", "Saved views", "Project options"
+#   - sprint create toggle: `button[aria-label="Create sprint"]`
+#   - settings tabs are plain buttons: `button:has-text("Tasks")` etc.
+# The Bureau presence widget is hidden globally by the engine; masks below only
+# cover live relative timestamps / presence where they intrude.
+
+# ---------------------------------------------------------------------------
+# Dashboard / project list — the Bam home page.
+# ---------------------------------------------------------------------------
+- id: bam-dashboard
+  app: bam
+  demonstrates: "The Bam dashboard listing every project the user can see"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+# ---------------------------------------------------------------------------
+# Kanban board — the primary view. Drill in from the dashboard card grid.
+# ---------------------------------------------------------------------------
+- id: bam-board
+  app: bam
+  demonstrates: "A project's Kanban board with phase columns and task cards"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: wait, ms: 2000 }
+  expect: ["[data-task-id]"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Kanban board" }
+  masks:
+    - "[data-testid='presence-avatars']"
+
+# One dark + retina variant for the primary board view (marketing/retina).
+- id: bam-board-dark
+  app: bam
+  demonstrates: "The Kanban board in dark theme (marketing/retina)"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: wait, ms: 2000 }
+  expect: ["[data-task-id]"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Kanban board" }
+  masks:
+    - "[data-testid='presence-avatars']"
+
+# ---------------------------------------------------------------------------
+# Task detail drawer — full task record (Details / Comments / Activity tabs).
+# ---------------------------------------------------------------------------
+- id: bam-task-detail
+  app: bam
+  demonstrates: "The task detail drawer with description, sidebar fields, and tabs"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "[data-task-id]", optional: true }
+    - { action: wait, ms: 2000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Task detail" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+# ---------------------------------------------------------------------------
+# Sprint create form — opened from the board's sprint selector.
+# ---------------------------------------------------------------------------
+- id: bam-sprint-create
+  app: bam
+  demonstrates: "The board sprint selector with the create-sprint form expanded"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[aria-label='Create sprint']", optional: true }
+    # Fill the sprint name so the Create button is enabled (not dimmed/disabled).
+    - { action: fill, selector: "input[placeholder='Sprint 1']", value: "Voyage Sprint — Escape the Island", optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Sprint planning" }
+
+# ---------------------------------------------------------------------------
+# Alternate views — List / Timeline / Calendar / Workload (view switcher).
+# ---------------------------------------------------------------------------
+- id: bam-list-view
+  app: bam
+  demonstrates: "The board in List view, a flat sortable table of tasks"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[aria-label='List view']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "List view" }
+
+- id: bam-timeline-view
+  app: bam
+  demonstrates: "The board in Timeline view, tasks laid out by date as a Gantt"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[aria-label='Timeline view']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bam-calendar-view
+  app: bam
+  demonstrates: "The board in Calendar view, tasks placed on their due dates"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[aria-label='Calendar view']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bam-workload-view
+  app: bam
+  demonstrates: "The board in Workload view, task load per assignee"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[aria-label='Workload view']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+# ---------------------------------------------------------------------------
+# Board management dialogs — epics, templates, import.
+# ---------------------------------------------------------------------------
+- id: bam-epic-manager
+  app: bam
+  demonstrates: "The epic manager dialog for grouping tasks across sprints"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[title='Manage epics']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bam-task-templates
+  app: bam
+  demonstrates: "The task templates manager for reusable task blueprints"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[title='Task templates']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bam-import
+  app: bam
+  demonstrates: "The import dialog for bringing a backlog in from CSV, Trello, Jira, or GitHub"
+  route: /b3/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "button.group" }
+    - { action: click, selector: "button.group", optional: true }
+    - { action: waitFor, selector: "[data-task-id]" }
+    - { action: click, selector: "button[title='Import tasks']", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+# ---------------------------------------------------------------------------
+# My Work — the personal cross-project task queue.
+# ---------------------------------------------------------------------------
+- id: bam-my-work
+  app: bam
+  demonstrates: "The My Work page grouping your tasks into Overdue / Due This Week / In Progress / All"
+  route: /b3/my-work
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "My Work" }
+  masks:
+    - "[data-testid='relative-timestamp']"
+
+# ---------------------------------------------------------------------------
+# People management — org-wide people list (org admins/owners).
+# ---------------------------------------------------------------------------
+- id: bam-people
+  app: bam
+  demonstrates: "The People management list for org admins and owners"
+  route: /b3/people
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  masks:
+    - "[data-testid='presence-avatars']"
+    - "[data-testid='relative-timestamp']"
+
+# ---------------------------------------------------------------------------
+# Settings — Profile tab (default landing).
+# ---------------------------------------------------------------------------
+- id: bam-settings
+  app: bam
+  demonstrates: "The Settings page on its Profile tab with the full tab rail"
+  route: /b3/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+# Settings → Tasks tab (host of Manage Priorities).
+- id: bam-settings-tasks
+  app: bam
+  demonstrates: "The Settings Tasks tab, home of the org's Manage Priorities control"
+  route: /b3/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Tasks')", optional: true }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+# Settings → Integrations tab (API keys, agents/service accounts, webhooks, Slack, SMTP).
+- id: bam-settings-integrations
+  app: bam
+  demonstrates: "The Settings Integrations tab: API keys, agents, webhooks, Slack, and SMTP"
+  route: /b3/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Integrations')", optional: true }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Integrations & API keys" }
+  masks:
+    - "[data-testid='api-key-secret']"
+
+# ---------------------------------------------------------------------------
+# Platform email (SMTP) — SuperUser Console → Platform tab → Platform SMTP relay.
+#
+# AUTH WRINKLE: this card only renders for a SuperUser. The capture engine
+# authenticates as the recipe `identity` against env.identities[identity]
+# (configured per-operator in the gitignored screenshots.config.json, or a
+# cached apps/e2e/.auth/<identity>.json storageState). The default `admin`
+# identity is an ORG admin, NOT a SuperUser, and /b3/superuser bounces a
+# non-SuperUser back to the dashboard — which would yield a misleading shot.
+# So this recipe uses `identity: superuser` and self-protects with
+# `expect` (the Platform SMTP relay heading) + `expectNot` (the login form).
+# If no `superuser` identity is configured, the login falls through / the
+# console redirects, the heading never appears, and the recipe FAILS
+# verification instead of writing a wrong image — the same pattern the
+# Helpdesk portal recipes use for their separate-portal login.
+#
+# To capture this image: add a SuperUser identity to screenshots.config.json,
+#   { "identities": { "superuser": { "email": "...", "password": "..." } } }
+# pointing at a real SuperUser account (e.g. one minted via
+# `cli create-admin`), then run the bam capture batch.
+- id: bam-platform-smtp
+  app: bam
+  demonstrates: "The platform-wide SMTP relay card in the SuperUser Console Platform tab — the system/fallback sender"
+  route: /b3/superuser
+  identity: superuser
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Platform')", optional: true }
+    - { action: waitFor, selector: "h3:has-text('Platform SMTP relay')" }
+    - { action: scrollTo, selector: "h3:has-text('Platform SMTP relay')", optional: true }
+    - { action: wait, ms: 1500 }
+  expect:
+    - "h3:has-text('Platform SMTP relay')"
+  expectNot:
+    - "input#password"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Platform email (SMTP)" }
+  masks:
+    - "[data-testid='api-key-secret']"
+
+# ---------------------------------------------------------------------------
+# Organization email (SMTP) — Settings → Integrations tab → org SMTP override.
+#
+# The per-org relay override lives in the Integrations tab (NOT a tab of its
+# own). Visible to org admins/owners. We click Integrations, scroll the
+# "Organization Email (SMTP)" card into view, and capture the full page so the
+# card sits in context below API keys / agents / webhooks / Slack.
+- id: bam-org-smtp
+  app: bam
+  demonstrates: "The per-organization SMTP override that overrides the platform relay for this org's outbound mail"
+  route: /b3/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Integrations')", optional: true }
+    - { action: waitFor, selector: "h2:has-text('Organization Email (SMTP)')" }
+    - { action: scrollTo, selector: "h2:has-text('Organization Email (SMTP)')", optional: true }
+    - { action: wait, ms: 1500 }
+  expect:
+    - "h2:has-text('Organization Email (SMTP)')"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 8, label: "Organization email (SMTP)" }
+  masks:
+    - "[data-testid='api-key-secret']"
