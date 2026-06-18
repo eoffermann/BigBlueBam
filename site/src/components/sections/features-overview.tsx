@@ -92,9 +92,9 @@ export function FeaturesOverview() {
             Keeping a project tool current is a second job: status re-keyed across three apps, sprint
             ceremonies that are mostly copy-paste, and a board that's always a little out of date, so
             nobody opens it. Bam is sprint-based Kanban with configurable phases, custom fields, and
-            carry-forward mechanics, and because agents drive it through the same MCP tools you do, they
-            keep the board honest. They move cards, log time, and generate sprint reports, keeping it
-            current without the busywork.
+            carry-forward mechanics, and because agents reach it through the same MCP tools you do, they
+            can keep the board honest. An agent can move cards, log time, and generate sprint reports,
+            keeping it current without the busywork.
           </p>
         </div>
       </AnimatedReveal>

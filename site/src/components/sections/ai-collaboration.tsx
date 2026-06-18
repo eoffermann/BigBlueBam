@@ -55,9 +55,10 @@ export function AiCollaboration() {
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             Most "AI" in a productivity tool is a chat box in the corner that summarizes the doc you
-            just wrote, and a lot of vendors charge extra for it. We took the other approach. Agents
-            here do real work on your actual boards, tickets, and deals, with the same permissions a
-            person has. No sidebar. No upcharge.
+            just wrote, and plenty of vendors charge extra for that. We took a different approach. An
+            agent can do real work on your actual boards, tickets, and deals, with the same
+            permissions a person has. It is real parity built into the platform, not a sidebar
+            bolted on the edge.
           </p>
         </div>
       </AnimatedReveal>
@@ -65,9 +66,13 @@ export function AiCollaboration() {
       {/* Human and AI role parity */}
       <AnimatedReveal delay={0.1}>
         <div className="mt-14 mb-14">
-          <h3 className="mb-8 text-center text-sm font-semibold tracking-wider text-zinc-400 uppercase">
+          <h3 className="mb-2 text-center text-sm font-semibold tracking-wider text-zinc-400 uppercase">
             Side by side, role by role
           </h3>
+          <p className="mx-auto mb-8 max-w-2xl text-center text-sm text-zinc-500">
+            Each of these is a role an agent can take. You bring the agent; BigBlueBam gives it the
+            same access your team has.
+          </p>
           <div className="grid gap-5 sm:grid-cols-2">
             {roles.map((role, i) => (
               <motion.div
@@ -107,8 +112,8 @@ export function AiCollaboration() {
           {[
             {
               step: '1',
-              title: 'Agent picks up work',
-              description: 'AI agents watch the board, pick up assigned tasks, and start working, logging progress as they go.',
+              title: 'An agent can pick up work',
+              description: 'An agent can watch the board, pick up assigned tasks, and start working, logging progress as it goes.',
               color: 'bg-primary-600',
             },
             {

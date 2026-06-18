@@ -112,7 +112,7 @@ export function TechnicalPage() {
           <AnimatedReveal>
             <div className="mx-auto mb-10 max-w-3xl text-center">
               <Badge variant="blue" className="mb-4">
-                How agents do real work
+                How agents can do real work
               </Badge>
               <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
                 Full parity through MCP
@@ -160,7 +160,7 @@ export function TechnicalPage() {
                     ))}
                   </div>
                   <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-900 p-4">
-                    <p className="mb-2 text-xs font-medium text-zinc-400">Example: an agent moves a task</p>
+                    <p className="mb-2 text-xs font-medium text-zinc-400">Example: an agent moving a task</p>
                     <pre className="overflow-x-auto text-xs leading-relaxed">
                       <code className="text-primary-300">
 {`{

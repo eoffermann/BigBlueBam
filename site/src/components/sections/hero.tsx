@@ -55,9 +55,9 @@ export function Hero() {
             The average company runs more than a hundred apps and loses half a workday a week just
             switching between them. BigBlueBam is the other bet: sixteen apps (boards, chat, CRM,
             docs, helpdesk, and a dozen more) that behave like a single product. Self-hosted, open
-            source, and built for AI from day one, so your agents work the same boards, sprints, and
-            tickets your team does, through one MCP server with 720+ tools. The new hires never ask
-            where anything lives. Neither will you.
+            source, and built for AI from day one, so agents can work the same boards, sprints, and
+            tickets your team does, through one MCP server with 720+ tools. The ones you bring on
+            never ask where anything lives. Neither will you.
           </motion.p>
 
           <motion.div

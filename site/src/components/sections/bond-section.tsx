@@ -76,8 +76,8 @@ export function BondSection() {
             someone's to-do list. Bond puts the pipeline on the same stack as your projects: a won
             deal can spin up a Bam project and a Bill invoice, and an agent can log the call you
             forgot to log. It moves contacts, companies, and deals through configurable stages with
-            activity logging, cross-product links, and 69 MCP tools, so an AI agent advances a deal
-            or surfaces a duplicate as naturally as it files a task.
+            activity logging, cross-product links, and 69 MCP tools, so an AI agent can advance a
+            deal or surface a duplicate as naturally as it files a task.
           </p>
         </div>
       </AnimatedReveal>

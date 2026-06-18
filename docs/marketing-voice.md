@@ -196,6 +196,28 @@ so we lead with what it does for them and keep an obvious door for the people wh
 want to see how the sausage is made. The technical page can be as dense and proud
 as it likes. The home page cannot.
 
+## Agents: say "can," never "will," never "free"
+
+We are building toward an agent store. Today, what agents can do is accurate, but
+actually running agents is left to the customer to implement, and agent operation
+is a future commercial offering (likely our biggest profit center). Language has
+to respect that without hedging or apologizing:
+
+- **Capability, not turnkey.** Write "an agent CAN move a task," "agents CAN
+  triage a ticket," not "agents do," "your agents handle," or "your newest
+  teammates." The platform gives an agent the same access a person has; the
+  customer brings and runs the agent. Never imply that installing the suite
+  auto-deploys agents for every role. State the capability plainly and stop. Do
+  not hedge it either; "can" is confident, not apologetic.
+- **Never imply running agents is free or included.** "Open source" and
+  "self-hosted" describe the SOFTWARE (the apps and the MCP tooling), not agent
+  operation. Leave agent pricing as an open part of the world of possibilities:
+  do not promise free, do not quote a price. Avoid lines like "no upcharge" or
+  "no seat license for your bots" that could be read as "agents are free to run."
+- **Sell the architecture, not a price.** The AI-first differentiator is real
+  parity: an agent uses the same tools, permissions, and audit trail a person
+  does, and is not a bolted-on chat box. That is the claim. "Free AI" is not.
+
 ## Examples (flat → us)
 
 - Flat: "Bond provides robust CRM capabilities for managing customer
