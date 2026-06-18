@@ -296,15 +296,43 @@ export async function runRecipes(recipes: LoadedRecipe[], opts: RunOptions): Pro
   const browser = await chromium.launch({ headless: true });
   try {
     // Authenticate each distinct identity once; reuse the storageState.
+    // A single un-authenticatable identity must NOT crash the whole batch:
+    // an operator may have configured only the `admin` identity and still want
+    // every admin recipe captured, while a recipe that needs a `superuser`
+    // identity (e.g. the SuperUser-Console-only platform SMTP card) simply
+    // fails its own verification. Record the auth error per identity and let
+    // the per-recipe loop surface it as a normal capture failure instead of
+    // throwing. This mirrors how an unconfigured separate-portal login leaves
+    // the portal recipes failing verification rather than aborting the run.
     const identities = [...new Set(recipes.map((r) => r.recipe.identity))];
     const authByIdentity = new Map<string, Record<string, unknown>>();
+    const authErrorByIdentity = new Map<string, string>();
     for (const id of identities) {
       log(`[auth] ${id}`);
-      authByIdentity.set(id, await authenticate(browser, opts.env, id));
+      try {
+        authByIdentity.set(id, await authenticate(browser, opts.env, id));
+      } catch (err) {
+        const msg = (err as Error).message;
+        authErrorByIdentity.set(id, msg);
+        log(`  [auth-skip] identity "${id}" unavailable — recipes needing it will fail: ${msg}`);
+      }
     }
 
     for (const loaded of recipes) {
-      const state = authByIdentity.get(loaded.recipe.identity)!;
+      const state = authByIdentity.get(loaded.recipe.identity);
+      if (!state) {
+        const reason =
+          authErrorByIdentity.get(loaded.recipe.identity) ??
+          `identity "${loaded.recipe.identity}" not authenticated`;
+        log(`  [FAIL] ${loaded.recipe.app}/${loaded.recipe.id}  auth: ${reason}`);
+        results.push({
+          id: loaded.recipe.id,
+          app: loaded.recipe.app,
+          ok: false,
+          error: `auth: ${reason}`,
+        });
+        continue;
+      }
       let result = await captureRecipe(browser, loaded, opts, state, manifest, gitSha);
       if (!result.ok) {
         // One retry: most failures are transient load/timeout races under

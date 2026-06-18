@@ -1,7 +1,7 @@
 ---
 title: "Bill (Invoicing)"
 app: bill
-generated: "2026-06-17T22:16:23.476Z"
+generated: "2026-06-18T00:43:58.369Z"
 ---
 
 # Bill (Invoicing)
@@ -12,6 +12,7 @@ Invoicing that turns client work into billed, tracked, and reconciled revenue.
 - Draft, finalize, and send invoices with line items, tax, and on-demand PDFs
 - Record payments and watch each invoice move from sent to partially paid to paid
 - Track expenses and bill rates, then review revenue, aging, profitability, and overdue in one place
+- Put standing fees on autopilot with recurring schedules that bill a client weekly, monthly, quarterly, or annually
 - Spin up draft invoices straight from a won Bond deal, and let agents drive the whole lifecycle over MCP
 
 ## See It in Action

@@ -22,13 +22,14 @@ Roles matter for the money-sensitive steps. Any member who can write to Bill can
 - **Expense** - A project cost: description, amount in cents, category, vendor, date, and a billable flag. Expenses start as `pending`, a reviewer moves them to `approved` or `rejected`, and an approved expense can be moved on to `reimbursed`.
 - **Rate** - A billing rate scoped to your org, a project, a user, or a user-on-a-project, with an amount in cents and a type (hourly, daily, or fixed). When Bill bills tracked time, it resolves the most specific rate that applies.
 - **Settings** - Your company identity and the defaults new invoices inherit: invoice prefix, default tax rate, payment terms, payment instructions, footer text, and terms text.
+- **Recurring schedule** - A subscription that bills one client on a cadence (weekly, monthly, quarterly, or annually) from a saved line-item template. It carries a status (`active`, `paused`, or `cancelled`), a next-run date, a count of invoices generated so far, and a mode: auto-finalize (each generated invoice gets a number and is marked sent) or draft (each generated invoice is left as a draft to review). A daily worker sweep materializes invoices from schedules whose next-run date has arrived, and you can also generate one on demand.
 - **Public view token** - A long opaque token on each invoice that grants read-only access (and a PDF) without logging in. It is how a sent invoice can be viewed by someone outside your org.
 
 ### Where to find it
 
 Bill is served at `/bill/`. You must be logged in to BigBlueBam first; if you are not, Bill shows a "Please log in to BigBlueBam first to access Bill." screen with a "Go to BigBlueBam Login" link to `/b3/`. Everything is scoped to your active organization, and mutating actions require the matching Bill permission on your account.
 
-The left sidebar carries a fixed **New Invoice** quick-action button, then the nav items **Dashboard**, **Invoices**, **Clients**, **Expenses**, **Rates**, and **Reports**, and under a **Bill Settings** subheading the **Bill Settings** item. Press `?` anywhere in Bill to open the embedded Help viewer.
+The left sidebar carries a fixed **New Invoice** quick-action button, then the nav items **Dashboard**, **Invoices**, **Recurring**, **Clients**, **Expenses**, **Rates**, and **Reports**, and under a **Bill Settings** subheading the **Bill Settings** item. Press `?` anywhere in Bill to open the embedded Help viewer.
 
 ![Billing dashboard](screenshots/light/01-dashboard.png)
 
@@ -260,6 +261,33 @@ To update your billing identity and defaults:
 
 The settings record also stores a company logo URL and a default currency, both reachable through the API and the `bill_update_settings` MCP tool, but neither has a field in the current Settings form.
 
+### Recurring billing
+
+The Recurring page at `/bill/recurring` is titled **Recurring** with the subtitle "Subscription schedules that generate invoices automatically." It is where you set up standing fees that bill a client on a cadence without re-drafting the invoice each cycle.
+
+The table columns are Name, Cadence, Next run, Generated (the count of invoices produced so far), Mode (Auto-finalize or Draft), Status, and Actions. A row of filter pills above it filters by status: **All** (empty), **active**, **paused**, and **cancelled**. Each schedule carries a client, a cadence (weekly, monthly, quarterly, or annually), a saved line-item template, an optional tax rate, a start date, an optional end date, and a mode.
+
+The **Mode** determines what each run produces. With **Auto-finalize** on, every generated invoice is assigned a number and marked sent automatically. With it off (**Draft**), each run produces a draft for you to review, finalize, and send by hand. Schedules generate on their own through a daily worker sweep that materializes invoices from every active schedule whose next-run date has arrived; you can also force one immediately with **Generate now**.
+
+To create a recurring schedule:
+
+1. Open **Recurring** in the sidebar and click **New Recurring Schedule**.
+2. Give the schedule a **Schedule name** and pick a **Client**.
+3. Choose a **Cadence** (weekly, monthly, quarterly, or annually) and a **Start date**; optionally set an **End date** and a **Tax rate (%)**.
+4. Tick **Auto-finalize generated invoices** to bill automatically, or leave it unchecked to generate drafts for review.
+5. In the **Line items (template)** table, add a Description, Qty, and Unit price (cents) for each row. The Subtotal updates as you type.
+6. Optionally add **Notes (internal)**, then click **Create schedule**. The schedule starts `active`.
+
+The per-row actions depend on status:
+
+- **Generate now** materializes an invoice immediately from the template (available on active and paused schedules). A banner reports the generated invoice number, or "draft" when the schedule is in draft mode.
+- **Pause** stops generation on an active schedule; **Resume** restarts a paused one.
+- **Cancel** stops all future generation permanently. It is an admin or owner action; existing invoices the schedule already produced are kept. Cancelling prompts for confirmation and cannot be undone.
+
+Creating, updating, pausing, resuming, and generating-now follow the same write permission as drafting an invoice, so any member who can create invoices can run these. Cancelling a schedule is restricted to an admin or owner, mirroring invoice deletion. When a run produces an invoice, Bill emits a `recurring.invoice_generated` event on the `bill` source for Bolt rules to consume.
+
+![Recurring billing](screenshots/light/07-recurring.png)
+
 ### PDF generation
 
 Every invoice can be downloaded as a PDF. The **PDF** action on the list, the **PDF** action in the detail header, and the inline **PDF preview** iframe all render the invoice through Bill's PDF service (`GET /bill/api/v1/invoices/:id/pdf`). A draft's PDF is named `DRAFT.pdf`; a finalized invoice's PDF is named after its number.
@@ -274,7 +302,7 @@ There is no Bill SPA page for the public view and no client-facing payment actio
 
 ### Working with AI agents
 
-Bill exposes 39 MCP tools (catalogued in `apps/mcp-server/src/tools/bill-tools.ts`), which together cover the full invoicing lifecycle from chat or a Bolt automation rule. Many tools resolve fuzzy identifiers: a client can be named by name or email, and a Bam project by name, and the tool resolves it to an ID. Mutating tools run under the same per-action permissions as the UI, so an agent acting as a member can build drafts but cannot finalize, send, or approve expenses unless its account has the admin or owner grant.
+Bill exposes 47 MCP tools (catalogued in `apps/mcp-server/src/tools/bill-tools.ts`), which together cover the full invoicing and recurring-billing lifecycle from chat or a Bolt automation rule. Many tools resolve fuzzy identifiers: a client can be named by name or email, and a Bam project by name, and the tool resolves it to an ID. Mutating tools run under the same per-action permissions as the UI, so an agent acting as a member can build drafts but cannot finalize, send, or approve expenses unless its account has the admin or owner grant.
 
 What agents commonly do:
 
@@ -284,6 +312,7 @@ What agents commonly do:
 - **Finish and collect:** `bill_finalize_invoice` to assign the number and lock the invoice, `bill_send_invoice` to mark it sent, `bill_record_payment` to log receipts, and `bill_delete_payment` to reverse one. `bill_void_invoice`, `bill_duplicate_invoice`, and `bill_delete_invoice` cover the rest of the invoice lifecycle.
 - **Clients:** `bill_create_client`, `bill_update_client`, and `bill_delete_client` manage the recipient records.
 - **Expenses and rates:** `bill_create_expense`, `bill_update_expense`, `bill_delete_expense`, `bill_approve_expense`, and `bill_reject_expense` for costs; `bill_create_rate`, `bill_update_rate`, `bill_delete_rate`, and `bill_resolve_rate` for billing rates (the create tool accepts project, user, and effective-date scoping that the UI form does not). Marking an approved expense reimbursed is a UI and REST action (`POST /bill/api/v1/expenses/:id/reimburse`) with no dedicated MCP tool.
+- **Recurring schedules:** `bill_list_recurring_invoices` and `bill_get_recurring_invoice` to read schedules and their line-item template; `bill_create_recurring_invoice` to stand one up (client, cadence, mode, and template line items); `bill_update_recurring_invoice` to adjust it; `bill_pause_recurring_invoice`, `bill_resume_recurring_invoice`, and `bill_cancel_recurring_invoice` to control its lifecycle (cancel is admin or owner); and `bill_generate_recurring_invoice_now` to materialize an invoice on demand.
 - **Reporting:** `bill_get_overdue`, `bill_get_revenue_summary`, `bill_get_profitability`, and `bill_get_outstanding` back the Reports view's data.
 - **Settings:** `bill_get_settings` and `bill_update_settings` read and write the org billing identity and invoice defaults, including the logo URL and default currency the UI form omits.
 
@@ -432,6 +461,25 @@ For the full tool catalog, see the MCP-tools reference in `docs/apps/bill/`.
 
 **Related:** Configure rates first (the Rates feature). An agent can do the same with `bill_create_invoice_from_time` (project, client, and a `date_from`/`date_to` range), and resolve a rate with `bill_resolve_rate`.
 
+### Story: Put a standing fee on a recurring schedule
+
+**Who:** Anyone who bills the same client the same amount on a regular cadence (a retainer, a subscription, a quarterly standing order).
+**Goal:** Bill a client automatically on a cadence without re-drafting the invoice each cycle.
+**Before you start:** The client exists in Bill. You have permission to create invoices (creating a schedule uses the same write permission).
+
+**Steps**
+
+1. Click **Recurring** in the sidebar, then **New Recurring Schedule**.
+2. Enter a **Schedule name** and pick the **Client**.
+3. Choose a **Cadence** (weekly, monthly, quarterly, or annually) and a **Start date**; set an **End date** and a **Tax rate (%)** if needed.
+4. Decide the mode: tick **Auto-finalize generated invoices** to bill and send automatically, or leave it unchecked to generate drafts you review first.
+5. Fill in the **Line items (template)** table with the descriptions, quantities, and unit prices (cents) to bill each cycle.
+6. Click **Create schedule**. It starts `active` with a next-run date on the start date.
+
+**Result:** The schedule appears in the Recurring list as `active`. A daily worker sweep generates an invoice from the template whenever the next-run date arrives, advancing the next run by the cadence. Auto-finalize schedules send each invoice automatically; draft schedules leave each one for you to finalize and send.
+
+**Related:** Use **Generate now** to produce an invoice immediately, **Pause** / **Resume** to stop and restart generation, and **Cancel** (admin or owner) to end the schedule while keeping the invoices it already produced. An agent can do all of this with `bill_create_recurring_invoice`, `bill_pause_recurring_invoice`, `bill_resume_recurring_invoice`, `bill_cancel_recurring_invoice`, and `bill_generate_recurring_invoice_now`. Build a Bolt rule on the `recurring.invoice_generated` event to react when a schedule bills.
+
 ### Story: Close out a billing period
 
 **Who:** A finance owner reviewing the month.
@@ -471,6 +519,6 @@ For the full tool catalog, see the MCP-tools reference in `docs/apps/bill/`.
 
 - **Bam** (`/b3/`) - Projects, tasks, and time entries feed time-based invoicing and rate resolution; invoice approvals route through Bam's approval queue.
 - **Bond** (`/bond/`) - Won deals convert into draft invoices via `bill_create_invoice_from_deal`; a Bill client can link to a Bond company.
-- **Bolt** (`/bolt/`) - Automation rules consume Bill events such as `invoice.paid`, `invoice.overdue`, and `payment.recorded`, and can trigger `bill_create_invoice_from_deal`.
+- **Bolt** (`/bolt/`) - Automation rules consume Bill events such as `invoice.paid`, `invoice.overdue`, `payment.recorded`, and `recurring.invoice_generated`, and can trigger `bill_create_invoice_from_deal`.
 - **Banter** (`/banter/`) - Approval requests reach the approver as a Banter DM.
-- Bill's own docs in `docs/apps/bill/`: the MCP-tools reference (the full 39-tool catalog) and `guide.md`.
+- Bill's own docs in `docs/apps/bill/`: the MCP-tools reference (the full 47-tool catalog) and `guide.md`.

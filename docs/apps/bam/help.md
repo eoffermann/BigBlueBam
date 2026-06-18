@@ -447,11 +447,63 @@ Settings control your profile and the org's configuration.
 To open settings, go to **/settings**. The ten tabs are **Profile**, **Appearance**
 (System, Light, Dark), **Notifications**, **Members**, **Tasks** (which includes
 **Manage Priorities**), **Permissions**, **Launchpad**, **Integrations** (API
-keys, agents and service accounts, webhooks, Slack, SMTP), **AI Providers**, and
-**Helpdesk**. Use the **Tasks** tab's **Manage Priorities** to configure the
-org's priority set.
+keys, agents and service accounts, webhooks, Slack, and the per-org SMTP
+override), **AI Providers**, and **Helpdesk**. Use the **Tasks** tab's **Manage
+Priorities** to configure the org's priority set. The per-org email relay lives
+on the **Integrations** tab; the platform-wide relay it falls back to is set in
+the SuperUser Console (see **Email delivery (SMTP)** below).
 
 ![Integrations and API keys](screenshots/light/06-settings-integrations.png)
+
+### Email delivery (SMTP)
+
+BigBlueBam sends outbound mail (org invitations, password resets, system and
+reporting alerts, and Blast campaigns) through an SMTP relay. There are two
+levels of configuration, and the system always picks the most specific one that
+is set.
+
+The resolution order is: the **org override** first, then the **platform
+relay**, then the server's **environment default**. In plain terms: if your
+organization has set its own relay, your org's mail goes through it; if it has
+not, your org's mail falls back to the platform relay a SuperUser configured;
+and if neither is set, the system uses the SMTP values baked into the server's
+environment variables. This used to live under **Account Settings >
+Integrations**; the platform relay has since moved to the SuperUser Console, and
+the per-org override now sits in its own card on the **Integrations** tab.
+
+**Platform email (SMTP).** The platform relay is the system-wide, fallback
+sender. It is what the platform uses for new-org-setup invitations, the
+password-reset fallback, and system and reporting alerts, and it is the relay
+any organization falls back to when it has not configured its own. Only a
+platform SuperUser can set it.
+
+To configure the platform relay, open the **SuperUser Console** at
+**/superuser**, click the **Platform** tab, and scroll to the **Platform SMTP
+relay** card. Fill in **SMTP Host**, **SMTP Port** (587 for STARTTLS, 465 for
+TLS-only), **SMTP Username**, **SMTP Password**, and **From Address**, set **Use
+TLS (secure)** for port 465, and save. Any field you leave blank falls back to
+the matching server environment variable (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASS`, `EMAIL_FROM`). Use **Test connection** to verify login and TLS, or
+enter an address and click **Send test email** to confirm end-to-end delivery.
+Changes take effect within 30 seconds.
+
+_(The Platform SMTP relay card is in the SuperUser Console and only renders for a platform SuperUser, so its screenshot is captured in a separate SuperUser pass.)_
+
+**Organization email (SMTP).** An org admin or owner can give their organization
+its own relay, which overrides the platform relay for that org's outbound mail
+(Blast campaigns and member or guest invitations). Leaving it blank keeps the
+org on the platform relay.
+
+To configure the org override, open **/settings**, select the **Integrations**
+tab, and scroll to the **Organization Email (SMTP)** card. Fill in the same
+fields and save; the card confirms whether the org is using its own relay or
+falling back to the platform relay. The relay password is masked on read, so
+leaving the dots in place keeps the stored password unchanged. **Test relay**
+checks whichever relay will actually send (your org override if set, otherwise
+the platform fallback). To stop using the org relay, click **Use platform
+relay**, which clears the override. Changes take effect within 30 seconds.
+
+![Organization email (SMTP)](screenshots/light/08-org-smtp.png)
 
 ### Command palette and keyboard shortcuts
 

@@ -10,7 +10,7 @@ You work with three kinds of object. A **diagram** is the top-level artifact (a 
 
 Blueprint is wired into Bam, the Kanban and sprint tool. You can generate a diagram from an existing Bam project (one node per task, edges drawn from parent/child links), and you can promote a diagram into Bam (one task per node, parent links from the edges). A node linked to a Bam task stays in two-way sync: rename the node and the task title updates, rename the task and the node updates.
 
-Several capabilities in Blueprint are agent-driven or API-driven rather than point-and-click. Anything an agent can do to a diagram, it does through a named tool, so an agent can read a process description and emit a fully wired diagram in a single call, with the same permissions and the same audit trail as a person. Where a backend capability has no rendered screen yet, this document says so plainly rather than promising a button that does not exist.
+Several capabilities in Blueprint are agent-driven or API-driven rather than point-and-click. Anything an agent can do to a diagram, it does through a named tool, so an agent can read a process description and emit a fully wired diagram in a single call, with the same permissions and the same audit trail as a person. A few backend capabilities still have no rendered screen (Mermaid import, image export, template seeding); where that is the case this document says so plainly rather than promising a button that does not exist.
 
 ### Key concepts
 
@@ -23,9 +23,9 @@ Several capabilities in Blueprint are agent-driven or API-driven rather than poi
 - **Layout algorithm** - the auto-arrange engine, run server-side by ELK. The layout dropdown offers Layered, Force-directed, Tree, and Grid, and all four apply a layout. Tree maps to ELK's mrtree and Grid maps to ELK's rectpacking. The radial algorithm is reachable only through the API or an agent.
 - **Linked entity** - a cross-product reference from a node to an object in another app, such as a Bam task, a Beacon entry, a Bond deal, or a Bearing goal. Only Bam tasks have live two-way sync.
 - **Visibility** - who can see the diagram. Private (you, plus collaborators), Project (project members, or the org if there is no project), or Organization (everyone in your org).
-- **Collaborator** - a user granted explicit access to one diagram at a role of owner, editor, commenter, or viewer, on top of any project- or org-level visibility. Managed today through the API or an agent.
-- **Snapshot (version)** - a saved, immutable copy of the whole graph that you can restore later.
-- **Comment** - a note attached to the whole diagram or anchored to a single node, with a resolved flag for review threads. Managed today through the API or an agent.
+- **Collaborator** - a user granted explicit access to one diagram at a role of owner, editor, commenter, or viewer, on top of any project- or org-level visibility. Managed in the editor's **People** panel, or by an agent through the API.
+- **Snapshot (version)** - a saved, immutable copy of the whole graph that you can restore later. Browsed and restored from the editor's **History** panel.
+- **Comment** - a note attached to the whole diagram or anchored to a single node, with a resolved flag for review threads. Read, written, and resolved in the editor's **Comments** panel, or by an agent through the API.
 - **Star** - your personal favorite flag on a diagram, used to filter the list.
 
 ### Where to find it
@@ -179,9 +179,9 @@ The backend can import a Mermaid source string and turn it into a Blueprint grap
 
 A snapshot saves the entire graph so you can return to it later.
 
-To save a snapshot, click **Save snapshot** (the camera button) in the top bar, or choose **Save snapshot** from the pane right-click menu. You can enter an optional label when prompted ("Snapshot label (optional)"). Each snapshot is numbered automatically, one higher than the latest.
+To save a snapshot, click **Save snapshot** (the camera button) in the top bar, choose **Save snapshot** from the pane right-click menu, or use the **Save snapshot** button at the top of the **History** panel. You can enter an optional label when prompted ("Snapshot label (optional)"). Each snapshot is numbered automatically, one higher than the latest.
 
-Listing the saved versions and restoring an earlier one are supported by the backend but have no rendered screen yet. Browsing versions and rolling back are available only through the API or an agent today (`blueprint_list_versions`, `blueprint_restore_version`).
+To browse and restore versions, open the **History** panel from the top bar (the clock icon). Each entry shows its version number (for example `v2`), its label or "Unlabeled", who saved it, and how long ago. Click **Restore** on a version, then **Confirm** the prompt ("Replace the current graph with v<n>?") to roll the diagram back to that snapshot. See the [Comments, People, and version History panels](#comments-people-and-version-history-panels) section for the full panel walkthrough.
 
 ### Star and archive
 
@@ -248,9 +248,19 @@ Once a node is linked to a Bam task (through generation, promotion, or a manual 
 
 When more than one person has a diagram open, Blueprint keeps everyone's canvas current. When anyone adds, moves, edits, or deletes a node or edge, every other open editor refetches the graph and updates. Your own zoom and pan position are not affected by other people's edits. The presence strip in the top bar shows who else is on the diagram, and the selected node is URL-addressable (`?node=<id>`) so a follower can be brought to the same node.
 
-### Comments and collaborators
+### Comments, People, and version History panels
 
-A diagram can carry comments, either anchored to a specific node or attached to the diagram as a whole, with a resolved flag for review threads. A diagram can also have explicit collaborators at the roles owner, editor, commenter, and viewer, granted on top of project- or org-level visibility. Both features are backed by the API and exposed as MCP tools today; there is no dedicated comments or collaborators panel rendered in the editor yet, so an agent or an API client manages them. Comments and collaborators are preserved when a diagram is archived.
+![Comments & collaboration](screenshots/light/06-comments-collaboration.png)
+
+The editor's top bar carries three toggle buttons, just left of the snapshot and export controls, that open a panel on the right side of the canvas: **Comments**, **People**, and **History**. Each button opens its panel and highlights while active; click it again, or the panel's close (X) button, to dismiss it. The three tabs share one panel, so you can switch between them without losing your place. Comments, collaborators, and snapshots are all preserved when a diagram is archived.
+
+**Comments.** Open the **Comments** panel (the speech-bubble icon) to read, write, and resolve notes on the diagram. Each comment shows its author, the relative time it was posted, and the rendered markdown body; a comment anchored to a node shows an "on <node label>" chip. To add one, type in the composer at the bottom (markdown works) and click **Comment** or press **Cmd/Ctrl+Enter**. The composer's checkbox controls anchoring: with a node selected on the canvas it reads **Pin to <node>** and attaches the comment to that node; with nothing selected it posts a diagram-level comment. Click **Resolve** to close a review thread (or **Reopen** to undo); resolved comments are hidden until you click **Show N resolved**.
+
+**People (collaborators).** Open the **People** panel (the people icon) to grant explicit per-diagram access on top of project- or org-level visibility. Search by name or email in the **Add by name or email** box and pick a person to add them (as an editor by default). Each collaborator row shows their name, a **role** dropdown (**Owner**, **Editor**, **Commenter**, or **Viewer**), and a trash button to remove them. Change a role from the dropdown. When a diagram has no direct collaborators the panel explains that people with project or org access can still see it.
+
+**History (versions).** Open the **History** panel (the clock icon) to browse and restore snapshots. The **Save snapshot** button at the top captures the current graph as a new version. Each entry shows its version number, its label or "Unlabeled", who saved it, and how long ago. Click **Restore** then **Confirm** to roll the graph back to that version. See [Snapshots (versions)](#snapshots-versions) for how snapshots are numbered and what they capture.
+
+All three panels are also fully agent- and API-driven, so an agent manages comments, collaborators, and versions through the same MCP tools described under [Working with AI agents](#working-with-ai-agents).
 
 ### Working with AI agents
 
@@ -400,7 +410,7 @@ For the full tool catalog and schemas, see the Blueprint MCP-tools reference in 
 
 **Result:** The diagram is either the agent's improved version or rolled back to your snapshot, with the review thread recorded.
 
-**Related:** Listing and restoring versions, and reading comments, have no editor screen yet; both are agent/API capabilities today.
+**Related:** Listing and restoring versions, and reading comments, are also in the editor's **History** and **Comments** panels; an agent does the same with `blueprint_list_versions`, `blueprint_restore_version`, and `blueprint_list_comments`.
 
 ### Story: Curate your diagram library
 

@@ -128,7 +128,7 @@ Layout-only fields (Section Header, Paragraph, Hidden Field, and Page Break) do 
 
 ### Form Settings dialog
 
-The **Settings** button in the builder action bar opens the Form Settings dialog, titled **Form Settings**. It covers visibility, expiration, and project scoping.
+The **Settings** button in the builder action bar opens the Form Settings dialog, titled **Form Settings**. It covers visibility, expiration, project scoping, who may submit (sign-in and allowed email domains), and submission notifications (email and Banter).
 
 ![Form settings](screenshots/light/06-form-settings-dialog.png)
 
@@ -149,6 +149,33 @@ To set an expiration:
 3. Click **Save**.
 
 Use **Cancel** to close the dialog without saving.
+
+#### Access control and notifications
+
+Below visibility and expiration, the Form Settings dialog has controls for who may submit and what happens when they do. These are enforced and delivered for real.
+
+![Access control and notifications](screenshots/light/07-access-and-notifications.png)
+
+- **Require sign-in to submit** - a checkbox. When on, a visitor must be signed in to a BigBlueBam account before they can submit (or upload a file). An anonymous attempt is rejected with a "You must be signed in to submit this form" error.
+- **Allowed email domains** - a comma-separated list, for example `acme.com, example.org`. When set, only a submitter whose email is on one of these domains may submit; everyone else is rejected with a "Submissions from ... are not allowed" error. The submitter's email is taken from their signed-in account, the form's email field, or an explicit email in the response, in that order. Leave the field blank to allow any domain. A leading `@` is tolerated and stripped.
+- **Email me on new submissions** - a checkbox that turns on notification emails for this form.
+- **Notification recipients** - a comma-separated list of email addresses to notify on each new submission. Used together with **Email me on new submissions**.
+- **Post to Banter channel** - an optional picker. When a channel is chosen, each new submission also posts a short message to that Banter channel.
+
+To gate who can submit:
+
+1. Click **Settings** in the builder.
+2. Check **Require sign-in to submit** to force authentication, and/or enter one or more domains under **Allowed email domains**.
+3. Click **Save**.
+
+To get notified of submissions:
+
+1. Click **Settings** in the builder.
+2. Check **Email me on new submissions** and enter one or more addresses under **Notification recipients**.
+3. (Optional) Pick a **Post to Banter channel** target.
+4. Click **Save**.
+
+> Note: the sign-in and allowed-domain gates are enforced on the public submit and file-upload paths. Combine them with **Visibility** (org or project membership) for layered access control. Notification and confirmation emails are dispatched through your deployment's SMTP transport; where SMTP is not configured, the worker logs the message instead of delivering it.
 
 ### Publish dialog
 
@@ -198,7 +225,7 @@ To filter by attachment processing state:
 
 The table columns are: a row number (#), **Email**, the first five display fields' answers, **Files** (a processing-status pill), and **Date**. If there are no submissions, the table shows "No responses yet."
 
-> Note: file uploads are accepted, stored against the submission, and tracked through the **Files** processing-status pill, but file processing is simulated today. There is no real attachment storage or scanning behind the status, so treat the processing state as a placeholder, not proof a file was scanned.
+File uploads are real. When a respondent attaches a file to a File Upload field, the bytes are uploaded to object storage (MinIO/S3) before the form is submitted, and the submission carries a stored-object reference. A background worker then validates each stored file (extension and MIME allowlist, confirming the object actually landed in storage), records the verified file on the submission, and mints a short-lived download link. The **Files** pill reflects that real outcome: **pending** (awaiting the worker), **processing**, **complete** (every file validated and stored), or **failed** (a file was rejected, for example a disallowed type or a missing object). Uploads are constrained to a size cap and an allowlist of image, document, spreadsheet, CSV, plain-text, and zip types; SVG is always blocked.
 
 To export responses:
 
@@ -230,7 +257,7 @@ The per-form Settings page has these sections:
 
 Each control saves immediately when you change it.
 
-> Note: confirmation emails to respondents and notification emails to your team are logged rather than delivered today, because outbound email (SMTP) is not yet wired up. The toggles persist, but no message is actually sent.
+Email on submit is real. When a form has **Email on Submit** turned on (with recipients configured) or a respondent supplies their email, a background worker sends two kinds of message: a confirmation email to the respondent (using the form's confirmation message) and a notification email to each configured recipient summarizing the new submission. Delivery goes out through the configured SMTP transport; if SMTP is not configured in your deployment, the worker logs the message it would have sent instead of dropping it silently, so the wiring is the same whether or not mail is delivered. The richer access and notification controls (recipient list, Banter channel, sign-in requirement, allowed domains) live in the in-builder **Form Settings** dialog described above; this page exposes the single **Email on Submit** toggle.
 
 ### Multi-page forms
 
@@ -253,7 +280,9 @@ A published form is served as a self-contained HTML page at `https://YOUR-DOMAIN
 
 Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission. The public submit endpoint is rate-limited to 10 submissions per hour per IP, and a form can also enforce a per-email limit, a maximum response count, and an expiration date.
 
-> Note: a form can carry `requires_login` and `allowed_domains` settings, but the public submit path does not enforce them today. Only visibility (org/project membership) and the expiration date gate who can submit. Do not rely on `requires_login` or `allowed_domains` to restrict a Public form.
+A form can additionally require sign-in and restrict submitters to an allowed set of email domains, both enforced on the public submit and file-upload paths (see "Access control and notifications" under Form Settings dialog). With **Require sign-in to submit** on, an unauthenticated submit or upload is rejected. With **Allowed email domains** set, a submitter whose email is not on an allowed domain is rejected. These gates stack with visibility, the per-email limit, the maximum response count, and the expiration date.
+
+File Upload fields are accepted on the public form: the respondent's file is uploaded to object storage before the form is submitted, the submission references the stored object, and a background worker validates the file (type allowlist, and confirming the object landed) and records it with a download link. The **Files** pill on the Responses table reflects that real outcome.
 
 ### Working with AI agents
 
@@ -379,7 +408,44 @@ For the full tool catalog and argument shapes, see the MCP-tools reference in `d
 
 **Result:** People who are not in the org (or not members of the chosen project) get a forbidden response when they open the public URL. Members can view and submit as normal.
 
-**Related:** Visibility (org and project membership) is the enforced gate. The `requires_login` and `allowed_domains` settings are stored but not enforced on the public submit path, so do not rely on them to restrict a Public form.
+**Related:** "Gate a public form by sign-in and email domain" covers the complementary `requires_login` and `allowed_domains` gates, which are enforced on the public submit and file-upload paths and stack with visibility.
+
+### Story: Gate a public form by sign-in and email domain, and get notified
+
+**Who:** An author who wants only known people to submit and wants to hear about each response.
+**Goal:** Require sign-in and an allowed email domain to submit, and email the right people when a submission arrives.
+**Before you start:** You are editing the form in the builder.
+
+**Steps**
+
+1. Click **Settings** in the builder action bar.
+2. Check **Require sign-in to submit** to force authentication (optional but recommended for internal forms).
+3. Under **Allowed email domains**, enter the domains you accept, comma separated, for example `acme.com, example.org`. Leave it blank to allow any domain.
+4. Check **Email me on new submissions** and, under **Notification recipients**, enter the addresses to notify, comma separated.
+5. (Optional) Pick a **Post to Banter channel** target to also post each submission to a channel.
+6. Click **Save**, then **Publish**.
+
+**Result:** An unauthenticated visitor is turned away with a sign-in error, a submitter on a disallowed domain is rejected, and every accepted submission triggers a confirmation email to the submitter plus a notification email to your recipients (and a Banter post if configured). Where SMTP is not configured, the worker logs the messages instead of delivering them.
+
+**Related:** "Restrict a form to your organization or a project" covers the visibility gate that stacks with these. An agent can set the same fields with `blank_update_form` (`requires_login`, `allowed_domains`, `notify_on_submit`, `notify_emails`).
+
+### Story: Collect file uploads on a form
+
+**Who:** An author who needs respondents to attach a document or image.
+**Goal:** Add a file-upload field and review the stored files that come in.
+**Before you start:** You are editing the form in the builder.
+
+**Steps**
+
+1. In the **Add Field** palette, click **File Upload**. The field appears in the canvas; set its **Label** and mark it **Required** if needed.
+2. Publish the form and share the public URL.
+3. A respondent attaches a file; it is uploaded to object storage before they submit, and the submission references the stored object.
+4. Open the form's **Responses** view. Watch the **Files** pill move from **pending** to **complete** as the background worker validates and stores each file (or to **failed** if a file is rejected).
+5. Use the **Attachment status:** filter pills to find submissions whose files are still pending or that failed validation.
+
+**Result:** Respondents can attach files, the files are stored for real, and the Responses table tells you which submissions have validated attachments.
+
+**Related:** Uploads are limited to a size cap and an allowlist of image, document, spreadsheet, CSV, plain-text, and zip types (SVG is always blocked).
 
 ### Story: Build a multi-page survey
 

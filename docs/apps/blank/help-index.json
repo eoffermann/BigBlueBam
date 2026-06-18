@@ -43,6 +43,11 @@
       "level": 3
     },
     {
+      "anchor": "access-control-and-notifications",
+      "title": "Access control and notifications",
+      "level": 4
+    },
+    {
       "anchor": "publish-dialog",
       "title": "Publish dialog",
       "level": 3
@@ -115,6 +120,16 @@
     {
       "anchor": "story-restrict-a-form-to-your-organization-or-a-project",
       "title": "Story: Restrict a form to your organization or a project",
+      "level": 3
+    },
+    {
+      "anchor": "story-gate-a-public-form-by-sign-in-and-email-domain-and-get-notified",
+      "title": "Story: Gate a public form by sign-in and email domain, and get notified",
+      "level": 3
+    },
+    {
+      "anchor": "story-collect-file-uploads-on-a-form",
+      "title": "Story: Collect file uploads on a form",
       "level": 3
     },
     {
@@ -177,7 +192,12 @@
     {
       "anchor": "form-settings-dialog",
       "title": "Form Settings dialog",
-      "text": "The Settings button in the builder action bar opens the Form Settings dialog, titled Form Settings. It covers visibility, expiration, and project scoping. To set visibility: 1. Click Settings in the builder. 2. Under Visibility, choose one of the radio options: - Public - \"Anyone with the link can view and submit this form.\" - Organization - \"Only members of your organization can view this form.\" - Project members - \"Only members of the chosen project can view this form.\" 3. If you choose Project members, a Project picker appears. Select a Bam project. 4. Click Save. Save is disabled if you chose Project members without picking a project. To set an expiration: 1. In the Form Settings dialog, use the Expires at datetime field to set when the form stops accepting responses. 2. Use the Clear button next to it to remove an expiration. 3. Click Save. Use Cancel to close the dialog without saving."
+      "text": "The Settings button in the builder action bar opens the Form Settings dialog, titled Form Settings. It covers visibility, expiration, project scoping, who may submit (sign-in and allowed email domains), and submission notifications (email and Banter). To set visibility: 1. Click Settings in the builder. 2. Under Visibility, choose one of the radio options: - Public - \"Anyone with the link can view and submit this form.\" - Organization - \"Only members of your organization can view this form.\" - Project members - \"Only members of the chosen project can view this form.\" 3. If you choose Project members, a Project picker appears. Select a Bam project. 4. Click Save. Save is disabled if you chose Project members without picking a project. To set an expiration: 1. In the Form Settings dialog, use the Expires at datetime field to set when the form stops accepting responses. 2. Use the Clear button next to it to remove an expiration. 3. Click Save. Use Cancel to close the dialog without saving."
+    },
+    {
+      "anchor": "access-control-and-notifications",
+      "title": "Access control and notifications",
+      "text": "Below visibility and expiration, the Form Settings dialog has controls for who may submit and what happens when they do. These are enforced and delivered for real. - Require sign-in to submit - a checkbox. When on, a visitor must be signed in to a BigBlueBam account before they can submit (or upload a file). An anonymous attempt is rejected with a \"You must be signed in to submit this form\" error. - Allowed email domains - a comma-separated list, for example acme.com, example.org. When set, only a submitter whose email is on one of these domains may submit; everyone else is rejected with a \"Submissions from ... are not allowed\" error. The submitter's email is taken from their signed-in account, the form's email field, or an explicit email in the response, in that order. Leave the field blank to allow any domain. A leading @ is tolerated and stripped. - Email me on new submissions - a checkbox that turns on notification emails for this form. - Notification recipients - a comma-separated list of email addresses to notify on each new submission. Used together with Email me on new submissions. - Post to Banter channel - an optional picker. When a channel is chosen, each new submission also posts a short message to that Banter channel. To gate who can submit: 1. Click Settings in the builder. 2. Check Require sign-in to submit to force authentication, and/or enter one or more domains under Allowed email domains. 3. Click Save. To get notified of submissions: 1. Click Settings in the builder. 2. Check Email me on new submissions and enter one or more addresses under Notification recipients. 3. (Optional) Pick a Post to Banter channel target. 4. Click Save. Note: the sign-in and allowed-domain gates are enforced on the public submit and file-upload paths. Combine them with Visibility (org or project membership) for layered access control. Notification and confirmation emails are dispatched through your deployment's SMTP transport; where SMTP is not configured, the worker logs the message instead of delivering it."
     },
     {
       "anchor": "publish-dialog",
@@ -192,7 +212,7 @@
     {
       "anchor": "responses",
       "title": "Responses",
-      "text": "The Responses view lists every submission for a form. Open it from a form card's overflow menu (Responses) or at /blank/forms/<id/responses. The page is titled \"<form name - Responses\" and shows the submission count. The back chevron returns you to the builder. Actions on the Responses page: - Analytics - opens the Analytics view for this form. - Export CSV - downloads all submissions for the form as a CSV file named submissions.csv. To filter by attachment processing state: 1. Use the Attachment status: filter pills above the table: all, pending, processing, complete, or failed. This filters the visible rows. The table columns are: a row number (), Email, the first five display fields' answers, Files (a processing-status pill), and Date. If there are no submissions, the table shows \"No responses yet.\" Note: file uploads are accepted, stored against the submission, and tracked through the Files processing-status pill, but file processing is simulated today. There is no real attachment storage or scanning behind the status, so treat the processing state as a placeholder, not proof a file was scanned. To export responses: 1. Open the Responses view for the form. 2. Click Export CSV. The browser downloads submissions.csv with every submission."
+      "text": "The Responses view lists every submission for a form. Open it from a form card's overflow menu (Responses) or at /blank/forms/<id/responses. The page is titled \"<form name - Responses\" and shows the submission count. The back chevron returns you to the builder. Actions on the Responses page: - Analytics - opens the Analytics view for this form. - Export CSV - downloads all submissions for the form as a CSV file named submissions.csv. To filter by attachment processing state: 1. Use the Attachment status: filter pills above the table: all, pending, processing, complete, or failed. This filters the visible rows. The table columns are: a row number (), Email, the first five display fields' answers, Files (a processing-status pill), and Date. If there are no submissions, the table shows \"No responses yet.\" File uploads are real. When a respondent attaches a file to a File Upload field, the bytes are uploaded to object storage (MinIO/S3) before the form is submitted, and the submission carries a stored-object reference. A background worker then validates each stored file (extension and MIME allowlist, confirming the object actually landed in storage), records the verified file on the submission, and mints a short-lived download link. The Files pill reflects that real outcome: pending (awaiting the worker), processing, complete (every file validated and stored), or failed (a file was rejected, for example a disallowed type or a missing object). Uploads are constrained to a size cap and an allowlist of image, document, spreadsheet, CSV, plain-text, and zip types; SVG is always blocked. To export responses: 1. Open the Responses view for the form. 2. Click Export CSV. The browser downloads submissions.csv with every submission."
     },
     {
       "anchor": "analytics",
@@ -202,7 +222,7 @@
     {
       "anchor": "per-form-settings-page",
       "title": "Per-form Settings page",
-      "text": "Each form has a settings page at /blank/forms/<id/settings with additional toggles. Reach it by entering the URL directly. The builder's Settings button opens the in-builder Form Settings dialog instead, which covers only visibility, expiration, and project. The per-form Settings page has these sections: - Access - Form Type (Public, Internal, Embedded), Accept Responses (whether new submissions are accepted), and One per Email (limit to one submission per email address). - Confirmation - Type (Show Message, Redirect, or Custom Page) and a Confirmation Message textarea. - Branding - a Theme Color picker and a Show Progress Bar checkbox for multi-page forms. - Notifications - an Email on Submit checkbox to be notified when someone submits. Each control saves immediately when you change it. Note: confirmation emails to respondents and notification emails to your team are logged rather than delivered today, because outbound email (SMTP) is not yet wired up. The toggles persist, but no message is actually sent."
+      "text": "Each form has a settings page at /blank/forms/<id/settings with additional toggles. Reach it by entering the URL directly. The builder's Settings button opens the in-builder Form Settings dialog instead, which covers only visibility, expiration, and project. The per-form Settings page has these sections: - Access - Form Type (Public, Internal, Embedded), Accept Responses (whether new submissions are accepted), and One per Email (limit to one submission per email address). - Confirmation - Type (Show Message, Redirect, or Custom Page) and a Confirmation Message textarea. - Branding - a Theme Color picker and a Show Progress Bar checkbox for multi-page forms. - Notifications - an Email on Submit checkbox to be notified when someone submits. Each control saves immediately when you change it. Email on submit is real. When a form has Email on Submit turned on (with recipients configured) or a respondent supplies their email, a background worker sends two kinds of message: a confirmation email to the respondent (using the form's confirmation message) and a notification email to each configured recipient summarizing the new submission. Delivery goes out through the configured SMTP transport; if SMTP is not configured in your deployment, the worker logs the message it would have sent instead of dropping it silently, so the wiring is the same whether or not mail is delivered. The richer access and notification controls (recipient list, Banter channel, sign-in requirement, allowed domains) live in the in-builder Form Settings dialog described above; this page exposes the single Email on Submit toggle."
     },
     {
       "anchor": "multi-page-forms",
@@ -217,7 +237,7 @@
     {
       "anchor": "public-form",
       "title": "Public form",
-      "text": "A published form is served as a self-contained HTML page at https://YOUR-DOMAIN/forms/<slug. This is the page the Publish dialog gives you and the one respondents fill out. It renders the form's fields, splits a multi-page form across pages with Back and Next controls and a progress bar, optionally collects the respondent's email, and shows the confirmation (message, redirect, or page) after a successful submission. Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission. The public submit endpoint is rate-limited to 10 submissions per hour per IP, and a form can also enforce a per-email limit, a maximum response count, and an expiration date. Note: a form can carry requireslogin and alloweddomains settings, but the public submit path does not enforce them today. Only visibility (org/project membership) and the expiration date gate who can submit. Do not rely on requireslogin or alloweddomains to restrict a Public form."
+      "text": "A published form is served as a self-contained HTML page at https://YOUR-DOMAIN/forms/<slug. This is the page the Publish dialog gives you and the one respondents fill out. It renders the form's fields, splits a multi-page form across pages with Back and Next controls and a progress bar, optionally collects the respondent's email, and shows the confirmation (message, redirect, or page) after a successful submission. Public submission is anonymous for forms set to Public visibility. Forms set to Organization or Project members visibility check that the caller belongs to the org or the chosen project before rendering or accepting a submission. The public submit endpoint is rate-limited to 10 submissions per hour per IP, and a form can also enforce a per-email limit, a maximum response count, and an expiration date. A form can additionally require sign-in and restrict submitters to an allowed set of email domains, both enforced on the public submit and file-upload paths (see \"Access control and notifications\" under Form Settings dialog). With Require sign-in to submit on, an unauthenticated submit or upload is rejected. With Allowed email domains set, a submitter whose email is not on an allowed domain is rejected. These gates stack with visibility, the per-email limit, the maximum response count, and the expiration date. File Upload fields are accepted on the public form: the respondent's file is uploaded to object storage before the form is submitted, the submission references the stored object, and a background worker validates the file (type allowlist, and confirming the object landed) and records it with a download link. The Files pill on the Responses table reflects that real outcome."
     },
     {
       "anchor": "working-with-ai-agents",
@@ -252,7 +272,17 @@
     {
       "anchor": "story-restrict-a-form-to-your-organization-or-a-project",
       "title": "Story: Restrict a form to your organization or a project",
-      "text": "Who: An author who wants the form limited to internal people. Goal: Stop people outside your org or project from viewing or submitting the form. Before you start: You are editing the form in the builder. Steps 1. Click Settings in the builder action bar. 2. Under Visibility, choose Organization to limit to your org, or Project members to limit to a Bam project. 3. If you chose Project members, select a project in the Project picker that appears. 4. Click Save. Result: People who are not in the org (or not members of the chosen project) get a forbidden response when they open the public URL. Members can view and submit as normal. Related: Visibility (org and project membership) is the enforced gate. The requireslogin and alloweddomains settings are stored but not enforced on the public submit path, so do not rely on them to restrict a Public form."
+      "text": "Who: An author who wants the form limited to internal people. Goal: Stop people outside your org or project from viewing or submitting the form. Before you start: You are editing the form in the builder. Steps 1. Click Settings in the builder action bar. 2. Under Visibility, choose Organization to limit to your org, or Project members to limit to a Bam project. 3. If you chose Project members, select a project in the Project picker that appears. 4. Click Save. Result: People who are not in the org (or not members of the chosen project) get a forbidden response when they open the public URL. Members can view and submit as normal. Related: \"Gate a public form by sign-in and email domain\" covers the complementary requireslogin and alloweddomains gates, which are enforced on the public submit and file-upload paths and stack with visibility."
+    },
+    {
+      "anchor": "story-gate-a-public-form-by-sign-in-and-email-domain-and-get-notified",
+      "title": "Story: Gate a public form by sign-in and email domain, and get notified",
+      "text": "Who: An author who wants only known people to submit and wants to hear about each response. Goal: Require sign-in and an allowed email domain to submit, and email the right people when a submission arrives. Before you start: You are editing the form in the builder. Steps 1. Click Settings in the builder action bar. 2. Check Require sign-in to submit to force authentication (optional but recommended for internal forms). 3. Under Allowed email domains, enter the domains you accept, comma separated, for example acme.com, example.org. Leave it blank to allow any domain. 4. Check Email me on new submissions and, under Notification recipients, enter the addresses to notify, comma separated. 5. (Optional) Pick a Post to Banter channel target to also post each submission to a channel. 6. Click Save, then Publish. Result: An unauthenticated visitor is turned away with a sign-in error, a submitter on a disallowed domain is rejected, and every accepted submission triggers a confirmation email to the submitter plus a notification email to your recipients (and a Banter post if configured). Where SMTP is not configured, the worker logs the messages instead of delivering them. Related: \"Restrict a form to your organization or a project\" covers the visibility gate that stacks with these. An agent can set the same fields with blankupdateform (requireslogin, alloweddomains, notifyonsubmit, notifyemails)."
+    },
+    {
+      "anchor": "story-collect-file-uploads-on-a-form",
+      "title": "Story: Collect file uploads on a form",
+      "text": "Who: An author who needs respondents to attach a document or image. Goal: Add a file-upload field and review the stored files that come in. Before you start: You are editing the form in the builder. Steps 1. In the Add Field palette, click File Upload. The field appears in the canvas; set its Label and mark it Required if needed. 2. Publish the form and share the public URL. 3. A respondent attaches a file; it is uploaded to object storage before they submit, and the submission references the stored object. 4. Open the form's Responses view. Watch the Files pill move from pending to complete as the background worker validates and stores each file (or to failed if a file is rejected). 5. Use the Attachment status: filter pills to find submissions whose files are still pending or that failed validation. Result: Respondents can attach files, the files are stored for real, and the Responses table tells you which submissions have validated attachments. Related: Uploads are limited to a size cap and an allowlist of image, document, spreadsheet, CSV, plain-text, and zip types (SVG is always blocked)."
     },
     {
       "anchor": "story-build-a-multi-page-survey",
@@ -280,6 +310,7 @@
     "Access": "per-form-settings-page",
     "Active Fields": "analytics",
     "Add Field": "form-builder",
+    "Allowed email domains": "access-control-and-notifications",
     "Analytics": "responses",
     "Attachment status:": "responses",
     "Bam": "related",
@@ -298,12 +329,14 @@
     "Done": "publish-dialog",
     "Duplicate": "forms-list",
     "Email": "responses",
+    "Email me on new submissions": "access-control-and-notifications",
     "Email on Submit": "per-form-settings-page",
     "Expires at": "form-settings-dialog",
     "Export CSV": "responses",
     "Field": "key-concepts",
     "Field Settings": "field-settings",
     "Field type": "key-concepts",
+    "File Upload": "story-collect-file-uploads-on-a-form",
     "Files": "responses",
     "Form": "key-concepts",
     "Form Settings": "form-settings-dialog",
@@ -323,6 +356,7 @@
     "Min Value": "field-settings",
     "NPS": "story-build-and-publish-your-first-form",
     "New Form": "forms-list",
+    "Notification recipients": "access-control-and-notifications",
     "Notifications": "per-form-settings-page",
     "One per Email": "per-form-settings-page",
     "Open in new tab": "publish-dialog",
@@ -332,6 +366,7 @@
     "Page Number": "form-builder",
     "Per-Field Breakdown": "analytics",
     "Placeholder": "field-settings",
+    "Post to Banter channel": "access-control-and-notifications",
     "Preview": "forms-list",
     "Project": "form-settings-dialog",
     "Project members": "key-concepts",
@@ -340,6 +375,7 @@
     "Publish": "form-builder",
     "Rating": "story-build-and-publish-your-first-form",
     "Regex Pattern": "field-settings",
+    "Require sign-in to submit": "access-control-and-notifications",
     "Required": "field-settings",
     "Responses": "forms-list",
     "Save": "form-settings-dialog",
@@ -376,9 +412,13 @@
     "`blank_update_field`": "working-with-ai-agents",
     "`blank_update_form`": "working-with-ai-agents",
     "closed": "key-concepts",
+    "complete": "responses",
     "draft": "key-concepts",
+    "failed": "responses",
     "field key": "key-concepts",
     "forms": "overview",
+    "pending": "responses",
+    "processing": "responses",
     "published": "key-concepts",
     "submissions": "overview"
   },

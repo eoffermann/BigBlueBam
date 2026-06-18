@@ -95,6 +95,27 @@
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 5, label: "Archived diagrams" }
 
+- id: blueprint-comments-collaboration
+  app: blueprint
+  demonstrates: "The editor's collaboration panels: open a diagram, then toggle the Comments panel from the top bar to show anchored/diagram-level comments, the People (collaborators) and History (version) tabs, and the comment composer"
+  # Open a real seeded diagram via the list, then click the Comments toggle in
+  # the top bar (PanelToggleButton renders its label as button text, so
+  # `button:has-text('Comments')` matches — see apps/blueprint/src/pages/editor.tsx).
+  # The right-side EditorPanels aside hosts the Comments / People / History tabs.
+  route: /blueprint/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: "div.group.cursor-pointer" }
+    - { action: click, selector: "div.group.cursor-pointer", optional: true }
+    - { action: waitFor, selector: ".react-flow", optional: true }
+    - { action: wait, ms: 2500 }
+    - { action: click, selector: "button:has-text('Comments')", optional: true }
+    - { action: waitFor, selector: "aside textarea", optional: true }
+    - { action: wait, ms: 1200 }
+  expect: ["aside"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Comments & collaboration" }
+
 - id: blueprint-diagram-list-dark
   app: blueprint
   demonstrates: "The diagram library in dark theme (marketing/retina)"

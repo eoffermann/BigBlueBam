@@ -12,7 +12,7 @@
 | `bureau_delete_room` | Soft-delete (archive) a Bureau room. Org admins/owners only (gated server-side). This is a soft delete — the row is retained for auditability but the room disappears from the floor and can no longer be entered, booked, or knocked on.  | `id`, `confirm_action` |
 | `bureau_get_chat_messages` | Recover the transcript of a Bureau room chat by its room key. Access is gated by participation: you can re-read what you were present for; org admins/owners and SuperUsers can additionally read any thread they can name. Returns up to  | `room_key`, `before`, `limit` |
 | `bureau_get_floor` | Fetch a single Bureau floor by id, including its rooms array (with live per-room occupancy), background image, and layout JSON. Use this to render the floor view or to enumerate rooms before bureau_who_is_in_room / bureau_move_self. | `id` |
-| `bureau_get_presence` | Snapshot the full org-wide Bureau presence map: every user with a live session, their current room, floor, and status (active/dnd/away). STUB: the underlying /v1/presence endpoint is not yet implemented on bureau-api (workstream 13). Until then this tool returns { data: [] }. Agents asking  | none |
+| `bureau_get_presence` | Snapshot the full org-wide Bureau presence map: every user with a live session in the caller | none |
 | `bureau_get_settings` | Get the org-wide Bureau settings (continuous_audio, allow_auto_follow, default_office_privacy, members_can_book, members_can_create_rooms). Creates and returns a default row if none exists yet. Readable by any member; mutating requires bureau_update_settings (admin/owner). | none |
 | `bureau_get_summon` | Fetch a summon audit row by id: who summoned, from which room, the target URL/app, and the eligible/denied recipient lists. Only the original summoner (or an org admin/owner) may read it. Use this after bureau_summon to inspect who was eligible vs denied, then optionally bureau_summon_grant_access to grant the denied users and re-summon them. | `id` |
 | `bureau_knock` | Knock on an office door — creates a pending bureau_knocks row, emits a knock.requested Bolt event, and schedules a 30s timeout that flips the knock to  | `room_id`, `message` |
@@ -22,14 +22,15 @@
 | `bureau_list_chats` | List the Bureau room-chat threads the caller participated in (the recovery half of room chat — the live half is WS-only). Optional  | `search` |
 | `bureau_list_floors` | List every Bureau floor in the caller | none |
 | `bureau_list_offices` | List every type= | none |
-| `bureau_locate_user` | Locate a user inside Bureau: returns their current room_id and floor_id if they have a live session, or null otherwise. STUB: the underlying /v1/presence/locate endpoint is not yet implemented on bureau-api (workstream 13). Until then this tool returns { data: null } so agents can call it without erroring, but it cannot actually locate users. Tracked separately; agents should treat a null result as  | `user_id` |
+| `bureau_list_rooms` | List rooms across the caller | `bookable`, `floor_id` |
+| `bureau_locate_user` | Locate a user inside Bureau: returns their current room_id and floor_id (plus status and the surface URL they are on) if they have a live presence session in the caller | `user_id` |
 | `bureau_move_self` | Move the caller into a Bureau room: mints a LiveKit access token for  | `id` |
 | `bureau_my_office` | Return the Bureau room owned by the caller (their personal office), or { data: null } if they have none. Use this to find the caller | none |
 | `bureau_respond_knock` | Resolve a pending knock as the office owner:  | `id`, `decision` |
 | `bureau_set_chat_retention` | Set the retention policy on a Bureau room chat. Org admins/owners and SuperUsers only (gated server-side; others get 403). Provide retention_hours (1..168, i.e. up to one week) to extend, OR retain_forever: true to keep the transcript indefinitely. At least one must be given. | `room_key`, `retention_hours`, `retain_forever` |
 | `bureau_set_door_state` | Update the durable default privacy ( | `id`, `privacy` |
 | `bureau_set_floor_background` | Set a Bureau floor | `id`, `background_url` |
-| `bureau_set_status` | Set the caller | `status` |
+| `bureau_set_status` | Set AND persist the caller | `status` |
 | `bureau_summon` | Summon every eligible occupant of the caller | `target_url`, `target_app`, `target_label`, `lk_room_hint`, `confirm_action` |
 | `bureau_summon_grant_access` | §4.4 grant-and-summon follow-up: for users who were DENIED on a prior summon (because they lacked access to the target URL), grant them access AND re-summon them in one step. Only the original summoner may call this on their own summon. Get the summon id and the denied user ids from bureau_get_summon.  | `id`, `user_ids`, `confirm_action` |
 | `bureau_update_booking` | Update a Bureau booking | `id`, `title`, `starts_at`, `ends_at`, `access` |

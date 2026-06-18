@@ -36,6 +36,13 @@ by human id, and task, sprint, epic, and comment changes emit events to Bolt for
 automation. The command palette (Cmd+K) and Launchpad provide quick navigation
 across the suite.
 
+Outbound email resolves through a two-level relay. A platform SuperUser sets a
+platform-wide SMTP relay in the SuperUser Console (the system and fallback sender
+for org invitations, password resets, and system reports), and any organization
+can set its own relay in Settings > Integrations to override it for that org's
+mail. Resolution runs org override first, then platform relay, then the server's
+environment default.
+
 ## Getting Started
 
 After logging in, create your first project from the dashboard and pick a template

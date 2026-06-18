@@ -138,8 +138,8 @@
       "level": 3
     },
     {
-      "anchor": "comments-and-collaborators",
-      "title": "Comments and collaborators",
+      "anchor": "comments-people-and-version-history-panels",
+      "title": "Comments, People, and version History panels",
       "level": 3
     },
     {
@@ -202,12 +202,12 @@
     {
       "anchor": "overview",
       "title": "Overview",
-      "text": "Blueprint stores every diagram as a set of database rows: a diagram record, one row per node, and one row per edge. Because the graph is structured rather than a flat image, every change you make is an ordinary, auditable action, and the same actions are exposed to AI agents as MCP tools. That is the core idea: a node is a first-class object that can be styled, nested, linked to a task in Bam, promoted into a new task, or generated from an existing one. You work with three kinds of object. A diagram is the top-level artifact (a flowchart, a graph, an org chart). A node is a box on the canvas with a shape, label, description, size, and position. An edge is a connection between two nodes with a direction, a kind, and arrow markers. Diagrams live in your organization and can optionally belong to a project, which controls who can see them. Blueprint is wired into Bam, the Kanban and sprint tool. You can generate a diagram from an existing Bam project (one node per task, edges drawn from parent/child links), and you can promote a diagram into Bam (one task per node, parent links from the edges). A node linked to a Bam task stays in two-way sync: rename the node and the task title updates, rename the task and the node updates. Several capabilities in Blueprint are agent-driven or API-driven rather than point-and-click. Anything an agent can do to a diagram, it does through a named tool, so an agent can read a process description and emit a fully wired diagram in a single call, with the same permissions and the same audit trail as a person. Where a backend capability has no rendered screen yet, this document says so plainly rather than promising a button that does not exist."
+      "text": "Blueprint stores every diagram as a set of database rows: a diagram record, one row per node, and one row per edge. Because the graph is structured rather than a flat image, every change you make is an ordinary, auditable action, and the same actions are exposed to AI agents as MCP tools. That is the core idea: a node is a first-class object that can be styled, nested, linked to a task in Bam, promoted into a new task, or generated from an existing one. You work with three kinds of object. A diagram is the top-level artifact (a flowchart, a graph, an org chart). A node is a box on the canvas with a shape, label, description, size, and position. An edge is a connection between two nodes with a direction, a kind, and arrow markers. Diagrams live in your organization and can optionally belong to a project, which controls who can see them. Blueprint is wired into Bam, the Kanban and sprint tool. You can generate a diagram from an existing Bam project (one node per task, edges drawn from parent/child links), and you can promote a diagram into Bam (one task per node, parent links from the edges). A node linked to a Bam task stays in two-way sync: rename the node and the task title updates, rename the task and the node updates. Several capabilities in Blueprint are agent-driven or API-driven rather than point-and-click. Anything an agent can do to a diagram, it does through a named tool, so an agent can read a process description and emit a fully wired diagram in a single call, with the same permissions and the same audit trail as a person. A few backend capabilities still have no rendered screen (Mermaid import, image export, template seeding); where that is the case this document says so plainly rather than promising a button that does not exist."
     },
     {
       "anchor": "key-concepts",
       "title": "Key concepts",
-      "text": "- Diagram - the top-level artifact. Has a name, a type, a layout algorithm, a visibility level, an optional project, and an archived flag. - Diagram type - a tag that picks the type icon and the sidebar grouping. The New diagram dialog offers Flowchart, Graph, Sequence, Class, and Mind map. Generate from Bam writes the type orgchart. - Node - a vertex on the canvas. Carries a shape, label, markdown description, position, width and height, a pinned flag, fill color, an optional parent (for nesting), and an optional cross-product link. - Shape - the visual form of a node. The palette offers Rounded, Rectangle, Diamond, Ellipse, and Hexagon. - Edge - a connection between two nodes. Carries a kind (Default, Dependency, Flow, Reference, Inherits) and an end marker (Filled arrow, Open arrow, No arrow / None). - Pinned - a node excluded from auto-layout. A pinned node keeps the position you set by hand when you run a layout pass. - Layout algorithm - the auto-arrange engine, run server-side by ELK. The layout dropdown offers Layered, Force-directed, Tree, and Grid, and all four apply a layout. Tree maps to ELK's mrtree and Grid maps to ELK's rectpacking. The radial algorithm is reachable only through the API or an agent. - Linked entity - a cross-product reference from a node to an object in another app, such as a Bam task, a Beacon entry, a Bond deal, or a Bearing goal. Only Bam tasks have live two-way sync. - Visibility - who can see the diagram. Private (you, plus collaborators), Project (project members, or the org if there is no project), or Organization (everyone in your org). - Collaborator - a user granted explicit access to one diagram at a role of owner, editor, commenter, or viewer, on top of any project- or org-level visibility. Managed today through the API or an agent. - Snapshot (version) - a saved, immutable copy of the whole graph that you can restore later. - Comment - a note attached to the whole diagram or anchored to a single node, with a resolved flag for review threads. Managed today through the API or an agent. - Star - your personal favorite flag on a diagram, used to filter the list."
+      "text": "- Diagram - the top-level artifact. Has a name, a type, a layout algorithm, a visibility level, an optional project, and an archived flag. - Diagram type - a tag that picks the type icon and the sidebar grouping. The New diagram dialog offers Flowchart, Graph, Sequence, Class, and Mind map. Generate from Bam writes the type orgchart. - Node - a vertex on the canvas. Carries a shape, label, markdown description, position, width and height, a pinned flag, fill color, an optional parent (for nesting), and an optional cross-product link. - Shape - the visual form of a node. The palette offers Rounded, Rectangle, Diamond, Ellipse, and Hexagon. - Edge - a connection between two nodes. Carries a kind (Default, Dependency, Flow, Reference, Inherits) and an end marker (Filled arrow, Open arrow, No arrow / None). - Pinned - a node excluded from auto-layout. A pinned node keeps the position you set by hand when you run a layout pass. - Layout algorithm - the auto-arrange engine, run server-side by ELK. The layout dropdown offers Layered, Force-directed, Tree, and Grid, and all four apply a layout. Tree maps to ELK's mrtree and Grid maps to ELK's rectpacking. The radial algorithm is reachable only through the API or an agent. - Linked entity - a cross-product reference from a node to an object in another app, such as a Bam task, a Beacon entry, a Bond deal, or a Bearing goal. Only Bam tasks have live two-way sync. - Visibility - who can see the diagram. Private (you, plus collaborators), Project (project members, or the org if there is no project), or Organization (everyone in your org). - Collaborator - a user granted explicit access to one diagram at a role of owner, editor, commenter, or viewer, on top of any project- or org-level visibility. Managed in the editor's People panel, or by an agent through the API. - Snapshot (version) - a saved, immutable copy of the whole graph that you can restore later. Browsed and restored from the editor's History panel. - Comment - a note attached to the whole diagram or anchored to a single node, with a resolved flag for review threads. Read, written, and resolved in the editor's Comments panel, or by an agent through the API. - Star - your personal favorite flag on a diagram, used to filter the list."
     },
     {
       "anchor": "where-to-find-it",
@@ -297,7 +297,7 @@
     {
       "anchor": "snapshots-versions",
       "title": "Snapshots (versions)",
-      "text": "A snapshot saves the entire graph so you can return to it later. To save a snapshot, click Save snapshot (the camera button) in the top bar, or choose Save snapshot from the pane right-click menu. You can enter an optional label when prompted (\"Snapshot label (optional)\"). Each snapshot is numbered automatically, one higher than the latest. Listing the saved versions and restoring an earlier one are supported by the backend but have no rendered screen yet. Browsing versions and rolling back are available only through the API or an agent today (blueprintlistversions, blueprintrestoreversion)."
+      "text": "A snapshot saves the entire graph so you can return to it later. To save a snapshot, click Save snapshot (the camera button) in the top bar, choose Save snapshot from the pane right-click menu, or use the Save snapshot button at the top of the History panel. You can enter an optional label when prompted (\"Snapshot label (optional)\"). Each snapshot is numbered automatically, one higher than the latest. To browse and restore versions, open the History panel from the top bar (the clock icon). Each entry shows its version number (for example v2), its label or \"Unlabeled\", who saved it, and how long ago. Click Restore on a version, then Confirm the prompt (\"Replace the current graph with v<n?\") to roll the diagram back to that snapshot. See the Comments, People, and version History panels section for the full panel walkthrough."
     },
     {
       "anchor": "star-and-archive",
@@ -335,9 +335,9 @@
       "text": "When more than one person has a diagram open, Blueprint keeps everyone's canvas current. When anyone adds, moves, edits, or deletes a node or edge, every other open editor refetches the graph and updates. Your own zoom and pan position are not affected by other people's edits. The presence strip in the top bar shows who else is on the diagram, and the selected node is URL-addressable (?node=<id) so a follower can be brought to the same node."
     },
     {
-      "anchor": "comments-and-collaborators",
-      "title": "Comments and collaborators",
-      "text": "A diagram can carry comments, either anchored to a specific node or attached to the diagram as a whole, with a resolved flag for review threads. A diagram can also have explicit collaborators at the roles owner, editor, commenter, and viewer, granted on top of project- or org-level visibility. Both features are backed by the API and exposed as MCP tools today; there is no dedicated comments or collaborators panel rendered in the editor yet, so an agent or an API client manages them. Comments and collaborators are preserved when a diagram is archived."
+      "anchor": "comments-people-and-version-history-panels",
+      "title": "Comments, People, and version History panels",
+      "text": "The editor's top bar carries three toggle buttons, just left of the snapshot and export controls, that open a panel on the right side of the canvas: Comments, People, and History. Each button opens its panel and highlights while active; click it again, or the panel's close (X) button, to dismiss it. The three tabs share one panel, so you can switch between them without losing your place. Comments, collaborators, and snapshots are all preserved when a diagram is archived. Comments. Open the Comments panel (the speech-bubble icon) to read, write, and resolve notes on the diagram. Each comment shows its author, the relative time it was posted, and the rendered markdown body; a comment anchored to a node shows an \"on <node label\" chip. To add one, type in the composer at the bottom (markdown works) and click Comment or press Cmd/Ctrl+Enter. The composer's checkbox controls anchoring: with a node selected on the canvas it reads Pin to <node and attaches the comment to that node; with nothing selected it posts a diagram-level comment. Click Resolve to close a review thread (or Reopen to undo); resolved comments are hidden until you click Show N resolved. People (collaborators). Open the People panel (the people icon) to grant explicit per-diagram access on top of project- or org-level visibility. Search by name or email in the Add by name or email box and pick a person to add them (as an editor by default). Each collaborator row shows their name, a role dropdown (Owner, Editor, Commenter, or Viewer), and a trash button to remove them. Change a role from the dropdown. When a diagram has no direct collaborators the panel explains that people with project or org access can still see it. History (versions). Open the History panel (the clock icon) to browse and restore snapshots. The Save snapshot button at the top captures the current graph as a new version. Each entry shows its version number, its label or \"Unlabeled\", who saved it, and how long ago. Click Restore then Confirm to roll the graph back to that version. See Snapshots (versions) for how snapshots are numbered and what they capture. All three panels are also fully agent- and API-driven, so an agent manages comments, collaborators, and versions through the same MCP tools described under Working with AI agents."
     },
     {
       "anchor": "working-with-ai-agents",
@@ -382,7 +382,7 @@
     {
       "anchor": "story-review-and-snapshot-before-an-agent-rewrite",
       "title": "Story: Review and snapshot before an agent rewrite",
-      "text": "Who: A diagram owner who wants a safe restore point before an agent reworks the graph. Goal: Capture the current graph, let the agent rewrite it, and roll back if needed. Before you start: Have a diagram open, and an agent with blueprint. access. Steps 1. In the editor, click Save snapshot and label it (for example \"before agent rewrite\"). 2. Ask the agent to make its changes. It can read the graph with blueprintreadnodes and blueprintreadedges, and rewrite with blueprintgenerate (replace: true) or incremental node/edge tools. 3. Have the agent add a comment summarizing what it changed with blueprintaddcomment, and read review feedback with blueprintlistcomments. 4. If the result is wrong, ask the agent to restore the labeled snapshot with blueprintrestoreversion (it lists versions with blueprintlistversions first). Result: The diagram is either the agent's improved version or rolled back to your snapshot, with the review thread recorded. Related: Listing and restoring versions, and reading comments, have no editor screen yet; both are agent/API capabilities today."
+      "text": "Who: A diagram owner who wants a safe restore point before an agent reworks the graph. Goal: Capture the current graph, let the agent rewrite it, and roll back if needed. Before you start: Have a diagram open, and an agent with blueprint. access. Steps 1. In the editor, click Save snapshot and label it (for example \"before agent rewrite\"). 2. Ask the agent to make its changes. It can read the graph with blueprintreadnodes and blueprintreadedges, and rewrite with blueprintgenerate (replace: true) or incremental node/edge tools. 3. Have the agent add a comment summarizing what it changed with blueprintaddcomment, and read review feedback with blueprintlistcomments. 4. If the result is wrong, ask the agent to restore the labeled snapshot with blueprintrestoreversion (it lists versions with blueprintlistversions first). Result: The diagram is either the agent's improved version or rolled back to your snapshot, with the review thread recorded. Related: Listing and restoring versions, and reading comments, are also in the editor's History and Comments panels; an agent does the same with blueprintlistversions, blueprintrestoreversion, and blueprintlistcomments."
     },
     {
       "anchor": "story-curate-your-diagram-library",
@@ -397,6 +397,7 @@
   ],
   "labels": {
     "Add <shape>": "add-nodes",
+    "Add by name or email": "comments-people-and-version-history-panels",
     "Add connected node": "add-nodes",
     "Add node": "add-nodes",
     "Align": "snap-to-grid",
@@ -417,8 +418,12 @@
     "Class": "browse-and-filter-diagrams",
     "Clear": "edit-a-node",
     "Cmd/Ctrl+D": "duplicate-a-node",
+    "Cmd/Ctrl+Enter": "comments-people-and-version-history-panels",
     "Collaborator": "key-concepts",
     "Comment": "key-concepts",
+    "Commenter": "comments-people-and-version-history-panels",
+    "Comments": "key-concepts",
+    "Confirm": "snapshots-versions",
     "Create diagram": "create-a-diagram",
     "Current": "auto-layout",
     "Delete": "delete-a-node",
@@ -434,6 +439,7 @@
     "Duplicate": "edit-a-node",
     "Edge": "key-concepts",
     "Edge kind": "edit-an-edge",
+    "Editor": "comments-people-and-version-history-panels",
     "Ellipse": "add-nodes",
     "End marker": "edit-an-edge",
     "Export": "export-a-diagram",
@@ -449,6 +455,7 @@
     "Grid": "auto-layout",
     "Height": "edit-a-node",
     "Hexagon": "add-nodes",
+    "History": "key-concepts",
     "Include completed tasks": "generate-a-diagram-from-a-bam-project",
     "Inspector": "the-editor-canvas",
     "JSON": "export-a-diagram",
@@ -471,7 +478,10 @@
     "Nothing selected": "the-editor-canvas",
     "Open editor": "browse-and-filter-diagrams",
     "Organization": "create-a-diagram",
+    "Owner": "comments-people-and-version-history-panels",
+    "People": "key-concepts",
     "Pin position": "edit-a-node",
+    "Pin to <node>": "comments-people-and-version-history-panels",
     "Pinned": "key-concepts",
     "Private": "create-a-diagram",
     "Project": "create-a-diagram",
@@ -481,12 +491,16 @@
     "Promote to task": "promote-a-single-node-to-a-bam-task",
     "Rectangle": "add-nodes",
     "Reload from server": "export-a-diagram",
+    "Reopen": "comments-people-and-version-history-panels",
     "Reorganize": "auto-layout",
+    "Resolve": "comments-people-and-version-history-panels",
+    "Restore": "snapshots-versions",
     "Right to left": "auto-layout",
     "Rounded": "add-nodes",
     "Save snapshot": "snapshots-versions",
     "Sequence": "browse-and-filter-diagrams",
     "Shape": "key-concepts",
+    "Show N resolved": "comments-people-and-version-history-panels",
     "Snap nodes to grid now": "snap-to-grid",
     "Snap to grid": "snap-to-grid",
     "Snapshot (version)": "key-concepts",
@@ -497,6 +511,7 @@
     "Tree": "auto-layout",
     "Type": "create-a-diagram",
     "Unpin (allow auto-layout)": "edit-a-node",
+    "Viewer": "comments-people-and-version-history-panels",
     "Visibility": "key-concepts",
     "Width": "edit-a-node",
     "bold": "edit-a-node",
@@ -505,6 +520,7 @@
     "entity id (uuid)": "link-a-node-to-another-apps-entity",
     "node": "overview",
     "pin": "move-and-pin-nodes",
+    "role": "comments-people-and-version-history-panels",
     "type": "link-a-node-to-another-apps-entity"
   },
   "crossrefs": [

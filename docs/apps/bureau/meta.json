@@ -3,11 +3,11 @@
   "nginx_path": "/bureau/",
   "api_port": 4015,
   "api_dir": "bureau-api",
-  "route_files": 14,
+  "route_files": 15,
   "schema_modules": 4,
   "has_seeder": false,
   "has_frontend": true,
-  "src_hash": "626d8419de28a51a6de50d2f5fa58f0cbb7308a88202d934916fde054f37ea09",
-  "generated_at": "2026-06-17T22:16:23.330Z",
-  "mcp_tool_count": 36
+  "src_hash": "426fed9a2869a1477858d2308bddb0116adf846376e3c622e47499a8e5a0d18a",
+  "generated_at": "2026-06-18T00:43:58.256Z",
+  "mcp_tool_count": 37
 }

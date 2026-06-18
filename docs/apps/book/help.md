@@ -10,7 +10,9 @@ Beyond plain events, Book computes availability. It takes the working hours you 
 
 Book also pulls other apps into one place. The Timeline view aggregates Book events with Bam task due dates and Bond deal close dates, so you can scan a week across the whole suite. Events can link to a Bam task, a Bond deal, or a Helpdesk ticket, and every Book-native event gets a LiveKit huddle room so attendees have a place to meet by video.
 
-A few areas of Book are still being finished. Where a screen exists but does not yet do what its label implies, this document says so plainly under the relevant feature so you do not lose time on a path that cannot complete today. Two of these remain: external calendar connections (the Connections page) and reminders and recurrence. Read those notes before relying on connecting an outside calendar or on reminder and repeat behavior.
+You can also pull an outside calendar into Book. The Connections page lets you subscribe to any public iCalendar (`.ics`) feed; Book fetches it, mirrors its events onto a Book calendar, and keeps them in step on a recurring schedule. Google Calendar and Microsoft Outlook two-way sync are built on the same engine and ready to drop in, but they stay disabled until an operator supplies the OAuth credentials; the `.ics` path needs nothing.
+
+A few areas of Book are still being finished. Where a screen exists but does not yet do what its label implies, this document says so plainly under the relevant feature so you do not lose time on a path that cannot complete today. The remaining one is reminders and recurrence. Read that note before relying on reminder and repeat behavior.
 
 ### Key concepts
 
@@ -24,7 +26,8 @@ A few areas of Book are still being finished. Where a screen exists but does not
 - **Booking page** - A public scheduling link at `/book/meet/<slug>` that lets an outside visitor pick one of your free slots. It carries a duration, before and after buffers, advance and notice limits, and brand styling.
 - **Booking** - The event created when a visitor books a slot on a booking page. It lands as a confirmed event on the page owner's default calendar.
 - **Timeline** - A cross-app, date-ranged view that gathers Book events, Bam task due dates, and Bond deal close dates into one per-day list.
-- **External connection** - A stored Google or Microsoft credential intended for two-way calendar sync. The backend records exist, but sync is not yet implemented (see Connections below).
+- **External connection** - A subscription to an outside calendar that Book pulls events from. The `.ics` feed provider works today with no credentials: paste a public iCalendar URL and Book mirrors its events onto a Book calendar, updating in place on each sync. Google Calendar and Microsoft Outlook connections use the same sync engine but require operator-supplied OAuth credentials before they can be created (see Connections below).
+- **Synced (mirrored) event** - A Book event that Book created from an external feed. It is kept in step with the feed automatically: a re-sync updates it in place, an event removed upstream is removed from Book, and disconnecting the feed removes all of its mirrored events.
 - **iCal feed** - A token-authenticated `.ics` URL that exposes one calendar to an outside calendar app. Available through the API and agents only; there is no button for it in the app yet.
 
 ### Where to find it
@@ -230,14 +233,28 @@ To set your working hours:
 
 ### Connections
 
-Intended to connect Google Calendar or Microsoft Outlook for two-way sync. Found under **Book Settings > Connections**. The heading reads "External Calendar Connections" with the subtitle "Connect Google Calendar or Microsoft Outlook for two-way sync".
+Subscribe to an outside calendar and pull its events into Book. Found under **Book Settings > Connections**. The heading reads "External Calendar Connections" with the subtitle "Subscribe to an external calendar feed (.ics URL) to pull its events into Book. Google and Outlook two-way sync require operator-supplied credentials."
 
-To reach the page:
+![Calendar connections](screenshots/light/07-connections.png)
+
+The page has three parts: the **.ics feed** subscribe form (the working, no-credentials path), the **Google Calendar** and **Microsoft Outlook** provider cards (gated on operator OAuth credentials), and **Your connections**, the list of feeds you have already connected with their sync status.
+
+To subscribe to an `.ics` feed:
 
 1. Click **Connections** under **Book Settings**.
-2. You see a **Google Calendar** card and a **Microsoft Outlook** card, each with a **Connect** button.
+2. In the **Subscribe to an .ics feed** card, paste a public iCalendar URL (any `https://...ics` or `webcal://...` link).
+3. Optionally give it a **Label** and pick the Book calendar to mirror its events into (leave **Auto-select calendar** to use your default).
+4. Click **Connect feed**. Book validates the URL, stores it, and the connection appears under **Your connections**.
+5. Click **Sync now** on the connection to pull the feed immediately. The card shows a green **Active** pill, the time of the last sync, and the count of events synced, along with a "Synced: N pulled, N added, N updated, N removed" line.
 
-Current limitation: external calendar sync is not implemented. Both **Connect** buttons are disabled, the page never calls the API, and there is no OAuth flow. A note on the page reads "OAuth integration requires Google/Microsoft credentials in the server configuration." Even at the API level, the force-sync action only updates a timestamp and does not pull or push any external events. Do not expect to connect or sync an outside calendar from Book today.
+How sync works:
+
+- Book fetches the feed, parses its events, and creates a matching Book event for each on the target calendar. A re-sync updates those events in place (it does not create duplicates), removes any that were cancelled or vanished upstream, and re-adds any you deleted by hand.
+- Syncs also run on their own: a background sweep refreshes every `.ics` connection roughly every fifteen minutes, so a subscribed calendar stays current without you pressing **Sync now**.
+- Click **Disconnect** to remove a connection. This also removes every event Book mirrored from that feed, so the calendar returns to just your own events.
+- `.ics` feeds are read-only sources: Book pulls events in but never pushes your Book events back out to the feed.
+
+Google and Outlook: the **Google Calendar** and **Microsoft Outlook** cards offer the same sync engine with two-way sync, but their **Connect** buttons stay disabled until an operator sets the provider credentials on the server (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for Google, `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` for Microsoft). Until then, use an `.ics` feed URL, which most calendar apps (including Google and Outlook) can publish for any calendar you own.
 
 ### iCal feed
 
@@ -251,7 +268,7 @@ Press **?** anywhere in Book (when you are not typing in a field), or navigate t
 
 ### Working with AI agents
 
-Agents reach Book through 24 MCP tools. They use the same Book API and permissions you do, so an agent can only do what its account is allowed to do. Agents are especially useful for the scheduling math that Book has no human screen for: finding a common free time across several people.
+Agents reach Book through 25 MCP tools. They use the same Book API and permissions you do, so an agent can only do what its account is allowed to do. Agents are especially useful for the scheduling math that Book has no human screen for: finding a common free time across several people.
 
 - **Reading events and the timeline:** `book_list_events` (the data behind Week, Day, Month reads), `book_get_event` (one event with attendees and linked-entity context), and `book_get_timeline` (the cross-app Timeline data).
 - **Creating and changing events:** `book_create_event` (resolves a calendar by name and an attendee by email, and can set attendees, which the human form cannot), `book_update_event` and `book_cancel_event` (resolve an event by UUID or title), and `book_rsvp_event` (RSVP by event UUID or title).
@@ -259,13 +276,13 @@ Agents reach Book through 24 MCP tools. They use the same Book API and permissio
 - **Calendars:** `book_list_calendars`, `book_create_calendar`, `book_update_calendar`, `book_delete_calendar` (the last three resolve a calendar by UUID or name).
 - **Booking pages:** `book_list_booking_pages`, `book_create_booking_page`, `book_update_booking_page` (set `enabled: false` to take a page offline without deleting it, or set the cross-app flags the editor does not expose), and `book_delete_booking_page`.
 - **Working hours:** `book_get_working_hours` and `book_set_working_hours` (a full replace; include every day you want available).
-- **External connections:** `book_list_connections`, `book_sync_connection`, and `book_delete_connection` (subject to the same sync limitation described under Connections).
+- **External connections:** `book_create_connection` (subscribe to an `.ics` feed URL, the no-OAuth path), `book_list_connections` (status of every connection, with feed URLs and tokens redacted), `book_sync_connection` (force a sync and get the imported/created/updated/removed counts back), and `book_delete_connection` (remove a connection and its mirrored events). Google and Microsoft connections cannot be created until an operator supplies the OAuth credentials.
 
 Things to know when reviewing agent work:
 
 - An agent can add attendees at creation time even though the human event form cannot. Check the attendee list on the event detail page to confirm who was invited.
 - `book_update_booking_page` is the way to set the booking-page options the human editor does not surface (advance limit, minimum notice, confirmation message, redirect URL, logo, the enabled flag, and the cross-app auto-create flags).
-- Some caveats that apply to people apply to agents too: recurrence is not expanded, reminders do not exist, and external calendar sync does not run. An agent cannot work around these because the backend does not implement them.
+- Some caveats that apply to people apply to agents too: recurrence is not expanded and reminders do not exist. An agent cannot work around these because the backend does not implement them. External calendar sync, by contrast, does run: an agent can subscribe to an `.ics` feed and sync it with `book_create_connection` and `book_sync_connection`.
 - Book publishes five automation events to Bolt, all from source `book`: `event.created`, `event.updated`, `event.cancelled`, `event.rsvp`, and `booking.created`. Use these to drive cross-app automations (for example, post to a Banter channel when a booking comes in). A new public booking creates or updates a Bond contact by email when the page has `auto_create_bond_contact` on, so a `booking.created` automation can safely assume the matching contact exists.
 
 Book agents also sit on the cross-cutting agentic platform that every BigBlueBam app shares:
@@ -474,4 +491,4 @@ For the full tool catalog and schemas, see the Book MCP-tools reference and guid
 - **Helpdesk** (`/helpdesk/`) - Events can link to a Helpdesk ticket.
 - **Bolt** (`/bolt/`) - Subscribe to Book's automation events (`event.created`, `event.updated`, `event.cancelled`, `event.rsvp`, `booking.created`, all from source `book`) to drive cross-app workflows.
 - **Banter** (`/banter/`) - A common automation target, for example posting to a channel when a booking arrives.
-- Book MCP-tools reference and guide in `docs/apps/book/` for the full catalog of the 24 agent tools and their schemas.
+- Book MCP-tools reference and guide in `docs/apps/book/` for the full catalog of the 25 agent tools and their schemas.

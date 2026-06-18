@@ -158,6 +158,11 @@
       "level": 3
     },
     {
+      "anchor": "email-delivery-smtp",
+      "title": "Email delivery (SMTP)",
+      "level": 3
+    },
+    {
       "anchor": "command-palette-and-keyboard-shortcuts",
       "title": "Command palette and keyboard shortcuts",
       "level": 3
@@ -407,7 +412,12 @@
     {
       "anchor": "settings",
       "title": "Settings",
-      "text": "Settings control your profile and the org's configuration. To open settings, go to /settings. The ten tabs are Profile, Appearance (System, Light, Dark), Notifications, Members, Tasks (which includes Manage Priorities), Permissions, Launchpad, Integrations (API keys, agents and service accounts, webhooks, Slack, SMTP), AI Providers, and Helpdesk. Use the Tasks tab's Manage Priorities to configure the org's priority set."
+      "text": "Settings control your profile and the org's configuration. To open settings, go to /settings. The ten tabs are Profile, Appearance (System, Light, Dark), Notifications, Members, Tasks (which includes Manage Priorities), Permissions, Launchpad, Integrations (API keys, agents and service accounts, webhooks, Slack, and the per-org SMTP override), AI Providers, and Helpdesk. Use the Tasks tab's Manage Priorities to configure the org's priority set. The per-org email relay lives on the Integrations tab; the platform-wide relay it falls back to is set in the SuperUser Console (see Email delivery (SMTP) below)."
+    },
+    {
+      "anchor": "email-delivery-smtp",
+      "title": "Email delivery (SMTP)",
+      "text": "BigBlueBam sends outbound mail (org invitations, password resets, system and reporting alerts, and Blast campaigns) through an SMTP relay. There are two levels of configuration, and the system always picks the most specific one that is set. The resolution order is: the org override first, then the platform relay, then the server's environment default. In plain terms: if your organization has set its own relay, your org's mail goes through it; if it has not, your org's mail falls back to the platform relay a SuperUser configured; and if neither is set, the system uses the SMTP values baked into the server's environment variables. This used to live under Account Settings Integrations; the platform relay has since moved to the SuperUser Console, and the per-org override now sits in its own card on the Integrations tab. Platform email (SMTP). The platform relay is the system-wide, fallback sender. It is what the platform uses for new-org-setup invitations, the password-reset fallback, and system and reporting alerts, and it is the relay any organization falls back to when it has not configured its own. Only a platform SuperUser can set it. To configure the platform relay, open the SuperUser Console at /superuser, click the Platform tab, and scroll to the Platform SMTP relay card. Fill in SMTP Host, SMTP Port (587 for STARTTLS, 465 for TLS-only), SMTP Username, SMTP Password, and From Address, set Use TLS (secure) for port 465, and save. Any field you leave blank falls back to the matching server environment variable (SMTPHOST, SMTPPORT, SMTPUSER, SMTPPASS, EMAILFROM). Use Test connection to verify login and TLS, or enter an address and click Send test email to confirm end-to-end delivery. Changes take effect within 30 seconds. (The Platform SMTP relay card is in the SuperUser Console and only renders for a platform SuperUser, so its screenshot is captured in a separate SuperUser pass.) Organization email (SMTP). An org admin or owner can give their organization its own relay, which overrides the platform relay for that org's outbound mail (Blast campaigns and member or guest invitations). Leaving it blank keeps the org on the platform relay. To configure the org override, open /settings, select the Integrations tab, and scroll to the Organization Email (SMTP) card. Fill in the same fields and save; the card confirms whether the org is using its own relay or falling back to the platform relay. The relay password is masked on read, so leaving the dots in place keeps the stored password unchanged. Test relay checks whichever relay will actually send (your org override if set, otherwise the platform fallback). To stop using the org relay, click Use platform relay, which clears the override. Changes take effect within 30 seconds."
     },
     {
       "anchor": "command-palette-and-keyboard-shortcuts",
@@ -511,6 +521,7 @@
     "/people": "people-and-members",
     "/people/:userId": "people-and-members",
     "/settings": "settings",
+    "/superuser": "email-delivery-smtp",
     "/superuser/people": "people-and-members",
     "AI Providers": "settings",
     "Access": "people-and-members",
@@ -555,11 +566,13 @@
     "Due This Week": "my-work",
     "Duplicate": "kanban-board",
     "Duplicate task": "task-detail-drawer",
+    "Email delivery (SMTP)": "settings",
     "Epic": "key-concepts",
     "Epics": "working-with-ai-agents",
     "Esc": "command-palette-and-keyboard-shortcuts",
     "Export": "kanban-board",
     "Format": "export",
+    "From Address": "email-delivery-smtp",
     "GitHub": "cross-app-integrations",
     "Helpdesk": "task-detail-drawer",
     "Idempotent upserts": "working-with-ai-agents",
@@ -588,11 +601,13 @@
     "Notifications": "settings",
     "Open detail": "kanban-board",
     "Organization (org)": "key-concepts",
+    "Organization Email (SMTP)": "email-delivery-smtp",
     "Overdue": "my-work",
     "Overview": "people-and-members",
     "Parent tasks": "subtasks-and-parent-tasks",
     "Permissions": "settings",
     "Phase": "key-concepts",
+    "Platform": "email-delivery-smtp",
     "Priority": "key-concepts",
     "Profile": "settings",
     "Project": "key-concepts",
@@ -601,8 +616,11 @@
     "Reporter": "task-detail-drawer",
     "Reports": "working-with-ai-agents",
     "Retrospective Notes (optional)": "sprints",
+    "SMTP Password": "email-delivery-smtp",
+    "SMTP Username": "email-delivery-smtp",
     "Saved view": "key-concepts",
     "Saved views": "saved-views",
+    "Send test email": "email-delivery-smtp",
     "Set state": "kanban-board",
     "Share to Banter": "task-detail-drawer",
     "Slack": "cross-app-integrations",
@@ -612,12 +630,15 @@
     "Start and due dates": "key-concepts",
     "Start this sprint": "sprints",
     "Story Points": "task-detail-drawer",
+    "SuperUser Console": "email-delivery-smtp",
     "Swimlane": "key-concepts",
     "Task": "key-concepts",
     "Task state": "key-concepts",
     "Task templates": "task-templates",
     "Tasks": "settings",
     "Templates": "working-with-ai-agents",
+    "Test connection": "email-delivery-smtp",
+    "Test relay": "email-delivery-smtp",
     "Time Logged": "task-detail-drawer",
     "Timeline": "alternate-views-list-timeline-calendar-workload",
     "Title": "creating-and-editing-tasks",
@@ -626,7 +647,9 @@
     "Visibility preflight": "working-with-ai-agents",
     "Watcher": "key-concepts",
     "Workload": "alternate-views-list-timeline-calendar-workload",
+    "card. Fill in": "email-delivery-smtp",
     "name": "project-dashboard-and-project-list",
+    "org override": "email-delivery-smtp",
     "task id prefix": "project-dashboard-and-project-list"
   },
   "crossrefs": [

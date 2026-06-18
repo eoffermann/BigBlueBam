@@ -288,3 +288,68 @@
   doc: { order: 6, label: "Integrations & API keys" }
   masks:
     - "[data-testid='api-key-secret']"
+
+# ---------------------------------------------------------------------------
+# Platform email (SMTP) — SuperUser Console → Platform tab → Platform SMTP relay.
+#
+# AUTH WRINKLE: this card only renders for a SuperUser. The capture engine
+# authenticates as the recipe `identity` against env.identities[identity]
+# (configured per-operator in the gitignored screenshots.config.json, or a
+# cached apps/e2e/.auth/<identity>.json storageState). The default `admin`
+# identity is an ORG admin, NOT a SuperUser, and /b3/superuser bounces a
+# non-SuperUser back to the dashboard — which would yield a misleading shot.
+# So this recipe uses `identity: superuser` and self-protects with
+# `expect` (the Platform SMTP relay heading) + `expectNot` (the login form).
+# If no `superuser` identity is configured, the login falls through / the
+# console redirects, the heading never appears, and the recipe FAILS
+# verification instead of writing a wrong image — the same pattern the
+# Helpdesk portal recipes use for their separate-portal login.
+#
+# To capture this image: add a SuperUser identity to screenshots.config.json,
+#   { "identities": { "superuser": { "email": "...", "password": "..." } } }
+# pointing at a real SuperUser account (e.g. one minted via
+# `cli create-admin`), then run the bam capture batch.
+- id: bam-platform-smtp
+  app: bam
+  demonstrates: "The platform-wide SMTP relay card in the SuperUser Console Platform tab — the system/fallback sender"
+  route: /b3/superuser
+  identity: superuser
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Platform')", optional: true }
+    - { action: waitFor, selector: "h3:has-text('Platform SMTP relay')" }
+    - { action: scrollTo, selector: "h3:has-text('Platform SMTP relay')", optional: true }
+    - { action: wait, ms: 1500 }
+  expect:
+    - "h3:has-text('Platform SMTP relay')"
+  expectNot:
+    - "input#password"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Platform email (SMTP)" }
+  masks:
+    - "[data-testid='api-key-secret']"
+
+# ---------------------------------------------------------------------------
+# Organization email (SMTP) — Settings → Integrations tab → org SMTP override.
+#
+# The per-org relay override lives in the Integrations tab (NOT a tab of its
+# own). Visible to org admins/owners. We click Integrations, scroll the
+# "Organization Email (SMTP)" card into view, and capture the full page so the
+# card sits in context below API keys / agents / webhooks / Slack.
+- id: bam-org-smtp
+  app: bam
+  demonstrates: "The per-organization SMTP override that overrides the platform relay for this org's outbound mail"
+  route: /b3/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: "button:has-text('Integrations')", optional: true }
+    - { action: waitFor, selector: "h2:has-text('Organization Email (SMTP)')" }
+    - { action: scrollTo, selector: "h2:has-text('Organization Email (SMTP)')", optional: true }
+    - { action: wait, ms: 1500 }
+  expect:
+    - "h2:has-text('Organization Email (SMTP)')"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 8, label: "Organization email (SMTP)" }
+  masks:
+    - "[data-testid='api-key-secret']"

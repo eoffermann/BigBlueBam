@@ -1193,6 +1193,9 @@ importers:
       '@fastify/cors':
         specifier: ^10.0.0
         version: 10.1.0
+      '@fastify/multipart':
+        specifier: ^9.0.0
+        version: 9.4.0
       '@fastify/rate-limit':
         specifier: ^10.0.0
         version: 10.3.0
@@ -1211,9 +1214,15 @@ importers:
       fastify-plugin:
         specifier: ^5.0.0
         version: 5.1.0
+      file-type:
+        specifier: ^22.0.1
+        version: 22.0.1
       ioredis:
         specifier: ^5.4.0
         version: 5.10.1
+      minio:
+        specifier: ^8.0.0
+        version: 8.0.7
       nanoid:
         specifier: ^5.0.0
         version: 5.1.7

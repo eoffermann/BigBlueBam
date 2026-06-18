@@ -12,9 +12,10 @@ Bureau is the source of the floating docked box that the rest of the suite shows
 - **Move, knock, and admit.** Enter Open rooms freely, knock on closed offices (auto-timed-out after 30 seconds), and triage knocks at your own door with Let in, Not now, or Decline. Head-down DND blocks knocks and offers visitors a leave-a-note path.
 - **Summon, Ring, and Hunt.** Bring everyone in your room to a resource in another app, ring one specific person to your screen, or hunt a teammate and jump to wherever they are. Every action is access-checked, so no one is sent a link they cannot open and no one's location leaks through a surface you could not see.
 - **Cross-app docked box.** A draggable presence and call console rendered inside every SPA, with mic, camera, screen share, ephemeral room chat, the live door-privacy toggle, and the DND switch.
-- **Room booking.** Reserve a bookable room for a window with open or locked access; the reservation mirrors to a Book event and schedules jobs that flip the room private at the start and clear it at the end.
+- **Room booking.** A dedicated Room booking screen lists the org's bookable rooms by floor; pick one, see its upcoming reservations, and book a window with open or locked access. The reservation mirrors to a Book event and schedules jobs that flip the room private at the start and clear it at the end.
+- **Live presence and status.** Your status (available, busy, away, dnd, focus, in_meeting) and the room and floor you are in are tracked live, surfaced on the floor map and the docked box, and persisted on the server so they survive a reconnect and apply even when you have no live web session.
 - **Recent chats with retention.** Room chats are ephemeral (24 hours by default), but participants can recover transcripts, and admins can extend retention up to a week or pin a thread permanently.
-- **Floor and office administration.** Org admins build floors on a canvas editor, place rooms and offices, set door defaults and capacities, upload a background underlay, and assign or reassign who owns each personal office.
+- **Floor and office administration, and org settings.** Org admins build floors on a canvas editor, place rooms and offices, set door defaults and capacities, upload a background underlay, and assign or reassign who owns each personal office. A Bureau settings screen controls org-wide defaults: continuous audio, auto-follow, whether members can book or create rooms, and the default office privacy.
 
 ## Integrations
 
@@ -31,4 +32,5 @@ Bureau is the source of the floating docked box that the rest of the suite shows
 2. On the **Floors** landing, click a floor card to open its live map.
 3. Click an Open room rectangle to enter it; your dot appears inside and your audio connects. Use **Leave room** to step out.
 4. Watch the docked box: it names your room, who is with you, and the page you are viewing, and it exposes Bring everyone here, Invite, Hunt, and the DND toggle.
-5. If you are an org admin, open **Edit floors** to build a floor on the canvas editor and **Offices** to assign who owns each personal office.
+5. To reserve a meeting space, open **Book a room** (under Rooms), pick a bookable room, and book a window with locked or open access.
+6. If you are an org admin, open **Edit floors** to build a floor on the canvas editor, **Offices** to assign who owns each personal office, and **Settings** to set org-wide defaults for audio, auto-follow, and member booking and room creation.

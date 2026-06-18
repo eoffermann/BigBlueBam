@@ -78,6 +78,11 @@
       "level": 3
     },
     {
+      "anchor": "recurring-billing",
+      "title": "Recurring billing",
+      "level": 3
+    },
+    {
       "anchor": "pdf-generation",
       "title": "PDF generation",
       "level": 3
@@ -133,6 +138,11 @@
       "level": 3
     },
     {
+      "anchor": "story-put-a-standing-fee-on-a-recurring-schedule",
+      "title": "Story: Put a standing fee on a recurring schedule",
+      "level": 3
+    },
+    {
       "anchor": "story-close-out-a-billing-period",
       "title": "Story: Close out a billing period",
       "level": 3
@@ -157,12 +167,12 @@
     {
       "anchor": "key-concepts",
       "title": "Key concepts",
-      "text": "- Invoice - A billable document addressed to one client. It snapshots your company details (the \"from\" side) and the client details (the \"to\" side) when it is created, and carries an invoice date, due date, line items, tax, totals, and payment history. Its number is literally DRAFT until you finalize it. - Invoice status - The lifecycle of an invoice. The values that the app actually sets are draft (editable, no number yet), sent (finalized, number assigned, edits locked), viewed (a client opened the public link), partiallypaid (some payment recorded, balance remains), paid (paid in full), and void (cancelled). Overdue is not a stored status: it is computed from the due date as any unpaid, finalized invoice that is past due. The Invoices list Overdue filter pill and the Dashboard Overdue tile both draw from that computed set, so they populate correctly. - Line item - One row on an invoice: a description, quantity, unit (default hours), and unit price in cents. The amount is quantity times unit price. Line items can only be added, edited, or removed while the invoice is a draft. - Client - The recipient of an invoice. Carries name, email, phone, address, tax ID, default payment terms (in days), default payment instructions, and notes. A Bill client is separate from a Bond contact or company, though it can be linked to a Bond company. - Payment - A recorded receipt against an invoice: an amount in cents, a method (Bank Transfer, Credit Card, Check, Cash, Stripe, PayPal, or Other), an optional reference, and a date. - Expense - A project cost: description, amount in cents, category, vendor, date, and a billable flag. Expenses start as pending, a reviewer moves them to approved or rejected, and an approved expense can be moved on to reimbursed. - Rate - A billing rate scoped to your org, a project, a user, or a user-on-a-project, with an amount in cents and a type (hourly, daily, or fixed). When Bill bills tracked time, it resolves the most specific rate that applies. - Settings - Your company identity and the defaults new invoices inherit: invoice prefix, default tax rate, payment terms, payment instructions, footer text, and terms text. - Public view token - A long opaque token on each invoice that grants read-only access (and a PDF) without logging in. It is how a sent invoice can be viewed by someone outside your org."
+      "text": "- Invoice - A billable document addressed to one client. It snapshots your company details (the \"from\" side) and the client details (the \"to\" side) when it is created, and carries an invoice date, due date, line items, tax, totals, and payment history. Its number is literally DRAFT until you finalize it. - Invoice status - The lifecycle of an invoice. The values that the app actually sets are draft (editable, no number yet), sent (finalized, number assigned, edits locked), viewed (a client opened the public link), partiallypaid (some payment recorded, balance remains), paid (paid in full), and void (cancelled). Overdue is not a stored status: it is computed from the due date as any unpaid, finalized invoice that is past due. The Invoices list Overdue filter pill and the Dashboard Overdue tile both draw from that computed set, so they populate correctly. - Line item - One row on an invoice: a description, quantity, unit (default hours), and unit price in cents. The amount is quantity times unit price. Line items can only be added, edited, or removed while the invoice is a draft. - Client - The recipient of an invoice. Carries name, email, phone, address, tax ID, default payment terms (in days), default payment instructions, and notes. A Bill client is separate from a Bond contact or company, though it can be linked to a Bond company. - Payment - A recorded receipt against an invoice: an amount in cents, a method (Bank Transfer, Credit Card, Check, Cash, Stripe, PayPal, or Other), an optional reference, and a date. - Expense - A project cost: description, amount in cents, category, vendor, date, and a billable flag. Expenses start as pending, a reviewer moves them to approved or rejected, and an approved expense can be moved on to reimbursed. - Rate - A billing rate scoped to your org, a project, a user, or a user-on-a-project, with an amount in cents and a type (hourly, daily, or fixed). When Bill bills tracked time, it resolves the most specific rate that applies. - Settings - Your company identity and the defaults new invoices inherit: invoice prefix, default tax rate, payment terms, payment instructions, footer text, and terms text. - Recurring schedule - A subscription that bills one client on a cadence (weekly, monthly, quarterly, or annually) from a saved line-item template. It carries a status (active, paused, or cancelled), a next-run date, a count of invoices generated so far, and a mode: auto-finalize (each generated invoice gets a number and is marked sent) or draft (each generated invoice is left as a draft to review). A daily worker sweep materializes invoices from schedules whose next-run date has arrived, and you can also generate one on demand. - Public view token - A long opaque token on each invoice that grants read-only access (and a PDF) without logging in. It is how a sent invoice can be viewed by someone outside your org."
     },
     {
       "anchor": "where-to-find-it",
       "title": "Where to find it",
-      "text": "Bill is served at /bill/. You must be logged in to BigBlueBam first; if you are not, Bill shows a \"Please log in to BigBlueBam first to access Bill.\" screen with a \"Go to BigBlueBam Login\" link to /b3/. Everything is scoped to your active organization, and mutating actions require the matching Bill permission on your account. The left sidebar carries a fixed New Invoice quick-action button, then the nav items Dashboard, Invoices, Clients, Expenses, Rates, and Reports, and under a Bill Settings subheading the Bill Settings item. Press ? anywhere in Bill to open the embedded Help viewer."
+      "text": "Bill is served at /bill/. You must be logged in to BigBlueBam first; if you are not, Bill shows a \"Please log in to BigBlueBam first to access Bill.\" screen with a \"Go to BigBlueBam Login\" link to /b3/. Everything is scoped to your active organization, and mutating actions require the matching Bill permission on your account. The left sidebar carries a fixed New Invoice quick-action button, then the nav items Dashboard, Invoices, Recurring, Clients, Expenses, Rates, and Reports, and under a Bill Settings subheading the Bill Settings item. Press ? anywhere in Bill to open the embedded Help viewer."
     },
     {
       "anchor": "feature-reference",
@@ -225,6 +235,11 @@
       "text": "The Settings view at /bill/settings is titled Billing Settings. It has two sections. Company Information holds Company Name, Email, Phone, Tax ID, and Address. These are snapshotted onto each invoice's \"from\" side at creation time. Invoice Defaults holds Invoice Prefix, Default Tax Rate (%), Payment Terms (days), Default Payment Instructions, Default Footer Text, and Default Terms & Conditions. New invoices inherit these defaults. To update your billing identity and defaults: 1. Open Bill Settings in the sidebar. 2. Edit any field under Company Information or Invoice Defaults. 3. Click Save Settings. The button shows \"Saved!\" on success. The settings record also stores a company logo URL and a default currency, both reachable through the API and the billupdatesettings MCP tool, but neither has a field in the current Settings form."
     },
     {
+      "anchor": "recurring-billing",
+      "title": "Recurring billing",
+      "text": "The Recurring page at /bill/recurring is titled Recurring with the subtitle \"Subscription schedules that generate invoices automatically.\" It is where you set up standing fees that bill a client on a cadence without re-drafting the invoice each cycle. The table columns are Name, Cadence, Next run, Generated (the count of invoices produced so far), Mode (Auto-finalize or Draft), Status, and Actions. A row of filter pills above it filters by status: All (empty), active, paused, and cancelled. Each schedule carries a client, a cadence (weekly, monthly, quarterly, or annually), a saved line-item template, an optional tax rate, a start date, an optional end date, and a mode. The Mode determines what each run produces. With Auto-finalize on, every generated invoice is assigned a number and marked sent automatically. With it off (Draft), each run produces a draft for you to review, finalize, and send by hand. Schedules generate on their own through a daily worker sweep that materializes invoices from every active schedule whose next-run date has arrived; you can also force one immediately with Generate now. To create a recurring schedule: 1. Open Recurring in the sidebar and click New Recurring Schedule. 2. Give the schedule a Schedule name and pick a Client. 3. Choose a Cadence (weekly, monthly, quarterly, or annually) and a Start date; optionally set an End date and a Tax rate (%). 4. Tick Auto-finalize generated invoices to bill automatically, or leave it unchecked to generate drafts for review. 5. In the Line items (template) table, add a Description, Qty, and Unit price (cents) for each row. The Subtotal updates as you type. 6. Optionally add Notes (internal), then click Create schedule. The schedule starts active. The per-row actions depend on status: - Generate now materializes an invoice immediately from the template (available on active and paused schedules). A banner reports the generated invoice number, or \"draft\" when the schedule is in draft mode. - Pause stops generation on an active schedule; Resume restarts a paused one. - Cancel stops all future generation permanently. It is an admin or owner action; existing invoices the schedule already produced are kept. Cancelling prompts for confirmation and cannot be undone. Creating, updating, pausing, resuming, and generating-now follow the same write permission as drafting an invoice, so any member who can create invoices can run these. Cancelling a schedule is restricted to an admin or owner, mirroring invoice deletion. When a run produces an invoice, Bill emits a recurring.invoicegenerated event on the bill source for Bolt rules to consume."
+    },
+    {
       "anchor": "pdf-generation",
       "title": "PDF generation",
       "text": "Every invoice can be downloaded as a PDF. The PDF action on the list, the PDF action in the detail header, and the inline PDF preview iframe all render the invoice through Bill's PDF service (GET /bill/api/v1/invoices/:id/pdf). A draft's PDF is named DRAFT.pdf; a finalized invoice's PDF is named after its number. When you finalize an invoice, Bill enqueues a background PDF job; when you send one, it enqueues an email job. While those run, the detail page can show a \"PDF generating...\" state. You do not need to trigger PDF generation manually; the PDF action always renders on demand."
@@ -237,7 +252,7 @@
     {
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
-      "text": "Bill exposes 39 MCP tools (catalogued in apps/mcp-server/src/tools/bill-tools.ts), which together cover the full invoicing lifecycle from chat or a Bolt automation rule. Many tools resolve fuzzy identifiers: a client can be named by name or email, and a Bam project by name, and the tool resolves it to an ID. Mutating tools run under the same per-action permissions as the UI, so an agent acting as a member can build drafts but cannot finalize, send, or approve expenses unless its account has the admin or owner grant. What agents commonly do: - List and inspect: billlistinvoices, billgetinvoice, billgetinvoicejobs, billlistclients, billgetclient, billlistexpenses, billlistrates, billgetsettings. - Build a draft: billcreateinvoice (blank draft for a client), then billaddlineitem, billupdatelineitem, and billdeletelineitem per line. billupdateinvoice adjusts a draft's dates, tax, discount, terms, notes, and footer. For a Bond-deal handoff, billcreateinvoicefromdeal pulls the deal value into one line item; in a Bolt rule the deal ID is passed as {{ event.deal.id }} from a deal. event, and it must be a UUID. - Bill tracked time: billcreateinvoicefromtime takes a project, a billing client, and a datefrom/dateto range, and the Bill API resolves the matching time entries, groups them by user and task, prices each group with the resolved rate, and builds one line item per group. This is the same range form the in-app wizard uses. - Finish and collect: billfinalizeinvoice to assign the number and lock the invoice, billsendinvoice to mark it sent, billrecordpayment to log receipts, and billdeletepayment to reverse one. billvoidinvoice, billduplicateinvoice, and billdeleteinvoice cover the rest of the invoice lifecycle. - Clients: billcreateclient, billupdateclient, and billdeleteclient manage the recipient records. - Expenses and rates: billcreateexpense, billupdateexpense, billdeleteexpense, billapproveexpense, and billrejectexpense for costs; billcreaterate, billupdaterate, billdeleterate, and billresolverate for billing rates (the create tool accepts project, user, and effective-date scoping that the UI form does not). Marking an approved expense reimbursed is a UI and REST action (POST /bill/api/v1/expenses/:id/reimburse) with no dedicated MCP tool. - Reporting: billgetoverdue, billgetrevenuesummary, billgetprofitability, and billgetoutstanding back the Reports view's data. - Settings: billgetsettings and billupdatesettings read and write the org billing identity and invoice defaults, including the logo URL and default currency the UI form omits. A typical agent flow is: an agent drafts an invoice from a deal or from logged time, fills line items, and records a payment when one lands, while leaving the Finalize and Send steps for an admin or owner to approve. For high-stakes actions, route the work through the platform approval queue (the proposalcreate / proposallist / proposaldecide tools) so a human signs off before money moves. One caution for agent-driven invoicing: the invoice number format the live finalizer produces is {prefix}-{number:05d} (for example INV-00001). Year-based forms like INV-2026-0042 that appear in some seed data and examples are not what finalize generates. Bill participates in the cross-cutting agentic platform that every BigBlueBam app shares: - Identity and heartbeat. Agent and service accounts carry users.kind (agent or service), which is mirrored onto each activity row's actortype, so Bill writes made by an agent are attributable. Agent runners report liveness with agentheartbeat. - Approvals. Beyond the in-app Request approval flow (which posts to Bam's queue), agents can stage any decision in the durable proposal queue with proposalcreate and let a human resolve it with proposaldecide. - Unified activity. Bill invoice and payment activity is queryable across apps through activityquery and activitybyactor, and surfaces in the unified activity view alongside the other apps. - Policies and webhooks. Per-a"
+      "text": "Bill exposes 47 MCP tools (catalogued in apps/mcp-server/src/tools/bill-tools.ts), which together cover the full invoicing and recurring-billing lifecycle from chat or a Bolt automation rule. Many tools resolve fuzzy identifiers: a client can be named by name or email, and a Bam project by name, and the tool resolves it to an ID. Mutating tools run under the same per-action permissions as the UI, so an agent acting as a member can build drafts but cannot finalize, send, or approve expenses unless its account has the admin or owner grant. What agents commonly do: - List and inspect: billlistinvoices, billgetinvoice, billgetinvoicejobs, billlistclients, billgetclient, billlistexpenses, billlistrates, billgetsettings. - Build a draft: billcreateinvoice (blank draft for a client), then billaddlineitem, billupdatelineitem, and billdeletelineitem per line. billupdateinvoice adjusts a draft's dates, tax, discount, terms, notes, and footer. For a Bond-deal handoff, billcreateinvoicefromdeal pulls the deal value into one line item; in a Bolt rule the deal ID is passed as {{ event.deal.id }} from a deal. event, and it must be a UUID. - Bill tracked time: billcreateinvoicefromtime takes a project, a billing client, and a datefrom/dateto range, and the Bill API resolves the matching time entries, groups them by user and task, prices each group with the resolved rate, and builds one line item per group. This is the same range form the in-app wizard uses. - Finish and collect: billfinalizeinvoice to assign the number and lock the invoice, billsendinvoice to mark it sent, billrecordpayment to log receipts, and billdeletepayment to reverse one. billvoidinvoice, billduplicateinvoice, and billdeleteinvoice cover the rest of the invoice lifecycle. - Clients: billcreateclient, billupdateclient, and billdeleteclient manage the recipient records. - Expenses and rates: billcreateexpense, billupdateexpense, billdeleteexpense, billapproveexpense, and billrejectexpense for costs; billcreaterate, billupdaterate, billdeleterate, and billresolverate for billing rates (the create tool accepts project, user, and effective-date scoping that the UI form does not). Marking an approved expense reimbursed is a UI and REST action (POST /bill/api/v1/expenses/:id/reimburse) with no dedicated MCP tool. - Recurring schedules: billlistrecurringinvoices and billgetrecurringinvoice to read schedules and their line-item template; billcreaterecurringinvoice to stand one up (client, cadence, mode, and template line items); billupdaterecurringinvoice to adjust it; billpauserecurringinvoice, billresumerecurringinvoice, and billcancelrecurringinvoice to control its lifecycle (cancel is admin or owner); and billgeneraterecurringinvoicenow to materialize an invoice on demand. - Reporting: billgetoverdue, billgetrevenuesummary, billgetprofitability, and billgetoutstanding back the Reports view's data. - Settings: billgetsettings and billupdatesettings read and write the org billing identity and invoice defaults, including the logo URL and default currency the UI form omits. A typical agent flow is: an agent drafts an invoice from a deal or from logged time, fills line items, and records a payment when one lands, while leaving the Finalize and Send steps for an admin or owner to approve. For high-stakes actions, route the work through the platform approval queue (the proposalcreate / proposallist / proposaldecide tools) so a human signs off before money moves. One caution for agent-driven invoicing: the invoice number format the live finalizer produces is {prefix}-{number:05d} (for example INV-00001). Year-based forms like INV-2026-0042 that appear in some seed data and examples are not what finalize generates. Bill participates in the cross-cutting agentic platform that every BigBlueBam app shares: - Identity and heartbeat. Agent and service accounts carry users.kind (agent or service), which is mirrored onto each activity row's actortype, so Bill writes made by an agent are att"
     },
     {
       "anchor": "user-stories",
@@ -280,6 +295,11 @@
       "text": "Who: Anyone billing logged hours. Goal: Generate an invoice from Bam time entries over a date range. Before you start: A rate exists that covers the work (set one under Rates, via the API, or with billcreaterate for project/user scope). You know the project, the client, and the date range to bill. Steps 1. Confirm a rate applies by checking Rates, or have an agent call billresolverate for the project, user, and date. 2. From the Invoices list, click From Time Entries. 3. Pick the Project, the Bill to client, and the Date From / Date To range. 4. Click Generate Invoice. Bill groups every billable entry on that project in the range by user and task, prices each group with the resolved rate, and builds one line item per group on a new draft. 5. Review the generated line items on the draft, click Finalize, then Re-send. Result: A draft invoice built from real tracked time, ready to finalize and send. Related: Configure rates first (the Rates feature). An agent can do the same with billcreateinvoicefromtime (project, client, and a datefrom/dateto range), and resolve a rate with billresolverate."
     },
     {
+      "anchor": "story-put-a-standing-fee-on-a-recurring-schedule",
+      "title": "Story: Put a standing fee on a recurring schedule",
+      "text": "Who: Anyone who bills the same client the same amount on a regular cadence (a retainer, a subscription, a quarterly standing order). Goal: Bill a client automatically on a cadence without re-drafting the invoice each cycle. Before you start: The client exists in Bill. You have permission to create invoices (creating a schedule uses the same write permission). Steps 1. Click Recurring in the sidebar, then New Recurring Schedule. 2. Enter a Schedule name and pick the Client. 3. Choose a Cadence (weekly, monthly, quarterly, or annually) and a Start date; set an End date and a Tax rate (%) if needed. 4. Decide the mode: tick Auto-finalize generated invoices to bill and send automatically, or leave it unchecked to generate drafts you review first. 5. Fill in the Line items (template) table with the descriptions, quantities, and unit prices (cents) to bill each cycle. 6. Click Create schedule. It starts active with a next-run date on the start date. Result: The schedule appears in the Recurring list as active. A daily worker sweep generates an invoice from the template whenever the next-run date arrives, advancing the next run by the cadence. Auto-finalize schedules send each invoice automatically; draft schedules leave each one for you to finalize and send. Related: Use Generate now to produce an invoice immediately, Pause / Resume to stop and restart generation, and Cancel (admin or owner) to end the schedule while keeping the invoices it already produced. An agent can do all of this with billcreaterecurringinvoice, billpauserecurringinvoice, billresumerecurringinvoice, billcancelrecurringinvoice, and billgeneraterecurringinvoicenow. Build a Bolt rule on the recurring.invoicegenerated event to react when a schedule bills."
+    },
+    {
       "anchor": "story-close-out-a-billing-period",
       "title": "Story: Close out a billing period",
       "text": "Who: A finance owner reviewing the month. Goal: See revenue, aging, profitability, and what is overdue. Before you start: You have Bill report permissions. Steps 1. Click Reports in the sidebar. 2. Read Revenue by Month for invoiced and collected totals. 3. Read Outstanding Aging to see balances by client and age bucket. 4. Read Project Profitability to compare revenue against approved expenses per project. 5. Read Overdue Invoices, and click any row to open and chase that invoice. Result: A complete financial snapshot for the period, with overdue invoices computed from due dates. Related: An agent can pull the same data with billgetrevenuesummary, billgetprofitability, billgetoutstanding, and billgetoverdue. The Dashboard's Overdue tile and the Invoices list Overdue filter draw from the same overdue set."
@@ -292,7 +312,7 @@
     {
       "anchor": "related",
       "title": "Related",
-      "text": "- Bam (/b3/) - Projects, tasks, and time entries feed time-based invoicing and rate resolution; invoice approvals route through Bam's approval queue. - Bond (/bond/) - Won deals convert into draft invoices via billcreateinvoicefromdeal; a Bill client can link to a Bond company. - Bolt (/bolt/) - Automation rules consume Bill events such as invoice.paid, invoice.overdue, and payment.recorded, and can trigger billcreateinvoicefromdeal. - Banter (/banter/) - Approval requests reach the approver as a Banter DM. - Bill's own docs in docs/apps/bill/: the MCP-tools reference (the full 39-tool catalog) and guide.md."
+      "text": "- Bam (/b3/) - Projects, tasks, and time entries feed time-based invoicing and rate resolution; invoice approvals route through Bam's approval queue. - Bond (/bond/) - Won deals convert into draft invoices via billcreateinvoicefromdeal; a Bill client can link to a Bond company. - Bolt (/bolt/) - Automation rules consume Bill events such as invoice.paid, invoice.overdue, payment.recorded, and recurring.invoicegenerated, and can trigger billcreateinvoicefromdeal. - Banter (/banter/) - Approval requests reach the approver as a Banter DM. - Bill's own docs in docs/apps/bill/: the MCP-tools reference (the full 47-tool catalog) and guide.md."
     }
   ],
   "labels": {
@@ -302,6 +322,8 @@
     "Amount (cents)": "invoice-detail",
     "Approve": "overview",
     "Approver": "invoice-list",
+    "Auto-finalize": "recurring-billing",
+    "Auto-finalize generated invoices": "recurring-billing",
     "Bam": "related",
     "Banter": "related",
     "Bill Settings": "where-to-find-it",
@@ -313,6 +335,7 @@
     "Bolt": "related",
     "Bond": "related",
     "Build a draft:": "working-with-ai-agents",
+    "Cadence": "recurring-billing",
     "Cancel": "create-an-invoice",
     "Category": "expenses",
     "Client": "key-concepts",
@@ -323,6 +346,7 @@
     "Create Draft Invoice": "create-an-invoice",
     "Create Manually Instead": "invoice-from-time-entries",
     "Create Rate": "rates",
+    "Create schedule": "recurring-billing",
     "Dashboard": "where-to-find-it",
     "Date": "expenses",
     "Date From": "invoice-from-time-entries",
@@ -335,6 +359,7 @@
     "Edit": "invoice-detail",
     "Edit Invoice {number}": "edit-an-invoice",
     "Email": "clients",
+    "End date": "recurring-billing",
     "Expense": "key-concepts",
     "Expenses": "where-to-find-it",
     "Expenses and rates:": "working-with-ai-agents",
@@ -344,6 +369,7 @@
     "Footer Text (on invoice)": "edit-an-invoice",
     "From Time Entries": "invoice-list",
     "Generate Invoice": "invoice-from-time-entries",
+    "Generate now": "recurring-billing",
     "Internal Notes": "edit-an-invoice",
     "Invoice": "key-concepts",
     "Invoice Defaults": "settings",
@@ -352,15 +378,18 @@
     "Invoices": "where-to-find-it",
     "Line Items": "create-an-invoice",
     "Line item": "key-concepts",
+    "Line items (template)": "recurring-billing",
     "List and inspect:": "working-with-ai-agents",
     "Mark reimbursed": "overview",
     "Message (optional)": "invoice-list",
     "Method": "invoice-detail",
+    "Mode": "recurring-billing",
     "Name": "clients",
     "New Client": "clients",
     "New Expense": "expenses",
     "New Invoice": "where-to-find-it",
     "New Rate": "rates",
+    "New Recurring Schedule": "recurring-billing",
     "Notes (internal)": "create-an-invoice",
     "Outstanding": "dashboard",
     "Outstanding Aging": "reports",
@@ -370,6 +399,7 @@
     "PDF": "invoice-list",
     "PDF preview": "invoice-detail",
     "Paid": "dashboard",
+    "Pause": "recurring-billing",
     "Payment": "key-concepts",
     "Project": "invoice-from-time-entries",
     "Project Profitability": "reports",
@@ -381,26 +411,33 @@
     "Re-send / Send": "overview",
     "Recent activity": "dashboard",
     "Record Payment": "invoice-detail",
+    "Recurring": "where-to-find-it",
+    "Recurring schedule": "key-concepts",
+    "Recurring schedules:": "working-with-ai-agents",
     "Reject": "overview",
     "Reporting:": "working-with-ai-agents",
     "Reports": "where-to-find-it",
     "Request approval": "invoice-list",
     "Request approval for {number}": "invoice-list",
+    "Resume": "recurring-billing",
     "Revenue by Month": "reports",
     "Save": "clients",
     "Save Changes": "edit-an-invoice",
     "Save Payment": "invoice-detail",
     "Save Settings": "settings",
+    "Schedule name": "recurring-billing",
     "Send": "working-with-ai-agents",
     "Send request": "invoice-list",
     "Sent": "invoice-list",
     "Settings": "key-concepts",
     "Settings:": "working-with-ai-agents",
+    "Start date": "recurring-billing",
     "Submit Expense": "expenses",
     "Subtotal": "create-an-invoice",
     "Tax": "create-an-invoice",
     "Tax Rate": "create-an-invoice",
     "Tax Rate (%)": "edit-an-invoice",
+    "Tax rate (%)": "recurring-billing",
     "Terms & Conditions (on invoice)": "edit-an-invoice",
     "Total": "create-an-invoice",
     "Total Billed": "clients",
@@ -409,12 +446,15 @@
     "Vendor": "expenses",
     "View all invoices": "dashboard",
     "Void": "invoice-detail",
+    "active": "recurring-billing",
     "approved": "expenses",
+    "cancelled": "recurring-billing",
     "client": "overview",
     "expenses": "overview",
     "integer cents": "overview",
     "invoice": "overview",
     "line items": "overview",
+    "paused": "recurring-billing",
     "payments": "overview",
     "pending": "expenses",
     "rates": "overview",

@@ -3,11 +3,11 @@
   "nginx_path": "/bill/",
   "api_port": 4014,
   "api_dir": "bill-api",
-  "route_files": 8,
-  "schema_modules": 11,
+  "route_files": 9,
+  "schema_modules": 12,
   "has_seeder": true,
   "has_frontend": true,
-  "src_hash": "97a1a5387faf36fe86bd8ada8ee4a75aca162092a23460eb31204e41acc87b2f",
-  "generated_at": "2026-06-17T22:16:23.281Z",
-  "mcp_tool_count": 39
+  "src_hash": "56c33003f7b774c4e3e6624fba1225a8beeb205b5f6779224a6e35bf7dfb8381",
+  "generated_at": "2026-06-18T00:43:58.227Z",
+  "mcp_tool_count": 47
 }

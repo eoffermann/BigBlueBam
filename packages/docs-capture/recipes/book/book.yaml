@@ -107,3 +107,18 @@
     - { action: waitFor, selector: main }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 6, label: "Calendars" }
+
+- id: book-connections
+  app: book
+  demonstrates: "The external Calendar Connections page — the working .ics feed subscribe form, the Google/Outlook OAuth provider cards (gated on operator credentials), and a connected feed showing an Active pill with its synced event count"
+  route: /book/settings/connections
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: waitFor, selector: "text=External Calendar Connections" }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  expect:
+    - "text=External Calendar Connections"
+    - "text=Subscribe to an .ics feed"
+    - "text=Your connections"
+  doc: { order: 7, label: "Calendar connections" }

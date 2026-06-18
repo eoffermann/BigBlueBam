@@ -130,3 +130,15 @@
   interactions:
     - { action: waitFor, selector: main, optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: bill-recurring
+  app: bill
+  demonstrates: "The Recurring page: subscription schedules with cadence, next-run, generated count, mode (auto-finalize vs draft), and per-row Generate now / Pause / Cancel actions"
+  route: /bill/recurring
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Recurring billing" }
+  masks:
+    - "table td:has-text('/')"

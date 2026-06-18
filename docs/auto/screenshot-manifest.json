@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-17T22:16:23.698Z",
+  "generated_at": "2026-06-18T00:43:58.508Z",
   "screenshots": [
     {
       "app": "bam",
@@ -46,8 +46,16 @@
       "theme": "light",
       "file": "06-settings-integrations.png",
       "path": "docs/apps/bam/screenshots/light/06-settings-integrations.png",
-      "size": 97150,
-      "hash": "f2819a6c019766970ad70f15f17f6b934dd0e6cf676289f24cf71127a884889c"
+      "size": 98465,
+      "hash": "109fccf6a1944eb5fb09bcd1a34b9ce1bd7b40104d372f13b01e0736e76ea0a2"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "08-org-smtp.png",
+      "path": "docs/apps/bam/screenshots/light/08-org-smtp.png",
+      "size": 84277,
+      "hash": "2acaf2540741f97d1c5ba9a9900a9b9bbf71581ff34c96037feedb6b9a4c3b89"
     },
     {
       "app": "bam",
@@ -58,292 +66,84 @@
       "hash": "fd0afeda6d0fe370b1d56b948d50841ca9b21d22852ede00314e2b4fbb57d4ca"
     },
     {
-      "app": "banter",
-      "theme": "light",
-      "file": "01-channel-view.png",
-      "path": "docs/apps/banter/screenshots/light/01-channel-view.png",
-      "size": 89278,
-      "hash": "6f22d96df18d378f1819016847efe8264c3cd8cf06befdf19447885f24cf287d"
-    },
-    {
-      "app": "banter",
-      "theme": "light",
-      "file": "02-channel-list.png",
-      "path": "docs/apps/banter/screenshots/light/02-channel-list.png",
-      "size": 117292,
-      "hash": "eedfeea30bde3302942a26520f6c31f20218a13944e17a7b656f09dd21d54ba9"
-    },
-    {
-      "app": "banter",
-      "theme": "light",
-      "file": "03-thread.png",
-      "path": "docs/apps/banter/screenshots/light/03-thread.png",
-      "size": 128363,
-      "hash": "095e07b98818395f9d014fe146df0b575ab09d02fc19bc90f6146a81369a51ec"
-    },
-    {
-      "app": "banter",
-      "theme": "light",
-      "file": "04-dms.png",
-      "path": "docs/apps/banter/screenshots/light/04-dms.png",
-      "size": 75918,
-      "hash": "330cff858ef1a257fc3ba3439a3e6358e1b19414950f299c97ccfda39c47ccf8"
-    },
-    {
-      "app": "banter",
-      "theme": "light",
-      "file": "05-search.png",
-      "path": "docs/apps/banter/screenshots/light/05-search.png",
-      "size": 117288,
-      "hash": "d2d0767ef86c781c8a792c7e73efb097cc265bb6ae7fef974258d86f3d54a90f"
-    },
-    {
-      "app": "banter",
-      "theme": "light",
-      "file": "06-preferences.png",
-      "path": "docs/apps/banter/screenshots/light/06-preferences.png",
-      "size": 83538,
-      "hash": "3e137694afd6c0a00c555686269613cc738be3599ef0a0b2cb59661fc8d5c714"
-    },
-    {
-      "app": "banter",
-      "theme": "dark",
-      "file": "01-channel-view.png",
-      "path": "docs/apps/banter/screenshots/dark/01-channel-view.png",
-      "size": 239532,
-      "hash": "59b242a1c03563a6166e2c053f3710f5059a5921a2223caaf5442001a66cb584"
-    },
-    {
-      "app": "beacon",
-      "theme": "light",
-      "file": "01-knowledge-home.png",
-      "path": "docs/apps/beacon/screenshots/light/01-knowledge-home.png",
-      "size": 105196,
-      "hash": "6fc18b86d4bdf6df079c51ca7ff389981293f4409ccbc6a5b0a0b8dccad8b550"
-    },
-    {
-      "app": "beacon",
-      "theme": "light",
-      "file": "02-article-detail.png",
-      "path": "docs/apps/beacon/screenshots/light/02-article-detail.png",
-      "size": 102519,
-      "hash": "4420ea7be5fdad024007db298e3277e8c575f41e1b98fcb81f581a1c0b740b0a"
-    },
-    {
-      "app": "beacon",
-      "theme": "light",
-      "file": "03-browse-list.png",
-      "path": "docs/apps/beacon/screenshots/light/03-browse-list.png",
-      "size": 104780,
-      "hash": "715e1fa2026ee15b58087bfd421c3264d0ee776536d23ec13ad9636fd74f3b3e"
-    },
-    {
-      "app": "beacon",
-      "theme": "light",
-      "file": "04-graph-explorer.png",
-      "path": "docs/apps/beacon/screenshots/light/04-graph-explorer.png",
-      "size": 166493,
-      "hash": "17ccd9c40155b8df3002c4ce2009e113c829b9db50f443d602804e936c327b51"
-    },
-    {
-      "app": "beacon",
-      "theme": "light",
-      "file": "05-governance-dashboard.png",
-      "path": "docs/apps/beacon/screenshots/light/05-governance-dashboard.png",
-      "size": 55994,
-      "hash": "52fd9068e0c3036bd6dac15f65dbac2e38f9564fc40647ed31e3d80836ef3798"
-    },
-    {
-      "app": "beacon",
-      "theme": "light",
-      "file": "06-search-results.png",
-      "path": "docs/apps/beacon/screenshots/light/06-search-results.png",
-      "size": 46735,
-      "hash": "675d10793e88589e254c427eb8e559969b8f31e89f6edc3754869d55efbd6eaf"
-    },
-    {
-      "app": "beacon",
-      "theme": "dark",
-      "file": "01-knowledge-home.png",
-      "path": "docs/apps/beacon/screenshots/dark/01-knowledge-home.png",
-      "size": 283897,
-      "hash": "d574e8d7fccc25b9b60abd8e6ce5fcea8b29228252be6adf3ad115a2a6bcea26"
-    },
-    {
-      "app": "bearing",
-      "theme": "light",
-      "file": "01-dashboard.png",
-      "path": "docs/apps/bearing/screenshots/light/01-dashboard.png",
-      "size": 86829,
-      "hash": "e03d3258ea3844670aeeb1c42460c1854d07bc836c4aa8d992bd5ad5d3b036ae"
-    },
-    {
-      "app": "bearing",
-      "theme": "light",
-      "file": "02-goal-detail.png",
-      "path": "docs/apps/bearing/screenshots/light/02-goal-detail.png",
-      "size": 5852,
-      "hash": "ada1c8335b7e4c00ac861c0c41861a40aef73910e88f343280760e9c22fdbf9e"
-    },
-    {
-      "app": "bearing",
-      "theme": "light",
-      "file": "03-my-goals.png",
-      "path": "docs/apps/bearing/screenshots/light/03-my-goals.png",
-      "size": 79615,
-      "hash": "627a3c6811f91b942e424d247cb910d4efe9fc292cd6edf71985b52f641ac694"
-    },
-    {
-      "app": "bearing",
-      "theme": "light",
-      "file": "04-at-risk.png",
-      "path": "docs/apps/bearing/screenshots/light/04-at-risk.png",
-      "size": 78445,
-      "hash": "0288fdbe40bc3707e7419128a7ecce57eb95545b49c250acaf517c3de6d335df"
-    },
-    {
-      "app": "bearing",
-      "theme": "light",
-      "file": "05-periods.png",
-      "path": "docs/apps/bearing/screenshots/light/05-periods.png",
-      "size": 40375,
-      "hash": "d2ba3c879cc806e556de0b3f9da010691488f0ea723a68d4ffed0ba4492e3bbc"
-    },
-    {
-      "app": "bearing",
-      "theme": "dark",
-      "file": "01-dashboard.png",
-      "path": "docs/apps/bearing/screenshots/dark/01-dashboard.png",
-      "size": 217278,
-      "hash": "7703ccec9ef137d327c5a0f8caf3c6cccce2d52a7c03801873dde0bf079f0dcc"
-    },
-    {
-      "app": "bench",
-      "theme": "light",
-      "file": "01-dashboard-list.png",
-      "path": "docs/apps/bench/screenshots/light/01-dashboard-list.png",
-      "size": 52387,
-      "hash": "ed5d528954246c474957de073db20d1ed41c60d1c47827a23380fce5caddce8b"
-    },
-    {
-      "app": "bench",
-      "theme": "light",
-      "file": "02-dashboard-view.png",
-      "path": "docs/apps/bench/screenshots/light/02-dashboard-view.png",
-      "size": 67804,
-      "hash": "c693497e982b59dc398e237514e4cdad022d7bd0e2cb82dfc6f10a22f7024398"
-    },
-    {
-      "app": "bench",
-      "theme": "light",
-      "file": "03-explorer.png",
-      "path": "docs/apps/bench/screenshots/light/03-explorer.png",
-      "size": 57235,
-      "hash": "8354f6d9971e2225acce9c2923c8e7fb0b116d142838a7e99b2025039fc83fcc"
-    },
-    {
-      "app": "bench",
-      "theme": "light",
-      "file": "04-widget-wizard.png",
-      "path": "docs/apps/bench/screenshots/light/04-widget-wizard.png",
-      "size": 52387,
-      "hash": "ed5d528954246c474957de073db20d1ed41c60d1c47827a23380fce5caddce8b"
-    },
-    {
-      "app": "bench",
-      "theme": "light",
-      "file": "05-reports.png",
-      "path": "docs/apps/bench/screenshots/light/05-reports.png",
-      "size": 46000,
-      "hash": "37813bb80100fabbe732b07480e70c582635e53aadb28eeace8f724a4cd0a0a4"
-    },
-    {
-      "app": "bench",
-      "theme": "light",
-      "file": "06-settings.png",
-      "path": "docs/apps/bench/screenshots/light/06-settings.png",
-      "size": 72921,
-      "hash": "24e08d307bf916118d049cdede1478308915b0099ed6a0392144d16d52dae421"
-    },
-    {
-      "app": "bench",
-      "theme": "dark",
-      "file": "02-dashboard-view.png",
-      "path": "docs/apps/bench/screenshots/dark/02-dashboard-view.png",
-      "size": 181453,
-      "hash": "930de8f8d972f3a1b947e81832d9349c7ebd52d0dd51697888673c6775162ca9"
-    },
-    {
       "app": "bill",
       "theme": "light",
       "file": "01-dashboard.png",
       "path": "docs/apps/bill/screenshots/light/01-dashboard.png",
-      "size": 78619,
-      "hash": "0f4201a9d3f6764e745822e3722f1579664b25744f98a7c7d1e28ad053b939ed"
+      "size": 79952,
+      "hash": "13d0831bb0432984d60778e6fed83caf07b3e2cafa6931489a5749aed04cb4ab"
     },
     {
       "app": "bill",
       "theme": "light",
       "file": "02-invoice-list.png",
       "path": "docs/apps/bill/screenshots/light/02-invoice-list.png",
-      "size": 99400,
-      "hash": "5b96dbbf875d85580de73cca93e647ab69a81df8372a59e254c5bb12a5443f88"
+      "size": 100689,
+      "hash": "ef23448918b02e92bc97667a425089409d9be84d7da8758146f37613cbd76be4"
     },
     {
       "app": "bill",
       "theme": "light",
       "file": "03-invoice-detail.png",
       "path": "docs/apps/bill/screenshots/light/03-invoice-detail.png",
-      "size": 79792,
-      "hash": "de9f077a6fb460847fac0c36023f56cacb451185d8d251e93902198cba5b5659"
+      "size": 81115,
+      "hash": "6a6a4f91a2e30e6daab5ac07fcbe8dd8ce4179d9331c0208c8a9c4328e9e7fc7"
     },
     {
       "app": "bill",
       "theme": "light",
       "file": "04-invoice-new.png",
       "path": "docs/apps/bill/screenshots/light/04-invoice-new.png",
-      "size": 51615,
-      "hash": "3b7f97ed7dd2dde098855e81da8b7aa8dfce33cfcccba1ff3df76fa492d8b5ce"
+      "size": 52925,
+      "hash": "43e3b0c3b5fb57c6d6aec568741d84e6d3639852fb51ee7d315856b4ef72f4cc"
     },
     {
       "app": "bill",
       "theme": "light",
       "file": "05-expenses.png",
       "path": "docs/apps/bill/screenshots/light/05-expenses.png",
-      "size": 110785,
-      "hash": "f49021070983ec2bdd6a8c4ca70bff3e945c721d697fdb350ed89e82ec6bb0b9"
+      "size": 112086,
+      "hash": "1695d8c0cc61fb4e14d0649a756ac76c9b7b53b3295bb6710fcaf2d32709376c"
     },
     {
       "app": "bill",
       "theme": "light",
       "file": "06-reports.png",
       "path": "docs/apps/bill/screenshots/light/06-reports.png",
-      "size": 80016,
-      "hash": "8d6b121a5a4d1f9cc9bec721d7883ca5a724dc3fccadd536a5829e463fcc304e"
+      "size": 81166,
+      "hash": "325ea1b739d26f22f09554d8e4bde0cc129354d8e513e0740a39fb768b154dab"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "07-recurring.png",
+      "path": "docs/apps/bill/screenshots/light/07-recurring.png",
+      "size": 62292,
+      "hash": "753fcc3fe1488ce80e34d7a6e1a79d0ce0ae38244e8716694ac74a256753f074"
     },
     {
       "app": "bill",
       "theme": "dark",
       "file": "02-invoice-list.png",
       "path": "docs/apps/bill/screenshots/dark/02-invoice-list.png",
-      "size": 256091,
-      "hash": "fd2f9c87f0c672a9c8f31bd2451ea58e6a5c61b9fe6a7d7c3606c6a26a608300"
+      "size": 259378,
+      "hash": "865f287ccaadc0c3500a3d1c5d06f0320362557d1823e531a211510d2850aa36"
     },
     {
       "app": "blank",
       "theme": "light",
       "file": "01-form-list.png",
       "path": "docs/apps/blank/screenshots/light/01-form-list.png",
-      "size": 56550,
-      "hash": "c86fd6411f5731b692e5027e52474555afaa5d53169c68ee2bb01f34f3b696b8"
+      "size": 63809,
+      "hash": "b19d01b13d0c24a95a7117c8d69b63c71d9ecffd95571d78bd26e2689d935282"
     },
     {
       "app": "blank",
       "theme": "light",
       "file": "02-form-builder.png",
       "path": "docs/apps/blank/screenshots/light/02-form-builder.png",
-      "size": 72516,
-      "hash": "9e971a3aebcb7939221b484bf9ec45e2bc640b19fec53f7490149bf84374dcab"
+      "size": 76630,
+      "hash": "6dc0fe65b058f898a512c7baef34667a31b71aa451db5980ea5e90e38d3bd932"
     },
     {
       "app": "blank",
@@ -358,8 +158,8 @@
       "theme": "light",
       "file": "04-responses.png",
       "path": "docs/apps/blank/screenshots/light/04-responses.png",
-      "size": 57023,
-      "hash": "c998f2c5d357cb4089d40d9c716cf15b37d89ac0eed8a0540bc96400b44fe395"
+      "size": 57059,
+      "hash": "34234e847bffcb0ba10a1db2e25b251afd9553b8587ca6abbcae29a281842518"
     },
     {
       "app": "blank",
@@ -379,99 +179,43 @@
     },
     {
       "app": "blank",
+      "theme": "light",
+      "file": "07-access-and-notifications.png",
+      "path": "docs/apps/blank/screenshots/light/07-access-and-notifications.png",
+      "size": 55296,
+      "hash": "f4fd20d7ddd9e93a60e3b000bb74310737bb591732622ceedad50e838bf8002a"
+    },
+    {
+      "app": "blank",
       "theme": "dark",
       "file": "01-form-list.png",
       "path": "docs/apps/blank/screenshots/dark/01-form-list.png",
-      "size": 157688,
-      "hash": "2765bd033714cabc8a216bb26b2dfe661b75eb83aad5aaaee606c520f2d85b7f"
-    },
-    {
-      "app": "blast",
-      "theme": "light",
-      "file": "01-campaigns.png",
-      "path": "docs/apps/blast/screenshots/light/01-campaigns.png",
-      "size": 69273,
-      "hash": "e063c104af2b8d82b38367ab8c2ae2e8d23631ae318a4832e984cfc5ff6e2606"
-    },
-    {
-      "app": "blast",
-      "theme": "light",
-      "file": "02-campaign-new.png",
-      "path": "docs/apps/blast/screenshots/light/02-campaign-new.png",
-      "size": 66445,
-      "hash": "9f9871cccf53ef2e0b4fee25c8067869a5cac0b4fa013eca915d61d0b789c632"
-    },
-    {
-      "app": "blast",
-      "theme": "light",
-      "file": "03-templates.png",
-      "path": "docs/apps/blast/screenshots/light/03-templates.png",
-      "size": 54980,
-      "hash": "b953371de108d0a7967a32ef3eaf1257ceefbb01650724a407c9ff6cfefc91a4"
-    },
-    {
-      "app": "blast",
-      "theme": "light",
-      "file": "04-template-editor.png",
-      "path": "docs/apps/blast/screenshots/light/04-template-editor.png",
-      "size": 69434,
-      "hash": "f19ba6b644d23cfdc9a38664a2a1d7ff33b0b091be825f0c5a2d9f3eb908f072"
-    },
-    {
-      "app": "blast",
-      "theme": "light",
-      "file": "05-segments.png",
-      "path": "docs/apps/blast/screenshots/light/05-segments.png",
-      "size": 66669,
-      "hash": "5b56d8585e9ea5f75b948af4786eb2ec2d2eb33745d0b5cef742393856cb12fd"
-    },
-    {
-      "app": "blast",
-      "theme": "light",
-      "file": "06-segment-builder.png",
-      "path": "docs/apps/blast/screenshots/light/06-segment-builder.png",
-      "size": 52181,
-      "hash": "57da681574f83a83a0dbaca4e742c6379ec003b557e7c8cc8df105d8c9f3b604"
-    },
-    {
-      "app": "blast",
-      "theme": "light",
-      "file": "07-analytics.png",
-      "path": "docs/apps/blast/screenshots/light/07-analytics.png",
-      "size": 49186,
-      "hash": "e724d884c26500c708731b838102650769c3091d76dd5f5c3d18e26916592ddd"
-    },
-    {
-      "app": "blast",
-      "theme": "dark",
-      "file": "01-campaigns.png",
-      "path": "docs/apps/blast/screenshots/dark/01-campaigns.png",
-      "size": 180242,
-      "hash": "3f7861c6cf2594b7f7cee9016ebb85b8edb91bb87fafef85575e5b68011c226b"
+      "size": 174687,
+      "hash": "2d64427373a97f78415d54adbc1f3767811ec20ba3ab43221b7b097b84d2139c"
     },
     {
       "app": "blueprint",
       "theme": "light",
       "file": "01-diagram-list.png",
       "path": "docs/apps/blueprint/screenshots/light/01-diagram-list.png",
-      "size": 71279,
-      "hash": "50772afdfc96f4eb0708ea50d16e914cd223bc0374ba52041e571438208e286d"
+      "size": 71330,
+      "hash": "131b47e18ef0f88167dd60f9b1121b5681f5cd6ff8eb361e83adb6240b875777"
     },
     {
       "app": "blueprint",
       "theme": "light",
       "file": "02-diagram-editor.png",
       "path": "docs/apps/blueprint/screenshots/light/02-diagram-editor.png",
-      "size": 85074,
-      "hash": "aee142bbeb60392f5ee0ac52b7b12ec6f8c5c408b889486fa1eb1524e82b06ed"
+      "size": 76061,
+      "hash": "adbe4c20d9e5664556f2c9bc29e40b08fee0bb2ed1de4804bfc5d6ea2f858ad7"
     },
     {
       "app": "blueprint",
       "theme": "light",
       "file": "03-new-diagram-dialog.png",
       "path": "docs/apps/blueprint/screenshots/light/03-new-diagram-dialog.png",
-      "size": 93425,
-      "hash": "cdf8ad1cbd0ada14340b6957ebacab035ae18a29325c5f8e7913bd80842dcf20"
+      "size": 92577,
+      "hash": "ea3d0e8753dec1cd297b3732dd328034df6e7c790d988a338f257ab169e2c731"
     },
     {
       "app": "blueprint",
@@ -491,179 +235,43 @@
     },
     {
       "app": "blueprint",
+      "theme": "light",
+      "file": "06-comments-collaboration.png",
+      "path": "docs/apps/blueprint/screenshots/light/06-comments-collaboration.png",
+      "size": 110575,
+      "hash": "8610ba9b689f0443d3f3676bc5299a9f32ebd62262e5be830a9b9ba1cd21c7c1"
+    },
+    {
+      "app": "blueprint",
       "theme": "dark",
       "file": "01-diagram-list.png",
       "path": "docs/apps/blueprint/screenshots/dark/01-diagram-list.png",
-      "size": 185235,
-      "hash": "93f67e292c914112c9f55ccf89e8d9b034eff6ad80430e5f29d36c2df542692a"
-    },
-    {
-      "app": "board",
-      "theme": "light",
-      "file": "01-all-boards.png",
-      "path": "docs/apps/board/screenshots/light/01-all-boards.png",
-      "size": 51081,
-      "hash": "3931b79fc2dc6aeaed4767164591aa7ce4194c5a075e239e4aa722b965a22d16"
-    },
-    {
-      "app": "board",
-      "theme": "light",
-      "file": "02-canvas-populated.png",
-      "path": "docs/apps/board/screenshots/light/02-canvas-populated.png",
-      "size": 28060,
-      "hash": "e92172176e3882015b60ccb28937ea315e4d321fa3f8ab5a7c83105ec217c5d7"
-    },
-    {
-      "app": "board",
-      "theme": "light",
-      "file": "03-templates.png",
-      "path": "docs/apps/board/screenshots/light/03-templates.png",
-      "size": 80006,
-      "hash": "1a00b0e4616436c25e7f012a3535ed1a8f664f587d4e4c1b4c09533fee8cbb1b"
-    },
-    {
-      "app": "board",
-      "theme": "light",
-      "file": "04-version-history.png",
-      "path": "docs/apps/board/screenshots/light/04-version-history.png",
-      "size": 44404,
-      "hash": "d1ac9acfd51781cb76093b1b5f541abe98f32d060d4bf18f3d962884bf5f758f"
-    },
-    {
-      "app": "board",
-      "theme": "dark",
-      "file": "01-all-boards.png",
-      "path": "docs/apps/board/screenshots/dark/01-all-boards.png",
-      "size": 130293,
-      "hash": "87743dd39ada3f9aee9d4d576fdad6f69ff2bf1834a508b0b5f62823871025b5"
-    },
-    {
-      "app": "bolt",
-      "theme": "light",
-      "file": "01-automations.png",
-      "path": "docs/apps/bolt/screenshots/light/01-automations.png",
-      "size": 112980,
-      "hash": "00d5d27060cdedb1d03718ea5d86ee39069bbacfac974cb80713995e062e565c"
-    },
-    {
-      "app": "bolt",
-      "theme": "light",
-      "file": "02-editor.png",
-      "path": "docs/apps/bolt/screenshots/light/02-editor.png",
-      "size": 74648,
-      "hash": "1eeb10fa708335897de20756916bd6230daf7b02479afba780e702e357f1e882"
-    },
-    {
-      "app": "bolt",
-      "theme": "light",
-      "file": "03-automation-detail.png",
-      "path": "docs/apps/bolt/screenshots/light/03-automation-detail.png",
-      "size": 100720,
-      "hash": "d9812ba4d99b96fd6cafb00b72e195c867a7e2a6724d51fe2d6304d07a8e8266"
-    },
-    {
-      "app": "bolt",
-      "theme": "light",
-      "file": "04-executions.png",
-      "path": "docs/apps/bolt/screenshots/light/04-executions.png",
-      "size": 38695,
-      "hash": "78fa48d3155465974932f336b7e4d76f6ee3aaa34425cc7739225edf4b33ade6"
-    },
-    {
-      "app": "bolt",
-      "theme": "light",
-      "file": "05-templates.png",
-      "path": "docs/apps/bolt/screenshots/light/05-templates.png",
-      "size": 106336,
-      "hash": "1022a5513585fbef4c4c72fb146c019d6b15d37ad7864d66ad2c121b2ba90264"
-    },
-    {
-      "app": "bolt",
-      "theme": "dark",
-      "file": "01-automations.png",
-      "path": "docs/apps/bolt/screenshots/dark/01-automations.png",
-      "size": 299106,
-      "hash": "08dba4d9080fcc3b31938ec7ef32fa7d4ae8f726f112a3b5d42acfb7a7669d42"
-    },
-    {
-      "app": "bond",
-      "theme": "light",
-      "file": "01-pipeline-board.png",
-      "path": "docs/apps/bond/screenshots/light/01-pipeline-board.png",
-      "size": 63580,
-      "hash": "69f5268cdf3e8d69d4821213a925098475477bc1cb639f3a26af3627bf56cdb0"
-    },
-    {
-      "app": "bond",
-      "theme": "light",
-      "file": "02-deal-detail.png",
-      "path": "docs/apps/bond/screenshots/light/02-deal-detail.png",
-      "size": 75962,
-      "hash": "1dec5925caa43e3407e335392b9e4bdf6b800630249705feb0822f734b79c17a"
-    },
-    {
-      "app": "bond",
-      "theme": "light",
-      "file": "03-contacts-list.png",
-      "path": "docs/apps/bond/screenshots/light/03-contacts-list.png",
-      "size": 91266,
-      "hash": "17d38ced9cd99b8daa3cfffd7fc5d3b5d8e116ba42bceb4ad0ea584e0abd4a95"
-    },
-    {
-      "app": "bond",
-      "theme": "light",
-      "file": "04-contact-detail.png",
-      "path": "docs/apps/bond/screenshots/light/04-contact-detail.png",
-      "size": 43294,
-      "hash": "180d5d5a3f48d96338ed8ec81a1c3ed0b8fcce6ff87c0aaf7b4cdb44dbfde0bc"
-    },
-    {
-      "app": "bond",
-      "theme": "light",
-      "file": "05-companies-list.png",
-      "path": "docs/apps/bond/screenshots/light/05-companies-list.png",
-      "size": 71750,
-      "hash": "041514f9ab5b907ae8b2c90ff287dd0c541568ed4ebd36173bee53fccf38fb9d"
-    },
-    {
-      "app": "bond",
-      "theme": "light",
-      "file": "06-analytics.png",
-      "path": "docs/apps/bond/screenshots/light/06-analytics.png",
-      "size": 65068,
-      "hash": "6aebca3e7d1108d675322c449de0e10c5fc87a855850da32a03ff93228d54348"
-    },
-    {
-      "app": "bond",
-      "theme": "dark",
-      "file": "01-pipeline-board.png",
-      "path": "docs/apps/bond/screenshots/dark/01-pipeline-board.png",
-      "size": 166335,
-      "hash": "ae7a852fe60c86ec6477f39820b16e265df2df84f3835837bbc9732b91259f48"
+      "size": 185045,
+      "hash": "a51d22f3d3e41ed543534863c8a7819e6d838aad9029f2eda2de5c45d68cd395"
     },
     {
       "app": "book",
       "theme": "light",
       "file": "01-week-view.png",
       "path": "docs/apps/book/screenshots/light/01-week-view.png",
-      "size": 52431,
-      "hash": "d9b0e44a3a2b84000721f8bf46248f6a3d940b8ffffc145b04e62dd24f127094"
+      "size": 56198,
+      "hash": "1fd26573bc1a69aaa91f227a047569ee90e3fdd0c88ed7d291e5e2429b3813ce"
     },
     {
       "app": "book",
       "theme": "light",
       "file": "02-month-view.png",
       "path": "docs/apps/book/screenshots/light/02-month-view.png",
-      "size": 56118,
-      "hash": "8f2898c990e9e53717e35ae1111858ea1071bda87fa01b0aef1ae0b1e2284003"
+      "size": 61497,
+      "hash": "ccfdd52ecfe8b610ce5f4e1d03977b78c3533988fceb414a5209410ef26d89e8"
     },
     {
       "app": "book",
       "theme": "light",
       "file": "03-timeline.png",
       "path": "docs/apps/book/screenshots/light/03-timeline.png",
-      "size": 75630,
-      "hash": "cbb58eca2b0b1be4449479d489019449dec3eb125a9925bebf3454d173ad0f5c"
+      "size": 78529,
+      "hash": "d23a13e6851a04a2533a73630ad7386d54df08ad726358a7f2df0ee40d24f3a2"
     },
     {
       "app": "book",
@@ -686,160 +294,96 @@
       "theme": "light",
       "file": "06-calendars.png",
       "path": "docs/apps/book/screenshots/light/06-calendars.png",
-      "size": 46413,
-      "hash": "60773111cc8d829f38fdc0711b317063ed913cc0e2f59250dc37120a3d6663d0"
+      "size": 53104,
+      "hash": "006a81bb1ecbcc1d4b8ea8a20b29f01d5242b8023689202ec4137bcd12c5a29e"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "07-connections.png",
+      "path": "docs/apps/book/screenshots/light/07-connections.png",
+      "size": 75162,
+      "hash": "c442e4f22e91d365fd2e7e093110aa5d716261bcd2cafe074daf19f4e3b76dfd"
     },
     {
       "app": "book",
       "theme": "dark",
       "file": "01-week-view.png",
       "path": "docs/apps/book/screenshots/dark/01-week-view.png",
-      "size": 126643,
-      "hash": "8f4546d5f6d4b773a53ecf2a6fe00f5f83e88260a26b9a6be4f4e3dd669c77f4"
-    },
-    {
-      "app": "brief",
-      "theme": "light",
-      "file": "01-home.png",
-      "path": "docs/apps/brief/screenshots/light/01-home.png",
-      "size": 88255,
-      "hash": "5dc3b035475a084e62a623507b68c84fef444087e5fd63eb9c6995e9302726a4"
-    },
-    {
-      "app": "brief",
-      "theme": "light",
-      "file": "02-documents.png",
-      "path": "docs/apps/brief/screenshots/light/02-documents.png",
-      "size": 109751,
-      "hash": "5fc63a770adaed7177531dad4e511dd2c85a5ac3d00ed0d8dd62bb54a3f92562"
-    },
-    {
-      "app": "brief",
-      "theme": "light",
-      "file": "03-detail.png",
-      "path": "docs/apps/brief/screenshots/light/03-detail.png",
-      "size": 98774,
-      "hash": "47772afea5bbcaf4f6cef9686650145f9813c904e8bd0353827361cb5775c0da"
-    },
-    {
-      "app": "brief",
-      "theme": "light",
-      "file": "04-editor.png",
-      "path": "docs/apps/brief/screenshots/light/04-editor.png",
-      "size": 98774,
-      "hash": "47772afea5bbcaf4f6cef9686650145f9813c904e8bd0353827361cb5775c0da"
-    },
-    {
-      "app": "brief",
-      "theme": "light",
-      "file": "05-templates.png",
-      "path": "docs/apps/brief/screenshots/light/05-templates.png",
-      "size": 105142,
-      "hash": "1295382c899049aa790f9966d7c38bdbd2012f7b8b869c1ee19014a2b0b50cb2"
-    },
-    {
-      "app": "brief",
-      "theme": "light",
-      "file": "06-search.png",
-      "path": "docs/apps/brief/screenshots/light/06-search.png",
-      "size": 39284,
-      "hash": "788ffebf4cc4b597a9f4502418f93edb87f41aa26dd6ccb5887d1586765e27bb"
-    },
-    {
-      "app": "brief",
-      "theme": "dark",
-      "file": "01-home.png",
-      "path": "docs/apps/brief/screenshots/dark/01-home.png",
-      "size": 225045,
-      "hash": "75c26ef33ffb81ccd369268b8f80fff0970679ec060cb5997196836a14028aa9"
+      "size": 143664,
+      "hash": "be2048fc6fa673e911184dbbe6057948371d1d13c71137ddf5170035214b24ea"
     },
     {
       "app": "bureau",
       "theme": "light",
       "file": "01-floor-directory.png",
       "path": "docs/apps/bureau/screenshots/light/01-floor-directory.png",
-      "size": 34981,
-      "hash": "283cf24bafded79ce4ef0ae9e7af58b501a46076ed9238223ff689d403e4ef20"
+      "size": 38482,
+      "hash": "e9bd84f8c73d00e04cea9a6770791f9ca5b4b3023f20a1949a992ea42a716916"
     },
     {
       "app": "bureau",
       "theme": "light",
       "file": "02-live-floor.png",
       "path": "docs/apps/bureau/screenshots/light/02-live-floor.png",
-      "size": 31719,
-      "hash": "5f3370a7e7c2084b50a0ee01cda4b512adbde660fc363dab12a7952b3667579e"
+      "size": 34306,
+      "hash": "35cd5cfb613023296a669df3b98404e5b2cfdfedc23d2106d56a666fdc406383"
     },
     {
       "app": "bureau",
       "theme": "light",
       "file": "03-recent-chats.png",
       "path": "docs/apps/bureau/screenshots/light/03-recent-chats.png",
-      "size": 72870,
-      "hash": "6abebb7d11449e1e93f369e214f227daf05343f4d0a8dabae63d3fdcd761fe49"
+      "size": 74404,
+      "hash": "00c0c2866c331976c90acf31dd019682aac362dc72c7f1d3327aed9ec7325a16"
     },
     {
       "app": "bureau",
       "theme": "light",
       "file": "04-admin-floors.png",
       "path": "docs/apps/bureau/screenshots/light/04-admin-floors.png",
-      "size": 43247,
-      "hash": "e0d9ce94026904ff89d64df2ec2b476b0c647575b9bb473eeb47f71cc2219abd"
+      "size": 46791,
+      "hash": "51cb43551b2740340c6dcb76c1510dfb783d3c65e1dc2e7d73f15fb4c93baa20"
     },
     {
       "app": "bureau",
       "theme": "light",
       "file": "05-admin-offices.png",
       "path": "docs/apps/bureau/screenshots/light/05-admin-offices.png",
-      "size": 54708,
-      "hash": "1d20a890ddbde694a07342f8a077098fbf31fe79919e77139ade4965e5144f60"
+      "size": 58676,
+      "hash": "f7a782ffd0698bc8d0fb4ef960592f34f3661799a659d6ce43e7f4a99c4726c5"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "06-room-booking.png",
+      "path": "docs/apps/bureau/screenshots/light/06-room-booking.png",
+      "size": 71699,
+      "hash": "1830b1f0a3d2d3da6d094fdcc478e9061c83f51957c4421f44decafa18a5c22d"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "07-admin-settings.png",
+      "path": "docs/apps/bureau/screenshots/light/07-admin-settings.png",
+      "size": 62702,
+      "hash": "7c8876f8ed6c6a3a7f4b08f859c4a824d54c6e288de8d9581710329163208449"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "08-presence-on-floor.png",
+      "path": "docs/apps/bureau/screenshots/light/08-presence-on-floor.png",
+      "size": 32249,
+      "hash": "da89188a374eee15fce175cf80017bdbc4072d7d4c519a8adc44a901fc2a9774"
     },
     {
       "app": "bureau",
       "theme": "dark",
       "file": "01-floor-directory.png",
       "path": "docs/apps/bureau/screenshots/dark/01-floor-directory.png",
-      "size": 88358,
-      "hash": "0a0ac495b9fb0dfaf69c50f79e0d98e136a3f5248b26834e476bc557d6fff288"
-    },
-    {
-      "app": "helpdesk",
-      "theme": "light",
-      "file": "01-portal-entry.png",
-      "path": "docs/apps/helpdesk/screenshots/light/01-portal-entry.png",
-      "size": 23892,
-      "hash": "b3494b38a2da4afa1ee60dab8da4071d52cd0424c75786015c4b0d23406fbff8"
-    },
-    {
-      "app": "helpdesk",
-      "theme": "light",
-      "file": "02-ticket-list.png",
-      "path": "docs/apps/helpdesk/screenshots/light/02-ticket-list.png",
-      "size": 48894,
-      "hash": "3b83dd4285b7a70089a3a047b9498c92725562b600b1a15ea7978a4848a80e79"
-    },
-    {
-      "app": "helpdesk",
-      "theme": "light",
-      "file": "03-ticket-detail.png",
-      "path": "docs/apps/helpdesk/screenshots/light/03-ticket-detail.png",
-      "size": 52121,
-      "hash": "f54b3532525d7c5062b0e998f69e407bb45154b16f94ba69ed93352d0f43f446"
-    },
-    {
-      "app": "helpdesk",
-      "theme": "light",
-      "file": "04-new-ticket.png",
-      "path": "docs/apps/helpdesk/screenshots/light/04-new-ticket.png",
-      "size": 33669,
-      "hash": "c375c652883e806b283f87bbee49a00339388e9c41a6e24e25ed843b7632c0e0"
-    },
-    {
-      "app": "helpdesk",
-      "theme": "dark",
-      "file": "01-portal-entry.png",
-      "path": "docs/apps/helpdesk/screenshots/dark/01-portal-entry.png",
-      "size": 65546,
-      "hash": "c2accc4ab20b8108227157257f74236429dee4eda92decf56a6f8a3f4bf887bb"
+      "size": 96982,
+      "hash": "4acfc36d13efb0cd2660d1c1993cd6cf729adc46c451692cee3dfd61b18c5c20"
     }
   ]
 }

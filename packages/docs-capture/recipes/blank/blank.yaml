@@ -141,3 +141,23 @@
     - { action: waitFor, selector: "main" }
     - { action: waitFor, selector: "h1:has-text('Settings')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+
+- id: blank-access-and-notifications
+  app: blank
+  demonstrates: "The Form Settings dialog's access + notification controls — Require sign-in to submit, Allowed email domains, and Email-on-submit recipients — on a gated form"
+  route: /blank/
+  interactions:
+    # Open the Castaway Rescue Request form (requires_login + allowed_domains +
+    # notify_on_submit are all set on it by the blank-submissions seed) so the
+    # access-control and notification sections render with real values.
+    - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Castaway Rescue Request')" }
+    - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Castaway Rescue Request')", optional: true }
+    - { action: wait, ms: 1500 }
+    - { action: click, selector: "button:has-text('Settings')", optional: true }
+    - { action: wait, ms: 1000 }
+    - { action: waitFor, selector: "h2:has-text('Form Settings')", optional: true }
+    # Scroll the access-control + notification controls into the frame.
+    - { action: scrollTo, selector: "label:has-text('Require sign-in to submit')", optional: true }
+    - { action: wait, ms: 500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Access control and notifications" }

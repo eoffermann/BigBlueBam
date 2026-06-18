@@ -103,8 +103,8 @@
       "level": 3
     },
     {
-      "anchor": "org-settings-api-and-mcp-only",
-      "title": "Org settings (API and MCP only)",
+      "anchor": "admin-settings",
+      "title": "Admin - Settings",
       "level": 3
     },
     {
@@ -192,7 +192,7 @@
     {
       "anchor": "where-to-find-it",
       "title": "Where to find it",
-      "text": "Bureau is served at /bureau/. You must be logged in to BigBlueBam first; Bureau shares the Bam session. If you are not logged in you will see \"Please log in to BigBlueBam first to access Bureau.\" with a \"Go to BigBlueBam Login\" link. The sidebar (brand label \"Bureau\") groups navigation under: - Floors: \"All floors\" (the Floors landing), then one row per floor with a live occupancy badge. - History: \"Recent chats\". - Admin (org admin, owner, or SuperUser only): \"Edit floors\" and \"Offices\". Floor and office administration require org admin, owner, or SuperUser. Audio huddles require LiveKit to be configured and the platform calling switch to be on; if calling is disabled, joining a room's audio returns a \"calling disabled\" error."
+      "text": "Bureau is served at /bureau/. You must be logged in to BigBlueBam first; Bureau shares the Bam session. If you are not logged in you will see \"Please log in to BigBlueBam first to access Bureau.\" with a \"Go to BigBlueBam Login\" link. The sidebar (brand label \"Bureau\") groups navigation under: - Floors: \"All floors\" (the Floors landing), then one row per floor with a live occupancy badge. - Rooms: \"Book a room\" (the Room booking screen at /bureau/booking). - History: \"Recent chats\". - Admin (org admin, owner, or SuperUser only): \"Edit floors\", \"Offices\", and \"Settings\". Floor and office administration require org admin, owner, or SuperUser. Audio huddles require LiveKit to be configured and the platform calling switch to be on; if calling is disabled, joining a room's audio returns a \"calling disabled\" error."
     },
     {
       "anchor": "feature-reference",
@@ -247,7 +247,7 @@
     {
       "anchor": "book-and-cancel-a-room",
       "title": "Book and cancel a room",
-      "text": "Bookable rooms can be reserved for a window; the reservation mirrors to a Book event. To book a room: 1. The room must be marked bookable. Booking is gated by the org's memberscanbook setting. 2. Create a booking with a title, start time, and end time, and choose access: open lets non-attendees wander in, locked holds the room private for the meeting. 3. Bureau writes the booking, anchors it to a Book event, and schedules lifecycle jobs that flip the room's privacy at the start time and clear it at the end time. To cancel a booking, the organizer or an admin removes it. Cancellation is a soft delete that drops the scheduled jobs and makes a best-effort attempt to cancel the linked Book event. There is no dedicated booking screen in the Bureau SPA today; booking and cancellation run through the Bureau API and the MCP tools. AI agent note: bureaubookroom and bureaucancelbooking both use the confirmaction two-step: preview first, then confirm. bureaulistbookings lists active bookings for a room over a window (default next 7 days), including the Book event back-link, and bureauupdatebooking edits a booking's title, window, or access (organizer or admin only)."
+      "text": "Bookable rooms can be reserved for a window; the reservation mirrors to a Book event. There is a dedicated Room booking screen in the Bureau SPA for this. To book a room: 1. Open /bureau/booking. The page heading is \"Book a room\" with the subtitle \"Reserve a bookable Bureau room for a meeting. Booking locks the room for the window and adds it to the organizer's calendar.\" 2. The left column lists the org's bookable rooms grouped by floor. Each room shows its type and capacity. Click one to open its schedule on the right. If the org has no bookable rooms you see \"No bookable rooms\" and a hint that an admin can mark a room bookable in the floor editor. 3. In the \"Book this room\" form, enter a Title (placeholder \"e.g. Sprint planning\"), pick Starts and Ends (datetime-local inputs default to the next hour and the hour after), and choose Access: Locked (\"Holds the room private for the meeting\") or Open (\"Anyone can wander in\"). 4. Click \"Book room\". Bureau writes the booking, anchors it to a Book event, and schedules lifecycle jobs that flip the room's privacy at the start time and clear it at the end time. Validation errors (missing title, end-before-start) and the server's \"member bookings are disabled\" 403 surface inline. 5. The \"Upcoming bookings (next 7 days)\" list below the form shows each reservation with its title, window, and the lock/open access badge. To cancel a booking, click \"Cancel\" on its row in the upcoming-bookings list. Only the organizer or an org admin sees the Cancel button. Cancellation is a soft delete that drops the scheduled jobs and makes a best-effort attempt to cancel the linked Book event. Booking is gated by the org's memberscanbook setting (see Admin - Settings below): when it is off, only admins and owners can reserve rooms, and a member's booking attempt 403s with the server message shown inline. AI agent note: bureaubookroom and bureaucancelbooking both use the confirmaction two-step: preview first, then confirm. bureaulistbookings lists active bookings for a room over a window (default next 7 days), including the Book event back-link, and bureauupdatebooking edits a booking's title, window, or access (organizer or admin only)."
     },
     {
       "anchor": "door-states-set-a-rooms-privacy",
@@ -257,7 +257,7 @@
     {
       "anchor": "set-your-status-and-dnd",
       "title": "Set your status and DND",
-      "text": "Your status tells teammates whether you can be interrupted. The canonical status set is available, busy, dnd, focus, away, and inmeeting. The surface for changing it is the docked box and the live connection, not a settings page. To go head-down: 1. In the docked box header, click the \"DND\" toggle (its tooltip reads \"Go head-down: block invites and hunts (DND)\"). 2. While DND is on, invites ring as blocked (callers get the leave-a-note path to your Banter direct messages) and hunts cannot locate you. Only an admin or SuperUser Force Invite gets through. 3. Click \"DND\" again to return to available. There is no separate in-app status menu in the Bureau SPA beyond the docked box DND toggle. Status changes flow over the live connection. Known gap: the MCP bureausetstatus tool is a stub that targets an endpoint which does not yet exist, so an agent cannot change your status today. Its accepted values (active, dnd, away) also do not match the canonical status set above. Real status changes happen over the live connection through the docked box."
+      "text": "Your status tells teammates whether you can be interrupted. The canonical status set is available, busy, dnd, focus, away, and inmeeting. The surface for changing it is the docked box and the live connection, not a settings page. To go head-down: 1. In the docked box header, click the \"DND\" toggle (its tooltip reads \"Go head-down: block invites and hunts (DND)\"). 2. While DND is on, invites ring as blocked (callers get the leave-a-note path to your Banter direct messages) and hunts cannot locate you. Only an admin or SuperUser Force Invite gets through. 3. Click \"DND\" again to return to available. The in-app surface for changing status interactively is the docked box DND toggle; the rest of the status set rides the live connection. Your chosen status is now persisted on the server, so it survives a reconnect and applies even when you have no live web session - which is what lets an agent set it for you over MCP. AI agent note: bureausetstatus is now wired (it PATCHes /me/status in the Bureau API and persists durably), so an agent can change your status on your behalf. The tool exposes the four-value subset available, busy, away, dnd; the underlying endpoint also accepts focus and inmeeting for status set through the docked box. Your live status, room, and floor are read back org-wide by bureaugetpresence and per-user by bureaulocateuser."
     },
     {
       "anchor": "the-cross-app-docked-box-audio-huddles-mic-cam-screen",
@@ -280,14 +280,14 @@
       "text": "The Offices screen is where you assign or reassign who owns each personal office. To assign an office owner: 1. In the sidebar Admin group, click \"Offices\". The heading is \"Admin · Offices\". 2. The table has columns \"Floor / Office\", \"Owner\" (avatar, name, and email, or \"Unassigned\"), and \"Actions\". 3. Click \"Reassign owner\" on a row. In the \"Reassign {office}\" dialog, search by name or email (placeholder \"Search name or email...\"); the current owner carries a \"Current\" tag. 4. Pick the new owner to assign the office to them. The new owner sees this room under \"My office\" immediately, and the previous owner loses owner-mode privileges (door, knock approvals). Non-admins see \"Office administration requires admin or owner\"."
     },
     {
-      "anchor": "org-settings-api-and-mcp-only",
-      "title": "Org settings (API and MCP only)",
-      "text": "Bureau has org-level settings - continuousaudio, allowautofollow, defaultofficeprivacy, memberscanbook, and memberscancreaterooms - that affect who can book and create rooms and how auto-follow behaves. These materially change behavior, but there is no settings screen in the Bureau SPA today. They are reachable only through the Bureau API and the bureaugetsettings / bureauupdatesettings MCP tools."
+      "anchor": "admin-settings",
+      "title": "Admin - Settings",
+      "text": "Bureau has org-level settings that affect who can book and create rooms, how auto-follow behaves, and how spatial audio and new offices default. There is a dedicated Bureau settings screen for them in the SPA. To review or change org settings: 1. In the sidebar Admin group, open \"Settings\" (or go to /bureau/admin/settings). The heading is \"Bureau settings\" with the subtitle \"Org-wide defaults for spatial audio, follow, and what members can do.\" 2. The toggles and select are: - Continuous audio - \"Keep always-on spatial audio open as people move around a floor.\" - Allow auto-follow - \"Permit being pulled along when a colleague navigates (the Bring feature).\" - Members can book rooms - \"When off, only admins and owners can reserve rooms.\" This is the memberscanbook gate the Room booking screen enforces. - Members can create rooms - \"When off, only admins and owners can add rooms to a floor.\" - Default office privacy - the door state a newly created office starts with: Open (anyone can enter), Knock (visitors must knock), or Private (ACL only). 3. Any member can read the settings; only org admins, owners, or SuperUsers can change them. For a non-admin the controls render read-only with the banner \"These settings are read-only for your role. Only org admins or owners can change them.\" Each change saves immediately and shows a brief \"Saved\" badge next to the row. AI agent note: bureaugetsettings reads the org's settings and bureauupdatesettings changes them (admin/owner gated server-side), matching the toggles on this screen."
     },
     {
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
-      "text": "Agents are first-class spatial occupants in Bureau. An agent that enters a room shows up on the floor and in the occupants list with an \"(A) \" prefix. Agents drive Bureau through over 30 bureau MCP tools, all forwarding the calling user's token and gated by the same server-side permission checks as the UI. What agents commonly do: - Perceive the office with bureaulistfloors, bureaugetfloor, bureauwhoisinroom, and bureauwhoishere (co-presence by URL). - Move into a room with bureaumoveself (the canonical \"appear in the room\" action). - Find a person with bureauwhereisuser (the real Hunt; returns the user's current surface or { located: false }). - Socialize with bureauknock, bureaurespondknock, bureauknockinbox, and bureauleavenote. On a DND block, surface the leave-a-note hint rather than retrying. - Teleport a room with bureausummon (high-impact, two-step confirm; caller must be in a room), then inspect or recover with bureaugetsummon and bureausummongrantaccess. - Book and manage rooms with bureaubookroom (two-step confirm), bureaulistbookings, bureauupdatebooking, and bureaucancelbooking (two-step confirm). - Set a door with bureausetdoorstate. - Administer floors and rooms with bureaucreatefloor, bureauupdatefloor, bureausetfloorbackground, bureaudeletefloor (two-step confirm), bureaucreateroom, bureauupdateroom, and bureaudeleteroom (two-step confirm), all admin/owner gated server-side. - Manage offices with bureaulistoffices, bureauassignoffice, and bureaumyoffice. - Recover chats with bureaulistchats, bureaugetchatmessages, and bureausetchatretention. - Read or change org settings with bureaugetsettings and bureauupdatesettings. Six high-impact tools use the confirmaction two-step (call once to preview, then again with confirmaction: true to commit): bureausummon, bureausummongrantaccess, bureaubookroom, bureaucancelbooking, bureaudeletefloor, and bureaudeleteroom. Three tools are stubs that hit endpoints which are not yet built, and an agent should treat them as not-yet-functional: - bureaulocateuser returns a null \"not located\" envelope. Use the implemented bureauwhereisuser instead. - bureaugetpresence returns an empty list. It cannot snapshot the org-wide presence map yet. - bureausetstatus returns a stub and changes nothing. Its enum (active, dnd, away) also does not match the canonical status set (available, busy, dnd, focus, away, inmeeting). Real status is set over the live connection through the docked box, not through this tool. Bureau participates in the suite-wide agentic platform alongside its own tools. Service-account agents are bound by the §15 agentpolicies kill switch and tool allowlists (the bureau. prefix), and every action is written to the unified activity view with the actor's kind (human, agent, or service). Cross-app result posting must pass the platform canaccess visibility preflight, which is exactly the check Bureau already runs internally before a summon, hunt, or co-presence read reveals a destination. High-impact spatial actions can be routed through the platform approval queue (proposalcreate / proposaldecide), and agents can subscribe to Bureau's Bolt events through outbound webhooks. Agents should also call agentheartbeat so their session is treated as live. A human reviewing agent work in Bureau should know that a summon DMs every eligible co-occupant in real time, that a hunt reveals where a teammate is, and that a booking can create or anchor a Book calendar event and can flip a room private for its window. The confirm step exists so these are previewed before they fire. For the full catalog and signatures, see the MCP-tools reference in docs/apps/bureau/."
+      "text": "Agents are first-class spatial occupants in Bureau. An agent that enters a room shows up on the floor and in the occupants list with an \"(A) \" prefix. Agents drive Bureau through over 30 bureau MCP tools, all forwarding the calling user's token and gated by the same server-side permission checks as the UI. What agents commonly do: - Perceive the office with bureaulistfloors, bureaugetfloor, bureauwhoisinroom, and bureauwhoishere (co-presence by URL). - Move into a room with bureaumoveself (the canonical \"appear in the room\" action). - Find a person with bureauwhereisuser (the real Hunt; returns the user's current surface or { located: false }). - Socialize with bureauknock, bureaurespondknock, bureauknockinbox, and bureauleavenote. On a DND block, surface the leave-a-note hint rather than retrying. - Teleport a room with bureausummon (high-impact, two-step confirm; caller must be in a room), then inspect or recover with bureaugetsummon and bureausummongrantaccess. - Book and manage rooms with bureaubookroom (two-step confirm), bureaulistbookings, bureauupdatebooking, and bureaucancelbooking (two-step confirm). - Set a door with bureausetdoorstate. - Administer floors and rooms with bureaucreatefloor, bureauupdatefloor, bureausetfloorbackground, bureaudeletefloor (two-step confirm), bureaucreateroom, bureauupdateroom, and bureaudeleteroom (two-step confirm), all admin/owner gated server-side. - Manage offices with bureaulistoffices, bureauassignoffice, and bureaumyoffice. - Recover chats with bureaulistchats, bureaugetchatmessages, and bureausetchatretention. - Read or change org settings with bureaugetsettings and bureauupdatesettings. Six high-impact tools use the confirmaction two-step (call once to preview, then again with confirmaction: true to commit): bureausummon, bureausummongrantaccess, bureaubookroom, bureaucancelbooking, bureaudeletefloor, and bureaudeleteroom. The three presence tools that were previously stubs are now backed by the real Redis presence store (GET /v1/presence, GET /v1/presence/locate, PATCH /v1/me/status): - bureaugetpresence snapshots the org-wide presence map: who is on Bureau right now, their status, and the room and floor they are in. - bureaulocateuser returns one user's current room, floor, status, and location, or a null \"not located\" envelope when they have no live session. For the access-checked Hunt (which respects DND and a destination-access preflight), prefer bureauwhereisuser. - bureausetstatus sets the caller's status and persists it durably so it survives a reconnect and applies with no live web session. The tool exposes the four-value subset available, busy, away, dnd; the endpoint also accepts focus and inmeeting for status set through the docked box. Bureau participates in the suite-wide agentic platform alongside its own tools. Service-account agents are bound by the §15 agentpolicies kill switch and tool allowlists (the bureau. prefix), and every action is written to the unified activity view with the actor's kind (human, agent, or service). Cross-app result posting must pass the platform canaccess visibility preflight, which is exactly the check Bureau already runs internally before a summon, hunt, or co-presence read reveals a destination. High-impact spatial actions can be routed through the platform approval queue (proposalcreate / proposaldecide), and agents can subscribe to Bureau's Bolt events through outbound webhooks. Agents should also call agentheartbeat so their session is treated as live. A human reviewing agent work in Bureau should know that a summon DMs every eligible co-occupant in real time, that a hunt reveals where a teammate is, and that a booking can create or anchor a Book calendar event and can flip a room private for its window. The confirm step exists so these are previewed before they fire. For the full catalog and signatures, see the MCP-tools reference in docs/apps/bureau/."
     },
     {
       "anchor": "user-stories",
@@ -327,7 +327,7 @@
     {
       "anchor": "story-book-the-conference-room",
       "title": "Story: Book the conference room",
-      "text": "Who: An organizer planning a meeting. Goal: Reserve a bookable room for a window and have it appear on the calendar. Before you start: The target room is marked bookable, and your org allows you to book (memberscanbook). Steps 1. Create a booking for the room with a title, start time, and end time. 2. Choose access: locked to hold the room private for the meeting, or open to let others wander in. 3. Confirm. Bureau writes the booking, anchors it to a Book event, and schedules the privacy flip at the start and the clear at the end. 4. To cancel, remove the booking as the organizer or an admin; the lifecycle jobs drop and the linked Book event is cancelled best-effort. Result: The room is reserved for your window and mirrored to Book; a locked booking holds it private when it starts. Related: Booking runs through the Bureau API and MCP today. Agents use bureaubookroom, bureaulistbookings, bureauupdatebooking, and bureaucancelbooking; the book and cancel tools use the confirmaction two-step."
+      "text": "Who: An organizer planning a meeting. Goal: Reserve a bookable room for a window and have it appear on the calendar. Before you start: The target room is marked bookable, and your org allows you to book (memberscanbook). Steps 1. Open /bureau/booking (sidebar Rooms to \"Book a room\") and pick the room from the left column. 2. In the \"Book this room\" form, enter a title, set the start and end times, and choose access: Locked to hold the room private for the meeting, or Open to let others wander in. 3. Click \"Book room\". Bureau writes the booking, anchors it to a Book event, and schedules the privacy flip at the start and the clear at the end. The reservation appears under \"Upcoming bookings\". 4. To cancel, click \"Cancel\" on the booking's row as the organizer or an admin; the lifecycle jobs drop and the linked Book event is cancelled best-effort. Result: The room is reserved for your window and mirrored to Book; a locked booking holds it private when it starts. Related: The Room booking screen at /bureau/booking is where people do this in the app. Agents use bureaubookroom, bureaulistbookings, bureauupdatebooking, and bureaucancelbooking; the book and cancel tools use the confirmaction two-step."
     },
     {
       "anchor": "story-recover-what-was-said-in-a-room",
@@ -352,17 +352,19 @@
     {
       "anchor": "related",
       "title": "Related",
-      "text": "- Board - Summons and rings commonly land people on a Board canvas, and Board surfaces the same docked box so the canvas huddle follows you in. - Brief - A Brief doc is a frequent summon and ring destination; each doc has a surface huddle the docked box auto-joins. - Bond - Bond deals are valid summon and ring destinations for pulling the room onto a record. - Banter - Surfaces the same docked box, and is the fallback delivery channel for the leave-a-note path when someone is in DND (\"[Bureau knock note] \" direct messages). - Book - Bureau bookings mirror to Book events; cancelling a booking cancels the linked Book event best-effort. - Bolt - Bureau emits events (entering and leaving rooms, status changes, knocks, room booked, room locked, summon issued) on the bureau source for automation. - Bench - Daily floor utilization rolls up for reporting in Bench. - MCP tools: this app exposes over 30 bureau tools. bureausummon, bureausummongrantaccess, bureaubookroom, bureaucancelbooking, bureaudeletefloor, and bureaudeleteroom use the confirmaction two-step. bureaulocateuser, bureaugetpresence, and bureausetstatus are stubs and do not yet change state (use bureauwhereisuser for Hunt instead of bureaulocateuser). See the MCP-tools reference in docs/apps/bureau/."
+      "text": "- Board - Summons and rings commonly land people on a Board canvas, and Board surfaces the same docked box so the canvas huddle follows you in. - Brief - A Brief doc is a frequent summon and ring destination; each doc has a surface huddle the docked box auto-joins. - Bond - Bond deals are valid summon and ring destinations for pulling the room onto a record. - Banter - Surfaces the same docked box, and is the fallback delivery channel for the leave-a-note path when someone is in DND (\"[Bureau knock note] \" direct messages). - Book - Bureau bookings mirror to Book events; cancelling a booking cancels the linked Book event best-effort. - Bolt - Bureau emits events (entering and leaving rooms, status changes, knocks, room booked, room locked, summon issued) on the bureau source for automation. - Bench - Daily floor utilization rolls up for reporting in Bench. - MCP tools: this app exposes over 30 bureau tools. bureausummon, bureausummongrantaccess, bureaubookroom, bureaucancelbooking, bureaudeletefloor, and bureaudeleteroom use the confirmaction two-step. The presence tools bureaugetpresence, bureaulocateuser, and bureausetstatus are now backed by the real Redis presence store; prefer bureauwhereisuser for the access-checked, DND-respecting Hunt. See the MCP-tools reference in docs/apps/bureau/."
     }
   ],
   "labels": {
     "AI agent note:": "move-yourself-between-rooms",
+    "Access": "book-and-cancel-a-room",
     "Actions": "admin-offices",
     "Admin": "where-to-find-it",
     "Admin · Floors": "admin-floors-list",
     "Admin · Offices": "admin-offices",
     "Administer floors and rooms": "working-with-ai-agents",
     "All floors": "where-to-find-it",
+    "Allow auto-follow": "admin-settings",
     "Archive": "admin-floors-list",
     "Banter": "related",
     "Bench": "related",
@@ -370,25 +372,33 @@
     "Bolt": "related",
     "Bond": "related",
     "Book": "related",
+    "Book a room": "where-to-find-it",
     "Book and manage rooms": "working-with-ai-agents",
+    "Book room": "book-and-cancel-a-room",
+    "Book this room": "book-and-cancel-a-room",
     "Bookable": "admin-floor-editor",
     "Booking": "key-concepts",
     "Brief": "related",
     "Bring everyone here": "summon-bring-everyone-here",
     "Building": "key-concepts",
     "Bureau": "where-to-find-it",
+    "Bureau settings": "admin-settings",
     "CHAT": "the-cross-app-docked-box-audio-huddles-mic-cam-screen",
+    "Cancel": "book-and-cancel-a-room",
     "Capacity (people)": "admin-floor-editor",
     "Conference": "key-concepts",
+    "Continuous audio": "admin-settings",
     "Create + open editor": "admin-floors-list",
     "DND": "key-concepts",
     "Decline": "knock-and-respond-to-a-knock",
     "Default": "browse-floors",
+    "Default office privacy": "admin-settings",
     "Docked box": "key-concepts",
     "Door default": "door-states-set-a-rooms-privacy",
     "Door state (privacy)": "key-concepts",
     "Edit": "admin-floors-list",
     "Edit floors": "where-to-find-it",
+    "Ends": "book-and-cancel-a-room",
     "Find a person": "working-with-ai-agents",
     "Floor": "key-concepts",
     "Floor / Office": "admin-offices",
@@ -404,18 +414,23 @@
     "Join": "summon-bring-everyone-here",
     "Just you": "see-who-is-in-a-room",
     "Knock": "key-concepts",
+    "Knock (visitors must knock)": "admin-settings",
     "Leave room": "the-live-floor-view-presence-canvas",
     "Let in": "knock-and-respond-to-a-knock",
     "Live": "the-live-floor-view-presence-canvas",
     "Lobby": "key-concepts",
+    "Locked": "book-and-cancel-a-room",
     "Lounge": "key-concepts",
     "Manage offices": "working-with-ai-agents",
     "Meeting": "key-concepts",
+    "Members can book rooms": "admin-settings",
+    "Members can create rooms": "admin-settings",
     "Move into a room": "working-with-ai-agents",
     "Name": "admin-floors-list",
     "New floor": "admin-floors-list",
     "New office": "admin-floor-editor",
     "New room": "admin-floor-editor",
+    "No bookable rooms": "book-and-cancel-a-room",
     "No floors yet": "browse-floors",
     "No room": "the-cross-app-docked-box-audio-huddles-mic-cam-screen",
     "Not now": "knock-and-respond-to-a-knock",
@@ -424,6 +439,7 @@
     "Office administration requires admin or owner": "admin-offices",
     "Offices": "where-to-find-it",
     "Open": "key-concepts",
+    "Open (anyone can enter)": "admin-settings",
     "Open space": "key-concepts",
     "Owner": "admin-floor-editor",
     "Perceive the office": "working-with-ai-agents",
@@ -431,6 +447,7 @@
     "Presence status": "key-concepts",
     "Preview as member": "admin-floors-list",
     "Private": "key-concepts",
+    "Private (ACL only)": "admin-settings",
     "Read or change org settings": "working-with-ai-agents",
     "Reassign owner": "admin-offices",
     "Recent chats": "where-to-find-it",
@@ -441,33 +458,41 @@
     "Ring (Invite)": "key-concepts",
     "Room": "key-concepts",
     "Room access list (ACL)": "key-concepts",
+    "Room booking": "book-and-cancel-a-room",
     "Room chat": "key-concepts",
+    "Rooms": "where-to-find-it",
     "Save": "admin-floor-editor",
+    "Saved": "admin-settings",
     "Select\" / \"New room\" / \"New office": "admin-floor-editor",
     "Set a door": "working-with-ai-agents",
+    "Settings": "where-to-find-it",
     "Slug": "admin-floors-list",
     "Socialize": "working-with-ai-agents",
+    "Starts": "book-and-cancel-a-room",
     "Stay here": "summon-bring-everyone-here",
     "Summon": "summon-bring-everyone-here",
     "Summon (Bring everyone here)": "key-concepts",
     "Surface huddle": "key-concepts",
     "Teleport a room": "working-with-ai-agents",
+    "Title": "book-and-cancel-a-room",
     "Toggle door privacy": "door-states-set-a-rooms-privacy",
     "Type": "admin-floor-editor",
     "Unassigned": "admin-offices",
+    "Upcoming bookings": "story-book-the-conference-room",
+    "Upcoming bookings (next 7 days)": "book-and-cancel-a-room",
     "Viewing:": "summon-bring-everyone-here",
     "Zone id": "admin-floor-editor",
     "`/bureau/`": "where-to-find-it",
     "`bureau_book_room`": "book-and-cancel-a-room",
     "`bureau_cancel_booking`": "book-and-cancel-a-room",
-    "`bureau_get_presence`": "working-with-ai-agents",
-    "`bureau_get_settings`": "org-settings-api-and-mcp-only",
+    "`bureau_get_presence`": "set-your-status-and-dnd",
+    "`bureau_get_settings`": "admin-settings",
     "`bureau_get_summon`": "summon-bring-everyone-here",
     "`bureau_knock_inbox`": "knock-and-respond-to-a-knock",
     "`bureau_knock`": "knock-and-respond-to-a-knock",
     "`bureau_leave_note`": "knock-and-respond-to-a-knock",
     "`bureau_list_bookings`": "book-and-cancel-a-room",
-    "`bureau_locate_user`": "working-with-ai-agents",
+    "`bureau_locate_user`": "set-your-status-and-dnd",
     "`bureau_move_self`": "move-yourself-between-rooms",
     "`bureau_respond_knock`": "knock-and-respond-to-a-knock",
     "`bureau_set_door_state`": "door-states-set-a-rooms-privacy",
@@ -475,7 +500,7 @@
     "`bureau_summon_grant_access`": "summon-bring-everyone-here",
     "`bureau_summon`": "summon-bring-everyone-here",
     "`bureau_update_booking`": "book-and-cancel-a-room",
-    "`bureau_update_settings`": "org-settings-api-and-mcp-only",
+    "`bureau_update_settings`": "admin-settings",
     "`bureau_where_is_user`": "hunt",
     "`bureau_who_is_here`": "see-who-is-in-a-room",
     "`bureau_who_is_in_room`": "see-who-is-in-a-room",

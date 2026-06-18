@@ -12,9 +12,9 @@ The headline idea is that anything a person can do to a diagram, an agent can do
 - React Flow editor with a shape palette (Rounded, Rectangle, Diamond, Ellipse, Hexagon), a property inspector, drag-to-connect edges, an add-connected-node palette, snap-to-grid, and resize handles.
 - Five diagram types: Flowchart, Graph, Sequence, Class, and Mind map.
 - Server-side ELK auto-layout with four dropdown choices (Layered, Force-directed, Tree, and Grid; Tree maps to mrtree and Grid to rectpacking), plus radial through the API or an agent, with pinned nodes excluded.
-- Versions: save immutable snapshots of the whole graph and restore an earlier one.
+- Versions: save immutable snapshots of the whole graph and restore an earlier one from the editor's **History** panel.
 - Mermaid and JSON export, and Mermaid import that materializes a Mermaid block into the editable graph.
-- Comments anchored to a node or the whole diagram, with a resolved flag, and explicit per-diagram collaborators at owner / editor / commenter / viewer roles.
+- In-editor collaboration panels (**Comments**, **People**, **History**) opened from the top bar: comments anchored to a node or the whole diagram with a resolved flag, explicit per-diagram collaborators at owner / editor / commenter / viewer roles, and a browsable, restorable version timeline.
 - Star and archive for organizing the library; archive is a soft delete that preserves nodes, edges, comments, and snapshots.
 - Visibility controls (Private, Project, Organization) and live multi-editor refresh with a presence strip.
 
@@ -34,5 +34,6 @@ Blueprint is served at `/blueprint/`, reachable from the Launchpad in any BigBlu
 3. In the editor, press **N** to add a node, drag between handles to connect nodes, and edit properties in the Inspector.
 4. Choose **Layered** in the layout dropdown and click **Apply layout** to tidy it up.
 5. Click **Save snapshot** to capture a restore point, and use **Export** for Mermaid or JSON.
+6. Open the **Comments**, **People**, or **History** panel from the top bar to leave a note, invite a collaborator, or browse and restore past versions.
 
 To start from existing work, use the chevron next to **New diagram** and choose **From Bam project tasks...**.
