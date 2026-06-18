@@ -222,6 +222,75 @@ export interface HydratedFeedEntry {
   score_breakdown?: ScoreBreakdown;
 }
 
+/**
+ * Seed the candidate index from recent posts in the channels the user follows,
+ * so the feed is never empty for anyone with accessible recent activity (the
+ * Facebook/Instagram model: your feed is your sources' recent content, not just
+ * events that happened after you existed). Idempotent (ON CONFLICT DO NOTHING)
+ * and gated by a short-lived Redis flag so it runs ~hourly per user, not on
+ * every read; live fan-in covers new posts in between. Membership IS the access
+ * gate (you only get channels you belong to), so no separate can_access pass.
+ */
+async function ensureChannelBackfill(
+  redis: Redis | undefined,
+  userId: string,
+  windowDays: number,
+): Promise<void> {
+  const flagKey = `bfeed:bf:${userId}`;
+  if (redis) {
+    try {
+      if (await redis.get(flagKey)) return; // backfilled recently
+    } catch {
+      // Redis unavailable — fall through and backfill (correctness over the
+      // perf optimization the flag provides).
+    }
+  }
+
+  try {
+    // NB: compute the cutoff in SQL from the numeric windowDays. Passing a JS
+    // Date param into a raw sql`` comparison binds it in a form the timestamptz
+    // comparison silently rejects (matches nothing, no error).
+    await db.execute(sql`
+      INSERT INTO banter_feed_entries (
+        org_id, user_id, category, entity_type, entity_id, source, channel_id,
+        published_at, last_activity_at, relationship_flags, interaction_flags, engagement_count
+      )
+      SELECT
+        bc.org_id, ${userId}, 'banter.channel_post', 'banter.message', m.id, 'banter', m.channel_id,
+        m.created_at, COALESCE(m.last_reply_at, m.created_at),
+        0, 0, COALESCE(m.reply_count, 0)
+      FROM banter_messages m
+      JOIN banter_channel_memberships mem ON mem.channel_id = m.channel_id AND mem.user_id = ${userId}
+      JOIN banter_channels bc ON bc.id = m.channel_id
+      WHERE m.created_at >= now() - (${windowDays} * interval '1 day')
+        AND m.is_deleted = false
+        AND m.thread_parent_id IS NULL
+        AND m.author_id <> ${userId}
+        AND bc.is_archived = false
+        AND bc.type IN ('public', 'private')
+        AND NOT EXISTS (
+          SELECT 1 FROM banter_feed_subscriptions s
+           WHERE s.user_id = ${userId}
+             AND s.scope_type = 'channel'
+             AND s.scope_source = 'banter'
+             AND s.scope_id = m.channel_id
+             AND s.state IN ('muted', 'unfollowed')
+        )
+      ON CONFLICT (user_id, entity_type, entity_id) DO NOTHING
+    `);
+  } catch {
+    // Best-effort: a backfill failure must not break the feed read.
+  }
+
+  if (redis) {
+    try {
+      await redis.set(flagKey, '1', 'EX', 3600);
+    } catch {
+      // Non-fatal.
+    }
+  }
+}
+
 /** The ranked, hydrated feed page for a user. */
 export async function getRankedFeed(
   redis: Redis | undefined,
@@ -234,6 +303,13 @@ export async function getRankedFeed(
   const offset = opts.cursor ? Math.max(0, parseInt(opts.cursor, 10) || 0) : 0;
 
   const { weights, version } = await loadEffectiveWeights(orgId);
+
+  // Never-empty guarantee (§10.3): seed the per-user index from recent posts in
+  // the channels this user follows, so the feed shows relevant activity instantly
+  // — for brand-new users and for content that predates the live fan-in — rather
+  // than only events the fan-in caught after this user existed.
+  await ensureChannelBackfill(redis, userId, weights.candidate_window_days);
+
   const ordered = await getOrderedRefs(
     redis,
     userId,
