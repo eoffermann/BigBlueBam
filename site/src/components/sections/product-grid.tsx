@@ -260,12 +260,14 @@ export function ProductGrid() {
             16 Apps + MCP Platform, One Stack
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Everything your team needs
+            Not a 17th tab — the sixteen you stop opening tabs for
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Work, communication, sales, and operations — sixteen apps, all self-hosted, all wired
-            together through a single MCP server with 720+ tools. No tab-switching, no integration
-            spreadsheet, no app that didn't get the memo.
+            "All-in-one" usually means a pile of shallow features that don't quite replace the
+            specialist tools you're already paying for. This isn't that. Sixteen genuinely capable
+            apps — work, communication, sales, operations — built as one system, self-hosted, and
+            wired together through a single MCP server with 720+ tools. No tab-switching, no
+            integration spreadsheet, no app that didn't get the memo.
           </p>
         </div>
       </AnimatedReveal>

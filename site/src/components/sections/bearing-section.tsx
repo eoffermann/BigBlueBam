@@ -68,14 +68,16 @@ export function BearingSection() {
             Goals &amp; OKRs
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Goals that update themselves
+            OKRs that survive past January
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Set objectives, attach measurable key results, and watch progress roll up from the work
-            your team is already doing. Bearing links key results to Bam epics, projects, and tasks,
-            organizes everything into time periods, and runs a status engine that flags goals as
-            on-track, at-risk, or behind before the quarter quietly slips away — backed by 30 MCP
-            tools, so an AI agent can stand up a full quarter and run the Friday status sweep for you.
+            Goals get set in a spreadsheet, presented once, and never opened again — goal theater
+            disconnected from the daily work, so nobody can actually tell if a key result is moving.
+            Bearing puts your objectives and key results on the same stack as the boards and deals
+            that drive them: link a key result to a Bam epic, project, sprint, or task and it
+            advances as that work reaches done, while a status engine flags goals on-track, at-risk,
+            or behind before the quarter quietly slips. And yes — agents can update progress too,
+            through 30 MCP tools.
           </p>
         </div>
       </AnimatedReveal>

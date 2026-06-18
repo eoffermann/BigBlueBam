@@ -86,11 +86,15 @@ export function FeaturesOverview() {
       <AnimatedReveal>
         <div className="mx-auto mb-14 max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Everything your team needs to ship
+            The board you stopped trusting
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A complete toolkit for human and AI teammates alike — designed for teams that value
-            flexibility, speed, and agentic workflows.
+            Keeping a project tool current is a second job: status re-keyed across three apps, sprint
+            ceremonies that are mostly copy-paste, and a board that's always a little out of date — so
+            nobody opens it. Bam is sprint-based Kanban with configurable phases, custom fields, and
+            carry-forward mechanics, and because agents drive it through the same MCP tools you do, they
+            keep the board honest — moving cards, logging time, generating sprint reports — current
+            without the busywork.
           </p>
         </div>
       </AnimatedReveal>

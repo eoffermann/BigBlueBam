@@ -68,14 +68,15 @@ export function BlueprintSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Diagrams that are data, not drawings
+            Your diagram died the moment you drew it
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Where Board is a freeform whiteboard, Blueprint makes deliberate flowcharts, graphs,
-            sequence, class, and mind maps — and stores each one as a typed relational graph instead
-            of an opaque image. Every node and edge is a real, auditable object your team can comment
-            on, version, and turn into work, with one-click ELK auto-layout and 36 MCP tools so an AI
-            agent can build or rewrite a whole diagram in a single call.
+            A flowchart, an org chart, an ERD — the instant it's finished it's a dead picture, stuck
+            in yet another diagramming subscription, that no automation and no AI can actually read
+            or rebuild. Blueprint stores each one as a typed graph of nodes and edges instead of an
+            opaque image, with one-click ELK auto-layout and Mermaid import and export — so an agent
+            can build, query, and rewrite the diagram with the same authority as a person, and any
+            node can become a task in Bam.
           </p>
         </div>
       </AnimatedReveal>

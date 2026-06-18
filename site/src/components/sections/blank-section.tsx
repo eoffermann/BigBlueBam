@@ -67,14 +67,14 @@ export function BlankSection() {
             Forms
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Ask nicely, collect anything
+            Where form responses stop dying
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Build a form in a visual editor, publish it to a shareable link, and watch real
-            responses — and real file uploads — roll in. Add conditional logic for forms that
-            adapt, gate submissions behind sign-in or an allowed domain when you need to, and let
-            email notifications tell you the moment someone hits Submit. 20 MCP tools mean an AI
-            agent can draft, build, and publish a form for you, then summarize what came back.
+            Form answers fall into a tab someone's supposed to read and turn into work — and nobody
+            does. Blank is a visual form builder with conditional logic that lives on the same stack
+            as the work, so a submission can route straight into it: spin up a Bam task or a Helpdesk
+            ticket the moment someone hits Submit, instead of waiting in a sheet forever. And because
+            it's all real MCP tools, an agent can read the responses and act on them too.
           </p>
         </div>
       </AnimatedReveal>

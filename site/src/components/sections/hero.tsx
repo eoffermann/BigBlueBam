@@ -40,9 +40,9 @@ export function Hero() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl font-bold tracking-tight text-zinc-900 sm:text-5xl lg:text-6xl"
           >
-            Sixteen apps. One stack.{' '}
+            You don't need a 101st app.{' '}
             <span className="bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent">
-              Your newest hires are AI.
+              You need the ones you have to talk.
             </span>
           </motion.h1>
 
@@ -52,11 +52,12 @@ export function Hero() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600"
           >
-            A self-hosted productivity suite — boards, chat, CRM, docs, helpdesk, and a dozen more —
-            that behaves like a single product. It was built from day one so AI agents work right
-            alongside your team, with the same boards, sprints, tickets, and tools as the humans.
-            All sixteen apps speak to agents through one MCP server with 720+ tools, so the new hires
-            never ask where anything lives.
+            The average company runs more than a hundred apps and loses half a workday a week just
+            switching between them. BigBlueBam is the other bet: sixteen apps — boards, chat, CRM,
+            docs, helpdesk, and a dozen more — that behave like a single product. Self-hosted, open
+            source, and built for AI from day one, so your agents work the same boards, sprints, and
+            tickets your team does — through one MCP server with 720+ tools. The new hires never ask
+            where anything lives. Neither will you.
           </motion.p>
 
           <motion.div

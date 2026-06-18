@@ -39,9 +39,12 @@ export function WorkPage() {
                 Work Management
               </h1>
               <p className="mt-4 max-w-2xl text-lg text-blue-100">
-                Plan projects with Bam's Kanban boards and sprints, brainstorm on Board's infinite
-                canvas, build structured flowcharts and org charts in Blueprint, and align your team
-                around measurable goals with Bearing. Four products, one seamless workflow.
+                The plan lives in one tool, the work in another, and the status update in a third —
+                so nobody quite trusts any of them. Here it's one workflow on one stack: Bam's boards
+                and sprints, Board's infinite canvas, Blueprint's flowcharts and org charts, and
+                Bearing's goals. The brainstorm becomes a board, the board rolls up to the goal, and
+                an agent can move the whole thing along while you're in a meeting. No re-keying, no
+                "which tool was that in."
               </p>
             </motion.div>
           </div>

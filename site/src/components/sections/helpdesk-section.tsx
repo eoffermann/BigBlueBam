@@ -68,14 +68,14 @@ export function HelpdeskSection() {
             Support Portal
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Support that doesn&rsquo;t live in your inbox
+            Tickets that talk to the work
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Give every organization its own branded portal where customers file tickets and follow
-            each one as a threaded conversation. Behind the scenes, every ticket becomes a Bam task
-            on your board, so support work sits right next to the rest of your project work. With 11
-            MCP tools, an AI agent can triage, dedupe, and reply to a ticket as naturally as your
-            team does.
+            A bug report lands in the support tool, gets retyped into the project tool, the customer
+            repeats themselves twice, and nobody on the engineering board ever hears the ticket
+            exists. Helpdesk runs on the same stack as the work: every ticket becomes a Bam task on
+            your board, SLA tracking is built into the queue, and with 11 MCP tools an AI agent can
+            triage, dedupe, and reply right alongside your team.
           </p>
         </div>
       </AnimatedReveal>

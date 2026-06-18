@@ -67,14 +67,15 @@ export function BlastSection() {
             Email Campaigns
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Send it. Track it. No spreadsheets.
+            Your email tool has never met your CRM.
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Blast turns your Bond CRM contacts into an audience. Design an email in a drag-and-drop
-            block builder, target it with saved segments, send through the suite's shared SMTP
-            relay, then watch opens, clicks, bounces, and unsubscribes roll up per campaign and
-            across the org. 28 MCP tools let an AI agent draft the copy and assemble the send —
-            though the send itself waits for a human by default.
+            Export a list, re-import it somewhere else, watch the charge climb per contact, and pray
+            at the black box that is your deliverability. Blast runs campaigns, templates, segments,
+            and delivery analytics on the same stack as Bond, so a segment is built straight from
+            real CRM data and the open and click rates land next to the deal. 28 MCP tools let an AI
+            agent draft the copy and assemble the send — though the send itself waits for a human by
+            default.
           </p>
         </div>
       </AnimatedReveal>

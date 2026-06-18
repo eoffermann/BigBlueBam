@@ -33,9 +33,12 @@ export function CommunicatePage() {
                 Communication & Knowledge
               </h1>
               <p className="mt-4 max-w-2xl text-lg text-purple-100">
-                Chat in real time with Banter, support customers through Helpdesk, build a
-                searchable knowledge base with Beacon, and collaborate on documents in Brief. Keep
-                every conversation and every answer in one place.
+                Team chat is where decisions go to get lost in the scrollback, and the "AI" in it
+                can summarize a thread but can't actually <em>do</em> anything. Different here: Banter
+                for real-time chat, Helpdesk for customer support, Beacon for a searchable knowledge
+                base, and Brief for documents — all on the same stack, so a message becomes a task, a
+                ticket links to the deal, and an agent in the channel can move the work, not just
+                recap it.
               </p>
             </motion.div>
           </div>

@@ -33,9 +33,12 @@ export function OperationsPage() {
                 Operations & Automation
               </h1>
               <p className="mt-4 max-w-2xl text-lg text-amber-100">
-                Automate workflows with Bolt, analyze data with Bench dashboards, schedule with Book,
-                collect information through Blank forms, and manage invoicing with Bill. The
-                operational backbone of your BigBlueBam workspace.
+                Invoicing, forms, scheduling, analytics, automation — five more subscriptions that
+                each live in their own corner and have never heard of your projects. Here they're
+                part of the same stack: Bolt automates across every app, Bench charts data straight
+                from your boards and deals, Book schedules against real calendars, Blank routes form
+                responses into the work, and Bill turns tracked time and won deals into invoices.
+                The back office, finally on speaking terms with the front.
               </p>
             </motion.div>
           </div>

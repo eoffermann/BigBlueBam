@@ -68,14 +68,16 @@ export function BeaconSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            A knowledge base that keeps itself honest
+            The wiki nobody trusts, fixed
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A curated knowledge base where every article has a shelf life. Beacon blends hybrid
-            search, a typed Knowledge Graph, and built-in freshness governance, so the library never
-            quietly rots as the facts change — stale knowledge gets surfaced, challenged, and renewed
-            instead. It shares your platform login and pulls projects from Bam, and 38 MCP tools let
-            an AI agent author, verify, or traverse knowledge as naturally as it files a task.
+            The company wiki goes stale the week it's written, search returns either nothing or
+            everything, and the one answer you need is stranded three tools away from where you're
+            actually working. Beacon is a knowledge base with real full-text and semantic search, a
+            typed Knowledge Graph, access policies, and built-in freshness governance — so the answer
+            lives next to the work and stops rotting when the facts change. It shares your platform
+            login and pulls projects from Bam, and 38 MCP tools let an AI agent read and write
+            knowledge as naturally as it files a task.
           </p>
         </div>
       </AnimatedReveal>

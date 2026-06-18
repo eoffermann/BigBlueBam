@@ -68,14 +68,16 @@ export function BenchSection() {
             Analytics
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            The numbers were here all along
+            Charts, minus the BI tax
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Bench turns the data your team already creates across the suite — deals, campaigns,
-            goals, tasks, knowledge-base activity — into shared dashboards, ad-hoc queries, and
-            scheduled reports. No warehouse, no exports, no copy-paste: it charts the live tables
-            through a curated registry, scoped to your org. And with 32 MCP tools, an AI agent can
-            summarize a whole dashboard or sniff out an anomaly without anyone touching a chart.
+            A "real" dashboard usually means standing up a separate BI tool, hiring someone who
+            speaks SQL, and feeding it last week's CSV exports from the apps that actually hold your
+            numbers. Bench skips all of it: it builds dashboards, widgets, ad-hoc queries, and
+            scheduled reports straight from the live data already in the suite — your Bam tasks and
+            Bond deals as they stand right now, not as they looked at export time, all scoped to
+            your org. And with 32 MCP tools, an AI agent can query and summarize a whole dashboard
+            without anyone touching a chart.
           </p>
         </div>
       </AnimatedReveal>

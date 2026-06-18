@@ -68,14 +68,15 @@ export function BookSection() {
             Scheduling
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Find the time
+            The booking link that knows what the meeting's about
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A calendar that lives where your work already does. Book runs week, day, month, and a
-            cross-app timeline; turns your working hours into bookable slots; and now subscribes to
-            outside calendars so the meeting your client added shows up next to your deadlines. Public
-            booking pages, a team meeting-time finder, and 25 MCP tools mean a person — or an AI
-            agent — can lock in a slot without playing email tag.
+            The scheduling link everyone pastes in their signature is one more monthly bill, living
+            off in its own tab — it has no idea when your team is actually free or what any of this is
+            even for. Book does availability rules, public booking pages, and timezone-aware events on
+            the same stack as the work, so what gets booked links straight to the Bam task or Bond
+            deal it's for. It finds time across a whole roster, not just one calendar — and through 25
+            MCP tools, an AI agent can find the slot and book it too.
           </p>
         </div>
       </AnimatedReveal>

@@ -20,14 +20,16 @@ export function Architecture() {
       <AnimatedReveal>
         <div className="mx-auto mb-14 max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Self-hosted. One command.
+            Self-hosted. One command. No hostages.
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Your data, your infrastructure. The entire platform runs from a single{' '}
+            Most software keeps your data in a format only it can read and hides "export" behind a
+            sales call. BigBlueBam is open source. The whole platform comes up with a single{' '}
             <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono">
               docker compose up
             </code>{' '}
-            with no vendor lock-in.
+            — your data in a Postgres database you can query, your infrastructure, a license that
+            doesn't expire. Your laptop today, someone else's cloud tomorrow. Your call, not ours.
           </p>
         </div>
       </AnimatedReveal>

@@ -68,13 +68,16 @@ export function BoltSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            If this, then handled
+            Automation without the duct tape
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Bolt is the suite's automation engine and its event hub. Every other app reports what it
-            does to Bolt, so one place can watch the whole suite and react: WHEN an event fires, IF
-            your conditions hold, THEN run an ordered chain of actions across any app. Build it
-            visually, no code required — and yes, with 24 MCP tools, agents can build it too.
+            Automating across tools usually means duct-taping five apps together with a brittle
+            third-party connector that breaks the moment an API changes — and bills you per task run.
+            Bolt is a visual trigger-condition-action engine that already lives inside the suite:
+            events from Bam, Bond, Banter, and the rest are right there, no connectors to buy. WHEN an
+            event fires, IF your conditions hold, THEN run an ordered chain of actions across any app —
+            with execution logs you can actually read, and 24 MCP tools so agents can build and inspect
+            rules too.
           </p>
         </div>
       </AnimatedReveal>

@@ -68,14 +68,16 @@ export function BondSection() {
             CRM
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Relationships, tracked
+            The CRM nobody updates
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A visual deal pipeline that lives next to your project board, helpdesk, and knowledge
-            base — not in a separate tab you forget to open. Bond moves contacts, companies, and
-            deals through configurable stages with activity logging, cross-product links, and 69 MCP
-            tools, so an AI agent can advance a deal or surface a duplicate as naturally as it files
-            a task.
+            Every CRM is the tool nobody updates, because it lives a continent away from the work —
+            and the deal you finally won closes to silence while the kickoff and the invoice sit on
+            someone's to-do list. Bond puts the pipeline on the same stack as your projects: a won
+            deal can spin up a Bam project and a Bill invoice, and an agent can log the call you
+            forgot to log. It moves contacts, companies, and deals through configurable stages with
+            activity logging, cross-product links, and 69 MCP tools, so an AI agent advances a deal
+            or surfaces a duplicate as naturally as it files a task.
           </p>
         </div>
       </AnimatedReveal>

@@ -15,8 +15,10 @@ export function Cta() {
             Put humans and AI agents on the same team
           </h2>
           <p className="mt-4 text-lg text-primary-200">
-            Self-hosted, open source, AI-native from day one. Spin it up with one command and meet
-            your newest teammates — they don't need a desk.
+            The next decade of work runs on people and agents sharing the same boards, the same
+            tickets, the same data — and we're built for exactly that. Open source, self-hosted,
+            AI-native from day one. Spin it up with one command and meet your newest teammates. They
+            don't need a desk, a seat license, or a tour of where things live.
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">

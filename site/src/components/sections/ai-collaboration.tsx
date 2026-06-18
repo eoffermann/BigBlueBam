@@ -76,10 +76,12 @@ export function AiCollaboration() {
             <span className="text-primary-600">They're teammates.</span>
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            BigBlueBam was architected from day one so AI agents operate at full parity with human
-            users. Every action a person can take — creating tasks, managing sprints, responding to
-            tickets — an AI agent can do through the same system, with the same permissions and audit
-            trail.
+            Most "AI" in a productivity tool is a chat box in the corner that summarizes the doc you
+            just wrote — and 73% of vendors now charge extra for it. We took the other approach.
+            BigBlueBam was architected from day one so agents operate at full parity with people:
+            every action a person can take — creating tasks, managing sprints, responding to tickets
+            — an agent does through the same system, with the same permissions and the same audit
+            trail. No sidebar. No upcharge. It's the architecture.
           </p>
         </div>
       </AnimatedReveal>

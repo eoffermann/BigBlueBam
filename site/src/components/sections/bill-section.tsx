@@ -68,13 +68,14 @@ export function BillSection() {
             Invoicing
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Get paid without the dread
+            Billing without the retype
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Invoices, expenses, recurring billing, and PDFs — generated from the work you already
-            tracked. Bill pulls billable time out of Bam, drafts an invoice from a won Bond deal, and
-            keeps revenue, aging, and profitability in one honest place. And with 47 MCP tools, an AI
-            agent can draft, send, and reconcile the whole lifecycle alongside you.
+            Billing usually means re-keying tracked time into yet another app, hoping you caught every
+            line, then chasing the payment for a month. Bill skips the retype: it turns a won Bond deal
+            into a draft invoice and a range of logged Bam time into priced line items, on the same
+            stack — line items, expenses, recurring billing, PDFs, and honest payment and aging. And
+            with 47 MCP tools, an AI agent can draft and send the whole lifecycle alongside you.
           </p>
         </div>
       </AnimatedReveal>

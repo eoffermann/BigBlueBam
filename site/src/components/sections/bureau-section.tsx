@@ -68,14 +68,16 @@ export function BureauSection() {
             New · Virtual Office
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Your office, minus the commute
+            Stop booking a meeting to ask a question
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Bureau gives a remote team the feel of a shared office: floors laid out on a map, rooms
-            you walk into, and a live dot for everyone who is around. Where chat tells you what was
-            said, Bureau tells you who is here and whether you can interrupt them — and a presence
-            widget follows you into every other app in the suite. 37 MCP tools mean an AI agent can
-            occupy the floor, locate a teammate, or book a room as naturally as you can.
+            Remote, you schedule a 30-minute call to ask a 30-second question — because the hallway
+            is gone, and there is no way to see who is around or just wander over. Bureau brings it
+            back: floors laid out on a map, rooms you walk into, a live dot for everyone who is
+            around, and knock-to-enter on a closed door. Where chat tells you what was said, Bureau
+            tells you who is here and whether you can interrupt them — and a presence widget follows
+            you into every other app in the suite. 37 MCP tools mean an AI agent can occupy the
+            floor, locate a teammate, or book a room as naturally as you can.
           </p>
         </div>
       </AnimatedReveal>

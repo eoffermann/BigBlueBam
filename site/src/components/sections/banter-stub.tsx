@@ -70,14 +70,15 @@ export function BanterStub() {
             <Badge variant="orange">Beta</Badge>
           </div>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Chat that sits next to the work
+            Where decisions stop getting lost
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            Channels, threads, DMs, reactions, and pins — the chat app you already know how to use,
-            sharing one BigBlueBam login with the rest of the suite. Type a task key and it becomes a
-            live chip; an agent can post the sprint report to <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">#standup</code> on
-            schedule. 69 MCP tools mean your bots talk in the same room as your team, not over a
-            webhook bridge.
+            Team chat is where decisions go to die in the scrollback — and the "AI" bolted onto it can
+            recap a thread but can't actually <em>do</em> anything in it. Banter is real-time messaging —
+            channels, threads, DMs, reactions, calls, scheduled posts — running on the same stack as your
+            work, sharing one BigBlueBam login with the rest of the suite. Type a task key and it becomes a
+            live chip linked to <a href="#bam" className="text-primary-600 underline-offset-2 hover:underline">Bam</a>;
+            an agent in the channel can turn a message into a task and move the work, not just summarize it.
           </p>
         </div>
       </AnimatedReveal>

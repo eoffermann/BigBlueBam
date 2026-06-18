@@ -69,14 +69,15 @@ export function BriefSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Docs that grow up to be knowledge
+            The doc and the work, finally speaking
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            A real-time collaborative editor that lives alongside your board, not in a separate
-            wiki you forget exists. Brief gives you rich text, templates, threaded comments, and
-            version history — then lets the documents that matter graduate into Beacon. Link a doc
-            to its Bam tasks, search across the suite, and let agents author and tidy it through 48
-            MCP tools.
+            Your spec lives in an editor that has no idea the work exists, so the doc and the
+            tasks drift apart and you end up with final_v3_FINAL and three people editing
+            different copies. Brief is a real-time collaborative editor — rich text, threaded
+            comments, version history, live co-editing — on the same stack as the work. A doc
+            links to (or graduates into) Bam tasks and Beacon knowledge, and agents can draft and
+            edit it through 48 MCP tools.
           </p>
         </div>
       </AnimatedReveal>

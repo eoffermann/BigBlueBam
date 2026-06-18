@@ -30,9 +30,12 @@ export function SalesPage() {
                 Sales & Marketing
               </h1>
               <p className="mt-4 max-w-2xl text-lg text-pink-100">
-                Manage your pipeline with Bond's visual CRM and reach your audience with Blast's
-                email campaigns. Contacts, deals, templates, segments, and analytics -- all
-                connected to the rest of your BigBlueBam workspace.
+                The CRM nobody updates because it lives a continent away from the actual work — and a
+                won deal that closes to silence, with the kickoff and the invoice still on someone's
+                to-do list. Bond's visual pipeline and Blast's email campaigns sit on the same stack
+                as your projects, so a won deal can spin up a Bam project and a Bill invoice on its
+                own, and an agent can log the call you forgot to. Contacts, deals, segments, and
+                analytics — connected to where the work happens, not stranded beside it.
               </p>
             </motion.div>
           </div>

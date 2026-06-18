@@ -68,14 +68,16 @@ export function BoardSection() {
             New
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Where good ideas go to get organized
+            The whiteboard that doesn't die in a screenshot
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
-            An infinite-canvas whiteboard for brainstorming, diagramming, and live planning — with
-            real-time multi-user editing, a built-in voice huddle, and a sticky-to-task pipeline that
-            turns a wall of ideas into tracked work on the Bam board. It shares your login and projects
-            with the rest of the suite, and 40 MCP tools let an AI agent read the canvas, add shapes,
-            and promote stickies to tasks right alongside you.
+            The best ideas of the week show up on a workshop whiteboard — then get photographed into a
+            slide and quietly forgotten, because the canvas is a different tool from where the work
+            actually happens. Board is an infinite canvas with real-time editing and a voice huddle
+            right on the board, where any sticky promotes into a tracked Bam task in the project and
+            phase you name — so the workshop turns into work instead of a snapshot. It shares your login
+            and projects with the rest of the suite, and 40 MCP tools let an AI agent read and summarize
+            the canvas, drop stickies, and promote them to tasks alongside you.
           </p>
         </div>
       </AnimatedReveal>
