@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   AtSign,
@@ -11,14 +11,21 @@ import {
   Loader2,
   ThumbsUp,
   Send,
+  MoreHorizontal,
+  Bell,
+  BellMinus,
+  BellOff,
 } from 'lucide-react';
 import {
   useFeed,
   useFeedEntry,
   useMarkFeedSeen,
   useDismissFeedEntry,
+  useChannelFollow,
+  useSetChannelFollow,
   type FeedEntry,
   type FeedFilters,
+  type FeedSubscriptionState,
 } from '@/hooks/use-feed';
 import { useThreadReplies, usePostThreadReply } from '@/hooks/use-threads';
 import { useToggleReaction } from '@/hooks/use-reactions';
@@ -274,6 +281,12 @@ function FeedEntryCard({
               <ExternalLink className="h-4 w-4" />
             </button>
           )}
+          {entry.channel_id && (
+            <FeedCardMenu
+              channelId={entry.channel_id}
+              channelLabel={entry.channel_slug ? `#${entry.channel_slug}` : 'this channel'}
+            />
+          )}
           <button
             title="Dismiss"
             onClick={(e) => {
@@ -318,6 +331,73 @@ function FeedEntryCard({
             </button>
           </div>
           {expanded && <FeedThread threadRootId={threadRootId} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Overflow menu — lightly-hidden follow/unfollow/mute for the entry's channel.
+// ---------------------------------------------------------------------------
+
+const FOLLOW_ITEMS: { state: FeedSubscriptionState; verb: string; icon: typeof Bell }[] = [
+  { state: 'following', verb: 'Follow', icon: Bell },
+  { state: 'unfollowed', verb: 'Unfollow', icon: BellMinus },
+  { state: 'muted', verb: 'Mute', icon: BellOff },
+];
+
+function FeedCardMenu({ channelId, channelLabel }: { channelId: string; channelLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const setFollow = useSetChannelFollow(channelId);
+  // Only look up the current state once the menu is opened (not once per card).
+  const { data } = useChannelFollow(channelId, open);
+  const state = data?.state ?? 'following';
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref} onClick={(e) => e.stopPropagation()}>
+      <button
+        title="More"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-700"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg z-30 py-1">
+          {FOLLOW_ITEMS.map((it) => {
+            const I = it.icon;
+            const selected = it.state === state;
+            return (
+              <button
+                key={it.state}
+                onClick={() => {
+                  setOpen(false);
+                  if (it.state !== state) setFollow.mutate(it.state);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
+              >
+                <I className="h-4 w-4 flex-shrink-0 text-zinc-500" />
+                <span className="flex-1">
+                  {it.verb} <span className="text-zinc-500">{channelLabel}</span>
+                </span>
+                {selected && <Check className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

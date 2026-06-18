@@ -20,13 +20,17 @@ interface ChannelFollow {
   state: FeedSubscriptionState;
 }
 
-/** Effective follow state for a channel (resolves default + explicit rows). */
-export function useChannelFollow(channelId: string | undefined) {
+/**
+ * Effective follow state for a channel (resolves default + explicit rows).
+ * `enabled` lets a caller defer the fetch (e.g. a per-feed-card menu that should
+ * only look up state when the menu is actually opened, not once per card).
+ */
+export function useChannelFollow(channelId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ['channel-follow', channelId],
     queryFn: () =>
       api.get<{ data: ChannelFollow }>(`/channels/${channelId}/follow`).then((r) => r.data),
-    enabled: !!channelId,
+    enabled: !!channelId && enabled,
     staleTime: 60_000,
   });
 }
