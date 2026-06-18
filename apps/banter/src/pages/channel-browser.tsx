@@ -97,11 +97,7 @@ export function ChannelBrowser({ onNavigate }: ChannelBrowserProps) {
                     </span>
                   ) : (
                     <button
-                      onClick={() =>
-                        joinChannel.mutate(channel.id, {
-                          onSuccess: () => onNavigate(`/channels/${channel.slug}`),
-                        })
-                      }
+                      onClick={() => joinChannel.mutate(channel.id)}
                       disabled={joinChannel.isPending}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 transition-colors disabled:opacity-50"
                     >
