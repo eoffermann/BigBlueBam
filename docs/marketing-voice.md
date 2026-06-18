@@ -11,6 +11,66 @@ We make a serious, deeply-integrated productivity suite, and we talk about it
 like people who actually enjoy their work — clear first, clever second, never
 clever at the expense of clear.
 
+## Lead with the problem
+
+The site already says what each app *does*. That's table stakes — every rival's
+site says what theirs does too. What differentiates us is what we *solve*.
+**Open on the problem, then reveal the product as the way out of it.**
+
+The shape of a problem-led beat:
+
+1. **Name the pain first.** The specific, recognizable frustration the reader
+   lives with today — the tab they forget to open, the four tools that don't
+   talk to each other, the "AI feature" that's a chatbot bolted onto the corner.
+   One or two sentences. Make them nod before they read a single feature.
+2. **The turn.** Pivot to the product as the obvious answer.
+3. **The substance.** Then what it does, plainly, exactly as the structure
+   below prescribes.
+
+A problem-led intro reads like we watched the reader's day go sideways and built
+the fix. A feature-led intro reads like a spec sheet. Write the former. The pain
+you lead with is almost always a competitor's shortcoming, stated as the
+reader's lived experience — which is the next section.
+
+## The competition (we know them cold; we rarely name them)
+
+We are opinionated about our software *and* the alternatives, and we keep a
+running mental roster of who we're up against. **Every app has several rivals;
+the suite as a whole has a few.** That roster stays in our heads, not on the
+page — we don't run comparison-chart attack ads or name names. Instead, the
+problem we lead with *is* the thing their users gripe about, recast as a pain the
+reader already feels. We allude; we don't litigate.
+
+**Do the homework every time.** When we build a new version of the site, search
+the web for current, common complaints about the leading tools in each space
+(and about all-in-one suites generally), then aim the copy at the ones we
+genuinely fix. If users keep saying a tool is "slow," "a labyrinth of settings,"
+"nickel-and-dimes you per seat," or "the AI is just a chatbot in the corner" —
+and we're actually better there — that's the problem to open on. Claim only what
+we can back up (see "Numbers & facts"); a hollow shot is worse than none.
+
+**Why we believe we win — the four we'll stand behind:**
+
+- **Modern architecture.** Built recently, on one coherent stack, as a single
+  system — not a decade of acquisitions stitched together with webhooks. It's
+  fast, and it's *whole*.
+- **AI-first, and not pretending.** Every app is driven by real MCP tools an
+  agent can operate with the same authority as a person — not a chat sidebar
+  glued onto last year's product. Everyone else can gesture at this; the bolt-on
+  shows.
+- **Open source.** You can read it, run it, self-host it, and trust it. No black
+  box, no hostage data, no "contact sales to export."
+- **The blended human/AI workplace.** The bet: tomorrow's business runs on people
+  and agents working the *same* surfaces, and we're the single strongest
+  contender built for exactly that. We say it with a grin — it's a big claim, and
+  we mean it.
+
+**Funny, never bitter.** Poking at the category's absurdities — the seven-tab
+workflow, the "AI" that summarizes the doc you just wrote — is some of the best
+comedy on the site. Punch up at *the work* and at *the way it's always been
+done*, never at the reader and never as a cheap shot at a named rival. Confident
+and amused, not resentful.
+
 ## Voice attributes
 
 - **Warm, not corporate.** Write like a sharp colleague explaining the thing
