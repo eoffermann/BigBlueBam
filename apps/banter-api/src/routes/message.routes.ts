@@ -39,6 +39,9 @@ import {
   scheduleMessage,
   ScheduledPostError,
 } from '../services/scheduled-post.service.js';
+// Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10)
+import { enqueueFeedFanin } from '../services/feed-queue.js';
+import { RELATIONSHIP_FLAGS, type FeedDirectRecipient } from '@bigbluebam/shared';
 
 // Attachment descriptors handed back by POST /v1/files/upload. There is no
 // pre-message attachment id; the upload stores the object in MinIO and returns
@@ -752,6 +755,114 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           }
         } catch {
           // Non-critical: don't let notification failures affect message delivery
+        }
+      })();
+
+      // ── Banter Feed fan-in (async, non-blocking) ─────────────────
+      // Enqueue one fan-in job per channel message. The worker resolves
+      // channel followers (Path B) and writes the per-user feed entries; the
+      // direct recipients (mentions + thread participants) are resolved here.
+      // DMs route to the DM view and never enter the Feed (§12.2).
+      (async () => {
+        try {
+          if (!message) return;
+          const [fch] = await db
+            .select({
+              type: banterChannels.type,
+              org_id: banterChannels.org_id,
+              project_id: banterChannels.project_id,
+            })
+            .from(banterChannels)
+            .where(eq(banterChannels.id, id))
+            .limit(1);
+          if (!fch) return;
+          if (fch.type === 'dm' || fch.type === 'group_dm') return; // DMs excluded
+
+          const isThreadReply = !!body.thread_parent_id;
+          const directRecipients: FeedDirectRecipient[] = [];
+
+          // @mentioned users → banter.mention (direct, highest priority).
+          const mentionedNames = extractMentions(body.content);
+          const mentionedIds: string[] = [];
+          if (mentionedNames.length > 0) {
+            const mentionedUsers = await db
+              .select({ id: users.id })
+              .from(users)
+              .where(
+                and(
+                  eq(users.org_id, fch.org_id),
+                  sql`lower(${users.display_name}) = ANY(${mentionedNames.map((n) => n.toLowerCase())}::text[])`,
+                ),
+              );
+            for (const mu of mentionedUsers) {
+              if (mu.id === user.id) continue;
+              mentionedIds.push(mu.id);
+              directRecipients.push({
+                user_id: mu.id,
+                relationship_flags: RELATIONSHIP_FLAGS.MENTIONED,
+                category: 'banter.mention',
+              });
+            }
+          }
+
+          // Thread participants → banter.thread.reply (direct).
+          if (isThreadReply && body.thread_parent_id) {
+            const [parent] = await db
+              .select({ author_id: banterMessages.author_id })
+              .from(banterMessages)
+              .where(eq(banterMessages.id, body.thread_parent_id))
+              .limit(1);
+            if (parent && parent.author_id !== user.id) {
+              directRecipients.push({
+                user_id: parent.author_id,
+                relationship_flags: RELATIONSHIP_FLAGS.AUTHOR,
+                category: 'banter.thread.reply',
+              });
+            }
+            const priorPosters = await db
+              .select({ author_id: banterMessages.author_id })
+              .from(banterMessages)
+              .where(
+                and(
+                  eq(banterMessages.thread_parent_id, body.thread_parent_id),
+                  eq(banterMessages.is_deleted, false),
+                ),
+              );
+            for (const p of priorPosters) {
+              if (p.author_id === user.id) continue;
+              directRecipients.push({
+                user_id: p.author_id,
+                relationship_flags: RELATIONSHIP_FLAGS.COMMENTER,
+                category: 'banter.thread.reply',
+              });
+            }
+          }
+
+          const createdAtIso =
+            message.created_at instanceof Date
+              ? message.created_at.toISOString()
+              : new Date(message.created_at as unknown as string).toISOString();
+
+          await enqueueFeedFanin({
+            entity_type: 'banter.message',
+            entity_id: message.id,
+            source: 'banter',
+            org_id: fch.org_id,
+            actor_id: user.id,
+            root_entity_type: isThreadReply ? 'banter.message' : null,
+            root_entity_id: body.thread_parent_id ?? null,
+            channel_id: id,
+            project_id: fch.project_id ?? null,
+            published_at: createdAtIso,
+            last_activity_at: createdAtIso,
+            engagement_count: 0,
+            direct_recipients: directRecipients,
+            broad_category: isThreadReply ? 'banter.thread.reply' : 'banter.channel_post',
+            broad_scope: 'channel',
+            mentioned_user_ids: mentionedIds,
+          });
+        } catch {
+          // Non-critical: feed fan-in must not affect message delivery.
         }
       })();
 

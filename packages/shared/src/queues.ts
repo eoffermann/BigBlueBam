@@ -21,9 +21,19 @@ export interface TaskLinkTitleFetchJobData {
  */
 export const BANTER_FEED_FANIN_QUEUE = 'banter-feed-fanin';
 
-export interface BanterFeedFaninJobData {
-  /** Canonical Feed category (§8), e.g. 'banter.channel_post'. */
+/**
+ * A producer-resolved Path A (direct) recipient: the user, their
+ * relationship-flag bitset, and the Feed category their entry should carry
+ * (e.g. an @mention → 'banter.mention'). The worker still runs can_access +
+ * subscription resolution per recipient before upserting.
+ */
+export interface FeedDirectRecipient {
+  user_id: string;
+  relationship_flags: number;
   category: string;
+}
+
+export interface BanterFeedFaninJobData {
   /** Canonical entity_type the entry points at, e.g. 'banter.message'. */
   entity_type: string;
   entity_id: string;
@@ -42,12 +52,12 @@ export interface BanterFeedFaninJobData {
   last_activity_at: string;
   /** Denormalized comment+reaction+participant tally for social proof. */
   engagement_count?: number;
-  /**
-   * Explicit direct-relationship recipients (Path A) keyed by user id, each a
-   * relationship-flag bitset. The worker still runs can_access + subscription
-   * resolution per user before upserting.
-   */
-  direct_recipients?: Record<string, number>;
-  /** @mentioned user ids (subset of direct recipients, for notification routing). */
+  /** Producer-resolved Path A recipients with their per-user category + flags. */
+  direct_recipients?: FeedDirectRecipient[];
+  /** Category for Path B (broad/followed-scope) recipients; null = no broad surfacing. */
+  broad_category?: string | null;
+  /** How the worker enumerates broad recipients. 'channel' = the channel's members. */
+  broad_scope?: 'channel' | 'project' | 'source' | null;
+  /** @mentioned user ids (subset of direct recipients), for notification routing. */
   mentioned_user_ids?: string[];
 }

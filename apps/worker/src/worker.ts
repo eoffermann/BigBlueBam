@@ -95,6 +95,11 @@ import {
 } from './jobs/banter-scheduled-post.job.js';
 // §1 Wave 5 banter subs
 import { startBanterPatternMatchConsumer } from './jobs/banter-pattern-match.job.js';
+// Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10)
+import {
+  processBanterFeedFaninJob,
+  type BanterFeedFaninJobData,
+} from './jobs/banter-feed-fanin.job.js';
 // §20 Wave 5 webhooks
 import {
   processAgentWebhookDispatchJob,
@@ -1651,6 +1656,31 @@ analyticsWorker.on('failed', (job, err) => {
   });
 });
 
+// Banter Feed fan-in worker — enqueue-driven (no cron). banter-api (and, from
+// Phase 5, other apps) enqueue one job per surfacing event; the worker resolves
+// concerned users (can_access + subscription) and upserts banter_feed_entries.
+const banterFeedFaninWorker = new Worker<BanterFeedFaninJobData>(
+  'banter-feed-fanin',
+  async (job: Job<BanterFeedFaninJobData>) => {
+    await processBanterFeedFaninJob(job, env, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+banterFeedFaninWorker.on('completed', (job) => {
+  logger.debug({ jobId: job.id, queue: 'banter-feed-fanin' }, 'Job completed');
+});
+banterFeedFaninWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'banter-feed-fanin', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'banter-feed-fanin',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by
 // the browser realtime bus), filters message.created events, evaluates
@@ -1746,6 +1776,8 @@ const workers = [
   bureauAnalyticsRollupWorker,
   // Book task #63 external-calendar sync sweep
   bookCalendarSyncWorker,
+  // Banter Feed fan-in
+  banterFeedFaninWorker,
   analyticsWorker,
 ];
 
@@ -1806,6 +1838,8 @@ logger.info(
       'bureau-analytics-rollup',
       // Book task #63 external-calendar sync sweep
       'book-calendar-sync',
+      // Banter Feed fan-in
+      'banter-feed-fanin',
       'analytics',
       // LiveKit advertised-address drift watchdog (hourly)
       'livekit-ip-drift',
