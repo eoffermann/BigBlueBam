@@ -1,5 +1,6 @@
 import type Redis from 'ioredis';
 import { and, eq, gte, isNull, inArray, sql } from 'drizzle-orm';
+import { pgTable, uuid, varchar } from 'drizzle-orm/pg-core';
 import { db } from '../db/index.js';
 import {
   banterFeedEntries,
@@ -31,6 +32,20 @@ import { channelDeepLink, threadDeepLink } from '../lib/notify.js';
 
 const CANDIDATE_CEILING = 2000;
 const CACHE_TTL_SECONDS = 60;
+
+// Minimal peer-app stubs for cross-app hydration (Phase 5). banter-api does not
+// declare the bam/brief Drizzle schema; these shadow the physical tables with
+// only the columns the Feed displays. Same drift-safe pattern as the visibility
+// service's peer-app-stubs. Keep columns minimal + in lockstep with the source.
+const tasksStub = pgTable('tasks', {
+  id: uuid('id').primaryKey(),
+  title: varchar('title', { length: 500 }),
+});
+const briefDocumentsStub = pgTable('brief_documents', {
+  id: uuid('id').primaryKey(),
+  title: varchar('title', { length: 500 }),
+  slug: varchar('slug', { length: 255 }),
+});
 
 export interface FeedQueryOptions {
   limit?: number;
@@ -328,6 +343,34 @@ export async function dismissEntry(userId: string, entryId: string): Promise<boo
 // (content preview + author + channel deep link). Other entity types get a
 // generic title until their per-source hydrators land in Phase 5.
 
+/** Bam task titles for cross-app feed entries, keyed by task id. */
+async function fetchTaskTitles(rows: CandidateRow[]): Promise<Map<string, { title: string }>> {
+  const ids = [...new Set(rows.filter((r) => r.entity_type === 'bam.task').map((r) => r.entity_id))];
+  const out = new Map<string, { title: string }>();
+  if (ids.length === 0) return out;
+  const result = await db
+    .select({ id: tasksStub.id, title: tasksStub.title })
+    .from(tasksStub)
+    .where(inArray(tasksStub.id, ids));
+  for (const row of result) out.set(row.id, { title: row.title ?? 'Untitled' });
+  return out;
+}
+
+/** Brief document titles + slugs for cross-app feed entries, keyed by doc id. */
+async function fetchDocTitles(
+  rows: CandidateRow[],
+): Promise<Map<string, { title: string; slug?: string }>> {
+  const ids = [...new Set(rows.filter((r) => r.entity_type === 'brief.document').map((r) => r.entity_id))];
+  const out = new Map<string, { title: string; slug?: string }>();
+  if (ids.length === 0) return out;
+  const result = await db
+    .select({ id: briefDocumentsStub.id, title: briefDocumentsStub.title, slug: briefDocumentsStub.slug })
+    .from(briefDocumentsStub)
+    .where(inArray(briefDocumentsStub.id, ids));
+  for (const row of result) out.set(row.id, { title: row.title ?? 'Untitled', slug: row.slug ?? undefined });
+  return out;
+}
+
 async function hydrateEntries(
   rows: CandidateRow[],
   weights: FeedWeights,
@@ -382,6 +425,11 @@ async function hydrateEntries(
     }
   }
 
+  // Cross-app hydration (Phase 5). Other apps' entity types fall through to the
+  // category label until their hydrators land.
+  const taskTitles = await fetchTaskTitles(rows);
+  const docTitles = await fetchDocTitles(rows);
+
   return rows.map((r): HydratedFeedEntry => {
     const breakdown = explain
       ? scoreEntry(
@@ -424,6 +472,28 @@ async function hydrateEntries(
       } else {
         title = 'Message (unavailable)';
       }
+    } else if (r.entity_type === 'bam.task') {
+      const t = taskTitles.get(r.entity_id);
+      const name = t?.title ?? 'a task';
+      title =
+        r.category === 'bam.task.assigned_to_me'
+          ? `Assigned to you: ${name}`
+          : r.category === 'bam.task.comment_on_my_task'
+            ? `New comment on: ${name}`
+            : r.category === 'bam.task.state_changed'
+              ? `Moved: ${name}`
+              : name;
+      open_in_app = `/b3/tasks/${r.entity_id}`;
+    } else if (r.entity_type === 'brief.document') {
+      const d = docTitles.get(r.entity_id);
+      const name = d?.title ?? 'a document';
+      title =
+        r.category === 'brief.document.created'
+          ? `New Brief: ${name}`
+          : r.category === 'brief.document.edited'
+            ? `Brief edited: ${name}`
+            : name;
+      open_in_app = `/brief/documents/${d?.slug ?? r.entity_id}`;
     }
 
     return {
