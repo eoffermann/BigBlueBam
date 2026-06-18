@@ -68,11 +68,16 @@
     # renders content, not a blank panel.
     - { action: waitFor, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')" }
     - { action: click, selector: "[class*='rounded-xl'][class*='cursor-pointer']:has-text('Howell Luau')", optional: true }
+    - { action: waitFor, selector: "button:has-text('Preview')" }
+    # The builder hides the Live Preview panel behind a Preview toggle.
+    - { action: click, selector: "button:has-text('Preview')" }
+    - { action: waitFor, selector: "span:has-text('Live Preview')" }
     - { action: wait, ms: 2000 }
-    - { action: click, selector: "button:has-text('Preview')", optional: true }
-    - { action: wait, ms: 2500 }
-    - { action: waitFor, selector: "span:has-text('Live Preview')", optional: true }
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  # Guard against a blank capture: the builder + its Live Preview panel must
+  # actually render (it previously crashed on {label,value} options).
+  expect:
+    - "span:has-text('Live Preview')"
   doc: { order: 3, label: "Live preview" }
 
 - id: blank-form-settings-dialog
