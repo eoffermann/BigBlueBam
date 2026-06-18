@@ -2,11 +2,76 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Link2, Search, BookOpen, ArrowRight } from 'lucide-react';
+import { Link2, Search, BookOpen, ArrowRight, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import manual from '@/content/manual.generated.json';
+
+/* ------------------------------------------------------------------ */
+/*  Manual image — click to enlarge to near-full-window (light only;   */
+/*  the docs deliberately don't do the marketing site's dark hover).   */
+/*  Rendered as an inline <img> + a body-portal overlay so it stays    */
+/*  valid inside markdown <p> wrappers.                                */
+/* ------------------------------------------------------------------ */
+function ManualImage({ src, alt }: { src?: string; alt?: string }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+  if (!src) return null;
+  return (
+    <>
+      <img
+        src={src}
+        alt={alt ?? ''}
+        loading="lazy"
+        onClick={() => setOpen(true)}
+        title="Click to enlarge"
+        className="my-6 max-w-full cursor-zoom-in rounded-lg border border-zinc-200 shadow-md transition hover:shadow-lg"
+      />
+      {open &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={alt ?? 'Enlarged screenshot'}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-[200] flex cursor-zoom-out items-center justify-center bg-black/85 p-4 backdrop-blur-sm sm:p-6"
+          >
+            <img
+              src={src}
+              alt={alt ?? ''}
+              className="max-h-[95vh] max-w-[98vw] rounded-lg shadow-2xl ring-1 ring-white/10"
+            />
+            <button
+              type="button"
+              aria-label="Close enlarged screenshot"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
+              className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -206,12 +271,7 @@ function makeComponents(app: string) {
     ),
     hr: () => <hr className="my-8 border-zinc-200" />,
     img: ({ src, alt }: ComponentPropsWithoutRef<'img'>) => (
-      <img
-        src={typeof src === 'string' ? src : undefined}
-        alt={alt ?? ''}
-        loading="lazy"
-        className="my-6 max-w-full rounded-lg border border-zinc-200 shadow-md"
-      />
+      <ManualImage src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} />
     ),
     strong: ({ children }: ComponentPropsWithoutRef<'strong'>) => (
       <strong className="font-semibold text-zinc-900">{children}</strong>
@@ -418,7 +478,7 @@ export function ManualPage() {
         <div className="lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
           {/* Sidebar */}
           <aside className="mb-10 lg:mb-0">
-            <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)]">
+            <div className="lg:sticky lg:top-24 lg:h-[calc(100vh-7rem)]">
               <Sidebar
                 query={query}
                 setQuery={setQuery}
