@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useChannel } from '@/hooks/use-channels';
 import { BanterLayout } from '@/pages/banter-layout';
 import { ChannelView } from '@/pages/channel-view';
+import { FeedPage } from '@/pages/feed';
 import { ChannelBrowser } from '@/pages/channel-browser';
 import { BookmarksPage } from '@/pages/bookmarks';
 import { SearchPage } from '@/pages/search';
@@ -19,6 +20,7 @@ type Route =
   | { page: 'channel'; slug: string }
   | { page: 'dm'; id: string }
   | { page: 'go'; id: string }
+  | { page: 'feed'; entryId?: string }
   | { page: 'browse' }
   | { page: 'bookmarks' }
   | { page: 'search' }
@@ -63,6 +65,12 @@ function parseRoute(path: string): Route {
   const callMatch = p.match(/^\/calls\/([^/]+)$/);
   if (callMatch) {
     return { page: 'call', id: callMatch[1]! };
+  }
+
+  // /feed and /feed/:entryId — the ranked landing view + permalinks.
+  const feedMatch = p.match(/^\/feed(?:\/([^/]+))?$/);
+  if (feedMatch) {
+    return { page: 'feed', entryId: feedMatch[1] };
   }
 
   if (p === '/browse') return { page: 'browse' };
@@ -175,7 +183,8 @@ export function App() {
   // /banter -> /banter/ 301), producing a black screen.
   useEffect(() => {
     if (isAuthenticated && route.page === 'redirect') {
-      navigate('/channels/general');
+      // Feed is the default Banter landing view (§17.4).
+      navigate('/feed');
     }
   }, [isAuthenticated, route.page, navigate]);
 
@@ -236,6 +245,8 @@ export function App() {
         return <ChannelView slug={route.slug} type="channel" onNavigate={navigate} />;
       case 'dm':
         return <ChannelView slug={route.id} type="dm" onNavigate={navigate} />;
+      case 'feed':
+        return <FeedPage entryId={route.entryId} onNavigate={navigate} />;
       case 'browse':
         return <ChannelBrowser onNavigate={navigate} />;
       case 'bookmarks':

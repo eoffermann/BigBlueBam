@@ -11,6 +11,13 @@ import {
   upsertSubscription,
   deleteSubscriptionById,
 } from '../services/feed-subscriptions.service.js';
+import {
+  getRankedFeed,
+  getFeedEntry,
+  markSeen,
+  dismissEntry,
+  bustFeedCache,
+} from '../services/feed-read.service.js';
 
 /**
  * Banter Feed routes (banter-feed-design-document.md §13).
@@ -39,6 +46,15 @@ const upsertSubscriptionSchema = z
 
 const channelFollowSchema = z.object({ state: stateEnum });
 
+const markSeenSchema = z
+  .object({
+    entry_ids: z.array(z.string().uuid()).max(500).optional(),
+    before_seq: z.number().int().nonnegative().optional(),
+  })
+  .refine((v) => (v.entry_ids && v.entry_ids.length > 0) || typeof v.before_seq === 'number', {
+    message: 'provide entry_ids or before_seq',
+  });
+
 function validationError(request: { id: string }, issues: { field: string; issue: string }[]) {
   return {
     error: {
@@ -51,6 +67,108 @@ function validationError(request: { id: string }, issues: { field: string; issue
 }
 
 export default async function feedRoutes(fastify: FastifyInstance) {
+  // -------------------------------------------------------------------------
+  // Ranked read (§6, §13)
+  // -------------------------------------------------------------------------
+
+  // GET /v1/feed — the caller's ranked feed.
+  fastify.get(
+    '/v1/feed',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+      const q = request.query as Record<string, string | undefined>;
+      const result = await getRankedFeed(
+        fastify.redis,
+        user.id,
+        user.org_id,
+        {
+          limit: q.limit ? parseInt(q.limit, 10) : undefined,
+          cursor: q.cursor ?? null,
+          category: q.category,
+          source: q.source,
+          unseen: q.unseen === 'true',
+          explain: q.explain === 'true',
+        },
+        Date.now(),
+      );
+      return reply.send(result);
+    },
+  );
+
+  // POST /v1/feed/seen — mark entries seen (by id list or seq watermark).
+  fastify.post(
+    '/v1/feed/seen',
+    { preHandler: [requireAuth, requireScope('read_write')] },
+    async (request, reply) => {
+      const user = request.user!;
+      const parsed = markSeenSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send(
+          validationError(
+            request,
+            parsed.error.issues.map((i) => ({ field: i.path.join('.'), issue: i.message })),
+          ),
+        );
+      }
+      const count = await markSeen(user.id, parsed.data);
+      await bustFeedCache(fastify.redis, user.id);
+      return reply.send({ data: { marked: count } });
+    },
+  );
+
+  // POST /v1/feed/:entryId/dismiss — dismiss a single entry.
+  fastify.post(
+    '/v1/feed/:entryId/dismiss',
+    { preHandler: [requireAuth, requireScope('read_write')] },
+    async (request, reply) => {
+      const user = request.user!;
+      const { entryId } = request.params as { entryId: string };
+      const ok = await dismissEntry(user.id, entryId);
+      if (!ok) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Feed entry not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      await bustFeedCache(fastify.redis, user.id);
+      return reply.send({ data: { success: true } });
+    },
+  );
+
+  // GET /v1/feed/:entryId — a single hydrated entry (permalink view).
+  fastify.get(
+    '/v1/feed/:entryId',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const user = request.user!;
+      const { entryId } = request.params as { entryId: string };
+      const q = request.query as Record<string, string | undefined>;
+      const entry = await getFeedEntry(
+        user.id,
+        entryId,
+        user.org_id,
+        q.explain === 'true',
+        Date.now(),
+      );
+      if (!entry) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Feed entry not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      return reply.send({ data: entry });
+    },
+  );
+
   // -------------------------------------------------------------------------
   // Subscriptions CRUD (§13)
   // -------------------------------------------------------------------------

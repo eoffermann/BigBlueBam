@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronRight, Search, Sparkles } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BanterSidebar } from '@/components/sidebar/banter-sidebar';
@@ -37,6 +38,8 @@ function breadcrumbsFor(route: ActiveRoute, channelName?: string): Crumb[] {
         { label: 'Direct Messages' },
         { label: channelName ?? 'Conversation' },
       ];
+    case 'feed':
+      return [{ label: 'Feed' }];
     case 'browse':
       return [{ label: 'Browse channels' }];
     case 'bookmarks':
@@ -118,6 +121,21 @@ export function BanterLayout({
               <nav className="flex items-center border-r border-zinc-200 dark:border-zinc-700 pr-4 mr-2">
                 <LaunchpadTrigger onClick={() => setLaunchpadOpen(true)} />
               </nav>
+
+              {/* Feed — the ranked, top-down landing view (§1). */}
+              <button
+                onClick={() => onNavigate('/feed')}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                  activeRoute.page === 'feed'
+                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300'
+                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800',
+                )}
+                title="Your Feed"
+              >
+                <Sparkles className="h-4 w-4" />
+                Feed
+              </button>
 
               {/* Breadcrumbs */}
               <div className="flex items-center gap-1 text-sm">
