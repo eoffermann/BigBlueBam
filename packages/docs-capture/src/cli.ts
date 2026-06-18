@@ -30,6 +30,7 @@ function parseArgs(argv: string[]): {
   recipesDir: string;
   outRoot: string;
   env?: string;
+  theme?: 'light' | 'dark';
   list: boolean;
 } {
   const out = {
@@ -44,6 +45,7 @@ function parseArgs(argv: string[]): {
     else if (a === '--recipes-dir') out.recipesDir = path.resolve(argv[++i]!);
     else if (a === '--out') out.outRoot = path.resolve(argv[++i]!);
     else if (a === '--env') out.env = argv[++i];
+    else if (a === '--theme') { const t = argv[++i]; if (t === 'light' || t === 'dark') out.theme = t; }
     else if (a === '--list') out.list = true;
   }
   return out;
@@ -73,7 +75,7 @@ async function main(): Promise<void> {
   console.log(`Recipes:     ${recipes.length}`);
   console.log(`Output:      ${args.outRoot}\n`);
 
-  const results = await runRecipes(recipes, { env, outRoot: args.outRoot, log: (m) => console.log(m) });
+  const results = await runRecipes(recipes, { env, outRoot: args.outRoot, log: (m) => console.log(m), themeOverride: args.theme });
 
   const ok = results.filter((r) => r.ok).length;
   const failed = results.length - ok;

@@ -85,7 +85,7 @@ export function BanterStub() {
       {/* Hero screenshot */}
       <AnimatedReveal delay={0.1} withScale>
         <FloatingFrame
-          src="/screenshots/banter/light/01-channels.png"
+          src="/screenshots/banter/light/01-channel-view.png"
           alt="Banter channel view with channel sidebar, message timeline, and direct messages"
         />
         <p className="mt-3 text-center text-sm text-zinc-500">

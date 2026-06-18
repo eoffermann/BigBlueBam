@@ -113,11 +113,11 @@ export function BenchSection() {
         </AnimatedReveal>
         <AnimatedReveal delay={0.2} withScale>
           <FloatingFrame
-            src="/screenshots/bench/light/06-saved-queries.png"
-            alt="Bench saved queries list with run and edit actions"
+            src="/screenshots/bench/light/01-dashboard-list.png"
+            alt="Bench dashboards list"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            The good queries, kept — one click to run them again next quarter.
+            Every dashboard in one place — pick one and the numbers are already waiting.
           </p>
         </AnimatedReveal>
         <AnimatedReveal delay={0.25} withScale>

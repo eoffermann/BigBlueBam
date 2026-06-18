@@ -82,6 +82,11 @@ export function BoardCanvasPage({ boardId, onNavigate }: BoardCanvasPageProps) {
   const [isDark] = useState(() => getTheme() === 'dark');
   const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const getAPI = useCallback(() => excalidrawAPIRef.current, []);
+  // Track when Excalidraw hands us its imperative API. The server-scene load
+  // below needs the API to exist; on a fresh mount the ref is still null when
+  // the effect first runs, so without this flag in the deps the fetch bailed
+  // and the board rendered empty (saved scene never loaded on a new device).
+  const [apiReady, setApiReady] = useState(false);
 
   // Real-time sync via WebSocket (layered on top of localStorage persistence)
   const { sendChanges, sendPointer, status, peerCount } = useBoardSync(boardId, getAPI);
@@ -103,13 +108,18 @@ export function BoardCanvasPage({ boardId, onNavigate }: BoardCanvasPageProps) {
 
     fetch(`/board/api/v1/boards/${boardId}/scene`, { credentials: 'include' })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.elements?.length > 0 && excalidrawAPIRef.current) {
-          excalidrawAPIRef.current.updateScene({ elements: data.elements });
+      // The scene endpoint wraps its payload in the standard API envelope
+      // ({ data: { elements, ... } }), so the elements live at data.data,
+      // not data. Reading the wrong level meant the saved scene was never
+      // loaded on a fresh device and the canvas always opened empty.
+      .then((res) => {
+        const elements = res?.data?.elements;
+        if (elements?.length > 0 && excalidrawAPIRef.current) {
+          excalidrawAPIRef.current.updateScene({ elements });
         }
       })
       .catch(() => {/* ignore */});
-  }, [boardId, initialData]);
+  }, [boardId, initialData, apiReady]);
 
   // Track the last set of elements so the beforeunload beacon can flush
   // them synchronously when the user closes the tab. Without this the
@@ -169,6 +179,7 @@ export function BoardCanvasPage({ boardId, onNavigate }: BoardCanvasPageProps) {
           <Excalidraw
             excalidrawAPI={(api) => {
               excalidrawAPIRef.current = api;
+              setApiReady(true);
             }}
             initialData={initialData}
             onChange={handleChange}
