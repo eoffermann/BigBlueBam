@@ -142,14 +142,21 @@ Gilligan stack.
   channel's messages requires joining it. Surfacing unjoined public channels
   therefore leaked previews of unreadable messages, so it was reverted.
 
-- **DEFERRED — public-channel discovery (a product decision).** True
-  Facebook-style discovery (seeing content from public channels you have not
-  joined) requires Banter's read-gate to change: public channels would need to
-  be readable by any org member (today they are browse/join-able but not
-  readable until joined). That is a platform-wide change to `requireChannelMember`
-  + the `banter.message`/`banter.channel` branch of can_access in
-  apps/api/src/services/visibility.service.ts, with blast radius beyond the Feed.
-  Not done here; awaiting a call on whether public == org-readable.
+- **DONE (2026-06-18) — public channels are org-readable.** Public channels can
+  now be read AND posted to by any member of the org without joining, so the Feed
+  surfaces them (Facebook-style discovery). Two mirrored gates changed:
+  `requireChannelMember` (apps/banter-api/src/middleware/channel-auth.ts)
+  synthesizes a non-admin context for a non-member on a public channel (private
+  still 404s non-members), and `banterChannelAccess` in
+  apps/api/src/services/visibility.service.ts returns allowed for a public
+  channel in the asker's org. **No auto-join** — joining the sidebar stays an
+  explicit action; the followed/unfollowed subscription controls Feed presence.
+  Admin actions remain gated (the synthesized 'member' role does not satisfy
+  `requireChannelAdmin`; P2-15 non-elevation still holds). The Feed sources all
+  public channels (backfill + fan-in Path B now enumerate org members for public
+  channels), each vetoable via unfollow/mute. A channel is followed by default;
+  unfollow from the channel header (ChannelFollowButton) or the feed-card
+  overflow (⋯) menu.
 
 - **Relevance boosts now computed (were hardcoded 0).** `enrichBoostFlags` in
   feed-read.service.ts computes the viewer's flags on the scored candidate page

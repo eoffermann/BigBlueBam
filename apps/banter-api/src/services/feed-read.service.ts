@@ -239,14 +239,12 @@ const BACKFILL_THROTTLE_SECONDS = 180;
 
 /**
  * Seed/top-up the candidate index from recent posts in every channel the user
- * can READ — i.e. every channel they belong to (public or private). This is what
- * makes the feed "surface everything visible" (the Facebook model: your feed is
- * your sources' recent content). In Banter today visibility == membership for
- * reads (requireChannelMember 403s a non-member even of a public channel), so an
- * unjoined public channel is deliberately NOT sourced — surfacing it would leak
- * previews of messages the user cannot open. DMs never feed (the DM view owns
- * them). A per-channel mute/unfollow still vetoes. Idempotent (ON CONFLICT
- * DO NOTHING).
+ * can READ — public channels in their org (now org-readable) PLUS private
+ * channels they belong to. This is what makes the feed "surface everything
+ * visible" (the Facebook model: your feed is your sources' recent content). DMs
+ * never feed (the DM view owns them). The followed/unfollowed subscription is
+ * the opt-out: a per-channel (or source) unfollow/mute vetoes here, so channels
+ * are followed by default but easy to drop. Idempotent (ON CONFLICT DO NOTHING).
  *
  * Gating — empty feeds ALWAYS run; populated feeds throttle:
  *  - Empty feed → always seed now, ignoring any flag. A stale flag must never
@@ -254,12 +252,13 @@ const BACKFILL_THROTTLE_SECONDS = 180;
  *    seed yields nothing (genuinely-empty org), a short flag avoids hammering
  *    but it self-heals the moment readable posts exist.
  *  - Populated feed → re-top-up at most once per BACKFILL_THROTTLE_SECONDS, so a
- *    channel the user JOINS after they last read flows in (with recent history)
- *    within a few minutes, without an INSERT on every read.
+ *    newly-created public channel (or one the user joins) flows in with recent
+ *    history within a few minutes, without an INSERT on every read.
  */
 async function ensureVisibleBackfill(
   redis: Redis | undefined,
   userId: string,
+  orgId: string,
   windowDays: number,
 ): Promise<void> {
   const flagKey = `bfeed:bf:${userId}`;
@@ -302,15 +301,14 @@ async function ensureVisibleBackfill(
         AND m.author_id <> ${userId}
         AND bc.is_archived = false
         AND bc.type IN ('public', 'private')
-        -- Visibility == membership for READS in Banter today: requireChannelMember
-        -- 403s a non-member even of a public channel, so surfacing an unjoined
-        -- public channel's content would leak previews of unreadable messages.
-        -- Source only from channels the user belongs to (public or private).
-        -- (Discovering unjoined public channels needs the read-gate to open
-        -- first — see docs/banter-feed-notes.md.)
-        AND EXISTS (
-          SELECT 1 FROM banter_channel_memberships mem
-           WHERE mem.channel_id = m.channel_id AND mem.user_id = ${userId}
+        AND (
+          -- public channels are org-readable → surface to any org member
+          (bc.type = 'public' AND bc.org_id = ${orgId})
+          -- private channels only to members
+          OR EXISTS (
+            SELECT 1 FROM banter_channel_memberships mem
+             WHERE mem.channel_id = m.channel_id AND mem.user_id = ${userId}
+          )
         )
         AND NOT EXISTS (
           SELECT 1 FROM banter_feed_subscriptions s
@@ -423,7 +421,7 @@ export async function getRankedFeed(
   // index from recent posts in every channel this user can SEE (joined + public),
   // so the feed shows relevant activity instantly — for brand-new users and for
   // content that predates the live fan-in.
-  await ensureVisibleBackfill(redis, userId, weights.candidate_window_days);
+  await ensureVisibleBackfill(redis, userId, orgId, weights.candidate_window_days);
 
   const ordered = await getOrderedRefs(
     redis,

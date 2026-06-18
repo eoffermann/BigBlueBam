@@ -714,12 +714,14 @@ async function preflightBlueprintNode(
 //  - archived channel → not_found for non-SuperUsers (archived channels are
 //     invisible to members; SuperUsers bypass to inspect/un-archive).
 //  - SuperUsers bypass the membership requirement entirely.
-//  - otherwise membership in banter_channel_memberships is required for EVERY
-//     channel type. Public channels merely 403 (vs 404 for private) in the
-//     middleware; either way a non-member cannot read content.
-//  - NB: org admins/owners who are NOT channel members are NOT elevated here
-//     (the P2-15 finding: requireChannelMember blocks non-member org admins),
-//     so we deliberately do NOT apply the generic isOrgAdmin bypass.
+//  - PUBLIC channels are org-readable: any member of the org may read them
+//     without joining (the read-gate and this preflight allow it; the Feed
+//     surfaces them, gated by the followed/unfollowed subscription). Membership
+//     is only required for PRIVATE channels (non-members get not_found).
+//  - NB: org admins/owners who are NOT channel members are NOT elevated for
+//     ADMIN actions (the P2-15 finding: requireChannelAdmin still needs a real
+//     admin/owner membership), so we deliberately do NOT apply a generic
+//     isOrgAdmin bypass here.
 //
 // A banter.message inherits its parent channel's access (and must not be
 // soft-deleted).
@@ -761,14 +763,12 @@ async function banterChannelAccess(
     return { allowed: true, reason: 'ok', entity_org_id: channel.org_id };
   }
 
-  // Non-member. Private/DM channels return not_found (leak-safe); a public
-  // channel returns the specific "not a member" reason. Either way: deny.
+  // Non-member. PUBLIC channels are org-readable: any member of the org (the
+  // org match is already established above) may read them, so the Feed can
+  // surface and the reader can open them. Private/DM channels still return
+  // not_found (leak-safe) to non-members.
   if (channel.type === 'public') {
-    return {
-      allowed: false,
-      reason: 'banter_not_channel_member',
-      entity_org_id: channel.org_id,
-    };
+    return { allowed: true, reason: 'ok', entity_org_id: channel.org_id };
   }
   return { allowed: false, reason: 'not_found' };
 }

@@ -353,8 +353,19 @@ export function buildFeedFaninDeps(
       const db = getDb();
       if (scope === 'channel') {
         if (!scopeId) return [];
+        // Public channels are org-readable, so a public post is a Feed candidate
+        // for EVERY org member (the followed/unfollowed subscription, applied by
+        // the caller via resolveState, is the opt-out). Private channels fan in
+        // to their members only.
         const res = await db.execute(sql`
-          SELECT user_id FROM banter_channel_memberships WHERE channel_id = ${scopeId}
+          SELECT bcm.user_id
+            FROM banter_channel_memberships bcm
+           WHERE bcm.channel_id = ${scopeId}
+          UNION
+          SELECT om.user_id
+            FROM organization_memberships om
+            JOIN banter_channels bc ON bc.id = ${scopeId}
+           WHERE bc.type = 'public' AND bc.is_archived = false AND om.org_id = bc.org_id
         `);
         return extractUserIds(res);
       }

@@ -93,22 +93,25 @@ export async function requireChannelMember(request: FastifyRequest, reply: Fasti
     .limit(1);
 
   if (!membership) {
-    // Private channels: return 404 to avoid leaking existence
-    if (channel.type === 'private') {
-      return reply.status(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Channel not found',
-          details: [],
-          request_id: request.id,
-        },
-      });
+    // PUBLIC channels are org-readable: any member of the org (org match was
+    // enforced in the channel lookup above) may read AND post without joining,
+    // via a synthesized non-admin context. No auto-join — joining the sidebar
+    // stays an explicit action; the Feed's followed/unfollowed subscription
+    // controls what surfaces. Admin actions remain gated: requireChannelAdmin
+    // runs after this and a synthesized 'member' role does not satisfy it.
+    if (channel.type === 'public') {
+      request.channelContext = {
+        channel,
+        membership: { role: 'member' } as MembershipRow,
+      };
+      return;
     }
 
-    return reply.status(403).send({
+    // Private channels: return 404 to avoid leaking existence.
+    return reply.status(404).send({
       error: {
-        code: 'FORBIDDEN',
-        message: 'Must be a member of this channel',
+        code: 'NOT_FOUND',
+        message: 'Channel not found',
         details: [],
         request_id: request.id,
       },
