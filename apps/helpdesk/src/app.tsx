@@ -10,6 +10,7 @@ import { NewTicketPage } from '@/pages/new-ticket';
 import { TicketDetailPage } from '@/pages/ticket-detail';
 import { OrgPickerPage } from '@/pages/org-picker';
 import { Header } from '@/components/layout/header';
+import { ImpersonationBanner } from '@bigbluebam/ui/impersonation-banner';
 import { NotificationPrompt } from '@/components/notification-prompt';
 import { OfflineBanner } from '@/components/offline-banner';
 import { ws } from '@/lib/websocket';
@@ -254,6 +255,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <ImpersonationBanner />
       <OfflineBanner />
       <Header onNavigate={navigate} />
       <main className="max-w-5xl mx-auto px-4 py-8">

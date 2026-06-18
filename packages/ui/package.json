@@ -8,6 +8,10 @@
       "types": "./help-center.tsx",
       "default": "./help-center.tsx"
     },
+    "./impersonation-banner": {
+      "types": "./impersonation-banner.tsx",
+      "default": "./impersonation-banner.tsx"
+    },
     "./help-viewer": {
       "types": "./help-viewer.tsx",
       "default": "./help-viewer.tsx"

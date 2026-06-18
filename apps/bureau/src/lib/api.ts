@@ -5,6 +5,8 @@
  * error envelope attached on `cause`.
  */
 
+import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
+
 const API_BASE = '/bureau/api/v1';
 
 /**
@@ -57,7 +59,7 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
     method: opts.method ?? 'GET',
     credentials: 'include',
     signal: opts.signal,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...impersonateHeader() },
   };
   if (opts.body !== undefined) {
     init.body = JSON.stringify(opts.body);

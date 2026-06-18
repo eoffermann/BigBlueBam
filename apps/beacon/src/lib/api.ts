@@ -1,3 +1,5 @@
+import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -61,6 +63,9 @@ class ApiClient {
       headers['Content-Type'] = 'application/json';
     }
 
+    // SuperUser impersonation: echo X-Impersonate-User when active. Inert otherwise.
+    Object.assign(headers, impersonateHeader());
+
     const response = await fetch(url.toString(), {
       method,
       headers,
@@ -119,6 +124,7 @@ class ApiClient {
     const headers: Record<string, string> = {};
     const orgId = this.getOrgId();
     if (orgId) headers['X-Org-Id'] = orgId;
+    Object.assign(headers, impersonateHeader());
 
     const response = await fetch(url.toString(), {
       method: 'POST',

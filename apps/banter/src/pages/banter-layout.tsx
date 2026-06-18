@@ -8,6 +8,7 @@ import { ThreadPanel } from '@/components/threads/thread-panel';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
 import { HelpTrigger } from '@bigbluebam/ui/help-center';
+import { ImpersonationBanner } from '@bigbluebam/ui/impersonation-banner';
 import { useAuthStore } from '@/stores/auth.store';
 import { useChannelStore } from '@/stores/channel.store';
 import { usePresence } from '@/hooks/use-presence';
@@ -106,6 +107,7 @@ export function BanterLayout({
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+      <ImpersonationBanner />
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         {!sidebarCollapsed && (

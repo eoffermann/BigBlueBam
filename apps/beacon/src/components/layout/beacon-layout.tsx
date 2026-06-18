@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight, Search } from 'lucide-react';
 import { Launchpad, LaunchpadTrigger } from '@bigbluebam/ui/launchpad';
 import { NotificationsBell } from '@bigbluebam/ui/notifications-bell';
+import { ImpersonationBanner } from '@bigbluebam/ui/impersonation-banner';
 import { HelpTrigger } from '@bigbluebam/ui/help-center';
 import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { BeaconSidebar } from '@/components/layout/beacon-sidebar';
@@ -62,6 +63,7 @@ export function BeaconLayout({ children, onNavigate, activeRoute }: BeaconLayout
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+      <ImpersonationBanner />
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside className="w-[260px] flex-shrink-0 bg-sidebar flex flex-col">

@@ -1,3 +1,5 @@
+import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -53,6 +55,8 @@ class ApiClient {
     if (body) {
       headers['Content-Type'] = 'application/json';
     }
+
+    Object.assign(headers, impersonateHeader());
 
     const response = await fetch(url.toString(), {
       method,

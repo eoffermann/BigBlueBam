@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth.store';
+import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
 
 export class ApiError extends Error {
   constructor(
@@ -53,6 +54,10 @@ class ApiClient {
     if (activeOrgId) {
       headers['X-Org-Id'] = activeOrgId;
     }
+
+    // SuperUser impersonation: echo X-Impersonate-User when an "act as" session
+    // is active so the API swaps to the target here too. Inert otherwise.
+    Object.assign(headers, impersonateHeader());
 
     const response = await fetch(url.toString(), {
       method,
@@ -115,6 +120,7 @@ class ApiClient {
     if (activeOrgId) {
       uploadHeaders['X-Org-Id'] = activeOrgId;
     }
+    Object.assign(uploadHeaders, impersonateHeader());
 
     const response = await fetch(url.toString(), {
       method: 'POST',

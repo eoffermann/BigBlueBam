@@ -14,7 +14,7 @@ import { UserMenu } from '@bigbluebam/ui/user-menu';
 import { Sidebar } from './sidebar';
 import { CommandPalette } from '@/components/common/command-palette';
 import { SuperuserContextBanner } from '@/components/superuser-context-banner';
-import { ImpersonationBanner } from '@/components/superuser/impersonation-banner';
+import { ImpersonationBanner } from '@bigbluebam/ui/impersonation-banner';
 import { OrgSwitcher } from '@/components/layout/org-switcher';
 import { useAuthStore } from '@/stores/auth.store';
 import { useCan } from '@bigbluebam/ui/use-can';

@@ -1,4 +1,5 @@
 import { getTenantSnapshot } from '@/stores/tenant.store';
+import { impersonateHeader } from '@bigbluebam/ui/impersonation-banner';
 
 // HB-52: Echo the csrf_token cookie in X-CSRF-Token header on state-
 // changing requests. The cookie is httpOnly=false so JS can read it.
@@ -62,6 +63,8 @@ class ApiClient {
     if (tenant.orgSlug) headers['X-Org-Slug'] = tenant.orgSlug;
     if (tenant.projectSlug) headers['X-Project-Slug'] = tenant.projectSlug;
 
+    Object.assign(headers, impersonateHeader());
+
     const response = await fetch(url.toString(), {
       method,
       headers,
@@ -121,6 +124,8 @@ class ApiClient {
     const tenant = getTenantSnapshot();
     if (tenant.orgSlug) uploadHeaders['X-Org-Slug'] = tenant.orgSlug;
     if (tenant.projectSlug) uploadHeaders['X-Project-Slug'] = tenant.projectSlug;
+
+    Object.assign(uploadHeaders, impersonateHeader());
 
     const response = await fetch(url.toString(), {
       method: 'POST',
