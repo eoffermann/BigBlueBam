@@ -465,46 +465,6 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 <img src="docs/apps/bam/screenshots/light/01-board.png" width="400" alt="Bam (Project Management)">
 
 [Guide](docs/apps/bam/guide.md) | [Overview](docs/apps/bam/marketing.md) | [MCP Tools](docs/apps/bam/mcp-tools.md)
-
-### Bill (Invoicing)
-
-9 routes, 12 schemas, 47 MCP tools
-
-<img src="docs/apps/bill/screenshots/light/01-dashboard.png" width="400" alt="Bill (Invoicing)">
-
-[Guide](docs/apps/bill/guide.md) | [Overview](docs/apps/bill/marketing.md) | [MCP Tools](docs/apps/bill/mcp-tools.md)
-
-### Blank (Forms)
-
-4 routes, 5 schemas, 20 MCP tools
-
-<img src="docs/apps/blank/screenshots/light/01-form-list.png" width="400" alt="Blank (Forms)">
-
-[Guide](docs/apps/blank/guide.md) | [Overview](docs/apps/blank/marketing.md) | [MCP Tools](docs/apps/blank/mcp-tools.md)
-
-### Blueprint
-
-6 routes, 11 schemas, 36 MCP tools
-
-<img src="docs/apps/blueprint/screenshots/light/01-diagram-list.png" width="400" alt="Blueprint">
-
-[Guide](docs/apps/blueprint/guide.md) | [Overview](docs/apps/blueprint/marketing.md) | [MCP Tools](docs/apps/blueprint/mcp-tools.md)
-
-### Book (Scheduling)
-
-9 routes, 10 schemas, 25 MCP tools
-
-<img src="docs/apps/book/screenshots/light/01-week-view.png" width="400" alt="Book (Scheduling)">
-
-[Guide](docs/apps/book/guide.md) | [Overview](docs/apps/book/marketing.md) | [MCP Tools](docs/apps/book/mcp-tools.md)
-
-### Bureau
-
-15 routes, 4 schemas, 37 MCP tools
-
-<img src="docs/apps/bureau/screenshots/light/01-floor-directory.png" width="400" alt="Bureau">
-
-[Guide](docs/apps/bureau/guide.md) | [Overview](docs/apps/bureau/marketing.md) | [MCP Tools](docs/apps/bureau/mcp-tools.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
 ---
 
@@ -820,11 +780,6 @@ site/               → Marketing site (served at /)
 | | |
 | **Per-App Guides** | |
 | [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
-| [Bill (Invoicing) Guide](docs/apps/bill/guide.md) | User guide and MCP tool reference |
-| [Blank (Forms) Guide](docs/apps/blank/guide.md) | User guide and MCP tool reference |
-| [Blueprint Guide](docs/apps/blueprint/guide.md) | User guide and MCP tool reference |
-| [Book (Scheduling) Guide](docs/apps/book/guide.md) | User guide and MCP tool reference |
-| [Bureau Guide](docs/apps/bureau/guide.md) | User guide and MCP tool reference |
 
 <!-- AUTODOCS:DOCS_INDEX:END -->
 ---

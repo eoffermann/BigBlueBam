@@ -1,35 +1,10 @@
 {
-  "generated_at": "2026-06-18T00:43:58.274Z",
+  "generated_at": "2026-06-18T00:49:53.750Z",
   "changed": [
     {
       "app": "bam",
       "reason": "src_hash_changed",
       "new_hash": "d2da36f2f4bdeb1ea50a3d5545473c2b2c6bd95332e938c29f2b1bcd07325b8d"
-    },
-    {
-      "app": "bill",
-      "reason": "src_hash_changed",
-      "new_hash": "56c33003f7b774c4e3e6624fba1225a8beeb205b5f6779224a6e35bf7dfb8381"
-    },
-    {
-      "app": "blank",
-      "reason": "src_hash_changed",
-      "new_hash": "ce51f934501b7fd8e7ff5b19b74101661df1c5ea0ffc20a13065c4a2db3e6692"
-    },
-    {
-      "app": "blueprint",
-      "reason": "src_hash_changed",
-      "new_hash": "c4c502e3d3cf51003edc01033afbf6f76e2de0ab7630bff01341534dc89bc3b2"
-    },
-    {
-      "app": "book",
-      "reason": "src_hash_changed",
-      "new_hash": "3923696e8b7008dcfa3caa1a2394cf2f221f6d673aad0b9d8d45bac511d36359"
-    },
-    {
-      "app": "bureau",
-      "reason": "src_hash_changed",
-      "new_hash": "426fed9a2869a1477858d2308bddb0116adf846376e3c622e47499a8e5a0d18a"
     }
   ]
 }

@@ -487,7 +487,7 @@ the matching server environment variable (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
 enter an address and click **Send test email** to confirm end-to-end delivery.
 Changes take effect within 30 seconds.
 
-_(The Platform SMTP relay card is in the SuperUser Console and only renders for a platform SuperUser, so its screenshot is captured in a separate SuperUser pass.)_
+![Platform email (SMTP)](screenshots/light/07-platform-smtp.png)
 
 **Organization email (SMTP).** An org admin or owner can give their organization
 its own relay, which overrides the platform relay for that org's outbound mail

@@ -1,7 +1,7 @@
 ---
 title: "Bam (Project Management) Guide"
 app: bam
-generated: "2026-06-18T00:43:58.364Z"
+generated: "2026-06-18T00:49:53.857Z"
 ---
 
 # Bam (Project Management) Guide
@@ -87,6 +87,10 @@ dashboards give you visibility into velocity, burndown, and workload.
 ### Settings Integrations
 
 ![Settings Integrations](screenshots/light/06-settings-integrations.png)
+
+### Platform Smtp
+
+![Platform Smtp](screenshots/light/07-platform-smtp.png)
 
 ### Org Smtp
 
