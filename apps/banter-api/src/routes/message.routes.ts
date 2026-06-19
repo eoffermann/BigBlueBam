@@ -22,6 +22,7 @@ import {
   threadDeepLink,
 } from '../lib/notify.js';
 import { sanitizeContent } from '../lib/sanitize.js';
+import { requireUuidParam } from '../lib/params.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import {
   loadEnrichedChannel,
@@ -988,7 +989,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     '/v1/messages/:id',
     { preHandler: [requireAuth] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
+      const id = requireUuidParam(request, reply, 'id');
+      if (id === null) return reply;
       const user = request.user!;
 
       const [row] = await db
@@ -1086,7 +1088,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     '/v1/messages/:id',
     { preHandler: [requireAuth, fastify.requireCan('banter.message.edit'), requireScope('read_write')] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
+      const id = requireUuidParam(request, reply, 'id');
+      if (id === null) return reply;
       const user = request.user!;
       const body = updateMessageSchema.parse(request.body);
 
@@ -1243,7 +1246,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     '/v1/messages/:id',
     { preHandler: [requireAuth, requireScope('read_write')] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
+      const id = requireUuidParam(request, reply, 'id');
+      if (id === null) return reply;
       const user = request.user!;
 
       const [existing] = await db

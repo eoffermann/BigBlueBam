@@ -13,6 +13,7 @@ import { broadcastToChannel } from '../services/realtime.js';
 import { extractMentions } from '../services/notification-queue.js';
 import { emitNotification, threadDeepLink } from '../lib/notify.js';
 import { sanitizeContent } from '../lib/sanitize.js';
+import { requireUuidParam } from '../lib/params.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import {
   loadEnrichedChannel,
@@ -33,7 +34,8 @@ export default async function threadRoutes(fastify: FastifyInstance) {
     '/v1/messages/:id/thread',
     { preHandler: [requireAuth] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
+      const id = requireUuidParam(request, reply, 'id');
+      if (id === null) return reply;
       const user = request.user!;
       const query = request.query as {
         before?: string;
@@ -179,7 +181,8 @@ export default async function threadRoutes(fastify: FastifyInstance) {
     '/v1/messages/:id/thread',
     { preHandler: [requireAuth, fastify.requireCan('banter.message_thread.create'), requireScope('read_write')] },
     async (request, reply) => {
-      const { id } = request.params as { id: string };
+      const id = requireUuidParam(request, reply, 'id');
+      if (id === null) return reply;
       const user = request.user!;
       const body = createReplySchema.parse(request.body);
 

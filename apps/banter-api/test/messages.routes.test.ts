@@ -142,6 +142,7 @@ describe('GET /v1/channels/:id/messages — is_bookmarked / is_pinned mapping', 
     selJoinOrderLimit([msgRow(M1), msgRow(M2)]);       // messages page
     selWhere([{ message_id: M1 }]);                     // bookmarks for this user
     selWhere([{ message_id: M2 }]);                     // pins for this channel
+    selWhere([]);                                       // attachments for the page
 
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/v1/channels/${CH}/messages`, headers: auth });
@@ -177,6 +178,38 @@ describe('message edit/delete routes exist at /v1/messages/:id (NOT channel-scop
     const res = await app.inject({ method: 'DELETE', url: `/v1/messages/${M1}`, headers: auth });
     expect(res.statusCode).toBe(200);
     expect(mockDb.update).toHaveBeenCalledOnce(); // soft delete = update is_deleted
+    await app.close();
+  });
+});
+
+describe('malformed :id is rejected with 400 (not a 500 from Postgres 22P02)', () => {
+  // A non-UUID id, if passed straight into a uuid-typed query, raises
+  // "invalid input syntax for type uuid" (SQLSTATE 22P02) and a 500. The
+  // requireUuidParam guard short-circuits with a 400 before any DB call.
+  it('GET /v1/messages/:id returns 400 and never touches the DB', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/v1/messages/not-a-uuid', headers: auth });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe('VALIDATION_ERROR');
+    expect(mockDb.select).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('PATCH /v1/messages/:id returns 400 for a malformed id', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'PATCH', url: '/v1/messages/123', headers: auth, payload: { content: 'edited' } });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe('VALIDATION_ERROR');
+    expect(mockDb.select).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('DELETE /v1/messages/:id returns 400 for a malformed id', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'DELETE', url: '/v1/messages/xxxx', headers: auth });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe('VALIDATION_ERROR');
+    expect(mockDb.select).not.toHaveBeenCalled();
     await app.close();
   });
 });
