@@ -1,0 +1,86 @@
+{
+  "app": "bam",
+  "tagline": "Plan it, drag it, ship it.",
+  "intro": "Bam is where the work lives. Every project is a board you shape yourself, with your own phases, task states, and fields, run in time-boxed sprints that carry unfinished work forward instead of dropping it. This chapter takes you from your first project to closing a sprint and reading the reports, and it shows where an AI agent can pick up the same board your team uses. By the end you will be able to set up a project, run a sprint start to finish, and find any task fast.",
+  "atAGlance": [
+    "Configurable boards: phases, task states, labels, and fields, set per project",
+    "Time-boxed sprints with carry-forward that never quietly loses work",
+    "Rich task cards: subtasks, time tracking, start and due dates, custom fields",
+    "Board, List, Timeline, and Calendar views of the very same work",
+    "Full MCP access, so an agent can run the board with nearly a person's authority"
+  ],
+  "pullQuotes": [
+    {
+      "after": "carry unfinished work forward when a sprint closes",
+      "text": "Carry-forward is a first-class concept, so unfinished work follows you instead of falling through the cracks."
+    },
+    {
+      "after": "The same data is reachable through MCP tools",
+      "text": "Every board action is also an MCP tool, so an agent can plan a sprint with nearly the authority a person has."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "You move tasks across the board by dragging cards",
+      "type": "tip",
+      "text": "Card positions are stored as floating-point values, so reordering a long column never renumbers its neighbors. Drag freely."
+    },
+    {
+      "after": "The default sprint length is 14 days",
+      "type": "note",
+      "text": "Only one sprint can be active per project at a time. Plan the next one while the current sprint runs, then start it the moment this one closes."
+    },
+    {
+      "after": "A task cannot move into a closed state while it still has open subtasks",
+      "type": "warning",
+      "text": "The done-gate is strict. Close or cancel the open subtasks first, or the API returns INCOMPLETE_SUBTASKS and the card stays exactly where it was."
+    },
+    {
+      "after": "Bam is served at",
+      "type": "tryit",
+      "text": "Open /b3/, click Projects, and create a project with a two-to-six-letter prefix like DOCS. Your very first task will be DOCS-1."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What is the maximum length of a project's task id prefix?",
+      "choices": ["2 letters", "6 letters", "8 letters", "There is no limit"],
+      "answer": "6 letters",
+      "where": "Key concepts: Project"
+    },
+    {
+      "type": "mc",
+      "q": "How many sprints can be active in a single project at the same time?",
+      "choices": ["Unlimited", "One", "Two", "One per member"],
+      "answer": "One",
+      "where": "Key concepts: Sprint"
+    },
+    {
+      "type": "short",
+      "q": "When you close an active sprint with unfinished tasks, what three things can happen to each incomplete task?",
+      "answer": "It can be carried forward to a target sprint, moved to the backlog, or cancelled.",
+      "where": "Key concepts: Carry-forward"
+    },
+    {
+      "type": "mc",
+      "q": "What prevents a task from moving into a closed state?",
+      "choices": ["A WIP limit on the phase", "Open subtasks", "A missing assignee", "An active sprint"],
+      "answer": "Open subtasks",
+      "where": "Key concepts: Done-gate"
+    },
+    {
+      "type": "short",
+      "q": "What priority does a new task get by default, and how many custom field types does Bam support?",
+      "answer": "New tasks default to Medium, and Bam supports seven custom field types: text, number, date, select, multi-select, checkbox, and url.",
+      "where": "Key concepts: Priority and Custom field"
+    },
+    {
+      "type": "mc",
+      "q": "Which of these is NOT one of Bam's saved view types?",
+      "choices": ["Board", "List", "Timeline", "Mind map"],
+      "answer": "Mind map",
+      "where": "Key concepts: Saved view"
+    }
+  ]
+}

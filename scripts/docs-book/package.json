@@ -1,0 +1,14 @@
+{
+  "name": "bigbluebam-docs-book",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Generates the printable, textbook-style BigBlueBam manual (DOCX + PDF) from the same content as the /docs page.",
+  "scripts": {
+    "build": "node build-book.mjs"
+  },
+  "dependencies": {
+    "docx": "^9.7.1",
+    "marked": "^18.0.5"
+  }
+}
