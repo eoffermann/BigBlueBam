@@ -11,6 +11,7 @@ export {
   beaconEntries,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 
 // Brief-specific tables

@@ -7,6 +7,7 @@ export {
   organizationMemberships,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 
 // Bond-specific tables

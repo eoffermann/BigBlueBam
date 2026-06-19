@@ -280,6 +280,37 @@ export async function resolveUserOrgRolesStub(dbInstance: any, userId: string): 
   return out;
 }
 
+/**
+ * SuperUser impersonation sessions. Canonical schema lives in
+ * apps/api/src/db/schema/impersonation-sessions.ts. Satellite auth plugins
+ * read this to verify an active, unexpired impersonation session exists for
+ * the (superuser_id, target_user_id) pair before honoring the
+ * X-Impersonate-User header — mirroring the Bam api check so a SuperUser
+ * cannot impersonate on a satellite app without first starting a session via
+ * POST /v1/platform/impersonate on the Bam api.
+ */
+export const impersonationSessions = pgTable(
+  'impersonation_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    superuser_id: uuid('superuser_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    target_user_id: uuid('target_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    started_at: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+    ended_at: timestamp('ended_at', { withTimezone: true }),
+    reason: text('reason'),
+  },
+  (table) => [
+    index('idx_imp_sessions_superuser').on(table.superuser_id),
+    index('idx_imp_sessions_target').on(table.target_user_id),
+    index('idx_imp_sessions_active').on(table.superuser_id, table.target_user_id, table.ended_at),
+  ],
+);
+
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   org_id: uuid('org_id').notNull(),

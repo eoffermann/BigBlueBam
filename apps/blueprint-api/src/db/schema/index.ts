@@ -7,6 +7,7 @@ export {
   organizationMemberships,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 
 export { blueprintDiagrams } from './blueprint-diagrams.js';

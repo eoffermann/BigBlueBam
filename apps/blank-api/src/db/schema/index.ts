@@ -9,6 +9,7 @@ export {
   projectMemberships,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 
 // Blank-specific tables

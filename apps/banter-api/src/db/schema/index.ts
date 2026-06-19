@@ -7,6 +7,7 @@ export {
   agentPolicies,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 export { banterChannelGroups } from './channel-groups.js';
 export { banterChannels } from './channels.js';

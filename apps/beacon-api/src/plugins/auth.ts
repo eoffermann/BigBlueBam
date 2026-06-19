@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { db } from '../db/index.js';
 import {
@@ -10,6 +10,7 @@ import {
   organizationMemberships,
   accountGroupMemberships,
   permissionGroups,
+  impersonationSessions,
 } from '../db/schema/index.js';
 
 const UUID_REGEX_HEADER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -319,6 +320,28 @@ async function authPlugin(fastify: FastifyInstance) {
     if (!target) return;
     if (!target.is_active) return;
     if (target.is_superuser) return;
+
+    // Require an active (non-expired, non-ended) impersonation session
+    // for this (superuser, target) pair, created via POST
+    // /v1/platform/impersonate on the Bam api. The impersonation_sessions
+    // table is shared across the suite (one Postgres DB), so this satellite
+    // honors the same 30-minute TTL as the Bam api auth plugin. Fail closed:
+    // if no active session exists, do NOT swap to the target user.
+    const impersonator = request.user;
+    const now = new Date();
+    const activeSession = await db
+      .select({ id: impersonationSessions.id })
+      .from(impersonationSessions)
+      .where(
+        and(
+          eq(impersonationSessions.superuser_id, impersonator.id),
+          eq(impersonationSessions.target_user_id, target.id),
+          isNull(impersonationSessions.ended_at),
+          gt(impersonationSessions.expires_at, now),
+        ),
+      )
+      .limit(1);
+    if (activeSession.length === 0) return;
 
     request.impersonator = request.user;
     request.user = await buildAuthUser(target, null, request);

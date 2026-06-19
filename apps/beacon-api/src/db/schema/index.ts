@@ -9,6 +9,7 @@ export {
   organizationMemberships,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 
 // Beacon-specific tables

@@ -178,3 +178,9 @@ export const accountGroupMemberships = pgTable('account_group_memberships', {
   detached_at: timestamp('detached_at', { withTimezone: true }),
   granted_at: timestamp('granted_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// SuperUser impersonation sessions. Canonical definition lives in
+// @bigbluebam/db-stubs (subset of apps/api/src/db/schema/impersonation-sessions.ts).
+// Re-exported here so this service's auth plugin can verify an active,
+// unexpired impersonation session before honoring X-Impersonate-User.
+export { impersonationSessions } from '@bigbluebam/db-stubs';

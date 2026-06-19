@@ -10,6 +10,7 @@ export {
   projectMembers,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 
 // Board-specific tables

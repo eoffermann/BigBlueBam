@@ -13,6 +13,7 @@ export {
   projectMembers,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from './bbb-refs.js';
 
 // Bureau-specific tables — workstream 1's migrations agent is authoring

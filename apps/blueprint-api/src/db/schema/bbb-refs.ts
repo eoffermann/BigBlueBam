@@ -10,4 +10,5 @@ export {
   organizationMemberships,
   permissionGroups,
   accountGroupMemberships,
+  impersonationSessions,
 } from '@bigbluebam/db-stubs';
