@@ -174,9 +174,21 @@ export function MessageCompose({ channelId, channelName }: MessageComposeProps) 
     const cursorPos = textarea.selectionStart;
     const textBeforeCursor = content.slice(0, cursorPos);
     const mentionStart = textBeforeCursor.lastIndexOf('@');
+    // Insert the canonical handle (slugified display_name), NOT the raw name.
+    // "Jonas Grumby" → `@jonas-grumby`. The raw-name form ("@Jonas Grumby")
+    // broke server-side resolution: the parser captured only "Jonas" (it
+    // stopped at the space) and then tried to match it against the FULL
+    // lower-cased display_name, which never hit. This slug MUST match the
+    // server's handle transform (apps/banter-api notification-queue
+    // slugifyHandle + the /v1/users/by-handle SQL): lower-case, whitespace →
+    // '-', strip non-[a-z0-9-].
+    const handle = member.display_name
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
     const newContent =
       content.slice(0, mentionStart) +
-      `@${member.display_name} ` +
+      `@${handle} ` +
       content.slice(cursorPos);
 
     setContent(newContent);

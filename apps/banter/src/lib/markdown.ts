@@ -41,8 +41,11 @@ export function markdownToHtml(md: string): string {
   // Italic: *text*
   html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
 
-  // @mentions
-  html = html.replace(/@(\w+)/g, '<span class="mention-highlight">@$1</span>');
+  // @mentions — match the handle charset the composer inserts (slugified
+  // display_name: lower-case + digits + '-', plus '.'/'_' for dotted/email
+  // localpart handles), so a multi-word handle like @jonas-grumby highlights
+  // whole rather than stopping at the first hyphen.
+  html = html.replace(/@([a-zA-Z0-9_.-]+)/g, '<span class="mention-highlight">@$1</span>');
 
   // Bam task references: PREFIX-123 → clickable link that resolves to
   // the task's project board via /b3/tasks/ref/<REF>. Works with ANY

@@ -14,7 +14,7 @@ import {
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireChannelMember } from '../middleware/channel-auth.js';
 import { broadcastToChannel } from '../services/realtime.js';
-import { extractMentions } from '../services/notification-queue.js';
+import { extractMentions, resolveMentionsToUsers } from '../services/notification-queue.js';
 import {
   emitNotification,
   channelDeepLink,
@@ -649,15 +649,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           // ── @mention notifications (highest priority) ──
           const mentionedNames = extractMentions(body.content);
           if (mentionedNames.length > 0) {
-            const mentionedUsers = await db
-              .select({ id: users.id, display_name: users.display_name })
-              .from(users)
-              .where(
-                and(
-                  eq(users.org_id, ch.org_id),
-                  sql`lower(${users.display_name}) = ANY(${mentionedNames.map((n) => n.toLowerCase())}::text[])`,
-                ),
-              );
+            const mentionedUsers = await resolveMentionsToUsers(ch.org_id, mentionedNames);
             for (const mu of mentionedUsers) {
               if (notified.has(mu.id)) continue;
               notified.add(mu.id);
@@ -786,15 +778,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           const mentionedNames = extractMentions(body.content);
           const mentionedIds: string[] = [];
           if (mentionedNames.length > 0) {
-            const mentionedUsers = await db
-              .select({ id: users.id })
-              .from(users)
-              .where(
-                and(
-                  eq(users.org_id, fch.org_id),
-                  sql`lower(${users.display_name}) = ANY(${mentionedNames.map((n) => n.toLowerCase())}::text[])`,
-                ),
-              );
+            const mentionedUsers = await resolveMentionsToUsers(fch.org_id, mentionedNames);
             for (const mu of mentionedUsers) {
               if (mu.id === user.id) continue;
               mentionedIds.push(mu.id);
@@ -921,23 +905,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           );
 
           // Fan out message.mentioned — once per successfully-resolved
-          // mentioned user. We reuse the same extractMentions() names and
-          // resolve them against users.display_name (same matching the
-          // notification path uses above).
+          // mentioned user. We reuse the same extractMentions() tokens and
+          // resolve them via the shared handle/display_name resolver (same
+          // matching the notification + feed fan-in paths use above).
           if (mentions.length > 0) {
-            const mentionedUsers = await db
-              .select({
-                id: users.id,
-                display_name: users.display_name,
-                email: users.email,
-              })
-              .from(users)
-              .where(
-                and(
-                  eq(users.org_id, user.org_id),
-                  sql`lower(${users.display_name}) = ANY(${mentions.map((n) => n.toLowerCase())}::text[])`,
-                ),
-              );
+            const mentionedUsers = await resolveMentionsToUsers(user.org_id, mentions);
             for (const mu of mentionedUsers) {
               await publishBoltEvent(
                 'message.mentioned',

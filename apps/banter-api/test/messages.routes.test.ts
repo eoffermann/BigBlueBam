@@ -32,7 +32,10 @@ vi.mock('../src/services/realtime.js', () => ({
   broadcastToUser: vi.fn(),
   setRedisPublisher: vi.fn(),
 }));
-vi.mock('../src/services/notification-queue.js', () => ({ extractMentions: () => [] }));
+vi.mock('../src/services/notification-queue.js', () => ({
+  extractMentions: () => [],
+  resolveMentionsToUsers: async () => [],
+}));
 vi.mock('../src/services/feed-queue.js', () => ({ enqueueFeedFanin: vi.fn() }));
 vi.mock('../src/lib/notify.js', () => ({
   emitNotification: vi.fn(),

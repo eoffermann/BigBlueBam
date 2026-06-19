@@ -10,7 +10,7 @@ import {
 } from '../db/schema/index.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { broadcastToChannel } from '../services/realtime.js';
-import { extractMentions } from '../services/notification-queue.js';
+import { extractMentions, resolveMentionsToUsers } from '../services/notification-queue.js';
 import { emitNotification, threadDeepLink } from '../lib/notify.js';
 import { sanitizeContent } from '../lib/sanitize.js';
 import { requireUuidParam } from '../lib/params.js';
@@ -321,15 +321,7 @@ export default async function threadRoutes(fastify: FastifyInstance) {
           // @mentions first
           const mentionedNames = extractMentions(body.content);
           if (mentionedNames.length > 0) {
-            const mentionedUsers = await db
-              .select({ id: users.id })
-              .from(users)
-              .where(
-                and(
-                  eq(users.org_id, ch.org_id),
-                  sql`lower(${users.display_name}) = ANY(${mentionedNames.map((n) => n.toLowerCase())}::text[])`,
-                ),
-              );
+            const mentionedUsers = await resolveMentionsToUsers(ch.org_id, mentionedNames);
             for (const mu of mentionedUsers) {
               if (notified.has(mu.id)) continue;
               notified.add(mu.id);
@@ -439,19 +431,7 @@ export default async function threadRoutes(fastify: FastifyInstance) {
           );
 
           if (mentions.length > 0) {
-            const mentionedUsers = await db
-              .select({
-                id: users.id,
-                display_name: users.display_name,
-                email: users.email,
-              })
-              .from(users)
-              .where(
-                and(
-                  eq(users.org_id, user.org_id),
-                  sql`lower(${users.display_name}) = ANY(${mentions.map((n) => n.toLowerCase())}::text[])`,
-                ),
-              );
+            const mentionedUsers = await resolveMentionsToUsers(user.org_id, mentions);
             for (const mu of mentionedUsers) {
               await publishBoltEvent(
                 'message.mentioned',
