@@ -1,0 +1,138 @@
+{
+  "app": "banter",
+  "tagline": "Where the conversation lives.",
+  "intro": "Banter is the chat layer of BigBlueBam: channels, direct messages, threads, reactions, pins, and bookmarks, all sitting right next to the rest of the suite. It shares your Bam identity and your org's people, so there is no second login and no second roster to manage. This chapter walks you from your first visit to #general through posting, threading, searching, and the admin policies that govern who can do what, and it shows where an AI agent can post, schedule, and listen on the same channels your team uses. By the end you will be able to set up channels, run a conversation, and find any message fast.",
+  "atAGlance": [
+    "Channels, DMs, and threads that keep side conversations out of the main timeline",
+    "Rich messages up to 40,000 characters with mentions, reactions, pins, and bookmarks",
+    "Full-text search across every channel you can see, with author, date, and attachment filters",
+    "Org-level policy for who can create channels, retention, file size, and @mention groups",
+    "MCP access, so an agent can post, schedule, DM, and listen for patterns on a channel"
+  ],
+  "pullQuotes": [
+    {
+      "after": "does not flood the main timeline",
+      "text": "Threads hang off a single message, so a side conversation stays focused instead of drowning the channel."
+    },
+    {
+      "after": "A worker delivers scheduled and deferred messages at the right time",
+      "text": "Scheduled posts and quiet hours mean an agent can queue a message and trust it lands at the right moment."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "Your draft is saved per channel",
+      "type": "tip",
+      "text": "Because drafts are kept per channel, you can start a reply in one room, jump to another to grab a detail, and come back to find your half-written message still waiting."
+    },
+    {
+      "after": "Banter does not have its own login or its own user list",
+      "type": "note",
+      "text": "Banter rides on your BigBlueBam identity. Everyone you can message is already a member of your org, and signing out of Bam signs you out of Banter too."
+    },
+    {
+      "after": "This action cannot be undone",
+      "type": "warning",
+      "text": "Deleting a channel archives it along with every message in it, and there is no undo. The default channel is the exception: it cannot be deleted or left."
+    },
+    {
+      "after": "a bare /banter/ visit redirects there",
+      "type": "tryit",
+      "text": "Open the Launchpad app switcher in the top-left, choose Banter, and land in #general; type a message and press Enter to post your first line."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What is the maximum length of a single Banter message?",
+      "choices": ["4,000 characters", "10,000 characters", "40,000 characters", "There is no limit"],
+      "answer": "40,000 characters",
+      "where": "Key concepts: Message"
+    },
+    {
+      "type": "mc",
+      "q": "What are the three channel types besides DMs?",
+      "choices": ["public, private, and a DM type", "open, closed, and hidden", "team, project, and personal", "default, custom, and archived"],
+      "answer": "public, private, and a DM type",
+      "where": "Key concepts: Channel"
+    },
+    {
+      "type": "short",
+      "q": "What are the four channel roles, and which one is read-only?",
+      "answer": "The roles are owner, admin, member, and viewer; a viewer is read-only and cannot post.",
+      "where": "Key concepts: Channel role"
+    },
+    {
+      "type": "mc",
+      "q": "How many people total can a group DM hold?",
+      "choices": ["2 people", "3 to 8 people", "Up to 10 people", "Up to 50 people"],
+      "answer": "3 to 8 people",
+      "where": "Key concepts: Direct message (DM)"
+    },
+    {
+      "type": "short",
+      "q": "Who can pin a message in a channel, and who can everyone see the pin?",
+      "answer": "Only channel admins can pin or unpin, and a pin is channel-wide and visible to every member in the channel's pinned list.",
+      "where": "Key concepts: Pin"
+    },
+    {
+      "type": "mc",
+      "q": "Who can see your bookmarks?",
+      "choices": ["Everyone in the channel", "Only channel admins", "Only you", "Anyone in your org"],
+      "answer": "Only you",
+      "where": "Key concepts: Bookmark"
+    },
+    {
+      "type": "mc",
+      "q": "Which of these is one of the live presence statuses in Banter?",
+      "choices": ["away on vacation", "do not disturb", "in a meeting", "snoozed"],
+      "answer": "do not disturb",
+      "where": "Key concepts: Presence"
+    },
+    {
+      "type": "short",
+      "q": "What happens the first time anyone opens Banter in an org that has no channels?",
+      "answer": "Banter creates #general, marks it the default, and auto-joins every active member, with the creator becoming owner.",
+      "where": "Key concepts: #general"
+    },
+    {
+      "type": "mc",
+      "q": "What are the three options for the 'Who can create channels' org policy?",
+      "choices": ["Everyone, Admins only, Organization owners only", "Members, Managers, Owners", "Open, Restricted, Locked", "Everyone, Verified, Owners"],
+      "answer": "Everyone, Admins only, Organization owners only",
+      "where": "Admin: organization policy"
+    },
+    {
+      "type": "short",
+      "q": "How is channel creation from the single + button rate-limited?",
+      "answer": "Channel creation is rate-limited to 5 per hour.",
+      "where": "Create a channel"
+    },
+    {
+      "type": "mc",
+      "q": "What happens to a reply in a thread unless you tick 'Also send to channel'?",
+      "choices": ["It is discarded", "It stays in the thread only", "It posts only to the parent author", "It is queued for later"],
+      "answer": "It stays in the thread only",
+      "where": "Key concepts: Thread"
+    },
+    {
+      "type": "short",
+      "q": "What does Banter now do about live audio calls, and where does live audio happen instead?",
+      "answer": "Banter no longer starts or joins calls; every call write endpoint returns HTTP 410 Gone, Banter keeps only a read-only view of past calls and transcripts, and live audio happens in the suite-wide Bureau docked box.",
+      "where": "Past calls and audio"
+    },
+    {
+      "type": "short",
+      "q": "What is a quiet hours policy, and which posts does it mostly affect?",
+      "answer": "Quiet hours is a per-channel policy that holds non-urgent posts until the channel's allowed hours, used mostly by automated and agent posts.",
+      "where": "Key concepts: Quiet hours"
+    },
+    {
+      "type": "mc",
+      "q": "What keyboard shortcut opens the quick channel switcher?",
+      "choices": ["Ctrl/Cmd+K", "Ctrl/Cmd+Shift+M", "Esc", "Up arrow"],
+      "answer": "Ctrl/Cmd+K",
+      "where": "Keyboard shortcuts"
+    }
+  ]
+}

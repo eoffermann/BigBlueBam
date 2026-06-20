@@ -55,20 +55,6 @@ function tint(hex, amount) {
   return (m(r) + m(g) + m(b)).toUpperCase();
 }
 
-// Upside-down (180-degree) text via Unicode glyph substitution. A true rotated
-// frame (VML textbox) does not render in the LibreOffice PDF, so we flip the
-// glyphs, which renders reliably as ordinary text. Callers also reverse line
-// order and right-align so the block reads correctly when the book is turned.
-const FLIP = {
-  a: 'ɐ', b: 'q', c: 'ɔ', d: 'p', e: 'ǝ', f: 'ɟ', g: 'ƃ', h: 'ɥ', i: 'ı', j: 'ɾ', k: 'ʞ', l: 'ן', m: 'ɯ', n: 'u', o: 'o', p: 'd', q: 'b', r: 'ɹ', s: 's', t: 'ʇ', u: 'n', v: 'ʌ', w: 'ʍ', x: 'x', y: 'ʎ', z: 'z',
-  A: '∀', B: 'q', C: 'Ɔ', D: 'p', E: 'Ǝ', F: 'Ⅎ', G: 'פ', H: 'H', I: 'I', J: 'ſ', K: 'ʞ', L: '˥', M: 'W', N: 'N', O: 'O', P: 'Ԁ', Q: 'O', R: 'ᴚ', S: 'S', T: '⊥', U: '∩', V: 'Λ', W: 'M', X: 'X', Y: '⅄', Z: 'Z',
-  0: '0', 1: 'Ɩ', 2: 'ᄅ', 3: 'Ɛ', 4: 'ㄣ', 5: 'ϛ', 6: '9', 7: 'ㄥ', 8: '8', 9: '6',
-  '.': '˙', ',': 'ʻ', '?': '¿', '!': '¡', "'": ',', '"': ',,', '(': ')', ')': '(', '[': ']', ']': '[', '{': '}', '}': '{', '<': '>', '>': '<', '&': '⅋', _: '‾', '-': '-', ':': ':', ';': '؛', '/': '/', ' ': ' ',
-};
-function flip(s) {
-  return [...String(s)].map((ch) => FLIP[ch] || FLIP[ch.toLowerCase()] || ch).reverse().join('');
-}
-
 /** Read a PNG's intrinsic pixel size from its IHDR header. */
 function pngSize(file) {
   try {
@@ -273,13 +259,17 @@ function titleName(app, title) {
   return t || (app.charAt(0).toUpperCase() + app.slice(1));
 }
 
+// The end-of-chapter quiz: QUESTIONS ONLY. Answers live in the Answer Key
+// appendix at the back of the book (see answerKeySection), so the reader is not
+// tempted by an answer on the same page.
 function quizBlock(quiz, accent, num) {
   if (!Array.isArray(quiz) || !quiz.length) return [];
   const out = [];
   // "Check yourself" starts on a fresh page, splitting the review from the chapter.
   out.push(new Paragraph({ children: [new PageBreak()] }));
   const inner = [
-    new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: 'Check yourself', bold: true, font: SANS, color: accent, size: 28 })] }),
+    new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: 'Check yourself', bold: true, font: SANS, color: accent, size: 28 })] }),
+    new Paragraph({ spacing: { after: 140 }, children: [new TextRun({ text: 'Every answer is findable in this chapter. Check your work against the Answer Key appendix at the back of the book.', italics: true, font: SANS, color: SUBTLE, size: 18 })] }),
   ];
   quiz.forEach((item, i) => {
     inner.push(new Paragraph({ spacing: { before: 100, after: 40 }, children: [
@@ -296,24 +286,37 @@ function quizBlock(quiz, accent, num) {
     }
   });
   out.push(colorPanel(tint(accent, 0.9), inner, { top: 240, bottom: 240, left: 280, right: 280 }));
-  // Answer key printed UPSIDE DOWN (Unicode-flipped glyphs, reversed line order,
-  // right-aligned) so it reads correctly when the reader turns the book around.
-  // A true rotated frame did not render in the LibreOffice PDF; flipping glyphs does.
-  out.push(new Paragraph({ spacing: { before: 280, after: 120 }, alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Answers  (turn the book around to read them)', italics: true, font: SANS, color: SUBTLE, size: 16 })] }));
-  const akLines = ['Answer key'];
-  quiz.forEach((item, i) => {
-    let ans = item.answer;
-    if (item.type === 'mc' && Array.isArray(item.choices)) {
-      const idx = item.choices.findIndex((c) => c === item.answer);
-      if (idx >= 0) ans = `${String.fromCharCode(97 + idx)}) ${item.answer}`;
-    }
-    akLines.push(`${i + 1}. ${ans}${item.where ? `  (see: ${item.where})` : ''}`);
-  });
-  // Reverse line order so a 180-degree turn reads the lines top-to-bottom.
-  akLines.slice().reverse().forEach((line) => {
-    out.push(new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 24 }, children: [new TextRun({ text: flip(line), font: SERIF, color: SUBTLE, size: 18 })] }));
-  });
   return out;
+}
+
+// Back-matter appendix: every chapter's quiz answers, grouped by chapter, each
+// citing the section where the reader can confirm it. Sits after the chapters
+// and before the glossary and index.
+function answerKeySection(chapters, accent) {
+  const children = [
+    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 120, after: 80 }, children: [new TextRun({ text: 'Answer Key', bold: true, font: SANS, color: accent, size: 48 })] }),
+    new Paragraph({ spacing: { after: 220 }, children: [new TextRun({ text: 'Answers to every "Check yourself" review, grouped by chapter. Each answer cites the section where you can confirm it.', italics: true, font: SERIF, color: SUBTLE, size: 22 })] }),
+  ];
+  chapters.forEach((ch) => {
+    const acc = ACCENT[ch.app] || accent;
+    // A styled (not heading-level) label so the 16 chapter rows do not flood the TOC.
+    children.push(new Paragraph({ spacing: { before: 240, after: 80 }, keepNext: true,
+      border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: acc, space: 2 } },
+      children: [new TextRun({ text: `Chapter ${ch.num}. ${titleName(ch.app, ch.title)}`, bold: true, font: SANS, color: acc, size: 26 })] }));
+    ch.quiz.forEach((item, i) => {
+      let ans = item.answer;
+      if (item.type === 'mc' && Array.isArray(item.choices)) {
+        const idx = item.choices.findIndex((c) => c === item.answer);
+        if (idx >= 0) ans = `${String.fromCharCode(97 + idx)}) ${item.answer}`;
+      }
+      children.push(new Paragraph({ spacing: { after: 50, line: 290 }, indent: { left: 380, hanging: 260 }, children: [
+        new TextRun({ text: `${i + 1}.  `, bold: true, font: SERIF, color: acc, size: 21 }),
+        new TextRun({ text: ans, font: SERIF, color: INK, size: 21 }),
+        ...(item.where ? [new TextRun({ text: `  (see: ${item.where})`, italics: true, font: SERIF, color: SUBTLE, size: 19 })] : []),
+      ] }));
+    });
+  });
+  return { properties: { type: SectionType.ODD_PAGE, page: PAGE }, footers: { default: pageFooter() }, children };
 }
 
 // --- render one chapter's markdown body --------------------------------------
@@ -356,12 +359,16 @@ function renderBody(md, enh, accent, chapterNum, figState, ctx) {
       out.push(new Paragraph({ spacing: { after: 120, line: 300 }, alignment: AlignmentType.LEFT, children: inlineRuns(tok.tokens, accent, {}, ctx) }));
       out.push(...anchoredFor(plain(tok.tokens)));
     } else if (tok.type === 'blockquote') {
-      const inner = (tok.tokens || []).filter((t) => t.type === 'paragraph').map((p) => new Paragraph({
+      const paras = (tok.tokens || []).filter((t) => t.type === 'paragraph');
+      const inner = paras.map((p) => new Paragraph({
         spacing: { after: 60, line: 300 }, indent: { left: 300 },
         border: { left: { style: BorderStyle.SINGLE, size: 24, color: tint(accent, 0.4), space: 10 } },
         children: inlineRuns(p.tokens, accent, { italics: true, color: SUBTLE }),
       }));
       out.push(...inner);
+      // Chapter intros and "Known limitation" notes are blockquotes, so anchors
+      // (pull-quotes, callouts) can legitimately point at blockquote text too.
+      out.push(...anchoredFor(paras.map((p) => plain(p.tokens)).join(' ')));
     } else if (tok.type === 'list') {
       let listText = '';
       let n = typeof tok.start === 'number' && tok.start ? tok.start : 1;
@@ -474,10 +481,9 @@ function pageFooter() {
 const PAGE_MARGIN = { top: 1440, bottom: 1440, left: 1584, right: 1440 };
 const PAGE = { size: { width: 12240, height: 15840 }, margin: PAGE_MARGIN }; // US Letter
 
-function chapterSection(chapter, num, ctx) {
+function chapterSection(chapter, num, ctx, enh) {
   const app = chapter.app;
   const accent = ACCENT[app] || '2563EB';
-  const enh = loadEnh(app);
   const figState = { n: 0 };
   const children = [
     ...chapterOpener(app, chapter.title, enh.tagline, enh.intro, enh.atAGlance, chapter.toc, accent, num),
@@ -555,18 +561,24 @@ async function main() {
 
   const fnState = { reg: {}, next: 1 };
   const allGloss = [];
+  const answerKeys = [];
   const chapterSecs = chapters.map((c, i) => {
     const num = appArg ? (manual.findIndex((m) => m.app === c.app) + 1) : i + 1;
     const gloss = parseGlossary(c.markdown);
     allGloss.push(...gloss);
-    return chapterSection(c, num, buildCtx(gloss, fnState));
+    const enh = loadEnh(c.app);
+    if (Array.isArray(enh.quiz) && enh.quiz.length) answerKeys.push({ num, app: c.app, title: c.title, quiz: enh.quiz });
+    return chapterSection(c, num, buildCtx(gloss, fnState), enh);
   });
   const seen = new Set();
   const glossary = [];
   for (const g of allGloss) { const k = g.term.toLowerCase(); if (!seen.has(k)) { seen.add(k); glossary.push(g); } }
   glossary.sort((x, y) => x.term.localeCompare(y.term));
 
-  const sections = [titleSection(!!appArg), tocSection(), ...chapterSecs, glossarySection(glossary, '2563EB'), indexSection('2563EB')];
+  // Order: front matter, chapters, then the Answer Key appendix, glossary, index.
+  const sections = [titleSection(!!appArg), tocSection(), ...chapterSecs];
+  if (answerKeys.length) sections.push(answerKeySection(answerKeys, '2563EB'));
+  sections.push(glossarySection(glossary, '2563EB'), indexSection('2563EB'));
 
   const doc = new Document({
     creator: 'BigBlueBam', title: 'BigBlueBam Manual',

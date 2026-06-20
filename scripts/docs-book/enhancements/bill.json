@@ -1,0 +1,131 @@
+{
+  "app": "bill",
+  "tagline": "Bill it, send it, get paid.",
+  "intro": "Bill turns the work your team already tracked into invoices a client can read and pay. You build a draft, fill it with line items, finalize it to lock a permanent number, send it, and record payments until the balance hits zero. Along the way it captures expenses with an approval step, resolves billing rates so tracked time prices itself, and reports on revenue, aging, and profitability. By the end of this chapter you can stand up your billing identity, send a finalized invoice, and read the numbers at the close of a period.",
+  "atAGlance": [
+    "Draft-to-paid invoice lifecycle: finalize locks the number, payments close the balance",
+    "Money in integer cents everywhere, so the inputs never round or guess",
+    "Recurring schedules that bill a client on a cadence without re-drafting",
+    "Time-based billing that resolves the most specific rate that applies",
+    "Full MCP coverage, so an agent can draft and collect while a human approves and sends"
+  ],
+  "pullQuotes": [
+    {
+      "after": "it resolves the most specific rate that applies",
+      "text": "Point Bill at a project and a date range and tracked time prices itself, resolving the most specific rate that applies."
+    },
+    {
+      "after": "every generated invoice is assigned a number and marked sent automatically",
+      "text": "Set a recurring schedule to Auto-finalize and every cycle's invoice numbers, finalizes, and sends itself."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "All money in Bill is stored and entered in",
+      "type": "tip",
+      "text": "Every amount, rate, and payment field is in whole cents, not dollars. Typing 150 means one dollar and fifty cents, so multiply your dollar figure by 100 before you enter it and nothing rounds."
+    },
+    {
+      "after": "is computed from the due date as any unpaid, finalized invoice",
+      "type": "note",
+      "text": "Overdue is not a stored status. It is computed live from the due date as any unpaid, finalized invoice that is past due, which is why the Dashboard Overdue tile, the Invoices list Overdue pill, and the Reports overdue table all agree."
+    },
+    {
+      "after": "Bill rejects a payment that would exceed the remaining balance",
+      "type": "warning",
+      "text": "A payment cannot push an invoice past paid. Bill rejects any receipt larger than the remaining balance, so record the actual amount received rather than rounding up to the total."
+    },
+    {
+      "after": "Bill is served at",
+      "type": "tryit",
+      "text": "Open /bill/, click Bill Settings, fill in your Company Name and an Invoice Prefix, and click Save Settings. Watch for the Saved! confirmation, then your next invoice carries those details on its from side."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "How is money stored and entered throughout Bill?",
+      "choices": ["In dollars and cents", "In integer cents", "In the org's default currency only", "As a free-text string"],
+      "answer": "In integer cents",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "Which invoice action requires an admin or owner role rather than plain write access?",
+      "choices": ["Adding a line item to a draft", "Creating a draft invoice", "Finalizing an invoice", "Managing clients"],
+      "answer": "Finalizing an invoice",
+      "where": "Overview"
+    },
+    {
+      "type": "short",
+      "q": "Once you finalize an invoice, what two things become locked?",
+      "answer": "Its number is assigned permanently and its line items can no longer be edited; invoices are only editable while in draft.",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "Is 'overdue' a stored invoice status?",
+      "choices": ["Yes, the app sets it like draft or paid", "No, it is computed from the due date", "Only on recurring invoices", "Only after a reminder email sends"],
+      "answer": "No, it is computed from the due date",
+      "where": "Key concepts: Invoice status"
+    },
+    {
+      "type": "short",
+      "q": "Name the six invoice status values that the app actually sets.",
+      "answer": "draft, sent, viewed, partially_paid, paid, and void.",
+      "where": "Key concepts: Invoice status"
+    },
+    {
+      "type": "short",
+      "q": "What three states make up the expense lifecycle from submission to terminal step?",
+      "answer": "An expense starts pending, a reviewer moves it to approved (or rejected), and an approved expense can be moved on to reimbursed.",
+      "where": "Key concepts: Expense"
+    },
+    {
+      "type": "mc",
+      "q": "When Bill bills tracked time, which rate does it use?",
+      "choices": ["The organization rate always", "The most specific rate that applies", "The highest rate available", "The rate on the first time entry"],
+      "answer": "The most specific rate that applies",
+      "where": "Key concepts: Rate"
+    },
+    {
+      "type": "mc",
+      "q": "What happens when you record a payment larger than the remaining balance?",
+      "choices": ["The invoice flips to paid and the extra is credited", "Bill rejects the payment", "The overage becomes a new draft invoice", "The client is refunded automatically"],
+      "answer": "Bill rejects the payment",
+      "where": "Invoice detail"
+    },
+    {
+      "type": "short",
+      "q": "What is the difference between a recurring schedule's Auto-finalize mode and its Draft mode?",
+      "answer": "With Auto-finalize on, every generated invoice is assigned a number and marked sent automatically; with it off (Draft), each run produces a draft for you to review, finalize, and send by hand.",
+      "where": "Recurring billing"
+    },
+    {
+      "type": "mc",
+      "q": "Can a client pay through the public invoice view that the view token opens?",
+      "choices": ["Yes, it has a Pay Now button", "No, it is view-and-PDF only and you record payments yourself", "Only with Stripe configured", "Only for partially_paid invoices"],
+      "answer": "No, it is view-and-PDF only and you record payments yourself",
+      "where": "Public invoice view"
+    },
+    {
+      "type": "short",
+      "q": "What invoice number format does the live finalizer produce, and what form should you not expect?",
+      "answer": "It produces {prefix}-{number:05d}, for example INV-00001; year-based forms like INV-2026-0042 from some seed data are not what finalize generates.",
+      "where": "Working with AI agents"
+    },
+    {
+      "type": "mc",
+      "q": "Which expenses count against profit in the Project Profitability report?",
+      "choices": ["All logged expenses", "Only approved expenses", "Only billable expenses", "Only reimbursed expenses"],
+      "answer": "Only approved expenses",
+      "where": "Reports"
+    },
+    {
+      "type": "short",
+      "q": "Marking an approved expense reimbursed has no dedicated MCP tool. How does an agent or user do it?",
+      "answer": "It is a UI and REST action via POST /bill/api/v1/expenses/:id/reimburse, with no dedicated MCP tool.",
+      "where": "Working with AI agents"
+    }
+  ]
+}

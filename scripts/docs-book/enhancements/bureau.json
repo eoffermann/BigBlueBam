@@ -1,0 +1,132 @@
+{
+  "app": "bureau",
+  "tagline": "The office is wherever you all are.",
+  "intro": "Bureau is the virtual office that rides along with everything else in the suite, so \"who is around right now\" and \"let's all go look at this together\" are one click away. You browse floors, drop into rooms with live occupant dots, and a floating docked box shows where you are, who else is on your page, and the actions to knock, summon, hunt, and book. This chapter walks you from dropping into your first room to running a summon, booking a conference room, and reading door states. By the end you will know how presence works, how to interrupt someone politely, and where an agent can be a first-class occupant beside you.",
+  "atAGlance": [
+    "A spatial office with floors, rooms, and live occupant dots for everyone around",
+    "Each room is a real-time audio huddle you join just by entering",
+    "A docked box that follows you across every app with one-click invite, hunt, and summon",
+    "Polite interruptions: knock on closed offices, with a 30-second auto-timeout",
+    "Server-side presence so your room and call survive moving between pages"
+  ],
+  "pullQuotes": [
+    {
+      "after": "who is available right now, can I interrupt them, and can we all jump to the same place",
+      "text": "Bureau answers the three questions chat cannot: who is around, can I break in, and can we all land on the same screen."
+    },
+    {
+      "after": "Each recipient is access-checked first, so people who cannot see the destination",
+      "text": "A summon teleports your whole room to a URL, but only the people who can actually open it get pulled."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "kept 24 hours by default and recoverable later under Recent chats",
+      "type": "tip",
+      "text": "Room chat is ephemeral on purpose, but if a thread mattered, an admin can open its transcript and set Retention to 2 days, 3 days, 1 week, or Retain permanently before the 24-hour clock runs out."
+    },
+    {
+      "after": "A knock auto-times-out after 30 seconds if the owner does not respond",
+      "type": "note",
+      "text": "Only office rooms with an assigned owner can be knocked on. You cannot knock on your own office, and you cannot knock on an office that has no owner."
+    },
+    {
+      "after": "Cancellation is a soft delete that drops the scheduled jobs",
+      "type": "warning",
+      "text": "Cancelling a booking is a soft delete that also makes a best-effort attempt to cancel the linked Book event. Only the organizer or an org admin sees the Cancel button, so confirm you are the one who should be tearing the reservation down."
+    },
+    {
+      "after": "Door state is enforced on entry. You can always enter an Open room",
+      "type": "tryit",
+      "text": "Open a floor at /floors/:id, click an Open room rectangle to drop your dot inside and connect audio, then click \"Leave room\" in the status bar to step back out."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "How many room types does Bureau offer?",
+      "choices": ["4", "6", "8", "12"],
+      "answer": "8",
+      "where": "Key concepts: Room"
+    },
+    {
+      "type": "mc",
+      "q": "What are the three door states a room can have?",
+      "choices": ["Open, Knock, and Private", "Public, Locked, and Hidden", "Available, Busy, and DND", "Member, Manager, and Owner"],
+      "answer": "Open, Knock, and Private",
+      "where": "Key concepts: Door state (privacy)"
+    },
+    {
+      "type": "short",
+      "q": "How long does a knock wait before it auto-times-out if the owner does not respond?",
+      "answer": "30 seconds.",
+      "where": "Key concepts: Knock"
+    },
+    {
+      "type": "mc",
+      "q": "How long are room chat messages kept by default?",
+      "choices": ["1 hour", "24 hours", "7 days", "Forever"],
+      "answer": "24 hours",
+      "where": "Key concepts: Room chat"
+    },
+    {
+      "type": "short",
+      "q": "Name the six presence status values Bureau supports.",
+      "answer": "available, busy, dnd, focus, away, and in_meeting.",
+      "where": "Key concepts: Presence status"
+    },
+    {
+      "type": "mc",
+      "q": "What does a summon do when a co-occupant lacks access to the destination?",
+      "choices": ["Sends them the link anyway", "Puts them on a denied list rather than pinging them with a dead link", "Grants them access automatically", "Cancels the entire summon"],
+      "answer": "Puts them on a denied list rather than pinging them with a dead link",
+      "where": "Key concepts: Summon (Bring everyone here)"
+    },
+    {
+      "type": "short",
+      "q": "When someone knocks and you respond from the incoming-knock toast, what are the three responses you can give?",
+      "answer": "\"Let in\" admits them, \"Not now\" defers the knock, and \"Decline\" rejects the visitor.",
+      "where": "Knock and respond to a knock"
+    },
+    {
+      "type": "mc",
+      "q": "If you are in DND when someone tries to knock, what happens?",
+      "choices": ["They are admitted automatically", "The knock is blocked (the server returns 423) and they are offered a leave-a-note path", "The knock queues until you exit DND", "Nothing; DND does not affect knocks"],
+      "answer": "The knock is blocked (the server returns 423) and they are offered a leave-a-note path",
+      "where": "Knock and respond to a knock"
+    },
+    {
+      "type": "short",
+      "q": "What two access modes can a booking have, and what does each mean?",
+      "answer": "Open means non-attendees may wander in, and Locked means the room is held private for the meeting.",
+      "where": "Key concepts: Booking"
+    },
+    {
+      "type": "mc",
+      "q": "Which setting gates whether ordinary members can reserve rooms?",
+      "choices": ["continuous_audio", "members_can_book", "allow_auto_follow", "members_can_create_rooms"],
+      "answer": "members_can_book",
+      "where": "Admin - Settings"
+    },
+    {
+      "type": "mc",
+      "q": "How does Hunt treat a teammate who is in DND or on a surface you cannot access?",
+      "choices": ["It reveals their location anyway", "It returns the same result as \"not located\"", "It overrides their DND", "It notifies them you tried to find them"],
+      "answer": "It returns the same result as \"not located\"",
+      "where": "Hunt"
+    },
+    {
+      "type": "short",
+      "q": "Why does navigating between pages not drop your room or your call?",
+      "answer": "Because your presence lives on the server, so the docked box re-attaches to the surface huddle wherever you land.",
+      "where": "The cross-app docked box"
+    },
+    {
+      "type": "mc",
+      "q": "How are agent occupants shown in the occupants list and on the floor?",
+      "choices": ["With a robot emoji", "With an \"(A) \" prefix", "In a separate panel", "They are hidden from humans"],
+      "answer": "With an \"(A) \" prefix",
+      "where": "Working with AI agents"
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "app": "bearing",
+  "tagline": "Set the objective, watch the drift, act in time.",
+  "intro": "Bearing is where your team's objectives get measurable. You set a Period, add Goals inside it, and break each goal into Key Results with a start value, a target, and a current value. As you check in, Bearing rolls those numbers into one progress percentage and compares it against where you should be by now, so a goal that is slipping shows up while there is still time to fix it. By the end of this chapter you will be able to stand up a quarter, run weekly check-ins, triage what is behind, and close the period out.",
+  "atAGlance": [
+    "Periods that scope the whole UI to one quarter, half, year, or custom span",
+    "Goals scoped to Organization, Team, Project, or Individual",
+    "Key Results in Number, Percentage, Currency, or Yes/No, clamped 0 to 100 percent",
+    "Automatic status from actual progress against expected, with an At Risk triage view",
+    "Agent and REST reach for linking key results to Bam work, reports, and status overrides the UI does not surface"
+  ],
+  "pullQuotes": [
+    {
+      "after": "rolls those numbers up into a single goal progress percentage",
+      "text": "Bearing compares actual progress against where you should be by now, so a drifting goal becomes visible while there is still time to act."
+    },
+    {
+      "after": "a background recompute job keeps that key result and its goal current",
+      "text": "Link a key result to Bam delivery and it moves on its own as the work lands, no manual check-in required."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "the first thing to do is create one on the",
+      "type": "tip",
+      "text": "The Dashboard and the At Risk view are both gated on a selected period. In a fresh org with no periods, create one on the Periods page and select it in the sidebar first, or those views will only show a prompt."
+    },
+    {
+      "after": "KR progress is clamped between 0 and 100 percent",
+      "type": "note",
+      "text": "A goal's overall progress is the average of its key results, and each key result's progress is clamped between 0 and 100 percent. A current value past the target does not push a key result above 100."
+    },
+    {
+      "after": "Deleting is blocked with a conflict error if the period still has goals",
+      "type": "warning",
+      "text": "Deleting a period that still holds goals fails with a conflict error. Move or delete the goals inside it first, then delete the period."
+    },
+    {
+      "after": "resolving the value to an active member of your org by user ID first, then by email",
+      "type": "tryit",
+      "text": "On any goal's detail page, open the Watchers card, click the person-plus icon, type a teammate's email, and press Enter to subscribe them to that goal's status-change emails."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What must exist and be selected before the Dashboard and At Risk views will show goals?",
+      "choices": ["At least one Goal", "At least one Period", "At least one Key Result", "An active Bolt automation"],
+      "answer": "At least one Period",
+      "where": "Where to find it"
+    },
+    {
+      "type": "mc",
+      "q": "Which four metric types can a Key Result use?",
+      "choices": ["Number, Percentage, Currency, Yes/No", "Integer, Float, Money, Boolean", "Count, Ratio, Dollars, Flag", "Number, Date, Text, Select"],
+      "answer": "Number, Percentage, Currency, Yes/No",
+      "where": "Key concepts: Key Result"
+    },
+    {
+      "type": "short",
+      "q": "How is a goal's overall progress calculated from its key results, and what range is each key result's progress clamped to?",
+      "answer": "A goal's overall progress is the average of its key results' progress, and each key result's progress is clamped between 0 and 100 percent.",
+      "where": "Key concepts: Key Result"
+    },
+    {
+      "type": "mc",
+      "q": "What are the four scopes a goal can have?",
+      "choices": ["Company, Squad, Repo, Person", "Organization, Team, Project, Individual", "Global, Department, Sprint, User", "Org, Group, Board, Owner"],
+      "answer": "Organization, Team, Project, Individual",
+      "where": "Key concepts: Scope"
+    },
+    {
+      "type": "short",
+      "q": "How does Bearing decide whether a goal is on track, at risk, or behind?",
+      "answer": "It derives the status automatically by comparing actual progress against expected progress, which is where the goal should be based on how much of the period has elapsed, unless someone overrides it.",
+      "where": "Key concepts: Expected progress"
+    },
+    {
+      "type": "mc",
+      "q": "What happens if you try to delete a period that still has goals?",
+      "choices": ["The goals are deleted with it", "The goals move to the next period", "Deletion is blocked with a conflict error", "The period is archived instead"],
+      "answer": "Deletion is blocked with a conflict error",
+      "where": "Periods"
+    },
+    {
+      "type": "mc",
+      "q": "The Periods row menu only shows Activate while the period is in which status?",
+      "choices": ["active", "planning", "completed", "archived"],
+      "answer": "planning",
+      "where": "Periods"
+    },
+    {
+      "type": "short",
+      "q": "Which goal scope is not offered in the Create Goal dialog, and how can a goal be reassigned to a different owner?",
+      "answer": "The Create Goal dialog does not offer the Individual scope or an owner field; new goals are owned by you, and reassigning a goal to another owner is done through the agent tool bearing_goal_update or REST, not the human UI.",
+      "where": "Create a Goal"
+    },
+    {
+      "type": "mc",
+      "q": "What does a check-in do when you set a key result's new current value?",
+      "choices": ["Only updates that one key result's bar", "Updates the KR, rolls up the goal's progress, re-derives the goal's status, and writes a snapshot", "Emails all watchers a digest", "Marks the goal achieved"],
+      "answer": "Updates the KR, rolls up the goal's progress, re-derives the goal's status, and writes a snapshot",
+      "where": "Record progress on a Key Result"
+    },
+    {
+      "type": "short",
+      "q": "What does linking a key result to Bam work do, and where is that linking available?",
+      "answer": "It binds the key result to a Bam epic, project, sprint, or task so a background recompute job keeps the key result and its goal current as linked tasks reach a done state. Linking is available only through the MCP tools and REST, not a human screen in this build.",
+      "where": "Working with AI agents"
+    },
+    {
+      "type": "mc",
+      "q": "How does the Watchers form resolve the value you type into the User ID or email field?",
+      "choices": ["By display name only", "By user ID first, then by email", "By email first, then by handle", "It always requires a UUID"],
+      "answer": "By user ID first, then by email",
+      "where": "Watch a goal"
+    },
+    {
+      "type": "short",
+      "q": "What two sections does the My Goals page split goals into, and what does the Completed section contain?",
+      "answer": "My Goals splits goals into Active and Completed sections, where Completed means a goal that is achieved or missed.",
+      "where": "My Goals"
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "app": "bench",
+  "tagline": "Chart the whole suite in one place.",
+  "intro": "Bench is the read-and-visualize layer over the rest of BigBlueBam. You assemble dashboards out of widgets, where each widget queries an approved data source like Bond deals or Blast campaigns and renders a chart, KPI card, or table. Bench never stores your business data; it reads other products' tables through an allowlisted registry and scopes every query to your active organization. By the end of this chapter you will be able to build a dashboard, explore a source ad hoc, save and schedule queries, and see where an agent can summarize a dashboard and flag anomalies for you.",
+  "atAGlance": [
+    "Shared dashboards built from widgets, each charting one registered data source",
+    "Eleven chart types, from bar and line to KPI card, gauge, and progress bar",
+    "Ad-Hoc Explorer for a quick aggregate without building a whole dashboard",
+    "Saved queries and cron-driven scheduled reports to Email, Banter, or Brief",
+    "Full MCP surface, so an agent can read dashboards, run queries, and compare periods"
+  ],
+  "pullQuotes": [
+    {
+      "after": "always scopes every query to your active organization",
+      "text": "Bench reads other apps but never writes them, and every query is org-scoped through an allowlisted registry."
+    },
+    {
+      "after": "compares the most recent period against the previous one",
+      "text": "An agent can flag a metric that moved sharply, marking any change over thirty percent as high, medium, or low severity."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "pick one of the eleven types",
+      "type": "tip",
+      "text": "The Widget Wizard and the Widget Edit page offer the same eleven chart types, but Widget Edit adds a live preview that re-runs the query as you change the source, measures, and dimensions. Tune there when you want to see the result before you save."
+    },
+    {
+      "after": "Three are exposed to you as queryable",
+      "type": "note",
+      "text": "A materialized view is a pre-computed rollup the worker refreshes for you. Bench surfaces three as bench: data sources: Daily Task Throughput, Pipeline Snapshot, and Campaign Engagement."
+    },
+    {
+      "after": "report delivery is a stub in this release",
+      "type": "warning",
+      "text": "Send now and the schedule only stamp the row's status; they do not produce or send an actual PDF, email, Banter post, or Brief document. A successful run even shows the neutral gray pill rather than a green one, so treat this as wiring, not confirmed delivery."
+    },
+    {
+      "after": "the first measure with its first aggregation",
+      "type": "tryit",
+      "text": "Open the Explorer, pick Knowledge Base Articles from the Data Source dropdown, and click Run Query to see the fixed shape: the first measure, the first two dimensions, and up to fifty rows."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What does Bench store about your business data?",
+      "choices": ["A full copy of every source table", "Only the dashboards and widgets you build", "Nothing; it queries other products' tables through a registry", "A nightly snapshot of all org data"],
+      "answer": "Nothing; it queries other products' tables through a registry",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "How many chart types does the Widget Wizard offer at the Chart Type step?",
+      "choices": ["Five", "Eight", "Eleven", "Fourteen"],
+      "answer": "Eleven",
+      "where": "Widget Wizard"
+    },
+    {
+      "type": "short",
+      "q": "What are the three visibility options a dashboard can have?",
+      "answer": "Private, Project, or Organization.",
+      "where": "Key concepts: Dashboard"
+    },
+    {
+      "type": "mc",
+      "q": "What is the minimum number of measures a query needs?",
+      "choices": ["Zero", "At least one", "At least two", "Exactly one per dimension"],
+      "answer": "At least one",
+      "where": "Key concepts: Measure"
+    },
+    {
+      "type": "short",
+      "q": "Name the five numeric aggregations a measure can use.",
+      "answer": "count, sum, avg, min, or max.",
+      "where": "Key concepts: Measure"
+    },
+    {
+      "type": "mc",
+      "q": "When you duplicate a dashboard, what visibility does the copy get?",
+      "choices": ["It keeps the original's visibility", "Organization", "Project", "It is forced to Private"],
+      "answer": "It is forced to Private",
+      "where": "Dashboards list"
+    },
+    {
+      "type": "mc",
+      "q": "What query shape runs when you pick a source manually in the Explorer?",
+      "choices": ["Every measure and dimension for the source", "The first measure with its first aggregation, plus the first two dimensions, limited to 50 rows", "Only a row count", "A custom query you type in"],
+      "answer": "The first measure with its first aggregation, plus the first two dimensions, limited to 50 rows",
+      "where": "Ad-Hoc Explorer"
+    },
+    {
+      "type": "short",
+      "q": "What are the three delivery methods for a scheduled report?",
+      "answer": "Email, Banter Channel, and Brief Document.",
+      "where": "Key concepts: Scheduled report"
+    },
+    {
+      "type": "mc",
+      "q": "What are the three export formats for a scheduled report?",
+      "choices": ["PDF, PNG, and CSV", "PDF, DOCX, and XLSX", "HTML, CSV, and JSON", "PNG, SVG, and PDF"],
+      "answer": "PDF, PNG, and CSV",
+      "where": "Key concepts: Scheduled report"
+    },
+    {
+      "type": "short",
+      "q": "Why do the helpdesk:tickets and Daily Task Throughput sources return no data in this release?",
+      "answer": "Their backing tables have no organization column, so the query builder's org filter fails and the query returns nothing.",
+      "where": "Sources that do not return data"
+    },
+    {
+      "type": "mc",
+      "q": "At what change does bench_detect_anomalies flag a metric, and with what severities?",
+      "choices": ["Over 10%, with pass or fail", "Over 30%, with high, medium, or low severity", "Over 50%, with a single alert flag", "Any change, ranked one through five"],
+      "answer": "Over 30%, with high, medium, or low severity",
+      "where": "Working with AI agents"
+    },
+    {
+      "type": "short",
+      "q": "What are the read-only values shown in Bench Settings for Cache TTL and the statement timeout?",
+      "answer": "The Default Cache TTL is 60 seconds and the Statement Timeout is 10,000 ms.",
+      "where": "Bench Settings"
+    }
+  ]
+}

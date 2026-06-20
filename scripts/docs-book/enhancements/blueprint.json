@@ -1,0 +1,154 @@
+{
+  "app": "blueprint",
+  "tagline": "Diagrams your team and your agents can both read.",
+  "intro": "Blueprint draws flowcharts, graphs, org charts, and mind maps, but stores each one as a typed graph of nodes and edges rather than a flat picture. Because every box and every line is a real database row, every change is an auditable action, and the same actions are open to AI agents as named tools. This chapter walks you from a blank canvas to a laid-out diagram, then into the round-trip with Bam where a node and its task stay in sync. By the end you will be able to build a diagram, arrange it with one click, and turn it into a project plan.",
+  "atAGlance": [
+    "Typed node and edge graph, so every change is an ordinary auditable action",
+    "Five shapes, five edge kinds, and server-side ELK auto-layout in four flavors",
+    "Two-way Bam sync: a linked node and its task share a title and description",
+    "Generate a diagram from a Bam project, or promote a whole graph into tasks",
+    "Full MCP surface, so an agent can emit a fully wired diagram in one call"
+  ],
+  "pullQuotes": [
+    {
+      "after": "an agent can read a process description and emit a fully wired diagram in a single call",
+      "text": "One call in, a complete laid-out diagram out, audited exactly like a person's edit."
+    },
+    {
+      "after": "rename the node and the task title updates, rename the task and the node updates",
+      "text": "Link a node to a Bam task once and the two stay in lockstep, both directions, nothing to configure."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "The radial algorithm is reachable only through the API or an agent",
+      "type": "tip",
+      "text": "The layout dropdown gives you Layered, Force-directed, Tree, and Grid, but the radial arrangement never shows up there. If you want a radial layout, an agent can apply it through blueprint_apply_layout."
+    },
+    {
+      "after": "a chosen template does not seed any nodes or edges into the new diagram",
+      "type": "note",
+      "text": "The Template select in the New diagram dialog is wired but inert today: the backend accepts a template id and ignores its content. Treat every new diagram as a blank canvas no matter which template you pick."
+    },
+    {
+      "after": "Archiving is a soft delete",
+      "type": "warning",
+      "text": "Deleting a node removes every edge attached to it, and if the node is linked to a Bam task, choosing Delete node + task also deletes that task along with its subtasks, comments, time entries, and activity. Archiving only hides a diagram; node and task deletion is the destructive one to watch."
+    },
+    {
+      "after": "when no field is focused) to open the in-app help viewer",
+      "type": "tryit",
+      "text": "Open /blueprint/, press N to drop a node, type a Label in the Inspector, then set the layout dropdown to Layered and click Apply layout to watch ELK arrange it server-side."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "How does Blueprint store a diagram?",
+      "choices": [
+        "As a single flat image file",
+        "As an opaque collaborative drawing blob",
+        "As a typed relational graph of node and edge rows",
+        "As a Mermaid source string only"
+      ],
+      "answer": "As a typed relational graph of node and edge rows",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "Which shapes does the node palette offer?",
+      "choices": [
+        "Rounded, Rectangle, Diamond, Ellipse, and Hexagon",
+        "Circle, Square, Triangle, and Star",
+        "Box, Pill, and Cloud",
+        "Only Rectangle and Ellipse"
+      ],
+      "answer": "Rounded, Rectangle, Diamond, Ellipse, and Hexagon",
+      "where": "Key concepts: Shape"
+    },
+    {
+      "type": "mc",
+      "q": "Which cross-product link type stays in live two-way sync?",
+      "choices": [
+        "beacon.entry",
+        "bond.deal",
+        "bam.task",
+        "bearing.goal"
+      ],
+      "answer": "bam.task",
+      "where": "Key concepts: Linked entity"
+    },
+    {
+      "type": "mc",
+      "q": "What are the five edge kinds you can choose?",
+      "choices": [
+        "Default, Dependency, Flow, Reference, and Inherits",
+        "Solid, Dashed, Dotted, Curved, and Straight",
+        "Parent, Child, Sibling, Peer, and Root",
+        "Up, Down, Left, Right, and None"
+      ],
+      "answer": "Default, Dependency, Flow, Reference, and Inherits",
+      "where": "Key concepts: Edge"
+    },
+    {
+      "type": "mc",
+      "q": "What type does Generate from Bam write onto the new diagram?",
+      "choices": [
+        "flowchart",
+        "graph",
+        "mind_map",
+        "org_chart"
+      ],
+      "answer": "org_chart",
+      "where": "Generate a diagram from a Bam project"
+    },
+    {
+      "type": "mc",
+      "q": "Which export formats are actually offered in the editor?",
+      "choices": [
+        "SVG and PNG",
+        "Mermaid (.mmd) and JSON",
+        "PDF and DOCX",
+        "CSV and XML"
+      ],
+      "answer": "Mermaid (.mmd) and JSON",
+      "where": "Export a diagram"
+    },
+    {
+      "type": "short",
+      "q": "What does it mean to pin a node, and what effect does pinning have during auto-layout?",
+      "answer": "A pinned node is excluded from auto-layout. It keeps the position you set by hand when you run a layout pass, and it cannot be dragged until you unpin it.",
+      "where": "Key concepts: Pinned and Move and pin nodes"
+    },
+    {
+      "type": "short",
+      "q": "Name Blueprint's three visibility levels and who can see a diagram at each.",
+      "answer": "Private (you, plus collaborators), Project (project members, or the org if there is no project), and Organization (everyone in your org).",
+      "where": "Key concepts: Visibility"
+    },
+    {
+      "type": "short",
+      "q": "When you promote a whole graph to Bam tasks, what does the source-parent edge direction mean?",
+      "answer": "An edge from A to B means A is the parent of B. It is the default, with target-parent reversing it and none skipping parent links entirely.",
+      "where": "Promote a whole graph to Bam tasks"
+    },
+    {
+      "type": "short",
+      "q": "What are the four collaborator roles available in the People panel?",
+      "answer": "Owner, Editor, Commenter, and Viewer, granted as explicit per-diagram access on top of project or org visibility.",
+      "where": "Key concepts: Collaborator and Comments, People, and version History panels"
+    },
+    {
+      "type": "short",
+      "q": "How is each snapshot numbered, and what does a snapshot capture?",
+      "answer": "Each snapshot is numbered automatically, one higher than the latest, and it saves a complete immutable copy of the whole graph that you can restore later.",
+      "where": "Snapshots (versions)"
+    },
+    {
+      "type": "short",
+      "q": "When an agent calls blueprint_generate, how many node specs and edge specs can it pass?",
+      "answer": "blueprint_generate accepts 1 to 500 node specs and up to 2000 edge specs, with replace true to wipe the existing graph first or auto_layout false to skip the post-generate pass.",
+      "where": "Working with AI agents"
+    }
+  ]
+}

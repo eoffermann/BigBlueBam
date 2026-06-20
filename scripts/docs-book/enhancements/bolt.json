@@ -1,0 +1,140 @@
+{
+  "app": "bolt",
+  "tagline": "When this happens, do that.",
+  "intro": "Bolt is the suite's wiring closet. Other apps emit events as people work, and Bolt watches for them and reacts, running the actions you defined without anyone clicking a button. You build a rule as WHEN this happens, IF these conditions hold, THEN run these steps, and every firing is recorded as an execution you can open and read line by line. By the end of this chapter you will be able to build a rule from a template or by hand, watch it run, and see where an AI agent can author and audit the same automations you do.",
+  "atAGlance": [
+    "The suite's event hub: every app reports its activity to one place",
+    "Trigger-condition-action rules with 13 condition operators and AND or OR logic",
+    "Templates: 16 pre-built blueprints you instantiate and customize",
+    "Schedule triggers that fire on a cron clock, not just on app events",
+    "Full execution log with per-step detail, retries, and single-event tracing"
+  ],
+  "pullQuotes": [
+    {
+      "after": "Bolt is the single place where the suite's activity converges",
+      "text": "Bam tasks, Bond deals, Helpdesk tickets: Bolt is the one place the whole suite's activity converges."
+    },
+    {
+      "after": "so you can see exactly what fired, what passed, what failed, and why",
+      "text": "Every run is recorded as an execution with per-action steps, so nothing fires in the dark."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "Bolt creates a copy named",
+      "type": "tip",
+      "text": "Duplicate a working rule before you experiment on it. The copy starts disabled and carries no execution history, so you can adapt it freely and only flip the toggle once it looks right."
+    },
+    {
+      "after": "The test only evaluates conditions; it never executes actions",
+      "type": "note",
+      "text": "Test Run is a conditions-only dry check: a green box means the actions would run on a real event, an amber box means they would not. To confirm the actions themselves fire, enable the rule and read the resulting runs in the Execution Log."
+    },
+    {
+      "after": "Deleting removes the automation and its conditions, actions, executions, and version history",
+      "type": "warning",
+      "text": "Delete is irreversible and takes everything with it: the rule plus all of its conditions, actions, executions, and version history. Disable a rule instead when you only need to pause it."
+    },
+    {
+      "after": "A few are labeled \"(requires agent)\" and wire a working notify step",
+      "type": "tryit",
+      "text": "Open Templates, click Use Template on \"Alert on high-priority task creation\", fill in any required parameter, then click Save & Enable and watch it appear on the Automations home as Enabled."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What three parts make up a Bolt automation?",
+      "choices": [
+        "A source, a target, and a schedule",
+        "A trigger, optional conditions, and an ordered list of actions",
+        "An event, a webhook, and a retry policy",
+        "A WHEN, an ELSE, and a THEN"
+      ],
+      "answer": "A trigger, optional conditions, and an ordered list of actions",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "How does Bolt name events and their source?",
+      "choices": [
+        "A single combined name like bond.deal.rotting",
+        "The bare event name plus an explicit separate source field, such as deal.rotting with bond as the source",
+        "A numeric event code with a source prefix",
+        "The source name only, with no event name"
+      ],
+      "answer": "The bare event name plus an explicit separate source field, such as deal.rotting with bond as the source",
+      "where": "Key concepts: Event source"
+    },
+    {
+      "type": "short",
+      "q": "What are the five possible statuses of an execution?",
+      "answer": "Running, Success, Partial (some steps failed but all ran), Failed (halted early), and Skipped (a guard or condition prevented it).",
+      "where": "Key concepts: Execution"
+    },
+    {
+      "type": "mc",
+      "q": "What is the default value of Max Executions / Hour for an automation?",
+      "choices": ["10", "60", "100", "1000"],
+      "answer": "60",
+      "where": "Key concepts: Limits"
+    },
+    {
+      "type": "mc",
+      "q": "How many condition operators does Bolt offer?",
+      "choices": ["7", "11", "13", "16"],
+      "answer": "13",
+      "where": "Key concepts: Condition"
+    },
+    {
+      "type": "short",
+      "q": "When an action fails, what are the three On Error behaviors Bolt can take?",
+      "answer": "Stop (halt the run), Continue (run the rest anyway), or Retry (retry up to the Retry Count).",
+      "where": "Key concepts: On Error"
+    },
+    {
+      "type": "mc",
+      "q": "How many templates does Bolt ship with?",
+      "choices": ["8", "14", "16", "26"],
+      "answer": "16",
+      "where": "Templates"
+    },
+    {
+      "type": "short",
+      "q": "What does the Schedule trigger source do, and what event type does it fire?",
+      "answer": "The Schedule source fires automations on a cron schedule rather than off another app's event, and the event type is cron.fired.",
+      "where": "Key concepts: Schedule trigger"
+    },
+    {
+      "type": "mc",
+      "q": "When you duplicate an automation, what state does the copy start in?",
+      "choices": ["Enabled", "Disabled", "Running", "Draft pending review"],
+      "answer": "Disabled",
+      "where": "Duplicating an automation"
+    },
+    {
+      "type": "short",
+      "q": "When does the Retry button appear on an execution detail page, and what happens if the automation is already at its hourly cap?",
+      "answer": "Retry appears only for runs whose status is Failed or Partial, and if the rule is over its hourly cap the retry is rejected as rate limited.",
+      "where": "Retrying a failed run"
+    },
+    {
+      "type": "mc",
+      "q": "How does Bolt handle the actions in an automation?",
+      "choices": [
+        "As a branching flow where conditions route to different actions",
+        "As a single linear ordered list that runs top to bottom",
+        "As parallel steps that all run at once",
+        "As a random order chosen at runtime"
+      ],
+      "answer": "As a single linear ordered list that runs top to bottom",
+      "where": "Simple mode"
+    },
+    {
+      "type": "short",
+      "q": "When reading the event body in a condition, what prefix must the field name carry?",
+      "answer": "Fields that read the event body must be prefixed with event., for example event.task.priority.",
+      "where": "Key concepts: Condition"
+    }
+  ]
+}

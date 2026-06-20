@@ -1,0 +1,125 @@
+{
+  "app": "blank",
+  "tagline": "Build it, publish it, collect it.",
+  "intro": "Blank is the intake layer for the whole suite. You build a form by dragging fields from a palette, decide who can reach it, and publish to a public URL that anyone with the link can fill out, no code required. Responses land in a Responses table and an Analytics view, and they can route into Bond or Helpdesk when that wiring is configured. By the end of this chapter you will be able to design a form, gate who can submit it, and read the numbers that come back.",
+  "atAGlance": [
+    "Drag-and-drop builder with 21 field types, from Short Text to NPS to File Upload",
+    "A public, login-free form at /forms/<slug> once you publish",
+    "Layered access: visibility, sign-in requirement, and allowed email domains",
+    "Real file uploads validated by a background worker, with status pills per submission",
+    "Full MCP coverage, so an agent can draft, publish, and report on a form"
+  ],
+  "pullQuotes": [
+    {
+      "after": "publish to get a shareable public URL",
+      "text": "Design in a visual builder, then publish to a public URL anyone with the link can fill out, no code required."
+    },
+    {
+      "after": "an agent can only do what you could do",
+      "text": "The MCP tools share your permissions, so an agent can drive the full authoring lifecycle but only ever do what you could."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "There are 20 Blank MCP tools",
+      "type": "tip",
+      "text": "Several MCP tools have no matching screen in the SPA, including blank_close_form, blank_get_embed_code, and per-field edits. When you need to close a form or grab its embed snippet, reach for an agent or the API rather than hunting for a button that is not there."
+    },
+    {
+      "after": "the visual builder does not yet expose a conditional editor",
+      "type": "note",
+      "text": "Conditional display is stored on the field and reachable through the MCP field tools, but the visual builder has no conditional editor yet. To show a field only when another answer matches, set it up through an agent or the API for now."
+    },
+    {
+      "after": "This action is destructive and cannot be undone",
+      "type": "warning",
+      "text": "Deleting a form removes its fields and every submission with it, permanently and with no undo. If you only want to stop new responses, close the form or turn off Accept Responses instead, which leaves the data intact."
+    },
+    {
+      "after": "publishes the form (it must have at least one field)",
+      "type": "tryit",
+      "text": "Open /blank/, click New Form, drop a single Rating field on the canvas, then click Publish and copy the URL from the Your form is live dialog."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What status does a brand-new form start in?",
+      "choices": ["published", "draft", "closed", "active"],
+      "answer": "draft",
+      "where": "Key concepts: Form status"
+    },
+    {
+      "type": "mc",
+      "q": "How many submissions per hour per IP does the public submit endpoint allow?",
+      "choices": ["5", "10", "50", "There is no limit"],
+      "answer": "10",
+      "where": "Public form"
+    },
+    {
+      "type": "short",
+      "q": "What are the three visibility options that control who can reach a form through its URL?",
+      "answer": "Public (anyone with the link), Organization (members of your org), and Project members (members of a chosen Bam project).",
+      "where": "Key concepts: Visibility"
+    },
+    {
+      "type": "mc",
+      "q": "Which file type does Blank always block on uploads, regardless of the size cap?",
+      "choices": ["PDF", "CSV", "SVG", "ZIP"],
+      "answer": "SVG",
+      "where": "Responses"
+    },
+    {
+      "type": "short",
+      "q": "Before Blank will publish a form, what minimum does the form need?",
+      "answer": "It must have at least one field.",
+      "where": "Publish dialog"
+    },
+    {
+      "type": "mc",
+      "q": "What does deleting a form remove besides the form itself?",
+      "choices": ["Nothing else", "Its fields and submissions", "Only its submissions", "Only its fields"],
+      "answer": "Its fields and submissions",
+      "where": "Forms list"
+    },
+    {
+      "type": "mc",
+      "q": "Which four field types are layout-only and carry no submitted answer?",
+      "choices": ["Short Text, Email, Number, Date", "Section Header, Paragraph, Hidden Field, Page Break", "Rating, Scale, NPS, Checkbox", "Single Select, Multi Select, Dropdown, Toggle"],
+      "answer": "Section Header, Paragraph, Hidden Field, Page Break",
+      "where": "Key concepts: Field type"
+    },
+    {
+      "type": "short",
+      "q": "What is the shape of the public form URL that the Publish dialog hands you?",
+      "answer": "https://YOUR-DOMAIN/forms/<slug>, the server-rendered public form page.",
+      "where": "Key concepts: Public form URL"
+    },
+    {
+      "type": "mc",
+      "q": "Where in the SPA can an author close a published form?",
+      "choices": ["The builder action bar", "The Forms list overflow menu", "The per-form Settings page", "Nowhere; there is no Close button in the SPA, so closing is done through the API or an agent"],
+      "answer": "Nowhere; there is no Close button in the SPA, so closing is done through the API or an agent",
+      "where": "Story: Close a form to stop accepting responses"
+    },
+    {
+      "type": "short",
+      "q": "When 'Allowed email domains' is set, in what order is the submitter's email determined?",
+      "answer": "From their signed-in account, then the form's email field, then an explicit email in the response, in that order.",
+      "where": "Access control and notifications"
+    },
+    {
+      "type": "mc",
+      "q": "What does the 'complete' Files pill on the Responses table mean?",
+      "choices": ["The submission was deleted", "Every file was validated and stored", "The form is closed", "The worker has not run yet"],
+      "answer": "Every file was validated and stored",
+      "where": "Responses"
+    },
+    {
+      "type": "short",
+      "q": "What two requirements gate getting to the Blank authoring SPA in the first place?",
+      "answer": "A BigBlueBam session or a bbam_ / bbam_svc_ API key, plus membership in an organization (all forms and submissions are scoped to your org).",
+      "where": "Where to find it: Prerequisites"
+    }
+  ]
+}

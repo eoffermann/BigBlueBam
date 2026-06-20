@@ -1,0 +1,143 @@
+{
+  "app": "beacon",
+  "tagline": "Knowledge that stays true, not just written once.",
+  "intro": "Beacon is your team's knowledge base, built so articles stay accurate over time instead of rotting quietly after the day they were written. You write in Markdown, find answers by meaning with hybrid search, walk a knowledge graph of typed links, and lean on a freshness dashboard that surfaces stale knowledge before it misleads anyone. This chapter takes you from your first published article through search, linking, the governance sweep, and expiry policy, and it shows where an agent can ingest and verify knowledge through the same tools. By the end you will be able to publish an article, find it by meaning, and keep the whole library verified.",
+  "atAGlance": [
+    "Knowledge articles with a full lifecycle: Draft, Active, Pending Review, Archived, Retired",
+    "A freshness signal that flags stale, expiring, or unverified knowledge before it bites",
+    "Hybrid search: semantic plus tags plus link traversal plus keyword fallback",
+    "A Knowledge Graph of typed links and implicit Tag Affinity edges",
+    "Per-scope expiry policy and a Fridge Cleanout dashboard for keeping the library verified"
+  ],
+  "pullQuotes": [
+    {
+      "after": "carry a freshness signal so stale knowledge surfaces before it misleads anyone",
+      "text": "Freshness is the whole point: Beacon shows you when knowledge is going stale before anyone acts on it."
+    },
+    {
+      "after": "Agents drive Beacon through its MCP tools (30 of them)",
+      "text": "Beacon ships 30 MCP tools, so an agent can author, verify, and graph knowledge with the same reach a person has."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "always turns on graph and tag expansion and pre-fetches linked articles",
+      "type": "tip",
+      "text": "When an agent needs context, beacon_search_context beats plain beacon_search: it always turns on graph and tag expansion and pre-fetches linked articles, so it pulls a richer slice of the graph in a single call."
+    },
+    {
+      "after": "the editor includes a \"Tags (comma-separated)\" field",
+      "type": "note",
+      "text": "The editor's tag field does not save today. Tags you see on articles were written by an agent or the API, and you filter by them on the Search screen rather than setting them on the editor."
+    },
+    {
+      "after": "Retire** soft-deletes the article: status becomes Retired",
+      "type": "warning",
+      "text": "Retired is a terminal state. The Restore button still appears on a Retired article, but the server only restores Archived ones, so Restore returns an error and the status will not change. To bring back retired knowledge, recreate or re-author it."
+    },
+    {
+      "after": "Press the ? key (when your cursor is not in a text field)",
+      "type": "tryit",
+      "text": "Open any Beacon screen and press the ? key while your cursor is outside a text field to pop the in-app help."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What are the five statuses a Beacon moves through in its lifecycle?",
+      "choices": [
+        "Draft, Active, Pending Review, Archived, Retired",
+        "New, Open, Reviewed, Closed, Deleted",
+        "Draft, Published, Stale, Expired, Removed",
+        "Pending, Active, Verified, Archived, Locked"
+      ],
+      "answer": "Draft, Active, Pending Review, Archived, Retired",
+      "where": "Key concepts: Status"
+    },
+    {
+      "type": "mc",
+      "q": "A Beacon's summary is limited to how many characters?",
+      "choices": ["140 characters", "280 characters", "500 characters", "There is no limit"],
+      "answer": "500 characters",
+      "where": "Key concepts: Beacon"
+    },
+    {
+      "type": "short",
+      "q": "What are the four freshness states a Beacon can show?",
+      "answer": "Verified recently, Content is stale, Expiring soon, and Needs verification.",
+      "where": "Key concepts: Freshness"
+    },
+    {
+      "type": "mc",
+      "q": "Which visibility level is visible only to the owner or creator?",
+      "choices": ["Public", "Organization", "Project", "Private"],
+      "answer": "Private",
+      "where": "Key concepts: Visibility"
+    },
+    {
+      "type": "short",
+      "q": "What does challenging an Active article do to its status?",
+      "answer": "It moves the article to Pending Review so an owner can review it.",
+      "where": "Key concepts: Challenge"
+    },
+    {
+      "type": "mc",
+      "q": "Which of these is NOT one of Beacon's typed link types?",
+      "choices": ["Related To", "Supersedes", "Blocks", "Conflicts With"],
+      "answer": "Blocks",
+      "where": "Key concepts: Link"
+    },
+    {
+      "type": "short",
+      "q": "What does verifying an article do besides recording a review?",
+      "answer": "It resets the expiry date and raises the verification count.",
+      "where": "Lifecycle actions"
+    },
+    {
+      "type": "mc",
+      "q": "What is the editor's default visibility when you create a new Beacon?",
+      "choices": ["Public", "Organization", "Project", "Private"],
+      "answer": "Organization",
+      "where": "Create and edit an article"
+    },
+    {
+      "type": "mc",
+      "q": "What is the attachment size limit on an article?",
+      "choices": ["2 MB", "5 MB", "10 MB", "25 MB"],
+      "answer": "10 MB",
+      "where": "Attachments"
+    },
+    {
+      "type": "short",
+      "q": "In what order do expiry policies resolve when computing your effective policy?",
+      "answer": "Project, then Organization, then System.",
+      "where": "Expiry Policy Settings"
+    },
+    {
+      "type": "mc",
+      "q": "How many tags can you add at a time through the tag write endpoints?",
+      "choices": ["1 to 5", "1 to 10", "1 to 20", "Up to 50"],
+      "answer": "1 to 20",
+      "where": "Tags"
+    },
+    {
+      "type": "short",
+      "q": "What does the daily expiry sweep do to Active articles when they expire, and to Pending Review articles after the grace period?",
+      "answer": "It moves expired Active articles to Pending Review, and moves Pending Review articles to Archived after the grace period (it also deletes very old Drafts).",
+      "where": "Expiry Policy Settings"
+    },
+    {
+      "type": "mc",
+      "q": "What does the beacon_upsert_by_slug tool return so an agent can tell an insert from an update?",
+      "choices": ["A status code", "A created flag", "A version number", "A diff"],
+      "answer": "A created flag",
+      "where": "Working with AI agents"
+    },
+    {
+      "type": "short",
+      "q": "Comments and attachments have no MCP tools. What does that mean for agents?",
+      "answer": "Agents cannot post comments or upload files; those actions stay human-only.",
+      "where": "Working with AI agents"
+    }
+  ]
+}

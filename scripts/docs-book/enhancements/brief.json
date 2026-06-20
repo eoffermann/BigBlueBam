@@ -1,0 +1,146 @@
+{
+  "app": "brief",
+  "tagline": "Write together, ship the words.",
+  "intro": "Brief is where your team writes together. Every document is a rich-text page you can co-edit live, comment on in the margins, version, and organize into folders scoped to a project. This chapter takes you from a blank page to a published document, shows how two people type at once without stepping on each other, and points out where an AI agent can do the things the buttons cannot. By the end you will be able to write, format, publish, and promote a document, and find any of them fast.",
+  "atAGlance": [
+    "Rich-text editing on Tiptap, with a formatting toolbar and slash commands",
+    "Real-time co-editing with live cursors and presence, merged conflict-free",
+    "Four-status lifecycle: Draft, In Review, Approved, and Archived",
+    "Folders, project scope, versions, comments, and stars to keep work tidy",
+    "Promote a finished document one-way into a Beacon knowledge-base article"
+  ],
+  "pullQuotes": [
+    {
+      "after": "concurrent edits merge without overwriting each other",
+      "text": "Two people, one document, live cursors. Edits merge conflict-free, so nobody overwrites anybody."
+    },
+    {
+      "after": "When a document is ready to become lasting knowledge",
+      "text": "Promote graduates a finished document straight into a Beacon article, one way and on purpose."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "publishing sets it to Approved",
+      "type": "note",
+      "text": "Brief has no editor button for the In Review status. The two save buttons only produce Draft or Approved; In Review is set through the API or by an agent with brief_update."
+    },
+    {
+      "after": "but Public is not a valid value and",
+      "type": "warning",
+      "text": "The Visibility menu lists Public, but it is not a valid value. Selecting it makes the save fail with a validation error. Choose Organization, Project, or Private instead."
+    },
+    {
+      "after": "This field is not stored by Brief today",
+      "type": "tip",
+      "text": "Skip the \"Brief summary (optional)\" input. Anything you type there is dropped on save and never appears on the document. Put summary text in the body instead."
+    },
+    {
+      "after": "Type at least 2 characters in the",
+      "type": "tryit",
+      "text": "Open Search from the sidebar, type two or more characters in the \"Type to search...\" box, and click a result to jump straight into that document."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What are Brief's four document statuses?",
+      "choices": [
+        "Draft, In Review, Approved, and Archived",
+        "Draft, Published, Locked, and Deleted",
+        "Open, In Progress, Closed, and Archived",
+        "New, Editing, Final, and Retired"
+      ],
+      "answer": "Draft, In Review, Approved, and Archived",
+      "where": "Key concepts: Status"
+    },
+    {
+      "type": "mc",
+      "q": "Which visibility level does the menu list but reject as invalid?",
+      "choices": ["Private", "Public", "Project", "Organization"],
+      "answer": "Public",
+      "where": "Key concepts: Visibility"
+    },
+    {
+      "type": "short",
+      "q": "What status does a document have after you click Publish, and what status after Save Draft?",
+      "answer": "Publish sets the document to Approved; Save Draft keeps it as Draft.",
+      "where": "Save a draft and publish"
+    },
+    {
+      "type": "mc",
+      "q": "How long can a document icon be?",
+      "choices": ["Up to 1 character", "Up to 2 characters", "Up to 5 characters", "Any length"],
+      "answer": "Up to 2 characters",
+      "where": "Key concepts: Document"
+    },
+    {
+      "type": "short",
+      "q": "What are the three valid visibility levels and who can see a document at each?",
+      "answer": "Organization (all org members), Project (the creator, collaborators, or members of that project), and Private (the creator and collaborators only).",
+      "where": "Key concepts: Visibility"
+    },
+    {
+      "type": "mc",
+      "q": "How many MCP tools does Brief expose to agents?",
+      "choices": ["12", "30", "48", "60"],
+      "answer": "48",
+      "where": "Working with AI agents"
+    },
+    {
+      "type": "short",
+      "q": "What technology does Brief use to merge concurrent edits without overwriting, and over what connection?",
+      "answer": "A conflict-free shared editing model (Yjs) over the /brief/ws WebSocket.",
+      "where": "Edit an existing document and co-edit in real time"
+    },
+    {
+      "type": "mc",
+      "q": "What happens when you promote a document to Beacon?",
+      "choices": [
+        "Brief creates a Beacon article from it, and the promotion is one-way",
+        "The document is deleted after the article is created",
+        "It can be promoted again to refresh the article",
+        "A draft copy is made and nothing is sent to Beacon"
+      ],
+      "answer": "Brief creates a Beacon article from it, and the promotion is one-way",
+      "where": "Promote to Beacon"
+    },
+    {
+      "type": "short",
+      "q": "Which folder actions can the Brief UI do, and which require an agent or the API?",
+      "answer": "The UI can only create folders; renaming, moving, and deleting folders are done through an agent or the API.",
+      "where": "Folders and project scope"
+    },
+    {
+      "type": "mc",
+      "q": "How many characters must you type before Search returns results?",
+      "choices": ["At least 1", "At least 2", "At least 3", "At least 5"],
+      "answer": "At least 2",
+      "where": "Search"
+    },
+    {
+      "type": "short",
+      "q": "Why should you avoid the \"Brief summary (optional)\" field, and what should you do instead?",
+      "answer": "It is not stored by Brief today, so anything typed there is dropped on save; put summary text in the document body instead.",
+      "where": "The \"Brief summary (optional)\" field"
+    },
+    {
+      "type": "mc",
+      "q": "What does the Duplicate action create?",
+      "choices": [
+        "A Draft copy named \"<title> (copy)\"",
+        "An Approved copy with the same title",
+        "A new version on the same document",
+        "A Beacon article from the document"
+      ],
+      "answer": "A Draft copy named \"<title> (copy)\"",
+      "where": "Duplicate a document"
+    },
+    {
+      "type": "short",
+      "q": "When you restore an archived document, what status does it return to?",
+      "answer": "It returns to Draft status.",
+      "where": "Archive and restore"
+    }
+  ]
+}

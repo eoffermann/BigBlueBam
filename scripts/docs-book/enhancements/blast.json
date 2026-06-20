@@ -1,0 +1,125 @@
+{
+  "app": "blast",
+  "tagline": "Write it once, send it everywhere, watch what lands.",
+  "intro": "Blast turns your Bond CRM contacts into an audience for bulk email. You compose a message once, in a visual block editor, raw HTML, or from a saved template, pick who should receive it, and send. After every send, Blast records what happened to each recipient and rolls the results into per-campaign and org-wide analytics. This chapter walks you from a first draft through Send Now to reading opens, clicks, bounces, and unsubscribes, and it shows where an agent can assemble a campaign for your approval.",
+  "atAGlance": [
+    "Three ways to build an email body: visual block editor, raw HTML, or a saved template",
+    "Segments that filter your Bond contacts and cache a contact count",
+    "Per-recipient delivery tracking plus per-campaign and org-wide analytics",
+    "Automatic open, click, bounce, complaint, and unsubscribe handling with no UI to wire",
+    "A CAN-SPAM gate that blocks any send missing an unsubscribe link or a physical address"
+  ],
+  "pullQuotes": [
+    {
+      "after": "every send and engagement event is published",
+      "text": "Blast pulls its audience from Bond and pushes every send and engagement event into Bolt, so your automation can react the moment an email lands."
+    },
+    {
+      "after": "resolve campaigns, templates, and segments by human-readable name",
+      "text": "Most agent tools resolve campaigns, templates, and segments by name, so an agent can act on the April Product Launch campaign without ever knowing its ID."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "The simplest fix is to use the default template footer",
+      "type": "tip",
+      "text": "The default template footer already includes an unsubscribe link, so the fastest way to clear the CAN-SPAM gate is to build on a template and just add your mailing address to the body."
+    },
+    {
+      "after": "deleting a campaign all exist in the API and MCP tools",
+      "type": "note",
+      "text": "The campaign detail page only renders Send Now today. Scheduling, pausing, cancelling, editing, and deleting a campaign all exist in the API and MCP tools, but you reach them through the API or a tool, not the detail UI."
+    },
+    {
+      "after": "Once an address unsubscribes (or files a spam complaint)",
+      "type": "warning",
+      "text": "Unsubscribes are org-wide and keyed on the email address. Once an address unsubscribes or files a spam complaint, it is suppressed across the whole org and excluded from every future send. There is no per-campaign opt back in."
+    },
+    {
+      "after": "it schedules the campaign about an hour out and returns a note",
+      "type": "tryit",
+      "text": "Have an agent call blast_send_campaign with the default require_human_approval set to true, then open the campaigns list and watch it land as a scheduled campaign about an hour out, awaiting your confirmation before any mail leaves."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "How many states can a campaign be in?",
+      "choices": ["Four", "Five", "Six", "Seven"],
+      "answer": "Six",
+      "where": "Key concepts: Campaign status"
+    },
+    {
+      "type": "mc",
+      "q": "Which campaign status is the terminal success state and the only one analytics counts?",
+      "choices": ["delivered", "sending", "sent", "scheduled"],
+      "answer": "sent",
+      "where": "Key concepts: Campaign status"
+    },
+    {
+      "type": "short",
+      "q": "What two things must a campaign's HTML body contain to pass the CAN-SPAM gate?",
+      "answer": "An unsubscribe mechanism (such as an {{unsubscribe_url}} merge field or text containing unsubscribe or opt-out) and a physical mailing address.",
+      "where": "Key concepts: CAN-SPAM gate, and Why a send was rejected"
+    },
+    {
+      "type": "mc",
+      "q": "Which two campaign statuses make the Send Now button appear on the detail page?",
+      "choices": ["draft and scheduled", "draft and sending", "scheduled and paused", "sent and draft"],
+      "answer": "draft and scheduled",
+      "where": "Campaign detail and Send Now"
+    },
+    {
+      "type": "short",
+      "q": "Where does Blast pull its audience from, and where does it push its send and engagement events?",
+      "answer": "It pulls its audience from Bond (contacts and segments over Bond contact fields) and pushes activity into Bolt so automation rules can react.",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "Where is the platform SMTP relay actually configured?",
+      "choices": ["In Blast under SMTP settings", "In the Bam app under Account Settings then Integrations", "Per campaign on the create form", "In the Sender Domains page"],
+      "answer": "In the Bam app under Account Settings then Integrations",
+      "where": "SMTP (platform relay)"
+    },
+    {
+      "type": "short",
+      "q": "What does blast_send_campaign do by default when require_human_approval is true?",
+      "answer": "It does not send immediately; it schedules the campaign about an hour out and returns a note that a human must confirm before it goes.",
+      "where": "Working with AI agents"
+    },
+    {
+      "type": "mc",
+      "q": "How many rows does the Recipients table show per page on the campaign detail page?",
+      "choices": ["10", "25", "50", "100"],
+      "answer": "25",
+      "where": "Campaign detail and Send Now"
+    },
+    {
+      "type": "short",
+      "q": "What are the two match modes for joining a segment's conditions?",
+      "answer": "ALL conditions (AND), which requires every condition, and ANY condition (OR), which matches any one.",
+      "where": "Key concepts: Segment, and Segment builder and preview"
+    },
+    {
+      "type": "mc",
+      "q": "What scope do you need to add or remove a sender domain?",
+      "choices": ["read", "read_write", "admin", "No scope is required"],
+      "answer": "admin",
+      "where": "Sender Domains"
+    },
+    {
+      "type": "short",
+      "q": "When a spam complaint arrives, what three things does Blast do automatically?",
+      "answer": "It marks the recipient complained, increments the complaints counter, and automatically unsubscribes that address org-wide.",
+      "where": "Provider webhooks (automatic, no UI)"
+    },
+    {
+      "type": "mc",
+      "q": "What do the blast_draft_email_content and blast_suggest_subject_lines tools return?",
+      "choices": ["Model-generated copy", "Hard-coded templated strings", "An error until a model is configured", "The contents of a saved template"],
+      "answer": "Hard-coded templated strings",
+      "where": "Working with AI agents"
+    }
+  ]
+}

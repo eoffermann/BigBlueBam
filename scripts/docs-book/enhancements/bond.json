@@ -1,0 +1,162 @@
+{
+  "app": "bond",
+  "tagline": "Track the relationship, close the deal.",
+  "intro": "Bond is the CRM where your sales work lives. It tracks the people and companies you sell to, moves deals across a pipeline you shape yourself, and watches every card age so nothing rots unattended. This chapter takes you from an empty board to a working pipeline, a contact with a history, and a deal closed Won or Lost, then shows where an AI agent can drive the same records. By the end you will be able to set up stages, qualify a lead, work the board with swimlanes, and read the forecast.",
+  "atAGlance": [
+    "A drag-and-drop pipeline board with rotting alerts that flag aging deals",
+    "Contacts and companies with lifecycle stages, lead scores, and soft delete",
+    "Configurable pipelines and stages, custom fields, and org-wide scoring rules",
+    "Analytics for weighted forecast, win rate, velocity, and loss reasons",
+    "A large MCP catalog, so an agent can work the CRM with a salesperson's reach"
+  ],
+  "pullQuotes": [
+    {
+      "after": "moves deals through a configurable pipeline",
+      "text": "Shape your own stages, then drag deals across them. The pipeline bends to how your team actually sells."
+    },
+    {
+      "after": "so an AI agent can do everything a salesperson does in the app",
+      "text": "Every contact, deal, and pipeline action is an MCP tool, so an agent can work the board with a salesperson's reach plus the admin config the UI hides."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "The default pipeline is selected automatically when you open the board",
+      "type": "tip",
+      "text": "You will only ever see the empty 'No pipeline selected' screen when the org truly has no pipelines. Once one exists, Bond auto-selects the default (or the first) so the board opens straight onto deals. Mark your main pipeline as default and skip the picker."
+    },
+    {
+      "after": "It does not collect company, owner, probability, currency, or linked contacts",
+      "type": "note",
+      "text": "The board's Create Deal dialog is deliberately minimal: name, optional value, optional close date. Set company, owner, probability, currency, and linked contacts afterward by editing the deal, or supply them up front through the bond_create_deal MCP tool, which an agent can use to collect the fields the dialog omits."
+    },
+    {
+      "after": "The target absorbs the source's deals, activities, and company links",
+      "type": "warning",
+      "text": "Merging contacts is one-directional and consolidating: the target keeps the source's deals, activities, and company links, and the source is then soft-deleted. Confirm you have the right target before you merge, and remember the merge loop runs only through MCP tools and the REST API, not an in-app screen."
+    },
+    {
+      "after": "The card turns orange, and red when it is more than 1.5 times over",
+      "type": "tryit",
+      "text": "Open the Pipeline Board and scan the cards: orange means a deal has passed its stage's rotting threshold, and red means it is more than 1.5 times over. Click a red card, then Log Activity to record a follow-up and re-engage it."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What are the four core objects Bond organizes your sales work around?",
+      "choices": [
+        "Contacts, companies, deals, and pipelines",
+        "Leads, accounts, opportunities, and tasks",
+        "Contacts, deals, invoices, and events",
+        "People, companies, activities, and reports"
+      ],
+      "answer": "Contacts, companies, deals, and pipelines",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "What lifecycle stage do new contacts default to?",
+      "choices": ["Subscriber", "Lead", "MQL", "Opportunity"],
+      "answer": "Lead",
+      "where": "Key concepts: Lifecycle stage"
+    },
+    {
+      "type": "short",
+      "q": "How is a deal's weighted value computed?",
+      "answer": "It is the deal's value multiplied by its probability.",
+      "where": "Key concepts: Deal"
+    },
+    {
+      "type": "mc",
+      "q": "What is the range a contact's lead score is clamped to?",
+      "choices": ["0 to 10", "0 to 100", "1 to 5", "-100 to 100"],
+      "answer": "0 to 100",
+      "where": "Key concepts: Lead score"
+    },
+    {
+      "type": "mc",
+      "q": "When does a deal card turn red rather than just orange?",
+      "choices": [
+        "When it has no owner assigned",
+        "When it has been open for more than 90 days",
+        "When it is more than 1.5 times over its stage's rotting threshold",
+        "When its probability drops below 25 percent"
+      ],
+      "answer": "When it is more than 1.5 times over its stage's rotting threshold",
+      "where": "Key concepts: Rotting (stale) deal"
+    },
+    {
+      "type": "short",
+      "q": "What are the three stage types a pipeline stage can have?",
+      "answer": "Active, Won, or Lost.",
+      "where": "Key concepts: Stage"
+    },
+    {
+      "type": "mc",
+      "q": "Which six stages does a new pipeline get seeded with?",
+      "choices": [
+        "Prospect, Qualified, Proposal, Negotiation, Closed Won, and Closed Lost",
+        "Lead, MQL, SQL, Opportunity, Customer, and Evangelist",
+        "New, Open, Working, Pending, Won, and Lost",
+        "Discovery, Demo, Quote, Contract, Won, and Lost"
+      ],
+      "answer": "Prospect, Qualified, Proposal, Negotiation, Closed Won, and Closed Lost",
+      "where": "Bond Settings: Pipelines"
+    },
+    {
+      "type": "short",
+      "q": "When you close a deal as Won, what does Bond set its probability to, and what happens when you close it as Lost?",
+      "answer": "Closing Won sets probability to 100 and moves it to a Won-type stage; closing Lost sets probability to 0, moves it to a Lost-type stage, and records the reason and competitor.",
+      "where": "Deal detail and outcomes"
+    },
+    {
+      "type": "mc",
+      "q": "Can members and viewers see every deal and contact in the org?",
+      "choices": [
+        "Yes, everyone sees everything",
+        "No, members and viewers see only the deals and contacts they own",
+        "Only if an admin grants them access per record",
+        "They see all contacts but only their own deals"
+      ],
+      "answer": "No, members and viewers see only the deals and contacts they own",
+      "where": "Where to find it: Roles and visibility"
+    },
+    {
+      "type": "short",
+      "q": "When you delete a contact, company, or deal in Bond, is the record erased? How do you bring a contact or company back?",
+      "answer": "No, deletes are soft: the record is hidden, not erased. Restore a contact or company by checking Include deleted in its list and clicking Restore on the struck-through row.",
+      "where": "Key concepts: Soft delete / Restoring deleted records"
+    },
+    {
+      "type": "mc",
+      "q": "How is a bulk contact import driven, since there is no in-app CSV file picker?",
+      "choices": [
+        "By uploading a spreadsheet on the Contacts list",
+        "Through the REST API with a JSON contacts array (1 to 5000 records) or an agent, with admin access",
+        "By pasting rows into the Create Contact dialog",
+        "Through the Bond Settings import wizard"
+      ],
+      "answer": "Through the REST API with a JSON contacts array (1 to 5000 records) or an agent, with admin access",
+      "where": "Bulk-importing contacts"
+    },
+    {
+      "type": "short",
+      "q": "Custom fields are defined per entity type. Are they scoped per pipeline or org-wide?",
+      "answer": "They are org-wide for that entity type (Contact, Company, or Deal), not per pipeline.",
+      "where": "Key concepts: Custom field / Bond Settings: Custom Fields"
+    },
+    {
+      "type": "mc",
+      "q": "Which Bond action has no in-app button and runs only through the REST endpoint or an MCP tool?",
+      "choices": [
+        "Creating a deal",
+        "Editing a contact's lifecycle stage",
+        "Recalculating a contact's lead score",
+        "Logging an activity"
+      ],
+      "answer": "Recalculating a contact's lead score",
+      "where": "Bond Settings: Lead Scoring"
+    }
+  ]
+}

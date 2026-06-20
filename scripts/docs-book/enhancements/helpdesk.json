@@ -1,0 +1,145 @@
+{
+  "app": "helpdesk",
+  "tagline": "File it, track it, close it.",
+  "intro": "Helpdesk is the public face of your support. Customers register on your org's branded portal, file tickets, follow the conversation as agents reply, and close issues out, all without ever needing a Bam account. Every ticket quietly spawns a linked Bam task, so your staff work support from the same project board they use for everything else, and the trail survives even if the ticket is later deleted. By the end of this chapter you will be able to stand up a portal, file and track a ticket, and see where an agent can triage the queue through MCP tools.",
+  "atAGlance": [
+    "Branded, multi-tenant portals at /helpdesk/<org-slug>/, one per org with a settings row",
+    "Customer sign-in that is fully separate from the Bam suite single sign-on",
+    "Five-status ticket lifecycle with a conversation timeline, attachments, and reopen",
+    "Every ticket mirrored to a linked Bam task so support work lives on the board",
+    "13 MCP tools so an agent can triage, answer, search, and configure tickets"
+  ],
+  "pullQuotes": [
+    {
+      "after": "every ticket spawns a Bam task",
+      "text": "Every support ticket mirrors to a linked Bam task, so your staff work it from the project board instead of a separate inbox."
+    },
+    {
+      "after": "Helpdesk exposes 13 MCP tools",
+      "text": "Thirteen MCP tools mean an agent can triage, answer, search, and configure tickets with its own authority."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "the portal returns your existing ticket instead of creating a duplicate",
+      "type": "tip",
+      "text": "Submitting the same subject and description again within an hour does not double-file. The portal hands back your existing ticket, so an accidental second click never clutters the queue."
+    },
+    {
+      "after": "fixed 4 hours with a 0.75 imminent threshold",
+      "type": "note",
+      "text": "The agent queue's SLA badge is hardwired to a 4-hour first-response target, but the background breach monitor enforces the per-org SLA setting (default 8 hours for first response, 48 for resolution). The badge and the recorded breaches can therefore disagree."
+    },
+    {
+      "after": "An agent \"merge\" actually moves the messages onto the primary and closes the source",
+      "type": "warning",
+      "text": "An agent merge is not customer-reversible. It physically moves the source ticket's messages onto the primary and closes the source, so confirm the true primary before merging. A customer's plain mark-as-duplicate is only annotative and can be unmarked."
+    },
+    {
+      "after": "must be at least 12 characters",
+      "type": "tryit",
+      "text": "Open /helpdesk/, pick an org's portal, click Create your account, and register with a password of at least 12 characters. Then file a New Ticket and watch the detail page show you a number like #123."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What are the five canonical ticket statuses?",
+      "choices": [
+        "Open, In Progress, Waiting on Customer, Resolved, Closed",
+        "New, Open, Pending, Done, Archived",
+        "Open, Assigned, Escalated, Resolved, Closed",
+        "Draft, Open, Blocked, Resolved, Closed"
+      ],
+      "answer": "Open, In Progress, Waiting on Customer, Resolved, Closed",
+      "where": "Key concepts: Status"
+    },
+    {
+      "type": "mc",
+      "q": "Which priority can an agent set that a customer cannot?",
+      "choices": ["Low", "Medium", "High", "Critical"],
+      "answer": "Critical",
+      "where": "Key concepts: Priority"
+    },
+    {
+      "type": "mc",
+      "q": "What is the minimum length for a customer's portal password?",
+      "choices": ["8 characters", "10 characters", "12 characters", "There is no minimum"],
+      "answer": "12 characters",
+      "where": "Register (create an account)"
+    },
+    {
+      "type": "mc",
+      "q": "If you submit the same subject and description again within an hour, what happens?",
+      "choices": [
+        "A second ticket is created",
+        "The portal returns your existing ticket instead of creating a duplicate",
+        "Submission is blocked with an error",
+        "The original ticket is overwritten"
+      ],
+      "answer": "The portal returns your existing ticket instead of creating a duplicate",
+      "where": "New Ticket"
+    },
+    {
+      "type": "mc",
+      "q": "What credential do support agents use on the agent routes?",
+      "choices": [
+        "A Bam session cookie alone",
+        "An hdag_ agent API key in the X-Agent-Key header",
+        "The customer portal sign-in",
+        "An OAuth token from the suite single sign-on"
+      ],
+      "answer": "An hdag_ agent API key in the X-Agent-Key header",
+      "where": "The agent queue (REST and MCP only)"
+    },
+    {
+      "type": "mc",
+      "q": "If you are looking for a knowledge base, which app should you use?",
+      "choices": ["Helpdesk's built-in KB", "Beacon", "Brief", "Bench"],
+      "answer": "Beacon",
+      "where": "Where to find it"
+    },
+    {
+      "type": "short",
+      "q": "What happens to a Waiting on Customer ticket when the customer sends a reply?",
+      "answer": "Sending a reply automatically flips the ticket back to Open.",
+      "where": "Reply to a ticket"
+    },
+    {
+      "type": "short",
+      "q": "What happens to a ticket's linked Bam task when the ticket is closed?",
+      "answer": "Closing the ticket also moves its linked Bam task to a terminal state.",
+      "where": "Close a ticket"
+    },
+    {
+      "type": "short",
+      "q": "How long is an email verification token valid before it expires?",
+      "answer": "Verification tokens expire after 24 hours.",
+      "where": "Verify email"
+    },
+    {
+      "type": "short",
+      "q": "How is a customer's mark-as-duplicate different from an agent's merge?",
+      "answer": "A customer mark-as-duplicate is annotative: it posts updates on the primary and can be unmarked. An agent merge actually moves the messages onto the primary and closes the source, and it is not customer-reversible.",
+      "where": "Key concepts: Duplicate"
+    },
+    {
+      "type": "short",
+      "q": "When no default project is set on the portal, where do new tickets create their Bam task?",
+      "answer": "The portal falls back to the project named in the tenant context, then the oldest project.",
+      "where": "Settings and admin"
+    },
+    {
+      "type": "mc",
+      "q": "Which MCP tool ranks tickets similar to a given one to find duplicates before merging?",
+      "choices": [
+        "helpdesk_search_tickets",
+        "helpdesk_find_similar_tickets",
+        "helpdesk_get_ticket_by_number",
+        "list_tickets"
+      ],
+      "answer": "helpdesk_find_similar_tickets",
+      "where": "Working with AI agents"
+    }
+  ]
+}

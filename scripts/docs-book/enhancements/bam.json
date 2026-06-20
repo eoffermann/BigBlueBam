@@ -81,6 +81,45 @@
       "choices": ["Board", "List", "Timeline", "Mind map"],
       "answer": "Mind map",
       "where": "Key concepts: Saved view"
+    },
+    {
+      "type": "mc",
+      "q": "Which roles exist at the organization level?",
+      "choices": ["owner, admin, and member, plus a guest role", "admin and member only", "owner and viewer only", "There are no roles at the org level"],
+      "answer": "owner, admin, and member, plus a guest role",
+      "where": "Key concepts: Organization"
+    },
+    {
+      "type": "short",
+      "q": "A task state is orthogonal to its phase and belongs to one of six categories. Name them.",
+      "answer": "todo, active, blocked, review, done, and cancelled.",
+      "where": "Key concepts: Task state"
+    },
+    {
+      "type": "mc",
+      "q": "What are the three project roles?",
+      "choices": ["admin, member, and viewer", "owner, admin, and member", "lead, contributor, and guest", "admin and member"],
+      "answer": "admin, member, and viewer",
+      "where": "Key concepts: Project"
+    },
+    {
+      "type": "short",
+      "q": "What are the four swimlane options for grouping the board?",
+      "answer": "No Swimlanes, By Assignee, By Priority, and By Epic.",
+      "where": "Key concepts: Swimlane"
+    },
+    {
+      "type": "mc",
+      "q": "How do you manually add a watcher to a task in the Bam UI?",
+      "choices": ["From the task detail drawer", "Through the command palette", "You cannot; watchers are populated by the system as people get involved with the task", "By assigning the task to them"],
+      "answer": "You cannot; watchers are populated by the system as people get involved with the task",
+      "where": "Key concepts: Watcher"
+    },
+    {
+      "type": "short",
+      "q": "An epic can hold one of three statuses, and it rolls up two metrics across its tasks. What are they?",
+      "answer": "An epic is open, in progress, or closed, and it rolls up task counts and story points.",
+      "where": "Key concepts: Epic"
     }
   ]
 }

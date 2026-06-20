@@ -1,0 +1,131 @@
+{
+  "app": "board",
+  "tagline": "An infinite canvas your whole team can draw on.",
+  "intro": "Board is where you think in space instead of in lists. It gives you an infinite Excalidraw canvas for sketches, retros, architecture maps, and brainstorms, with sticky notes, shapes, arrows, and frames that auto-save and sync live as your team draws together. This chapter walks you from your first template through real-time collaboration, version snapshots, and locking, and it shows the marquee handoff where stickies become tracked Bam tasks. By the end you will be able to spin up a board, run a live session on it, and turn the ideas into work.",
+  "atAGlance": [
+    "Infinite Excalidraw canvas: stickies, text, shapes, arrows, frames, and images",
+    "Live collaboration with shared cursors and auto-save as you draw",
+    "Named version snapshots you can restore at any time",
+    "Promote brainstorm stickies into real Bam tasks in a named project and phase",
+    "40 MCP tools, so an agent can read, build, and tidy a board with your permissions"
+  ],
+  "pullQuotes": [
+    {
+      "after": "several people can edit the same canvas at once",
+      "text": "One infinite canvas, many cursors. The whole team draws together and sees each other move in real time."
+    },
+    {
+      "after": "turns selected brainstorm stickies into Bam tasks in a named project and phase",
+      "text": "Promote-to-tasks is the marquee handoff: a sticky from a brainstorm becomes a tracked Bam task, linked back to where it started."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "Most tools accept a board",
+      "type": "tip",
+      "text": "Tools resolve a board by name or UUID, and templates, projects, and phases resolve by name too. So an agent can act on \"Q3 Retro\" without you ever copying an id, and every tool forwards your bearer token so a locked board stays locked."
+    },
+    {
+      "after": "chat is not pushed live over the realtime connection",
+      "type": "note",
+      "text": "Board chat is the one part of a board that is not real time. The panel refreshes by polling, so a teammate's message shows up on the next refresh rather than the instant it is sent, and the panel keeps the last 100 messages."
+    },
+    {
+      "after": "cascades through elements, collaborators, stars, versions, and links",
+      "type": "warning",
+      "text": "Deleting a board permanently removes its elements, collaborators, stars, versions, and links, and it cannot be undone. Archive instead unless the removal is truly final, since an archived board can always be restored."
+    },
+    {
+      "after": "Board is served at",
+      "type": "tryit",
+      "text": "Open /board/, click New Board, pick a Retro template, and click Use. You will land on a pre-filled canvas with no layout work."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What is a board's default visibility setting?",
+      "choices": ["private", "project", "organization", "public"],
+      "answer": "project",
+      "where": "Key concepts: Visibility"
+    },
+    {
+      "type": "mc",
+      "q": "What is the default background pattern for a new board's canvas?",
+      "choices": ["grid", "lines", "dots", "plain"],
+      "answer": "dots",
+      "where": "Key concepts: Background"
+    },
+    {
+      "type": "short",
+      "q": "What are the soft and hard element limits on a single board, and what happens at each?",
+      "answer": "The soft limit is 500 elements, where you get a warning, and the hard limit is 2000 live elements, at which further additions are rejected. Deleted elements do not count.",
+      "where": "Element limits"
+    },
+    {
+      "type": "mc",
+      "q": "What is the default color of a sticky note?",
+      "choices": ["yellow", "blue", "green", "white"],
+      "answer": "yellow",
+      "where": "Key concepts: Sticky note"
+    },
+    {
+      "type": "short",
+      "q": "Board has no login of its own. How does it know who you are and what you can do?",
+      "answer": "It reads your shared BigBlueBam session cookie, and your permissions come from Bam. If you are not signed in, Board shows a 'Please log in to BigBlueBam first' screen.",
+      "where": "Overview"
+    },
+    {
+      "type": "mc",
+      "q": "When a board is locked, who can still edit it?",
+      "choices": ["Anyone with the link", "Only the board creator", "The board creator or an org admin or owner", "No one until it is unlocked"],
+      "answer": "The board creator or an org admin or owner",
+      "where": "Key concepts: Lock"
+    },
+    {
+      "type": "short",
+      "q": "Which native toolbar do you draw with on the canvas, and which controls does Board overlay on top of it?",
+      "answer": "You draw with Excalidraw's own native toolbar. Board overlays a floating board toolbar, a connection status badge, an integrity banner when the project link is broken, and a chat panel.",
+      "where": "The infinite canvas"
+    },
+    {
+      "type": "mc",
+      "q": "What does the Share button in the floating toolbar actually do?",
+      "choices": ["Opens a collaborator manager", "Copies a shareable link to the board to your clipboard", "Emails the board to a teammate", "Publishes the board publicly"],
+      "answer": "Copies a shareable link to the board to your clipboard",
+      "where": "The board toolbar"
+    },
+    {
+      "type": "short",
+      "q": "Why is there no in-app way to manage collaborators today, and what controls who can reach a board instead?",
+      "answer": "There is a complete backend for collaborators but no screen in the Board app yet, and the Share button only copies the link. Until a sharing screen ships, control access through the board's visibility setting, or have an agent or API client manage collaborators directly.",
+      "where": "Collaborators (no in-app management today)"
+    },
+    {
+      "type": "mc",
+      "q": "Which three formats can a board's canvas be exported as?",
+      "choices": ["PDF, SVG, and PNG", "JSON, SVG, and PNG", "JSON, PDF, and PNG", "DOCX, SVG, and PNG"],
+      "answer": "JSON, SVG, and PNG",
+      "where": "Export"
+    },
+    {
+      "type": "short",
+      "q": "On the Save Version dialog, which fields render blank, and why?",
+      "answer": "The Description field and the list's element-count and creator-name fields render blank because the backend does not store the description and does not return an element count or creator name on versions today. Only the version name, creator reference, and timestamp are saved and shown reliably.",
+      "where": "Version history (snapshots)"
+    },
+    {
+      "type": "mc",
+      "q": "What is a frame used for on a board?",
+      "choices": ["Locking a region of the canvas", "A labeled region that groups the elements inside it", "Setting the background pattern", "Marking a board as a favorite"],
+      "answer": "A labeled region that groups the elements inside it",
+      "where": "Key concepts: Frame"
+    },
+    {
+      "type": "short",
+      "q": "What does the connection status badge at the top-right report, and what are its three states?",
+      "answer": "It reports the realtime connection state for the canvas, shown as Live (green), Connecting (amber), or Offline (red), plus an 'N editors' chip when other people are present.",
+      "where": "Real-time presence and audio"
+    }
+  ]
+}

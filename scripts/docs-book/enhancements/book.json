@@ -1,0 +1,156 @@
+{
+  "app": "book",
+  "tagline": "Set your hours, share a link, fill your calendar.",
+  "intro": "Book is scheduling without setup. The first time you open it, a personal calendar appears and you can start adding events, while behind the scenes Book turns your working hours into free time slots that power public booking pages and agent-driven meeting-finding. This chapter walks you from your weekly hours to a shared booking link, takes you through the cross-app Timeline that pulls Bam tasks and Bond deals alongside your events, and shows where an AI agent can do the scheduling math that has no human screen yet. By the end you will be able to publish a link an outside visitor can book, and know exactly which controls are live and which are still being finished.",
+  "atAGlance": [
+    "A personal calendar provisioned automatically, with Week, Day, and Month views",
+    "Working hours that compute free slots for availability and public booking pages",
+    "Public booking links at /book/meet/<slug> that outsiders can use without logging in",
+    "A cross-app Timeline that gathers Book events, Bam task due dates, and Bond deal close dates",
+    "An agent can find a common free time across several people, the math Book has no screen for"
+  ],
+  "pullQuotes": [
+    {
+      "after": "subtracts the events that mark you as busy, and produces free time slots",
+      "text": "Working hours minus busy events equals availability, and that availability powers every booking page you publish."
+    },
+    {
+      "after": "finding a common free time across several people",
+      "text": "An agent can intersect everyone's calendars and hand back a meeting time, the one scheduling job Book has no human screen for."
+    }
+  ],
+  "callouts": [
+    {
+      "after": "paste a public iCalendar URL and Book mirrors",
+      "type": "tip",
+      "text": "Google and Outlook two-way sync stay disabled until an operator supplies OAuth credentials, but the .ics path needs nothing. Most calendar apps, including Google and Outlook, can publish a public .ics URL for any calendar you own, so paste that and Book mirrors it in with no setup."
+    },
+    {
+      "after": "defaults to on at the data layer, new pages create a Bond contact",
+      "type": "note",
+      "text": "The booking-page editor exposes only title, slug, description, duration, buffers, and brand color. Because auto_create_bond_contact defaults to on at the data layer and the editor has no toggle for it, every new page creates or updates a Bond contact by email on each booking. To change that, set the flag with the book_update_booking_page MCP tool."
+    },
+    {
+      "after": "The save replaces your full weekly schedule with the enabled days shown",
+      "type": "warning",
+      "text": "Saving Working Hours is a full replace, not a merge. The save overwrites your entire weekly schedule with whatever days are currently enabled, so any day you forgot to re-enable is dropped. Confirm every day you want available is checked before you click Save Working Hours."
+    },
+    {
+      "after": "guarded by a row lock, and a collision returns a 409",
+      "type": "tryit",
+      "text": "Set your Working Hours, create a booking page with a unique lowercase slug, then open its /book/meet/<slug> link in a private window and book yourself a slot. Watch the confirmed event land on your default calendar."
+    }
+  ],
+  "quiz": [
+    {
+      "type": "mc",
+      "q": "What is created for you automatically the first time you open Book, and can it be deleted?",
+      "choices": [
+        "A team calendar; yes, it can be deleted",
+        "A personal calendar named My Calendar; no, it cannot be deleted",
+        "A booking page; yes, it can be deleted",
+        "Nothing is created until you add a calendar"
+      ],
+      "answer": "A personal calendar named My Calendar; no, it cannot be deleted",
+      "where": "Overview and Key concepts: Calendar"
+    },
+    {
+      "type": "mc",
+      "q": "What status and visibility does a brand-new event get by default?",
+      "choices": [
+        "status tentative, visibility free",
+        "status confirmed, visibility busy",
+        "status confirmed, visibility free",
+        "status cancelled, visibility out_of_office"
+      ],
+      "answer": "status confirmed, visibility busy",
+      "where": "Key concepts: Event"
+    },
+    {
+      "type": "short",
+      "q": "When you cancel an event, what actually happens to it?",
+      "answer": "Cancelling is a soft delete: the event's status flips to cancelled rather than the row being erased, so it drops out of availability and the timeline but its record is retained.",
+      "where": "Key concepts: Event, and Story: Cancel an event"
+    },
+    {
+      "type": "mc",
+      "q": "Which event visibility setting does NOT consume an availability slot?",
+      "choices": ["Busy", "Free", "Tentative", "Out of Office"],
+      "answer": "Free",
+      "where": "Key concepts: Show as (visibility)"
+    },
+    {
+      "type": "short",
+      "q": "What are the default working hours when you first set up Book?",
+      "answer": "Monday to Friday, 09:00 to 17:00, are enabled by default.",
+      "where": "Key concepts: Working hours, and the Working Hours feature"
+    },
+    {
+      "type": "mc",
+      "q": "Where does the event created by a public booking land?",
+      "choices": [
+        "On a new calendar created for the booking",
+        "As a confirmed event on the page owner's default calendar",
+        "On the visitor's calendar",
+        "Nowhere until the owner accepts it"
+      ],
+      "answer": "As a confirmed event on the page owner's default calendar",
+      "where": "Key concepts: Booking, and Public Meet page"
+    },
+    {
+      "type": "short",
+      "q": "Which two controls appear on the New Event form but do nothing when you save, and why?",
+      "answer": "The Reminder dropdown and the Color picker. Book has no reminder feature or job, and event color is not stored on the event because color lives on the calendar, so both controls are inactive.",
+      "where": "New Event and Edit Event: Notes and current limitations"
+    },
+    {
+      "type": "mc",
+      "q": "What happens if you choose a Repeat option like Weekly on an event?",
+      "choices": [
+        "Book generates all future occurrences immediately",
+        "The rule is stored on the single event but not expanded, so it remains one event",
+        "The event is rejected as unsupported",
+        "It creates a recurring booking page"
+      ],
+      "answer": "The rule is stored on the single event but not expanded, so it remains one event",
+      "where": "New Event and Edit Event: Notes and current limitations"
+    },
+    {
+      "type": "short",
+      "q": "Which calendar feed provider works today with no credentials, and which two require operator-supplied OAuth before they can be connected?",
+      "answer": "The .ics feed provider works with no credentials; Google Calendar and Microsoft Outlook require operator-supplied OAuth credentials before a connection can be created.",
+      "where": "Connections, and Key concepts: External connection"
+    },
+    {
+      "type": "mc",
+      "q": "Roughly how often does the background sweep refresh every .ics connection on its own?",
+      "choices": ["Every minute", "Every fifteen minutes", "Once an hour", "Once a day"],
+      "answer": "Every fifteen minutes",
+      "where": "Connections: How sync works"
+    },
+    {
+      "type": "short",
+      "q": "What does disconnecting an .ics feed do to the events Book pulled from it?",
+      "answer": "Disconnecting removes the connection and every event Book mirrored from that feed, so the calendar returns to just your own events.",
+      "where": "Connections: How sync works, and Key concepts: Synced (mirrored) event"
+    },
+    {
+      "type": "mc",
+      "q": "When two visitors try to grab the same booking slot at once, what stops a double-booking?",
+      "choices": [
+        "The slot is simply offered to both",
+        "A row lock guards the booking, and a collision returns a 409 'This time slot is no longer available'",
+        "The second visitor is silently dropped",
+        "Both bookings are created and merged later"
+      ],
+      "answer": "A row lock guards the booking, and a collision returns a 409 'This time slot is no longer available'",
+      "where": "Public Meet page"
+    },
+    {
+      "type": "short",
+      "q": "Why can't you add attendees from the human New Event form, and how can attendees be added instead?",
+      "answer": "The human form does not support adding or editing attendees; attendees are set when an event is created through the API or an agent tool, book_create_event.",
+      "where": "New Event and Edit Event: Notes, and Working with AI agents"
+    }
+  ]
+}
