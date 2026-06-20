@@ -115,7 +115,36 @@ The entire stack runs via `docker compose up`. All services are accessed through
 - `http://DOMAIN/files/` serves uploaded files from MinIO
 - `http://DOMAIN/mcp/` proxies to the MCP server
 
-Application containers (api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, mcp-server, worker, helpdesk-api, frontend, voice-agent) are stateless and scale horizontally. Data services (postgres, redis, minio, qdrant) can be swapped for managed cloud equivalents by changing environment variables only.
+**The marketing `site` is also a Docker Compose service, run the same way locally and on Railway.** It is the top-level `site/` Vite app (React, not part of `apps/`), built by `infra/site/Dockerfile` (`npm run build`, then `serve -s dist` on `:3000`) and defined as the `site` service in `docker-compose.yml`. Two non-obvious things that have tripped this up before: (1) it is NOT fronted by the app nginx above (there is no `site` / `:3000` route in `infra/nginx/nginx.conf`); it serves itself on its own port/domain, which is why it is absent from the route list. Do not assume it lives outside the stack just because nginx does not mention it. (2) Anything under `site/public/` (including the committed `site/public/downloads/BigBlueBam-Manual.{pdf,docx}` book artifacts) is copied into `dist` and baked into the image at build time, so after changing site source or those artifacts you must `docker compose build site && docker compose up -d --force-recreate site` to see it locally; on Railway it ships on push to `stable`.
+
+Application containers (api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, mcp-server, worker, helpdesk-api, frontend, site, voice-agent) are stateless and scale horizontally. Data services (postgres, redis, minio, qdrant) can be swapped for managed cloud equivalents by changing environment variables only.
+
+## CRITICAL: Response style
+
+Open with the substance. Do not preface an answer with validation of me or
+with commentary about the kind of answer you're about to give.
+
+Banned openers and framings (representative, not exhaustive; avoid anything
+in this family):
+- "You're right to push back / to ask / to be skeptical"
+- "Good question," "Great point," "Fair point"
+- "I'm going to give you the honest answer rather than the reassuring one"
+- "Let me be honest / direct / straight with you"
+- "Honestly," "To be real with you," "The truth is,"
+- Any sentence whose only job is to announce that the next sentence will be candid
+
+Rationale: honesty is the floor, not a feature. Announcing it implies the rest
+of the output is something else, which is exactly what someone managing me would
+say. Telling me you're about to be honest is a tell, not a reassurance.
+Flattering me before answering reads as positioning rather than substance.
+
+When you disagree with me, state the disagreement and the reason. Don't ask
+permission, don't frame it as brave, don't cushion it with a compliment first.
+When I'm wrong, lead with what's wrong. When I'm right, just proceed; no
+congratulation needed.
+
+Cut transitional throat-clearing. If a sentence carries no information and only
+manages my reaction, delete it.
 
 ## IMPORTANT: Preserving Test Data
 
@@ -263,6 +292,14 @@ BigBlueBam uses a two-branch model for deployments:
 When `./scripts/deploy.sh` runs, it prompts the operator to choose between `stable` and `main` (default `stable`). The choice is persisted in `.deploy-state.json` and re-used on subsequent runs. Both the Docker Compose and Railway adapters honor it. See `scripts/deploy/shared/branch-select.mjs` for the prompt and `scripts/deploy/main.mjs` for how it's threaded through to the platform adapters.
 
 Day-to-day development: work on feature branches off `main`, merge to `main` via PR, then promote `main` to `stable` when the change is production-ready (typically fast-forward or a `--ff-only` merge to avoid extra merge noise on `stable`).
+
+## Surface Map (REST / MCP / CLI / UI) — keep it current
+
+`docs/reference/mcp-endpoint-mapping.md` is the authoritative map of our whole surface: every REST endpoint, its corresponding MCP tool (or `—` if none), MCP tools that have no backing endpoint, the `apps/api/src/cli.ts` commands, and representative UI call sites — grouped by app and by the cross-app platform surface, with a summary table of coverage.
+
+**Whenever you add, remove, rename, or consolidate a REST endpoint; add, change, or remove an MCP tool; change a CLI command; or wire/unwire a UI call site, update the matching table in that document in the same change.** It is not yet CI-enforced, so keeping it honest is on us — a stale surface map is worse than none.
+
+**It must be COMPLETE, not just accurate.** Every REST row's MCP-tool column is either a backtick-wrapped tool name **or** `— _(skip: <short reason>)_` explaining why there is no tool (auth/credentials, multipart/binary, public-inbound, SuperUser/permission admin, internal service-to-service route, realtime/ws/Yjs, resolver-done-internally, deprecated, deferred, …). Never leave a bare `—` in the MCP column. A section that is entirely or nearly tool-less gets a `> **⚠ No MCP tools in this section — intentional.**` callout under its heading saying why. Keep the coverage summary counts in sync. Self-check (must print `0`): `grep -cE '^\| \`[^|]+\` \| — \|' docs/reference/mcp-endpoint-mapping.md`.
 
 ## Common Commands
 
