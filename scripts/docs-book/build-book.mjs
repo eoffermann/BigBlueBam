@@ -24,7 +24,8 @@ import { marked } from 'marked';
 import {
   Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel,
   Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
-  AlignmentType, PageBreak, Header, Footer, PageNumber, TabStopType, TabStopPosition,
+  AlignmentType, PageBreak, Header, Footer, PageNumber,
+  SectionType, TableOfContents, FootnoteReferenceRun, SimpleField, Textbox,
 } from 'docx';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,25 +71,80 @@ function loadEnh(app) {
   return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : {};
 }
 
+// --- glossary parsing (from the "Key concepts" definition list) --------------
+function parseGlossary(md) {
+  // The glossary is ONLY the "Key concepts" section's definition list, not every
+  // bold bullet in the chapter (integrations, nav lists, platform bullets, etc.).
+  const sec = md.match(/#{2,4}\s+Key concepts[^\n]*\n([\s\S]*?)(?=\n#{1,6}\s|$)/i);
+  const scope = sec ? sec[1] : '';
+  const out = [];
+  const re = /^[-*]\s+\*\*([^*]+)\*\*\s*[-–]\s*([\s\S]*?)(?=\n[-*]\s+\*\*|\n#|$)/gm;
+  let m;
+  while ((m = re.exec(scope))) {
+    const term = m[1].trim();
+    const def = m[2].replace(/\s+/g, ' ').trim();
+    if (term && def && term.length <= 40) out.push({ term, def });
+  }
+  return out;
+}
+
+/** Build a decoration context: glossary regex + footnote/index state. */
+function buildCtx(glossary, fnState) {
+  if (!glossary.length) return null;
+  const byLower = new Map();
+  glossary.forEach((g) => byLower.set(g.term.toLowerCase(), g));
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const alt = glossary.map((g) => esc(g.term)).sort((a, b) => b.length - a.length).join('|');
+  return { byLower, re: new RegExp(`\\b(${alt})\\b`, 'gi'), firstSeen: new Set(), fnState };
+}
+
+/** Split plain text around glossary terms; footnote first use, index every use. */
+function decorateText(text, base, ctx) {
+  if (!ctx) return [new TextRun({ text, font: SERIF, color: INK, ...base })];
+  const runs = [];
+  let last = 0;
+  ctx.re.lastIndex = 0;
+  let m;
+  while ((m = ctx.re.exec(text))) {
+    if (m.index > last) runs.push(new TextRun({ text: text.slice(last, m.index), font: SERIF, color: INK, ...base }));
+    const word = m[0];
+    const key = word.toLowerCase();
+    const entry = ctx.byLower.get(key);
+    runs.push(new TextRun({ text: word, font: SERIF, color: INK, ...base }));
+    // Index mark on every occurrence (hidden XE field).
+    runs.push(new SimpleField(`XE "${entry.term}"`));
+    // Footnote on first occurrence.
+    if (!ctx.firstSeen.has(key)) {
+      ctx.firstSeen.add(key);
+      const id = ctx.fnState.next++;
+      ctx.fnState.reg[id] = { children: [new Paragraph({ children: [new TextRun({ text: `${entry.term}. `, bold: true, font: SERIF, size: 18 }), new TextRun({ text: entry.def, font: SERIF, size: 18 })] })] };
+      runs.push(new FootnoteReferenceRun(id));
+    }
+    last = m.index + word.length;
+  }
+  if (last < text.length) runs.push(new TextRun({ text: text.slice(last), font: SERIF, color: INK, ...base }));
+  return runs;
+}
+
 // --- inline markdown tokens -> docx TextRuns ---------------------------------
-function inlineRuns(tokens, accent, base = {}) {
+function inlineRuns(tokens, accent, base = {}, ctx = null) {
   const runs = [];
   for (const t of tokens || []) {
     if (t.type === 'text') {
-      if (t.tokens && t.tokens.length) runs.push(...inlineRuns(t.tokens, accent, base));
-      else runs.push(new TextRun({ text: t.text, font: SERIF, color: INK, ...base }));
+      if (t.tokens && t.tokens.length) runs.push(...inlineRuns(t.tokens, accent, base, ctx));
+      else runs.push(...decorateText(t.text, base, ctx));
     } else if (t.type === 'strong') {
-      runs.push(...inlineRuns(t.tokens, accent, { ...base, bold: true }));
+      runs.push(...inlineRuns(t.tokens, accent, { ...base, bold: true }, ctx));
     } else if (t.type === 'em') {
-      runs.push(...inlineRuns(t.tokens, accent, { ...base, italics: true }));
+      runs.push(...inlineRuns(t.tokens, accent, { ...base, italics: true }, ctx));
     } else if (t.type === 'codespan') {
       runs.push(new TextRun({ text: t.text, font: MONO, color: accent, size: 20, ...base }));
     } else if (t.type === 'link') {
-      runs.push(...inlineRuns(t.tokens, accent, { ...base, color: accent, underline: {} }));
+      runs.push(...inlineRuns(t.tokens, accent, { ...base, color: accent, underline: {} }, ctx));
     } else if (t.type === 'br') {
       runs.push(new TextRun({ break: 1 }));
     } else if (t.text) {
-      runs.push(new TextRun({ text: t.text, font: SERIF, color: INK, ...base }));
+      runs.push(...decorateText(t.text, base, ctx));
     }
   }
   return runs.length ? runs : [new TextRun({ text: '', font: SERIF })];
@@ -162,7 +218,9 @@ function chapterOpener(app, title, tagline, intro, atAGlance, toc, accent, num) 
   const white = 'FFFFFF';
   const panelKids = [
     new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: `CHAPTER ${num}`, bold: true, font: SANS, color: tint(accent, 0.55), size: 26 })] }),
-    new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: titleName(app, title), bold: true, font: SANS, color: white, size: 80 })] }),
+    // HEADING_1 so the Table of Contents captures the chapter as a level-1 entry;
+    // explicit run props keep the big white display look on the color panel.
+    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 0, after: 60 }, children: [new TextRun({ text: titleName(app, title), bold: true, font: SANS, color: white, size: 80 })] }),
     new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ text: tagline || '', font: SANS, color: white, size: 28 })] }),
   ];
   out.push(colorPanel(accent, panelKids));
@@ -220,25 +278,33 @@ function quizBlock(quiz, accent, num) {
     }
   });
   out.push(colorPanel(tint(accent, 0.9), inner, { top: 240, bottom: 240, left: 280, right: 280 }));
-  // Answer key
-  out.push(new Paragraph({ spacing: { before: 160, after: 60 }, children: [new TextRun({ text: 'Answer key', bold: true, font: SANS, color: SUBTLE, size: 18 })] }));
+  // Answer key, printed UPSIDE DOWN like a textbook self-test: the reader turns
+  // the book around to read it. An upright cue line introduces it.
+  out.push(new Paragraph({ spacing: { before: 220, after: 80 }, children: [new TextRun({ text: 'Answers  (turn the book around to read)', italics: true, font: SANS, color: SUBTLE, size: 16 })] }));
+  const akKids = [
+    new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: 'Answer key', bold: true, font: SANS, color: SUBTLE, size: 18 })] }),
+  ];
   quiz.forEach((item, i) => {
     let ans = item.answer;
     if (item.type === 'mc' && Array.isArray(item.choices)) {
       const idx = item.choices.findIndex((c) => c === item.answer);
       if (idx >= 0) ans = `${String.fromCharCode(97 + idx)}) ${item.answer}`;
     }
-    out.push(new Paragraph({ spacing: { after: 20 }, children: [
+    akKids.push(new Paragraph({ spacing: { after: 20 }, children: [
       new TextRun({ text: `${i + 1}. `, bold: true, font: SANS, color: SUBTLE, size: 18 }),
       new TextRun({ text: ans, font: SANS, color: SUBTLE, size: 18 }),
       ...(item.where ? [new TextRun({ text: `  (see: ${item.where})`, italics: true, font: SANS, color: SUBTLE, size: 16 })] : []),
     ] }));
   });
+  out.push(new Textbox({
+    style: { width: 432, height: 176, rotation: 180 },
+    children: akKids,
+  }));
   return out;
 }
 
 // --- render one chapter's markdown body --------------------------------------
-function renderBody(md, enh, accent, chapterNum, figState) {
+function renderBody(md, enh, accent, chapterNum, figState, ctx) {
   const tokens = marked.lexer(md);
   const out = [];
   let seenH1 = false;
@@ -274,7 +340,7 @@ function renderBody(md, enh, accent, chapterNum, figState) {
         out.push(...figure(img, accent, chapterNum, figState));
         continue;
       }
-      out.push(new Paragraph({ spacing: { after: 120, line: 300 }, alignment: AlignmentType.LEFT, children: inlineRuns(tok.tokens, accent) }));
+      out.push(new Paragraph({ spacing: { after: 120, line: 300 }, alignment: AlignmentType.LEFT, children: inlineRuns(tok.tokens, accent, {}, ctx) }));
       out.push(...anchoredFor(plain(tok.tokens)));
     } else if (tok.type === 'blockquote') {
       const inner = (tok.tokens || []).filter((t) => t.type === 'paragraph').map((p) => new Paragraph({
@@ -288,7 +354,7 @@ function renderBody(md, enh, accent, chapterNum, figState) {
       let n = typeof tok.start === 'number' && tok.start ? tok.start : 1;
       tok.items.forEach((it) => {
         listText += ' ' + (it.text || '');
-        const itemRuns = inlineRuns(it.tokens && it.tokens[0] && it.tokens[0].tokens ? it.tokens[0].tokens : [{ type: 'text', text: it.text }], accent);
+        const itemRuns = inlineRuns(it.tokens && it.tokens[0] && it.tokens[0].tokens ? it.tokens[0].tokens : [{ type: 'text', text: it.text }], accent, {}, ctx);
         if (tok.ordered) {
           out.push(new Paragraph({
             spacing: { after: 40, line: 290 }, indent: { left: 380, hanging: 240 },
@@ -364,7 +430,32 @@ function mdTable(tok, accent) {
 }
 
 // --- assemble ----------------------------------------------------------------
-function chapterSection(chapter, num) {
+
+// Running header: a borderless two-cell table at 100% content width, with a
+// shared bottom border. The right cell is right-aligned, so the text's right
+// edge and the rule's right edge are the SAME content-width edge (fixes the
+// header-wider-than-rule mismatch from the tab-stop version).
+function runningHeader(app, title, accent) {
+  const noTopSideBorders = { top: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.SINGLE, size: 8, color: accent } };
+  return new Header({ children: [new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: noBorders(),
+    columnWidths: [5000, 5000],
+    rows: [new TableRow({ children: [
+      new TableCell({ borders: noTopSideBorders, margins: { bottom: 40, left: 0, right: 0 }, children: [new Paragraph({ children: [new TextRun({ text: titleName(app, title), font: SANS, color: accent, size: 16, bold: true })] })] }),
+      new TableCell({ borders: noTopSideBorders, margins: { bottom: 40, left: 0, right: 0 }, children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'BigBlueBam Manual', font: SANS, color: SUBTLE, size: 16 })] })] }),
+    ] })],
+  })] });
+}
+
+function pageFooter() {
+  return new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ children: [PageNumber.CURRENT], font: SANS, color: SUBTLE, size: 16 })] })] });
+}
+
+const PAGE_MARGIN = { top: 1440, bottom: 1440, left: 1584, right: 1440 };
+const PAGE = { size: { width: 12240, height: 15840 }, margin: PAGE_MARGIN }; // US Letter
+
+function chapterSection(chapter, num, ctx) {
   const app = chapter.app;
   const accent = ACCENT[app] || '2563EB';
   const enh = loadEnh(app);
@@ -372,20 +463,14 @@ function chapterSection(chapter, num) {
   const children = [
     ...chapterOpener(app, chapter.title, enh.tagline, enh.intro, enh.atAGlance, chapter.toc, accent, num),
     new Paragraph({ children: [new PageBreak()] }),
-    ...renderBody(chapter.markdown, enh, accent, num, figState),
+    ...renderBody(chapter.markdown, enh, accent, num, figState, ctx),
     ...quizBlock(enh.quiz, accent, num),
   ];
   return {
-    properties: { page: { margin: { top: 1440, bottom: 1440, left: 1584, right: 1440 } } },
-    headers: { default: new Header({ children: [new Paragraph({
-      border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: accent } },
-      tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
-      children: [new TextRun({ text: titleName(app, chapter.title), font: SANS, color: accent, size: 16, bold: true }), new TextRun({ text: '\tBigBlueBam Manual', font: SANS, color: SUBTLE, size: 16 })],
-    })] }) },
-    footers: { default: new Footer({ children: [new Paragraph({
-      alignment: AlignmentType.RIGHT,
-      children: [new TextRun({ children: [PageNumber.CURRENT], font: SANS, color: SUBTLE, size: 16 })],
-    })] }) },
+    // Chapters start on an ODD (right-hand, recto) page like a real textbook.
+    properties: { type: SectionType.ODD_PAGE, page: PAGE },
+    headers: { default: runningHeader(app, chapter.title, accent) },
+    footers: { default: pageFooter() },
     children,
   };
 }
@@ -398,7 +483,45 @@ function titleSection(single) {
     new Paragraph({ spacing: { after: 240 }, children: [new TextRun({ text: 'Sixteen apps that behave like one. A field guide.', font: SERIF, italics: true, color: SUBTLE, size: 26 })] }),
     new Paragraph({ children: [new TextRun({ text: 'Open source. Self-hosted. Built for humans and AI agents.', font: SANS, color: SUBTLE, size: 20 })] }),
   ];
-  return { properties: {}, children: [colorPanel(tint(a, 0.92), kids, { top: 480, bottom: 480, left: 360, right: 360 })] };
+  return { properties: { page: PAGE }, children: [colorPanel(tint(a, 0.92), kids, { top: 480, bottom: 480, left: 360, right: 360 })] };
+}
+
+function tocSection() {
+  const a = '2563EB';
+  return {
+    properties: { type: SectionType.NEXT_PAGE, page: PAGE },
+    footers: { default: pageFooter() },
+    children: [
+      new Paragraph({ spacing: { before: 240, after: 200 }, children: [new TextRun({ text: 'Table of Contents', bold: true, font: SANS, color: a, size: 48 })] }),
+      new TableOfContents('Contents', { hyperlink: true, headingStyleRange: '1-3' }),
+    ],
+  };
+}
+
+function glossarySection(glossary, accent) {
+  const children = [
+    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 120, after: 120 }, children: [new TextRun({ text: 'Glossary', bold: true, font: SANS, color: accent, size: 48 })] }),
+    new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: 'Key terms used throughout this book. Each is footnoted on first use in a chapter.', italics: true, font: SERIF, color: SUBTLE, size: 22 })] }),
+  ];
+  for (const g of glossary) {
+    children.push(new Paragraph({ spacing: { after: 100, line: 290 }, children: [
+      new TextRun({ text: `${g.term}.  `, bold: true, font: SANS, color: accent, size: 22 }),
+      new TextRun({ text: g.def, font: SERIF, color: INK, size: 22 }),
+    ] }));
+  }
+  return { properties: { type: SectionType.ODD_PAGE, page: PAGE }, footers: { default: pageFooter() }, children };
+}
+
+function indexSection(accent) {
+  return {
+    properties: { type: SectionType.ODD_PAGE, page: PAGE },
+    footers: { default: pageFooter() },
+    children: [
+      new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 120, after: 160 }, children: [new TextRun({ text: 'Index', bold: true, font: SANS, color: accent, size: 48 })] }),
+      new Paragraph({ children: [new TextRun({ text: 'Page references update when the document is opened.', italics: true, font: SERIF, color: SUBTLE, size: 18 })] }),
+      new Paragraph({ children: [new SimpleField('INDEX \\h "A" \\c "2"')] }),
+    ],
+  };
 }
 
 async function main() {
@@ -410,14 +533,25 @@ async function main() {
   const chapters = appArg ? manual.filter((c) => c.app === appArg) : manual;
   if (!chapters.length) { console.error(`No chapter for --app=${appArg}`); process.exit(1); }
 
-  const sections = [titleSection(!!appArg)];
-  chapters.forEach((c, i) => {
+  const fnState = { reg: {}, next: 1 };
+  const allGloss = [];
+  const chapterSecs = chapters.map((c, i) => {
     const num = appArg ? (manual.findIndex((m) => m.app === c.app) + 1) : i + 1;
-    sections.push(chapterSection(c, num));
+    const gloss = parseGlossary(c.markdown);
+    allGloss.push(...gloss);
+    return chapterSection(c, num, buildCtx(gloss, fnState));
   });
+  const seen = new Set();
+  const glossary = [];
+  for (const g of allGloss) { const k = g.term.toLowerCase(); if (!seen.has(k)) { seen.add(k); glossary.push(g); } }
+  glossary.sort((x, y) => x.term.localeCompare(y.term));
+
+  const sections = [titleSection(!!appArg), tocSection(), ...chapterSecs, glossarySection(glossary, '2563EB'), indexSection('2563EB')];
 
   const doc = new Document({
     creator: 'BigBlueBam', title: 'BigBlueBam Manual',
+    features: { updateFields: true },
+    ...(Object.keys(fnState.reg).length ? { footnotes: fnState.reg } : {}),
     styles: { default: { document: { run: { font: SERIF, size: 22, color: INK } } } },
     sections,
   });
@@ -430,8 +564,6 @@ async function main() {
   console.log(`DOCX -> ${path.relative(ROOT, docxPath)}  (${(buf.length / 1024).toFixed(0)} KB)`);
 
   if (wantPdf) {
-    const soffice = process.platform === 'win32'
-      ? 'C:\\Program Files\\LibreOffice\\program\\soffice.exe' : 'soffice';
     const pdfPath = docxPath.replace(/\.docx$/, '.pdf');
     try { fs.rmSync(pdfPath, { force: true }); } catch {}
     const sleep = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch {} };
@@ -441,16 +573,26 @@ async function main() {
         spawnSync('taskkill', ['/F', '/IM', 'soffice.bin', '/T'], { stdio: 'ignore' });
       } else { spawnSync('pkill', ['-f', 'soffice'], { stdio: 'ignore' }); }
     };
-    // LibreOffice is single-instance; a stale process or a self-update can hold
-    // the lock and make --convert-to silently no-op. Kill-and-retry once.
+    killStale(); sleep(2000); // officehelper bootstraps its own LibreOffice; clear any stray instance first
+    // Convert via UNO so the TOC and Index FIELDS get updated (plain
+    // `soffice --convert-to pdf` leaves them blank). Fall back to plain convert
+    // only if the LibreOffice python is missing.
+    const loPy = process.platform === 'win32' ? 'C:\\Program Files\\LibreOffice\\program\\python.exe' : 'python3';
+    const conv = path.join(__dirname, 'lo-convert.py');
     let ok = false;
-    for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
-      const r = spawnSync(soffice, ['--headless', '--convert-to', 'pdf', '--outdir', OUT_DIR, docxPath], { stdio: 'inherit' });
+    if (process.platform !== 'win32' || fs.existsSync(loPy)) {
+      const r = spawnSync(loPy, [conv, docxPath, pdfPath], { stdio: 'inherit' });
       ok = r.status === 0 && fs.existsSync(pdfPath);
-      if (!ok && attempt === 1) { console.error('PDF conversion did not land; clearing LibreOffice and retrying...'); killStale(); sleep(4000); }
+    }
+    if (!ok) {
+      console.error('UNO convert unavailable; falling back to plain convert (TOC/Index will be blank until opened).');
+      killStale(); sleep(3000);
+      const soffice = process.platform === 'win32' ? 'C:\\Program Files\\LibreOffice\\program\\soffice.exe' : 'soffice';
+      const r2 = spawnSync(soffice, ['--headless', '--convert-to', 'pdf', '--outdir', OUT_DIR, docxPath], { stdio: 'inherit' });
+      ok = r2.status === 0 && fs.existsSync(pdfPath);
     }
     if (ok) console.log(`PDF  -> ${path.relative(ROOT, pdfPath)}`);
-    else console.error('PDF conversion failed. A LibreOffice self-update or lock may be active; close LibreOffice and re-run.');
+    else console.error('PDF conversion failed. Close LibreOffice and re-run.');
   }
 }
 main().catch((e) => { console.error(e); process.exit(1); });
