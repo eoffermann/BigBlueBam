@@ -120,7 +120,7 @@ function decorateText(text, base, ctx) {
     if (!ctx.firstSeen.has(key)) {
       ctx.firstSeen.add(key);
       const id = ctx.fnState.next++;
-      ctx.fnState.reg[id] = { children: [new Paragraph({ children: [new TextRun({ text: `${entry.term}. `, bold: true, font: SERIF, size: 18 }), new TextRun({ text: entry.def, font: SERIF, size: 18 })] })] };
+      ctx.fnState.reg[id] = { children: [new Paragraph({ children: [new TextRun({ text: `${entry.term}. `, bold: true, font: SERIF, size: 18 }), ...inlineMd(entry.def, '2563EB', { size: 18 })] })] };
       runs.push(new FootnoteReferenceRun(id));
     }
     last = m.index + word.length;
@@ -162,6 +162,8 @@ function heading(text, level, accent) {
   const children = [];
   if (level === 2) {
     children.push(new Paragraph({
+      // H2 is a major subsection; start it on a new page (its accent rule leads).
+      pageBreakBefore: true,
       spacing: { before: 60, after: 60 },
       border: { bottom: { style: BorderStyle.SINGLE, size: 18, color: accent, space: 1 } },
       children: [new TextRun({ text: '', size: 2 })],
@@ -169,11 +171,23 @@ function heading(text, level, accent) {
   }
   children.push(new Paragraph({
     heading: level === 2 ? HeadingLevel.HEADING_2 : level === 3 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_4,
+    // Explicit outline level so LibreOffice's build-from-outline TOC finds it.
+    // The docx heading STYLES carry no w:outlineLvl, so without this the TOC is blank.
+    outlineLevel: level - 1,
     spacing: { before: level === 2 ? 120 : 200, after: 100 },
     keepNext: true,
     children: [new TextRun({ text, bold: true, font: SANS, color: accent, size: sizes[level] || 19 })],
   }));
   return children;
+}
+
+// Render a string of inline markdown (bold, italic, `code`, links) to styled
+// runs. Used where source text reaches a leaf unrendered (glossary defs,
+// footnote defs) so backticks and asterisks become real formatting, not literals.
+function inlineMd(text, accent, base = {}) {
+  const toks = marked.lexer(text || '');
+  const p = toks.find((t) => t.type === 'paragraph') || toks[0];
+  return inlineRuns(p && p.tokens ? p.tokens : [{ type: 'text', text: text || '' }], accent, base);
 }
 
 function calloutBox(type, text, accent) {
@@ -223,7 +237,7 @@ function chapterOpener(app, title, tagline, intro, atAGlance, toc, accent, num) 
     new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: `CHAPTER ${num}`, bold: true, font: SANS, color: tint(accent, 0.55), size: 26 })] }),
     // HEADING_1 so the Table of Contents captures the chapter as a level-1 entry;
     // explicit run props keep the big white display look on the color panel.
-    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 0, after: 60 }, children: [new TextRun({ text: titleName(app, title), bold: true, font: SANS, color: white, size: 80 })] }),
+    new Paragraph({ heading: HeadingLevel.HEADING_1, outlineLevel: 0, spacing: { before: 0, after: 60 }, children: [new TextRun({ text: titleName(app, title), bold: true, font: SANS, color: white, size: 80 })] }),
     new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ text: tagline || '', font: SANS, color: white, size: 28 })] }),
   ];
   out.push(colorPanel(accent, panelKids));
@@ -294,7 +308,7 @@ function quizBlock(quiz, accent, num) {
 // and before the glossary and index.
 function answerKeySection(chapters, accent) {
   const children = [
-    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 120, after: 80 }, children: [new TextRun({ text: 'Answer Key', bold: true, font: SANS, color: accent, size: 48 })] }),
+    new Paragraph({ heading: HeadingLevel.HEADING_1, outlineLevel: 0, spacing: { before: 120, after: 80 }, children: [new TextRun({ text: 'Answer Key', bold: true, font: SANS, color: accent, size: 48 })] }),
     new Paragraph({ spacing: { after: 220 }, children: [new TextRun({ text: 'Answers to every "Check yourself" review, grouped by chapter. Each answer cites the section where you can confirm it.', italics: true, font: SERIF, color: SUBTLE, size: 22 })] }),
   ];
   chapters.forEach((ch) => {
@@ -345,7 +359,11 @@ function renderBody(md, enh, accent, chapterNum, figState, ctx) {
     return els;
   };
 
-  for (const tok of tokens) {
+  // Next non-space token, used to keep the paragraph just above a table glued
+  // to it (so a heading + intro + table block bumps to the next page together).
+  const nextMeaningful = (from) => { for (let j = from + 1; j < tokens.length; j++) { if (tokens[j].type !== 'space') return tokens[j]; } return null; };
+  for (let ti = 0; ti < tokens.length; ti++) {
+    const tok = tokens[ti];
     if (tok.type === 'heading') {
       if (tok.depth === 1) { if (!seenH1) { seenH1 = true; continue; } continue; }
       out.push(...heading(tok.text, Math.min(tok.depth, 4), accent));
@@ -356,7 +374,10 @@ function renderBody(md, enh, accent, chapterNum, figState, ctx) {
         out.push(...figure(img, accent, chapterNum, figState));
         continue;
       }
-      out.push(new Paragraph({ spacing: { after: 120, line: 300 }, alignment: AlignmentType.LEFT, children: inlineRuns(tok.tokens, accent, {}, ctx) }));
+      const nxt = nextMeaningful(ti);
+      out.push(new Paragraph({ spacing: { after: 120, line: 300 }, alignment: AlignmentType.LEFT,
+        keepNext: !!(nxt && nxt.type === 'table'),
+        children: inlineRuns(tok.tokens, accent, {}, ctx) }));
       out.push(...anchoredFor(plain(tok.tokens)));
     } else if (tok.type === 'blockquote') {
       const paras = (tok.tokens || []).filter((t) => t.type === 'paragraph');
@@ -444,14 +465,22 @@ function figure(img, accent, chapterNum, figState) {
 function mdTable(tok, accent) {
   const headFill = tint(accent, 0.85);
   const rows = [];
-  rows.push(new TableRow({ tableHeader: true, children: tok.header.map((c) => new TableCell({
+  // Keep a short table together: cantSplit stops a single row straddling a page,
+  // and keepNext chains every row (except the last) to the next so the whole
+  // table, plus its heading and intro text (also keepNext), bumps to the next
+  // page rather than splitting. A table taller than a page still splits, because
+  // keepNext is best-effort and cannot fit the impossible.
+  rows.push(new TableRow({ tableHeader: true, cantSplit: true, children: tok.header.map((c) => new TableCell({
     shading: { type: ShadingType.CLEAR, fill: headFill }, margins: { top: 60, bottom: 60, left: 100, right: 100 },
-    children: [new Paragraph({ children: [new TextRun({ text: plain(c.tokens), bold: true, font: SANS, color: INK, size: 19 })] })],
+    children: [new Paragraph({ keepNext: true, children: [new TextRun({ text: plain(c.tokens), bold: true, font: SANS, color: INK, size: 19 })] })],
   })) }));
-  tok.rows.forEach((r) => rows.push(new TableRow({ children: r.map((c) => new TableCell({
-    margins: { top: 60, bottom: 60, left: 100, right: 100 },
-    children: [new Paragraph({ children: inlineRuns(c.tokens, accent, { size: 19 }) })],
-  })) })));
+  tok.rows.forEach((r, ri) => {
+    const keep = ri < tok.rows.length - 1; // last row does not glue to the next section
+    rows.push(new TableRow({ cantSplit: true, children: r.map((c) => new TableCell({
+      margins: { top: 60, bottom: 60, left: 100, right: 100 },
+      children: [new Paragraph({ keepNext: keep, children: inlineRuns(c.tokens, accent, { size: 19 }) })],
+    })) }));
+  });
   return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows });
 }
 
@@ -487,7 +516,8 @@ function chapterSection(chapter, num, ctx, enh) {
   const figState = { n: 0 };
   const children = [
     ...chapterOpener(app, chapter.title, enh.tagline, enh.intro, enh.atAGlance, chapter.toc, accent, num),
-    new Paragraph({ children: [new PageBreak()] }),
+    // No manual page break here: the first body H2 carries pageBreakBefore, so it
+    // opens the next page on its own (a manual break here would leave a blank page).
     ...renderBody(chapter.markdown, enh, accent, num, figState, ctx),
     ...quizBlock(enh.quiz, accent, num),
   ];
@@ -526,13 +556,15 @@ function tocSection() {
 
 function glossarySection(glossary, accent) {
   const children = [
-    new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 120, after: 120 }, children: [new TextRun({ text: 'Glossary', bold: true, font: SANS, color: accent, size: 48 })] }),
+    new Paragraph({ heading: HeadingLevel.HEADING_1, outlineLevel: 0, spacing: { before: 120, after: 120 }, children: [new TextRun({ text: 'Glossary', bold: true, font: SANS, color: accent, size: 48 })] }),
     new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: 'Key terms used throughout this book. Each is footnoted on first use in a chapter.', italics: true, font: SERIF, color: SUBTLE, size: 22 })] }),
   ];
   for (const g of glossary) {
     children.push(new Paragraph({ spacing: { after: 100, line: 290 }, children: [
       new TextRun({ text: `${g.term}.  `, bold: true, font: SANS, color: accent, size: 22 }),
-      new TextRun({ text: g.def, font: SERIF, color: INK, size: 22 }),
+      // Render the definition's inline markdown (code, bold, italics) properly
+      // instead of dumping raw backticks and asterisks into the page.
+      ...inlineMd(g.def, accent, { size: 22 }),
     ] }));
   }
   return { properties: { type: SectionType.ODD_PAGE, page: PAGE }, footers: { default: pageFooter() }, children };
@@ -543,8 +575,8 @@ function indexSection(accent) {
     properties: { type: SectionType.ODD_PAGE, page: PAGE },
     footers: { default: pageFooter() },
     children: [
-      new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 120, after: 160 }, children: [new TextRun({ text: 'Index', bold: true, font: SANS, color: accent, size: 48 })] }),
-      new Paragraph({ children: [new TextRun({ text: 'Page references update when the document is opened.', italics: true, font: SERIF, color: SUBTLE, size: 18 })] }),
+      new Paragraph({ heading: HeadingLevel.HEADING_1, outlineLevel: 0, spacing: { before: 120, after: 160 }, children: [new TextRun({ text: 'Index', bold: true, font: SANS, color: accent, size: 48 })] }),
+      new Paragraph({ children: [new TextRun({ text: 'Key terms and the pages where they appear.', italics: true, font: SERIF, color: SUBTLE, size: 18 })] }),
       new Paragraph({ children: [new SimpleField('INDEX \\h "A" \\c "2"')] }),
     ],
   };
@@ -595,6 +627,12 @@ async function main() {
   fs.writeFileSync(docxPath, buf);
   console.log(`DOCX -> ${path.relative(ROOT, docxPath)}  (${(buf.length / 1024).toFixed(0)} KB)`);
 
+  // Sidecar list of index terms (the glossary terms). The PDF converter marks
+  // their occurrences and builds a native alphabetical index, because Word
+  // XE/INDEX fields do not survive the LibreOffice import.
+  const termsPath = path.join(OUT_DIR, `${base}.terms.json`);
+  fs.writeFileSync(termsPath, JSON.stringify(glossary.map((g) => g.term)));
+
   if (wantPdf) {
     const pdfPath = docxPath.replace(/\.docx$/, '.pdf');
     try { fs.rmSync(pdfPath, { force: true }); } catch {}
@@ -613,7 +651,7 @@ async function main() {
     const conv = path.join(__dirname, 'lo-convert.py');
     let ok = false;
     if (process.platform !== 'win32' || fs.existsSync(loPy)) {
-      const r = spawnSync(loPy, [conv, docxPath, pdfPath], { stdio: 'inherit' });
+      const r = spawnSync(loPy, [conv, docxPath, pdfPath, termsPath], { stdio: 'inherit' });
       ok = r.status === 0 && fs.existsSync(pdfPath);
     }
     if (!ok) {
