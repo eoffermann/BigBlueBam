@@ -25,7 +25,7 @@ import {
   Document, Packer, Paragraph, TextRun, ImageRun, HeadingLevel,
   Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
   AlignmentType, PageBreak, Header, Footer, PageNumber,
-  SectionType, TableOfContents, FootnoteReferenceRun, SimpleField, Textbox,
+  SectionType, TableOfContents, FootnoteReferenceRun, SimpleField,
 } from 'docx';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,6 +55,20 @@ function tint(hex, amount) {
   return (m(r) + m(g) + m(b)).toUpperCase();
 }
 
+// Upside-down (180-degree) text via Unicode glyph substitution. A true rotated
+// frame (VML textbox) does not render in the LibreOffice PDF, so we flip the
+// glyphs, which renders reliably as ordinary text. Callers also reverse line
+// order and right-align so the block reads correctly when the book is turned.
+const FLIP = {
+  a: 'ɐ', b: 'q', c: 'ɔ', d: 'p', e: 'ǝ', f: 'ɟ', g: 'ƃ', h: 'ɥ', i: 'ı', j: 'ɾ', k: 'ʞ', l: 'ן', m: 'ɯ', n: 'u', o: 'o', p: 'd', q: 'b', r: 'ɹ', s: 's', t: 'ʇ', u: 'n', v: 'ʌ', w: 'ʍ', x: 'x', y: 'ʎ', z: 'z',
+  A: '∀', B: 'q', C: 'Ɔ', D: 'p', E: 'Ǝ', F: 'Ⅎ', G: 'פ', H: 'H', I: 'I', J: 'ſ', K: 'ʞ', L: '˥', M: 'W', N: 'N', O: 'O', P: 'Ԁ', Q: 'O', R: 'ᴚ', S: 'S', T: '⊥', U: '∩', V: 'Λ', W: 'M', X: 'X', Y: '⅄', Z: 'Z',
+  0: '0', 1: 'Ɩ', 2: 'ᄅ', 3: 'Ɛ', 4: 'ㄣ', 5: 'ϛ', 6: '9', 7: 'ㄥ', 8: '8', 9: '6',
+  '.': '˙', ',': 'ʻ', '?': '¿', '!': '¡', "'": ',', '"': ',,', '(': ')', ')': '(', '[': ']', ']': '[', '{': '}', '}': '{', '<': '>', '>': '<', '&': '⅋', _: '‾', '-': '-', ':': ':', ';': '؛', '/': '/', ' ': ' ',
+};
+function flip(s) {
+  return [...String(s)].map((ch) => FLIP[ch] || FLIP[ch.toLowerCase()] || ch).reverse().join('');
+}
+
 /** Read a PNG's intrinsic pixel size from its IHDR header. */
 function pngSize(file) {
   try {
@@ -78,9 +92,12 @@ function parseGlossary(md) {
   const sec = md.match(/#{2,4}\s+Key concepts[^\n]*\n([\s\S]*?)(?=\n#{1,6}\s|$)/i);
   const scope = sec ? sec[1] : '';
   const out = [];
-  const re = /^[-*]\s+\*\*([^*]+)\*\*\s*[-–]\s*([\s\S]*?)(?=\n[-*]\s+\*\*|\n#|$)/gm;
-  let m;
-  while ((m = re.exec(scope))) {
+  // Split into bullet items (each definition is hard-wrapped across lines), then
+  // take the FULL item text. A single regex with `$` under /m stops at the first
+  // line wrap, which truncated every definition mid-sentence.
+  for (const raw of scope.split(/\n(?=[-*]\s+\*\*)/)) {
+    const m = raw.match(/^[-*]\s+\*\*([^*]+)\*\*\s*[-–:]\s*([\s\S]*)$/);
+    if (!m) continue;
     const term = m[1].trim();
     const def = m[2].replace(/\s+/g, ' ').trim();
     if (term && def && term.length <= 40) out.push({ term, def });
@@ -259,7 +276,8 @@ function titleName(app, title) {
 function quizBlock(quiz, accent, num) {
   if (!Array.isArray(quiz) || !quiz.length) return [];
   const out = [];
-  out.push(new Paragraph({ spacing: { before: 320, after: 0 }, children: [] }));
+  // "Check yourself" starts on a fresh page, splitting the review from the chapter.
+  out.push(new Paragraph({ children: [new PageBreak()] }));
   const inner = [
     new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: 'Check yourself', bold: true, font: SANS, color: accent, size: 28 })] }),
   ];
@@ -278,28 +296,23 @@ function quizBlock(quiz, accent, num) {
     }
   });
   out.push(colorPanel(tint(accent, 0.9), inner, { top: 240, bottom: 240, left: 280, right: 280 }));
-  // Answer key, printed UPSIDE DOWN like a textbook self-test: the reader turns
-  // the book around to read it. An upright cue line introduces it.
-  out.push(new Paragraph({ spacing: { before: 220, after: 80 }, children: [new TextRun({ text: 'Answers  (turn the book around to read)', italics: true, font: SANS, color: SUBTLE, size: 16 })] }));
-  const akKids = [
-    new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: 'Answer key', bold: true, font: SANS, color: SUBTLE, size: 18 })] }),
-  ];
+  // Answer key printed UPSIDE DOWN (Unicode-flipped glyphs, reversed line order,
+  // right-aligned) so it reads correctly when the reader turns the book around.
+  // A true rotated frame did not render in the LibreOffice PDF; flipping glyphs does.
+  out.push(new Paragraph({ spacing: { before: 280, after: 120 }, alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Answers  (turn the book around to read them)', italics: true, font: SANS, color: SUBTLE, size: 16 })] }));
+  const akLines = ['Answer key'];
   quiz.forEach((item, i) => {
     let ans = item.answer;
     if (item.type === 'mc' && Array.isArray(item.choices)) {
       const idx = item.choices.findIndex((c) => c === item.answer);
       if (idx >= 0) ans = `${String.fromCharCode(97 + idx)}) ${item.answer}`;
     }
-    akKids.push(new Paragraph({ spacing: { after: 20 }, children: [
-      new TextRun({ text: `${i + 1}. `, bold: true, font: SANS, color: SUBTLE, size: 18 }),
-      new TextRun({ text: ans, font: SANS, color: SUBTLE, size: 18 }),
-      ...(item.where ? [new TextRun({ text: `  (see: ${item.where})`, italics: true, font: SANS, color: SUBTLE, size: 16 })] : []),
-    ] }));
+    akLines.push(`${i + 1}. ${ans}${item.where ? `  (see: ${item.where})` : ''}`);
   });
-  out.push(new Textbox({
-    style: { width: 432, height: 176, rotation: 180 },
-    children: akKids,
-  }));
+  // Reverse line order so a 180-degree turn reads the lines top-to-bottom.
+  akLines.slice().reverse().forEach((line) => {
+    out.push(new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 24 }, children: [new TextRun({ text: flip(line), font: SERIF, color: SUBTLE, size: 18 })] }));
+  });
   return out;
 }
 
@@ -394,11 +407,17 @@ function figure(img, accent, chapterNum, figState) {
   const file = path.join(PUBLIC, rel);
   const dims = pngSize(file);
   if (dims && fs.existsSync(file)) {
-    const maxW = 580;
-    const w = Math.min(maxW, dims.w);
-    const h = Math.round(dims.h * (w / dims.w));
+    // Fit within the column width AND a max height so the image plus its caption
+    // never overflow one page (a tall screenshot otherwise fills the page and
+    // pushes the caption onto the next one). Shrink proportionally when needed.
+    const maxW = 580; // ~6 in column
+    const maxH = 700; // ~7.3 in, leaving room for the caption + spacing on a page
+    let w = Math.min(maxW, dims.w);
+    let h = Math.round(dims.h * (w / dims.w));
+    if (h > maxH) { h = maxH; w = Math.round(dims.w * (maxH / dims.h)); }
     out.push(new Paragraph({
       alignment: AlignmentType.CENTER, spacing: { before: 120, after: 40 },
+      keepNext: true, // keep the image with its caption (next paragraph)
       border: { top: { style: BorderStyle.SINGLE, size: 4, color: HAIR }, bottom: { style: BorderStyle.SINGLE, size: 4, color: HAIR }, left: { style: BorderStyle.SINGLE, size: 4, color: HAIR }, right: { style: BorderStyle.SINGLE, size: 4, color: HAIR } },
       children: [new ImageRun({ type: 'png', data: fs.readFileSync(file), transformation: { width: w, height: h } })],
     }));
@@ -489,7 +508,8 @@ function titleSection(single) {
 function tocSection() {
   const a = '2563EB';
   return {
-    properties: { type: SectionType.NEXT_PAGE, page: PAGE },
+    // ODD page so the TOC opens on a right-hand page, not the inside-front-cover position.
+    properties: { type: SectionType.ODD_PAGE, page: PAGE },
     footers: { default: pageFooter() },
     children: [
       new Paragraph({ spacing: { before: 240, after: 200 }, children: [new TextRun({ text: 'Table of Contents', bold: true, font: SANS, color: a, size: 48 })] }),
