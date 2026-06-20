@@ -130,11 +130,14 @@ def render_index(doc, term_pages):
         if first != last_letter:
             last_letter = first
             text.insertControlCharacter(cur, PARAGRAPH_BREAK, False)
+            # Section letter: ~2x the entry size, with clear space above it.
+            cur.setPropertyValue("ParaTopMargin", 360)   # ~0.14in space above (1/100 mm)
             cur.setPropertyValue("CharWeight", BOLD)
-            cur.setPropertyValue("CharHeight", 13.0)
+            cur.setPropertyValue("CharHeight", 26.0)
             cur.setPropertyValue("CharColor", 0x52525B)
             text.insertString(cur, first, False)
         text.insertControlCharacter(cur, PARAGRAPH_BREAK, False)
+        cur.setPropertyValue("ParaTopMargin", 0)         # entries carry no extra space above
         cur.setPropertyValue("CharWeight", BOLD)
         cur.setPropertyValue("CharHeight", 11.0)
         cur.setPropertyValue("CharColor", 0x18181B)

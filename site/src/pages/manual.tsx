@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Link2, Search, BookOpen, ArrowRight, X } from 'lucide-react';
+import { Link2, Search, BookOpen, ArrowRight, X, FileText, FileType } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { Navbar } from '@/components/layout/navbar';
@@ -482,6 +482,29 @@ export function ManualPage() {
               <ArrowRight className="h-3.5 w-3.5" />
             </a>
           </p>
+
+          {/* Download the printable, textbook-style edition of this manual. */}
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <a
+              href="/downloads/BigBlueBam-Manual.pdf"
+              download
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700"
+            >
+              <FileText className="h-4 w-4" />
+              Download PDF
+            </a>
+            <a
+              href="/downloads/BigBlueBam-Manual.docx"
+              download
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50"
+            >
+              <FileType className="h-4 w-4" />
+              Download DOCX
+            </a>
+            <span className="text-sm text-zinc-500">
+              The complete textbook edition: every app, with review quizzes, a glossary, and an index.
+            </span>
+          </div>
         </header>
 
         <div className="lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
