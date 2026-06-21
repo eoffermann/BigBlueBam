@@ -16,6 +16,7 @@ import { CreateDealDialog } from '@/components/pipeline/create-deal-dialog';
 import { Button } from '@/components/common/button';
 import { usePipeline } from '@/hooks/use-pipelines';
 import { useDeals, useMoveDealStage, type Deal } from '@/hooks/use-deals';
+import { usePipelineSync } from '@/hooks/use-pipeline-sync';
 import { usePipelineStore } from '@/stores/pipeline.store';
 import { usePipelineSummary } from '@/hooks/use-analytics';
 import { cn, formatCurrencyCompact } from '@/lib/utils';
@@ -71,6 +72,11 @@ export function PipelineBoard({ onNavigate, pipelineId: propPipelineId }: Pipeli
   const summary = summaryData?.data;
 
   const moveDealStage = useMoveDealStage();
+
+  // T1: subscribe to live deal events on this pipeline so another viewer's
+  // drags/creates/closes refresh this board within ~200ms. No-op until the
+  // /bond/ws endpoint is reachable, so it never breaks the board.
+  usePipelineSync(activePipelineId);
 
   const [search, setSearch] = useState('');
   const [activeDragId, setActiveDragId] = useState<string | null>(null);

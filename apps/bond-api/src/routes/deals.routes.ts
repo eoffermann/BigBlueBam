@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as dealService from '../services/deal.service.js';
+import { broadcastToPipeline } from '../lib/broadcast.js';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -106,6 +107,11 @@ export default async function dealRoutes(fastify: FastifyInstance) {
         request.user!.org_id,
         request.user!.id,
       );
+      await broadcastToPipeline(fastify.redis, deal.pipeline_id, {
+        type: 'bond.deal.created',
+        pipeline_id: deal.pipeline_id,
+        deal_id: deal.id,
+      });
       return reply.status(201).send({ data: deal });
     },
   );
@@ -138,6 +144,11 @@ export default async function dealRoutes(fastify: FastifyInstance) {
         body,
         request.user!.id,
       );
+      await broadcastToPipeline(fastify.redis, deal.pipeline_id, {
+        type: 'bond.deal.updated',
+        pipeline_id: deal.pipeline_id,
+        deal_id: deal.id,
+      });
       return reply.send({ data: deal });
     },
   );
@@ -147,7 +158,16 @@ export default async function dealRoutes(fastify: FastifyInstance) {
     '/deals/:id',
     { preHandler: [requireAuth, fastify.requireCan('bond.deal.delete'), requireScope('read_write')] },
     async (request, reply) => {
+      // Capture pipeline_id before the soft-delete so we can tell the board
+      // which room to refresh. getDeal throws notFound for a missing deal,
+      // which yields the correct 404 before we attempt the delete.
+      const existing = await dealService.getDeal(request.params.id, request.user!.org_id);
       await dealService.deleteDeal(request.params.id, request.user!.org_id);
+      await broadcastToPipeline(fastify.redis, existing.pipeline_id, {
+        type: 'bond.deal.deleted',
+        pipeline_id: existing.pipeline_id,
+        deal_id: request.params.id,
+      });
       return reply.send({ data: { deleted: true } });
     },
   );
@@ -161,6 +181,11 @@ export default async function dealRoutes(fastify: FastifyInstance) {
         request.params.id,
         request.user!.org_id,
       );
+      await broadcastToPipeline(fastify.redis, deal.pipeline_id, {
+        type: 'bond.deal.restored',
+        pipeline_id: deal.pipeline_id,
+        deal_id: deal.id,
+      });
       return reply.send({ data: deal });
     },
   );
@@ -177,6 +202,12 @@ export default async function dealRoutes(fastify: FastifyInstance) {
         body.stage_id,
         request.user!.id,
       );
+      await broadcastToPipeline(fastify.redis, deal.pipeline_id, {
+        type: 'bond.deal.stage_moved',
+        pipeline_id: deal.pipeline_id,
+        deal_id: deal.id,
+        stage_id: deal.stage_id,
+      });
       return reply.send({ data: deal });
     },
   );
@@ -193,6 +224,12 @@ export default async function dealRoutes(fastify: FastifyInstance) {
         request.user!.id,
         body.close_reason,
       );
+      await broadcastToPipeline(fastify.redis, deal.pipeline_id, {
+        type: 'bond.deal.closed',
+        pipeline_id: deal.pipeline_id,
+        deal_id: deal.id,
+        outcome: 'won',
+      });
       return reply.send({ data: deal });
     },
   );
@@ -210,6 +247,12 @@ export default async function dealRoutes(fastify: FastifyInstance) {
         body.close_reason,
         body.lost_to_competitor,
       );
+      await broadcastToPipeline(fastify.redis, deal.pipeline_id, {
+        type: 'bond.deal.closed',
+        pipeline_id: deal.pipeline_id,
+        deal_id: deal.id,
+        outcome: 'lost',
+      });
       return reply.send({ data: deal });
     },
   );
@@ -224,6 +267,11 @@ export default async function dealRoutes(fastify: FastifyInstance) {
         request.user!.org_id,
         request.user!.id,
       );
+      await broadcastToPipeline(fastify.redis, deal.pipeline_id, {
+        type: 'bond.deal.duplicated',
+        pipeline_id: deal.pipeline_id,
+        deal_id: deal.id,
+      });
       return reply.status(201).send({ data: deal });
     },
   );

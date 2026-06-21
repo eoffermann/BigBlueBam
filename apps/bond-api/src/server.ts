@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
@@ -81,6 +82,11 @@ await fastify.register(authPlugin);
 import permissionsPlugin from './plugins/permissions.js';
 await fastify.register(permissionsPlugin);
 
+// WebSocket support for the realtime pipeline hub (T1 live deal updates).
+await fastify.register(websocket, {
+  options: { maxPayload: 4096 },
+});
+
 // Health + readiness probes (shared plugin)
 await fastify.register(healthCheckPlugin, {
   service: 'bond-api',
@@ -106,6 +112,9 @@ import userSettingsRoutes from './routes/user-settings.routes.js';
 // Internal cross-app routes (INTERNAL_SERVICE_SECRET-guarded; e.g. book-api
 // auto-creating a contact on a public booking).
 import internalRoutes from './routes/internal.routes.js';
+// Realtime pipeline WebSocket — nginx exposes this at /bond/ws (no /v1
+// prefix; the proxy targets /ws directly), mirroring blueprint/ws.
+import wsRoutes from './routes/ws.routes.js';
 
 await fastify.register(contactRoutes, { prefix: '/v1' });
 await fastify.register(companyRoutes, { prefix: '/v1' });
@@ -120,6 +129,7 @@ await fastify.register(importRoutes, { prefix: '/v1' });
 await fastify.register(dedupeRoutes, { prefix: '/v1' });
 await fastify.register(userSettingsRoutes, { prefix: '/v1' });
 await fastify.register(internalRoutes, { prefix: '/v1' });
+await fastify.register(wsRoutes);
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

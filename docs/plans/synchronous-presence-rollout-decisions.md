@@ -160,3 +160,54 @@ at the bottom. Work is autonomous; this log is so the choices can be revisited.
    fix options; left unfixed because the right remedy is a product/data design
    call (which org should orphaned users belong to), not something to guess
    autonomously.
+
+### 2026-06-21 — Item 3: Bond pipeline T1 (live deal updates)
+
+1. **Copied Blueprint's proven invalidate-hub pattern rather than inventing
+   one.** Blueprint already does Redis-PubSub-per-entity -> per-socket Redis
+   subscriber -> WS fan-out -> client `invalidateQueries`. Bond had no WS route
+   at all (only Bolt events on deal moves). New pieces, all modeled on the
+   blueprint files line-for-line:
+   - `apps/bond-api/src/lib/broadcast.ts` — `broadcastToPipeline(redis, pipelineId, event)`
+     on channel `bond:<pipelineId>`, fire-and-forget (a Redis failure never
+     blocks the mutation).
+   - `apps/bond-api/src/routes/ws.routes.ts` — `GET /ws`, subscribe protocol
+     `{ type:'subscribe', pipeline_id }`, gated by the same `getPipeline(id,
+     orgId)` org check the REST routes use (throws -> FORBIDDEN frame), 25s
+     ping keepalive, per-socket Redis subscriber.
+   - `apps/bond/src/hooks/use-pipeline-sync.ts` — connects to `/bond/ws`,
+     subscribes to the active pipeline, invalidates `['bond','deals']` +
+     `['bond','analytics']` (200ms trailing debounce), capped-backoff reconnect.
+     Mounted in `pipeline-board.tsx`.
+
+2. **Broadcast on every board-changing deal mutation, not just stage move.**
+   The user story is "live drags," but create/update/delete/close/restore/
+   duplicate all visibly change the board, so each route now broadcasts a typed
+   `DealEvent`. The client invalidates on any `bond.deal.*`, so the event detail
+   is advisory. DELETE has no returned deal, so the route reads the deal's
+   `pipeline_id` via `getDeal` before the soft-delete (getDeal's notFound throw
+   also yields the correct 404).
+
+3. **Self-echo intentionally not filtered** (same as Blueprint): the mutating
+   client already refetched via the mutation's `onSuccess`; the WS-triggered
+   refetch is a cheap no-op and self-heals optimistic drift.
+
+4. **Backward-compatible / no-harm:** the WS is pure read-only fan-out (no
+   writes flow over it); if `/bond/ws` is unreachable the hook silently retries
+   and the board behaves exactly as before (refetch-on-action). Added the
+   `@fastify/websocket@^11` dep to bond-api and registered the plugin + route in
+   `server.ts`. Added the `/bond/ws` proxy block to ALL THREE nginx configs
+   (`nginx.conf`, `nginx-with-site.conf` [the local bind-mounted one],
+   `nginx.railway.conf` [prod]) so it works on every profile.
+
+5. **Verification:** bond-api + bond frontend typecheck clean; all 85 bond-api
+   unit tests pass (no regression). Rebuilt bond-api + frontend, recreated both
+   (frontend re-renders the bind-mounted nginx config). A live Playwright smoke
+   proved the whole realtime path end to end against the rebuilt stack, as a
+   healthy-org user (e2e-admin, to avoid the soft-deleted-org auth issue in
+   task #16): board page renders -> browser WebSocket subscribes to /bond/ws and
+   gets the `subscribed` ack -> an API `PATCH /deals/:id/stage` (200) -> the
+   subscribed socket receives `bond.deal.stage_moved` with the correct stage_id
+   -> deal moved back (fixture restored). That is exactly what makes a second
+   viewer's board refresh live. Smoke script run then deleted; durable coverage
+   is the bond-api unit suite + this recorded run.
