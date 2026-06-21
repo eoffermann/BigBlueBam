@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { useBookingPage, useCreateBookingPage, useUpdateBookingPage } from '@/hooks/use-booking-pages';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface BookingPageEditorProps {
   bookingPageId?: string;
@@ -78,9 +79,21 @@ export function BookingPageEditorPage({ bookingPageId, onNavigate }: BookingPage
         Back to Booking Pages
       </button>
 
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-        {isNew ? 'New Booking Page' : 'Edit Booking Page'}
-      </h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+          {isNew ? 'New Booking Page' : 'Edit Booking Page'}
+        </h1>
+        {!isNew && existing && (
+          <div className="ml-auto">
+            <PresenceChipStrip
+              url={`${window.location.origin}${window.location.pathname}`}
+              surfaceApp="book"
+              surfaceId={existing.id}
+              surfaceLabel={existing.title}
+            />
+          </div>
+        )}
+      </div>
 
       <div className="space-y-4">
         <div>

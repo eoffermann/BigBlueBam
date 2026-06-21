@@ -23,6 +23,7 @@ import { validateAutomationForm } from '@/lib/automation-validation';
 import { validateGraph, type GraphValidationError } from '@/lib/graph-validation';
 import { cn } from '@/lib/utils';
 import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface AutomationEditorPageProps {
   id?: string;
@@ -342,6 +343,20 @@ export function AutomationEditorPage({ id, onNavigate }: AutomationEditorPagePro
 
           {/* Title */}
           <div>
+            {/* Presence: who else is viewing this saved automation. Renders
+                nothing when nobody else is present, so it cannot break the
+                page. Only mount once the automation has an id (unsaved drafts
+                have no surface to share yet). */}
+            {id && existing?.data && (
+              <div className="flex justify-end mb-2">
+                <PresenceChipStrip
+                  url={`${window.location.origin}${window.location.pathname}`}
+                  surfaceApp="bolt"
+                  surfaceId={existing.data.id}
+                  surfaceLabel={existing.data.name}
+                />
+              </div>
+            )}
             <input
               type="text"
               placeholder="Automation name..."

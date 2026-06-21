@@ -20,6 +20,7 @@ import { Plus, GripVertical, Trash2, Eye, Send, Settings, Type, AlignLeft, Mail,
 import { useForm, useUpdateForm, usePublishForm, useBamProjects, useBanterChannels } from '@/hooks/use-forms';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 import type { BlankField, BlankForm } from '@/hooks/use-forms';
 
 interface FormBuilderPageProps {
@@ -525,6 +526,16 @@ export function FormBuilderPage({ formId, onNavigate: _onNavigate }: FormBuilder
                 placeholder="Add a description..."
                 aria-label="Form description"
               />
+              {form && (
+                <div className="mt-2">
+                  <PresenceChipStrip
+                    url={`${window.location.origin}${window.location.pathname}`}
+                    surfaceApp="blank"
+                    surfaceId={form.id}
+                    surfaceLabel={form.name}
+                  />
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button

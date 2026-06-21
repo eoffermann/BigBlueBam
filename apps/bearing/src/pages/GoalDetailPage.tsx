@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '@/compone
 import { TimeRemainingBadge } from '@/components/common/TimeRemainingBadge';
 import { formatDate } from '@/lib/utils';
 import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface GoalDetailPageProps {
   id: string;
@@ -124,6 +125,12 @@ export function GoalDetailPage({ id, onNavigate }: GoalDetailPageProps) {
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                <PresenceChipStrip
+                  url={`${window.location.origin}${window.location.pathname}`}
+                  surfaceApp="bearing"
+                  surfaceId={goal.id}
+                  surfaceLabel={goal.title}
+                />
                 <StatusBadge status={goal.status} />
                 <DropdownMenu
                   trigger={

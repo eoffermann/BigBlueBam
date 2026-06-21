@@ -8,6 +8,7 @@ import {
   type CampaignRecipient,
 } from '@/hooks/use-campaigns';
 import { campaignStatusLabel, campaignStatusColor, formatDate, formatNumber, formatPercentage } from '@/lib/utils';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface CampaignDetailPageProps {
   campaignId: string;
@@ -104,6 +105,12 @@ export function CampaignDetailPage({ campaignId, onNavigate }: CampaignDetailPag
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
             {campaignStatusLabel(campaign.status)}
           </span>
+          <PresenceChipStrip
+            url={`${window.location.origin}${window.location.pathname}`}
+            surfaceApp="blast"
+            surfaceId={campaign.id}
+            surfaceLabel={campaign.name}
+          />
         </div>
 
         {(campaign.status === 'draft' || campaign.status === 'scheduled') && (

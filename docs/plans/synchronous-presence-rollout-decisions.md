@@ -88,3 +88,75 @@ at the bottom. Work is autonomous; this log is so the choices can be revisited.
    (reverts if the redis container restarts). RECOMMEND, as a separate dev-stack
    fix, persisting an eviction policy and/or a larger maxmemory in the redis
    service config so this does not recur.
+
+### 2026-06-21 — Item 2: presence chips (T2) on the seven remaining apps
+
+1. **Mounted `PresenceChipStrip` on one canonical single-entity surface per app.**
+   Surfaces chosen, each placed in the entity header next to the title and after
+   the page's existing loading/null guards (so the entity is always in scope):
+   - **Bearing** — `GoalDetailPage` (`goal.id` / `goal.title`)
+   - **Bench** — `dashboard-view` (`dashboard.id` / `dashboard.name`); the chip
+     went on the *view* page, not `dashboard-edit` (whose title is the static
+     string "Edit Dashboard", a poor presence surface).
+   - **Bolt** — `automation-editor`, gated on `id && existing?.data`
+     (`automation.id` / `automation.name`).
+   - **Blast** — `campaign-detail` (`campaign.id` / `campaign.name`); the
+     campaign, not the template editor, is where a user dwells.
+   - **Book** — `booking-page-editor`, gated on `!isNew && existing`
+     (`bookingPage.id` / `bookingPage.title`); the booking page is the
+     most-configured single entity.
+   - **Blank** — `form-builder`, gated on `form` (`form.id` / `form.name`).
+   - **Bill** — `invoice-detail` (`invoice.id` / `invoice.invoice_number ??
+     invoice.id`).
+   *Rationale:* one well-chosen surface per app proves the pattern and matches the
+   bond/beacon precedent without a sprawling first pass. More surfaces per app can
+   follow once multiuser presence is validated end to end.
+
+2. **Editor surfaces gate the chip behind a saved entity id.** Bolt, Book, and
+   Blank only mount the chip once the record exists (no id on the "new/unsaved"
+   path), because an unsaved draft has no shared canonical URL to gather presence
+   on. Detail/view surfaces (Bearing/Bench/Blast/Bill) always have an id by the
+   time they render past their null guard.
+
+3. **Extended the shared `PresenceSurfaceApp` union additively** in
+   `packages/ui/presence-chip-strip.tsx` with `bench`, `bearing`, `bolt`, `blank`,
+   `bill`, `book`, `blast`. Purely additive (widens a string-literal discriminator)
+   so the seven apps that already consumed the component (brief/board/blueprint/
+   bond/bam/beacon/helpdesk) are untouched. The seven concurrent edits to this one
+   file settled with all slugs retained (verified on disk).
+
+4. **Added the `@bigbluebam/ui/presence-chip-strip` Vite alias** to each app's
+   `vite.config.ts` (it was missing in all seven; bond/beacon already had it). TS
+   resolves the import through the `packages/ui` `exports` map, so no tsconfig
+   `paths` change was needed; the runtime bundler alias is what was absent.
+
+5. **Verification.** All seven apps typecheck clean individually and together
+   (`pnpm --filter ... typecheck`, 7/7 Done). The change is additive and the
+   component renders nothing when no other user is present (and fails silently
+   until the bureau `presence/here`/`ring` endpoints are live), so it cannot alter
+   current single-user behavior. Rebuilt the monolithic `frontend` image (serves
+   all SPAs) and ran a Playwright smoke per surface confirming each page still
+   loads and renders its entity with no uncaught errors and no layout regression.
+
+6. **Smoke result: 7/7 surfaces OK.** Logged in (alice@example.com) and loaded
+   all seven detail/editor routes against the rebuilt stack
+   (`/bearing/goals/:id`, `/bench/dashboards/:id`, `/bill/invoices/:id`,
+   `/blast/campaigns/:id`, `/bolt/automations/:id`, `/blank/forms/:id/edit`,
+   `/book/booking-pages/:id/edit`). Each rendered its entity with no `pageerror`.
+   Seeded one Book booking page first (alice's org had zero). Smoke + probe
+   scripts were run then deleted (not committed), matching the Item 1 precedent;
+   the durable coverage is the per-app typecheck plus this recorded run.
+
+7. **Discovered (pre-existing, NOT this branch): `/b3/api/auth/me` 403 for
+   demo users on a soft-deleted org.** The smoke's only console noise was a 403
+   on `GET /b3/api/auth/me`. Root-caused: alice/bob have `users.org_id` pointing
+   at org `seed-smoke-36`, soft-deleted 2026-06-15, and no `organization_memberships`
+   rows; `resolveOrgContext` (apps/api/src/plugins/auth.ts:126-141) falls back to
+   the legacy org_id but rejects it because the org is soft-deleted, while login
+   uses a more lenient path — so login 200s and every authed call 403s. This is
+   the same thing that blocked the Bam live smoke in Item 1. It is independent of
+   the presence change (the chip never calls auth/me), affects all apps equally,
+   and does NOT touch Eddie's own (healthy) accounts. Recorded as task #16 with
+   fix options; left unfixed because the right remedy is a product/data design
+   call (which org should orphaned users belong to), not something to guess
+   autonomously.

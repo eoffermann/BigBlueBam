@@ -4,6 +4,7 @@ import { useDashboard } from '@/hooks/use-dashboards';
 import { useWidgetQuery, type WidgetQueryDateRange } from '@/hooks/use-widgets';
 import { ChartRenderer } from '@/components/widgets/chart-renderer';
 import { DateRangePicker, type DateRange } from '@/components/dashboards/date-range-picker';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 interface DashboardViewPageProps {
   dashboardId: string;
@@ -93,7 +94,15 @@ export function DashboardViewPage({ dashboardId, onNavigate }: DashboardViewPage
     <div className={`p-6 ${isFullscreen ? 'fixed inset-0 z-40 bg-white dark:bg-zinc-900 overflow-auto' : ''}`}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{dashboard.name}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{dashboard.name}</h1>
+            <PresenceChipStrip
+              url={`${window.location.origin}${window.location.pathname}`}
+              surfaceApp="bench"
+              surfaceId={dashboard.id}
+              surfaceLabel={dashboard.name}
+            />
+          </div>
           {dashboard.description && (
             <p className="text-sm text-zinc-500 mt-0.5">{dashboard.description}</p>
           )}

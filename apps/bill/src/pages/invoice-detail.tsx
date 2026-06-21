@@ -3,6 +3,7 @@ import { FileText, Send, Ban, Copy, DollarSign, FileDown, UserCheck } from 'luci
 import { useInvoice, useFinalizeInvoice, useSendInvoice, useVoidInvoice, useDuplicateInvoice, useRecordPayment } from '@/hooks/use-invoices';
 import { useBamUsers, useRequestApproval } from '@/hooks/use-approvals';
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
+import { PresenceChipStrip } from '@bigbluebam/ui/presence-chip-strip';
 
 function pdfHref(pdfUrl: string | null | undefined): string | null {
   if (!pdfUrl) return null;
@@ -91,6 +92,12 @@ export function InvoiceDetailPage({ invoiceId, onNavigate }: Props) {
             </h1>
             <p className="text-sm text-zinc-500">{invoice.to_name}</p>
           </div>
+          <PresenceChipStrip
+            url={`${window.location.origin}${window.location.pathname}`}
+            surfaceApp="bill"
+            surfaceId={invoice.id}
+            surfaceLabel={invoice.invoice_number ?? invoice.id}
+          />
           <span className={cn('px-3 py-1 rounded-full text-xs font-medium', statusBadgeClass(invoice.status))}>
             {invoice.status.replace('_', ' ')}
           </span>

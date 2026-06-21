@@ -38,6 +38,13 @@ export type PresenceSurfaceApp =
   | 'bond'
   | 'bam'
   | 'beacon'
+  | 'bench'
+  | 'bearing'
+  | 'bolt'
+  | 'blank'
+  | 'bill'
+  | 'book'
+  | 'blast'
   | 'helpdesk';
 
 export interface PresenceUser {
