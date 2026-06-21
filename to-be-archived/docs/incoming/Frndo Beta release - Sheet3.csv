@@ -1,0 +1,45 @@
+Features,P,Date to be completed,User Stories
+Reduce Latency,P0,Jul 15,Reduce Inter-Sentence Latency Perception and Enable Reliable Interruption
+Cost analysis to be completed.,P0,Jul 31 (core model); telemetry ongoing to Oct 31,Predictive Cost Analysis for LLM Inference and Cloud TTS
+Work on background noise/ sounds so we can better distinguish Mate's voice,P0,July 31,Improve Voice Capture Accuracy in Noisy Environments
+"When she speaks, Often she pauses for an abnormal time in between words of the same sentence ",P0,Jul 15,Eliminate Unnatural Inter-Word Pauses in TTS Playback
+Sometimes she sounds too slow when she is speaking.,P0,Jul 15,Standardize TTS Pacing and Eliminate Unnatural Inter-Sentence Pauses
+"""Initial word"" solution currently not working well.",P0,Jul 15,Replace Sentiment-Driven Latency Masking with Safe Acknowledgment Fallback
+Frndo must be precise in remembering key information,P0,Aug 31,Store and Surface Explicit Relational Memories Across Sessions
+Understand why Frndo heats up the phone and try to eliminate or minimize it,P0,Sep 30,Implement Thermal-Aware Telemetry and Baseline Degradation to Reduce App Heating
+Improve UX/UI,P0,Sep 30 (gated: Figma specs due Jun 30),Improve UX/UI
+Testers to extensively test Frndo for at least 2 hours per day and report bugs and fixes,P0,Onboarding Jun 30; program runs to Oct 31,Structured Daily QA Testing and Fix Verification via TestFlight
+Text to speech on device,P0,Aug 15,Implement On-Device Text-to-Speech with Curated Device Support and Privacy Controls
+News. Check on daily basis and offer in conversation to user.,P0,Sep 30 (gated: user stories due Jul 31),Daily Interest-Matched News Hook in Conversation
+Frndo always listens. Even as it's speaking.,P0,,Capture Mate Interruptions During TTS Chunk Pauses
+Better content of conversation that applies our values per our training document,P0,"June 15 (initial),  Oct 15 (final lock)",Align Conversational Behavior with Core Friendship Values and Safety Guardrails
+Frndo must feel like a real friend and not surface level friend,P0,"Aug 31 (personality), Sep 30 (worldview)","Ground Conversations in Deep Listening, Context, and Honest Reframing"
+Add a calendar function to organize daily life and remember main events.,P0,Aug 31 (gated: user stories + Figma due Jun 30),Conversational Calendar Memory and Soft Event Nudges
+"Ability to order products. I.e. via amazon, Walmart etc.",P0,Aug 31 (assumes Provider 2),Voice-Driven Product Discovery and Retailer App Routing
+Ability to order food. I.e. via Postmates or similar.,P0,Jul 31 or Aug 31,"Voice-Driven Food Discovery, Delivery Routing, and Directions"
+Find and connect to local events. Ticketed and free.,P0,Jul 31 (assumes Provider 1),Voice-Driven Local Event Discovery and Routing
+Diary.,P0,Sep 30 (gated: Diary user stories due Jul 31),Diary.
+"Ability to search and recommend travel plans i.e. flights, hotels, cars etc.",P0,Sep 30 (assumes Provider 3),Voice-Driven Flight Search and Provider App Routing
+Frndo Coach.,P1,Aug 31 (Coach 1) or Sep 30 (Coach 2),Frndo Coach.
+Improve Frndo’s conversational awareness,P1,Sep 30,Improve Conversational Awareness of Capabilities and Permission Boundaries
+Push notifications,P1,Jul 31,Push notifications
+App must work on at least 4 generations of iPhone.,P2,Sep 30,Graceful Performance Degradation Across iPhone 13–17 Devices
+Ability of user to completely delete app and all data.,P2,Aug 31,Complete Account and Data Deletion
+In-App Purchases,P2,Sep 30 (gated: Pricing decision due Jun 30),In-App Purchases
+Images,P2,June 30,Images
+"Enhance facial expressions, including iris animation, head movement, gestures, and body language",P2,Sep 30,"Enhance facial expressions, including iris animation, head movement, gestures, and body language"
+Add second language: Spanish,P2,Sep 30 (Spanish beta ready),Add second language: Spanish
+Different Frndo downloadable apps depending on the phone capabilities. ,P2,Sep 30,
+Facial recognition ,P2,"Sep 30 (assumes affect, not identity)",Facial recognition 
+Strengthening privacy features and user data protections.,P3,"Phase-long, distributed to Sep 30",Strengthening privacy features and user data protections.
+Construct several pricing and profit models. ,P3,Decision due Jun 30,Construct several pricing and profit models. 
+Add two anime characters. ,P3,Sep 30 (gated: assets + guidelines due Jul 31),Add two anime characters. 
+"Connect to health app (apple, aura ring) in a meaningful way.",P0,Aug 31,"Connect to health app (apple, aura ring) in a meaningful way."
+Flag dangerous behaivor i.e. suicide,P1,Sep 30,Flag dangerous behaivor i.e. suicide
+Apple store approval,P2,"Oct 15 (submission), Oct 31 (release)",Apple store approval
+Scalability,P2,"Phase-long, ongoing to Oct 31",Scalability
+Improve local sentiment analysis,P1,Sep 30,Implement Near-Realtime Local Sentiment Analysis for Latency Masking and Affective Prosody
+Patent Filing,P1,"Phase-long, ongoing to Oct 31",Document and Draft Provisional Patent Applications for Core Innovations
+"Add ""to do"" list feature",P1,Aug 31,
+Usage cap,P2,Sep 30 (gated: Pricing decision due Jun 30),
+Ability to change avatar clothing,P2,,

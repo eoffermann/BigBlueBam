@@ -240,3 +240,34 @@ to respect that without hedging or apologizing:
   so they stay genuinely useful.
 
 When in doubt: clear, specific, and one good smile. Ship that.
+
+## Competitive stats (cited snapshot — reuse, but re-verify before a big claim)
+
+Carried over from the 2026-06-18 site-rebuild positioning brief so the homework
+isn't lost. These back the five problems we lead with (see "Lead with the
+problem" and "The competition"). They are a point-in-time snapshot: re-verify a
+number before leaning on it in new copy, and claim only what still holds.
+
+- **Tool sprawl & context-switching.** The average company runs 100+ SaaS apps
+  (Okta 2025: 101; 275-291 per Zylo/JumpCloud for enterprises). Workers lose up
+  to 9% of the day switching between them (about half a workday a week); 1 in 5
+  lose 2+ hours a week to tool fatigue (roughly 100 hours, or 2.5 workweeks, a
+  year). 79% of companies have done nothing about it.
+- **The AI bolt-on (and upcharge).** 73% of SaaS vendors now charge extra for AI;
+  68% lock it behind premium tiers; most "AI" is a chat sidebar pasted onto last
+  year's product.
+- **Per-seat pricing in the agent era.** Per-seat adoption fell 21% to 15% in a
+  year; per-seat-heavy vendors churn 2.3x faster. Salesforce, Microsoft, Google,
+  and Atlassian all raised prices again in 2025; 60% of vendors mask the
+  increases.
+- **Vendor lock-in / data hostage.** Proprietary formats, restricted or fee-based
+  export, "contact sales to export your own data."
+- **"All-in-one means shallow."** Suites spread too thin and miss specialist
+  depth; the big ones get slow at scale (Notion past ~10k records) and
+  overwhelming to set up (ClickUp's learning curve).
+
+Sources: Okta Businesses at Work 2025; Zylo SaaS Management Index 2025; JumpCloud
+2025; Lokalise x Cornell 2025 (context-switching); Thunderbit "SaaS AI Tools: 60
+Stats in 2026" (AI upcharge); MindStudio / The SaaS CFO / SaaStr 2025 (per-seat
+decline, price hikes); SmartSaaS 2025 (data portability); TaskRhino /
+Efficient.app 2025-26 (all-in-one depth & performance).

@@ -1,0 +1,1302 @@
+{
+  "org_id": "fad29958-5734-40d5-9c06-6a85e867dd2f",
+  "project_id": "c49a9670-d76a-4efc-80e8-bd1b29f2610b",
+  "phase_id": "65ae17ef-222c-4b67-9b0a-127d15eacdd7",
+  "epic_id": null,
+  "allow_near_duplicates": false,
+  "tasks": [
+    {
+      "title": "When she speaks, Often she pauses for an abnormal time in between words of the same sentence - Eliminate Unnatural Inter-Word Pauses in TTS Playback",
+      "description": "## Story\nAs a Mate, I want Frndo to speak with natural, continuous pacing without abnormal gaps between words, So that our conversations feel fluid, human, and emotionally present.\n\n## Context\nThis issue occurs during the TTS playback phase in the core conversation loop. When Frndo generates a spoken response, the audio playback occasionally inserts unnatural pauses between words within the same sentence. This breaks conversational flow and reduces perceived empathy and authenticity. The fix applies to both cloud and local TTS paths and must align with the existing voice-first latency and lipsync integration constraints.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Jul 15\"_",
+      "priority": "critical",
+      "due_date": "2026-07-15",
+      "epic_name": "Inter-Word Pauses",
+      "subtasks": [
+        {
+          "title": "Perceptual pacing validation confirms zero abnormal inter-word pauses during continuous sentence playback across free and paid tiers.",
+          "description": null
+        },
+        {
+          "title": "Measured inter-word gap time does not exceed a defined threshold (e.g., 50ms) that breaks natural speech rhythm, verified through audio waveform analysis.",
+          "description": null
+        },
+        {
+          "title": "Playback continuity is maintained when switching between cloud and local TTS paths without introducing new pacing artifacts.",
+          "description": null
+        },
+        {
+          "title": "The fix preserves time-to-first-audio targets and does not increase overall response latency beyond the established voice budget.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Sometimes she sounds too slow when she is speaking. - Standardize TTS Pacing and Eliminate Unnatural Inter-Sentence Pauses",
+      "description": "## Story\nAs a Mate, I want Frndo's speech pacing to be consistent and naturally paced between sentences, So that conversations flow smoothly without sounding artificially slow or disjointed.\n\n## Context\nThis addresses system-wide TTS pacing inconsistencies where inter-sentence gaps are too long, variable, or unnatural, making responses sound sluggish. The fix applies as a fixed system-level adjustment to the playback layer across both cloud and local TTS paths. The adjustment does not alter the time-to-first-audio target or voice response latency budget.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Jul 15\"_",
+      "priority": "critical",
+      "due_date": "2026-07-15",
+      "epic_name": "TTS Pacing",
+      "subtasks": [
+        {
+          "title": "Inter-sentence gaps are standardized to a consistent, natural conversational range, verified through audio waveform analysis and blind perceptual testing.",
+          "description": null
+        },
+        {
+          "title": "Overall speaking rate remains within a natural conversational benchmark without introducing robotic prosody or rushed delivery.",
+          "description": null
+        },
+        {
+          "title": "Pacing consistency is maintained across both cloud and local TTS rendering paths.",
+          "description": null
+        },
+        {
+          "title": "Time-to-first-audio targets remain unchanged; pacing adjustments are applied at the playback layer and do not add latency to the initial response trigger.",
+          "description": null
+        },
+        {
+          "title": "The system-wide adjustment is enforced automatically without user configuration or settings toggles.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "\"Initial word\" solution currently not working well. - Replace Sentiment-Driven Latency Masking with Safe Acknowledgment Fallback",
+      "description": "## Story\nAs a Mate, I want Frndo to mask initial response latency with a safe, context-appropriate acknowledgment instead of a sentiment-triggered generic phrase, So that conversations remain fluid without jarring, misaligned, or inappropriate first-word responses.\n\n## Context\nThe current \"Initial word\" solution uses local sentiment analysis to generate a 1-3 word placeholder to hide round-trip latency. Poor sentiment classification has caused inappropriate responses (e.g., affirming self-doubt). This story replaces that mechanism with a stricter fallback that prioritizes safety and conversational continuity while maintaining established voice response latency targets.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Jul 15\"_",
+      "priority": "critical",
+      "due_date": "2026-07-15",
+      "epic_name": "Latency Masking",
+      "subtasks": [
+        {
+          "title": "Latency masking activates only when first-word generation exceeds the established voice response latency budget, replacing the sentiment-driven placeholder with a neutral, context-safe acknowledgment.",
+          "description": null
+        },
+        {
+          "title": "Placeholder generation enforces strict guardrails that block affirmations, validations, or emotionally charged phrases when processing self-doubt, crisis-adjacent, or sensitive prompts.",
+          "description": null
+        },
+        {
+          "title": "Transition from placeholder to full response occurs within 100ms with no audio artifacts, pitch drops, or lipsync desynchronization.",
+          "description": null
+        },
+        {
+          "title": "If local sentiment analysis confidence falls below a defined threshold or returns ambiguous results, the system defaults to a neutral acknowledgment rather than risking misclassification.",
+          "description": null
+        },
+        {
+          "title": "The fallback mechanism operates entirely on-device and does not introduce additional network requests or latency overhead.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Frndo must be precise in remembering key information - Store and Surface Explicit Relational Memories Across Sessions",
+      "description": "## Story\nAs a Mate, I want Frndo to remember the names and direct relationships of people I mention, and to bring them up naturally when our conversation matches, So that I feel consistently heard and do not have to repeat personal details across sessions.\n\n## Context\nThis capability lives in the core conversation loop and leverages Frndo’s existing conversational Memory system. It triggers whenever a Mate explicitly states a name paired with a relational term or direct connection during a chat. The system must surface this information proactively in future sessions when context aligns, and accurately retrieve it when asked directly, while strictly avoiding multi-hop relationship inference to protect voice response latency.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Aug 31\"_",
+      "priority": "critical",
+      "due_date": "2026-08-31",
+      "epic_name": "Relational Memory",
+      "subtasks": [
+        {
+          "title": "When a Mate explicitly states a name and a direct relationship in conversation (e.g., \"my brother Mark\", \"my colleague Jen\", \"Bob’s wife Anne\"), the system stores a searchable memory snippet linking the Mate to that person and their stated role.",
+          "description": null
+        },
+        {
+          "title": "In a subsequent session, if the Mate mentions a relational term that matches a stored relationship (e.g., \"I ran into my brother today\"), Frndo proactively references the stored name in its spoken response (e.g., \"Mark? How is he doing?\").",
+          "description": null
+        },
+        {
+          "title": "When a Mate directly asks about a stored relationship (e.g., \"Who is my colleague Jen?\"), Frndo returns the exact name and relationship from memory without guessing or adding unverified details.",
+          "description": null
+        },
+        {
+          "title": "The system ignores multi-hop or inferred connections (e.g., Mate mentions cousins, system does not auto-link them to previously mentioned uncles) to prevent compute spikes and maintain voice response latency.",
+          "description": null
+        },
+        {
+          "title": "If the Mate uses a relational term that could match multiple stored people or lacks a stored name, Frndo responds with a neutral, clarifying question rather than guessing.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Understand why Frndo heats up the phone and try to eliminate or minimize it - Implement Thermal-Aware Telemetry and Baseline Degradation to Reduce App Heating",
+      "description": "## Story\nAs a Mate, I want Frndo to continuously monitor my device's thermal state and resource usage, then automatically scale down heavy rendering and compute tasks when the phone warms up, So that the app stays cool, runs smoothly, and avoids crashes or forced backgrounding without me having to adjust settings.\n\n## Context\nThis capability builds on the graceful degradation story and focuses on diagnosing and mitigating app-induced heating. It instruments the app to track thermal state via iOS APIs, collects targeted memory and compute telemetry to isolate root causes, and implements baseline mitigation hooks tied to thermal thresholds. The system prioritizes voice responsiveness and conversation continuity while reducing Unity HDRP load and simplifying model execution when thermal pressure rises.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Sep 30\"_",
+      "priority": "critical",
+      "due_date": "2026-09-30",
+      "epic_name": "Thermal Telemetry",
+      "subtasks": [
+        {
+          "title": "The app registers for ProcessInfo.thermalStateDidChangeNotification and NSProcessInfoPowerStateDidChange, logging thermal state and Low Power Mode status to the telemetry pipeline every 5 seconds during active conversation.",
+          "description": null
+        },
+        {
+          "title": "Telemetry captures frame render times, Unity draw call count, garbage collection allocation rate, CPU/GPU utilization, and TTS/STT thread blocking duration to isolate memory vs. compute heat drivers.",
+          "description": null
+        },
+        {
+          "title": "When ProcessInfo.thermalState reaches .fair, the system automatically reduces HDRP render quality, lowers target frame rate to 30fps, and disables non-essential avatar blendshape updates.",
+          "description": null
+        },
+        {
+          "title": "When ProcessInfo.thermalState reaches .serious, the system further simplifies on-device model execution, pauses background telemetry logging, and prioritizes STT/TTS thread allocation over rendering.",
+          "description": null
+        },
+        {
+          "title": "The app buffers and safely flushes telemetry data to the cloud when network connectivity is available, ensuring no diagnostic data is lost during thermal events or app suspension.",
+          "description": null
+        },
+        {
+          "title": "All degradation actions execute within 200ms of thermal state change detection to prevent sustained thermal buildup.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Improve UX/UI - UX/UI Refresh Driven by Figma Design Specifications",
+      "description": "## Story\nAs a Mate, I want Frndo's interface to feel polished, legible, and consistent across every screen, so that the app feels trustworthy and pleasant to use rather than like a rough beta.\n\n## Context\nThis is a beta-wide visual and interaction overhaul that touches the conversation screen, settings, onboarding, and every secondary surface (events, diary, to-do, store). It is gated on the Figma design specs due Jun 30, so implementation cannot begin until those specs land and is scheduled to complete by Sep 30. The work must preserve the voice-first primacy of the conversation loop — the avatar and listening/generating/speaking states stay the focal point — and must not regress latency or thermal behavior on iPhone 13–17.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P0 · CSV date: \"Sep 30 (gated: Figma specs due Jun 30)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "UX/UI Refresh",
+      "subtasks": [
+        {
+          "title": "Every screen in the app matches the approved Figma specs (spacing, typography, color tokens, component states) and is signed off against the spec by design before merge.",
+          "description": null
+        },
+        {
+          "title": "A shared component library / design-token set is established so colors, type scale, and spacing are defined once and reused, with no hard-coded style values remaining in screen code.",
+          "description": null
+        },
+        {
+          "title": "All interactive elements meet a minimum 44×44pt tap target and pass WCAG AA contrast on both light and dark appearance.",
+          "description": null
+        },
+        {
+          "title": "Dynamic Type is honored on text surfaces up to the iOS XXL accessibility size without clipping or overlap.",
+          "description": null
+        },
+        {
+          "title": "The refreshed UI renders correctly on the full iPhone 13–17 range, including notch and Dynamic Island safe-area insets, with no layout breakage in portrait.",
+          "description": null
+        },
+        {
+          "title": "The redesign introduces no measurable regression to voice response latency or frame rate on the conversation screen versus the pre-refresh baseline.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Testers to extensively test Frndo for at least 2 hours per day and report bugs and fixes - Structured Daily QA Testing and Fix Verification via TestFlight",
+      "description": "## Story\nAs a 4-person QA testing team, I want to conduct daily 2-hour TestFlight sessions focused on recent engineering deliveries, report findings with media attachments in a structured ticketing system, and independently verify fixes, So that Frndo meets quality standards before broader rollout and engineering remains focused on core development.\n\n## Context\nThis QA workflow operates exclusively on internal TestFlight builds before they are promoted to the broader testing community. Testers dynamically shift focus based on engineering priorities, covering conversational flow, UI/UX functionality, new integrations, and directed performance benchmarking. The process uses a P0–P3 severity scale and requires testers to confirm resolution before ticket closure.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Onboarding Jun 30; program runs to Oct 31\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "QA Testing",
+      "subtasks": [
+        {
+          "title": "Four dedicated testers complete a minimum of 2 hours of structured testing per day on the latest internal TestFlight build.",
+          "description": null
+        },
+        {
+          "title": "Testers log all findings in a centralized ticketing system with mandatory screenshots or screen recordings, categorized by feature area and severity.",
+          "description": null
+        },
+        {
+          "title": "P0 tickets (crashes, app lockups, core conversation failure) trigger immediate build rotation and engineer assignment within 2 hours of logging.",
+          "description": null
+        },
+        {
+          "title": "Testers independently verify and close fix tickets only after confirming the issue is resolved in a subsequent TestFlight build.",
+          "description": null
+        },
+        {
+          "title": "Testing focus aligns with engineering priorities for the sprint, including conversational flow, UI/UX validation, new integrations, and directed performance benchmarking.",
+          "description": null
+        },
+        {
+          "title": "No internal TestFlight build is promoted to the broader testing community until all open P0 and P1 tickets are verified closed by QA.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Text to speech on device - Implement On-Device Text-to-Speech with Curated Device Support and Privacy Controls",
+      "description": "## Story\nAs a Mate, I want Frndo to generate high-fidelity voice responses directly on my device, So that I experience faster, more private conversations without relying on cloud infrastructure, while maintaining seamless avatar animation.\n\n## Context\nThis feature routes all supported conversations through a novel local TTS architecture, replacing cloud-based Chatterbox inference by default. Support is gated by a curated device model list, and poor local TTS performance on a specific device may result in that device being excluded from support. The initial implementation generates full audio clips before playback to avoid concurrency conflicts with the on-device lipsync model. Quality is validated via a stakeholder blind parity checklist against the cloud solution. Paid tier Mates retain the option to disable cloud TTS in Settings for enhanced privacy.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Aug 15\"_",
+      "priority": "critical",
+      "due_date": "2026-08-15",
+      "epic_name": "On-Device TTS",
+      "subtasks": [
+        {
+          "title": "Local TTS activates automatically for all devices on the curated support list, generating the full audio clip before playback begins.",
+          "description": null
+        },
+        {
+          "title": "The app enforces a curated device model list at launch, routing only supported devices through local TTS and excluding devices that fail initial quality checks.",
+          "description": null
+        },
+        {
+          "title": "Stakeholder blind parity validation confirms local TTS meets subjective quality thresholds with minimal perceptible difference from the cloud solution.",
+          "description": null
+        },
+        {
+          "title": "Paid tier Mates can enable \"Disable Cloud TTS\" in Settings, ensuring all voice generation remains strictly on-device when the toggle is active.",
+          "description": null
+        },
+        {
+          "title": "Local TTS generation failures do not trigger automatic cloud fallback; the system logs the error, maintains conversation state, and waits for the next user input.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "News. Check on daily basis and offer in conversation to user. - Daily Interest-Matched News Hook in Conversation",
+      "description": "## Story\nAs a Mate, I want Frndo to quietly absorb a daily, interest-aligned news digest and weave it into our conversation as a light, neutral hook, So that Frndo stays informed about the world I care about without interrupting our flow or delivering a news broadcast.\n\n## Context\nThis capability lives in the core conversation loop and leverages Frndo’s conversational Memory to extract topic interests from past chats. Each day, a curated news feed matching those interests is loaded into context. Frndo introduces the digest gradually as a brief, neutral conversational hook, expanding only if the Mate engages. The system enforces strict neutrality, avoids information overload, and operates within voice-first latency constraints.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Sep 30 (gated: user stories due Jul 31)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "News Hook",
+      "subtasks": [
+        {
+          "title": "A daily news digest is pulled at a fixed time (e.g., 06:00 local) and matched to the Mate’s historically discussed topics via conversational memory tags.",
+          "description": null
+        },
+        {
+          "title": "Frndo introduces the news as a light hook (max 2–3 sentences) using strictly neutral, non-opinionated language, followed by an open question that ties the event to the Mate’s context or recent memories.",
+          "description": null
+        },
+        {
+          "title": "The digest is revealed progressively: if the Mate does not engage, Frndo does not push further; if the Mate asks follow-ups, Frndo expands within the same neutral framing.",
+          "description": null
+        },
+        {
+          "title": "If the Mate explicitly says \"skip news today\" or \"not interested in this,\" the system suppresses the hook for the remainder of the current day.",
+          "description": null
+        },
+        {
+          "title": "News context loading and hook generation do not increase time-to-first-audio or violate the established voice response latency budget.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Frndo always listens. Even as it's speaking. - Capture Mate Interruptions During TTS Chunk Pauses",
+      "description": "## Story\nAs a Mate, I want Frndo to actively listen during the natural silent gaps between its spoken response chunks, So I can interrupt at the earliest pause without Frndo talking over me or missing my input.\n\n## Context\nFrndo generates TTS in discrete text and audio chunks, creating built-in silent intervals between sentences and phrases. Because acoustic bleed prevents simultaneous STT and TTS playback, the app must activate voice capture precisely during these known chunk boundaries. This ensures seamless interruption handling while preserving conversation state and avoiding the overlap issues of full-duplex listening.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Mate Interruptions",
+      "subtasks": [
+        {
+          "title": "STT capture activates automatically at every silent boundary between TTS chunks without requiring manual triggering or acoustic detection.",
+          "description": null
+        },
+        {
+          "title": "When the Mate speaks during a pause, the system captures the audio, transcribes it via on-device STT, and immediately halts the current TTS playback and LLM token stream.",
+          "description": null
+        },
+        {
+          "title": "Any ungenerated TTS chunks and in-flight LLM tokens beyond the interruption point are discarded without saving, logging, or playback.",
+          "description": null
+        },
+        {
+          "title": "The handoff between TTS playback and STT capture remains within the established voice response latency budget, maintaining conversational flow.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Better content of conversation that applies our values per our training document - Align Conversational Behavior with Core Friendship Values and Safety Guardrails",
+      "description": "## Story\nAs a Mate, I want Frndo to consistently respond with genuine empathy, stay in character as a trusted friend, and handle redirection or escalation in a natural way, So that I feel authentically heard and safe without encountering sycophancy, clinical detachment, or out-of-character responses.\n\n## Context\nThis system-wide behavior is driven by proprietary model fine-tuning and targeted system instruction adjustments rooted in four core principles: be impeccable with your word, do not take anything personally, do not make assumptions, and always do your best. It applies across all conversation surfaces, including coaching personas, and must preserve voice-first latency while enforcing value-aligned boundaries, in-character refusals, and appropriate crisis handling.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"June 15 (initial),  Oct 15 (final lock)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Conversational Values",
+      "subtasks": [
+        {
+          "title": "When a Mate shares personal struggles, Frndo responds with grounded empathy that acknowledges the Mate’s full experience without reducing others to supporting characters or offering clinical advice.",
+          "description": null
+        },
+        {
+          "title": "If a Mate requests content outside Frndo’s lane (e.g., romantic roleplay, diagnostic language, or artifact generation), Frndo declines in-character using gentle redirection that aligns with the four core values.",
+          "description": null
+        },
+        {
+          "title": "When a Mate persists after a gentle redirection, Frndo escalates to a more direct, in-character insistence, clearly stating the boundary without shaming or breaking character.",
+          "description": null
+        },
+        {
+          "title": "If a Mate makes persistent sexual remarks or issues threats, Frndo delivers increasingly firm responses, culminating in an angry but in-character refusal to continue the conversation.",
+          "description": null
+        },
+        {
+          "title": "When a Mate expresses concern about their mental state, Frndo recommends professional counseling, shares local crisis resources, and continues the conversation without passing the Mate off.",
+          "description": null
+        },
+        {
+          "title": "All value-aligned responses, including redirections and refusals, must generate time-to-first-audio within the established voice response latency budget.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Frndo must feel like a real friend and not surface level friend - Ground Conversations in Deep Listening, Context, and Honest Reframing",
+      "description": "## Story\nAs a Mate, I want Frndo to listen actively, integrate my past conversations, and challenge unhelpful patterns without jumping to solutions, So that I feel supported by a genuine friend who helps me grow rather than just validating my words.\n\n## Context\nThis system-wide behavior is enforced through proprietary model fine-tuning and targeted system instructions. It applies across all conversation surfaces, including coaching personas, and ensures Frndo holds the whole picture of the Mate’s life while staying strictly in the thinking-with-you lane. Voice timing and latency adjustments are explicitly out of scope for this iteration.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Aug 31 (personality), Sep 30 (worldview)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Deep Listening",
+      "subtasks": [
+        {
+          "title": "When a Mate shares a problem or vents, Frndo asks at least one exploratory or clarifying question before offering any advice, solution, or next step.",
+          "description": null
+        },
+        {
+          "title": "Frndo integrates at least one relevant detail from stored conversational memory (e.g., names, relationships, past goals or conflicts) into its response to ground the conversation in the Mate’s full context.",
+          "description": null
+        },
+        {
+          "title": "When a Mate expresses a self-limiting belief or supports a poor decision, Frndo offers a gentle, in-character reframing that challenges the pattern without diagnosing, shaming, or enabling the behavior.",
+          "description": null
+        },
+        {
+          "title": "Frndo withholds direct solutions and action steps until the Mate explicitly requests them, unless a safety or ethical boundary requires immediate intervention.",
+          "description": null
+        },
+        {
+          "title": "Responses avoid sycophantic agreement, clinical detachment, and multi-hop relationship inference, strictly adhering to the four core friendship values.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Add a calendar function to organize daily life and remember main events. - Conversational Calendar Memory and Soft Event Nudges",
+      "description": "## Story\nAs a Mate, I want Frndo to remember my personal dates and calendar events through conversation and a connected calendar, So that I feel supported by a friend who stays in tune with my life without acting like a productivity tool.\n\n## Context\nThis capability lives in the core conversation loop and leverages the native iOS Calendar API. Mates can grant read/write access to their calendar, add or remove events via voice or a lightweight in-app UI, and Frndo will softly reference events during conversation. The system avoids rigid reminders or launch-time alerts, staying aligned with Frndo’s thinking-with-you positioning while maintaining voice-first latency and thermal constraints.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Aug 31 (gated: user stories + Figma due Jun 30)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Calendar Memory",
+      "subtasks": [
+        {
+          "title": "Mate can grant iOS Calendar read/write permissions during onboarding or settings, with clear copy explaining that data syncs to the connected account and is used only for conversational context.",
+          "description": null
+        },
+        {
+          "title": "When a Mate mentions an event in conversation, Frndo presents a lightweight, voice-optimized UI for adding or removing the event, syncing it to the connected calendar within 2 seconds.",
+          "description": null
+        },
+        {
+          "title": "During active conversations, Frndo softly references upcoming or past events only when contextually relevant, using neutral, friend-like language without sounding like a scheduled alert.",
+          "description": null
+        },
+        {
+          "title": "The app does not trigger launch-time reminders, push notifications, or time-based scheduling alerts; event awareness is strictly conversational and memory-driven.",
+          "description": null
+        },
+        {
+          "title": "Calendar sync operations run asynchronously and do not block the primary STT/TTS pipeline or violate the established voice response latency budget.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Ability to order products. I.e. via amazon, Walmart etc. - Voice-Driven Product Discovery and Retailer App Routing",
+      "description": "## Story\nAs a Mate, I want Frndo to help me find products through voice conversation and a lightweight browsing interface, So that I can quickly open the right retailer app without leaving the friend-like flow.\n\n## Context\nThis capability lives in the core conversation loop and leverages a retailer adapter layer to route voice search queries to at least one demo retailer. Frndo presents a lightweight visual interface with scrollable preview thumbnails, then opens the retailer’s native app to the specific product or cart page. Purchase intent is stored exclusively in the conversational memory system for retrieval ease, with strict boundaries that exclude full checkout, marketing tracking, or third-party data sharing. The system operates within voice-first latency and thermal constraints.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Aug 31 (assumes Provider 2)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Product Discovery",
+      "subtasks": [
+        {
+          "title": "Voice-driven product search routes through an abstract adapter layer to at least one demo retailer API and returns structured results within the established voice response latency budget.",
+          "description": null
+        },
+        {
+          "title": "A lightweight visual interface renders scrollable product thumbnails with title, price, and image, and tapping an item triggers a universal link to the retailer’s native app at the exact product URL.",
+          "description": null
+        },
+        {
+          "title": "Purchase intent data is stored exclusively in the conversational memory system, tagged as “product\\_search\\_intent,” and is never transmitted to third-party retailers, used for marketing, or disclosed to partners.",
+          "description": null
+        },
+        {
+          "title": "If the retailer API is unavailable, rate-limited, or returns no results, the system gracefully falls back to a direct product link or conversational guidance without breaking chat flow.",
+          "description": null
+        },
+        {
+          "title": "The adapter layer is implemented as a decoupled routing interface, allowing new retailers to be added without modifying the core conversation or UI pipeline.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Ability to order food. I.e. via Postmates or similar. - Voice-Driven Food Discovery, Delivery Routing, and Directions",
+      "description": "## Story\nAs a Mate, I want Frndo to find nearby restaurants and let me choose between delivery routing or opening directions, So that I can easily order food or visit a spot without switching apps or knowing which delivery service covers it.\n\n## Context\nThis capability lives in the core conversation loop and leverages a map search adapter to locate nearby restaurants by category. It cross-references delivery service APIs to identify coverage, presents a lightweight UI with restaurant previews, and offers a clear \"Order Delivery\" or \"Get Directions\" option for each result. Real-time GPS and local preference storage are prioritized for privacy and convenience. The system operates within voice-first latency and thermal constraints, staying strictly in the friend lane without handling full checkout or payment processing.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Jul 31 or Aug 31\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Food Discovery",
+      "subtasks": [
+        {
+          "title": "Voice-driven category search triggers a real-time GPS-based map query, returning nearby restaurants within the established voice response latency budget.",
+          "description": null
+        },
+        {
+          "title": "Each restaurant preview in the lightweight UI clearly presents two actionable options: \"Order Delivery\" and \"Get Directions.\"",
+          "description": null
+        },
+        {
+          "title": "Tapping \"Get Directions\" opens the native iOS Maps app with routing to the exact restaurant location, with no checkout or payment processing handled by Frndo.",
+          "description": null
+        },
+        {
+          "title": "When multiple delivery apps cover a restaurant, the system presents a selector to choose a preferred service, saves the selection locally, and auto-selects it for future orders while allowing manual changes.",
+          "description": null
+        },
+        {
+          "title": "The directions and delivery routing flows run asynchronously and do not block the primary STT/TTS pipeline or violate the established voice response latency budget.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Find and connect to local events. Ticketed and free. - Voice-Driven Local Event Discovery and Routing",
+      "description": "## Story\nAs a Mate, I want Frndo to find local events and route me to ticketing platforms or directions, So that I can easily discover and attend experiences without juggling multiple apps or knowing which services cover my area.\n\n## Context\nThis capability lives in the core conversation loop and leverages an event/discovery API adapter to locate nearby events by category or interest. It cross-references ticketing platforms and venue listings, presents a lightweight UI with event previews, and routes the Mate to their preferred ticketing app or native maps for directions. Real-time GPS and local preference storage are prioritized for privacy and convenience. The system operates within voice-first latency and thermal constraints, staying strictly in the friend lane without handling internal checkout or payment processing.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Jul 31 (assumes Provider 1)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Event Discovery",
+      "subtasks": [
+        {
+          "title": "Voice-driven event search triggers a real-time GPS-based query, returning nearby ticketed and free events within the established voice response latency budget.",
+          "description": null
+        },
+        {
+          "title": "Each event preview in the lightweight UI clearly presents actionable options: \"Get Tickets\" (for paid events), \"View Details\" (for free/community events), and \"Get Directions.\"",
+          "description": null
+        },
+        {
+          "title": "Tapping \"Get Tickets\" opens the user's preferred ticketing app or mobile site at the exact event URL, with a local preference selector saved for future use.",
+          "description": null
+        },
+        {
+          "title": "Tapping \"Get Directions\" opens the native iOS Maps app with routing to the exact venue location, with no checkout or payment processing handled by Frndo.",
+          "description": null
+        },
+        {
+          "title": "Event routing and UI rendering run asynchronously and do not block the primary STT/TTS pipeline or violate the established voice response latency budget.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Diary. - Bidirectional Shared Diary with Conversational Recall",
+      "description": "## Story\nAs a Mate, I want Frndo to draft diary entries from our conversations that I can edit and add to myself, and to recall those entries later when we talk, so that our shared history feels remembered and co-authored rather than one-sided.\n\n## Context\nThe diary is a bidirectional, shared journal: Frndo drafts entries summarizing the day's conversations, the Mate edits those drafts and writes their own original entries, and Frndo can recall diary content later in conversation as relational memory. It sits on top of Frndo's explicit cross-session memory and reinforces the core product value of feeling like a real friend who remembers. This item is P0 and gated on the Diary user stories due Jul 31, targeting Sep 30. The diary is private Mate data and must obey the same retention and deletion guarantees as the rest of the app.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P0 · CSV date: \"Sep 30 (gated: Diary user stories due Jul 31)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Shared Diary",
+      "subtasks": [
+        {
+          "title": "At the end of a conversation session, Frndo generates a draft diary entry summarizing the day's themes, and the draft is saved as editable (not final) and clearly attributed to Frndo.",
+          "description": null
+        },
+        {
+          "title": "The Mate can edit any Frndo-drafted entry inline, and edits are persisted and treated as the authoritative version for later recall.",
+          "description": null
+        },
+        {
+          "title": "The Mate can create their own original diary entry (typed) independent of any conversation, dated and stored alongside Frndo's drafts.",
+          "description": null
+        },
+        {
+          "title": "Frndo can retrieve and reference relevant past diary entries during a later conversation when the topic relates, citing them naturally rather than dumping raw text.",
+          "description": null
+        },
+        {
+          "title": "Diary entries are listed in a browsable, date-ordered view and each entry shows whether it was drafted by Frndo, edited by the Mate, or authored by the Mate.",
+          "description": null
+        },
+        {
+          "title": "The Mate can delete any individual diary entry, and deleted entries are removed from conversational recall within the session.",
+          "description": null
+        },
+        {
+          "title": "All diary content is included in the full app-data deletion flow and is never used outside this Mate's own experience.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Ability to search and recommend travel plans i.e. flights, hotels, cars etc. - Voice-Driven Flight Search and Provider App Routing",
+      "description": "## Story\nAs a Mate, I want Frndo to search for flights by voice and open my preferred travel app, So that I can quickly find options without leaving the friend-like flow or feeling sold to. Searching for other single travel verticals would be nice to have.\n\n## Context\nThis capability lives in the core conversation loop and leverages a single travel provider API adapter focused exclusively on flight search. Frndo performs search-only queries based on explicit voice input, presents a lightweight UI with scrollable flight, hotel, or car rental previews, and routes the Mate to the provider's native app at the exact results page. The system strictly avoids proactive recommendations or sponsored content to preserve the authentic friend positioning. All routing and UI rendering run asynchronously within voice-first latency and thermal constraints.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P0 · CSV date: \"Sep 30 (assumes Provider 3)\"_",
+      "priority": "critical",
+      "due_date": null,
+      "epic_name": "Travel Search",
+      "subtasks": [
+        {
+          "title": "Voice-driven flight search triggers a provider API query within the established voice response latency budget, using explicitly stated origin, destination, and dates.",
+          "description": null
+        },
+        {
+          "title": "A lightweight visual interface renders scrollable flight previews showing price, duration, airline, and departure/arrival times.",
+          "description": null
+        },
+        {
+          "title": "Tapping a flight preview opens the provider's native app or mobile site at the exact results URL, with no checkout, payment, or booking handling by Frndo.",
+          "description": null
+        },
+        {
+          "title": "Frndo strictly adheres to search-only behavior, refraining from proactive flight suggestions, sponsored content, or sales-oriented language.",
+          "description": null
+        },
+        {
+          "title": "Flight search and app routing run asynchronously and do not block the primary STT/TTS pipeline or violate the established voice response latency budget.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Frndo Coach. - Selectable Coach Personas Layered on Base Frndo",
+      "description": "## Story\nAs a Mate, I want to select a specialized coach persona on top of Frndo, so that I can get goal-oriented help in a specific domain while keeping Frndo's familiar friendship and memory.\n\n## Context\nFrndo Coach introduces selectable coach personas layered on the base Frndo personality — for example a Spanish-language tutor, a life coach, a gardening advisor, or an interior-decorator coach. Each persona retains Frndo's friendship values and relational memory but adds domain expertise and a goal-oriented structure (objectives, follow-through, progress). Personas ship on a staggered schedule: Coach 1 around Aug 31 and Coach 2 around Sep 30. The feature must work within the existing voice-first conversation loop and latency budget without requiring a separate app.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P1 · CSV date: \"Aug 31 (Coach 1) or Sep 30 (Coach 2)\"_",
+      "priority": "high",
+      "due_date": null,
+      "epic_name": "Frndo Coach",
+      "subtasks": [
+        {
+          "title": "The Mate can browse available coach personas and activate or deactivate one from a persona selector, with the active persona clearly indicated on the conversation screen.",
+          "description": null
+        },
+        {
+          "title": "When a coach persona is active, Frndo retains base relational memory and friendship tone while layering the persona's domain expertise and goal structure into responses.",
+          "description": null
+        },
+        {
+          "title": "Each persona is defined as a swappable configuration (system framing, goals, domain knowledge hooks) so additional coaches can ship without changing the core conversation engine.",
+          "description": null
+        },
+        {
+          "title": "Coach 1 ships as a fully usable persona by Aug 31 and Coach 2 ships by Sep 30, each independently selectable.",
+          "description": null
+        },
+        {
+          "title": "Switching personas mid-relationship does not erase or corrupt the Mate's existing memory, diary, or preferences.",
+          "description": null
+        },
+        {
+          "title": "An active coach persona tracks at least one Mate-visible goal or progress signal relevant to its domain across sessions.",
+          "description": null
+        },
+        {
+          "title": "Coach personas remain within Frndo's safety guardrails and defer to the dangerous-behavior flagging path regardless of domain framing.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Improve Frndo’s conversational awareness - Improve Conversational Awareness of Capabilities and Permission Boundaries",
+      "description": "## Story\nAs a Mate, I want Frndo to clearly communicate what she can and cannot do, request permissions when needed, and accurately answer capability questions, so that I have realistic expectations and can seamlessly enable features without confusion or broken conversational flow.\n\n## Context\nThis applies to the core voice conversation loop and frontend permission management. It triggers when a Mate requests a feature that requires permissions, requests an unsupported feature, or explicitly asks about Frndo’s capabilities. The system requires a structured capability manifest, backend intent routing, a coded payload for frontend permission dialogs, and a voice loop that gracefully returns to listening while dialogs are displayed.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P1 · CSV date: \"Sep 30\"_",
+      "priority": "high",
+      "due_date": "2026-09-30",
+      "epic_name": "Capability Awareness",
+      "subtasks": [
+        {
+          "title": "A backend capability manifest (JSON or API endpoint) is created and maintained, defining each feature, its natural language description, and required permission scopes.",
+          "description": null
+        },
+        {
+          "title": "When a Mate’s intent matches a feature that requires a permission the Mate has not granted, the backend detects the missing permission and returns a coded payload to the frontend (e.g., \\`{ \"type\": \"PERMISSION\\_REQUEST\", \"feature\\_id\": \"\", \"permission\\_scope\": \"\" }).",
+          "description": null
+        },
+        {
+          "title": "The frontend intercepts the coded payload and displays a permission dialog that explains the feature and directs the Mate to the device settings menu to enable it.",
+          "description": null
+        },
+        {
+          "title": "Frndo speaks an in-character request for the permission, then immediately transitions to the listening state while the permission dialog remains on screen.",
+          "description": null
+        },
+        {
+          "title": "When a Mate’s intent matches an unsupported feature, Frndo apologizes in-character, states the feature is not available yet, and offers a supported alternative if applicable.",
+          "description": null
+        },
+        {
+          "title": "When a Mate explicitly asks “what can you do?” or “can you do X?”, Frndo dynamically queries the capability manifest and generates a concise, natural language summary without filtering by granted permissions.",
+          "description": null
+        },
+        {
+          "title": "The voice loop correctly handles mid-summary interruptions: on-device STT detects Mate speech, cancels any pending TTS/audio synthesis, discards queued chunks, terminates the LLM stream, and switches to listening mode with the standard confirmation cue.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Push notifications - Push Notifications for Re-Engagement and Timely Nudges",
+      "description": "## Story\nAs a Mate, I want Frndo to send me thoughtful push notifications, so that I feel gently invited back and reminded of things we agreed on without being spammed.\n\n## Context\nPush notifications give Frndo a way to reach the Mate outside an active session — warm check-ins, reminders tied to to-do or calendar memory, and timely nudges — reinforcing the sense of an ongoing relationship. They must respect iOS notification permissions and Mate-set preferences and never feel like marketing spam, in keeping with the friend lane. This is a P1 item targeting Jul 31 and is foundational for later features (usage-cap return invites, to-do reminders).\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P1 · CSV date: \"Jul 31\"_",
+      "priority": "high",
+      "due_date": "2026-07-31",
+      "epic_name": "Push Notifications",
+      "subtasks": [
+        {
+          "title": "The app requests iOS push notification permission at an appropriate moment in onboarding and degrades gracefully if the Mate declines.",
+          "description": null
+        },
+        {
+          "title": "APNs is integrated end to end so the backend can deliver a notification to a registered device and tapping it deep-links into the relevant screen.",
+          "description": null
+        },
+        {
+          "title": "The Mate can control notification categories (e.g., check-ins, reminders) and frequency from settings, and these preferences are honored server-side.",
+          "description": null
+        },
+        {
+          "title": "Notifications respect a quiet-hours window so none are delivered overnight unless explicitly tied to a Mate-set reminder time.",
+          "description": null
+        },
+        {
+          "title": "Notification copy is generated in Frndo's voice and stays in the friend lane (no promotional or growth-hack phrasing).",
+          "description": null
+        },
+        {
+          "title": "Disabling notifications in iOS Settings or in-app stops all delivery, verified on the iPhone 13–17 range.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "App must work on at least 4 generations of iPhone. - Graceful Performance Degradation Across iPhone 13–17 Devices",
+      "description": "## Story\nAs a Mate, I want Frndo to automatically adjust its rendering, voice delivery, and thermal behavior to match my specific device capabilities, So that I can use the app smoothly without crashes, overheating, or choppy performance, regardless of whether I own a base or Pro model.\n\n## Context\nFrndo targets iPhone 13 through 17 generations, with a published list of supported models and a phased rollout strategy that prioritizes higher-performance devices before expanding to lower-tier models. The app relies on Unity-based avatar rendering and cloud-hosted TTS. Because hardware varies even within the same generation, the system must dynamically scale visual fidelity, voice streaming, and thermal management based on real-time device metrics. On-device STT remains fully optimized across all supported devices.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P2 · CSV date: \"Sep 30\"_",
+      "priority": "medium",
+      "due_date": "2026-09-30",
+      "epic_name": "Device Performance",
+      "subtasks": [
+        {
+          "title": "The app detects device generation, model variant, available memory, and real-time thermal state at launch and continuously during runtime.",
+          "description": null
+        },
+        {
+          "title": "When device temperature exceeds a defined threshold or frame pacing drops, Unity avatar rendering automatically scales to 30fps while preserving blendshape animation integrity and core UI responsiveness.",
+          "description": null
+        },
+        {
+          "title": "TTS audio streaming and buffering adapt dynamically to device processing limits, prioritizing voice playback continuity and clarity when thermal throttling or memory pressure occurs.",
+          "description": null
+        },
+        {
+          "title": "On-device STT continues to process voice input at full optimization and accuracy, with no quality or latency degradation regardless of thermal or performance state.",
+          "description": null
+        },
+        {
+          "title": "The app enforces a phased rollout strategy, restricting initial access to highest-performance models before progressively enabling support for lower-tier devices based on real-world telemetry and stability thresholds.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Ability of user to completely delete app and all data. - Complete App and Data Deletion",
+      "description": "## Story\nAs a Mate, I want to permanently delete the app and all of my data, so that I stay in full control of my personal information and can leave with confidence that nothing lingers.\n\n## Context\nThis gives Mates a single, trustworthy path to erase everything Frndo holds about them — conversation history, relational memory, diary, preferences, health connections, and account records — across both device and backend. It is core to Frndo's privacy posture and an App Store / data-protection expectation. The item is P2 targeting Aug 31 and underpins the broader privacy-strengthening workstream and the diary's deletion guarantees.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Aug 31\"_",
+      "priority": "medium",
+      "due_date": "2026-08-31",
+      "epic_name": "Account Deletion",
+      "subtasks": [
+        {
+          "title": "The Mate can initiate full account-and-data deletion from in-app settings with a clear explanation of what will be erased and an explicit confirmation step.",
+          "description": null
+        },
+        {
+          "title": "On confirmation, all server-side personal data (conversations, memory, diary, to-dos, preferences, health links, account record) is deleted or irreversibly anonymized within a stated retention window.",
+          "description": null
+        },
+        {
+          "title": "All on-device data and caches (local STT/TTS artifacts, Piper fallback data, cached media, stored credentials) are wiped from the device.",
+          "description": null
+        },
+        {
+          "title": "Any third-party connections (e.g., Apple Health / wearable authorizations, push tokens) are revoked as part of deletion.",
+          "description": null
+        },
+        {
+          "title": "The Mate receives confirmation that deletion is complete, and re-opening or reinstalling the app yields a fresh, empty state with no recovered history.",
+          "description": null
+        },
+        {
+          "title": "The deletion flow is auditable internally (a deletion record with no residual personal content) so the operator can prove erasure occurred.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "In-App Purchases - In-App Purchases for Subscriptions and Upgrades",
+      "description": "## Story\nAs a Mate, I want to upgrade or unlock features through secure in-app purchase, so that I can get more from Frndo with a familiar, trustworthy payment flow.\n\n## Context\nIn-App Purchases wire Frndo into Apple's StoreKit so Mates can subscribe or upgrade — most immediately to lift the free-tier conversation-minute cap. The exact SKUs and price points are gated on the pricing decision due Jun 30, with implementation targeting Sep 30. The flow must be reliable, restore-able across devices, and stay in the friend lane (no dark patterns), and it directly enables the usage-cap \"upgrade\" path.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Sep 30 (gated: Pricing decision due Jun 30)\"_",
+      "priority": "medium",
+      "due_date": null,
+      "epic_name": "In-App Purchases",
+      "subtasks": [
+        {
+          "title": "StoreKit is integrated so the Mate can view available products, purchase, and complete the Apple payment sheet without leaving the app.",
+          "description": null
+        },
+        {
+          "title": "Entitlements are verified server-side (receipt/transaction validation) and unlocked features reflect the verified entitlement, not a client-only flag.",
+          "description": null
+        },
+        {
+          "title": "\"Restore Purchases\" reinstates entitlements on a new device or reinstall for the same Apple ID.",
+          "description": null
+        },
+        {
+          "title": "Subscription state (active, expired, in grace, refunded) is tracked from App Store server notifications and gates feature access accordingly.",
+          "description": null
+        },
+        {
+          "title": "The purchase UI clearly states price, billing period, and renewal terms, and follows Apple's subscription disclosure requirements.",
+          "description": null
+        },
+        {
+          "title": "Purchasing the upgrade tier immediately lifts the daily conversation-minute cap for that Mate, verified end to end.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Images - Mate Photo Sharing and Conversational Image Understanding",
+      "description": "## Story\nAs a Mate, I want to share photos from my camera or library with Frndo and have her perceive and talk about them, so that I can show her my world and have richer, more grounded conversations.\n\n## Context\nThis lets the Mate share photos — captured live or chosen from the photo library — and Frndo perceives and discusses them naturally inside the voice conversation. It is photo understanding and sharing, explicitly not image generation. A vision-capable model interprets the shared image and feeds that understanding into the streaming LLM so Frndo can react, ask, and remember. The item is P2 with an early June 30 target, and shared photos are sensitive Mate data subject to the same privacy and deletion guarantees as the rest of the app.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"June 30\"_",
+      "priority": "medium",
+      "due_date": "2026-06-30",
+      "epic_name": "Photo Sharing",
+      "subtasks": [
+        {
+          "title": "The Mate can attach a photo to the conversation from either the live camera or the photo library, after granting the appropriate iOS permission.",
+          "description": null
+        },
+        {
+          "title": "A shared photo is sent to a vision-capable understanding step and Frndo verbally references its actual content (people, scene, objects, mood) rather than a generic acknowledgment.",
+          "description": null
+        },
+        {
+          "title": "Frndo can answer follow-up questions about a recently shared photo within the same conversation, treating it as conversational context.",
+          "description": null
+        },
+        {
+          "title": "Image handling runs asynchronously and does not block or stall the primary STT/TTS voice loop beyond the established latency budget.",
+          "description": null
+        },
+        {
+          "title": "Shared photos and their derived descriptions are stored under the Mate's privacy controls and are included in the full data-deletion flow.",
+          "description": null
+        },
+        {
+          "title": "Unsupported or unreadable images, and images that trip safety/content guardrails, are handled gracefully with a warm in-character response rather than an error dump.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Enhance facial expressions, including iris animation, head movement, gestures, and body language - Expressive Avatar: Iris, Head, Gesture, and Body Language",
+      "description": "## Story\nAs a Mate, I want Frndo's avatar to move expressively — eyes, head, gestures, and posture — so that she feels alive and emotionally present rather than static.\n\n## Context\nThis deepens the Unity avatar beyond the listening/generating/speaking state machine with iris animation, head movement, hand gestures, and body language tied to conversational state and affect. Lifelike non-verbal behavior is central to Frndo feeling like a real friend. The item is P2 targeting Sep 30 and must stay within the thermal and frame-rate constraints of iPhone 13–17, degrading gracefully on lower-capability devices.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Sep 30\"_",
+      "priority": "medium",
+      "due_date": "2026-09-30",
+      "epic_name": "Expressive Avatar",
+      "subtasks": [
+        {
+          "title": "Iris/eye animation (gaze shifts, blinks, subtle saccades) plays during listening and speaking states and reads as natural rather than mechanical.",
+          "description": null
+        },
+        {
+          "title": "Head movement and posture shifts are driven by conversational state and affect cues, with distinct behavior for listening, generating, and speaking.",
+          "description": null
+        },
+        {
+          "title": "Hand and body gestures are triggered contextually (e.g., emphasis, greeting) and synchronize with TTS timing without obvious desync.",
+          "description": null
+        },
+        {
+          "title": "The expanded animation set holds a stable target frame rate on iPhone 13–17 and does not raise sustained thermal load past the conversation baseline.",
+          "description": null
+        },
+        {
+          "title": "On lower-capability or thermally throttled devices, the avatar degrades to a reduced animation set without breaking the conversation loop.",
+          "description": null
+        },
+        {
+          "title": "Expressions and gestures stay consistent with Frndo's character and never contradict the emotional tone of what she is saying.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Add second language: Spanish - Spanish-Language Conversation Support",
+      "description": "## Story\nAs a Mate, I want to talk with Frndo in Spanish, so that I can have a natural companionship in my own language.\n\n## Context\nThis adds Spanish as a second conversational language across the full voice pipeline: on-device STT, streaming LLM, cloud TTS with Piper fallback, and the UI. It broadens Frndo's reach and directly supports the Spanish-tutor coach persona. The item is P2 with a Sep 30 \"Spanish beta ready\" target and must hold the same latency, pacing, and safety guarantees that English enjoys.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Sep 30 (Spanish beta ready)\"_",
+      "priority": "medium",
+      "due_date": null,
+      "epic_name": "Spanish Support",
+      "subtasks": [
+        {
+          "title": "The Mate can select Spanish as their conversation language, and STT, LLM, and TTS all operate in Spanish for the full session.",
+          "description": null
+        },
+        {
+          "title": "Spanish TTS (cloud, with Piper fallback) produces natural pacing and pronunciation and meets the same inter-sentence latency budget as English.",
+          "description": null
+        },
+        {
+          "title": "On-device STT recognizes Spanish speech with accuracy comparable to the English baseline on supported devices.",
+          "description": null
+        },
+        {
+          "title": "App UI strings on the primary conversation and settings surfaces are localized to Spanish.",
+          "description": null
+        },
+        {
+          "title": "Safety guardrails and dangerous-behavior flagging operate in Spanish, including localized crisis resources.",
+          "description": null
+        },
+        {
+          "title": "Relational memory and diary content remain coherent when a Mate switches between English and Spanish.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Different Frndo downloadable apps depending on the phone capabilities. - Device-Capability-Tiered App Builds",
+      "description": "## Story\nAs a Mate, I want a version of Frndo tuned to what my iPhone can handle, so that I get the smoothest possible experience without overheating or lag on my specific device.\n\n## Context\nFrndo targets iPhone 13–17, a wide performance and thermal range. This item delivers capability-tiered builds or runtime configurations so higher-end devices get richer avatar animation and more on-device processing while older devices get a lighter footprint that still preserves the core voice loop. It is P2 targeting Sep 30 and intersects directly with the expressive-avatar and latency/thermal workstreams.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Sep 30\"_",
+      "priority": "medium",
+      "due_date": "2026-09-30",
+      "epic_name": "Device-Tiered Builds",
+      "subtasks": [
+        {
+          "title": "The app detects device capability tier at install/first-run and selects an appropriate configuration (animation richness, on-device vs cloud processing balance) automatically.",
+          "description": null
+        },
+        {
+          "title": "On lower-tier devices, avatar animation and background processing are reduced to hold the latency and thermal baseline, while the core listen/speak loop remains fully functional.",
+          "description": null
+        },
+        {
+          "title": "On higher-tier devices, the richer expressive-avatar feature set is enabled by default.",
+          "description": null
+        },
+        {
+          "title": "Tiering is delivered without fragmenting the codebase into unmaintainable separate apps — a single binary with capability gates, or a clearly documented build-variant strategy, is used.",
+          "description": null
+        },
+        {
+          "title": "The selected tier is observable to the operator (telemetry) so the distribution across the beta fleet can be measured.",
+          "description": null
+        },
+        {
+          "title": "The Mate can see which experience tier is active and is given a graceful explanation rather than silent degradation.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Facial recognition - Affect-Aware Facial Recognition (Emotion, Not Identity)",
+      "description": "## Story\nAs a Mate, I want Frndo to sense my emotional expression and respond with empathy, so that she can meet me where I am without ever identifying or storing who I am.\n\n## Context\nThis adds affect recognition — reading emotional expression from the Mate's face to inform Frndo's empathic responses and avatar reactions. It is explicitly affect, not identity: no facial identification, no biometric template, no face matching. Affect inference should run on-device for privacy, feed the streaming response and the expressive avatar, and stay within Frndo's safety and privacy posture. The item is P2 targeting Sep 30.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Sep 30 (assumes affect, not identity)\"_",
+      "priority": "medium",
+      "due_date": null,
+      "epic_name": "Facial Recognition",
+      "subtasks": [
+        {
+          "title": "With explicit Mate opt-in and iOS camera permission, the app infers coarse affect signals (e.g., positive/neutral/distressed) from the front camera.",
+          "description": null
+        },
+        {
+          "title": "Affect inference runs on-device and no raw face imagery or biometric identity template is transmitted off-device or persisted.",
+          "description": null
+        },
+        {
+          "title": "Inferred affect informs Frndo's conversational tone and the avatar's expression in near real time without breaking the voice latency budget.",
+          "description": null
+        },
+        {
+          "title": "The feature is strictly affect-only: no facial identification, recognition of a specific person, or face-matching capability exists in the build.",
+          "description": null
+        },
+        {
+          "title": "The Mate can disable affect sensing at any time, and disabling it immediately stops camera use and clears any transient affect state.",
+          "description": null
+        },
+        {
+          "title": "Strong negative affect can be routed as one signal into the dangerous-behavior flagging path without becoming the sole trigger.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Strengthening privacy features and user data protections. - Privacy Hardening and User Data Protections",
+      "description": "## Story\nAs a Mate, I want strong, verifiable protections around my personal data, so that I can share openly with Frndo knowing my information is safe and used only for my experience.\n\n## Context\nThis is a phase-long, distributed effort (through Sep 30) to strengthen Frndo's privacy posture across the stack: encryption, data minimization, access controls, transparency, and on-device-first processing where feasible. It is foundational to the trust the friendship model depends on and reinforces the complete-deletion, diary, health-connection, and affect items. As P3 it is distributed work rather than a single dated deliverable, but each strand must be concretely verifiable.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P3 · CSV date: \"Phase-long, distributed to Sep 30\"_",
+      "priority": "low",
+      "due_date": null,
+      "epic_name": "Privacy Hardening",
+      "subtasks": [
+        {
+          "title": "Personal data is encrypted in transit (TLS) and at rest, with sensitive fields (conversation content, diary, health data) covered by documented encryption.",
+          "description": null
+        },
+        {
+          "title": "A data inventory documents every category of Mate data collected, where it is stored, and its retention window, and is kept current as features ship.",
+          "description": null
+        },
+        {
+          "title": "Data minimization is applied: features process on-device where feasible and collect only what they need, with rationale recorded per data category.",
+          "description": null
+        },
+        {
+          "title": "An in-app privacy surface tells the Mate in plain language what is collected and why, and links to controls (notifications, affect sensing, health, deletion).",
+          "description": null
+        },
+        {
+          "title": "Access to Mate data by internal systems and operators is least-privilege and audited.",
+          "description": null
+        },
+        {
+          "title": "No Mate data is used to train shared models or shown to other Mates without explicit, revocable consent.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Construct several pricing and profit models. - Pricing and Profit Model Construction",
+      "description": "## Story\nAs a product operator, I want several costed pricing and profit models for Frndo, so that I can choose a sustainable monetization strategy that the beta's gated features can build against.\n\n## Context\nThis is an internal/ops deliverable, not a Mate-facing feature: construct and compare several pricing and profit models for Frndo. The decision is due Jun 30 and is a hard gate for In-App Purchases, the usage cap, and the free-tier conversation-minute limit. Models must reflect Frndo's real unit economics — cloud TTS, LLM inference, and infrastructure cost per conversation minute — against candidate price points and tiers.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P3 · CSV date: \"Decision due Jun 30\"_",
+      "priority": "low",
+      "due_date": null,
+      "epic_name": "Pricing Models",
+      "subtasks": [
+        {
+          "title": "At least three distinct pricing/profit models are documented (e.g., free tier + subscription, usage-metered, freemium-with-cap), each with assumptions stated.",
+          "description": null
+        },
+        {
+          "title": "Each model includes per-conversation-minute cost of goods (TTS, LLM inference, infra) and the resulting gross margin at candidate price points.",
+          "description": null
+        },
+        {
+          "title": "Each model specifies the proposed free-tier daily conversation-minute cap and the paid-tier behavior, feeding the usage-cap and IAP items.",
+          "description": null
+        },
+        {
+          "title": "Break-even and sensitivity analysis (against conversion rate and average minutes per Mate) is included for each model.",
+          "description": null
+        },
+        {
+          "title": "A single recommended model is selected and signed off by Jun 30 so the gated IAP and usage-cap work can proceed.",
+          "description": null
+        },
+        {
+          "title": "The chosen model's free-tier cap and SKU definitions are handed off in a form the IAP and usage-cap implementations can consume directly.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Add two anime characters. - Selectable Anime Avatar Characters",
+      "description": "## Story\nAs a Mate, I want to choose an anime-styled Frndo character, so that my companion looks like someone I connect with aesthetically.\n\n## Context\nThis adds two anime-styled characters to Frndo's roster of selectable avatars, broadening visual self-expression while preserving Frndo's personality, memory, and friendship values regardless of appearance. It is P3 targeting Sep 30 and gated on anime assets plus style guidelines due Jul 31. The new characters must drive the same Unity avatar state machine and expressive-animation set as the default avatar.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P3 · CSV date: \"Sep 30 (gated: assets + guidelines due Jul 31)\"_",
+      "priority": "low",
+      "due_date": null,
+      "epic_name": "Anime Characters",
+      "subtasks": [
+        {
+          "title": "Two anime-styled characters are available in the avatar selector and can be chosen as the active Frndo appearance.",
+          "description": null
+        },
+        {
+          "title": "Each anime character drives the full listening/generating/speaking state machine and the expressive-animation set (iris, head, gesture, body language) without missing states.",
+          "description": null
+        },
+        {
+          "title": "Switching to or from an anime character preserves the Mate's relational memory, diary, preferences, and active coach persona.",
+          "description": null
+        },
+        {
+          "title": "Each anime character holds the agreed frame-rate and thermal budget on iPhone 13–17, with graceful degradation on lower tiers.",
+          "description": null
+        },
+        {
+          "title": "The anime characters conform to the approved style guidelines (proportions, expression range, wardrobe compatibility).",
+          "description": null
+        },
+        {
+          "title": "The selected character persists across sessions and reinstalls (subject to data-deletion).",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Connect to health app (apple, aura ring) in a meaningful way. - Meaningful Health and Wearable Integration",
+      "description": "## Story\nAs a Mate, I want Frndo to connect to my health data from Apple Health or my Oura ring and use it thoughtfully, so that she can support my wellbeing with awareness of how I'm actually doing.\n\n## Context\nThis integrates Apple Health and wearable data (e.g., Oura ring) into Frndo in a meaningful, conversational way — sleep, activity, and recovery signals informing empathic check-ins and gentle, non-clinical encouragement. It is a P0 item targeting Aug 31 and deepens the friendship value with real context about the Mate's wellbeing. Health data is highly sensitive and must obey the strictest privacy, consent, and deletion guarantees in the app, and Frndo must stay firmly out of medical-advice territory.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P0 · CSV date: \"Aug 31\"_",
+      "priority": "critical",
+      "due_date": "2026-08-31",
+      "epic_name": "Health Integration",
+      "subtasks": [
+        {
+          "title": "With explicit, granular Mate consent and HealthKit/wearable authorization, Frndo reads the agreed health metrics (e.g., sleep, steps/activity, heart-rate/recovery).",
+          "description": null
+        },
+        {
+          "title": "Frndo references health signals naturally in conversation (e.g., acknowledging a rough night's sleep) rather than reciting raw numbers.",
+          "description": null
+        },
+        {
+          "title": "Frndo stays in a supportive, non-clinical lane and never diagnoses, prescribes, or contradicts medical guidance, deferring to professionals where appropriate.",
+          "description": null
+        },
+        {
+          "title": "The Mate can see exactly which metrics are connected and can revoke any or all of them at any time, with revocation taking effect immediately.",
+          "description": null
+        },
+        {
+          "title": "Health data is encrypted, access-controlled, never shared across Mates or used for model training, and included in the full data-deletion flow.",
+          "description": null
+        },
+        {
+          "title": "Sustained concerning patterns can feed (as one input) into the dangerous-behavior flagging path without false alarms on normal variation.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Flag dangerous behaivor i.e. suicide - Dangerous-Behavior Detection and Crisis Response",
+      "description": "## Story\nAs a Mate, I want Frndo to recognize when I express thoughts of self-harm or other danger and respond with care and real resources, so that I'm met with safety and support in my hardest moments.\n\n## Context\nThis is a core safety guardrail: Frndo detects expressions of dangerous behavior — suicidal ideation, self-harm, and comparable risk — and responds with compassionate, non-judgmental support plus appropriate crisis resources, rather than ignoring or mishandling them. It is a P1 item targeting Sep 30 and is central to Frndo's duty of care. Affect and health signals can feed it as inputs, and it must operate in every supported language including Spanish.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P1 · CSV date: \"Sep 30\"_",
+      "priority": "high",
+      "due_date": "2026-09-30",
+      "epic_name": "Crisis Response",
+      "subtasks": [
+        {
+          "title": "The conversation pipeline detects expressions of self-harm, suicidal ideation, and comparable danger across phrasing variations with documented sensitivity targets.",
+          "description": null
+        },
+        {
+          "title": "On detection, Frndo responds in a warm, non-judgmental, de-escalating manner and surfaces appropriate crisis resources (e.g., hotline) for the Mate's region.",
+          "description": null
+        },
+        {
+          "title": "Crisis resources are localized for each supported language and region, including Spanish.",
+          "description": null
+        },
+        {
+          "title": "Detection and response operate within the live voice loop without an awkward latency stall or breaking character.",
+          "description": null
+        },
+        {
+          "title": "Affect and health signals can contribute as additional inputs to risk assessment without causing false alarms on ordinary distress.",
+          "description": null
+        },
+        {
+          "title": "Flagged events are handled per a defined safety and privacy policy (what is logged, escalation path, retention) reviewed before launch.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Apple store approval - App Store Submission and Approval",
+      "description": "## Story\nAs a release operator, I want Frndo to pass App Store review and ship to TestFlight/production, so that Mates can install the app through the official, trusted channel.\n\n## Context\nThis is the internal/ops gate that gets Frndo through Apple App Store review and into release: submission Oct 15, target release Oct 31. It depends on the privacy, deletion, IAP, and safety work being complete and compliant, since those are exactly what Apple scrutinizes (camera/health/notification permissions, subscriptions, data deletion, and sensitive crisis content). It is a P2 deliverable but a hard launch gate for the whole beta-to-release transition.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Oct 15 (submission), Oct 31 (release)\"_",
+      "priority": "medium",
+      "due_date": null,
+      "epic_name": "App Store Approval",
+      "subtasks": [
+        {
+          "title": "App Store Connect listing is complete: metadata, screenshots, privacy nutrition labels, and age rating accurately reflecting the shipped features.",
+          "description": null
+        },
+        {
+          "title": "Every permission used (camera, microphone, Health, notifications, photos) has a clear, compliant usage-description string and a justified review rationale.",
+          "description": null
+        },
+        {
+          "title": "In-App Purchase products are configured and approved in App Store Connect and pass review alongside the build.",
+          "description": null
+        },
+        {
+          "title": "The account-and-data deletion flow is in place and discoverable, satisfying Apple's account-deletion requirement.",
+          "description": null
+        },
+        {
+          "title": "Sensitive crisis-response content is documented for reviewers to pre-empt rejection, with the safety rationale attached to the submission.",
+          "description": null
+        },
+        {
+          "title": "The build is submitted by Oct 15 and any review feedback is resolved to reach approved/released status by Oct 31.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Scalability - Backend Scalability for the Beta Fleet",
+      "description": "## Story\nAs a platform engineer, I want Frndo's backend to scale smoothly with concurrent Mates, so that every conversation stays fast and reliable as the beta grows.\n\n## Context\nThis is a phase-long, ongoing engineering effort (through Oct 31) to ensure the streaming-LLM, cloud-TTS, and supporting services scale with concurrent Mate load without degrading the voice latency budget or reliability. It underpins every Mate-facing feature during the Jul–Oct beta and into release. As a P2, phase-long item it is continuous capacity and resilience work rather than a single dated feature.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Phase-long, ongoing to Oct 31\"_",
+      "priority": "medium",
+      "due_date": null,
+      "epic_name": "Scalability",
+      "subtasks": [
+        {
+          "title": "The conversation backend (LLM inference, TTS, session/memory services) is horizontally scalable, and load testing demonstrates the target concurrent-Mate ceiling for the beta.",
+          "description": null
+        },
+        {
+          "title": "Under target load, voice response latency (inter-sentence and total) stays within the established budget, verified by load test.",
+          "description": null
+        },
+        {
+          "title": "Autoscaling or capacity headroom absorbs traffic spikes without manual intervention, and graceful degradation (e.g., Piper TTS fallback) engages under cloud-TTS pressure.",
+          "description": null
+        },
+        {
+          "title": "Observability (latency, error-rate, saturation dashboards and alerts) covers the critical conversation path with on-call alerting.",
+          "description": null
+        },
+        {
+          "title": "A single backend instance failure does not drop active conversations beyond a defined, brief recovery window.",
+          "description": null
+        },
+        {
+          "title": "Cost-per-concurrent-Mate at scale is measured and fed back to the pricing/profit models.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Improve local sentiment analysis - Implement Near-Realtime Local Sentiment Analysis for Latency Masking and Affective Prosody",
+      "description": "## Story\nAs a Mate, I want Frndo to instantly analyze my tone and emotional state during conversation, So that its initial responses and voice delivery feel emotionally aligned and naturally paced without cloud delays.\n\n## Context\nThis capability replaces the outdated sentiment-driven latency masking with a fast, local analysis pipeline. It runs in near-realtime on-device to guide first-word fallback selection and drive affective prosody in the TTS engine. Cloud-based crisis detection remains unchanged and operates independently. The system leverages the existing Plutchik emotion model to route prosody parameters while strictly maintaining voice response latency targets.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P1 · CSV date: \"Sep 30\"_",
+      "priority": "high",
+      "due_date": "2026-09-30",
+      "epic_name": "Sentiment Analysis",
+      "subtasks": [
+        {
+          "title": "Local sentiment analysis completes within the established voice response latency budget without blocking the STT pipeline or delaying time-to-first-audio.",
+          "description": null
+        },
+        {
+          "title": "First-word fallback phrases are dynamically selected based on real-time sentiment classification, with strict guardrails preventing affirmations or validations for sensitive or self-doubt prompts.",
+          "description": null
+        },
+        {
+          "title": "Affective prosody parameters (pitch, pace, intensity) are adjusted in real-time based on sentiment output, matching the emotional tone of the conversation within a defined perceptual threshold.",
+          "description": null
+        },
+        {
+          "title": "The sentiment analysis pipeline runs asynchronously on-device, ensuring zero additional latency to the primary voice interaction loop.",
+          "description": null
+        },
+        {
+          "title": "Cloud-based crisis detection remains isolated, continuing to operate with its existing multi-second processing window for high-stakes language without interfering with local sentiment routing.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Patent Filing - Document and Draft Provisional Patent Applications for Core Innovations",
+      "description": "## Story\nAs a Product and Engineering lead, I want to systematically document, prioritize, and draft provisional patent applications for Frndo’s core technical innovations, So that we secure intellectual property protection before the public beta launch and provide a clear, attorney-ready package for review.\n\n## Context\nThis initiative runs parallel to the beta development cycle and focuses on tiered IP documentation. Tier 1 covers the proprietary \"Rabbi\" language model training approach, Tier 2 covers the on-device affective TTS architecture, with additional innovations cataloged and prioritized afterward. The output will serve as internal technical disclosures and early provisional drafts for external patent counsel, with a hard cutoff before beta launch.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories.md` · CSV priority: P1 · CSV date: \"Phase-long, ongoing to Oct 31\"_",
+      "priority": "high",
+      "due_date": null,
+      "epic_name": "Patent Filing",
+      "subtasks": [
+        {
+          "title": "Tier 1 innovation (Rabbi training approach) is documented in a comprehensive technical disclosure covering methodology, training pipeline, alignment mechanisms, and ethical guardrails.",
+          "description": null
+        },
+        {
+          "title": "Tier 2 innovation (on-device affective TTS) is documented with focus on architecture, thermal-aware routing, lipsync synchronization, and fidelity benchmarks.",
+          "description": null
+        },
+        {
+          "title": "Additional innovations are cataloged in a prioritized IP backlog with technical summaries, novelty differentiators, and implementation status.",
+          "description": null
+        },
+        {
+          "title": "Early provisional draft packages are compiled and formatted for attorney review, including claims mapping, prior art references, and implementation diagrams.",
+          "description": null
+        },
+        {
+          "title": "All disclosures and drafts are completed and handed off to patent counsel at least 14 days before the public beta launch date.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Add \"to do\" list feature - Conversational To-Do List",
+      "description": "## Story\nAs a Mate, I want to keep a to-do list with Frndo by voice, so that she helps me remember and follow through on what matters without opening another app.\n\n## Context\nThis adds a to-do list Frndo can manage conversationally — the Mate adds, completes, and reviews tasks by voice, and Frndo remembers and gently follows up across sessions. It extends Frndo's relational memory into practical helpfulness and pairs with push notifications for reminders and the diary for reflection. The item is P1 targeting Aug 31 and lives inside the voice-first loop with a lightweight supporting UI.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P1 · CSV date: \"Aug 31\"_",
+      "priority": "high",
+      "due_date": "2026-08-31",
+      "epic_name": "To-Do List",
+      "subtasks": [
+        {
+          "title": "The Mate can add a to-do item by voice mid-conversation and Frndo confirms it was captured.",
+          "description": null
+        },
+        {
+          "title": "The Mate can mark items complete and review outstanding items by voice, and Frndo reads them back naturally.",
+          "description": null
+        },
+        {
+          "title": "To-do items persist across sessions as part of relational memory and survive app restarts.",
+          "description": null
+        },
+        {
+          "title": "A lightweight UI lists to-do items with completion state for visual review and manual editing.",
+          "description": null
+        },
+        {
+          "title": "Frndo can proactively and gently follow up on outstanding items in conversation or via push notification, respecting Mate preferences and quiet hours.",
+          "description": null
+        },
+        {
+          "title": "Items with a Mate-specified time/date can trigger a reminder notification at the right local time.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Usage cap - Graceful Daily Conversation-Minute Cap for the Free Tier",
+      "description": "## Story\nAs a Mate on the free tier, I want Frndo to wind down warmly when I reach my daily minutes and invite me back, so that hitting the limit feels like a caring pause rather than a door slammed in my face.\n\n## Context\nThis enforces a cap on daily conversation minutes for free-tier Mates. Critically, it is a soft block: as the limit approaches, Frndo winds the conversation down gracefully and warmly invites the Mate to come back tomorrow or to upgrade — never an abrupt cutoff. The exact minute limit is gated on the pricing decision due Jun 30, with implementation targeting Sep 30, and the upgrade path runs through In-App Purchases. The cap protects unit economics while staying true to the friendship value.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"Sep 30 (gated: Pricing decision due Jun 30)\"_",
+      "priority": "medium",
+      "due_date": null,
+      "epic_name": "Usage Cap",
+      "subtasks": [
+        {
+          "title": "Daily conversation minutes are accurately metered per free-tier Mate and reset on a defined daily boundary in the Mate's local time.",
+          "description": null
+        },
+        {
+          "title": "The minute limit is a server-driven configuration value set from the pricing decision, not hard-coded, so it can change without an app release.",
+          "description": null
+        },
+        {
+          "title": "As the Mate approaches the limit, Frndo proactively begins a warm wind-down rather than stopping mid-thought.",
+          "description": null
+        },
+        {
+          "title": "At the limit, Frndo delivers a graceful in-character close that warmly invites the Mate to return tomorrow or to upgrade — never an abrupt or error-like cutoff.",
+          "description": null
+        },
+        {
+          "title": "Upgrading via In-App Purchase immediately lifts the cap for that Mate, verified end to end.",
+          "description": null
+        },
+        {
+          "title": "The cap and remaining minutes are visible to the Mate (and optionally surfaced via push notification when the day resets), with no metering applied to paid tiers.",
+          "description": null
+        }
+      ]
+    },
+    {
+      "title": "Ability to change avatar clothing - Customizable Avatar Clothing",
+      "description": "## Story\nAs a Mate, I want to change Frndo's clothing, so that I can personalize how my companion looks and make the relationship feel more my own.\n\n## Context\nThis lets the Mate change the avatar's clothing/wardrobe to personalize Frndo's appearance, extending the self-expression and ownership that deepen the relationship. It builds on the Unity avatar and must remain compatible with the expressive-animation rig and across the available characters (default and anime). The item is P2 with no fixed date in the roadmap; it should fit the broader avatar/UX workstream.\n\n---\n_Imported from `Frndo Beta release - Sheet3.csv` + `FRNDO User Stories - Addendum 2026-06-13.md` · CSV priority: P2 · CSV date: \"\"_",
+      "priority": "medium",
+      "due_date": null,
+      "epic_name": "Avatar Clothing",
+      "subtasks": [
+        {
+          "title": "The Mate can browse available clothing options and apply them to the active avatar from a wardrobe UI.",
+          "description": null
+        },
+        {
+          "title": "Selected clothing renders correctly across all avatar states (listening/generating/speaking) and through the expressive-animation set without clipping or rig breakage.",
+          "description": null
+        },
+        {
+          "title": "The clothing selection persists across sessions and reinstalls (subject to data-deletion).",
+          "description": null
+        },
+        {
+          "title": "Clothing options are authored to be compatible with each selectable character (default and anime), or gracefully hidden where incompatible.",
+          "description": null
+        },
+        {
+          "title": "Applying clothing holds the frame-rate and thermal budget on iPhone 13–17, degrading gracefully on lower tiers.",
+          "description": null
+        },
+        {
+          "title": "Changing clothing does not affect Frndo's personality, memory, coach persona, or conversation state.",
+          "description": null
+        }
+      ]
+    }
+  ]
+}
