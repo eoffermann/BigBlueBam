@@ -3,6 +3,7 @@ import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import { Hero } from '@/components/sections/hero';
 import { AiCollaboration } from '@/components/sections/ai-collaboration';
+import { PervasivePresence } from '@/components/sections/pervasive-presence';
 import { ProductGrid } from '@/components/sections/product-grid';
 import { Architecture } from '@/components/sections/architecture';
 import { Cta } from '@/components/sections/cta';
@@ -94,6 +95,7 @@ export function App() {
       <main>
         <Hero />
         <AiCollaboration />
+        <PervasivePresence />
         <ProductGrid />
         <Architecture />
         <Cta />

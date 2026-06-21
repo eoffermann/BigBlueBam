@@ -1,7 +1,7 @@
 ---
 title: "Introduction to BigBlueBam Guide"
 app: introduction
-generated: "2026-06-21T04:19:34.293Z"
+generated: "2026-06-21T05:14:21.433Z"
 ---
 
 # Introduction to BigBlueBam Guide
@@ -66,6 +66,13 @@ open the "(?)" Help Center in any top bar for that app's documentation. If you a
 running it yourself, the whole stack comes up with one Docker Compose command and
 your data lives in a Postgres database you control.
 
+## Walkthrough
+
+### Bureau Widget
+
+![Bureau Widget](screenshots/light/01-bureau-widget.png)
+
+
 ## MCP Tools
 
 
@@ -107,3 +114,8 @@ Counts are per-app catalog sizes; the shared platform layer adds the cross-cutti
 tools on top. Each app's own `mcp-tools.md` lists its tools in full. Tool counts
 drift as the catalogs grow; verify against each app's `meta.json` before quoting a
 number.
+
+## Related Apps
+
+- [Bearing (Goals & OKRs)](../bearing/guide.md)
+- [Bench (Analytics)](../bench/guide.md)

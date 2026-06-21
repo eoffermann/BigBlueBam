@@ -165,6 +165,8 @@ your own tab. They are live, shared surfaces. Open a task, a deal, a document, a
 diagram, a ticket, or a board and you can see who else is there with you, right on
 the page.
 
+![The Bureau dock, available in every app: presence and chat at the top, the Invite, Hunt, and Bring controls for pulling people together, and mic, camera, screen-share, and door controls for the huddle itself.](screenshots/light/01-bureau-widget.png)
+
 That presence is the doorway to working together in the moment:
 
 - **See who is here.** A presence strip on the work surfaces (tasks in Bam, deals
