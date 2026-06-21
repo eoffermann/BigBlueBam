@@ -1,7 +1,7 @@
 ---
 title: "Blank (Forms) Guide"
 app: blank
-generated: "2026-06-18T00:43:58.372Z"
+generated: "2026-06-21T04:54:53.408Z"
 ---
 
 # Blank (Forms) Guide
@@ -32,6 +32,10 @@ Blank form submissions emit Bolt events (`submission.created`, `form.published`,
 ## Getting Started
 
 Open Blank from the Launchpad. Create a new form in the builder, add fields from the palette, configure each field in the Field Settings panel, and set visibility in the Form Settings dialog. Click Publish to get a public form URL, and share it with respondents. Review submissions in the Responses view and read aggregate trends in Analytics. You can also delegate the whole flow to an AI agent that drafts, builds, and publishes the form for you.
+
+## Working together
+
+Like every app, Blank carries the persistent Bureau presence dock, so you can see who is around and start a voice or video huddle from anywhere in it; deeper per-record co-editing lives on the document, board, and task surfaces.
 
 ## Walkthrough
 

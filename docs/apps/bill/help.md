@@ -330,6 +330,10 @@ Bill participates in the cross-cutting agentic platform that every BigBlueBam ap
 
 For the full tool catalog, see the MCP-tools reference in `docs/apps/bill/`.
 
+## Working together (live presence)
+
+Like every BigBlueBam app, Bill carries the persistent Bureau presence dock, so collaboration is ambient rather than scheduled. From anywhere in Bill you can see who is around and ring, knock, or invite a teammate into a live voice or video huddle that follows you in a floating window as you both move through the suite. Voice and video here are the digital equivalent of bumping into someone in the hallway or stopping by their desk, not a booked meeting. The deeper per-record collaboration (a presence strip showing who is on a specific item, and real-time co-editing of the same record) lives on the document, board, diagram, and task surfaces, described in the Introduction; in Bill, the shared layer is the always-on Bureau dock.
+
 ## User Stories
 
 ### Story: Set up your billing identity

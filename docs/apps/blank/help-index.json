@@ -93,6 +93,11 @@
       "level": 3
     },
     {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "level": 2
+    },
+    {
       "anchor": "user-stories",
       "title": "User Stories",
       "level": 2
@@ -243,6 +248,11 @@
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
       "text": "Agents drive Blank through MCP tools that proxy to the same API the SPA uses. The tools share your permissions, so an agent can only do what you could do. There are 20 Blank MCP tools, and together they cover the full authoring lifecycle: generate, create, edit fields, publish, close, duplicate, delete, and read or export responses. Generate and create: - Draft a form from a description with blankgenerateform, which returns a suggested form specification (it does not save anything). Its heuristics seed fields when the description mentions name, email, phone, NPS, rating or satisfaction, feedback or comment, and bug or issue. - Create the draft with blankcreateform, which accepts inline field definitions. Edit structure: - Add a field with blankaddfield (it accepts the conditional-display arguments conditionalonfieldid, conditionaloperator, and conditionalvalue). - Change a field with blankupdatefield, remove one with blankdeletefield, and reorder them with blankreorderfields. Inspect, publish, and manage lifecycle: - List and read forms with blanklistforms and blankgetform. - Update form metadata with blankupdateform. - Publish a draft with blankpublishform and stop new responses with blankcloseform. - Clone a form with blankduplicateform, get its iframe snippet with blankgetembedcode, and remove a form with blankdeleteform (destructive). Read and report on responses: - List and read submissions with blanklistsubmissions and blankgetsubmission. - Summarize and report on results with blanksummarizeresponses and blankgetformanalytics (both return the same analytics payload the Analytics view uses). - Export raw responses with blankexportsubmissions (returns CSV text), and remove a single response with blankdeletesubmission (destructive). Some tools have no matching screen in the SPA: blankgenerateform (the builder has no AI-draft entry point), blankgetsubmission (the Responses table has no per-submission detail view), blankaddfield / blankupdatefield / blankdeletefield / blankreorderfields (an agent can edit fields directly, whereas a person does the same work in the builder canvas), blankcloseform, blankgetembedcode, and blankdeletesubmission. When reviewing agent work, check the form's fields and visibility in the builder before publishing, and confirm the public URL from the Your form is live dialog. Blank also participates in the suite-wide agent platform. Agent activity is attributed to an agent identity and surfaced in the unified activity feed; long-running agents send heartbeats. Destructive or sensitive steps (publishing, closing, or deleting) can be routed through the approval-queue tools so a human decides before the action lands. Per-agent policies (kill switch plus a blank. tool allowlist) gate which Blank tools a service account may call, and subscribed Blank events can be pushed to agent runners through signed outbound webhooks. Before an agent quotes a submission's contents into a shared surface it should call the visibility preflight (canaccess) for that entity and drop anything the asker is not allowed to see. For the full tool catalog and argument shapes, see the MCP-tools reference in docs/apps/blank/mcp-tools.md."
+    },
+    {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "text": "Like every BigBlueBam app, Blank carries the persistent Bureau presence dock, so collaboration is ambient rather than scheduled. From anywhere in Blank you can see who is around and ring, knock, or invite a teammate into a live voice or video huddle that follows you in a floating window as you both move through the suite. Voice and video here are the digital equivalent of bumping into someone in the hallway or stopping by their desk, not a booked meeting. The deeper per-record collaboration (a presence strip showing who is on a specific item, and real-time co-editing of the same record) lives on the document, board, diagram, and task surfaces, described in the Introduction; in Blank, the shared layer is the always-on Bureau dock."
     },
     {
       "anchor": "user-stories",

@@ -21,3 +21,7 @@ Bill connects to Bam for projects, tasks, and time entries that drive rate resol
 ## Getting Started
 
 Open Bill from the Launchpad at `/bill/`. Set up your company identity and invoice defaults in Bill Settings, then create a client under Clients. Create an invoice manually with line items, generate a draft from a Bond deal, or use the Invoice from Time Entries wizard to bill tracked Bam time over a date range. Finalize the invoice to assign its number (an admin or owner step), send it, and record payments as they arrive. For standing fees, set up a recurring schedule under Recurring to bill a client automatically on a cadence. Track status on the Dashboard and use Reports to monitor revenue, aging, profitability, and overdue balances.
+
+## Working together
+
+Like every app, Bill carries the persistent Bureau presence dock, so you can see who is around and start a voice or video huddle from anywhere in it; deeper per-record co-editing lives on the document, board, and task surfaces.

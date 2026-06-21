@@ -263,6 +263,10 @@ Agent runs ride the suite's shared agentic platform, which sits alongside the Bo
 
 For the full tool catalog and parameter schemas, see the MCP-tools reference and guide in `docs/apps/bolt/`.
 
+## Working together (live presence)
+
+Like every BigBlueBam app, Bolt carries the persistent Bureau presence dock, so collaboration is ambient rather than scheduled. From anywhere in Bolt you can see who is around and ring, knock, or invite a teammate into a live voice or video huddle that follows you in a floating window as you both move through the suite. Voice and video here are the digital equivalent of bumping into someone in the hallway or stopping by their desk, not a booked meeting. The deeper per-record collaboration (a presence strip showing who is on a specific item, and real-time co-editing of the same record) lives on the document, board, diagram, and task surfaces, described in the Introduction; in Bolt, the shared layer is the always-on Bureau dock.
+
 ## User Stories
 
 ### Story: Create your first automation from a template

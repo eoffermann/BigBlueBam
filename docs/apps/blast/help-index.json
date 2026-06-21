@@ -108,6 +108,11 @@
       "level": 3
     },
     {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "level": 2
+    },
+    {
       "anchor": "user-stories",
       "title": "User Stories",
       "level": 2
@@ -273,6 +278,11 @@
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
       "text": "Agents drive Blast through 28 MCP tools backed by the same Blast API the UI uses. Most action tools resolve campaigns, templates, and segments by human-readable name as well as by UUID, so an agent can say \"send the April Product Launch campaign\" without knowing the ID. Name resolution prefers an exact match, accepts a single fuzzy match, and returns a clean error when a name is ambiguous. Common agent actions and their tools: - Draft and reuse content: blastcreatetemplate, blastgettemplate, blastlisttemplates, blastupdatetemplate, blastduplicatetemplate, and blastpreviewtemplate (renders a template with sample merge data without sending). - Create and edit a campaign draft: blastdraftcampaign (resolves a template or segment by name or UUID and creates a draft), blastupdatecampaign, blastlistcampaigns, and blastgetcampaign. - Build and check audiences: blastcreatesegment and blastupdatesegment (full field and operator set, including the ones the builder UI hides), blastlistsegments, blastgetsegment, blastpreviewsegment (first 50 matching contacts), blastevaluatesegment (the full resolved send list, read-only), blastrecalculatesegmentcount, and blastcheckunsubscribed (confirm an address is not suppressed before targeting it). - Send and control a send: blastsendcampaign, blastpausecampaign, and blastcancelcampaign. - Review results: blastgetcampaignanalytics, blastgetcampaigndeviceanalytics, blastlistcampaignrecipients, blastgetengagementsummary, and blastgetengagementtrend. The key human-in-the-loop control is on sending. blastsendcampaign takes requirehumanapproval, which defaults to true. With the default, the tool does not send immediately; it schedules the campaign about an hour out and returns a note that a human must confirm before it goes. Only requirehumanapproval: false triggers an immediate send. When you review agent work, expect agent-initiated sends to land as scheduled campaigns awaiting a person, and treat any immediate send as an explicit override. Two tools named like AI features are not wired to a model. blastdraftemailcontent and blastsuggestsubjectlines return hard-coded templated strings, not model-generated copy. Use them as scaffolding, not as a writing assistant. Blast agents also run on the platform-wide agentic surface that spans every app: - Identity and heartbeat: every agent action is tagged with the actor's kind (human, agent, or service) on the activity log, and agent runners post agentheartbeat so operators can see which agents are live. - Proposals (approval queues): an agent can stage a campaign send or a segment change as a durable proposal with proposalcreate, and a human clears it with proposaldecide. This is the recommended pattern for sends beyond the per-tool requirehumanapproval gate. - Unified activity and search: activityquery, activitybyactor, and searcheverything let an agent (or a reviewer) trace what an agent did across Blast, Bond, and the rest of the suite. - Visibility preflight: before an agent posts campaign results into a shared surface, it calls canaccess for each cited entity and drops anything the asking user is not allowed to see. - Agent policies and webhooks: a per-agent kill switch and tool allowlist (the blast. prefix) gate which Blast tools a given service account may call, and outbound webhooks push subscribed Blast Bolt events to agent runners. For the full tool catalog and schemas, see mcp-tools.md."
+    },
+    {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "text": "Like every BigBlueBam app, Blast carries the persistent Bureau presence dock, so collaboration is ambient rather than scheduled. From anywhere in Blast you can see who is around and ring, knock, or invite a teammate into a live voice or video huddle that follows you in a floating window as you both move through the suite. Voice and video here are the digital equivalent of bumping into someone in the hallway or stopping by their desk, not a booked meeting. The deeper per-record collaboration (a presence strip showing who is on a specific item, and real-time co-editing of the same record) lives on the document, board, diagram, and task surfaces, described in the Introduction; in Blast, the shared layer is the always-on Bureau dock."
     },
     {
       "anchor": "user-stories",

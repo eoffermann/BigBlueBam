@@ -1,7 +1,7 @@
 ---
 title: "Bolt (Workflow Automation) Guide"
 app: bolt
-generated: "2026-06-17T22:16:23.493Z"
+generated: "2026-06-21T04:54:53.419Z"
 ---
 
 # Bolt (Workflow Automation) Guide
@@ -29,6 +29,10 @@ Bolt is also built for AI agents. It exposes 26 MCP tools that let an agent auth
 ## Getting Started
 
 Open Bolt from the app switcher at `/bolt/`. Browse Templates for a head start or click New Automation to build from scratch. Pick a trigger source and event, add conditions to filter which events should proceed, then add the actions to run. Save the rule as a draft or save and enable it, then watch it run in the Execution Log and open any run to see its trigger event, condition evaluation, and step-by-step results.
+
+## Working together
+
+Like every app, Bolt carries the persistent Bureau presence dock, so you can see who is around and start a voice or video huddle from anywhere in it; deeper per-record co-editing lives on the document, board, and task surfaces.
 
 ## Walkthrough
 
@@ -102,3 +106,4 @@ Open Bolt from the app switcher at `/bolt/`. Browse Templates for a head start o
 - [Brief (Documents)](../brief/guide.md)
 - [Bureau](../bureau/guide.md)
 - [Helpdesk (Support Portal)](../helpdesk/guide.md)
+- [Introduction to BigBlueBam](../introduction/guide.md)

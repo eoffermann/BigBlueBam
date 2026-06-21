@@ -1,7 +1,7 @@
 ---
 title: "Blast (Email Campaigns) Guide"
 app: blast
-generated: "2026-06-17T22:16:23.482Z"
+generated: "2026-06-21T04:54:53.414Z"
 ---
 
 # Blast (Email Campaigns) Guide
@@ -29,6 +29,10 @@ Blast pulls its audience from Bond CRM: segments filter on Bond contact fields, 
 ## Getting Started
 
 Open Blast from the Launchpad at /blast/ (sign in to BigBlueBam first; Blast has no separate login). Make sure a SuperUser has configured the platform SMTP relay, and optionally verify a sending domain under Blast Settings -> Domains. Build a template in the visual editor, save a segment over your Bond contacts, then create a campaign, choose its content, and review the body for an unsubscribe link and a physical mailing address. Open the new draft and click Send Now; the CAN-SPAM check runs before anything leaves the system.
+
+## Working together
+
+Like every app, Blast carries the persistent Bureau presence dock, so you can see who is around and start a voice or video huddle from anywhere in it; deeper per-record co-editing lives on the document, board, and task surfaces.
 
 ## Walkthrough
 

@@ -20,3 +20,7 @@ Events can link to a Bam task, a Bond deal, or a Helpdesk ticket. The timeline p
 ## Getting Started
 
 Open Book from the Launchpad at `/book/`. Sign in to BigBlueBam first if prompted; Book has no login of its own. Your **My Calendar** is created automatically. Set your working hours under **Book Settings > Working Hours**, then create events from any calendar view with **New Event**. Publish a booking page under **Booking Pages** when you want outside people to schedule time, and use the **Timeline** to see the week across Book, Bam, and Bond.
+
+## Working together
+
+Like every app, Book carries the persistent Bureau presence dock, so you can see who is around and start a voice or video huddle from anywhere in it; deeper per-record co-editing lives on the document, board, and task surfaces.

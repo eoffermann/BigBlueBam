@@ -317,6 +317,10 @@ Blank also participates in the suite-wide agent platform. Agent activity is attr
 
 For the full tool catalog and argument shapes, see the MCP-tools reference in `docs/apps/blank/mcp-tools.md`.
 
+## Working together (live presence)
+
+Like every BigBlueBam app, Blank carries the persistent Bureau presence dock, so collaboration is ambient rather than scheduled. From anywhere in Blank you can see who is around and ring, knock, or invite a teammate into a live voice or video huddle that follows you in a floating window as you both move through the suite. Voice and video here are the digital equivalent of bumping into someone in the hallway or stopping by their desk, not a booked meeting. The deeper per-record collaboration (a presence strip showing who is on a specific item, and real-time co-editing of the same record) lives on the document, board, diagram, and task surfaces, described in the Introduction; in Blank, the shared layer is the always-on Bureau dock.
+
 ## User Stories
 
 ### Story: Build and publish your first form

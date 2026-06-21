@@ -1,7 +1,7 @@
 ---
 title: "Blast (Email Campaigns)"
 app: blast
-generated: "2026-06-17T22:16:23.483Z"
+generated: "2026-06-21T04:54:53.415Z"
 ---
 
 # Blast (Email Campaigns)
@@ -13,6 +13,7 @@ Turn your Bond CRM contacts into email campaigns, with a visual builder, saved s
 - Target sends with saved segments that filter your Bond CRM contacts
 - Track opens, clicks, bounces, and unsubscribes per campaign and across the org
 - Built-in CAN-SPAM gate, automatic unsubscribe suppression, and SPF/DKIM/DMARC domain verification
+- Reach your team without scheduling: the persistent Bureau presence dock lets you see who is around and start a voice or video huddle from anywhere in Blast
 
 ## See It in Action
 

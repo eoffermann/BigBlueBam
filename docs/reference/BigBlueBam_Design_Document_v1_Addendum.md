@@ -399,9 +399,22 @@ platform's agent-parity model (section 15).
 
 ### 36.5 Implementation status
 
-The presence strip is mounted on the work surfaces listed above; location reporting
-is wired into Bam, Bond, Brief, Bearing, and Bench today; voice, video, and
-co-editing live in the apps named above. The operational apps (Bill, Blank, Blast,
-Book, Bolt) participate in the suite but do not yet mount the in-app presence strip
-or a huddle control. Extending the presence layer to them is tracked as follow-up
-work.
+The persistent Bureau presence dock is mounted in every app via `mountBureauClient`
+(`apps/*/src/main.tsx`), so seeing who is around and starting or joining a voice or
+video huddle (ring, knock, invite, summon, and a floating picture-in-picture call
+that follows you between apps) is available from all sixteen apps, the operational
+ones (Bill, Blank, Blast, Book, Bolt) included.
+
+What varies by app is the deeper, per-record collaboration:
+
+- The per-item presence strip (`packages/ui/presence-chip-strip.tsx`) is mounted on
+  the work surfaces (Bam tasks, Bond deals, Brief documents, Blueprint diagrams, the
+  Board canvas, Beacon pages, Helpdesk tickets), showing who is on that exact record
+  and offering a ring-from-the-item.
+- Real-time co-editing of a single record (shared cursors, live merge) lives in
+  Brief documents, the Board canvas, and Blueprint diagrams.
+
+The operational apps carry the ambient dock but do not yet add the per-record
+presence strip or live co-editing of an individual record (an invoice, form,
+campaign, event, or automation). Extending those per-record surfaces is tracked as
+follow-up work.
