@@ -16,7 +16,7 @@
  *
  * Output: site/src/content/manual.generated.json
  *   An ordered array of { app, title, toc, markdown }.
- *   Order: bam FIRST, then the remaining apps alphabetically.
+ *   Order: introduction FIRST, then bam, then the remaining apps alphabetically.
  *   title is taken from help-index.json.title, falling back to the markdown H1.
  *
  * Run: node scripts/docs/build-manual.mjs
@@ -47,8 +47,10 @@ function pngSize(filePath) {
   }
 }
 
-// The 16 documented apps. bam is pinned first; the rest follow alphabetically.
+// The suite introduction plus the 16 documented apps. introduction is pinned
+// first, then bam, then the rest alphabetically.
 const APPS = [
+  'introduction',
   'bam',
   'banter',
   'beacon',
@@ -122,10 +124,12 @@ function build() {
     entries.push({ app, title, toc, markdown });
   }
 
-  // Order: bam first, then alphabetical by app slug.
+  // Order: introduction first, then bam, then alphabetical by app slug.
+  const orderRank = (app) => (app === 'introduction' ? 0 : app === 'bam' ? 1 : 2);
   entries.sort((a, b) => {
-    if (a.app === 'bam') return -1;
-    if (b.app === 'bam') return 1;
+    const ra = orderRank(a.app);
+    const rb = orderRank(b.app);
+    if (ra !== rb) return ra - rb;
     return a.app.localeCompare(b.app);
   });
 

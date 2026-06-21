@@ -81,6 +81,9 @@ it gets its personality. Schema:
 - **Quiz answers must be findable in the chapter**, and every question cites the
   section in `where`. Mix a couple multiple-choice with a couple short-answer.
   Make them about real, useful behavior, not trivia.
+- **The Introduction chapter (`introduction`) has no quiz.** It is a suite
+  overview, not an app lesson. Do not author a `quiz` (or answer key) for it; the
+  generator hard-skips the quiz for `introduction` regardless.
 - **Agent language is capability, never turnkey or free.** "An agent can run a
   sprint", never "agents run your sprints" or anything implying agents ship
   deployed or free. (See `docs/marketing-voice.md`.)
@@ -102,7 +105,8 @@ it gets its personality. Schema:
    - Every callout you authored appears (`grep -o ">TIP<"`, `>NOTE<`, `>WARNING<`,
      `>TRY IT<`). A count of 0 means a broken anchor: fix the phrase.
    - Both pull-quotes appear; every screenshot has a `Figure N.M` caption.
-   - The "Check yourself" quiz and "Answer key" are present.
+   - The "Check yourself" quiz and "Answer key" are present (except the
+     Introduction chapter, which has none).
    - Zero em dashes: `unzip -p <docx> word/document.xml | grep -c "—"` is 0.
 4. If the PDF step fails, a stale LibreOffice instance (or a self-update) may hold
    the single-instance lock. Kill `soffice.exe`/`soffice.bin`, wait a few seconds,

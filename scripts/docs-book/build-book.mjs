@@ -599,6 +599,9 @@ async function main() {
     const gloss = parseGlossary(c.markdown);
     allGloss.push(...gloss);
     const enh = loadEnh(c.app);
+    // The Introduction chapter is a suite overview, not an app lesson: it never
+    // gets a quiz or an answer-key entry, regardless of any enhancement file.
+    if (c.app === 'introduction') enh.quiz = [];
     if (Array.isArray(enh.quiz) && enh.quiz.length) answerKeys.push({ num, app: c.app, title: c.title, quiz: enh.quiz });
     return chapterSection(c, num, buildCtx(gloss, fnState), enh);
   });

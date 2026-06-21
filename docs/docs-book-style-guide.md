@@ -143,6 +143,12 @@ Answers live in two places: a small **answer key** at the very end of the chapte
 a **combined answer key** in the back matter. Each answer cites the section where
 the reader can confirm it ("see: Sprints").
 
+**Exception: the Introduction chapter has no quiz.** It is a suite overview, not
+an app lesson, so it ships with no "Check yourself" box and no entry in the
+combined answer key. Do not author a quiz for `introduction`. The generator omits
+the quiz for any chapter whose enhancement file has no `quiz` array, and it
+hard-skips the quiz for the Introduction regardless.
+
 ## 9. Front and back matter
 
 - **Title page:** "BigBlueBam" wordmark, "The Complete Manual", a subtitle, the
@@ -191,5 +197,6 @@ quiz.
 A chapter is book-ready when: it opens on a full-color page with an authored
 intro; every screenshot has a figure caption; at least two callouts and one
 pull-quote appear, drawn from the real material; the prose matches the web docs
-word for word; a "Check yourself" quiz with an answer key closes it; and there is
-not a single em dash anywhere.
+word for word; a "Check yourself" quiz with an answer key closes it (except the
+Introduction chapter, which has no quiz); and there is not a single em dash
+anywhere.

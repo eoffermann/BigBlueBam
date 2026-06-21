@@ -53,6 +53,7 @@ function capitalize(s) {
  */
 function displayName(appName) {
   const overrides = {
+    introduction: 'Introduction to BigBlueBam',
     bam: 'Bam (Project Management)',
     banter: 'Banter (Team Messaging)',
     beacon: 'Beacon (Knowledge Base)',

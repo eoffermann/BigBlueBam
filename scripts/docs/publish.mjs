@@ -52,6 +52,7 @@ function capitalize(s) {
 
 function displayName(appName) {
   const overrides = {
+    introduction: 'Introduction to BigBlueBam',
     bam: 'Bam (Project Management)',
     banter: 'Banter (Team Messaging)',
     beacon: 'Beacon (Knowledge Base)',
@@ -178,6 +179,19 @@ function injectDocsIndexMarkers(readme) {
 
 function generateAppCard(appName, meta) {
   const name = displayName(appName);
+
+  // The suite introduction is not a product app: it has no routes or schemas,
+  // so give it a suite-level card instead of a "0 routes, 0 schemas" line.
+  if (appName === 'introduction') {
+    return [
+      `### ${name}`,
+      '',
+      'An overview of the whole suite: the sixteen apps, how they connect, and how AI agents work alongside your team.',
+      '',
+      `[Guide](docs/apps/${appName}/guide.md) | [Overview](docs/apps/${appName}/marketing.md)`,
+    ].join('\n');
+  }
+
   const description = meta.mcp_tool_count > 0
     ? `${meta.route_files} routes, ${meta.schema_modules} schemas, ${meta.mcp_tool_count} MCP tools`
     : `${meta.route_files} routes, ${meta.schema_modules} schemas`;

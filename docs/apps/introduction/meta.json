@@ -1,0 +1,14 @@
+{
+  "app": "introduction",
+  "suite_overview": true,
+  "nginx_path": null,
+  "api_port": null,
+  "api_dir": null,
+  "route_files": 0,
+  "schema_modules": 0,
+  "has_seeder": false,
+  "has_frontend": false,
+  "app_count": 16,
+  "mcp_tool_count": 733,
+  "generated_at": "2026-06-20T00:00:00.000Z"
+}
