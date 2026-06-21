@@ -174,6 +174,9 @@ export function useUpdateBeacon() {
         body_markdown: string;
         tags: string[];
         visibility: BeaconVisibility;
+        // Optional optimistic stale-write guard: the updated_at the editor
+        // loaded. Server returns 409 STALE_WRITE if the row changed since.
+        expected_updated_at: string;
       }>;
     }) => api.put<ApiResponse<Beacon>>(`/beacons/${id}`, data),
     onSuccess: (_res, variables) => {

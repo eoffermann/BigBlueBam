@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { createTaskSchema, updateTaskSchema, moveTaskSchema, bulkUpdateSchema } from '@bigbluebam/shared';
+import { createTaskSchema, updateTaskSchema, moveTaskSchema, bulkUpdateSchema, staleWriteSchema, isStaleWrite, staleWriteError } from '@bigbluebam/shared';
 import * as taskService from '../services/task.service.js';
 import * as taskUpsertService from '../services/task-upsert.service.js';
 import * as projectService from '../services/project.service.js';
@@ -317,6 +317,20 @@ export default async function taskRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, fastify.requireCan('bam.task.update'), requireScope('read_write'), requireProjectAccessForEntity('task')] },
     async (request, reply) => {
       const data = updateTaskSchema.parse(request.body);
+      // Optional optimistic stale-write guard. Only runs when the client sends
+      // expected_updated_at; omitting it preserves the prior last-write-wins
+      // behavior. See docs/plans/synchronous-presence-rollout-by-app.md (Item 1).
+      const { expected_updated_at } = staleWriteSchema.parse(request.body);
+      if (expected_updated_at) {
+        const [cur] = await db
+          .select({ updated_at: tasks.updated_at })
+          .from(tasks)
+          .where(eq(tasks.id, request.params.id))
+          .limit(1);
+        if (cur && isStaleWrite(expected_updated_at, cur.updated_at)) {
+          return reply.status(409).send(staleWriteError(request.id, cur.updated_at));
+        }
+      }
       try {
         const task = await taskService.updateTask(request.params.id, data, request.user!.id, request.impersonator?.id ?? null, request.viaSuperuserContext);
 

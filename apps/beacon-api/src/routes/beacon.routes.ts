@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { staleWriteSchema, isStaleWrite, staleWriteError } from '@bigbluebam/shared';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { requireBeaconEditAccess, requireBeaconReadAccess } from '../middleware/authorize.js';
 import { shadowOnly } from '../middleware/dual-read.js';
@@ -221,6 +222,22 @@ export default async function beaconRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth, requireBeaconEditAccess(), shadowOnly('beacon.beacon.update'), requireScope('read_write')] },
     async (request, reply) => {
       const data = updateBeaconSchema.parse(request.body);
+      // Optional optimistic stale-write guard (suite-wide convention). Only runs
+      // when the client sends expected_updated_at; omitting it keeps the prior
+      // last-write-wins behavior. Knowledge bodies are long markdown, so a silent
+      // overwrite here is the suite's highest-risk data loss.
+      // See docs/plans/synchronous-presence-rollout-by-app.md (Item 1).
+      const { expected_updated_at } = staleWriteSchema.parse(request.body);
+      if (expected_updated_at) {
+        const current = await beaconService.getBeacon(
+          request.params.id,
+          request.user!.id,
+          request.user!.org_id,
+        );
+        if (current && isStaleWrite(expected_updated_at, current.updated_at)) {
+          return reply.status(409).send(staleWriteError(request.id, current.updated_at));
+        }
+      }
       const beacon = await beaconService.updateBeacon(
         request.params.id,
         data,

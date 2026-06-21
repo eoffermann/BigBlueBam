@@ -41,6 +41,9 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
   const [tagsInput, setTagsInput] = useState('');
   const [visibility, setVisibility] = useState<BeaconVisibility>('Organization');
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Set when a save is rejected as stale (someone changed the article since it
+  // was opened). While true, the next save omits the guard to force an overwrite.
+  const [staleConflict, setStaleConflict] = useState(false);
 
   // Pre-select the active project from the store when creating
   useEffect(() => {
@@ -81,7 +84,13 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
       if (isEditMode && existing) {
         await updateBeacon.mutateAsync({
           id: existing.id,
-          data: { title, summary, body_markdown: body, tags: parseTags(), visibility },
+          data: {
+            title, summary, body_markdown: body, tags: parseTags(), visibility,
+            // Stale-write guard: send the updated_at we loaded so the server
+            // rejects (409) if it changed under us. After a stale conflict the
+            // user can Save again to overwrite, which omits the guard.
+            ...(staleConflict ? {} : { expected_updated_at: existing.updated_at }),
+          },
         });
         onNavigate(`/${idOrSlug}`);
       } else {
@@ -97,7 +106,14 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
         onNavigate(`/${res.data.slug ?? res.data.id}`);
       }
     } catch (err: any) {
-      setSaveError(err?.message ?? 'Failed to save');
+      if (err?.status === 409 || err?.code === 'STALE_WRITE') {
+        setStaleConflict(true);
+        setSaveError(
+          'This article changed since you opened it. Reload the page to get the latest version, or click Save again to overwrite it with your changes.',
+        );
+      } else {
+        setSaveError(err?.message ?? 'Failed to save');
+      }
     }
   };
 
