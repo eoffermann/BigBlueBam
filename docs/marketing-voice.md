@@ -154,11 +154,116 @@ Keep the established shape — it works and it's consistent across the suite:
 
 ## Words we like / words we avoid
 
-Like: *alongside, lives in, one click, carries over, no tab-switching, drag,
+### Reach for
+*alongside, lives in, one click, carries over, no tab-switching, drag,
 queue, board, pipeline, in plain terms, and yes — agents can do it too.*
 
-Avoid: *synergy, leverage (as a verb), seamless, robust, cutting-edge,
-unlock (overused), empower, supercharge, "in today's fast-paced world."*
+And the habits underneath them: concrete nouns over abstractions, real
+numbers over "powerful," plain verbs (use, build, send, move), and
+sentences that vary in length the way a person's do.
+
+### Avoid — the vocabulary
+*synergy, leverage (as a verb), seamless / seamlessly, robust,
+cutting-edge, unlock (overused), empower, supercharge, elevate, streamline,
+harness, foster, utilize (it's "use"), facilitate, delve / delve into,
+navigate (the landscape / the complexities), spearhead, bolster, showcase,
+revolutionize, transformative, game-changer, best-in-class,
+state-of-the-art, world-class, next-gen, pivotal, crucial, comprehensive,
+holistic, nuanced, multifaceted, myriad, plethora, meticulous, boasts
+(as in "the app boasts…").*
+
+### Avoid — the stock phrases
+*"in today's fast-paced world," "in today's digital age," "in the
+ever-evolving landscape of," "when it comes to," "at the end of the day,"
+"it's worth noting that," "it's important to note," "needless to say,"
+"look no further," "say goodbye to [X]," "a testament to," "in the realm
+of," "rich tapestry," "let's dive in," "deep dive," "embark on a journey."*
+
+### Avoid — the sentence shapes (the real tells)
+- "It's not just [X] — it's [Y]," and its cousins ("This isn't about
+  features. It's about people."). Negative-then-positive parallelism is
+  the most recognizable AI tic going right now.
+- The reflexive rule of three, where every list lands on exactly three
+  adjectives: "fast, reliable, and scalable."
+- Fragment-question hooks: "The result?" "The best part?" "Here's the
+  thing:" "But here's the kicker:"
+- "Not only… but also."
+- "Whether you're a [solo founder] or a [Fortune 500]…" and the sweeping
+  "from [startups] to [enterprises]" range.
+- Openers like "Imagine a world where…" or "In a world where…"
+- Tidy aphoristic closers that restate the opening line with a little uplift.
+- "Moreover / Furthermore / Additionally" as connective filler.
+
+### Avoid — the formatting tells
+- The em-dash as a reflexive dramatic pause. We *do* use em-dashes (see
+  Reach for), so the rule isn't "no dashes," it's "earn it": roughly one
+  per paragraph, never as a drumroll before a punchline.
+- Emoji garnish (🚀 ✨ ✅), emoji bullets, and bold-for-emphasis mid-sentence.
+- "In conclusion," "In summary," "Ultimately" as wrap-up signals.
+
+## Before / after (How to say what we want to say without sounding lazy)
+
+**1 — The opener cliché + empowerment verbs**
+Before: In today's fast-paced world, our platform empowers teams to unlock
+their full potential and supercharge productivity.
+After: Your work lives in one place. Drag a task to the board and it carries
+over to everyone's queue.
+> Kills: "in today's fast-paced world," empower, unlock, supercharge. Trades
+> three abstractions for one concrete action.
+
+**2 — The "not just" parallelism (the #1 tell)**
+Before: It's not just a task manager — it's a complete reimagining of how
+work flows.
+After: It's a task manager that doesn't make you switch tabs to see what's
+next.
+> Kills the negative-then-positive scaffold and the "reimagining" inflation.
+> Says the actual benefit out loud.
+
+**3 — The rule of three + best-in-class filler**
+Before: Fast, reliable, and scalable, our robust solution delivers
+best-in-class performance.
+After: It opens in under a second and holds up when your board has 4,000
+cards on it.
+> Kills the reflexive triplet, robust, best-in-class. Replaces "performance"
+> with a number a reader can picture.
+
+**4 — Seamless + the journey metaphor**
+Before: Embark on a seamless journey from chaos to clarity with our
+intuitive workflow.
+After: Move a card from the queue to the board to done. That's the workflow.
+> Kills embark/journey, seamless, intuitive. Shows the three steps instead of
+> promising "clarity."
+
+**5 — Fragment-question hook + leverage**
+Before: The best part? You can leverage AI agents to handle the busywork.
+After: And yes — agents can do it too. Hand off the repetitive stuff and
+keep moving.
+> Kills the "The best part?" hook and leverage-as-verb. Uses the house line
+> for agents instead.
+
+**6 — Whether-you're range + transformative**
+Before: Whether you're a solo founder or a Fortune 500, our transformative
+platform scales with you.
+After: One person can run it from a single board. A team of fifty can run
+forty boards alongside each other.
+> Kills the "whether you're… or…" sweep and transformative. Two concrete
+> cases beat one abstract claim.
+
+**7 — Say goodbye + emoji garnish**
+Before: Say goodbye to tab-switching forever! 🚀 Everything you need, all in
+one place. ✨
+After: No tab-switching. Your inbox, your board, and your pipeline sit on
+one screen.
+> Kills "say goodbye to," the exclamation, the rocket and sparkle. Names the
+> three things that are actually on the screen.
+
+**8 — It's-worth-noting + tidy uplift closer**
+Before: It's worth noting that, at the end of the day, great work happens
+when teams work in harmony.
+After: In plain terms: people get more done when they're not hunting for the
+thing they need.
+> Kills "it's worth noting," "at the end of the day," and the harmony-platitude
+> close. Uses the house "in plain terms" lead-in.
 
 ## No em dashes (hard rule)
 
