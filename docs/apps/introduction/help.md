@@ -17,7 +17,7 @@ on the whiteboard can become a task. A won deal can become an invoice. You do no
 re-key anything, and you do not lose the thread when work moves from one app to
 the next.
 
-Two ideas run through the whole suite:
+Three ideas run through the whole suite:
 
 - **It is one system, built recently, on one stack.** Not a decade of acquired
   products stitched together with webhooks. Because the apps share a data model,
@@ -27,6 +27,11 @@ Two ideas run through the whole suite:
   on the same boards, with the same permissions and the same audit trail as a
   person. The suite ships more than 730 of these tools. This is the architecture,
   not an add-on.
+- **Presence is pervasive.** Every place you work is a live, shared surface. You
+  can see which teammates are on the same task, deal, document, diagram, or board,
+  pull them into a voice or video huddle with a tap, and co-edit in real time.
+  Voice and video are ambient here, the digital equivalent of bumping into someone
+  in the hallway, not a scheduled meeting.
 
 BigBlueBam is open source and self-hostable. You can read it, run it on your own
 hardware, and export your data with plain SQL. It is built for small-to-medium
@@ -52,6 +57,10 @@ A few ideas explain how the whole suite hangs together.
 - **Agents work the same surfaces you do.** An agent authenticates like a user,
   is bound by the same permissions, and every action it takes is recorded. It is
   not a separate, weaker API. It is the same product.
+- **The apps are live, not solo.** Presence, real-time co-editing, and one-tap
+  voice and video are woven through the suite, so working together does not mean
+  scheduling a meeting. A virtual office (Bureau) carries your presence across
+  every app, and an agent can be pulled into a call too.
 - **Yours to run.** The software is open source. Run the whole stack with one
   command, point it at managed databases if you like, and your data stays in a
   Postgres database you can query directly.
@@ -148,6 +157,38 @@ and pasting. A few of the connections that ship today:
   (a deal goes stale, a form is submitted, a task is assigned) and runs the next
   step, so the integrations above can be extended without writing glue code.
 
+## Pervasive presence: the apps are live, shared spaces
+
+BigBlueBam is built for teams that work together all day, whether they share a
+room or are spread across the world. The apps are not solo tools you each use in
+your own tab. They are live, shared surfaces. Open a task, a deal, a document, a
+diagram, a ticket, or a board and you can see who else is there with you, right on
+the page.
+
+That presence is the doorway to working together in the moment:
+
+- **See who is here.** A presence strip on the work surfaces (tasks in Bam, deals
+  in Bond, documents in Brief, diagrams in Blueprint, tickets in Helpdesk,
+  knowledge in Beacon, and the Board canvas) shows the teammates looking at the
+  same thing you are.
+- **Pull someone in with a tap.** From that strip you can ring a teammate into a
+  voice or video huddle on the spot. It is a tap, not a calendar invite.
+- **Work in the same place.** Documents in Brief, the canvas in Board, and
+  diagrams in Blueprint are co-edited live, with each other's cursors and changes
+  appearing as they happen. Banter carries real-time channels, DMs, and calls or
+  huddles in the same room as the conversation.
+- **A place to be.** Bureau is the always-on virtual office: live floors and
+  rooms, with a presence widget that follows you across every app, so a teammate
+  deep in the CRM is still findable and reachable.
+- **Bring an agent into the room.** Presence and calls are not limited to people.
+  An AI agent can be invited into a Banter call to listen and help.
+
+The mental model is a hallway, not a meeting. Voice and video here are not a
+scheduled call or a formal meeting; they are what happens when you bump into a
+colleague in the hall or wander over to their desk. A quick question, a shared
+screen, two people looking at the same thing for a minute, then back to work.
+Geography stops mattering: the team is together even when it is apart.
+
 ## Working with AI agents
 
 BigBlueBam treats an AI agent as a teammate that uses the product, not as a
@@ -211,6 +252,14 @@ An AI agent assigned to the project watches for tickets, drafts replies, and fil
 tasks, all through the same MCP tools and under the same permissions a human
 teammate has. Its actions show up in the activity stream next to everyone else's,
 and anything destructive waits for a person to confirm.
+
+### Story: A hallway moment, on demand
+
+You open a task in Bam and notice from the presence strip that a teammate is
+already looking at it. Instead of typing a paragraph, you ring them into a huddle
+straight from the card, talk it through for two minutes while you both look at the
+same task, and get back to work. No meeting was scheduled, no link was pasted, and
+nobody left the app they were in.
 
 ### Story: One place to stand
 

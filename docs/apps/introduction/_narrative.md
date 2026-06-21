@@ -20,6 +20,11 @@ designed so AI agents can do real work on the same surfaces as the people.
 - **Real cross-app connections** - help desk tickets spawn project tasks,
   bookings create CRM contacts, documents graduate into the knowledge base, and
   won deals turn into invoices, because the apps share a data model
+- **Pervasive presence and live collaboration** - every work surface shows who
+  else is there, one tap rings a teammate into a voice or video huddle, documents
+  and boards and diagrams are co-edited in real time, and the Bureau virtual
+  office carries your presence across every app, so voice and video feel like a
+  hallway run-in rather than a scheduled meeting
 - **Agent parity, not a sidebar** - nearly every action a person can take is also
   an MCP tool (more than 730 across the suite), so an AI agent works the same
   boards with the same permissions and the same audit trail as a teammate
