@@ -137,10 +137,13 @@ describe('upsertContactByEmail — create path', () => {
   it('returns created=true when no matching row exists', async () => {
     // Pre-check: empty.
     mockSelect.mockReturnValueOnce(chainable([]));
-    // Insert .onConflictDoUpdate.returning() gives { contact, created }.
-    mockInsert.mockReturnValueOnce(
-      chainable([{ contact: makeContact(), created: true }]),
-    );
+    // Insert path is raw SQL, not the Drizzle builder: the service issues
+    // db.execute(`INSERT ... ON CONFLICT ... RETURNING *, (xmax = 0) AS
+    // created`) and reads the result as a flat row array, destructuring
+    // `created` off the contact columns. So the mock resolves db.execute() to
+    // [{ ...contactColumns, created: true }] — NOT db.insert(), and NOT a
+    // nested { contact, created } shape.
+    mockExecute.mockResolvedValueOnce([{ ...makeContact(), created: true }]);
 
     const result = await upsertContactByEmail(
       { email: 'ada@example.com', first_name: 'Ada' },
