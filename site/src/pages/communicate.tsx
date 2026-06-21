@@ -7,6 +7,7 @@ import { BureauSection } from '@/components/sections/bureau-section';
 import { HelpdeskSection } from '@/components/sections/helpdesk-section';
 import { BeaconSection } from '@/components/sections/beacon-section';
 import { BriefSection } from '@/components/sections/brief-section';
+import { PervasivePresence } from '@/components/sections/pervasive-presence';
 import { Button } from '@/components/ui/button';
 
 export function CommunicatePage() {
@@ -44,6 +45,7 @@ export function CommunicatePage() {
           </div>
         </section>
 
+        <PervasivePresence />
         <BanterStub />
         <BureauSection />
         <HelpdeskSection />
