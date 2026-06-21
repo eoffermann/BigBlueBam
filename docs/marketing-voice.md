@@ -49,7 +49,7 @@ genuinely fix. If users keep saying a tool is "slow," "a labyrinth of settings,"
 and we're actually better there — that's the problem to open on. Claim only what
 we can back up (see "Numbers & facts"); a hollow shot is worse than none.
 
-**Why we believe we win — the four we'll stand behind:**
+**Why we believe we win — the five we'll stand behind:**
 
 - **Modern architecture.** Built recently, on one coherent stack, as a single
   system — not a decade of acquisitions stitched together with webhooks. It's
@@ -64,6 +64,11 @@ we can back up (see "Numbers & facts"); a hollow shot is worse than none.
   and agents working the *same* surfaces, and we're the single strongest
   contender built for exactly that. We say it with a grin — it's a big claim, and
   we mean it.
+- **Pervasive presence.** Every app is a live, shared space, not a private tab you
+  each work in alone. You can see who is on the same task, deal, document, or
+  board, and pull them into voice or video the way you would lean over to their
+  desk, never by booking a meeting. The team is together even when it is spread
+  across the world.
 
 **Funny, never bitter.** Poking at the category's absurdities — the seven-tab
 workflow, the "AI" that summarizes the doc you just wrote — is some of the best

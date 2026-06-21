@@ -88,6 +88,11 @@
       "level": 3
     },
     {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "level": 2
+    },
+    {
       "anchor": "user-stories",
       "title": "User Stories",
       "level": 2
@@ -238,6 +243,11 @@
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
       "text": "Agents drive Bench through the Model Context Protocol. The Bench MCP tools call the same bench-api routes the UI uses, with the caller's bearer token, so an agent sees only data its token is allowed to see and every query is org-scoped. The full Bench tool surface lives in apps/mcp-server/src/tools/bench-tools.ts and is summarized in this app's MCP-tools reference. What agents commonly do in Bench: - Discover what can be queried - benchlistdatasources lists every source with its schema. Agents should call this first to learn valid field names. - Run ad-hoc queries - benchqueryadhoc runs a structured query (measures, dimensions, filters, limit) against any registered source. This is the freeform query path the Explorer UI does not expose for manually-picked sources. - Read dashboards and widgets - benchlistdashboards, benchgetdashboard, benchlistwidgets, and benchquerywidget read a dashboard and run its widget queries. benchsummarizedashboard is the canonical \"read this dashboard for me\" entry point: it fetches the dashboard and runs every widget query, returning the bundle for summarization. Widgets backed by a non-returning source come back as a per-widget error rather than failing the whole call. - Manage and trigger reports - benchlistscheduledreports lists schedules; benchgeneratereport triggers an immediate delivery (the same Send now path, still a delivery stub). - Detect anomalies and compare periods - benchdetectanomalies compares the most recent period against the previous one and flags a change over 30% with a severity of high, medium, or low. benchcompareperiods compares two arbitrary date ranges and returns both values, the percent change, and the direction. There is no UI for either; both are agent-only. Both filter on a createdat column, so they work only for sources that have one with a valid org column (Bond, Blast, Beacon, Bearing) and not for the helpdesk:tickets, Bureau, or materialized-view sources. When you review agent work in Bench, the things to confirm are that the agent queried a source that actually returns data, that visibility on any dashboard it created matches your intent (the default is Private), and that a report it created or triggered points at the right delivery target. Note again that triggering a report does not yet send anything. Bench also participates in the cross-cutting agentic platform. Every agent action carries an agent or service identity that is recorded in the unified activity log, and agents send periodic agentheartbeat calls so operators can see which runners are live. High-impact or cross-app steps an agent is unsure about can be routed to a human approval queue with the platform proposalcreate and proposaldecide tools. Per-agent kill switches and tool allowlists in agentpolicies gate which tools a service account may call, and outbound webhooks can push Bench Bolt events (such as report.delivered, source bench) to subscribed agent runners. Before an agent reposts Bench results into another app's shared surface, it should run the platform canaccess visibility check for each cited entity and drop anything the asking user is not allowed to see. Cross-app reads (searcheverything, activityquery) let an agent pull context from other apps to frame a Bench summary."
+    },
+    {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "text": "BigBlueBam treats collaboration as ambient, not as a scheduled meeting. Your presence in Bench shows in the Bureau virtual office, so teammates can see where you are and gather without booking a call. The suite's see-who-is-here strips, one-tap huddles, and real-time co-editing live on its collaborative surfaces. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model."
     },
     {
       "anchor": "user-stories",

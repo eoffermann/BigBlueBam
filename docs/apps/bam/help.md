@@ -600,6 +600,10 @@ it. When reviewing agent work, watch the project audit log and the task **Activi
 tab; both record the agent actor. See `docs/apps/bam/mcp-tools.md` for the full
 tool catalog.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. When you open a task, a presence strip shows exactly who else is on it, and you can ring a teammate into a voice or video huddle straight from the card. Your location in Bam shows in the Bureau office, so the team can find you. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Spin up a project from a template

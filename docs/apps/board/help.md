@@ -309,6 +309,10 @@ Board's tools sit on the same platform surface every app shares, so agent work i
 - **Visibility preflight.** Before an agent posts a board's contents into another shared surface, it calls `can_access` for each cited entity and drops anything the asking user is not allowed to see.
 - **Policies and webhooks.** Per-agent kill switches and tool allowlists (a `board.*` glob covers Board's tools) gate every service-account call, and subscribed Bolt events can be pushed to an agent runner over a signed outbound webhook.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. The canvas shows who else is on the board, edits and cursors sync live, and the board carries audio conferencing so you can talk while you sketch together. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Create your first board from a template

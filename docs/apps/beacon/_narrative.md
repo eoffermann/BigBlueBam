@@ -54,3 +54,7 @@ click **Create a Beacon** to write your first article in Markdown, then
 **Publish** it to make it Active. Use **Search** to find knowledge by meaning,
 **Graph** to explore connections, and **Dashboard** (Fridge Cleanout) to keep
 the library verified. Org admins set freshness rules under **Beacon Settings**.
+
+## Working together
+
+A presence strip on the article view shows who else is on a knowledge page, with a one-tap huddle.

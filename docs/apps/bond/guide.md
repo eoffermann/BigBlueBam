@@ -1,7 +1,7 @@
 ---
 title: "Bond (CRM) Guide"
 app: bond
-generated: "2026-06-17T22:16:23.497Z"
+generated: "2026-06-21T04:38:25.182Z"
 ---
 
 # Bond (CRM) Guide
@@ -28,6 +28,10 @@ Bond contacts feed Blast email campaign segments. Deal events (`deal.created`, `
 ## Getting Started
 
 Open Bond from the Launchpad. You start on the Pipeline Board, which loads your default pipeline automatically. If your org has no pipeline yet, open **Bond Settings** and create one; it seeds six default stages (Prospect, Qualified, Proposal, Negotiation, Closed Won, Closed Lost). Add contacts and companies from their lists, then add deals from the board and drag them between stages as they progress. Mark a deal Won or Lost on its detail page, log activities to build a timeline, and use the Analytics page to track pipeline health, forecast, and deal velocity.
+
+## Working together
+
+A presence strip on the deal detail shows who else is on a deal, with a one-tap huddle, and your location in Bond shows in the Bureau virtual office.
 
 ## Walkthrough
 
@@ -144,3 +148,4 @@ Open Bond from the Launchpad. You start on the Pipeline Board, which loads your 
 - [Bolt (Workflow Automation)](../bolt/guide.md)
 - [Book (Scheduling)](../book/guide.md)
 - [Bureau](../bureau/guide.md)
+- [Introduction to BigBlueBam](../introduction/guide.md)

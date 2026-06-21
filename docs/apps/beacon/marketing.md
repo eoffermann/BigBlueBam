@@ -1,7 +1,7 @@
 ---
 title: "Beacon (Knowledge Base)"
 app: beacon
-generated: "2026-06-17T22:16:23.466Z"
+generated: "2026-06-21T04:38:25.144Z"
 ---
 
 # Beacon (Knowledge Base)
@@ -13,6 +13,7 @@ A knowledge base that keeps itself honest: hybrid search, a knowledge graph, and
 - Explore how knowledge connects through a typed knowledge graph of links and shared-tag affinity
 - Stay current with per-article expiry, verify and challenge lifecycle, and a Fridge Cleanout governance dashboard
 - Let AI agents create, search, verify, and traverse knowledge through 30 MCP tools, gated by visibility preflight and agent policies
+- See who else is on an article and pull them into a live huddle from the page
 
 ## See It in Action
 

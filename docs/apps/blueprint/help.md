@@ -281,6 +281,10 @@ A few tool descriptions describe roadmap behavior that the running app does not 
 
 For the full tool catalog and schemas, see the Blueprint MCP-tools reference in `docs/apps/blueprint/`.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. The editor shows who else is in the diagram, your changes and cursors sync live, and you can ring a collaborator into a huddle while you work the same graph. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Create your first flowchart

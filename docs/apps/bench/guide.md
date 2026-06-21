@@ -1,7 +1,7 @@
 ---
 title: "Bench (Analytics) Guide"
 app: bench
-generated: "2026-06-17T22:16:23.472Z"
+generated: "2026-06-21T04:38:25.157Z"
 ---
 
 # Bench (Analytics) Guide
@@ -42,6 +42,10 @@ Bench reads from the operational apps and hands off to the collaboration and aut
 3. Set the name and visibility, then click **Templates** for a prebuilt widget or **Custom Widget** to build one with the wizard. Choose a source that returns data, such as Bond Deals, Blast Campaigns, or a `bench` materialized view.
 4. Return to the read view to see the charts, or open **Explorer** to run a one-off query.
 5. When a view is worth repeating, save its definition in **Saved Queries** or set up a **Scheduled Report** to deliver a snapshot on a cadence.
+
+## Working together
+
+Your location in Bench shows in the Bureau virtual office, so teammates can find you; the suite's live-collaboration surfaces are covered in the Introduction.
 
 ## Walkthrough
 

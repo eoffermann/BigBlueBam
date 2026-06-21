@@ -133,6 +133,11 @@
       "level": 4
     },
     {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "level": 2
+    },
+    {
       "anchor": "user-stories",
       "title": "User Stories",
       "level": 2
@@ -343,6 +348,11 @@
       "anchor": "cross-cutting-agentic-platform",
       "title": "Cross-cutting agentic platform",
       "text": "Board's tools sit on the same platform surface every app shares, so agent work is identifiable, reviewable, and governed: - Identity and heartbeat. Agent and service accounts are distinct from human users, and their actions are tagged as such in the activity log. Long-running agents report liveness with agentheartbeat. - Approvals. An agent can route a board action it should not take unilaterally (for example a permanent delete or a large promote-to-tasks run) into an approval queue with proposalcreate; a human reviews and resolves it with proposallist and proposaldecide. - Unified activity. Board activity is queryable alongside every other app through the unified activity view and activityquery / activitybyactor. - Visibility preflight. Before an agent posts a board's contents into another shared surface, it calls canaccess for each cited entity and drops anything the asking user is not allowed to see. - Policies and webhooks. Per-agent kill switches and tool allowlists (a board. glob covers Board's tools) gate every service-account call, and subscribed Bolt events can be pushed to an agent runner over a signed outbound webhook."
+    },
+    {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "text": "BigBlueBam treats collaboration as ambient, not as a scheduled meeting. The canvas shows who else is on the board, edits and cursors sync live, and the board carries audio conferencing so you can talk while you sketch together. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model."
     },
     {
       "anchor": "user-stories",

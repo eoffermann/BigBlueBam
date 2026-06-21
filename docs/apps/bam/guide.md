@@ -1,7 +1,7 @@
 ---
 title: "Bam (Project Management) Guide"
 app: bam
-generated: "2026-06-18T00:49:53.857Z"
+generated: "2026-06-21T04:38:25.128Z"
 ---
 
 # Bam (Project Management) Guide
@@ -62,6 +62,10 @@ through the People page. Use keyboard shortcuts (press ? for help, N to create a
 task, Cmd+K for the command palette) to move fast. Sprint reports and project
 dashboards give you visibility into velocity, burndown, and workload.
 
+## Working together
+
+A presence strip on the task drawer shows who else is on a task, and you can ring them into a huddle from the card; your location in Bam shows in the Bureau virtual office.
+
 ## Walkthrough
 
 ### Board
@@ -80,9 +84,17 @@ dashboards give you visibility into velocity, burndown, and workload.
 
 ![List View](screenshots/light/04-list-view.png)
 
+### People
+
+![People](screenshots/light/04-people.png)
+
 ### My Work
 
 ![My Work](screenshots/light/05-my-work.png)
+
+### Settings
+
+![Settings](screenshots/light/05-settings.png)
 
 ### Settings Integrations
 
@@ -95,6 +107,14 @@ dashboards give you visibility into velocity, burndown, and workload.
 ### Org Smtp
 
 ![Org Smtp](screenshots/light/08-org-smtp.png)
+
+### Timeline
+
+![Timeline](screenshots/light/09-timeline.png)
+
+### Calendar
+
+![Calendar](screenshots/light/10-calendar.png)
 
 
 ## MCP Tools
@@ -246,3 +266,4 @@ dashboards give you visibility into velocity, burndown, and workload.
 - [Brief (Documents)](../brief/guide.md)
 - [Bureau](../bureau/guide.md)
 - [Helpdesk (Support Portal)](../helpdesk/guide.md)
+- [Introduction to BigBlueBam](../introduction/guide.md)

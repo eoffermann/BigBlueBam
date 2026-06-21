@@ -1,7 +1,7 @@
 ---
 title: "Blueprint Guide"
 app: blueprint
-generated: "2026-06-18T00:43:58.375Z"
+generated: "2026-06-21T04:38:25.166Z"
 ---
 
 # Blueprint Guide
@@ -46,6 +46,10 @@ Blueprint is served at `/blueprint/`, reachable from the Launchpad in any BigBlu
 6. Open the **Comments**, **People**, or **History** panel from the top bar to leave a note, invite a collaborator, or browse and restore past versions.
 
 To start from existing work, use the chevron next to **New diagram** and choose **From Bam project tasks...**.
+
+## Working together
+
+Diagrams are co-edited live with shared cursors, a presence strip shows who is in the editor, and you can ring a collaborator into a huddle.
 
 ## Walkthrough
 
@@ -118,3 +122,7 @@ To start from existing work, use the chevron next to **New diagram** and choose 
 | `blueprint_update_comment` | Edit a Blueprint comment | `id`, `comment_id`, `body`, `body_plain`, `resolved` |
 | `blueprint_update_edge` | Update fields on a Blueprint edge. Provide only the fields to change. Pass  | `id`, `edge_id`, `source_handle`, `target_handle`, `kind`, `label`, `marker_start`, `marker_end`, `style`, `waypoints` |
 | `blueprint_update_node` | Update fields on a Blueprint node. Provide only the fields to change. Does NOT update position — use blueprint_move_node for that. To re-target the cross-product link, prefer blueprint_link_entity (single-purpose tool with cleaner semantics). | `id`, `node_id`, `shape`, `label`, `parent_node_id`, `width`, `height`, `z_index`, `pinned`, `style`, `data`, `ref_entity_type`, `ref_entity_id` |
+
+## Related Apps
+
+- [Introduction to BigBlueBam](../introduction/guide.md)

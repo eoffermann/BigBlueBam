@@ -312,6 +312,10 @@ These per-app tools sit on top of the cross-cutting agentic platform. Agents ide
 
 What a human should know when reviewing agent work: agents posting into shared Banter surfaces honor per-entity visibility (they call `can_access` for each cited entity and drop anything the asker is not allowed to see), and replies route human-in-the-loop follow-ups to the thread author. Scheduled and deferred posts will appear later than the moment the agent ran, which is expected. Banter emits Bolt events on the `banter` source (`channel.created`, `message.posted`, `message.mentioned`, `message.edited`, `reaction.added`, `message.scheduled`, `message.quiet_hours_deferred`, and `message.matched`) that you can wire into automations or audit.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. Banter is the suite's real-time room: channels, DMs, and calls or huddles in the same place as the conversation. You can invite an AI agent into a call to listen and help. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Get into Banter and read #general

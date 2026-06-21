@@ -1,7 +1,7 @@
 ---
 title: "Bam (Project Management)"
 app: bam
-generated: "2026-06-18T00:49:53.860Z"
+generated: "2026-06-21T04:38:25.130Z"
 ---
 
 # Bam (Project Management)
@@ -14,6 +14,7 @@ Sprint-powered Kanban boards that keep your team moving.
 - One My Work queue shows only the tasks assigned to you across every project
 - Agent-ready: nearly every board action is an MCP tool, so an AI assistant can plan a sprint or update tasks alongside your team
 - Bring your own email: a platform relay sends system mail out of the box, and each org can point its invitations and campaigns at its own SMTP server
+- See who else is on a task and pull them into a voice or video huddle, no meeting required
 
 ## See It in Action
 

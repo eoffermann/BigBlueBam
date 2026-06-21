@@ -1,7 +1,7 @@
 ---
 title: "Helpdesk (Support Portal)"
 app: helpdesk
-generated: "2026-06-17T22:16:23.511Z"
+generated: "2026-06-21T04:38:25.204Z"
 ---
 
 # Helpdesk (Support Portal)
@@ -13,6 +13,7 @@ Give every organization its own branded support portal, where customers file tic
 - Threaded ticket conversations through Open, In Progress, Waiting on Customer, Resolved, and Closed
 - Every ticket mirrored to a Bam task so support work lives next to your other project work
 - AI-ready: agents triage, search, find similar tickets, and reconcile customers through MCP tools
+- See who else is on a ticket and pull them into a live huddle on it
 
 ## See It in Action
 

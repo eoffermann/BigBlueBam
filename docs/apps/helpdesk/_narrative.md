@@ -20,3 +20,7 @@ Helpdesk tickets become Bam tasks in the default project, so internal teams tria
 ## Getting Started
 
 Customers go to their organization's portal (for example `/helpdesk/your-org/`), create an account or sign in, then click **New Ticket** to file an issue with a subject, priority, optional category, and a rich-text description. They follow the ticket on **My Tickets** and reply in its conversation. Agents pick up incoming tickets from the agent queue or from Bam's ticket views, reply or add internal notes, and move the ticket through its statuses to Resolved or Closed. Admins configure each portal's default project, categories, welcome message, and verification settings before going live.
+
+## Working together
+
+A presence strip on the ticket detail shows who else is on a ticket, with a one-tap huddle so support and engineering can talk on the same ticket.

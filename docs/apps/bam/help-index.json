@@ -183,6 +183,11 @@
       "level": 3
     },
     {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "level": 2
+    },
+    {
       "anchor": "user-stories",
       "title": "User Stories",
       "level": 2
@@ -438,6 +443,11 @@
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
       "text": "Agents drive Bam through its MCP tools, which accept natural identifiers (project, phase, sprint, and label names, a user's email, or a human id like FRND-42) as well as UUIDs. The catalog spans nine Bam tool files and lets an agent do nearly everything a human can on the board: - Tasks - searchtasks, gettask, bamgettaskbyhumanid, createtask, updatetask, movetask, deletetask, bulkupdatetasks, logtime, duplicatetask, importcsv, taskupsertbyexternalid, bamaddtaskparent, bamremovetaskparent, bamlisttaskparents, bamlisttasksubtasks. - Sprints - listsprints, createsprint, startsprint, completesprint, getsprintreport. - Projects - listprojects, getproject, createproject, testslackwebhook, disconnectgithubintegration. - Epics - bamcreateepic, bamupdateepic, bamgetepic, bamlistepics. - Members and users - listmembers, getmytasks, bamfinduserbyemail, bamfinduser, baminvitemember, bamadminresetpassword, bamsendpasswordresetlink. - Reports - getvelocityreport, getburndown, getcumulativeflow, getoverduetasks, getworkload, getstatusdistribution, getcycletimereport, gettimetrackingreport. - Templates - listtemplates, createfromtemplate. - Comments - listcomments, addcomment. - Import - importgithubissues, suggestbranchname, bamimportcsv. Resolver helpers (bamlistlabels, bamlistphases, bamliststates) and identity tools (getme, updateme, listmyorgs, switchactiveorg) round out the Bam-specific catalog. On top of the Bam tools, agents reach Bam through the cross-cutting agentic platform that every app shares: - Identity, audit, heartbeat - An agent identifies itself and reports liveness with agentheartbeat, reviews its own recent actions with agentaudit, and describes its capabilities with agentselfreport. Every write an agent makes is recorded with an agent actor type in the activity log. - Approval queues - For work that needs a human sign-off, an agent files a proposal with proposalcreate, a human or another agent lists pending items with proposallist, and a decision is recorded with proposaldecide. - Cross-app read plane - searcheverything fans a query out across apps (Bam tasks included) with normalized scoring, resolvereferences turns mentions like FRND-42 into resolved entities, and activityquery reads the unified cross-app activity view. Composite views projectview and accountview assemble a rounded picture of a project or account spanning multiple apps. - Idempotent upserts - taskupsertbyexternalid keys on the project plus an external id and emits a task.upserted event with a created flag, so an agent can sync tasks from an external system without creating duplicates. - Visibility preflight - Before an agent posts a Bam task into a shared surface, it calls canaccess(askeruserid, entitytype, entityid) and drops anything the asker is not allowed to see. - Agent policies and webhooks - A per-agent kill switch and tool allowlist (bam., task., and so on) gate every service-account call, and subscribed Bolt events are pushed to agent runners via signed outbound webhooks. Destructive tools require human review. deletetask and disconnectgithubintegration use the two-step confirmaction token flow: the tool stages the action and returns a time-limited token, and a second call confirms it. When reviewing agent work, watch the project audit log and the task Activity tab; both record the agent actor. See docs/apps/bam/mcp-tools.md for the full tool catalog."
+    },
+    {
+      "anchor": "working-together-live-presence",
+      "title": "Working together (live presence)",
+      "text": "BigBlueBam treats collaboration as ambient, not as a scheduled meeting. When you open a task, a presence strip shows exactly who else is on it, and you can ring a teammate into a voice or video huddle straight from the card. Your location in Bam shows in the Bureau office, so the team can find you. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model."
     },
     {
       "anchor": "user-stories",

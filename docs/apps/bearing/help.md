@@ -264,6 +264,10 @@ Beyond the Bearing-specific tools, agents working here also use the cross-cuttin
 
 For reviewers: agent-created goals and updates show up in the same lists and feeds as human ones, attributed to the agent. See the Bearing MCP-tools reference under `docs/apps/bearing/` for the full catalog and parameters.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. Your presence in Bearing shows in the Bureau virtual office, so teammates can see where you are and gather without booking a call. The suite's see-who-is-here strips, one-tap huddles, and real-time co-editing live on its collaborative surfaces. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Set up your first quarter

@@ -354,6 +354,10 @@ Bureau participates in the suite-wide agentic platform alongside its own tools. 
 
 A human reviewing agent work in Bureau should know that a summon DMs every eligible co-occupant in real time, that a hunt reveals where a teammate is, and that a booking can create or anchor a Book calendar event and can flip a room private for its window. The confirm step exists so these are previewed before they fire. For the full catalog and signatures, see the MCP-tools reference in `docs/apps/bureau/`.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. Bureau is the office itself: live floors and rooms where the team gathers, and the presence layer the rest of the suite plugs into, so your location and your live room follow you everywhere you work. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Drop into the office and join a room

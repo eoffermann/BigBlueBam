@@ -1,7 +1,7 @@
 ---
 title: "Banter (Team Messaging) Guide"
 app: banter
-generated: "2026-06-17T22:16:23.461Z"
+generated: "2026-06-21T04:38:25.136Z"
 ---
 
 # Banter (Team Messaging) Guide
@@ -28,6 +28,10 @@ Banter connects to the rest of BigBlueBam. Agents and automations can drop a Bam
 ## Getting Started
 
 Open Banter from the Launchpad app switcher. You land in the #general channel by default, which is created and populated automatically the first time your org opens Banter. Browse and join public channels, create new ones for your team or project, start direct messages, and use threaded replies for focused discussions. Press ? for help at any time.
+
+## Working together
+
+Banter carries real-time channels and DMs plus calls and huddles in the same room as the conversation, and an AI agent can be invited into a call.
 
 ## Walkthrough
 
@@ -140,7 +144,9 @@ Open Banter from the Launchpad app switcher. You land in the #general channel by
 - [Bearing (Goals & OKRs)](../bearing/guide.md)
 - [Bench (Analytics)](../bench/guide.md)
 - [Bill (Invoicing)](../bill/guide.md)
+- [Blank (Forms)](../blank/guide.md)
 - [Bolt (Workflow Automation)](../bolt/guide.md)
 - [Book (Scheduling)](../book/guide.md)
 - [Bureau](../bureau/guide.md)
 - [Helpdesk (Support Portal)](../helpdesk/guide.md)
+- [Introduction to BigBlueBam](../introduction/guide.md)

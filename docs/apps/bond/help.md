@@ -362,6 +362,10 @@ Reviewing agent work: own-only visibility is enforced server-side, so a member o
 
 For the full tool catalog and schemas, see the Bond MCP-tools reference and guide in `docs/apps/bond/`.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. When you open a deal, a presence strip shows who else is on it, and you can ring a teammate into a huddle without leaving the page. Your location in Bond shows in the Bureau office. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Set up your first sales pipeline

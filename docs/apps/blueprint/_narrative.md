@@ -37,3 +37,7 @@ Blueprint is served at `/blueprint/`, reachable from the Launchpad in any BigBlu
 6. Open the **Comments**, **People**, or **History** panel from the top bar to leave a note, invite a collaborator, or browse and restore past versions.
 
 To start from existing work, use the chevron next to **New diagram** and choose **From Bam project tasks...**.
+
+## Working together
+
+Diagrams are co-edited live with shared cursors, a presence strip shows who is in the editor, and you can ring a collaborator into a huddle.

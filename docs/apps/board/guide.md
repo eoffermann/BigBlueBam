@@ -1,7 +1,7 @@
 ---
 title: "Board (Visual Collaboration) Guide"
 app: board
-generated: "2026-06-17T22:16:23.490Z"
+generated: "2026-06-21T04:38:25.174Z"
 ---
 
 # Board (Visual Collaboration) Guide
@@ -28,6 +28,10 @@ Board shares authentication with all BigBlueBam apps and reads your Bam session 
 ## Getting Started
 
 Open Board from the Launchpad at `/board/`. You land on All Boards. Click New Board to pick a template, or start a Blank board with a name and icon. Open a board to reach the full-screen canvas; use Excalidraw's toolbar to add shapes, connectors, sticky notes, and frames. The canvas supports zoom, pan, and multi-select and saves automatically. Press `?` for in-app help.
+
+## Working together
+
+The canvas is co-edited live with shared cursors and a presence bar, and the board carries audio conferencing so collaborators can talk while they draw.
 
 ## Walkthrough
 
@@ -104,3 +108,4 @@ Open Board from the Launchpad at `/board/`. You land on All Boards. Click New Bo
 - [Bolt (Workflow Automation)](../bolt/guide.md)
 - [Bond (CRM)](../bond/guide.md)
 - [Bureau](../bureau/guide.md)
+- [Introduction to BigBlueBam](../introduction/guide.md)

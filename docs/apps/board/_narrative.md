@@ -19,3 +19,7 @@ Board shares authentication with all BigBlueBam apps and reads your Bam session 
 ## Getting Started
 
 Open Board from the Launchpad at `/board/`. You land on All Boards. Click New Board to pick a template, or start a Blank board with a name and icon. Open a board to reach the full-screen canvas; use Excalidraw's toolbar to add shapes, connectors, sticky notes, and frames. The canvas supports zoom, pan, and multi-select and saves automatically. Press `?` for in-app help.
+
+## Working together
+
+The canvas is co-edited live with shared cursors and a presence bar, and the board carries audio conferencing so collaborators can talk while they draw.

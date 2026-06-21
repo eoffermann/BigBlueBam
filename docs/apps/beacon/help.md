@@ -523,6 +523,10 @@ platform, so the same guardrails apply here as everywhere:
 
 For the full tool catalog, see `docs/apps/beacon/mcp-tools.md`.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. When you open a knowledge page, a presence strip shows who else is reading or editing it, and you can ring a teammate into a huddle from the page. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Write and publish your first article

@@ -34,3 +34,7 @@ Bureau is the source of the floating docked box that the rest of the suite shows
 4. Watch the docked box: it names your room, who is with you, and the page you are viewing, and it exposes Bring everyone here, Invite, Hunt, and the DND toggle.
 5. To reserve a meeting space, open **Book a room** (under Rooms), pick a bookable room, and book a window with locked or open access.
 6. If you are an org admin, open **Edit floors** to build a floor on the canvas editor, **Offices** to assign who owns each personal office, and **Settings** to set org-wide defaults for audio, auto-follow, and member booking and room creation.
+
+## Working together
+
+Bureau is the virtual office and the presence layer the rest of the suite plugs into: live floors and rooms, and a presence and location that follow you across every app.

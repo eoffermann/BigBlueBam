@@ -5,3 +5,4 @@ Diagrams that are data, not drawings - every node and edge is a real, auditable 
 - Round-trips with Bam: generate a diagram from a project's tasks, promote a node or a whole graph into tasks, and keep nodes and tasks in two-way sync.
 - Collaborate right on the canvas: anchored and diagram-level comments, per-diagram roles, and a restorable version timeline in the editor's Comments, People, and History panels.
 - An agent can read a process doc and emit a fully wired, laid-out diagram in a single call, under the platform's agent policies, audit trail, and human-approval queue.
+- Co-edit a diagram live, see each other's cursors, and huddle while you work the same graph

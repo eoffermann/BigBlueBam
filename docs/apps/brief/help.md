@@ -550,6 +550,10 @@ that every app shares:
 
 For the full tool catalog see `docs/apps/brief/mcp-tools.md`.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. Documents are co-edited live, with each other's cursors and changes appearing as they happen, a presence strip showing who is in the document, and a live call you can start without leaving it. Your location in Brief shows in the Bureau office. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Write your first document and publish it

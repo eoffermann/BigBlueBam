@@ -20,3 +20,7 @@ Brief documents link to Bam tasks for requirements and specifications, and to Be
 
 Open Brief from the Launchpad at /brief/. Create a new document or start from a template. The editor supports slash commands (type /) for inserting blocks, and a live word count and Table of Contents track your progress. Set a document's visibility to Organization, Project, or Private to control who can see it. Use folders and the project-scope selector to organize your library, and the search bar to find content quickly.
 </content>
+
+## Working together
+
+Documents are co-edited live with shared cursors, a presence strip shows who is in the document, you can start a live call in place, and your location shows in the Bureau virtual office.

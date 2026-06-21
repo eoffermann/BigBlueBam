@@ -351,3 +351,57 @@ Configure auto-deletion of:
 - Completed tasks older than N days
 - Activity logs older than N months
 - Archived projects after N days
+
+## 36. Pervasive Presence & Ambient Collaboration
+
+BigBlueBam is built so collaboration is constant and ambient rather than something
+you schedule. Across the suite, the apps are live, shared surfaces: you can see who
+you are working with, reach them instantly, and work together in real time, whether
+the team shares a room or is spread across the world. Voice and video are treated
+like bumping into a colleague in the hallway or stopping by their desk, not like a
+formal meeting or a phone call.
+
+### 36.1 The presence layer
+
+- **Per-surface presence.** A shared presence strip (`packages/ui/presence-chip-strip.tsx`)
+  appears on the main work surfaces: tasks in Bam, deals in Bond, documents in
+  Brief, diagrams in Blueprint, tickets in Helpdesk, knowledge pages in Beacon,
+  and the Board canvas. It shows who else is on the exact item and offers a one-tap
+  "ring into a huddle" so you can pull a teammate into live voice or video without
+  leaving the page.
+- **Suite-wide location.** Apps report your location to the Bureau virtual office
+  via `@bigbluebam/bureau-client` (for example `useBureauLocationLabel`), so the
+  team can see where you are across the suite and gather where you already are.
+- **Bureau, the virtual office.** Bureau provides live floors and rooms plus the
+  presence primitives the rest of the suite plugs into: people-here, knock, ring,
+  invite, bring, summon, a chat blip, cross-app navigation to where someone is, and
+  a picture-in-picture call host so a live room can follow you between apps.
+
+### 36.2 Real-time co-editing
+
+Brief documents, the Board canvas, and Blueprint diagrams are co-edited live, with
+each participant's cursor and changes appearing as they happen (CRDT and awareness
+over the realtime layer in section 11). Banter carries real-time channels, DMs, and
+calls or huddles in the same room as the conversation.
+
+### 36.3 Voice and video
+
+Voice and video run on LiveKit and are woven through Banter (calls and huddles),
+Board (audio conferencing on the canvas), Bureau (rooms), and Brief (in-document
+calls). They are ambient by design: a huddle is a tap from a presence strip, not a
+calendar invite.
+
+### 36.4 Agents in the room
+
+Presence and calls are not limited to people. An AI agent can be invited into a
+Banter call (`banter_invite_agent_to_call`) to listen and help, consistent with the
+platform's agent-parity model (section 15).
+
+### 36.5 Implementation status
+
+The presence strip is mounted on the work surfaces listed above; location reporting
+is wired into Bam, Bond, Brief, Bearing, and Bench today; voice, video, and
+co-editing live in the apps named above. The operational apps (Bill, Blank, Blast,
+Book, Bolt) participate in the suite but do not yet mount the in-app presence strip
+or a huddle control. Extending the presence layer to them is tracked as follow-up
+work.

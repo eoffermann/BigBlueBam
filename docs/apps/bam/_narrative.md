@@ -52,3 +52,7 @@ not limited to project members), and group them into a sprint. Invite teammates
 through the People page. Use keyboard shortcuts (press ? for help, N to create a
 task, Cmd+K for the command palette) to move fast. Sprint reports and project
 dashboards give you visibility into velocity, burndown, and workload.
+
+## Working together
+
+A presence strip on the task drawer shows who else is on a task, and you can ring them into a huddle from the card; your location in Bam shows in the Bureau virtual office.

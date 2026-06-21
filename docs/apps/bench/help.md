@@ -273,6 +273,10 @@ When you review agent work in Bench, the things to confirm are that the agent qu
 
 Bench also participates in the cross-cutting agentic platform. Every agent action carries an agent or service identity that is recorded in the unified activity log, and agents send periodic `agent_heartbeat` calls so operators can see which runners are live. High-impact or cross-app steps an agent is unsure about can be routed to a human approval queue with the platform `proposal_create` and `proposal_decide` tools. Per-agent kill switches and tool allowlists in `agent_policies` gate which tools a service account may call, and outbound webhooks can push Bench Bolt events (such as `report.delivered`, source `bench`) to subscribed agent runners. Before an agent reposts Bench results into another app's shared surface, it should run the platform `can_access` visibility check for each cited entity and drop anything the asking user is not allowed to see. Cross-app reads (`search_everything`, `activity_query`) let an agent pull context from other apps to frame a Bench summary.
 
+## Working together (live presence)
+
+BigBlueBam treats collaboration as ambient, not as a scheduled meeting. Your presence in Bench shows in the Bureau virtual office, so teammates can see where you are and gather without booking a call. The suite's see-who-is-here strips, one-tap huddles, and real-time co-editing live on its collaborative surfaces. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
 ## User Stories
 
 ### Story: Open and read a dashboard

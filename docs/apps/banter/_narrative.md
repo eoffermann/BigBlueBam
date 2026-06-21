@@ -19,3 +19,7 @@ Banter connects to the rest of BigBlueBam. Agents and automations can drop a Bam
 ## Getting Started
 
 Open Banter from the Launchpad app switcher. You land in the #general channel by default, which is created and populated automatically the first time your org opens Banter. Browse and join public channels, create new ones for your team or project, start direct messages, and use threaded replies for focused discussions. Press ? for help at any time.
+
+## Working together
+
+Banter carries real-time channels and DMs plus calls and huddles in the same room as the conversation, and an AI agent can be invited into a call.

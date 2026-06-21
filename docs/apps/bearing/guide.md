@@ -1,7 +1,7 @@
 ---
 title: "Bearing (Goals & OKRs) Guide"
 app: bearing
-generated: "2026-06-18T04:26:01.049Z"
+generated: "2026-06-21T04:38:25.149Z"
 ---
 
 # Bearing (Goals & OKRs) Guide
@@ -27,6 +27,10 @@ Bearing key results can be linked to Bam epics, projects, sprints, and tasks (th
 ## Getting Started
 
 Open Bearing from the BigBlueBam app switcher. Create a time period (such as Q2 2026) on the Periods page and select it in the sidebar, then add objectives on the Dashboard with measurable key results. Record progress with check-ins and post status updates regularly. The At Risk view flags goals that need attention, and the period can be completed to close out the cadence.
+
+## Working together
+
+Your location in Bearing shows in the Bureau virtual office, so teammates can find you; the suite's live-collaboration surfaces are covered in the Introduction.
 
 ## Walkthrough
 
