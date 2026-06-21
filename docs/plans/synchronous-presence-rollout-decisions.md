@@ -211,3 +211,55 @@ at the bottom. Work is autonomous; this log is so the choices can be revisited.
    -> deal moved back (fixture restored). That is exactly what makes a second
    viewer's board refresh live. Smoke script run then deleted; durable coverage
    is the bond-api unit suite + this recorded run.
+
+### 2026-06-21 — Item 4: Blueprint T3 awareness (cursors + selection)
+
+1. **Awareness rides a SEPARATE Redis channel + a SEPARATE socket** —
+   `blueprint:awareness:<id>`, not the structural `blueprint:<id>` channel. This
+   is the central design choice: it means cursor traffic can never reach the
+   `use-diagram-sync` socket (which would refetch the whole graph on every
+   cursor twitch), and `use-diagram-sync` did not have to be touched at all.
+   Channel is selected by a `channel: 'mutations' | 'awareness'` field on the
+   subscribe frame (defaults to `mutations`, so the existing sync client is
+   unchanged). Verified both directions of isolation in the smoke.
+
+2. **Ephemeral, no persistence, minimal server state.** New `AwarenessEvent`
+   types (`cursor` / `selection` / `left`) + `broadcastAwareness` in
+   `blueprint-api/src/lib/broadcast.ts`. The ws route handles `cursor` and
+   `selection` frames (only on an awareness-subscribed socket for its diagram,
+   access already gated at subscribe), and emits `left` on socket close so peers
+   clear immediately. Color is a stable hash of the user id (`awarenessColor`)
+   so every viewer renders a given person in the same color with zero
+   server-side room/Map state to track or clean up. No DB writes anywhere.
+
+3. **Client: own hook + two overlays, fully isolated from the editor.**
+   `use-diagram-awareness.ts` opens the awareness socket, throttles cursor sends
+   to ~20Hz, drops idle cursors after 8s (selections persist until `left`), and
+   reconnects with backoff. `remote-cursors-overlay.tsx` and
+   `remote-selection-overlay.tsx` transform flow coords to screen via
+   `useViewport` and render with `pointer-events: none`, so they track pan/zoom
+   and can never intercept canvas interaction. Wired into `editor.tsx`:
+   `onMouseMove` on the canvas wrapper sends the cursor (passive, no
+   preventDefault), `onSelectionChange` also broadcasts the selection, overlays
+   mount as siblings of `<ReactFlow>` inside the existing ReactFlowProvider.
+
+4. **Scope call: node-selection rings only; edge-selection highlight deferred.**
+   Edge geometry on React Flow is materially more complex (path recompute) and
+   low value for a first pass; the selection frame still carries edge ids, so
+   rendering can be added later without a protocol change. Recorded in
+   docs/plans/synchronous-presence-rollout-notes.md.
+
+5. **No-harm posture.** All additive; if the awareness socket never connects the
+   editor is unaffected (empty overlays, no-op senders). No new deps
+   (`@fastify/websocket` already in blueprint-api; `/blueprint/ws` nginx route
+   already existed).
+
+6. **Verification.** blueprint-api + blueprint typecheck clean. Rebuilt
+   blueprint-api + frontend, recreated both. A live Playwright smoke (10/10
+   PASS) against the rebuilt stack as the healthy e2e-admin user proved: editor
+   canvas renders with no uncaught errors; awareness + mutations sockets both
+   subscribe; a 2nd socket's cursor (with server color + display name) and
+   selection (node id echoed) reach the 1st; awareness events do NOT reach the
+   mutations socket and structural events do NOT reach the awareness socket
+   (isolation both ways); and a node move still reaches the mutations socket
+   (structural sync intact after the ws-route edits). Smoke run then deleted.

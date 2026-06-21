@@ -53,6 +53,9 @@ import {
 import { SHAPE_OPTIONS } from '@/components/canvas/node-types';
 import { useDiagram, useDiagramGraph, useArchiveDiagram, useSnapshotVersion } from '@/hooks/use-diagrams';
 import { useDiagramSync } from '@/hooks/use-diagram-sync';
+import { useDiagramAwareness } from '@/hooks/use-diagram-awareness';
+import { RemoteCursorsOverlay } from '@/components/canvas/remote-cursors-overlay';
+import { RemoteSelectionOverlay } from '@/components/canvas/remote-selection-overlay';
 import {
   useCreateNode,
   type CreateNodeInput,
@@ -180,6 +183,15 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
   // this diagram. The reconciliation effect below applies it without
   // touching the local viewport — shared document, independent camera.
   useDiagramSync(diagramId);
+  // T3 awareness: live remote cursors + selection highlights. Own socket on a
+  // separate channel — decoupled from the structural sync above, so it can
+  // never trigger a graph refetch and can fail without affecting the editor.
+  const {
+    cursors: remoteCursors,
+    selections: remoteSelections,
+    sendCursor: sendAwarenessCursor,
+    sendSelection: sendAwarenessSelection,
+  } = useDiagramAwareness(diagramId);
   const archiveMutation = useArchiveDiagram();
   const snapshotMutation = useSnapshotVersion(diagramId);
 
@@ -543,12 +555,31 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
     [screenToFlowPosition],
   );
 
-  const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
-    const node = params.nodes[0];
-    const edge = params.edges[0];
-    setSelectedNodeId(node?.id ?? null);
-    setSelectedEdgeId(node ? null : edge?.id ?? null);
-  }, []);
+  const onSelectionChange = useCallback(
+    (params: OnSelectionChangeParams) => {
+      const node = params.nodes[0];
+      const edge = params.edges[0];
+      setSelectedNodeId(node?.id ?? null);
+      setSelectedEdgeId(node ? null : edge?.id ?? null);
+      // Broadcast our selection so other viewers see a colored ring (T3).
+      sendAwarenessSelection(
+        params.nodes.map((n) => n.id),
+        params.edges.map((e) => e.id),
+      );
+    },
+    [sendAwarenessSelection],
+  );
+
+  // Broadcast our cursor (in flow coordinates) as it moves over the canvas.
+  // The hook throttles sends; this handler is passive (no preventDefault), so
+  // it can't interfere with React Flow's own pointer handling.
+  const onAwarenessPointerMove = useCallback(
+    (event: React.MouseEvent) => {
+      const flow = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      sendAwarenessCursor(flow.x, flow.y);
+    },
+    [screenToFlowPosition, sendAwarenessCursor],
+  );
 
   const onNodeClick: NodeMouseHandler = useCallback((_, node) => {
     setSelectedNodeId(node.id);
@@ -1246,7 +1277,11 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
 
       {/* Canvas + inspector */}
       <div className="flex flex-1 min-h-0">
-        <div ref={canvasWrapRef} className="flex-1 min-w-0 relative">
+        <div
+          ref={canvasWrapRef}
+          className="flex-1 min-w-0 relative"
+          onMouseMove={onAwarenessPointerMove}
+        >
           <CanvasContextMenu
             state={contextMenu}
             onClose={() => setContextMenu(null)}
@@ -1392,6 +1427,11 @@ function EditorInner({ diagramId, onNavigate }: EditorPageProps) {
               }}
             />
           </ReactFlow>
+          {/* T3 awareness overlays — remote cursors + selection rings. Both
+              use the live viewport so they track pan/zoom; pointer-events off
+              so they never intercept canvas interaction. */}
+          <RemoteSelectionOverlay selections={remoteSelections} nodes={rfNodes} />
+          <RemoteCursorsOverlay cursors={remoteCursors} />
         </div>
         <Inspector
           selectedNode={selectedNode}
