@@ -3,6 +3,7 @@ import * as Y from 'yjs';
 import { db } from '../db/index.js';
 import { briefDocuments } from '../db/schema/index.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
+import { maybeSnapshotVersion } from './version.service.js';
 
 // ---------------------------------------------------------------------------
 // Yjs persistence service (Wave 2 stub for Hocuspocus integration)
@@ -176,6 +177,10 @@ export async function saveYjsStateImmediate(
     .returning({ id: briefDocuments.id });
 
   if (!row) return false;
+
+  // Throttled version snapshot so continuous editing builds a revision history
+  // (at most one auto-snapshot per VERSION_SNAPSHOT_THROTTLE_MS). Fire-and-forget.
+  maybeSnapshotVersion(docId, userId, orgId).catch(() => {});
 
   // Fire-and-forget Bolt emission. Bare event name, source 'brief'.
   publishBoltEvent(

@@ -16,7 +16,7 @@ import { useCollaboration } from '@/hooks/use-collaboration';
 import { useCollaborativeEditor, BriefEditorContent } from '@/components/editor/brief-editor';
 import { useBureauLocationLabel } from '@bigbluebam/bureau-client';
 import { useComments, useCreateComment, useResolveComment, useDeleteComment } from '@/hooks/use-comments';
-import { useVersions } from '@/hooks/use-versions';
+import { useVersions, useRestoreVersion } from '@/hooks/use-versions';
 import { StatusBadge } from '@/components/document/status-badge';
 import { CommentThread } from '@/components/document/comment-thread';
 import { ExportMenu } from '@/components/document/export-menu';
@@ -42,6 +42,11 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
 
   // Bureau widget context: show the document title, not the URL path.
   useBureauLocationLabel(doc?.title ?? null);
+
+  const restoreVersion = useRestoreVersion();
+  // Documents have no version column; the current version is the latest snapshot
+  // in brief_versions (listVersions returns them newest-first).
+  const latestVersion = versions && versions.length > 0 ? versions[0]!.version_number : 0;
 
   const toggleStar = useToggleStar();
   const archiveDoc = useArchiveDocument();
@@ -176,7 +181,7 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
               <StatusBadge status={doc.status} />
             </div>
             {doc.summary && (
-              <p className="text-zinc-600 dark:text-zinc-400 text-sm">{doc.summary}</p>
+              <p className="text-zinc-600 dark:text-zinc-400 text-sm break-words max-w-3xl">{doc.summary}</p>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -284,24 +289,54 @@ export function DocumentDetailPage({ idOrSlug, onNavigate }: DocumentDetailPageP
           </SidebarField>
 
           {/* Version history */}
-          <SidebarField label="Version">
+          <SidebarField label="Version history">
             <div>
               <button
                 onClick={() => setShowVersions(!showVersions)}
                 className="flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-300 hover:text-primary-600"
               >
-                v{doc.version}
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showVersions ? 'rotate-180' : ''}`} />
+                {latestVersion > 0
+                  ? `v${latestVersion} (${versions!.length} saved)`
+                  : 'No saved versions yet'}
+                {versions && versions.length > 0 && (
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showVersions ? 'rotate-180' : ''}`} />
+                )}
               </button>
               {showVersions && versions && versions.length > 0 && (
-                <div className="mt-2 space-y-1.5 max-h-48 overflow-auto">
-                  {versions.map((v) => (
-                    <div key={v.id} className="text-xs text-zinc-500 dark:text-zinc-400">
-                      <span className="font-medium">v{v.version}</span>
-                      {' '}&mdash;{' '}
-                      {v.changed_by_name ?? 'Unknown'}
-                      {' '}&middot;{' '}
-                      {formatRelativeTime(v.created_at)}
+                <div className="mt-2 space-y-2 max-h-64 overflow-auto">
+                  {versions.map((v, idx) => (
+                    <div key={v.id} className="text-xs text-zinc-500 dark:text-zinc-400 group/version">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">v{v.version_number}</span>
+                          {' '}&middot;{' '}
+                          {v.changed_by_name ?? 'Unknown'}
+                          {' '}&middot;{' '}
+                          {formatRelativeTime(v.created_at)}
+                        </span>
+                        {idx !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Restore version v${v.version_number}? The current content is snapshotted first, so this is reversible.`)) {
+                                restoreVersion.mutate(
+                                  { documentId: doc.id, versionId: v.id },
+                                  { onSuccess: () => refetch() },
+                                );
+                              }
+                            }}
+                            disabled={restoreVersion.isPending}
+                            className="shrink-0 opacity-0 group-hover/version:opacity-100 focus:opacity-100 inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                            title={`Restore v${v.version_number}`}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            Restore
+                          </button>
+                        )}
+                      </div>
+                      {v.change_summary && (
+                        <p className="mt-0.5 break-words text-zinc-400 dark:text-zinc-500">{v.change_summary}</p>
+                      )}
                     </div>
                   ))}
                 </div>

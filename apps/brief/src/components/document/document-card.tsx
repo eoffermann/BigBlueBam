@@ -43,7 +43,7 @@ export function DocumentCard({ document, onClick, onDelete, deleting }: Document
               )}
             </div>
             {document.summary && (
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mb-2">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 break-words mb-2">
                 {document.summary}
               </p>
             )}

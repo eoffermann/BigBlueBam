@@ -14,6 +14,7 @@ import {
 import { sanitizeHtml } from '../lib/sanitize.js';
 import { publishBoltEvent } from '../lib/bolt-events.js';
 import { enrichDocumentEventPayload } from '../lib/enrich-document-event.js';
+import { maybeSnapshotVersion } from './version.service.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -390,6 +391,10 @@ export async function updateDocument(
         publishBoltEvent('document.published', 'brief', payload, orgId, userId, 'user'),
       )
       .catch(() => {});
+    // Always record a version at publish milestones (bypasses the autosave throttle).
+    maybeSnapshotVersion(doc!.id, userId, orgId, { force: true, changeSummary: 'Published' }).catch(
+      () => {},
+    );
   }
 
   return doc!;

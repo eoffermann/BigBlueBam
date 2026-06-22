@@ -108,6 +108,11 @@ export function HomePage({ onNavigate }: HomePageProps) {
                       {doc.title}
                     </p>
                   </div>
+                  {doc.summary && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 break-words mt-0.5">
+                      {doc.summary}
+                    </p>
+                  )}
                   <div className="flex items-center gap-2 mt-0.5">
                     <Avatar src={doc.creator_avatar_url} name={doc.creator_name} size="sm" />
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">

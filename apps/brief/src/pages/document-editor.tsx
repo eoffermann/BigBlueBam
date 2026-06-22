@@ -54,6 +54,18 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
   const [editorHtml, setEditorHtml] = useState('');
   const [wordCount, setWordCount] = useState(0);
   const [initialContent, setInitialContent] = useState<string | null>(null);
+  // Autosave status shown in place of the old "Save Draft" button.
+  const [savedState, setSavedState] = useState<'saved' | 'saving'>('saved');
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flag a recent edit so the indicator reads "Saving..." then settles to
+  // "All changes saved". Existing docs only — new docs have no document yet.
+  const markEdited = useCallback(() => {
+    if (!isEditMode) return;
+    setSavedState('saving');
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSavedState('saved'), 1200);
+  }, [isEditMode]);
 
   // Pre-select the active project from the store when creating
   useEffect(() => {
@@ -77,21 +89,25 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
     }
   }, [isEditMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Populate form when editing
+  // Populate form when editing. Initialize ONCE per document: autosave triggers
+  // refetches of `existing`, and re-running this on every refetch would clobber
+  // the user's in-progress title/summary/content with the just-saved server copy.
+  const populatedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (existing) {
-      setTitle(existing.title);
-      setSummary(existing.summary ?? '');
-      setIconEmoji(existing.icon ?? '');
-      setProjectId(existing.project_id ?? '');
-      setVisibility(existing.visibility ?? 'organization');
+    if (!existing) return;
+    if (populatedRef.current === existing.id) return;
+    populatedRef.current = existing.id;
+    setTitle(existing.title);
+    setSummary(existing.summary ?? '');
+    setIconEmoji(existing.icon ?? '');
+    setProjectId(existing.project_id ?? '');
+    setVisibility(existing.visibility ?? 'organization');
 
-      // Convert stored content to HTML for the editor
-      const md = existing.plain_text ?? '';
-      const html = markdownToHtml(md);
-      setInitialContent(html);
-      setEditorHtml(html);
-    }
+    // Convert stored content to HTML for the editor
+    const md = existing.plain_text ?? '';
+    const html = markdownToHtml(md);
+    setInitialContent(html);
+    setEditorHtml(html);
   }, [existing]);
 
   // Set initial content for new documents
@@ -127,7 +143,8 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
       .split(/\s+/)
       .filter((w) => w.length > 0);
     setWordCount(words.length);
-  }, []);
+    markEdited();
+  }, [markEdited]);
 
   // Wait for content to be ready before creating the editor.
   // Tiptap's `content` prop is only read on initialization; passing it
@@ -218,16 +235,37 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
     (value: string) => {
       setTitle(value);
       if (docIdForCollab) ydoc.getMap('meta').set('title', value);
+      markEdited();
     },
-    [docIdForCollab, ydoc],
+    [docIdForCollab, ydoc, markEdited],
   );
   const handleSummaryChange = useCallback(
     (value: string) => {
       setSummary(value);
       if (docIdForCollab) ydoc.getMap('meta').set('summary', value);
+      markEdited();
     },
-    [docIdForCollab, ydoc],
+    [docIdForCollab, ydoc, markEdited],
   );
+
+  // Autosave icon + visibility for existing docs. Body, title, and summary are
+  // already persisted live by the Yjs collaboration flush; these two fields are
+  // the only editor metadata not covered, so debounce-PATCH them on change. The
+  // populate effect runs once per doc, so the resulting refetch won't clobber edits.
+  useEffect(() => {
+    if (!isEditMode || !existing) return;
+    const iconChanged = (iconEmoji || null) !== (existing.icon ?? null);
+    const visChanged = visibility !== (existing.visibility ?? 'organization');
+    if (!iconChanged && !visChanged) return;
+    setSavedState('saving');
+    const t = setTimeout(() => {
+      updateDocument.mutate(
+        { id: existing.id, data: { icon: iconEmoji || undefined, visibility } },
+        { onSettled: () => setSavedState('saved') },
+      );
+    }, 800);
+    return () => clearTimeout(t);
+  }, [iconEmoji, visibility, isEditMode, existing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isEditMode && (loadingExisting || !contentReady)) {
     return (
@@ -358,12 +396,25 @@ export function DocumentEditorPage({ idOrSlug, onNavigate }: DocumentEditorPageP
           {isEditMode && existing && (
             <ExportMenu documentId={existing.id} slug={existing.slug} />
           )}
-          <Button variant="secondary" size="sm" onClick={handleSaveDraft} loading={isSaving} disabled={!title.trim()}>
-            Save Draft
-          </Button>
-          <Button size="sm" onClick={handlePublish} loading={isSaving} disabled={!title.trim()}>
-            Publish
-          </Button>
+          {isEditMode ? (
+            <>
+              <span
+                className="text-xs text-zinc-400 dark:text-zinc-500 select-none"
+                title="Your changes save automatically as you type"
+              >
+                {savedState === 'saving' ? 'Saving...' : 'All changes saved'}
+              </span>
+              {existing?.status !== 'approved' && (
+                <Button size="sm" onClick={handlePublish} loading={isSaving} disabled={!title.trim()}>
+                  Publish
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button size="sm" onClick={handleSaveDraft} loading={isSaving} disabled={!title.trim()}>
+              Create document
+            </Button>
+          )}
         </div>
       </div>
 

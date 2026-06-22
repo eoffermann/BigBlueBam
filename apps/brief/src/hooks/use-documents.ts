@@ -47,10 +47,12 @@ export interface BriefFolder {
 export interface BriefVersion {
   id: string;
   document_id: string;
-  version: number;
+  version_number: number;
   title: string;
-  plain_text: string;
-  changed_by: string;
+  plain_text: string | null;
+  change_summary: string | null;
+  word_count: number;
+  created_by: string;
   changed_by_name: string | null;
   created_at: string;
 }
