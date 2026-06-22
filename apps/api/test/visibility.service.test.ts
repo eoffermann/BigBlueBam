@@ -548,13 +548,16 @@ describe('visibility.service preflightAccess', () => {
       expect(result.entity_org_id).toBe(ORG_A);
     });
 
-    it('denies a non-member of a public channel with banter_not_channel_member', async () => {
+    // Public channels are org-readable as of a5ee1b28 (feat(banter): make public
+    // channels org-readable; feed surfaces them): a non-member org user may read
+    // a public channel so the Banter Feed can surface it. Private/DM stay leak-safe.
+    it('allows a non-member of a public channel (public channels are org-readable)', async () => {
       mockAsker(ORG_A, 'member');
       pushSelect([{ id: CHANNEL_ID, org_id: ORG_A, type: 'public', is_archived: false }]);
-      pushSelect([]); // no membership
+      pushSelect([]); // no membership — public channels are still org-readable
       const result = await preflightAccess(USER_ASKER, 'banter.channel', CHANNEL_ID);
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toBe('banter_not_channel_member');
+      expect(result.allowed).toBe(true);
+      expect(result.reason).toBe('ok');
     });
 
     it('returns not_found for a non-member of a private channel (leak-safe)', async () => {
@@ -636,7 +639,7 @@ describe('visibility.service preflightAccess', () => {
       expect(result.reason).toBe('not_found');
     });
 
-    it('denies a message in a public channel the asker has not joined', async () => {
+    it('allows a message in a public channel even if the asker has not joined (public is org-readable)', async () => {
       mockAsker(ORG_A, 'member');
       pushSelect([
         {
@@ -648,10 +651,10 @@ describe('visibility.service preflightAccess', () => {
           is_archived: false,
         },
       ]);
-      pushSelect([]); // no membership
+      pushSelect([]); // no membership — public channels are still org-readable
       const result = await preflightAccess(USER_ASKER, 'banter.message', ENTITY_ID);
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toBe('banter_not_channel_member');
+      expect(result.allowed).toBe(true);
+      expect(result.reason).toBe('ok');
     });
   });
 
