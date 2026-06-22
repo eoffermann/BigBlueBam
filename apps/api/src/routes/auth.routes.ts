@@ -256,6 +256,16 @@ export default async function authRoutes(fastify: FastifyInstance) {
             org_id: result.user.org_id,
             is_superuser: result.user.is_superuser,
             active_org_id: result.user.org_id,
+            // Identity fields the SPA gates on must be present on the login
+            // user, not just on GET /auth/me. App computes `ftueRequired` and
+            // the forced-password-change redirect straight from the store user
+            // it sets from this response; omitting these made the FTUE tour
+            // re-fire on every login (notification_prefs absent → ftue_completed
+            // reads undefined → tour shown) even after the user skipped it.
+            kind: result.user.kind,
+            timezone: result.user.timezone,
+            notification_prefs: result.user.notification_prefs,
+            force_password_change: result.user.force_password_change,
           },
         },
       });
