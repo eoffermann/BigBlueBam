@@ -16,8 +16,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/tests/**/*.test.ts'],
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     // Integration tests are inherently serial; do not parallelize.
     sequence: {
       concurrent: false,

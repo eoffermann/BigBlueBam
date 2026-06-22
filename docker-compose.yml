@@ -186,6 +186,7 @@ services:
       BENCH_API_URL: http://bench-api:4011/v1
       BILL_API_URL: http://bill-api:4014/v1
       BLANK_API_URL: http://blank-api:4013/v1
+      BUREAU_API_URL: http://bureau-api:4015/v1
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
       MCP_INTERNAL_API_TOKEN: ${MCP_INTERNAL_API_TOKEN:-}

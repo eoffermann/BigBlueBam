@@ -22,8 +22,17 @@ concurrency:
 
 jobs:
   vitest:
-    name: Vitest (all packages)
+    name: Vitest (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+
+    # Sharded so no single runner runs all ~40 workspace suites at once. Running
+    # them all in parallel on one runner starved DB-setup hooks and produced
+    # "Hook timed out" false-reds that varied run-to-run. Each shard gets its own
+    # Postgres/Redis service and runs its subset of packages serially.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -99,5 +108,37 @@ jobs:
           MIGRATIONS_DIR: ${{ github.workspace }}/infra/postgres/migrations
         run: node apps/api/dist/migrate.js
 
-      - name: Run unit tests
-        run: pnpm -r --parallel --if-present test
+      - name: Run unit tests (shard ${{ matrix.shard }}/4)
+        env:
+          SHARD: ${{ matrix.shard }}
+          TOTAL: 4
+        run: |
+          # Deterministically round-robin every workspace package that has a
+          # test script across the shards, then run this shard's packages one at
+          # a time. Serial within a shard keeps DB-setup hooks from contending,
+          # which is what caused the flaky "Hook timed out" reds.
+          mapfile -t PKGS < <(node -e '
+            const fs = require("fs");
+            const names = [];
+            for (const base of ["apps", "packages"]) {
+              if (!fs.existsSync(base)) continue;
+              for (const d of fs.readdirSync(base)) {
+                const pj = `${base}/${d}/package.json`;
+                if (!fs.existsSync(pj)) continue;
+                let j; try { j = JSON.parse(fs.readFileSync(pj, "utf8")); } catch { continue; }
+                if (j.scripts && j.scripts.test) names.push(j.name);
+              }
+            }
+            names.sort();
+            const shard = Number(process.env.SHARD), total = Number(process.env.TOTAL);
+            names.filter((_, i) => i % total === shard - 1).forEach((n) => console.log(n));
+          ')
+          echo "Shard ${SHARD}/${TOTAL} packages: ${PKGS[*]}"
+          if [ ${#PKGS[@]} -eq 0 ]; then echo "no packages in this shard"; exit 0; fi
+          fail=0
+          for p in "${PKGS[@]}"; do
+            echo "::group::$p"
+            pnpm --filter "$p" --if-present run test || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail

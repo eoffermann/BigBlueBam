@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1066,
-    "mcp_tools_scanned": 348,
-    "rest_routes_scanned": 770,
-    "read_permissions": 430,
-    "destructive_permissions": 107
+    "total": 1318,
+    "mcp_tools_scanned": 731,
+    "rest_routes_scanned": 835,
+    "read_permissions": 514,
+    "destructive_permissions": 124
   },
   "permissions": [
     {
@@ -638,6 +638,23 @@
       ]
     },
     {
+      "id": "bam.auth_service_account.rotate",
+      "app": "bam",
+      "resource": "auth_service_account",
+      "verb": "rotate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /auth/service-accounts/:id/rotate",
+          "file": "service-account.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.beta_signup.list",
       "app": "bam",
       "resource": "beta_signup",
@@ -685,6 +702,23 @@
           "source": "rest",
           "ref": "GET /comments/:id/reactions",
           "file": "reaction.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.comment_revision.get",
+      "app": "bam",
+      "resource": "comment_revision",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /comments/:id/revisions",
+          "file": "comment.routes.ts"
         }
       ]
     },
@@ -808,6 +842,23 @@
       ]
     },
     {
+      "id": "bam.csv.import",
+      "app": "bam",
+      "resource": "csv",
+      "verb": "import",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_import_csv",
+          "file": "import-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.custom_field.delete",
       "app": "bam",
       "resource": "custom_field",
@@ -927,6 +978,57 @@
       ]
     },
     {
+      "id": "bam.epic_task.get",
+      "app": "bam",
+      "resource": "epic_task",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /epics/:id/tasks",
+          "file": "epic.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.epic_tasks.list",
+      "app": "bam",
+      "resource": "epic_tasks",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_list_epic_tasks",
+          "file": "epic-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.epic.create",
+      "app": "bam",
+      "resource": "epic",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_create_epic",
+          "file": "epic-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.epic.delete",
       "app": "bam",
       "resource": "epic",
@@ -937,8 +1039,35 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bam_delete_epic",
+          "file": "epic-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /epics/:id",
+          "file": "epic.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.epic.get",
+      "app": "bam",
+      "resource": "epic",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_get_epic",
+          "file": "epic-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "GET /epics/:id",
           "file": "epic.routes.ts"
         }
       ]
@@ -953,6 +1082,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_update_epic",
+          "file": "epic-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /epics/:id",
@@ -1471,6 +1605,108 @@
       ]
     },
     {
+      "id": "bam.member_activity.get",
+      "app": "bam",
+      "resource": "member_activity",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_get_member_activity",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.member_from_org.remove",
+      "app": "bam",
+      "resource": "member_from_org",
+      "verb": "remove",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_remove_member_from_org",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.member_projects.list",
+      "app": "bam",
+      "resource": "member_projects",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_list_member_projects",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.member_role.update",
+      "app": "bam",
+      "resource": "member_role",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_update_member_role",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.member_to_projects.add",
+      "app": "bam",
+      "resource": "member_to_projects",
+      "verb": "add",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_add_member_to_projects",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.member.invite",
+      "app": "bam",
+      "resource": "member",
+      "verb": "invite",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_invite_member",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.org_launchpad_app.list",
       "app": "bam",
       "resource": "org_launchpad_app",
@@ -1585,6 +1821,40 @@
         {
           "source": "rest",
           "ref": "GET /org/members/:userId/api-keys",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.org_member_delete_account.create",
+      "app": "bam",
+      "resource": "org_member_delete_account",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /org/members/:userId/delete-account",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.org_member_deletion_eligibility.get",
+      "app": "bam",
+      "resource": "org_member_deletion_eligibility",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /org/members/:userId/deletion-eligibility",
           "file": "org.routes.ts"
         }
       ]
@@ -1709,6 +1979,23 @@
       ]
     },
     {
+      "id": "bam.org_member_reset_ftue.create",
+      "app": "bam",
+      "resource": "org_member_reset_ftue",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /org/members/:userId/reset-ftue",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.org_member_reset_password.create",
       "app": "bam",
       "resource": "org_member_reset_password",
@@ -1721,6 +2008,23 @@
         {
           "source": "rest",
           "ref": "POST /org/members/:userId/reset-password",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.org_member_send_password_reset.create",
+      "app": "bam",
+      "resource": "org_member_send_password_reset",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /org/members/:userId/send-password-reset",
           "file": "org.routes.ts"
         }
       ]
@@ -1787,6 +2091,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bam_get_org_member",
+          "file": "member-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /org/members/:userId",
           "file": "org.routes.ts"
@@ -1840,6 +2149,74 @@
         {
           "source": "rest",
           "ref": "PATCH /org/members/:userId",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.org_smtp_setting_test.create",
+      "app": "bam",
+      "resource": "org_smtp_setting_test",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /org/smtp-settings/test",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.org_smtp_setting.delete",
+      "app": "bam",
+      "resource": "org_smtp_setting",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /org/smtp-settings",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.org_smtp_setting.list",
+      "app": "bam",
+      "resource": "org_smtp_setting",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /org/smtp-settings",
+          "file": "org.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.org_smtp_setting.update",
+      "app": "bam",
+      "resource": "org_smtp_setting",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PUT /org/smtp-settings",
           "file": "org.routes.ts"
         }
       ]
@@ -1926,6 +2303,45 @@
           "source": "rest",
           "ref": "GET /overview",
           "file": "superuser.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.password_reset_link.send",
+      "app": "bam",
+      "resource": "password_reset_link",
+      "verb": "send",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_send_password_reset_link",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.people.list",
+      "app": "bam",
+      "resource": "people",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_list_people",
+          "file": "member-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "GET /people",
+          "file": "people.routes.ts"
         }
       ]
     },
@@ -2202,6 +2618,23 @@
       ]
     },
     {
+      "id": "bam.priority_reorder.create",
+      "app": "bam",
+      "resource": "priority_reorder",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /priorities/reorder",
+          "file": "priority.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.priority.create",
       "app": "bam",
       "resource": "priority",
@@ -2300,6 +2733,57 @@
           "source": "rest",
           "ref": "GET /projects/:id/board",
           "file": "task.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.project_calling_setting_effective.get",
+      "app": "bam",
+      "resource": "project_calling_setting_effective",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /projects/:id/calling-settings/effective",
+          "file": "project-calling-settings.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.project_calling_setting.get",
+      "app": "bam",
+      "resource": "project_calling_setting",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /projects/:id/calling-settings",
+          "file": "project-calling-settings.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.project_calling_setting.update",
+      "app": "bam",
+      "resource": "project_calling_setting",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PUT /projects/:id/calling-settings",
+          "file": "project-calling-settings.routes.ts"
         }
       ]
     },
@@ -2419,6 +2903,23 @@
           "source": "rest",
           "ref": "PUT /projects/:id/github-integration",
           "file": "github-integration.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.project_import_csv_preview.create",
+      "app": "bam",
+      "resource": "project_import_csv_preview",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /projects/:id/import/csv/preview",
+          "file": "import.routes.ts"
         }
       ]
     },
@@ -3322,6 +3823,23 @@
       ]
     },
     {
+      "id": "bam.reset_password.admin",
+      "app": "bam",
+      "resource": "reset_password",
+      "verb": "admin",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_admin_reset_password",
+          "file": "member-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.sprint_complete.create",
       "app": "bam",
       "resource": "sprint_complete",
@@ -3522,6 +4040,23 @@
           "source": "mcp",
           "ref": "bam_list_states",
           "file": "bam-resolver-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.superuser_activity_log.list",
+      "app": "bam",
+      "resource": "superuser_activity_log",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /superuser/activity-log",
+          "file": "superuser-logs.routes.ts"
         }
       ]
     },
@@ -3849,6 +4384,91 @@
       ]
     },
     {
+      "id": "bam.superuser_system_error.list",
+      "app": "bam",
+      "resource": "superuser_system_error",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": true,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /superuser/system-errors",
+          "file": "superuser-logs.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.system_error_record_browser.create",
+      "app": "bam",
+      "resource": "system_error_record_browser",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /system-errors/record-browser",
+          "file": "internal-system-errors.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.system_error_record.create",
+      "app": "bam",
+      "resource": "system_error_record",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /system-errors/record",
+          "file": "internal-system-errors.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.system_setting_password_policy_preview.create",
+      "app": "bam",
+      "resource": "system_setting_password_policy_preview",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /system-settings/password_policy/preview",
+          "file": "system-settings.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.system_setting_smtp_test.create",
+      "app": "bam",
+      "resource": "system_setting_smtp_test",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /system-settings/smtp/test",
+          "file": "system-settings.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.system_setting.get",
       "app": "bam",
       "resource": "system_setting",
@@ -4066,6 +4686,142 @@
           "source": "rest",
           "ref": "GET /tasks/:id/github-refs",
           "file": "github-integration.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_parent.add",
+      "app": "bam",
+      "resource": "task_parent",
+      "verb": "add",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_add_task_parent",
+          "file": "task-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_parent.create",
+      "app": "bam",
+      "resource": "task_parent",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /tasks/:id/parents",
+          "file": "task.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_parent.delete",
+      "app": "bam",
+      "resource": "task_parent",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /tasks/:id/parents/:parentId",
+          "file": "task.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_parent.get",
+      "app": "bam",
+      "resource": "task_parent",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /tasks/:id/parents",
+          "file": "task.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_parent.remove",
+      "app": "bam",
+      "resource": "task_parent",
+      "verb": "remove",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_remove_task_parent",
+          "file": "task-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_parents.list",
+      "app": "bam",
+      "resource": "task_parents",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_list_task_parents",
+          "file": "task-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_subtask.get",
+      "app": "bam",
+      "resource": "task_subtask",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /tasks/:id/subtasks",
+          "file": "task.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.task_subtasks.list",
+      "app": "bam",
+      "resource": "task_subtasks",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bam_list_task_subtasks",
+          "file": "task-tools.ts"
         }
       ]
     },
@@ -4639,6 +5395,23 @@
       ]
     },
     {
+      "id": "bam.user.delete",
+      "app": "bam",
+      "resource": "user",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /users/:id",
+          "file": "superuser.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bam.user.find",
       "app": "bam",
       "resource": "user",
@@ -5108,6 +5881,23 @@
       ]
     },
     {
+      "id": "banter.bookmark_by_message.delete",
+      "app": "banter",
+      "resource": "bookmark_by_message",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /v1/bookmarks/by-message/:messageId",
+          "file": "bookmark.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.bookmark.create",
       "app": "banter",
       "resource": "bookmark",
@@ -5117,6 +5907,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_create_bookmark",
+          "file": "banter-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /v1/bookmarks",
@@ -5134,6 +5929,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_delete_bookmark",
+          "file": "banter-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /v1/bookmarks/:id",
@@ -5155,6 +5955,23 @@
           "source": "rest",
           "ref": "GET /v1/bookmarks",
           "file": "bookmark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.bookmarks.list",
+      "app": "banter",
+      "resource": "bookmarks",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_bookmarks",
+          "file": "banter-tools.ts"
         }
       ]
     },
@@ -5223,6 +6040,23 @@
           "source": "rest",
           "ref": "GET /v1/calls/:id/participants",
           "file": "call.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.call_participants.list",
+      "app": "banter",
+      "resource": "call_participants",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_call_participants",
+          "file": "banter-tools.ts"
         }
       ]
     },
@@ -5463,6 +6297,40 @@
       ]
     },
     {
+      "id": "banter.channel_bulk_add_member.create",
+      "app": "banter",
+      "resource": "channel_bulk_add_member",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /v1/channels/bulk-add-members",
+          "file": "channel.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.channel_bulk.create",
+      "app": "banter",
+      "resource": "channel_bulk",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /v1/channels/bulk",
+          "file": "channel.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.channel_by_name.get",
       "app": "banter",
       "resource": "channel_by_name",
@@ -5638,6 +6506,23 @@
       ]
     },
     {
+      "id": "banter.channel_members.list",
+      "app": "banter",
+      "resource": "channel_members",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_channel_members",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.channel_message.create",
       "app": "banter",
       "resource": "channel_message",
@@ -5740,6 +6625,23 @@
       ]
     },
     {
+      "id": "banter.channel_presence.list",
+      "app": "banter",
+      "resource": "channel_presence",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_channel_presence",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.channel_scheduled_message.get",
       "app": "banter",
       "resource": "channel_scheduled_message",
@@ -5818,6 +6720,23 @@
       ]
     },
     {
+      "id": "banter.channel.follow",
+      "app": "banter",
+      "resource": "channel",
+      "verb": "follow",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PUT /v1/channels/:id/follow",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.channel.get",
       "app": "banter",
       "resource": "channel",
@@ -5836,6 +6755,11 @@
           "source": "rest",
           "ref": "GET /v1/channels/:id",
           "file": "channel.routes.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "GET /v1/channels/:id/follow",
+          "file": "feed.routes.ts"
         }
       ]
     },
@@ -5957,6 +6881,40 @@
       ]
     },
     {
+      "id": "banter.channels.search",
+      "app": "banter",
+      "resource": "channels",
+      "verb": "search",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_search_channels",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.dismiss.feed",
+      "app": "banter",
+      "resource": "dismiss",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_dismiss",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.dm.create",
       "app": "banter",
       "resource": "dm",
@@ -6004,6 +6962,227 @@
           "source": "mcp",
           "ref": "banter_send_dm",
           "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.dms.list",
+      "app": "banter",
+      "resource": "dms",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_dms",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.explain.feed",
+      "app": "banter",
+      "resource": "explain",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_explain",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_dismiss.create",
+      "app": "banter",
+      "resource": "feed_dismiss",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /v1/feed/:entryId/dismiss",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_seen.create",
+      "app": "banter",
+      "resource": "feed_seen",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /v1/feed/seen",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_subscription.delete",
+      "app": "banter",
+      "resource": "feed_subscription",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /v1/feed/subscriptions/:id",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_subscription.list",
+      "app": "banter",
+      "resource": "feed_subscription",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /v1/feed/subscriptions",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_subscription.update",
+      "app": "banter",
+      "resource": "feed_subscription",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PUT /v1/feed/subscriptions",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_weight_org.update",
+      "app": "banter",
+      "resource": "feed_weight_org",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PUT /v1/feed/weights/org",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_weight_platform.update",
+      "app": "banter",
+      "resource": "feed_weight_platform",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PUT /v1/feed/weights/platform",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_weight_preview.create",
+      "app": "banter",
+      "resource": "feed_weight_preview",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /v1/feed/weights/preview",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed_weight.list",
+      "app": "banter",
+      "resource": "feed_weight",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /v1/feed/weights",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed.get",
+      "app": "banter",
+      "resource": "feed",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /v1/feed/:entryId",
+          "file": "feed.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.feed.list",
+      "app": "banter",
+      "resource": "feed",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /v1/feed",
+          "file": "feed.routes.ts"
         }
       ]
     },
@@ -6110,6 +7289,40 @@
       ]
     },
     {
+      "id": "banter.group_members.list",
+      "app": "banter",
+      "resource": "group_members",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_group_members",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.internal_dm.create",
+      "app": "banter",
+      "resource": "internal_dm",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /v1/internal/dm",
+          "file": "internal.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.internal_feed.create",
       "app": "banter",
       "resource": "internal_feed",
@@ -6191,6 +7404,23 @@
           "source": "rest",
           "ref": "GET /v1/link-preview",
           "file": "link-preview.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.mark_seen.feed",
+      "app": "banter",
+      "resource": "mark_seen",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_mark_seen",
+          "file": "banter-tools.ts"
         }
       ]
     },
@@ -6545,6 +7775,23 @@
       ]
     },
     {
+      "id": "banter.pins.list",
+      "app": "banter",
+      "resource": "pins",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_pins",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.post.schedule",
       "app": "banter",
       "resource": "post",
@@ -6596,6 +7843,23 @@
       ]
     },
     {
+      "id": "banter.presence.get",
+      "app": "banter",
+      "resource": "presence",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_get_presence",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "banter.presence.set",
       "app": "banter",
       "resource": "presence",
@@ -6608,6 +7872,74 @@
         {
           "source": "mcp",
           "ref": "banter_set_presence",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.query.feed",
+      "app": "banter",
+      "resource": "query",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_query",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.reactions.list",
+      "app": "banter",
+      "resource": "reactions",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_reactions",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.read.mark",
+      "app": "banter",
+      "resource": "read",
+      "verb": "mark",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_mark_read",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.scheduled_message.cancel",
+      "app": "banter",
+      "resource": "scheduled_message",
+      "verb": "cancel",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_cancel_scheduled_message",
           "file": "banter-tools.ts"
         }
       ]
@@ -6626,6 +7958,23 @@
           "source": "rest",
           "ref": "DELETE /v1/scheduled-messages/:id",
           "file": "scheduled-messages.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.scheduled_messages.list",
+      "app": "banter",
+      "resource": "scheduled_messages",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_list_scheduled_messages",
+          "file": "banter-tools.ts"
         }
       ]
     },
@@ -6710,6 +8059,40 @@
         {
           "source": "mcp",
           "ref": "banter_share_sprint",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.subscription_list.feed",
+      "app": "banter",
+      "resource": "subscription_list",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_subscription_list",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.subscription_set.feed",
+      "app": "banter",
+      "resource": "subscription_set",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_subscription_set",
           "file": "banter-tools.ts"
         }
       ]
@@ -7024,6 +8407,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "banter_delete_user_group",
+          "file": "banter-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /v1/user-groups/:id",
           "file": "user-group.routes.ts"
@@ -7134,6 +8522,57 @@
           "source": "rest",
           "ref": "POST /v1/webhooks/livekit",
           "file": "webhook.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.weights_get.feed",
+      "app": "banter",
+      "resource": "weights_get",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_weights_get",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "banter.weights_set_org.feed",
+      "app": "banter",
+      "resource": "weights_set_org",
+      "verb": "feed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "banter_feed_weights_set_org",
+          "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "beacon.add.comment",
+      "app": "beacon",
+      "resource": "add",
+      "verb": "comment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_comment_add",
+          "file": "beacon-tools.ts"
         }
       ]
     },
@@ -7619,6 +9058,40 @@
       ]
     },
     {
+      "id": "beacon.delete.attachment",
+      "app": "beacon",
+      "resource": "delete",
+      "verb": "attachment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_attachment_delete",
+          "file": "beacon-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "beacon.delete.comment",
+      "app": "beacon",
+      "resource": "delete",
+      "verb": "comment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_comment_delete",
+          "file": "beacon-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "beacon.delete.query",
       "app": "beacon",
       "resource": "delete",
@@ -7631,6 +9104,23 @@
         {
           "source": "mcp",
           "ref": "beacon_query_delete",
+          "file": "beacon-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "beacon.edit.comment",
+      "app": "beacon",
+      "resource": "edit",
+      "verb": "comment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_comment_edit",
           "file": "beacon-tools.ts"
         }
       ]
@@ -7767,6 +9257,57 @@
         {
           "source": "mcp",
           "ref": "beacon_graph_hubs",
+          "file": "beacon-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "beacon.list.attachments",
+      "app": "beacon",
+      "resource": "list",
+      "verb": "attachments",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_attachments_list",
+          "file": "beacon-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "beacon.list.comments",
+      "app": "beacon",
+      "resource": "list",
+      "verb": "comments",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_comments_list",
+          "file": "beacon-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "beacon.list.links",
+      "app": "beacon",
+      "resource": "list",
+      "verb": "links",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_links_list",
           "file": "beacon-tools.ts"
         }
       ]
@@ -8214,6 +9755,23 @@
       ]
     },
     {
+      "id": "beacon.self.stats",
+      "app": "beacon",
+      "resource": "self",
+      "verb": "stats",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "beacon_stats",
+          "file": "beacon-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "beacon.self.suggest",
       "app": "beacon",
       "resource": "self",
@@ -8316,6 +9874,40 @@
       ]
     },
     {
+      "id": "bearing.activate.period",
+      "app": "bearing",
+      "resource": "activate",
+      "verb": "period",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_period_activate",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.complete.period",
+      "app": "bearing",
+      "resource": "complete",
+      "verb": "period",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_period_complete",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bearing.create.goal",
       "app": "bearing",
       "resource": "create",
@@ -8350,6 +9942,74 @@
       ]
     },
     {
+      "id": "bearing.create.period",
+      "app": "bearing",
+      "resource": "create",
+      "verb": "period",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_period_create",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.delete.goal",
+      "app": "bearing",
+      "resource": "delete",
+      "verb": "goal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_goal_delete",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.delete.kr",
+      "app": "bearing",
+      "resource": "delete",
+      "verb": "kr",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_kr_delete",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.delete.period",
+      "app": "bearing",
+      "resource": "delete",
+      "verb": "period",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_period_delete",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bearing.get.goal",
       "app": "bearing",
       "resource": "get",
@@ -8362,6 +10022,23 @@
         {
           "source": "mcp",
           "ref": "bearing_goal_get",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.get.kr",
+      "app": "bearing",
+      "resource": "get",
+      "verb": "kr",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_kr_get",
           "file": "bearing-tools.ts"
         }
       ]
@@ -8627,6 +10304,40 @@
       ]
     },
     {
+      "id": "bearing.history.goal",
+      "app": "bearing",
+      "resource": "history",
+      "verb": "goal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_goal_history",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.history.kr",
+      "app": "bearing",
+      "resource": "history",
+      "verb": "kr",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_kr_history",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bearing.key_result_history.get",
       "app": "bearing",
       "resource": "key_result_history",
@@ -8797,6 +10508,40 @@
       ]
     },
     {
+      "id": "bearing.links.kr",
+      "app": "bearing",
+      "resource": "links",
+      "verb": "kr",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_kr_links",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.list.kr",
+      "app": "bearing",
+      "resource": "list",
+      "verb": "kr",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_kr_list",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bearing.period_activate.create",
       "app": "bearing",
       "resource": "period_activate",
@@ -8826,6 +10571,23 @@
         {
           "source": "rest",
           "ref": "POST /periods/:id/complete",
+          "file": "periods.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.period_report.get",
+      "app": "bearing",
+      "resource": "period_report",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /periods/:id/report",
           "file": "periods.ts"
         }
       ]
@@ -9069,6 +10831,57 @@
       ]
     },
     {
+      "id": "bearing.status_override.goal",
+      "app": "bearing",
+      "resource": "status_override",
+      "verb": "goal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_goal_status_override",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.unlink.kr",
+      "app": "bearing",
+      "resource": "unlink",
+      "verb": "kr",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_kr_unlink",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.unwatch.goal",
+      "app": "bearing",
+      "resource": "unwatch",
+      "verb": "goal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_goal_unwatch",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bearing.update.goal",
       "app": "bearing",
       "resource": "update",
@@ -9098,6 +10911,74 @@
         {
           "source": "mcp",
           "ref": "bearing_kr_update",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.update.period",
+      "app": "bearing",
+      "resource": "update",
+      "verb": "period",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_period_update",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.updates.goal",
+      "app": "bearing",
+      "resource": "updates",
+      "verb": "goal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_goal_updates",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.watch.goal",
+      "app": "bearing",
+      "resource": "watch",
+      "verb": "goal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_goal_watch",
+          "file": "bearing-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bearing.watchers.goal",
+      "app": "bearing",
+      "resource": "watchers",
+      "verb": "goal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bearing_goal_watchers",
           "file": "bearing-tools.ts"
         }
       ]
@@ -9164,6 +11045,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bench_create_dashboard",
+          "file": "bench-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /dashboards",
           "file": "dashboards.routes.ts"
@@ -9180,6 +11066,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_delete_dashboard",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /dashboards/:id",
@@ -9198,6 +11089,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bench_duplicate_dashboard",
+          "file": "bench-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /dashboards/:id/duplicate",
           "file": "dashboards.routes.ts"
@@ -9214,6 +11110,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_export_dashboard",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /dashboards/:id/export",
@@ -9288,6 +11189,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bench_update_dashboard",
+          "file": "bench-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /dashboards/:id",
           "file": "dashboards.routes.ts"
@@ -9321,6 +11227,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_get_data_source",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /data-sources/:product/:entity",
@@ -9393,6 +11304,40 @@
           "source": "rest",
           "ref": "GET /materialized-views",
           "file": "materialized-views.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bench.materialized_view.refresh",
+      "app": "bench",
+      "resource": "materialized_view",
+      "verb": "refresh",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_refresh_materialized_view",
+          "file": "bench-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bench.materialized_views.list",
+      "app": "bench",
+      "resource": "materialized_views",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_list_materialized_views",
+          "file": "bench-tools.ts"
         }
       ]
     },
@@ -9533,6 +11478,23 @@
       ]
     },
     {
+      "id": "bench.saved_queries.list",
+      "app": "bench",
+      "resource": "saved_queries",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_list_saved_queries",
+          "file": "bench-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bench.saved_query.create",
       "app": "bench",
       "resource": "saved_query",
@@ -9542,6 +11504,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_create_saved_query",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /saved-queries",
@@ -9560,6 +11527,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bench_delete_saved_query",
+          "file": "bench-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /saved-queries/:id",
           "file": "saved-queries.routes.ts"
@@ -9576,6 +11548,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_get_saved_query",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /saved-queries/:id",
@@ -9611,9 +11588,65 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bench_update_saved_query",
+          "file": "bench-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /saved-queries/:id",
           "file": "saved-queries.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bench.scheduled_report.create",
+      "app": "bench",
+      "resource": "scheduled_report",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_create_scheduled_report",
+          "file": "bench-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bench.scheduled_report.delete",
+      "app": "bench",
+      "resource": "scheduled_report",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_delete_scheduled_report",
+          "file": "bench-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bench.scheduled_report.update",
+      "app": "bench",
+      "resource": "scheduled_report",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_update_scheduled_report",
+          "file": "bench-tools.ts"
         }
       ]
     },
@@ -9669,6 +11702,23 @@
       ]
     },
     {
+      "id": "bench.widget.add",
+      "app": "bench",
+      "resource": "widget",
+      "verb": "add",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_add_widget",
+          "file": "bench-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bench.widget.delete",
       "app": "bench",
       "resource": "widget",
@@ -9678,6 +11728,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_delete_widget",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /widgets/:id",
@@ -9695,6 +11750,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_get_widget",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /widgets/:id",
@@ -9737,6 +11797,23 @@
       ]
     },
     {
+      "id": "bench.widget.refresh",
+      "app": "bench",
+      "resource": "widget",
+      "verb": "refresh",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_refresh_widget",
+          "file": "bench-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bench.widget.update",
       "app": "bench",
       "resource": "widget",
@@ -9746,6 +11823,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bench_update_widget",
+          "file": "bench-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /widgets/:id",
@@ -9781,6 +11863,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bill_create_client",
+          "file": "bill-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /clients",
           "file": "clients.routes.ts"
@@ -9798,6 +11885,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bill_delete_client",
+          "file": "bill-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /clients/:id",
           "file": "clients.routes.ts"
@@ -9814,6 +11906,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_get_client",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /clients/:id",
@@ -9848,6 +11945,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_update_client",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /clients/:id",
@@ -9890,6 +11992,23 @@
       ]
     },
     {
+      "id": "bill.expense_reimburse.create",
+      "app": "bill",
+      "resource": "expense_reimburse",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /expenses/:id/reimburse",
+          "file": "expenses.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bill.expense.approve",
       "app": "bill",
       "resource": "expense",
@@ -9899,6 +12018,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_approve_expense",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /expenses/:id/approve",
@@ -9939,6 +12063,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bill_delete_expense",
+          "file": "bill-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /expenses/:id",
           "file": "expenses.routes.ts"
@@ -9973,25 +12102,13 @@
       "requires_superuser": false,
       "sources": [
         {
-          "source": "rest",
-          "ref": "POST /expenses/:id/reject",
-          "file": "expenses.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "bill.expense.reimburse",
-      "app": "bill",
-      "resource": "expense",
-      "verb": "reimburse",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
+          "source": "mcp",
+          "ref": "bill_reject_expense",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
-          "ref": "POST /expenses/:id/reimburse",
+          "ref": "POST /expenses/:id/reject",
           "file": "expenses.routes.ts"
         }
       ]
@@ -10006,6 +12123,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_update_expense",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /expenses/:id",
@@ -10100,6 +12222,23 @@
           "source": "rest",
           "ref": "GET /invoices/:id/jobs",
           "file": "invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.invoice_jobs.get",
+      "app": "bill",
+      "resource": "invoice_jobs",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_get_invoice_jobs",
+          "file": "bill-tools.ts"
         }
       ]
     },
@@ -10243,6 +12382,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bill_delete_invoice",
+          "file": "bill-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /invoices/:id",
           "file": "invoices.routes.ts"
@@ -10259,6 +12403,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_duplicate_invoice",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /invoices/:id/duplicate",
@@ -10365,9 +12514,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bill_update_invoice",
+          "file": "bill-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /invoices/:id",
           "file": "invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.invoice.void",
+      "app": "bill",
+      "resource": "invoice",
+      "verb": "void",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_void_invoice",
+          "file": "bill-tools.ts"
         }
       ]
     },
@@ -10406,6 +12577,57 @@
       ]
     },
     {
+      "id": "bill.line_item.delete",
+      "app": "bill",
+      "resource": "line_item",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_delete_line_item",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.line_item.update",
+      "app": "bill",
+      "resource": "line_item",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_update_line_item",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.outstanding.get",
+      "app": "bill",
+      "resource": "outstanding",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_get_outstanding",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bill.overdue.get",
       "app": "bill",
       "resource": "overdue",
@@ -10432,6 +12654,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_delete_payment",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /payments/:id",
@@ -10501,6 +12728,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bill_create_rate",
+          "file": "bill-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /rates",
           "file": "rates.routes.ts"
@@ -10517,6 +12749,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_delete_rate",
+          "file": "bill-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /rates/:id",
@@ -10569,9 +12806,255 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bill_update_rate",
+          "file": "bill-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /rates/:id",
           "file": "rates.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.rates.list",
+      "app": "bill",
+      "resource": "rates",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_list_rates",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice_generate_now.create",
+      "app": "bill",
+      "resource": "recurring_invoice_generate_now",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /recurring-invoices/:id/generate-now",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice_now.generate",
+      "app": "bill",
+      "resource": "recurring_invoice_now",
+      "verb": "generate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_generate_recurring_invoice_now",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice_pause.create",
+      "app": "bill",
+      "resource": "recurring_invoice_pause",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /recurring-invoices/:id/pause",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice_resume.create",
+      "app": "bill",
+      "resource": "recurring_invoice_resume",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /recurring-invoices/:id/resume",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice.cancel",
+      "app": "bill",
+      "resource": "recurring_invoice",
+      "verb": "cancel",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_cancel_recurring_invoice",
+          "file": "bill-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "POST /recurring-invoices/:id/cancel",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice.create",
+      "app": "bill",
+      "resource": "recurring_invoice",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_create_recurring_invoice",
+          "file": "bill-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "POST /recurring-invoices",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice.get",
+      "app": "bill",
+      "resource": "recurring_invoice",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_get_recurring_invoice",
+          "file": "bill-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "GET /recurring-invoices/:id",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice.list",
+      "app": "bill",
+      "resource": "recurring_invoice",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /recurring-invoices",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice.pause",
+      "app": "bill",
+      "resource": "recurring_invoice",
+      "verb": "pause",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_pause_recurring_invoice",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice.resume",
+      "app": "bill",
+      "resource": "recurring_invoice",
+      "verb": "resume",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_resume_recurring_invoice",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoice.update",
+      "app": "bill",
+      "resource": "recurring_invoice",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_update_recurring_invoice",
+          "file": "bill-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "PATCH /recurring-invoices/:id",
+          "file": "recurring-invoices.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.recurring_invoices.list",
+      "app": "bill",
+      "resource": "recurring_invoices",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_list_recurring_invoices",
+          "file": "bill-tools.ts"
         }
       ]
     },
@@ -10695,6 +13178,74 @@
       ]
     },
     {
+      "id": "bill.settings.get",
+      "app": "bill",
+      "resource": "settings",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_get_settings",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bill.settings.update",
+      "app": "bill",
+      "resource": "settings",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bill_update_settings",
+          "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blank.embed_code.get",
+      "app": "blank",
+      "resource": "embed_code",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blank_get_embed_code",
+          "file": "blank-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blank.field.add",
+      "app": "blank",
+      "resource": "field",
+      "verb": "add",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blank_add_field",
+          "file": "blank-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "blank.field.delete",
       "app": "blank",
       "resource": "field",
@@ -10704,6 +13255,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blank_delete_field",
+          "file": "blank-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /fields/:id",
@@ -10722,9 +13278,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "blank_update_field",
+          "file": "blank-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /fields/:id",
           "file": "fields.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blank.fields.reorder",
+      "app": "blank",
+      "resource": "fields",
+      "verb": "reorder",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blank_reorder_fields",
+          "file": "blank-tools.ts"
         }
       ]
     },
@@ -10853,6 +13431,23 @@
       ]
     },
     {
+      "id": "blank.form_upload.create",
+      "app": "blank",
+      "resource": "form_upload",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /forms/:slug/upload",
+          "file": "public.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "blank.form.close",
       "app": "blank",
       "resource": "form",
@@ -10862,6 +13457,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blank_close_form",
+          "file": "blank-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /forms/:id/close",
@@ -10902,6 +13502,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "blank_delete_form",
+          "file": "blank-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /forms/:id",
           "file": "forms.routes.ts"
@@ -10918,6 +13523,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blank_duplicate_form",
+          "file": "blank-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /forms/:id/duplicate",
@@ -11082,6 +13692,23 @@
       ]
     },
     {
+      "id": "blank.submission_file.get",
+      "app": "blank",
+      "resource": "submission_file",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /submissions/:id/files/:idx",
+          "file": "submissions.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "blank.submission.delete",
       "app": "blank",
       "resource": "submission",
@@ -11091,6 +13718,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blank_delete_submission",
+          "file": "blank-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /submissions/:id",
@@ -11257,6 +13889,23 @@
       ]
     },
     {
+      "id": "blast.campaign_device_analytics.get",
+      "app": "blast",
+      "resource": "campaign_device_analytics",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_get_campaign_device_analytics",
+          "file": "blast-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "blast.campaign_pause.create",
       "app": "blast",
       "resource": "campaign_pause",
@@ -11291,6 +13940,23 @@
       ]
     },
     {
+      "id": "blast.campaign_recipients.list",
+      "app": "blast",
+      "resource": "campaign_recipients",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_list_campaign_recipients",
+          "file": "blast-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "blast.campaign_schedule.create",
       "app": "blast",
       "resource": "campaign_schedule",
@@ -11317,6 +13983,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_cancel_campaign",
+          "file": "blast-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /campaigns/:id/cancel",
@@ -11415,6 +14086,23 @@
       ]
     },
     {
+      "id": "blast.campaign.pause",
+      "app": "blast",
+      "resource": "campaign",
+      "verb": "pause",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_pause_campaign",
+          "file": "blast-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "blast.campaign.send",
       "app": "blast",
       "resource": "campaign",
@@ -11447,9 +14135,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "blast_update_campaign",
+          "file": "blast-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /campaigns/:id",
           "file": "campaigns.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blast.campaigns.list",
+      "app": "blast",
+      "resource": "campaigns",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_list_campaigns",
+          "file": "blast-tools.ts"
         }
       ]
     },
@@ -11488,6 +14198,23 @@
       ]
     },
     {
+      "id": "blast.engagement_trend.get",
+      "app": "blast",
+      "resource": "engagement_trend",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_get_engagement_trend",
+          "file": "blast-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "blast.segment_count.create",
       "app": "blast",
       "resource": "segment_count",
@@ -11501,6 +14228,23 @@
           "source": "rest",
           "ref": "POST /segments/:id/count",
           "file": "segments.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blast.segment_count.recalculate",
+      "app": "blast",
+      "resource": "segment_count",
+      "verb": "recalculate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_recalculate_segment_count",
+          "file": "blast-tools.ts"
         }
       ]
     },
@@ -11578,6 +14322,23 @@
       ]
     },
     {
+      "id": "blast.segment.evaluate",
+      "app": "blast",
+      "resource": "segment",
+      "verb": "evaluate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_evaluate_segment",
+          "file": "blast-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "blast.segment.get",
       "app": "blast",
       "resource": "segment",
@@ -11587,6 +14348,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_get_segment",
+          "file": "blast-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /segments/:id",
@@ -11638,6 +14404,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_update_segment",
+          "file": "blast-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /segments/:id",
@@ -11848,6 +14619,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "blast_duplicate_template",
+          "file": "blast-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /templates/:id/duplicate",
           "file": "templates.routes.ts"
@@ -11894,6 +14670,23 @@
       ]
     },
     {
+      "id": "blast.template.preview",
+      "app": "blast",
+      "resource": "template",
+      "verb": "preview",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_preview_template",
+          "file": "blast-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "blast.template.update",
       "app": "blast",
       "resource": "template",
@@ -11903,6 +14696,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "blast_update_template",
+          "file": "blast-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /templates/:id",
@@ -12009,23 +14807,6 @@
           "source": "rest",
           "ref": "POST /webhooks/complaint",
           "file": "webhooks.routes.ts"
-        }
-      ]
-    },
-    {
-      "id": "board.board_audio_token.create",
-      "app": "board",
-      "resource": "board_audio_token",
-      "verb": "create",
-      "is_destructive": false,
-      "is_read": false,
-      "requires_confirmation": false,
-      "requires_superuser": false,
-      "sources": [
-        {
-          "source": "rest",
-          "ref": "POST /v1/boards/:id/audio/token",
-          "file": "audio.routes.ts"
         }
       ]
     },
@@ -12642,6 +15423,57 @@
       ]
     },
     {
+      "id": "board.chat.post",
+      "app": "board",
+      "resource": "chat",
+      "verb": "post",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_post_chat",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.chat.read",
+      "app": "board",
+      "resource": "chat",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_read_chat",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.collaborator.add",
+      "app": "board",
+      "resource": "collaborator",
+      "verb": "add",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_add_collaborator",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "board.collaborator.delete",
       "app": "board",
       "resource": "collaborator",
@@ -12659,6 +15491,23 @@
       ]
     },
     {
+      "id": "board.collaborator.remove",
+      "app": "board",
+      "resource": "collaborator",
+      "verb": "remove",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_remove_collaborator",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "board.collaborator.update",
       "app": "board",
       "resource": "collaborator",
@@ -12669,9 +15518,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "board_update_collaborator",
+          "file": "board-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /collaborators/:collabId",
           "file": "collaborator.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.collaborators.list",
+      "app": "board",
+      "resource": "collaborators",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_list_collaborators",
+          "file": "board-tools.ts"
         }
       ]
     },
@@ -12710,6 +15581,40 @@
       ]
     },
     {
+      "id": "board.integrity.check",
+      "app": "board",
+      "resource": "integrity",
+      "verb": "check",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_check_integrity",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.integrity.remediate",
+      "app": "board",
+      "resource": "integrity",
+      "verb": "remediate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_remediate_integrity",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "board.link.delete",
       "app": "board",
       "resource": "link",
@@ -12720,9 +15625,65 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "board_delete_link",
+          "file": "board-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /links/:linkId",
           "file": "link.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.links.list",
+      "app": "board",
+      "resource": "links",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_list_links",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.permanent.delete",
+      "app": "board",
+      "resource": "permanent",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_delete_permanent",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.recent.list",
+      "app": "board",
+      "resource": "recent",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_list_recent",
+          "file": "board-tools.ts"
         }
       ]
     },
@@ -12756,6 +15717,23 @@
         {
           "source": "mcp",
           "ref": "board_create",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.self.duplicate",
+      "app": "board",
+      "resource": "self",
+      "verb": "duplicate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_duplicate",
           "file": "board-tools.ts"
         }
       ]
@@ -12812,6 +15790,23 @@
       ]
     },
     {
+      "id": "board.self.restore",
+      "app": "board",
+      "resource": "self",
+      "verb": "restore",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_restore",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "board.self.search",
       "app": "board",
       "resource": "self",
@@ -12824,6 +15819,23 @@
         {
           "source": "mcp",
           "ref": "board_search",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.self.stats",
+      "app": "board",
+      "resource": "self",
+      "verb": "stats",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_stats",
           "file": "board-tools.ts"
         }
       ]
@@ -12858,6 +15870,40 @@
         {
           "source": "mcp",
           "ref": "board_update",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.starred.list",
+      "app": "board",
+      "resource": "starred",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_list_starred",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.stats.org",
+      "app": "board",
+      "resource": "stats",
+      "verb": "org",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_org_stats",
           "file": "board-tools.ts"
         }
       ]
@@ -12924,6 +15970,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "board_create_template",
+          "file": "board-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /templates",
           "file": "template.routes.ts"
@@ -12941,9 +15992,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "board_delete_template",
+          "file": "board-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /templates/:id",
           "file": "template.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.template.instantiate",
+      "app": "board",
+      "resource": "template",
+      "verb": "instantiate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_instantiate_template",
+          "file": "board-tools.ts"
         }
       ]
     },
@@ -12975,9 +16048,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "board_update_template",
+          "file": "board-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /templates/:id",
           "file": "template.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.templates.list",
+      "app": "board",
+      "resource": "templates",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_list_templates",
+          "file": "board-tools.ts"
         }
       ]
     },
@@ -13011,6 +16106,74 @@
         {
           "source": "mcp",
           "ref": "board_promote_to_tasks",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.toggle.star",
+      "app": "board",
+      "resource": "toggle",
+      "verb": "star",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_star_toggle",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.version.create",
+      "app": "board",
+      "resource": "version",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_create_version",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.version.restore",
+      "app": "board",
+      "resource": "version",
+      "verb": "restore",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_restore_version",
+          "file": "board-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "board.versions.list",
+      "app": "board",
+      "resource": "versions",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "board_list_versions",
           "file": "board-tools.ts"
         }
       ]
@@ -13485,6 +16648,40 @@
       ]
     },
     {
+      "id": "bolt.execution.retry",
+      "app": "bolt",
+      "resource": "execution",
+      "verb": "retry",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_retry_execution",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bolt.executions.list",
+      "app": "bolt",
+      "resource": "executions",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_list_executions",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bolt.self.actions",
       "app": "bolt",
       "resource": "self",
@@ -13553,6 +16750,23 @@
       ]
     },
     {
+      "id": "bolt.self.duplicate",
+      "app": "bolt",
+      "resource": "self",
+      "verb": "duplicate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_duplicate",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bolt.self.enable",
       "app": "bolt",
       "resource": "self",
@@ -13604,6 +16818,40 @@
       ]
     },
     {
+      "id": "bolt.self.explain",
+      "app": "bolt",
+      "resource": "self",
+      "verb": "explain",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_explain",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bolt.self.generate",
+      "app": "bolt",
+      "resource": "self",
+      "verb": "generate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_generate",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bolt.self.get",
       "app": "bolt",
       "resource": "self",
@@ -13633,6 +16881,40 @@
         {
           "source": "mcp",
           "ref": "bolt_list",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bolt.self.patch",
+      "app": "bolt",
+      "resource": "self",
+      "verb": "patch",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_patch",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bolt.self.stats",
+      "app": "bolt",
+      "resource": "self",
+      "verb": "stats",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_stats",
           "file": "bolt-tools.ts"
         }
       ]
@@ -13689,6 +16971,23 @@
       ]
     },
     {
+      "id": "bolt.template.instantiate",
+      "app": "bolt",
+      "resource": "template",
+      "verb": "instantiate",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_instantiate_template",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bolt.template.list",
       "app": "bolt",
       "resource": "template",
@@ -13706,6 +17005,23 @@
       ]
     },
     {
+      "id": "bolt.templates.list",
+      "app": "bolt",
+      "resource": "templates",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_list_templates",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bolt.trace.event",
       "app": "bolt",
       "resource": "trace",
@@ -13719,6 +17035,57 @@
           "source": "mcp",
           "ref": "bolt_event_trace",
           "file": "bolt-observability-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bolt.version.restore",
+      "app": "bolt",
+      "resource": "version",
+      "verb": "restore",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_restore_version",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bolt.versions.list",
+      "app": "bolt",
+      "resource": "versions",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bolt_list_versions",
+          "file": "bolt-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.activities.list",
+      "app": "bond",
+      "resource": "activities",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_activities",
+          "file": "bond-tools.ts"
         }
       ]
     },
@@ -13750,6 +17117,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_delete_activity",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /activities/:id",
           "file": "activities.routes.ts"
@@ -13766,6 +17138,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_activity",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /activities/:id",
@@ -13817,6 +17194,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_update_activity",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /activities/:id",
@@ -13944,6 +17326,23 @@
       ]
     },
     {
+      "id": "bond.companies.search",
+      "app": "bond",
+      "resource": "companies",
+      "verb": "search",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_search_companies",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bond.company_contact.get",
       "app": "bond",
       "resource": "company_contact",
@@ -13961,6 +17360,23 @@
       ]
     },
     {
+      "id": "bond.company_contacts.list",
+      "app": "bond",
+      "resource": "company_contacts",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_company_contacts",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bond.company_deal.get",
       "app": "bond",
       "resource": "company_deal",
@@ -13974,6 +17390,23 @@
           "source": "rest",
           "ref": "GET /companies/:id/deals",
           "file": "companies.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.company_deals.list",
+      "app": "bond",
+      "resource": "company_deals",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_company_deals",
+          "file": "bond-tools.ts"
         }
       ]
     },
@@ -14026,6 +17459,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_delete_company",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /companies/:id",
@@ -14082,6 +17520,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_restore_company",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /companies/:id/restore",
@@ -14195,6 +17638,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_delete_contact",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /contacts/:id",
           "file": "contacts.routes.ts"
@@ -14289,6 +17737,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_restore_contact",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /contacts/:id/restore",
@@ -14387,6 +17840,23 @@
       ]
     },
     {
+      "id": "bond.conversion_rates.get",
+      "app": "bond",
+      "resource": "conversion_rates",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_conversion_rates",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bond.custom_field_definition.create",
       "app": "bond",
       "resource": "custom_field_definition",
@@ -14472,6 +17942,108 @@
       ]
     },
     {
+      "id": "bond.custom_field.create",
+      "app": "bond",
+      "resource": "custom_field",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_create_custom_field",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.custom_field.delete",
+      "app": "bond",
+      "resource": "custom_field",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_delete_custom_field",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.custom_field.get",
+      "app": "bond",
+      "resource": "custom_field",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_custom_field",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.custom_field.update",
+      "app": "bond",
+      "resource": "custom_field",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_update_custom_field",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.custom_fields.list",
+      "app": "bond",
+      "resource": "custom_fields",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_custom_fields",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.deal_activities.list",
+      "app": "bond",
+      "resource": "deal_activities",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_deal_activities",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bond.deal_activity.get",
       "app": "bond",
       "resource": "deal_activity",
@@ -14485,6 +18057,23 @@
           "source": "rest",
           "ref": "GET /deals/:id/activities",
           "file": "deals.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.deal_contact.add",
+      "app": "bond",
+      "resource": "deal_contact",
+      "verb": "add",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_add_deal_contact",
+          "file": "bond-tools.ts"
         }
       ]
     },
@@ -14540,6 +18129,40 @@
       ]
     },
     {
+      "id": "bond.deal_contact.remove",
+      "app": "bond",
+      "resource": "deal_contact",
+      "verb": "remove",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_remove_deal_contact",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.deal_contacts.list",
+      "app": "bond",
+      "resource": "deal_contacts",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_deal_contacts",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "bond.deal_lost.close",
       "app": "bond",
       "resource": "deal_lost",
@@ -14584,6 +18207,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_get_deal_related",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /deals/:id/related",
           "file": "deals.routes.ts"
@@ -14600,6 +18228,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_deal_stage_history",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /deals/:id/stage-history",
@@ -14638,6 +18271,23 @@
           "source": "rest",
           "ref": "PATCH /deals/:id/stage",
           "file": "deals.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.deal_velocity.get",
+      "app": "bond",
+      "resource": "deal_velocity",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_deal_velocity",
+          "file": "bond-tools.ts"
         }
       ]
     },
@@ -14708,6 +18358,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_delete_deal",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /deals/:id",
           "file": "deals.routes.ts"
@@ -14724,6 +18379,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_duplicate_deal",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /deals/:id/duplicate",
@@ -14780,6 +18440,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_restore_deal",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /deals/:id/restore",
@@ -14871,6 +18536,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_create_import_mapping",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /imports/mappings",
           "file": "imports.routes.ts"
@@ -14891,6 +18561,23 @@
           "source": "rest",
           "ref": "GET /imports/mappings",
           "file": "imports.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.import_mappings.list",
+      "app": "bond",
+      "resource": "import_mappings",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_import_mappings",
+          "file": "bond-tools.ts"
         }
       ]
     },
@@ -15024,6 +18711,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_create_pipeline",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /pipelines",
           "file": "pipelines.routes.ts"
@@ -15041,6 +18733,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_delete_pipeline",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /pipelines/:id",
           "file": "pipelines.routes.ts"
@@ -15057,6 +18754,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_pipeline",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /pipelines/:id",
@@ -15092,9 +18794,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_update_pipeline",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /pipelines/:id",
           "file": "pipelines.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.pipelines.list",
+      "app": "bond",
+      "resource": "pipelines",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_pipelines",
+          "file": "bond-tools.ts"
         }
       ]
     },
@@ -15126,6 +18850,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_create_scoring_rule",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /scoring-rules",
           "file": "scoring.routes.ts"
@@ -15142,6 +18871,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_delete_scoring_rule",
+          "file": "bond-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /scoring-rules/:id",
@@ -15177,9 +18911,116 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bond_update_scoring_rule",
+          "file": "bond-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /scoring-rules/:id",
           "file": "scoring.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.scoring_rules.list",
+      "app": "bond",
+      "resource": "scoring_rules",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_scoring_rules",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.stage.create",
+      "app": "bond",
+      "resource": "stage",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_create_stage",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.stage.delete",
+      "app": "bond",
+      "resource": "stage",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_delete_stage",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.stage.update",
+      "app": "bond",
+      "resource": "stage",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_update_stage",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.stages.list",
+      "app": "bond",
+      "resource": "stages",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_list_stages",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.stages.reorder",
+      "app": "bond",
+      "resource": "stages",
+      "verb": "reorder",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_reorder_stages",
+          "file": "bond-tools.ts"
         }
       ]
     },
@@ -15196,6 +19037,91 @@
         {
           "source": "mcp",
           "ref": "bond_get_stale_deals",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.user_setting.list",
+      "app": "bond",
+      "resource": "user_setting",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /user-settings",
+          "file": "user-settings.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.user_setting.update",
+      "app": "bond",
+      "resource": "user_setting",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PATCH /user-settings",
+          "file": "user-settings.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.user_settings.get",
+      "app": "bond",
+      "resource": "user_settings",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_user_settings",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.user_settings.update",
+      "app": "bond",
+      "resource": "user_settings",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_update_user_settings",
+          "file": "bond-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bond.win_loss.get",
+      "app": "bond",
+      "resource": "win_loss",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bond_get_win_loss",
           "file": "bond-tools.ts"
         }
       ]
@@ -15289,8 +19215,30 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "book_delete_booking_page",
+          "file": "book-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "DELETE /booking-pages/:id",
+          "file": "booking-pages.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "book.booking_page.get",
+      "app": "book",
+      "resource": "booking_page",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /booking-pages/:id",
           "file": "booking-pages.routes.ts"
         }
       ]
@@ -15323,9 +19271,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "book_update_booking_page",
+          "file": "book-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /booking-pages/:id",
           "file": "booking-pages.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "book.booking_pages.list",
+      "app": "book",
+      "resource": "booking_pages",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_list_booking_pages",
+          "file": "book-tools.ts"
         }
       ]
     },
@@ -15339,6 +19309,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_create_calendar",
+          "file": "book-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /calendars",
@@ -15356,6 +19331,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_delete_calendar",
+          "file": "book-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /calendars/:id",
@@ -15391,9 +19371,31 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "book_update_calendar",
+          "file": "book-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /calendars/:id",
           "file": "calendars.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "book.calendars.list",
+      "app": "book",
+      "resource": "calendars",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_list_calendars",
+          "file": "book-tools.ts"
         }
       ]
     },
@@ -15410,6 +19412,23 @@
         {
           "source": "rest",
           "ref": "POST /connections/google",
+          "file": "connections.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "book.connection_ic.create",
+      "app": "book",
+      "resource": "connection_ic",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /connections/ics",
           "file": "connections.routes.ts"
         }
       ]
@@ -15449,6 +19468,23 @@
       ]
     },
     {
+      "id": "book.connection.create",
+      "app": "book",
+      "resource": "connection",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_create_connection",
+          "file": "book-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "book.connection.delete",
       "app": "book",
       "resource": "connection",
@@ -15458,6 +19494,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_delete_connection",
+          "file": "book-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "DELETE /connections/:id",
@@ -15479,6 +19520,40 @@
           "source": "rest",
           "ref": "GET /connections",
           "file": "connections.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "book.connection.sync",
+      "app": "book",
+      "resource": "connection",
+      "verb": "sync",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_sync_connection",
+          "file": "book-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "book.connections.list",
+      "app": "book",
+      "resource": "connections",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_list_connections",
+          "file": "book-tools.ts"
         }
       ]
     },
@@ -15565,6 +19640,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_get_event",
+          "file": "book-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /events/:id",
@@ -15816,6 +19896,57 @@
       ]
     },
     {
+      "id": "book.working_hours.get",
+      "app": "book",
+      "resource": "working_hours",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_get_working_hours",
+          "file": "book-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "book.working_hours.set",
+      "app": "book",
+      "resource": "working_hours",
+      "verb": "set",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "book_set_working_hours",
+          "file": "book-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.add.collaborator",
+      "app": "brief",
+      "resource": "add",
+      "verb": "collaborator",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_collaborator_add",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "brief.add.comment",
       "app": "brief",
       "resource": "add",
@@ -15828,6 +19959,23 @@
         {
           "source": "mcp",
           "ref": "brief_comment_add",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.beacon.link",
+      "app": "brief",
+      "resource": "beacon",
+      "verb": "link",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_link_beacon",
           "file": "brief-tools.ts"
         }
       ]
@@ -15981,6 +20129,142 @@
         {
           "source": "mcp",
           "ref": "brief_update_content",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.create.folder",
+      "app": "brief",
+      "resource": "create",
+      "verb": "folder",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_folder_create",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.create.template",
+      "app": "brief",
+      "resource": "create",
+      "verb": "template",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_template_create",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.create.version",
+      "app": "brief",
+      "resource": "create",
+      "verb": "version",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_version_create",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.delete.comment",
+      "app": "brief",
+      "resource": "delete",
+      "verb": "comment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_comment_delete",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.delete.embed",
+      "app": "brief",
+      "resource": "delete",
+      "verb": "embed",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_embed_delete",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.delete.folder",
+      "app": "brief",
+      "resource": "delete",
+      "verb": "folder",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_folder_delete",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.delete.template",
+      "app": "brief",
+      "resource": "delete",
+      "verb": "template",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_template_delete",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.diff.version",
+      "app": "brief",
+      "resource": "diff",
+      "verb": "version",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_version_diff",
           "file": "brief-tools.ts"
         }
       ]
@@ -16569,6 +20853,23 @@
       ]
     },
     {
+      "id": "brief.edit.comment",
+      "app": "brief",
+      "resource": "edit",
+      "verb": "comment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_comment_edit",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "brief.embed.delete",
       "app": "brief",
       "resource": "embed",
@@ -16671,6 +20972,23 @@
       ]
     },
     {
+      "id": "brief.html.export",
+      "app": "brief",
+      "resource": "html",
+      "verb": "export",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_export_html",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "brief.link.delete",
       "app": "brief",
       "resource": "link",
@@ -16688,6 +21006,23 @@
       ]
     },
     {
+      "id": "brief.list.collaborators",
+      "app": "brief",
+      "resource": "list",
+      "verb": "collaborators",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_collaborators_list",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "brief.list.comment",
       "app": "brief",
       "resource": "list",
@@ -16700,6 +21035,142 @@
         {
           "source": "mcp",
           "ref": "brief_comment_list",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.list.embeds",
+      "app": "brief",
+      "resource": "list",
+      "verb": "embeds",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_embeds_list",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.list.folders",
+      "app": "brief",
+      "resource": "list",
+      "verb": "folders",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_folders_list",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.list.links",
+      "app": "brief",
+      "resource": "list",
+      "verb": "links",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_links_list",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.list.templates",
+      "app": "brief",
+      "resource": "list",
+      "verb": "templates",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_templates_list",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.markdown.export",
+      "app": "brief",
+      "resource": "markdown",
+      "verb": "export",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_export_markdown",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.react.comment",
+      "app": "brief",
+      "resource": "react",
+      "verb": "comment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_comment_react",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.remove.collaborator",
+      "app": "brief",
+      "resource": "remove",
+      "verb": "collaborator",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_collaborator_remove",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.remove.link",
+      "app": "brief",
+      "resource": "remove",
+      "verb": "link",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_link_remove",
           "file": "brief-tools.ts"
         }
       ]
@@ -16734,6 +21205,23 @@
         {
           "source": "mcp",
           "ref": "brief_version_restore",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.search.semantic",
+      "app": "brief",
+      "resource": "search",
+      "verb": "semantic",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_semantic_search",
           "file": "brief-tools.ts"
         }
       ]
@@ -16824,6 +21312,23 @@
       ]
     },
     {
+      "id": "brief.self.recent",
+      "app": "brief",
+      "resource": "self",
+      "verb": "recent",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_recent",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
       "id": "brief.self.restore",
       "app": "brief",
       "resource": "self",
@@ -16853,6 +21358,57 @@
         {
           "source": "mcp",
           "ref": "brief_search",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.self.star",
+      "app": "brief",
+      "resource": "self",
+      "verb": "star",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_star",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.self.starred",
+      "app": "brief",
+      "resource": "self",
+      "verb": "starred",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_starred",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.self.stats",
+      "app": "brief",
+      "resource": "self",
+      "verb": "stats",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_stats",
           "file": "brief-tools.ts"
         }
       ]
@@ -16989,6 +21545,74 @@
         {
           "source": "mcp",
           "ref": "brief_promote_to_beacon",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.unreact.comment",
+      "app": "brief",
+      "resource": "unreact",
+      "verb": "comment",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_comment_unreact",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.update.collaborator",
+      "app": "brief",
+      "resource": "update",
+      "verb": "collaborator",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_collaborator_update",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.update.folder",
+      "app": "brief",
+      "resource": "update",
+      "verb": "folder",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_folder_update",
+          "file": "brief-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "brief.update.template",
+      "app": "brief",
+      "resource": "update",
+      "verb": "template",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "brief_template_update",
           "file": "brief-tools.ts"
         }
       ]
@@ -18583,6 +23207,451 @@
       ]
     }
   ],
-  "unmapped_tools": [],
+  "unmapped_tools": [
+    {
+      "tool": "agent_list",
+      "file": "agent-tools.ts"
+    },
+    {
+      "tool": "attachment_meta",
+      "file": "attachment-tools.ts"
+    },
+    {
+      "tool": "blueprint_list",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_get",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_read_nodes",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_read_edges",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_search",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_export",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_create",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_update",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_archive",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_add_node",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_update_node",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_move_node",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_duplicate_node",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_delete_node",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_add_edge",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_update_edge",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_delete_edge",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_apply_layout",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_generate",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_promote_graph_to_tasks",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_generate_from_bam",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_promote_node_to_task",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_link_entity",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_list_versions",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_snapshot_version",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_restore_version",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_list_comments",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_add_comment",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_update_comment",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_list_collaborators",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_add_collaborator",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_remove_collaborator",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_star",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_unstar",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_import_mermaid",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "blueprint_list_templates",
+      "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "bureau_list_floors",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_list_rooms",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_get_floor",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_who_is_in_room",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_locate_user",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_get_presence",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_move_self",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_set_status",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_set_door_state",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_knock",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_respond_knock",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_book_room",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_list_bookings",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_cancel_booking",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_summon",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_create_floor",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_create_room",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_update_room",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_update_floor",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_set_floor_background",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_delete_floor",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_delete_room",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_update_booking",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_list_offices",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_assign_office",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_my_office",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_knock_inbox",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_leave_note",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_who_is_here",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_where_is_user",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_get_summon",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_summon_grant_access",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_list_chats",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_get_chat_messages",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_set_chat_retention",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_get_settings",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "bureau_update_settings",
+      "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "edit_comment",
+      "file": "comment-tools.ts"
+    },
+    {
+      "tool": "list_comment_revisions",
+      "file": "comment-tools.ts"
+    },
+    {
+      "tool": "delete_comment",
+      "file": "comment-tools.ts"
+    },
+    {
+      "tool": "toggle_comment_reaction",
+      "file": "comment-tools.ts"
+    },
+    {
+      "tool": "list_comment_reactions",
+      "file": "comment-tools.ts"
+    },
+    {
+      "tool": "import_jira",
+      "file": "import-tools.ts"
+    },
+    {
+      "tool": "import_trello",
+      "file": "import-tools.ts"
+    },
+    {
+      "tool": "get_my_org",
+      "file": "me-tools.ts"
+    },
+    {
+      "tool": "set_helpdesk_signup_disabled",
+      "file": "platform-tools.ts"
+    },
+    {
+      "tool": "update_project",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "archive_project",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "list_project_members",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "add_project_member",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "list_custom_fields",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "create_custom_field",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "update_custom_field",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "delete_custom_field",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "create_label",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "update_label",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "delete_label",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "create_phase",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "update_phase",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "delete_phase",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "reorder_phases",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "list_views",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "create_view",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "update_view",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "delete_view",
+      "file": "project-tools.ts"
+    },
+    {
+      "tool": "get_sprint",
+      "file": "sprint-tools.ts"
+    },
+    {
+      "tool": "update_sprint",
+      "file": "sprint-tools.ts"
+    },
+    {
+      "tool": "cancel_sprint",
+      "file": "sprint-tools.ts"
+    },
+    {
+      "tool": "get_board",
+      "file": "task-tools.ts"
+    },
+    {
+      "tool": "list_task_time_entries",
+      "file": "task-tools.ts"
+    },
+    {
+      "tool": "get_my_time_entries",
+      "file": "task-tools.ts"
+    },
+    {
+      "tool": "create_template",
+      "file": "template-tools.ts"
+    },
+    {
+      "tool": "delete_template",
+      "file": "template-tools.ts"
+    }
+  ],
   "unmapped_routes": []
 }

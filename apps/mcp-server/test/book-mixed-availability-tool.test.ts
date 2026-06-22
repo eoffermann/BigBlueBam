@@ -44,12 +44,24 @@ function createMockServer(): { server: McpServer; tools: Map<string, RegisteredT
   return { server, tools };
 }
 
+// Tools read the body via res.text() then JSON.parse, so the mock must expose
+// text() alongside json().
 function mockApiOk(data: unknown) {
-  mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => data });
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    status: 200,
+    json: async () => data,
+    text: async () => (data === undefined ? '' : JSON.stringify(data)),
+  });
 }
 
 function mockApiError(status: number, data: unknown) {
-  mockFetch.mockResolvedValueOnce({ ok: false, status, json: async () => data });
+  mockFetch.mockResolvedValueOnce({
+    ok: false,
+    status,
+    json: async () => data,
+    text: async () => (data === undefined ? '' : JSON.stringify(data)),
+  });
 }
 
 const HUMAN = '11111111-1111-1111-1111-111111111111';

@@ -6,8 +6,8 @@ export default defineConfig({
     // import cost (drizzle + peer-app-stubs can take multiple seconds), which
     // surfaced as "Hook timed out in 10000ms" on the DB-backed book-api suites.
     // Mirror the other *-api packages' config.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     globals: true,
     environment: 'node',
   },

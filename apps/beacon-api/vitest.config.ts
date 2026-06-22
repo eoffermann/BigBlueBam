@@ -8,8 +8,8 @@ export default defineConfig({
     // CI runners sometimes blow through a 10s ceiling on first-test-in-file
     // module-graph load, especially since this suite pulls in the full
     // Qdrant-adapter import chain.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
