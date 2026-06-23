@@ -1,4 +1,4 @@
-import { eq, and, gt, asc, ilike, or, sql } from 'drizzle-orm';
+import { eq, and, gt, asc, ilike, or, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   bearingGoals,
@@ -95,6 +95,25 @@ export interface UpdateGoalInput {
 // CRUD
 // ---------------------------------------------------------------------------
 
+/** Owner summary attached to goals so the UI can render the owner's avatar +
+ *  name (the Bearing frontend's GoalOwner shape). */
+interface GoalOwner {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+}
+
+/** Batch-load owner summaries for a set of owner ids (deduped). */
+async function loadOwnerMap(ownerIds: (string | null | undefined)[]): Promise<Map<string, GoalOwner>> {
+  const ids = [...new Set(ownerIds.filter((x): x is string => !!x))];
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: users.id, display_name: users.display_name, avatar_url: users.avatar_url })
+    .from(users)
+    .where(inArray(users.id, ids));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
 export async function listGoals(filters: ListGoalFilters) {
   const conditions = [eq(bearingGoals.organization_id, filters.orgId)];
 
@@ -142,9 +161,13 @@ export async function listGoals(filters: ListGoalFilters) {
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
-  const data = hasMore ? rows.slice(0, limit) : rows;
+  const sliced = hasMore ? rows.slice(0, limit) : rows;
   const nextCursor =
-    hasMore && data.length > 0 ? data[data.length - 1]!.created_at.toISOString() : null;
+    hasMore && sliced.length > 0 ? sliced[sliced.length - 1]!.created_at.toISOString() : null;
+
+  // Attach owner summaries so list cards can show the owner's avatar + name.
+  const ownerMap = await loadOwnerMap(sliced.map((g) => g.owner_id));
+  const data = sliced.map((g) => ({ ...g, owner: g.owner_id ? ownerMap.get(g.owner_id) ?? null : null }));
 
   return {
     data,
@@ -176,8 +199,11 @@ export async function getGoal(id: string, orgId: string, redis?: Redis) {
     : await computeGoalProgress(id);
   const status = await computeGoalStatus({ ...goal, progress: progress.toString() });
 
+  const ownerMap = await loadOwnerMap([goal.owner_id]);
+
   return {
     ...goal,
+    owner: goal.owner_id ? ownerMap.get(goal.owner_id) ?? null : null,
     progress: progress.toFixed(2),
     computed_status: status,
     key_results: keyResults,
