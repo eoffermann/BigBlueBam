@@ -9,6 +9,10 @@ name: Seed Smoke
 # a Phase B/C/D seeder fails, so the log assertion is what actually catches
 # later-phase drift).
 on:
+  # Allow manual runs: the seeders also depend on root deps + the lockfile
+  # (the postgres driver is imported by scripts/seed-*.mjs), which the path
+  # filters below do not cover, so a dep-only fix can be re-verified on demand.
+  workflow_dispatch:
   pull_request:
     paths:
       - 'scripts/seed-*.mjs'
@@ -16,12 +20,18 @@ on:
       - 'infra/postgres/migrations/**'
       - 'docker-compose.yml'
       - '.github/workflows/seed-smoke.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   push:
     branches: [main, stable]
     paths:
       - 'scripts/seed-*.mjs'
       - 'scripts/seed-beacons.js'
       - 'infra/postgres/migrations/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/seed-smoke.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
 
 jobs:
   seed-smoke:
