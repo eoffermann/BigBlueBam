@@ -1,7 +1,7 @@
 ---
 title: "Bolt (Workflow Automation)"
 app: bolt
-generated: "2026-06-17T22:16:23.494Z"
+generated: "2026-06-23T06:01:51.803Z"
 ---
 
 # Bolt (Workflow Automation)
@@ -13,6 +13,7 @@ Event-driven workflow automation that connects every BigBlueBam app: WHEN this h
 - Trigger off over 130 events across the suite and run cross-app action chains with variable interpolation between steps
 - Detailed execution logs with per-step traces, single-event tracing, and one-click retry of failed runs
 - Built for AI agents too: 26 MCP tools to author, test, and observe automations, with policy guardrails and approvals
+- Reach your team without scheduling: the persistent Bureau presence dock lets you see who is around and start a voice or video huddle from anywhere in Bolt
 
 ## See It in Action
 

@@ -1,7 +1,7 @@
 ---
 title: "Bill (Invoicing)"
 app: bill
-generated: "2026-06-21T04:54:53.403Z"
+generated: "2026-06-23T06:01:51.773Z"
 ---
 
 # Bill (Invoicing)

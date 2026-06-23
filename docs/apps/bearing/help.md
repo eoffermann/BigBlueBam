@@ -40,7 +40,7 @@ Press **?** anywhere outside a text field to open the in-app help viewer.
 
 ## Feature reference
 
-The Bearing sidebar carries a brand mark with a **beta** pill, a **period scope selector** dropdown, and four navigation items with these exact labels: **Dashboard**, **My Goals**, **At Risk**, and **Periods**. The period scope selector sets the one period that the whole UI is scoped to; your choice is remembered between visits, and Bearing auto-selects the first active period if you have not chosen one.
+The Bearing sidebar carries a brand mark, a **period scope selector** dropdown, and four navigation items with these exact labels: **Dashboard**, **My Goals**, **At Risk**, and **Periods**. The period scope selector sets the one period that the whole UI is scoped to; your choice is remembered between visits, and Bearing auto-selects the first active period if you have not chosen one.
 
 ### Goals Dashboard
 

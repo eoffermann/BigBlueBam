@@ -458,6 +458,30 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 ---
 
 <!-- AUTODOCS:APP_SECTIONS:START -->
+### Bam (Project Management)
+
+66 routes, 54 schemas, 123 MCP tools
+
+<img src="docs/apps/bam/screenshots/light/01-board.png" width="400" alt="Bam (Project Management)">
+
+[Guide](docs/apps/bam/guide.md) | [Overview](docs/apps/bam/marketing.md) | [MCP Tools](docs/apps/bam/mcp-tools.md)
+
+### Banter (Team Messaging)
+
+22 routes, 23 schemas, 77 MCP tools
+
+<img src="docs/apps/banter/screenshots/light/01-channel-view.png" width="400" alt="Banter (Team Messaging)">
+
+[Guide](docs/apps/banter/guide.md) | [Overview](docs/apps/banter/marketing.md) | [MCP Tools](docs/apps/banter/mcp-tools.md)
+
+### Beacon (Knowledge Base)
+
+9 routes, 12 schemas, 38 MCP tools
+
+<img src="docs/apps/beacon/screenshots/light/01-knowledge-home.png" width="400" alt="Beacon (Knowledge Base)">
+
+[Guide](docs/apps/beacon/guide.md) | [Overview](docs/apps/beacon/marketing.md) | [MCP Tools](docs/apps/beacon/mcp-tools.md)
+
 ### Bearing (Goals & OKRs)
 
 4 routes, 9 schemas, 30 MCP tools
@@ -465,6 +489,108 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 <img src="docs/apps/bearing/screenshots/light/01-dashboard.png" width="400" alt="Bearing (Goals & OKRs)">
 
 [Guide](docs/apps/bearing/guide.md) | [Overview](docs/apps/bearing/marketing.md) | [MCP Tools](docs/apps/bearing/mcp-tools.md)
+
+### Bench (Analytics)
+
+6 routes, 7 schemas, 32 MCP tools
+
+<img src="docs/apps/bench/screenshots/light/01-dashboard-list.png" width="400" alt="Bench (Analytics)">
+
+[Guide](docs/apps/bench/guide.md) | [Overview](docs/apps/bench/marketing.md) | [MCP Tools](docs/apps/bench/mcp-tools.md)
+
+### Bill (Invoicing)
+
+9 routes, 12 schemas, 47 MCP tools
+
+<img src="docs/apps/bill/screenshots/light/01-dashboard.png" width="400" alt="Bill (Invoicing)">
+
+[Guide](docs/apps/bill/guide.md) | [Overview](docs/apps/bill/marketing.md) | [MCP Tools](docs/apps/bill/mcp-tools.md)
+
+### Blank (Forms)
+
+4 routes, 5 schemas, 20 MCP tools
+
+<img src="docs/apps/blank/screenshots/light/01-form-list.png" width="400" alt="Blank (Forms)">
+
+[Guide](docs/apps/blank/guide.md) | [Overview](docs/apps/blank/marketing.md) | [MCP Tools](docs/apps/blank/mcp-tools.md)
+
+### Blast (Email Campaigns)
+
+7 routes, 9 schemas, 28 MCP tools
+
+<img src="docs/apps/blast/screenshots/light/01-campaigns.png" width="400" alt="Blast (Email Campaigns)">
+
+[Guide](docs/apps/blast/guide.md) | [Overview](docs/apps/blast/marketing.md) | [MCP Tools](docs/apps/blast/mcp-tools.md)
+
+### Blueprint
+
+6 routes, 11 schemas, 36 MCP tools
+
+<img src="docs/apps/blueprint/screenshots/light/01-diagram-list.png" width="400" alt="Blueprint">
+
+[Guide](docs/apps/blueprint/guide.md) | [Overview](docs/apps/blueprint/marketing.md) | [MCP Tools](docs/apps/blueprint/mcp-tools.md)
+
+### Board (Visual Collaboration)
+
+9 routes, 11 schemas, 40 MCP tools
+
+<img src="docs/apps/board/screenshots/light/01-all-boards.png" width="400" alt="Board (Visual Collaboration)">
+
+[Guide](docs/apps/board/guide.md) | [Overview](docs/apps/board/marketing.md) | [MCP Tools](docs/apps/board/mcp-tools.md)
+
+### Bolt (Workflow Automation)
+
+7 routes, 10 schemas, 24 MCP tools
+
+<img src="docs/apps/bolt/screenshots/light/01-automations.png" width="400" alt="Bolt (Workflow Automation)">
+
+[Guide](docs/apps/bolt/guide.md) | [Overview](docs/apps/bolt/marketing.md) | [MCP Tools](docs/apps/bolt/mcp-tools.md)
+
+### Bond (CRM)
+
+13 routes, 16 schemas, 69 MCP tools
+
+<img src="docs/apps/bond/screenshots/light/01-pipeline-board.png" width="400" alt="Bond (CRM)">
+
+[Guide](docs/apps/bond/guide.md) | [Overview](docs/apps/bond/marketing.md) | [MCP Tools](docs/apps/bond/mcp-tools.md)
+
+### Book (Scheduling)
+
+9 routes, 10 schemas, 25 MCP tools
+
+<img src="docs/apps/book/screenshots/light/01-week-view.png" width="400" alt="Book (Scheduling)">
+
+[Guide](docs/apps/book/guide.md) | [Overview](docs/apps/book/marketing.md) | [MCP Tools](docs/apps/book/mcp-tools.md)
+
+### Brief (Documents)
+
+10 routes, 10 schemas, 48 MCP tools
+
+<img src="docs/apps/brief/screenshots/light/01-home.png" width="400" alt="Brief (Documents)">
+
+[Guide](docs/apps/brief/guide.md) | [Overview](docs/apps/brief/marketing.md) | [MCP Tools](docs/apps/brief/mcp-tools.md)
+
+### Bureau
+
+15 routes, 4 schemas, 37 MCP tools
+
+<img src="docs/apps/bureau/screenshots/light/01-floor-directory.png" width="400" alt="Bureau">
+
+[Guide](docs/apps/bureau/guide.md) | [Overview](docs/apps/bureau/marketing.md) | [MCP Tools](docs/apps/bureau/mcp-tools.md)
+
+### Helpdesk (Support Portal)
+
+10 routes, 13 schemas, 11 MCP tools
+
+<img src="docs/apps/helpdesk/screenshots/light/01-portal-entry.png" width="400" alt="Helpdesk (Support Portal)">
+
+[Guide](docs/apps/helpdesk/guide.md) | [Overview](docs/apps/helpdesk/marketing.md) | [MCP Tools](docs/apps/helpdesk/mcp-tools.md)
+
+### Introduction to BigBlueBam
+
+An overview of the whole suite: the sixteen apps, how they connect, and how AI agents work alongside your team.
+
+[Guide](docs/apps/introduction/guide.md) | [Overview](docs/apps/introduction/marketing.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
 ---
 
@@ -779,7 +905,23 @@ site/               → Marketing site (served at /)
 | [Agent Conventions](docs/reference/agent-conventions.md) | Rules agents must follow (visibility preflight, audit) |
 | | |
 | **Per-App Guides** | |
+| [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
+| [Banter (Team Messaging) Guide](docs/apps/banter/guide.md) | User guide and MCP tool reference |
+| [Beacon (Knowledge Base) Guide](docs/apps/beacon/guide.md) | User guide and MCP tool reference |
 | [Bearing (Goals & OKRs) Guide](docs/apps/bearing/guide.md) | User guide and MCP tool reference |
+| [Bench (Analytics) Guide](docs/apps/bench/guide.md) | User guide and MCP tool reference |
+| [Bill (Invoicing) Guide](docs/apps/bill/guide.md) | User guide and MCP tool reference |
+| [Blank (Forms) Guide](docs/apps/blank/guide.md) | User guide and MCP tool reference |
+| [Blast (Email Campaigns) Guide](docs/apps/blast/guide.md) | User guide and MCP tool reference |
+| [Blueprint Guide](docs/apps/blueprint/guide.md) | User guide and MCP tool reference |
+| [Board (Visual Collaboration) Guide](docs/apps/board/guide.md) | User guide and MCP tool reference |
+| [Bolt (Workflow Automation) Guide](docs/apps/bolt/guide.md) | User guide and MCP tool reference |
+| [Bond (CRM) Guide](docs/apps/bond/guide.md) | User guide and MCP tool reference |
+| [Book (Scheduling) Guide](docs/apps/book/guide.md) | User guide and MCP tool reference |
+| [Brief (Documents) Guide](docs/apps/brief/guide.md) | User guide and MCP tool reference |
+| [Bureau Guide](docs/apps/bureau/guide.md) | User guide and MCP tool reference |
+| [Helpdesk (Support Portal) Guide](docs/apps/helpdesk/guide.md) | User guide and MCP tool reference |
+| [Introduction to BigBlueBam Guide](docs/apps/introduction/guide.md) | User guide and MCP tool reference |
 
 <!-- AUTODOCS:DOCS_INDEX:END -->
 ---

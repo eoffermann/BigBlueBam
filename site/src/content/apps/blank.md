@@ -1,7 +1,7 @@
 ---
 title: "Blank (Forms)"
 app: blank
-generated: "2026-06-18T00:43:58.372Z"
+generated: "2026-06-23T06:01:51.779Z"
 ---
 
 # Blank (Forms)
@@ -14,6 +14,7 @@ Build forms and surveys with a visual editor, publish them to a public link, and
 - Email notifications on every submission, with an optional post to a Banter channel
 - Response analytics with totals, a 30-day submission trend, and per-field breakdowns, plus one-click CSV export
 - AI agents can generate a form from a plain-language description, publish it, and summarize the responses for you
+- Reach your team without scheduling: the persistent Bureau presence dock lets you see who is around and start a voice or video huddle from anywhere in Blank
 
 ## See It in Action
 

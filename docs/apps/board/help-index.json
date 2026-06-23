@@ -222,7 +222,7 @@
     {
       "anchor": "overview",
       "title": "Overview",
-      "text": "Board is BigBlueBam's whiteboarding app. Each board is one infinite canvas powered by Excalidraw, where you place sticky notes, text, shapes, arrows, freehand drawings, frames, and images. Boards auto-save as you work and sync in real time, so several people can edit the same canvas at once and see each other's cursors. Board is in beta. The sidebar shows a yellow beta chip next to the Board logo. Boards live inside your BigBlueBam organization and can optionally be scoped to a Bam project. Because projects, project members, phases, and tasks all live in Bam, Board can hand work back to Bam: sticky notes from a brainstorm can be promoted into Bam tasks in a named project and phase. You organize boards with stars, archive, templates, and named version snapshots. Board does not have its own login. It reads your shared BigBlueBam session, and your permissions come from Bam. If you are not signed in, Board shows a \"Please log in to BigBlueBam first\" screen with a link to the main app."
+      "text": "Board is BigBlueBam's whiteboarding app. Each board is one infinite canvas powered by Excalidraw, where you place sticky notes, text, shapes, arrows, freehand drawings, frames, and images. Boards auto-save as you work and sync in real time, so several people can edit the same canvas at once and see each other's cursors. Boards live inside your BigBlueBam organization and can optionally be scoped to a Bam project. Because projects, project members, phases, and tasks all live in Bam, Board can hand work back to Bam: sticky notes from a brainstorm can be promoted into Bam tasks in a named project and phase. You organize boards with stars, archive, templates, and named version snapshots. Board does not have its own login. It reads your shared BigBlueBam session, and your permissions come from Bam. If you are not signed in, Board shows a \"Please log in to BigBlueBam first\" screen with a link to the main app."
     },
     {
       "anchor": "key-concepts",
@@ -499,7 +499,6 @@
     "Version name": "version-history-snapshots",
     "Visibility": "key-concepts",
     "back arrow": "the-board-toolbar",
-    "beta": "overview",
     "board toolbar": "the-infinite-canvas",
     "chat panel": "the-infinite-canvas",
     "connection status badge": "the-infinite-canvas",

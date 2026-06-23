@@ -162,7 +162,7 @@
     {
       "anchor": "overview",
       "title": "Overview",
-      "text": "Bearing organizes work around objectives. You create a Period (a named time box such as a quarter), add Goals inside it, and break each goal into Key Results that carry a start value, a target value, and a current value. As you record progress on the key results, Bearing rolls those numbers up into a single goal progress percentage and compares it against where you should be by now, so a goal that is drifting becomes visible while there is still time to act. The product is built for small to medium teams running a regular OKR cadence: set goals at the start of a period, check in weekly with status updates, triage the goals that are at risk, and close the period out at the end. Goals can be scoped to the whole organization, a team, a project, or an individual, so the same period can hold company objectives next to team objectives. Bearing can read progress from your real work when an agent or API caller links a key result to a Bam epic, project, or sprint. As linked Bam tasks reach a done state, a background job recomputes the key result and its goal automatically. That linking is available through the MCP tools and REST, not through a human screen in this build. Bearing is in beta. It signs you in with your existing BigBlueBam (Bam) session, so you reach it the same way you reach the other apps in the suite."
+      "text": "Bearing organizes work around objectives. You create a Period (a named time box such as a quarter), add Goals inside it, and break each goal into Key Results that carry a start value, a target value, and a current value. As you record progress on the key results, Bearing rolls those numbers up into a single goal progress percentage and compares it against where you should be by now, so a goal that is drifting becomes visible while there is still time to act. The product is built for small to medium teams running a regular OKR cadence: set goals at the start of a period, check in weekly with status updates, triage the goals that are at risk, and close the period out at the end. Goals can be scoped to the whole organization, a team, a project, or an individual, so the same period can hold company objectives next to team objectives. Bearing can read progress from your real work when an agent or API caller links a key result to a Bam epic, project, or sprint. As linked Bam tasks reach a done state, a background job recomputes the key result and its goal automatically. That linking is available through the MCP tools and REST, not through a human screen in this build. Bearing signs you in with your existing BigBlueBam (Bam) session, so you reach it the same way you reach the other apps in the suite."
     },
     {
       "anchor": "key-concepts",
@@ -177,7 +177,7 @@
     {
       "anchor": "feature-reference",
       "title": "Feature reference",
-      "text": "The Bearing sidebar carries a brand mark with a beta pill, a period scope selector dropdown, and four navigation items with these exact labels: Dashboard, My Goals, At Risk, and Periods. The period scope selector sets the one period that the whole UI is scoped to; your choice is remembered between visits, and Bearing auto-selects the first active period if you have not chosen one."
+      "text": "The Bearing sidebar carries a brand mark, a period scope selector dropdown, and four navigation items with these exact labels: Dashboard, My Goals, At Risk, and Periods. The period scope selector sets the one period that the whole UI is scoped to; your choice is remembered between visits, and Bearing auto-selects the first active period if you have not chosen one."
     },
     {
       "anchor": "goals-dashboard",
@@ -404,7 +404,6 @@
     "at-risk report": "reports-and-csv-export",
     "at_risk": "key-concepts",
     "behind": "key-concepts",
-    "beta": "overview",
     "cancelled": "key-concepts",
     "completed": "key-concepts",
     "draft": "key-concepts",

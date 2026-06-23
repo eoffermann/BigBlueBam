@@ -1,7 +1,7 @@
 ---
 title: "Bench (Analytics) Guide"
 app: bench
-generated: "2026-06-21T04:38:25.157Z"
+generated: "2026-06-23T06:01:51.767Z"
 ---
 
 # Bench (Analytics) Guide

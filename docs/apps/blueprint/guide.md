@@ -1,7 +1,7 @@
 ---
 title: "Blueprint Guide"
 app: blueprint
-generated: "2026-06-21T04:38:25.166Z"
+generated: "2026-06-23T06:01:51.789Z"
 ---
 
 # Blueprint Guide

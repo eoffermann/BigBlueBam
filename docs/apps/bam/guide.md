@@ -1,7 +1,7 @@
 ---
 title: "Bam (Project Management) Guide"
 app: bam
-generated: "2026-06-21T04:38:25.128Z"
+generated: "2026-06-23T06:01:51.743Z"
 ---
 
 # Bam (Project Management) Guide
@@ -84,17 +84,9 @@ A presence strip on the task drawer shows who else is on a task, and you can rin
 
 ![List View](screenshots/light/04-list-view.png)
 
-### People
-
-![People](screenshots/light/04-people.png)
-
 ### My Work
 
 ![My Work](screenshots/light/05-my-work.png)
-
-### Settings
-
-![Settings](screenshots/light/05-settings.png)
 
 ### Settings Integrations
 
@@ -107,14 +99,6 @@ A presence strip on the task drawer shows who else is on a task, and you can rin
 ### Org Smtp
 
 ![Org Smtp](screenshots/light/08-org-smtp.png)
-
-### Timeline
-
-![Timeline](screenshots/light/09-timeline.png)
-
-### Calendar
-
-![Calendar](screenshots/light/10-calendar.png)
 
 
 ## MCP Tools

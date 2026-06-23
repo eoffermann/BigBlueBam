@@ -1,53 +1,1293 @@
 {
-  "generated_at": "2026-06-18T04:26:01.173Z",
+  "generated_at": "2026-06-23T06:01:52.406Z",
   "screenshots": [
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "01-board.png",
+      "path": "docs/apps/bam/screenshots/light/01-board.png",
+      "size": 111069,
+      "hash": "fed25351248bc3150ec893ded7e7bab21ca14fe80900139016d21d5bff2d5f82"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "02-task-detail.png",
+      "path": "docs/apps/bam/screenshots/light/02-task-detail.png",
+      "size": 145370,
+      "hash": "a2ad52828109331d208a86e715ba1e3b3de8ac3ee80b19ddbacfd0d2435345cb"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "03-sprint-create.png",
+      "path": "docs/apps/bam/screenshots/light/03-sprint-create.png",
+      "size": 115101,
+      "hash": "356ac713573134caa6a3de27431923442f4173c20e6ef7455a70926c40fc4c26"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "04-list-view.png",
+      "path": "docs/apps/bam/screenshots/light/04-list-view.png",
+      "size": 82260,
+      "hash": "9a2ee7fc9cb0c3e2aafd03116ccc961c4aa79d9c19fa52f38fb09fbd93d52e41"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "05-my-work.png",
+      "path": "docs/apps/bam/screenshots/light/05-my-work.png",
+      "size": 55995,
+      "hash": "e99f8dd3e8d72def867df77860805747720ea39357abfc0cdf8024deb568b404"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "06-settings-integrations.png",
+      "path": "docs/apps/bam/screenshots/light/06-settings-integrations.png",
+      "size": 132281,
+      "hash": "bff419def400b864e4263fde792a23c4970e75e99802aee84b9f5ee6a2d95b29"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "07-platform-smtp.png",
+      "path": "docs/apps/bam/screenshots/light/07-platform-smtp.png",
+      "size": 255040,
+      "hash": "15ae26637d0326abdffde3693cde6476192da4b9a896f14143794c74835e65a6"
+    },
+    {
+      "app": "bam",
+      "theme": "light",
+      "file": "08-org-smtp.png",
+      "path": "docs/apps/bam/screenshots/light/08-org-smtp.png",
+      "size": 84277,
+      "hash": "2acaf2540741f97d1c5ba9a9900a9b9bbf71581ff34c96037feedb6b9a4c3b89"
+    },
+    {
+      "app": "bam",
+      "theme": "dark",
+      "file": "01-board.png",
+      "path": "docs/apps/bam/screenshots/dark/01-board.png",
+      "size": 297978,
+      "hash": "1d31b939d639211f6fb688fc702391bb8c63f2c85c4feff4b643c2cd4f15b71a"
+    },
+    {
+      "app": "bam",
+      "theme": "dark",
+      "file": "04-list-view.png",
+      "path": "docs/apps/bam/screenshots/dark/04-list-view.png",
+      "size": 82260,
+      "hash": "9a2ee7fc9cb0c3e2aafd03116ccc961c4aa79d9c19fa52f38fb09fbd93d52e41"
+    },
+    {
+      "app": "bam",
+      "theme": "dark",
+      "file": "05-my-work.png",
+      "path": "docs/apps/bam/screenshots/dark/05-my-work.png",
+      "size": 55995,
+      "hash": "e99f8dd3e8d72def867df77860805747720ea39357abfc0cdf8024deb568b404"
+    },
+    {
+      "app": "banter",
+      "theme": "light",
+      "file": "01-channel-view.png",
+      "path": "docs/apps/banter/screenshots/light/01-channel-view.png",
+      "size": 38776,
+      "hash": "4287df80d239f4d1b381b04fca9ad4484ef0c5c53b65486ab54c20752cf0b8bf"
+    },
+    {
+      "app": "banter",
+      "theme": "light",
+      "file": "02-channel-list.png",
+      "path": "docs/apps/banter/screenshots/light/02-channel-list.png",
+      "size": 38803,
+      "hash": "f715ee6e08b7f8c8f8879538f2a2c6a917f41cc33ec3fe1c374b23766f4f71ea"
+    },
+    {
+      "app": "banter",
+      "theme": "light",
+      "file": "03-thread.png",
+      "path": "docs/apps/banter/screenshots/light/03-thread.png",
+      "size": 38776,
+      "hash": "4287df80d239f4d1b381b04fca9ad4484ef0c5c53b65486ab54c20752cf0b8bf"
+    },
+    {
+      "app": "banter",
+      "theme": "light",
+      "file": "04-dms.png",
+      "path": "docs/apps/banter/screenshots/light/04-dms.png",
+      "size": 38783,
+      "hash": "f98b26febd4177762f05d11dc32e909482c49376d5bb7ee53c27d176fb516234"
+    },
+    {
+      "app": "banter",
+      "theme": "light",
+      "file": "05-search.png",
+      "path": "docs/apps/banter/screenshots/light/05-search.png",
+      "size": 38783,
+      "hash": "f98b26febd4177762f05d11dc32e909482c49376d5bb7ee53c27d176fb516234"
+    },
+    {
+      "app": "banter",
+      "theme": "light",
+      "file": "06-preferences.png",
+      "path": "docs/apps/banter/screenshots/light/06-preferences.png",
+      "size": 67517,
+      "hash": "ebcf8a48ef692aee0a3c684b7a9d212b3796add96accb2adb0cb47893cbce0a9"
+    },
+    {
+      "app": "banter",
+      "theme": "dark",
+      "file": "01-channel-view.png",
+      "path": "docs/apps/banter/screenshots/dark/01-channel-view.png",
+      "size": 102688,
+      "hash": "38803abb525431d968e6cb0bab6845b74d144252147928f902c010533d69f9fd"
+    },
+    {
+      "app": "banter",
+      "theme": "dark",
+      "file": "03-thread.png",
+      "path": "docs/apps/banter/screenshots/dark/03-thread.png",
+      "size": 38776,
+      "hash": "4287df80d239f4d1b381b04fca9ad4484ef0c5c53b65486ab54c20752cf0b8bf"
+    },
+    {
+      "app": "banter",
+      "theme": "dark",
+      "file": "04-dms.png",
+      "path": "docs/apps/banter/screenshots/dark/04-dms.png",
+      "size": 38783,
+      "hash": "f98b26febd4177762f05d11dc32e909482c49376d5bb7ee53c27d176fb516234"
+    },
+    {
+      "app": "banter",
+      "theme": "dark",
+      "file": "06-preferences.png",
+      "path": "docs/apps/banter/screenshots/dark/06-preferences.png",
+      "size": 67517,
+      "hash": "ebcf8a48ef692aee0a3c684b7a9d212b3796add96accb2adb0cb47893cbce0a9"
+    },
+    {
+      "app": "beacon",
+      "theme": "light",
+      "file": "01-knowledge-home.png",
+      "path": "docs/apps/beacon/screenshots/light/01-knowledge-home.png",
+      "size": 53841,
+      "hash": "853a973eded1f36ad6f5507d4653c8ec33f740254aeea754660affe509d3e936"
+    },
+    {
+      "app": "beacon",
+      "theme": "light",
+      "file": "02-article-detail.png",
+      "path": "docs/apps/beacon/screenshots/light/02-article-detail.png",
+      "size": 72588,
+      "hash": "9fbd9319e30645ac00c5781388928f951ccaf7ed65ff7c4e25ca63d8788e1cfc"
+    },
+    {
+      "app": "beacon",
+      "theme": "light",
+      "file": "03-browse-list.png",
+      "path": "docs/apps/beacon/screenshots/light/03-browse-list.png",
+      "size": 88819,
+      "hash": "b7cf4a38ed9f4b35f79bc8cda9cee1f4e07a4d2b0365e43e4bb2e5f3bd2739a2"
+    },
+    {
+      "app": "beacon",
+      "theme": "light",
+      "file": "04-graph-explorer.png",
+      "path": "docs/apps/beacon/screenshots/light/04-graph-explorer.png",
+      "size": 48460,
+      "hash": "81378d9cef23b5dee1c991577b4a0599bd8f95228788252571ded563eea74d5b"
+    },
+    {
+      "app": "beacon",
+      "theme": "light",
+      "file": "05-governance-dashboard.png",
+      "path": "docs/apps/beacon/screenshots/light/05-governance-dashboard.png",
+      "size": 55648,
+      "hash": "fd0a0df66060e22883d7582d47e5c9b6c341d9ab9ccc2e1e23dd5bc7012d8983"
+    },
+    {
+      "app": "beacon",
+      "theme": "light",
+      "file": "06-search-results.png",
+      "path": "docs/apps/beacon/screenshots/light/06-search-results.png",
+      "size": 46617,
+      "hash": "24fd1b5ccc1ab1b9c697bdd10271a6908c7693cfd4822d910316098f6a78d1cb"
+    },
+    {
+      "app": "beacon",
+      "theme": "dark",
+      "file": "01-knowledge-home.png",
+      "path": "docs/apps/beacon/screenshots/dark/01-knowledge-home.png",
+      "size": 141573,
+      "hash": "70a38a76151ad9e22a9e219fbba4604abdb06c0d2a7a104e4c5442941ff40ca7"
+    },
+    {
+      "app": "beacon",
+      "theme": "dark",
+      "file": "04-graph-explorer.png",
+      "path": "docs/apps/beacon/screenshots/dark/04-graph-explorer.png",
+      "size": 48460,
+      "hash": "81378d9cef23b5dee1c991577b4a0599bd8f95228788252571ded563eea74d5b"
+    },
+    {
+      "app": "beacon",
+      "theme": "dark",
+      "file": "05-governance-dashboard.png",
+      "path": "docs/apps/beacon/screenshots/dark/05-governance-dashboard.png",
+      "size": 55648,
+      "hash": "fd0a0df66060e22883d7582d47e5c9b6c341d9ab9ccc2e1e23dd5bc7012d8983"
+    },
+    {
+      "app": "beacon",
+      "theme": "dark",
+      "file": "06-search-results.png",
+      "path": "docs/apps/beacon/screenshots/dark/06-search-results.png",
+      "size": 46617,
+      "hash": "24fd1b5ccc1ab1b9c697bdd10271a6908c7693cfd4822d910316098f6a78d1cb"
+    },
     {
       "app": "bearing",
       "theme": "light",
       "file": "01-dashboard.png",
       "path": "docs/apps/bearing/screenshots/light/01-dashboard.png",
-      "size": 86834,
-      "hash": "57a6b977332171d932c95008824682219f9822cbfa9383fabb5e7ab884293bc8"
+      "size": 97792,
+      "hash": "618a5dd292bf96b15c6f405e724a35654aeaaa8090df7069f0bed627906aa86d"
     },
     {
       "app": "bearing",
       "theme": "light",
       "file": "02-goal-detail.png",
       "path": "docs/apps/bearing/screenshots/light/02-goal-detail.png",
-      "size": 98107,
-      "hash": "986f1f9a7988aff95b574c0e558fe5a054b8f0faebdb93900842cc0adcafcd52"
+      "size": 59996,
+      "hash": "c8ea34ffcec383b1a3e09f928fba71d235391d5824909e5a4c87d2fc2d982029"
     },
     {
       "app": "bearing",
       "theme": "light",
       "file": "03-my-goals.png",
       "path": "docs/apps/bearing/screenshots/light/03-my-goals.png",
-      "size": 79621,
-      "hash": "d760a41789d03c3972b0ab9671e934a733455ff024b2337a014916b317caa91b"
+      "size": 95498,
+      "hash": "4de3edc136b57981a59cfb3831ab20715d36f91b625e85b0b30f2247bfc46565"
     },
     {
       "app": "bearing",
       "theme": "light",
       "file": "04-at-risk.png",
       "path": "docs/apps/bearing/screenshots/light/04-at-risk.png",
-      "size": 78445,
-      "hash": "0288fdbe40bc3707e7419128a7ecce57eb95545b49c250acaf517c3de6d335df"
+      "size": 93375,
+      "hash": "bec34038a1622abfad21e389cb7e99862202b069cfe81e7c2de5469cdcd02db1"
     },
     {
       "app": "bearing",
       "theme": "light",
       "file": "05-periods.png",
       "path": "docs/apps/bearing/screenshots/light/05-periods.png",
-      "size": 40385,
-      "hash": "0529c65aa1174fe417692b66457cf89e9f85c01eaca1e77fba2b238b412e0516"
+      "size": 39266,
+      "hash": "d60129c1bb1c9625fc140029980659ea567a93414c7d636b795596c27c35057e"
     },
     {
       "app": "bearing",
       "theme": "dark",
       "file": "01-dashboard.png",
       "path": "docs/apps/bearing/screenshots/dark/01-dashboard.png",
-      "size": 217278,
-      "hash": "7703ccec9ef137d327c5a0f8caf3c6cccce2d52a7c03801873dde0bf079f0dcc"
+      "size": 237525,
+      "hash": "acb1298e69f506408dba6e9b23262efd10eb16e2b51f29c70cb0aab7190dbe5e"
+    },
+    {
+      "app": "bearing",
+      "theme": "dark",
+      "file": "02-goal-detail.png",
+      "path": "docs/apps/bearing/screenshots/dark/02-goal-detail.png",
+      "size": 59996,
+      "hash": "c8ea34ffcec383b1a3e09f928fba71d235391d5824909e5a4c87d2fc2d982029"
+    },
+    {
+      "app": "bearing",
+      "theme": "dark",
+      "file": "04-at-risk.png",
+      "path": "docs/apps/bearing/screenshots/dark/04-at-risk.png",
+      "size": 93375,
+      "hash": "bec34038a1622abfad21e389cb7e99862202b069cfe81e7c2de5469cdcd02db1"
+    },
+    {
+      "app": "bearing",
+      "theme": "dark",
+      "file": "05-periods.png",
+      "path": "docs/apps/bearing/screenshots/dark/05-periods.png",
+      "size": 39266,
+      "hash": "d60129c1bb1c9625fc140029980659ea567a93414c7d636b795596c27c35057e"
+    },
+    {
+      "app": "bench",
+      "theme": "light",
+      "file": "01-dashboard-list.png",
+      "path": "docs/apps/bench/screenshots/light/01-dashboard-list.png",
+      "size": 112104,
+      "hash": "e9dbe467a894b88a5fd4a65d628fb6f54e3e8e917177b1c0ffe71a43c26cd439"
+    },
+    {
+      "app": "bench",
+      "theme": "light",
+      "file": "02-dashboard-view.png",
+      "path": "docs/apps/bench/screenshots/light/02-dashboard-view.png",
+      "size": 37067,
+      "hash": "6e4f8eac1a611f5f5ce8d4175545108fe81b55884f748eb064e4b93a6cabb2d7"
+    },
+    {
+      "app": "bench",
+      "theme": "light",
+      "file": "03-explorer.png",
+      "path": "docs/apps/bench/screenshots/light/03-explorer.png",
+      "size": 57696,
+      "hash": "03a818a0655121ad1c9eaab6ac0d93330c58294fe9093a26b0c3af07fc0b5c3d"
+    },
+    {
+      "app": "bench",
+      "theme": "light",
+      "file": "04-widget-wizard.png",
+      "path": "docs/apps/bench/screenshots/light/04-widget-wizard.png",
+      "size": 112104,
+      "hash": "e9dbe467a894b88a5fd4a65d628fb6f54e3e8e917177b1c0ffe71a43c26cd439"
+    },
+    {
+      "app": "bench",
+      "theme": "light",
+      "file": "05-reports.png",
+      "path": "docs/apps/bench/screenshots/light/05-reports.png",
+      "size": 40737,
+      "hash": "287277e87ba4690cba5d50f64d05c4920d8ad9700fafab9abe58fea110448a5f"
+    },
+    {
+      "app": "bench",
+      "theme": "light",
+      "file": "06-settings.png",
+      "path": "docs/apps/bench/screenshots/light/06-settings.png",
+      "size": 73421,
+      "hash": "67a7d40cb7e8046800e964e3228d133671c1304e81f7733cbaf59c86800dcbab"
+    },
+    {
+      "app": "bench",
+      "theme": "dark",
+      "file": "01-dashboard-list.png",
+      "path": "docs/apps/bench/screenshots/dark/01-dashboard-list.png",
+      "size": 112104,
+      "hash": "e9dbe467a894b88a5fd4a65d628fb6f54e3e8e917177b1c0ffe71a43c26cd439"
+    },
+    {
+      "app": "bench",
+      "theme": "dark",
+      "file": "02-dashboard-view.png",
+      "path": "docs/apps/bench/screenshots/dark/02-dashboard-view.png",
+      "size": 94575,
+      "hash": "625e9d78ee18a9db24ee0aa02574fb2ffbe44da6613b921f9e0aebafdf45c48f"
+    },
+    {
+      "app": "bench",
+      "theme": "dark",
+      "file": "03-explorer.png",
+      "path": "docs/apps/bench/screenshots/dark/03-explorer.png",
+      "size": 57696,
+      "hash": "03a818a0655121ad1c9eaab6ac0d93330c58294fe9093a26b0c3af07fc0b5c3d"
+    },
+    {
+      "app": "bench",
+      "theme": "dark",
+      "file": "04-widget-wizard.png",
+      "path": "docs/apps/bench/screenshots/dark/04-widget-wizard.png",
+      "size": 112104,
+      "hash": "e9dbe467a894b88a5fd4a65d628fb6f54e3e8e917177b1c0ffe71a43c26cd439"
+    },
+    {
+      "app": "bench",
+      "theme": "dark",
+      "file": "05-reports.png",
+      "path": "docs/apps/bench/screenshots/dark/05-reports.png",
+      "size": 40737,
+      "hash": "287277e87ba4690cba5d50f64d05c4920d8ad9700fafab9abe58fea110448a5f"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "01-dashboard.png",
+      "path": "docs/apps/bill/screenshots/light/01-dashboard.png",
+      "size": 79534,
+      "hash": "afca14c731e06e1f6ac87e2f8d0bacdfa3b24a64bee60997efa90f589aaa2fcb"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "02-invoice-list.png",
+      "path": "docs/apps/bill/screenshots/light/02-invoice-list.png",
+      "size": 132563,
+      "hash": "90b6bd8fa30f964e56312f0674273d4f8d2aacac5ec669bcc2b05718fce5cced"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "03-invoice-detail.png",
+      "path": "docs/apps/bill/screenshots/light/03-invoice-detail.png",
+      "size": 65811,
+      "hash": "0a5fe25b9956833e38f37b9add6f4562f95b3736de33c6c8b2b27da943597a11"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "04-invoice-new.png",
+      "path": "docs/apps/bill/screenshots/light/04-invoice-new.png",
+      "size": 53376,
+      "hash": "f0a01d5e32f5e89ad0d24209889387dd86e1e4c1742e4e007d602a6b33fa5f17"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "05-expenses.png",
+      "path": "docs/apps/bill/screenshots/light/05-expenses.png",
+      "size": 46205,
+      "hash": "8af3764f73476ec31ba284bc5a1a0deb5f60f792780e0af26b1c9c40739732c9"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "06-reports.png",
+      "path": "docs/apps/bill/screenshots/light/06-reports.png",
+      "size": 62627,
+      "hash": "3cada35221d6b48a043eadb5bfddbb4cd401e8b025af7ddacbaf3ca06e1412a1"
+    },
+    {
+      "app": "bill",
+      "theme": "light",
+      "file": "07-recurring.png",
+      "path": "docs/apps/bill/screenshots/light/07-recurring.png",
+      "size": 48304,
+      "hash": "d7003a7338797bdc9fca036b1dfc42ab91e8e8bead505027bcf9136d03a0f58b"
+    },
+    {
+      "app": "bill",
+      "theme": "dark",
+      "file": "01-dashboard.png",
+      "path": "docs/apps/bill/screenshots/dark/01-dashboard.png",
+      "size": 79534,
+      "hash": "afca14c731e06e1f6ac87e2f8d0bacdfa3b24a64bee60997efa90f589aaa2fcb"
+    },
+    {
+      "app": "bill",
+      "theme": "dark",
+      "file": "02-invoice-list.png",
+      "path": "docs/apps/bill/screenshots/dark/02-invoice-list.png",
+      "size": 339763,
+      "hash": "4e71fdf17fb5eae725eabc65c9816665cb0174bcf8ced88310a3f6e38257f618"
+    },
+    {
+      "app": "bill",
+      "theme": "dark",
+      "file": "03-invoice-detail.png",
+      "path": "docs/apps/bill/screenshots/dark/03-invoice-detail.png",
+      "size": 65811,
+      "hash": "0a5fe25b9956833e38f37b9add6f4562f95b3736de33c6c8b2b27da943597a11"
+    },
+    {
+      "app": "bill",
+      "theme": "dark",
+      "file": "05-expenses.png",
+      "path": "docs/apps/bill/screenshots/dark/05-expenses.png",
+      "size": 46205,
+      "hash": "8af3764f73476ec31ba284bc5a1a0deb5f60f792780e0af26b1c9c40739732c9"
+    },
+    {
+      "app": "bill",
+      "theme": "dark",
+      "file": "06-reports.png",
+      "path": "docs/apps/bill/screenshots/dark/06-reports.png",
+      "size": 62627,
+      "hash": "3cada35221d6b48a043eadb5bfddbb4cd401e8b025af7ddacbaf3ca06e1412a1"
+    },
+    {
+      "app": "bill",
+      "theme": "dark",
+      "file": "07-recurring.png",
+      "path": "docs/apps/bill/screenshots/dark/07-recurring.png",
+      "size": 48304,
+      "hash": "d7003a7338797bdc9fca036b1dfc42ab91e8e8bead505027bcf9136d03a0f58b"
+    },
+    {
+      "app": "blank",
+      "theme": "light",
+      "file": "01-form-list.png",
+      "path": "docs/apps/blank/screenshots/light/01-form-list.png",
+      "size": 87303,
+      "hash": "18174fec4bd018866f40f6f0cb835fa2f90b50035430da51b89193a7c54081d0"
+    },
+    {
+      "app": "blank",
+      "theme": "light",
+      "file": "02-form-builder.png",
+      "path": "docs/apps/blank/screenshots/light/02-form-builder.png",
+      "size": 51364,
+      "hash": "c41b4cccfc51f65d4eb1ef32035d57c1fba8694ec482d2bb4d926b6137949430"
+    },
+    {
+      "app": "blank",
+      "theme": "light",
+      "file": "03-form-preview.png",
+      "path": "docs/apps/blank/screenshots/light/03-form-preview.png",
+      "size": 104719,
+      "hash": "ebda1ae313efff57a2fda0607cce48b4ca8bf950c0dc1a1aa263ed3f8ce20575"
+    },
+    {
+      "app": "blank",
+      "theme": "light",
+      "file": "04-responses.png",
+      "path": "docs/apps/blank/screenshots/light/04-responses.png",
+      "size": 57059,
+      "hash": "34234e847bffcb0ba10a1db2e25b251afd9553b8587ca6abbcae29a281842518"
+    },
+    {
+      "app": "blank",
+      "theme": "light",
+      "file": "05-analytics.png",
+      "path": "docs/apps/blank/screenshots/light/05-analytics.png",
+      "size": 55478,
+      "hash": "82b8757cb09aad04237cecc9c027b52c69476c33b507a14f1302534ac39e743f"
+    },
+    {
+      "app": "blank",
+      "theme": "light",
+      "file": "06-form-settings-dialog.png",
+      "path": "docs/apps/blank/screenshots/light/06-form-settings-dialog.png",
+      "size": 55766,
+      "hash": "aafcf183454857a5e03fe973374ffb01eddfb9a16f9713c3e1446417f7f5d112"
+    },
+    {
+      "app": "blank",
+      "theme": "light",
+      "file": "07-access-and-notifications.png",
+      "path": "docs/apps/blank/screenshots/light/07-access-and-notifications.png",
+      "size": 55296,
+      "hash": "f4fd20d7ddd9e93a60e3b000bb74310737bb591732622ceedad50e838bf8002a"
+    },
+    {
+      "app": "blank",
+      "theme": "dark",
+      "file": "01-form-list.png",
+      "path": "docs/apps/blank/screenshots/dark/01-form-list.png",
+      "size": 227837,
+      "hash": "c0d4ab3535ce17a435ae3906020e8b7f720e9666b0a9efc27d44157766d9edd5"
+    },
+    {
+      "app": "blank",
+      "theme": "dark",
+      "file": "02-form-builder.png",
+      "path": "docs/apps/blank/screenshots/dark/02-form-builder.png",
+      "size": 51364,
+      "hash": "c41b4cccfc51f65d4eb1ef32035d57c1fba8694ec482d2bb4d926b6137949430"
+    },
+    {
+      "app": "blank",
+      "theme": "dark",
+      "file": "03-form-preview.png",
+      "path": "docs/apps/blank/screenshots/dark/03-form-preview.png",
+      "size": 104719,
+      "hash": "ebda1ae313efff57a2fda0607cce48b4ca8bf950c0dc1a1aa263ed3f8ce20575"
+    },
+    {
+      "app": "blast",
+      "theme": "light",
+      "file": "01-campaigns.png",
+      "path": "docs/apps/blast/screenshots/light/01-campaigns.png",
+      "size": 103398,
+      "hash": "08ecd1a72f3aea87dd53944174d6c24400da067aa5c92c51b6bd71eafdc1028e"
+    },
+    {
+      "app": "blast",
+      "theme": "light",
+      "file": "02-campaign-new.png",
+      "path": "docs/apps/blast/screenshots/light/02-campaign-new.png",
+      "size": 66901,
+      "hash": "2c17abfbf84953ee8fefe59f9a9d7e023a91d24306e240e5921f700aa3639d1a"
+    },
+    {
+      "app": "blast",
+      "theme": "light",
+      "file": "03-templates.png",
+      "path": "docs/apps/blast/screenshots/light/03-templates.png",
+      "size": 89638,
+      "hash": "dcc2d5ac360ad3fe992749fbaf9cb06b435c7f0f9c350ea67f5588967b014738"
+    },
+    {
+      "app": "blast",
+      "theme": "light",
+      "file": "04-template-editor.png",
+      "path": "docs/apps/blast/screenshots/light/04-template-editor.png",
+      "size": 69922,
+      "hash": "1149815702fbcffcd51a36fd0a5e2f1e097ff63a6208eec563332cb141960191"
+    },
+    {
+      "app": "blast",
+      "theme": "light",
+      "file": "05-segments.png",
+      "path": "docs/apps/blast/screenshots/light/05-segments.png",
+      "size": 41476,
+      "hash": "ca61b2a6460048cb032d0987b126898f01dedb74bf9f988465214114871bf6b3"
+    },
+    {
+      "app": "blast",
+      "theme": "light",
+      "file": "06-segment-builder.png",
+      "path": "docs/apps/blast/screenshots/light/06-segment-builder.png",
+      "size": 52669,
+      "hash": "dffbf2904e8d94c4b466cf7fa95a8a5e6d5126fb3b9cc994af9f55b529204ffe"
+    },
+    {
+      "app": "blast",
+      "theme": "light",
+      "file": "07-analytics.png",
+      "path": "docs/apps/blast/screenshots/light/07-analytics.png",
+      "size": 49655,
+      "hash": "4de398e80883b8a13d7fd70cda1f0451fb6ff686764b063c2bfcbd4b6d41b22d"
+    },
+    {
+      "app": "blast",
+      "theme": "dark",
+      "file": "01-campaigns.png",
+      "path": "docs/apps/blast/screenshots/dark/01-campaigns.png",
+      "size": 265070,
+      "hash": "9a523f8dba038c005e955c18bc201f7beb60d376d550b7f660d69612f4b56313"
+    },
+    {
+      "app": "blast",
+      "theme": "dark",
+      "file": "02-campaign-new.png",
+      "path": "docs/apps/blast/screenshots/dark/02-campaign-new.png",
+      "size": 66901,
+      "hash": "2c17abfbf84953ee8fefe59f9a9d7e023a91d24306e240e5921f700aa3639d1a"
+    },
+    {
+      "app": "blast",
+      "theme": "dark",
+      "file": "04-template-editor.png",
+      "path": "docs/apps/blast/screenshots/dark/04-template-editor.png",
+      "size": 69922,
+      "hash": "1149815702fbcffcd51a36fd0a5e2f1e097ff63a6208eec563332cb141960191"
+    },
+    {
+      "app": "blast",
+      "theme": "dark",
+      "file": "06-segment-builder.png",
+      "path": "docs/apps/blast/screenshots/dark/06-segment-builder.png",
+      "size": 52669,
+      "hash": "dffbf2904e8d94c4b466cf7fa95a8a5e6d5126fb3b9cc994af9f55b529204ffe"
+    },
+    {
+      "app": "blast",
+      "theme": "dark",
+      "file": "07-analytics.png",
+      "path": "docs/apps/blast/screenshots/dark/07-analytics.png",
+      "size": 49655,
+      "hash": "4de398e80883b8a13d7fd70cda1f0451fb6ff686764b063c2bfcbd4b6d41b22d"
+    },
+    {
+      "app": "blueprint",
+      "theme": "light",
+      "file": "01-diagram-list.png",
+      "path": "docs/apps/blueprint/screenshots/light/01-diagram-list.png",
+      "size": 51946,
+      "hash": "162faefa44774e79b6c5cdfb01f0368d8c79083f36726de77c5c3d06278dc2a2"
+    },
+    {
+      "app": "blueprint",
+      "theme": "light",
+      "file": "02-diagram-editor.png",
+      "path": "docs/apps/blueprint/screenshots/light/02-diagram-editor.png",
+      "size": 37830,
+      "hash": "655a1e7fc3d6b912b49dd5fa050d82e0589370fbd9dc21c92d1aeef980c7c336"
+    },
+    {
+      "app": "blueprint",
+      "theme": "light",
+      "file": "03-new-diagram-dialog.png",
+      "path": "docs/apps/blueprint/screenshots/light/03-new-diagram-dialog.png",
+      "size": 79409,
+      "hash": "26b9169f235abec923a50cec760b7a2d818ecceec5f5da34d6754309faa8a4a4"
+    },
+    {
+      "app": "blueprint",
+      "theme": "light",
+      "file": "04-starred-filter.png",
+      "path": "docs/apps/blueprint/screenshots/light/04-starred-filter.png",
+      "size": 53547,
+      "hash": "a0fbde54c8dd18a074bb342bc651069f58dc66ca8b0dd2738b111dc4a1bd8767"
+    },
+    {
+      "app": "blueprint",
+      "theme": "light",
+      "file": "05-archived-filter.png",
+      "path": "docs/apps/blueprint/screenshots/light/05-archived-filter.png",
+      "size": 54311,
+      "hash": "b200df18665dce454d7e38413c440a8c68f6732d05379fad24b76c6e3150b79c"
+    },
+    {
+      "app": "blueprint",
+      "theme": "light",
+      "file": "06-comments-collaboration.png",
+      "path": "docs/apps/blueprint/screenshots/light/06-comments-collaboration.png",
+      "size": 49054,
+      "hash": "cb9bcb864c250cee0f2597f013a6ffc828356d298f1c5ffb12e30d38039ded7b"
+    },
+    {
+      "app": "blueprint",
+      "theme": "dark",
+      "file": "01-diagram-list.png",
+      "path": "docs/apps/blueprint/screenshots/dark/01-diagram-list.png",
+      "size": 132581,
+      "hash": "35be1ced765c01ae3fd60e3b75bff5e991b111753ee0e1f4d6df6efd9b3f32f6"
+    },
+    {
+      "app": "blueprint",
+      "theme": "dark",
+      "file": "02-diagram-editor.png",
+      "path": "docs/apps/blueprint/screenshots/dark/02-diagram-editor.png",
+      "size": 37830,
+      "hash": "655a1e7fc3d6b912b49dd5fa050d82e0589370fbd9dc21c92d1aeef980c7c336"
+    },
+    {
+      "app": "blueprint",
+      "theme": "dark",
+      "file": "03-new-diagram-dialog.png",
+      "path": "docs/apps/blueprint/screenshots/dark/03-new-diagram-dialog.png",
+      "size": 79409,
+      "hash": "26b9169f235abec923a50cec760b7a2d818ecceec5f5da34d6754309faa8a4a4"
+    },
+    {
+      "app": "blueprint",
+      "theme": "dark",
+      "file": "06-comments-collaboration.png",
+      "path": "docs/apps/blueprint/screenshots/dark/06-comments-collaboration.png",
+      "size": 49054,
+      "hash": "cb9bcb864c250cee0f2597f013a6ffc828356d298f1c5ffb12e30d38039ded7b"
+    },
+    {
+      "app": "board",
+      "theme": "light",
+      "file": "01-all-boards.png",
+      "path": "docs/apps/board/screenshots/light/01-all-boards.png",
+      "size": 45746,
+      "hash": "96dbcee56051b6ec9e85c7d033c6ec2ca93434dc7eb68b9f339ae07056c9238a"
+    },
+    {
+      "app": "board",
+      "theme": "light",
+      "file": "02-canvas-populated.png",
+      "path": "docs/apps/board/screenshots/light/02-canvas-populated.png",
+      "size": 62071,
+      "hash": "57bba3fcf41f67cdf7d39d4e057c21b16b9d715e7ee0702727368a62728118b6"
+    },
+    {
+      "app": "board",
+      "theme": "light",
+      "file": "03-templates.png",
+      "path": "docs/apps/board/screenshots/light/03-templates.png",
+      "size": 79991,
+      "hash": "a7866f4f8958fcc2574b357ffb9791fb441745a386c7f67e83b1f86fbaa7c6b4"
+    },
+    {
+      "app": "board",
+      "theme": "light",
+      "file": "04-version-history.png",
+      "path": "docs/apps/board/screenshots/light/04-version-history.png",
+      "size": 41090,
+      "hash": "a7c3f4360339674539e6b4168a5f4b662a9773e29458e0d826da88e9bf94d61b"
+    },
+    {
+      "app": "board",
+      "theme": "dark",
+      "file": "01-all-boards.png",
+      "path": "docs/apps/board/screenshots/dark/01-all-boards.png",
+      "size": 117948,
+      "hash": "eb15c5e10a10d2a277edb8ce3120d2d852598b21be276bb7393bf53f4b524cc8"
+    },
+    {
+      "app": "board",
+      "theme": "dark",
+      "file": "02-canvas-populated.png",
+      "path": "docs/apps/board/screenshots/dark/02-canvas-populated.png",
+      "size": 62071,
+      "hash": "57bba3fcf41f67cdf7d39d4e057c21b16b9d715e7ee0702727368a62728118b6"
+    },
+    {
+      "app": "board",
+      "theme": "dark",
+      "file": "03-templates.png",
+      "path": "docs/apps/board/screenshots/dark/03-templates.png",
+      "size": 79991,
+      "hash": "a7866f4f8958fcc2574b357ffb9791fb441745a386c7f67e83b1f86fbaa7c6b4"
+    },
+    {
+      "app": "board",
+      "theme": "dark",
+      "file": "04-version-history.png",
+      "path": "docs/apps/board/screenshots/dark/04-version-history.png",
+      "size": 41090,
+      "hash": "a7c3f4360339674539e6b4168a5f4b662a9773e29458e0d826da88e9bf94d61b"
+    },
+    {
+      "app": "bolt",
+      "theme": "light",
+      "file": "01-automations.png",
+      "path": "docs/apps/bolt/screenshots/light/01-automations.png",
+      "size": 71469,
+      "hash": "4a9c42161fa81d9b6902c672021bb9f9aef716823afc355d6b9eda54d2531e66"
+    },
+    {
+      "app": "bolt",
+      "theme": "light",
+      "file": "02-editor.png",
+      "path": "docs/apps/bolt/screenshots/light/02-editor.png",
+      "size": 74557,
+      "hash": "4c0ea59a4b825dfb0ecf9269bcc6040e43c6348776b82b3afb5ef4cdb9d5bf94"
+    },
+    {
+      "app": "bolt",
+      "theme": "light",
+      "file": "03-automation-detail.png",
+      "path": "docs/apps/bolt/screenshots/light/03-automation-detail.png",
+      "size": 85676,
+      "hash": "9343a09c588bb8b06a7c7fb8f4519805fb255a09deea42ad5270b5c61afe4ce7"
+    },
+    {
+      "app": "bolt",
+      "theme": "light",
+      "file": "04-executions.png",
+      "path": "docs/apps/bolt/screenshots/light/04-executions.png",
+      "size": 38560,
+      "hash": "6667ce1cb3b68db65e43f8c7e4eff346ad64bf95009ac4da844835e7adb806dd"
+    },
+    {
+      "app": "bolt",
+      "theme": "light",
+      "file": "05-templates.png",
+      "path": "docs/apps/bolt/screenshots/light/05-templates.png",
+      "size": 106199,
+      "hash": "05653e20b033ac2ddbaa4f16f7a3f28d08032ffc530f6576687d93fa4a41037a"
+    },
+    {
+      "app": "bolt",
+      "theme": "dark",
+      "file": "01-automations.png",
+      "path": "docs/apps/bolt/screenshots/dark/01-automations.png",
+      "size": 179385,
+      "hash": "ad13948ef11c47e91d7d2db1a84c94dd95c73a02fe31db35613329d5c126bcaf"
+    },
+    {
+      "app": "bolt",
+      "theme": "dark",
+      "file": "02-editor.png",
+      "path": "docs/apps/bolt/screenshots/dark/02-editor.png",
+      "size": 74557,
+      "hash": "4c0ea59a4b825dfb0ecf9269bcc6040e43c6348776b82b3afb5ef4cdb9d5bf94"
+    },
+    {
+      "app": "bolt",
+      "theme": "dark",
+      "file": "03-automation-detail.png",
+      "path": "docs/apps/bolt/screenshots/dark/03-automation-detail.png",
+      "size": 85676,
+      "hash": "9343a09c588bb8b06a7c7fb8f4519805fb255a09deea42ad5270b5c61afe4ce7"
+    },
+    {
+      "app": "bolt",
+      "theme": "dark",
+      "file": "05-templates.png",
+      "path": "docs/apps/bolt/screenshots/dark/05-templates.png",
+      "size": 106199,
+      "hash": "05653e20b033ac2ddbaa4f16f7a3f28d08032ffc530f6576687d93fa4a41037a"
+    },
+    {
+      "app": "bond",
+      "theme": "light",
+      "file": "01-pipeline-board.png",
+      "path": "docs/apps/bond/screenshots/light/01-pipeline-board.png",
+      "size": 75758,
+      "hash": "008f17665877fa883335484f89bd4727e6c9dbb16905d1beeab1788b3715b7c8"
+    },
+    {
+      "app": "bond",
+      "theme": "light",
+      "file": "02-deal-detail.png",
+      "path": "docs/apps/bond/screenshots/light/02-deal-detail.png",
+      "size": 66243,
+      "hash": "0eb83769a1628bf44686a7380c0531afb1ae85c15c01efa4445caae277fa87cd"
+    },
+    {
+      "app": "bond",
+      "theme": "light",
+      "file": "03-contacts-list.png",
+      "path": "docs/apps/bond/screenshots/light/03-contacts-list.png",
+      "size": 135301,
+      "hash": "1d027004447dd8ef86da0a4a6a7a0b29f6be8cfa725e88bd6af63db4d7731d71"
+    },
+    {
+      "app": "bond",
+      "theme": "light",
+      "file": "04-contact-detail.png",
+      "path": "docs/apps/bond/screenshots/light/04-contact-detail.png",
+      "size": 44887,
+      "hash": "bacf4fcb026e9c25fda59b5e0c6d390aa862709671ea4fe56401e3a662882069"
+    },
+    {
+      "app": "bond",
+      "theme": "light",
+      "file": "05-companies-list.png",
+      "path": "docs/apps/bond/screenshots/light/05-companies-list.png",
+      "size": 103497,
+      "hash": "1b79b0070cadb02d994784147e3a4998d0098b0e27ebb78a86f994e18300b054"
+    },
+    {
+      "app": "bond",
+      "theme": "light",
+      "file": "06-analytics.png",
+      "path": "docs/apps/bond/screenshots/light/06-analytics.png",
+      "size": 62353,
+      "hash": "04c49eb8b180156fd48c3104dfcc6c93b477ffa3b1a6c1bde340c084b3f63c0b"
+    },
+    {
+      "app": "bond",
+      "theme": "dark",
+      "file": "01-pipeline-board.png",
+      "path": "docs/apps/bond/screenshots/dark/01-pipeline-board.png",
+      "size": 202004,
+      "hash": "e38984f4ac04c12e47310bbf0660a79498b3ffa3ae75c04864bb40dc9d1f93ff"
+    },
+    {
+      "app": "bond",
+      "theme": "dark",
+      "file": "02-deal-detail.png",
+      "path": "docs/apps/bond/screenshots/dark/02-deal-detail.png",
+      "size": 66243,
+      "hash": "0eb83769a1628bf44686a7380c0531afb1ae85c15c01efa4445caae277fa87cd"
+    },
+    {
+      "app": "bond",
+      "theme": "dark",
+      "file": "03-contacts-list.png",
+      "path": "docs/apps/bond/screenshots/dark/03-contacts-list.png",
+      "size": 135301,
+      "hash": "1d027004447dd8ef86da0a4a6a7a0b29f6be8cfa725e88bd6af63db4d7731d71"
+    },
+    {
+      "app": "bond",
+      "theme": "dark",
+      "file": "06-analytics.png",
+      "path": "docs/apps/bond/screenshots/dark/06-analytics.png",
+      "size": 62353,
+      "hash": "04c49eb8b180156fd48c3104dfcc6c93b477ffa3b1a6c1bde340c084b3f63c0b"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "01-week-view.png",
+      "path": "docs/apps/book/screenshots/light/01-week-view.png",
+      "size": 42859,
+      "hash": "4a79c298232e93f73a51aba5b8cb4730987cc954dc8677fe3e3800cc8103b26f"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "02-month-view.png",
+      "path": "docs/apps/book/screenshots/light/02-month-view.png",
+      "size": 43456,
+      "hash": "c9187fb9b3459c57817b1dc5cab7df3afb94aede6b4530b9fb49a6b19adde7f9"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "03-timeline.png",
+      "path": "docs/apps/book/screenshots/light/03-timeline.png",
+      "size": 37278,
+      "hash": "64c56a8312d1c8e7cccabffbac92334d88bbc60ef17f98a8960768e9999031f4"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "04-booking-pages.png",
+      "path": "docs/apps/book/screenshots/light/04-booking-pages.png",
+      "size": 49906,
+      "hash": "b397e02f01e05d5557a798bf0ce0fc821aff0a9959cbd16dae5d96fb209ecd47"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "05-working-hours.png",
+      "path": "docs/apps/book/screenshots/light/05-working-hours.png",
+      "size": 62552,
+      "hash": "10b6903ac4bff68a4391829ecbc4fb7d385280b0ecf0d596139ef528522adc4f"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "06-calendars.png",
+      "path": "docs/apps/book/screenshots/light/06-calendars.png",
+      "size": 40969,
+      "hash": "33ea1062d6a4b3d382527d0a809c15f4dcac0bdffd536a053b655327e73ef80f"
+    },
+    {
+      "app": "book",
+      "theme": "light",
+      "file": "07-connections.png",
+      "path": "docs/apps/book/screenshots/light/07-connections.png",
+      "size": 70793,
+      "hash": "d63b30a99f5cd945585679a34310c22c18d1cca2795b81733b832111c7e84a95"
+    },
+    {
+      "app": "book",
+      "theme": "dark",
+      "file": "01-week-view.png",
+      "path": "docs/apps/book/screenshots/dark/01-week-view.png",
+      "size": 108639,
+      "hash": "33698b6228db90d2de9c71bc732977832f84134a3593e1dfd4e2493b6e195975"
+    },
+    {
+      "app": "book",
+      "theme": "dark",
+      "file": "02-month-view.png",
+      "path": "docs/apps/book/screenshots/dark/02-month-view.png",
+      "size": 43456,
+      "hash": "c9187fb9b3459c57817b1dc5cab7df3afb94aede6b4530b9fb49a6b19adde7f9"
+    },
+    {
+      "app": "book",
+      "theme": "dark",
+      "file": "03-timeline.png",
+      "path": "docs/apps/book/screenshots/dark/03-timeline.png",
+      "size": 37278,
+      "hash": "64c56a8312d1c8e7cccabffbac92334d88bbc60ef17f98a8960768e9999031f4"
+    },
+    {
+      "app": "book",
+      "theme": "dark",
+      "file": "04-booking-pages.png",
+      "path": "docs/apps/book/screenshots/dark/04-booking-pages.png",
+      "size": 49906,
+      "hash": "b397e02f01e05d5557a798bf0ce0fc821aff0a9959cbd16dae5d96fb209ecd47"
+    },
+    {
+      "app": "book",
+      "theme": "dark",
+      "file": "05-working-hours.png",
+      "path": "docs/apps/book/screenshots/dark/05-working-hours.png",
+      "size": 62552,
+      "hash": "10b6903ac4bff68a4391829ecbc4fb7d385280b0ecf0d596139ef528522adc4f"
+    },
+    {
+      "app": "book",
+      "theme": "dark",
+      "file": "07-connections.png",
+      "path": "docs/apps/book/screenshots/dark/07-connections.png",
+      "size": 70793,
+      "hash": "d63b30a99f5cd945585679a34310c22c18d1cca2795b81733b832111c7e84a95"
+    },
+    {
+      "app": "brief",
+      "theme": "light",
+      "file": "01-home.png",
+      "path": "docs/apps/brief/screenshots/light/01-home.png",
+      "size": 85870,
+      "hash": "df9412510e1795809ab49215c8e09ed3f2ed15801c7c80b25afccba7872de500"
+    },
+    {
+      "app": "brief",
+      "theme": "light",
+      "file": "02-documents.png",
+      "path": "docs/apps/brief/screenshots/light/02-documents.png",
+      "size": 95429,
+      "hash": "dace1205b5caaa5bd120e39ec0f9981a2f6c6e38a5554f91689f3d55dbb944b9"
+    },
+    {
+      "app": "brief",
+      "theme": "light",
+      "file": "03-detail.png",
+      "path": "docs/apps/brief/screenshots/light/03-detail.png",
+      "size": 69760,
+      "hash": "de91c794f0b10fb20f29c6c060575ddc25af29d027934dca15dee4ad48a7d2e3"
+    },
+    {
+      "app": "brief",
+      "theme": "light",
+      "file": "04-editor.png",
+      "path": "docs/apps/brief/screenshots/light/04-editor.png",
+      "size": 69760,
+      "hash": "de91c794f0b10fb20f29c6c060575ddc25af29d027934dca15dee4ad48a7d2e3"
+    },
+    {
+      "app": "brief",
+      "theme": "light",
+      "file": "05-templates.png",
+      "path": "docs/apps/brief/screenshots/light/05-templates.png",
+      "size": 105014,
+      "hash": "545bfbdeb3a32b02771a4eb023f6ceb14747807cc714e1458fb10f5fb82038fe"
+    },
+    {
+      "app": "brief",
+      "theme": "light",
+      "file": "06-search.png",
+      "path": "docs/apps/brief/screenshots/light/06-search.png",
+      "size": 39158,
+      "hash": "46083b10b63449387db4cde3e9272bd813c8b23acd8a6ac1bccc332be7ed6a14"
+    },
+    {
+      "app": "brief",
+      "theme": "dark",
+      "file": "01-home.png",
+      "path": "docs/apps/brief/screenshots/dark/01-home.png",
+      "size": 216660,
+      "hash": "2b580639ab778bfdddacf387070d07f9f42966ed4efb545c8c7a29f804ebc5a8"
+    },
+    {
+      "app": "brief",
+      "theme": "dark",
+      "file": "02-documents.png",
+      "path": "docs/apps/brief/screenshots/dark/02-documents.png",
+      "size": 95429,
+      "hash": "dace1205b5caaa5bd120e39ec0f9981a2f6c6e38a5554f91689f3d55dbb944b9"
+    },
+    {
+      "app": "brief",
+      "theme": "dark",
+      "file": "05-templates.png",
+      "path": "docs/apps/brief/screenshots/dark/05-templates.png",
+      "size": 105014,
+      "hash": "545bfbdeb3a32b02771a4eb023f6ceb14747807cc714e1458fb10f5fb82038fe"
+    },
+    {
+      "app": "brief",
+      "theme": "dark",
+      "file": "06-search.png",
+      "path": "docs/apps/brief/screenshots/dark/06-search.png",
+      "size": 39158,
+      "hash": "46083b10b63449387db4cde3e9272bd813c8b23acd8a6ac1bccc332be7ed6a14"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "01-floor-directory.png",
+      "path": "docs/apps/bureau/screenshots/light/01-floor-directory.png",
+      "size": 38920,
+      "hash": "6bcad2a40ba077035ba206377ded63f3428e8734d4a07120fd0ce30a6e7e7b97"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "02-live-floor.png",
+      "path": "docs/apps/bureau/screenshots/light/02-live-floor.png",
+      "size": 21385,
+      "hash": "1709cc792a30465db73cb30d39c2b5fc0363bad29cddad55440ac862fec26a33"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "03-recent-chats.png",
+      "path": "docs/apps/bureau/screenshots/light/03-recent-chats.png",
+      "size": 77850,
+      "hash": "bd62db5bc1b9b7595c7b17f239a8af945bf25fa2a8eb0f3cb48522ab75ce75ca"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "04-admin-floors.png",
+      "path": "docs/apps/bureau/screenshots/light/04-admin-floors.png",
+      "size": 47128,
+      "hash": "ee8158e679de340b8621fed70dd54c98bf5b92b9269ca88e54d22d5ad2bace0c"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "05-admin-offices.png",
+      "path": "docs/apps/bureau/screenshots/light/05-admin-offices.png",
+      "size": 49190,
+      "hash": "2999b7720f9810617171b664cc43645ca749ce27204810a996d5a3bdc7f569d5"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "06-room-booking.png",
+      "path": "docs/apps/bureau/screenshots/light/06-room-booking.png",
+      "size": 70177,
+      "hash": "868c701332b7db60c097fdc981aa336a85f05872863cb51c8e4104dc128300ae"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "07-admin-settings.png",
+      "path": "docs/apps/bureau/screenshots/light/07-admin-settings.png",
+      "size": 62990,
+      "hash": "17387ad80962cf009571dd88ea472e2ab16472edb6325c8cee84f24917559d40"
+    },
+    {
+      "app": "bureau",
+      "theme": "light",
+      "file": "08-presence-on-floor.png",
+      "path": "docs/apps/bureau/screenshots/light/08-presence-on-floor.png",
+      "size": 21385,
+      "hash": "1709cc792a30465db73cb30d39c2b5fc0363bad29cddad55440ac862fec26a33"
+    },
+    {
+      "app": "bureau",
+      "theme": "dark",
+      "file": "01-floor-directory.png",
+      "path": "docs/apps/bureau/screenshots/dark/01-floor-directory.png",
+      "size": 98182,
+      "hash": "20a944cce5df6e0680fb08b539b9f9c2b8fdafbd164b5decd2528280384b16f8"
+    },
+    {
+      "app": "bureau",
+      "theme": "dark",
+      "file": "02-live-floor.png",
+      "path": "docs/apps/bureau/screenshots/dark/02-live-floor.png",
+      "size": 21385,
+      "hash": "1709cc792a30465db73cb30d39c2b5fc0363bad29cddad55440ac862fec26a33"
+    },
+    {
+      "app": "bureau",
+      "theme": "dark",
+      "file": "06-room-booking.png",
+      "path": "docs/apps/bureau/screenshots/dark/06-room-booking.png",
+      "size": 70177,
+      "hash": "868c701332b7db60c097fdc981aa336a85f05872863cb51c8e4104dc128300ae"
+    },
+    {
+      "app": "bureau",
+      "theme": "dark",
+      "file": "08-presence-on-floor.png",
+      "path": "docs/apps/bureau/screenshots/dark/08-presence-on-floor.png",
+      "size": 21385,
+      "hash": "1709cc792a30465db73cb30d39c2b5fc0363bad29cddad55440ac862fec26a33"
+    },
+    {
+      "app": "helpdesk",
+      "theme": "light",
+      "file": "01-portal-entry.png",
+      "path": "docs/apps/helpdesk/screenshots/light/01-portal-entry.png",
+      "size": 23892,
+      "hash": "b3494b38a2da4afa1ee60dab8da4071d52cd0424c75786015c4b0d23406fbff8"
+    },
+    {
+      "app": "helpdesk",
+      "theme": "dark",
+      "file": "01-portal-entry.png",
+      "path": "docs/apps/helpdesk/screenshots/dark/01-portal-entry.png",
+      "size": 65546,
+      "hash": "c2accc4ab20b8108227157257f74236429dee4eda92decf56a6f8a3f4bf887bb"
+    },
+    {
+      "app": "introduction",
+      "theme": "light",
+      "file": "01-bureau-widget.png",
+      "path": "docs/apps/introduction/screenshots/light/01-bureau-widget.png",
+      "size": 25452,
+      "hash": "8ec3601a26691434ca575df18a33f0cc6bd9e814507409f5c2be4f83c15e1d53"
     }
   ]
 }

@@ -1,7 +1,7 @@
 ---
 title: "Bureau Guide"
 app: bureau
-generated: "2026-06-21T04:38:25.195Z"
+generated: "2026-06-23T06:01:51.826Z"
 ---
 
 # Bureau Guide
@@ -135,6 +135,11 @@ Bureau is the virtual office and the presence layer the rest of the suite plugs 
 - [Banter (Team Messaging)](../banter/guide.md)
 - [Bearing (Goals & OKRs)](../bearing/guide.md)
 - [Bench (Analytics)](../bench/guide.md)
+- [Bill (Invoicing)](../bill/guide.md)
+- [Blank (Forms)](../blank/guide.md)
+- [Blast (Email Campaigns)](../blast/guide.md)
+- [Bolt (Workflow Automation)](../bolt/guide.md)
 - [Bond (CRM)](../bond/guide.md)
+- [Book (Scheduling)](../book/guide.md)
 - [Brief (Documents)](../brief/guide.md)
 - [Introduction to BigBlueBam](../introduction/guide.md)

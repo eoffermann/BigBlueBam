@@ -156,8 +156,13 @@ The editor is reached at `/create` (from the "Create a Beacon" card on Home or
 "New Beacon" in Browse) and at `/<idOrSlug>/edit` (the "Edit" button on a detail
 page). The header reads **"Create Beacon"** or **"Edit Beacon"**.
 
-The body field is a plain **Markdown** text area, labeled **"Body (Markdown)"**.
-You write Markdown directly; there is no rich-text formatting toolbar.
+The body field is a **Markdown** editor, labeled **"Body (Markdown)"**. You
+write Markdown directly; there is no rich-text formatting toolbar. When you edit
+an **existing** article the body is a **live collaborative editor**: anyone else
+who opens the same article edits the body with you in real time, and you see
+their cursors and changes as they type (the label reads "live co-editing").
+While creating a brand-new article (before the first save) the body is a plain
+text area, since there is no shared article to join yet.
 
 To write a new article:
 
@@ -184,8 +189,12 @@ tags. Tags on an article today come from agent or API writes
 on the Search screen.
 
 Editing an existing article works the same way, except the Project field is
-read-only and your changes bump the article's version and write a version
-snapshot.
+read-only, the body is the live collaborative editor described above (your edits
+sync to anyone editing alongside you), and saving bumps the article's version and
+writes a version snapshot. If someone changed the article's title, summary, or
+visibility since you opened it, the save is rejected with a "this article changed
+since you opened it" notice so you do not silently overwrite their change; the
+body itself merges live and is not subject to that conflict check.
 
 There is no screenshot of the editor in this set.
 
@@ -524,6 +533,8 @@ For the full tool catalog, see `docs/apps/beacon/mcp-tools.md`.
 ## Working together (live presence)
 
 BigBlueBam treats collaboration as ambient, not as a scheduled meeting. When you open a knowledge page, a presence strip shows who else is reading or editing it, and you can ring a teammate into a huddle from the page. Voice and video here are the digital version of bumping into a colleague in the hallway or stopping by their desk: a quick question, a shared look at the same thing, then back to work. Your presence travels with you across the suite through the Bureau virtual office. The Introduction covers the full pervasive-presence model.
+
+Beacon goes a step further than presence on the article body itself: the editor for an existing article is **real-time co-editing**. Two or more people can write the same Markdown body at once and see each other's cursors and edits live, the way you would in a shared document, so a team can draft or correct an article together instead of trading "who has it open" messages. The shared text merges automatically (it is a CRDT), so simultaneous edits do not clobber each other; only the article's metadata (title, summary, visibility) uses the last-writer-wins conflict notice.
 
 ## User Stories
 

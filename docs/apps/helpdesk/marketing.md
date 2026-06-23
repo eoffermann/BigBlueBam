@@ -1,7 +1,7 @@
 ---
 title: "Helpdesk (Support Portal)"
 app: helpdesk
-generated: "2026-06-21T04:38:25.204Z"
+generated: "2026-06-23T06:01:51.832Z"
 ---
 
 # Helpdesk (Support Portal)
@@ -20,10 +20,6 @@ Give every organization its own branded support portal, where customers file tic
 
 ![Portal Entry](screenshots/light/01-portal-entry.png)
 
-
-![Ticket List](screenshots/light/02-ticket-list.png)
-
-![Ticket Detail](screenshots/light/03-ticket-detail.png)
 
 ---
 

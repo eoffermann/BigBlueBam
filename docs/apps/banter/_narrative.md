@@ -1,6 +1,6 @@
 # Banter - Team Chat
 
-Banter is BigBlueBam's real-time team chat app. It gives your organization channels, direct messages, threads, reactions, pins, and bookmarks so conversations live next to the rest of the suite. You sign in to BigBlueBam first and Banter shares that same identity and the same people, so there is no separate login or user list to manage. Banter is in BETA.
+Banter is BigBlueBam's real-time team chat app. It gives your organization channels, direct messages, threads, reactions, pins, and bookmarks so conversations live next to the rest of the suite. You sign in to BigBlueBam first and Banter shares that same identity and the same people, so there is no separate login or user list to manage.
 
 ## Key Features
 

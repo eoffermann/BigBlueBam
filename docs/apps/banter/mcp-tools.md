@@ -17,6 +17,14 @@
 | `banter_delete_user_group` | Delete a Banter user group (destructive - requires confirmation). Accepts a group UUID or @handle. Requires org owner/admin privileges. | `group_id`, `confirm` |
 | `banter_edit_message` | Edit an existing Banter message | `message_id`, `content` |
 | `banter_end_call` | End an active call (destructive - requires confirmation) | `call_id`, `confirm` |
+| `banter_feed_dismiss` | Dismiss a single feed entry — it is excluded from future reads entirely. | none |
+| `banter_feed_explain` | Return the full score breakdown for one feed entry (recency, weight, affinity, interaction, engagement, multipliers). For tuning and debugging. | none |
+| `banter_feed_mark_seen` | Mark feed entries as seen (they sink in the ranking but do not vanish). Provide either entry_ids or a before_seq watermark. | `entry_ids`, `before_seq` |
+| `banter_feed_query` | The caller | `cursor`, `limit`, `category`, `source`, `unseen`, `explain` |
+| `banter_feed_subscription_list` | List the caller | none |
+| `banter_feed_subscription_set` | Follow / unfollow / mute a scope in the caller | `scope_type`, `scope_source`, `scope_id`, `state` |
+| `banter_feed_weights_get` | Effective feed ranking weights for the caller | none |
+| `banter_feed_weights_set_org` | Set this org | none |
 | `banter_find_user_by_email` | Find a Banter user by email (case-insensitive exact match). Returns {id, email, name, display_name, avatar_url} or null if no match. | `email` |
 | `banter_find_user_by_handle` | Find a Banter user by handle (accepts  | `handle` |
 | `banter_get_active_huddle` | Check if a channel has an active huddle and get its details | `channel_id` |

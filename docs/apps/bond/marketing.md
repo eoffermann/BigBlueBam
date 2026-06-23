@@ -1,7 +1,7 @@
 ---
 title: "Bond (CRM)"
 app: bond
-generated: "2026-06-21T04:38:25.184Z"
+generated: "2026-06-23T06:01:51.808Z"
 ---
 
 # Bond (CRM)

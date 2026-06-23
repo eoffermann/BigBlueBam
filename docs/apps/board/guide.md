@@ -1,7 +1,7 @@
 ---
 title: "Board (Visual Collaboration) Guide"
 app: board
-generated: "2026-06-21T04:38:25.174Z"
+generated: "2026-06-23T06:01:51.795Z"
 ---
 
 # Board (Visual Collaboration) Guide
@@ -9,7 +9,7 @@ generated: "2026-06-21T04:38:25.174Z"
 
 # Board - Visual Collaboration
 
-Board is BigBlueBam's infinite canvas whiteboard for real-time visual collaboration, brainstorming, diagramming, and team workshops. Each board is one Excalidraw-powered canvas where you place sticky notes, text, shapes, connectors, freehand drawings, frames, and images, and everything auto-saves as you work. Board is in beta.
+Board is BigBlueBam's infinite canvas whiteboard for real-time visual collaboration, brainstorming, diagramming, and team workshops. Each board is one Excalidraw-powered canvas where you place sticky notes, text, shapes, connectors, freehand drawings, frames, and images, and everything auto-saves as you work.
 
 ## Key Features
 
@@ -105,7 +105,11 @@ The canvas is co-edited live with shared cursors and a presence bar, and the boa
 
 - [Bam (Project Management)](../bam/guide.md)
 - [Bench (Analytics)](../bench/guide.md)
+- [Bill (Invoicing)](../bill/guide.md)
+- [Blank (Forms)](../blank/guide.md)
+- [Blast (Email Campaigns)](../blast/guide.md)
 - [Bolt (Workflow Automation)](../bolt/guide.md)
 - [Bond (CRM)](../bond/guide.md)
+- [Book (Scheduling)](../book/guide.md)
 - [Bureau](../bureau/guide.md)
 - [Introduction to BigBlueBam](../introduction/guide.md)

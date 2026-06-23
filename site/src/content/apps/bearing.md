@@ -1,7 +1,7 @@
 ---
 title: "Bearing (Goals & OKRs)"
 app: bearing
-generated: "2026-06-18T04:26:01.052Z"
+generated: "2026-06-23T06:01:51.762Z"
 ---
 
 # Bearing (Goals & OKRs)
@@ -13,6 +13,7 @@ Set objectives, measure key results, and catch the goals slipping behind before 
 - Progress rolls up automatically from key results to the goal, and renders the real percentage at every step
 - Automatic status flags goals on track, at risk, or behind, with an At Risk view that surfaces the worst first
 - AI agents can provision a whole quarter of goals, link key results to real Bam delivery, and run weekly status sweeps
+- Your presence travels with you across the suite via the Bureau virtual office
 
 ## See It in Action
 

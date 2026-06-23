@@ -3,11 +3,11 @@
   "nginx_path": "/banter/",
   "api_port": 4002,
   "api_dir": "banter-api",
-  "route_files": 21,
-  "schema_modules": 22,
+  "route_files": 22,
+  "schema_modules": 23,
   "has_seeder": true,
   "has_frontend": true,
-  "src_hash": "9d6cd9b8f6f1cd40d3e0d82c01dc06f4f1c3032cc6ae4af569b5b9baf1ca77c6",
-  "generated_at": "2026-06-17T22:16:23.261Z",
-  "mcp_tool_count": 69
+  "src_hash": "884c10332b3caf16fb2136478297fec2cb75afce9fea2b4324838334c47d6ba4",
+  "generated_at": "2026-06-23T06:01:50.816Z",
+  "mcp_tool_count": 77
 }

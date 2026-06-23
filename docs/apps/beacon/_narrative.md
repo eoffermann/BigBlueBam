@@ -3,13 +3,16 @@
 Beacon is BigBlueBam's knowledge base app for writing, searching, linking, and
 keeping team knowledge current. Every article is a "Beacon" with its own
 lifecycle, freshness signal, and expiry date, so the library does not quietly
-rot as facts change. Beacon is currently in BETA.
+rot as facts change.
 
 ## Key Features
 
-- **Articles with a lifecycle** - Write knowledge in a Markdown editor. Each
-  article moves through Draft, Active, Pending Review, Archived, and Retired, and
-  carries a version history with a snapshot on every edit.
+- **Articles with a lifecycle** - Write knowledge in a Markdown editor with
+  real-time co-editing: two or more people can edit the same article body at
+  once and see each other's cursors and changes live, the same way you would in
+  a shared document. Each article moves through Draft, Active, Pending Review,
+  Archived, and Retired, and carries a version history with a snapshot on every
+  edit.
 - **Freshness and verification** - Every article has an expiry date and a
   freshness signal (Verified recently, Content is stale, Expiring soon, Needs
   verification). Verifying an article resets its expiry and raises its
@@ -57,4 +60,4 @@ the library verified. Org admins set freshness rules under **Beacon Settings**.
 
 ## Working together
 
-A presence strip on the article view shows who else is on a knowledge page, with a one-tap huddle.
+A presence strip on the article view shows who else is on a knowledge page, with a one-tap huddle. Editing an existing article is fully collaborative: open the editor and you co-write the Markdown body in real time with anyone else editing it, complete with live cursors.

@@ -1,7 +1,7 @@
 ---
 title: "Introduction to BigBlueBam Guide"
 app: introduction
-generated: "2026-06-21T05:14:21.433Z"
+generated: "2026-06-23T06:01:51.835Z"
 ---
 
 # Introduction to BigBlueBam Guide

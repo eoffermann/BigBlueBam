@@ -1,7 +1,7 @@
 ---
 title: "Helpdesk (Support Portal) Guide"
 app: helpdesk
-generated: "2026-06-21T04:38:25.202Z"
+generated: "2026-06-23T06:01:51.831Z"
 ---
 
 # Helpdesk (Support Portal) Guide
@@ -39,18 +39,6 @@ A presence strip on the ticket detail shows who else is on a ticket, with a one-
 ### Portal Entry
 
 ![Portal Entry](screenshots/light/01-portal-entry.png)
-
-### Ticket List
-
-![Ticket List](screenshots/light/02-ticket-list.png)
-
-### Ticket Detail
-
-![Ticket Detail](screenshots/light/03-ticket-detail.png)
-
-### New Ticket
-
-![New Ticket](screenshots/light/04-new-ticket.png)
 
 
 ## MCP Tools
