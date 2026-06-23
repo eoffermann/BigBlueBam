@@ -266,6 +266,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
             timezone: result.user.timezone,
             notification_prefs: result.user.notification_prefs,
             force_password_change: result.user.force_password_change,
+            avatar_url: result.user.avatar_url,
           },
         },
       });

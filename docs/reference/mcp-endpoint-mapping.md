@@ -390,7 +390,8 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `GET /auth/me` | `get_me` | Current user + permission matrix | `apps/frontend/src/lib/api/*` (auth) |
-| `PATCH /auth/me` | `update_me` | Update own profile fields | `apps/frontend/src/pages/settings.tsx` |
+| `PATCH /auth/me` | `update_me` | Update own profile fields (incl. `avatar_url`: an `/avatars/…` default or `/files/…` upload path) | `apps/frontend/src/pages/settings.tsx` |
+| `POST /auth/me/avatar` | — _(skip: multipart binary upload)_ | Upload a profile picture; stores in MinIO and sets `users.avatar_url` | `apps/frontend/src/components/settings/avatar-picker.tsx` |
 | `GET /auth/orgs` | `list_my_orgs` | List caller's org memberships | `apps/frontend/src/components/layout/org-switcher.tsx` |
 | `POST /auth/bootstrap` | — _(skip: first-run auth bootstrap)_ | First-run SuperUser/org bootstrap | `apps/frontend/src/pages/*bootstrap*` |
 | `POST /auth/change-password` | `change_my_password` | Change own password | `apps/frontend/src/pages/settings.tsx` |

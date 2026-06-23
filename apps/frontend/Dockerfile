@@ -183,6 +183,12 @@ COPY --from=build /app/apps/bureau/dist /usr/share/nginx/html/bureau
 # so changes are visible without a rebuild.
 COPY docs/apps/ /usr/share/nginx/html/docs/apps/
 
+# Default profile-picture options (served at /avatars/, reachable from every
+# SPA regardless of its base path). In docker-compose, a bind mount of
+# ./assets/default-avatars overlays this COPY so newly-added avatars appear
+# without a rebuild. User-uploaded avatars are served separately via /files/.
+COPY assets/default-avatars/ /usr/share/nginx/html/avatars/
+
 # Two nginx config profiles are baked into the image and the right one is
 # picked at container start by infra/nginx/entrypoint.sh, which lives at
 # /docker-entrypoint.d/ so the official nginx image runs it before starting

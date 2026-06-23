@@ -15,6 +15,7 @@ import { SettingsLlmProviders } from '@/pages/settings-llm-providers';
 import { OrgSmtpSettingsForm } from '@/components/settings/org-smtp-settings-form';
 import { SlackImportCard } from '@/components/settings/slack-import-card';
 import { PriorityManager } from '@/components/settings/priority-manager';
+import { AvatarPicker } from '@/components/settings/avatar-picker';
 import { usePriorities, priorityInlineStyle } from '@/hooks/use-priorities';
 import { timezoneSelectOptions } from '@/lib/timezones';
 import { SettingsFtueTour, type SettingsTab } from '@/components/ftue/settings-tour';
@@ -770,6 +771,7 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                   <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Profile</h2>
                   <p className="text-sm text-zinc-500">Update your personal information.</p>
                 </div>
+                <AvatarPicker />
                 <div data-ftue="display-name">
                   <Input
                     id="display-name"
