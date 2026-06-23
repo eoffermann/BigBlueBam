@@ -13,10 +13,12 @@ import {
   RotateCcw,
   Headset,
 } from 'lucide-react';
+import { CornerDownRight } from 'lucide-react';
 import type { Task, Priority } from '@bigbluebam/shared';
 import { cn, formatDate, isOverdue, truncate } from '@/lib/utils';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { EpicChip, taskEpic } from './epic-chip';
+import { useIsNestTarget } from './board-drag-context';
 
 interface TaskCardProps {
   task: Task;
@@ -119,6 +121,10 @@ export function TaskCard({ task, onClick, onContextMenu, onEpicClick, isDragOver
     disabled: isDragOverlay,
   });
 
+  // True while another card is being dragged over this card's center sweet
+  // spot — release there nests the dragged task under this one.
+  const isNestTarget = useIsNestTarget(task.id) && !isDragOverlay;
+
   const style = !isDragOverlay
     ? {
         transform: CSS.Transform.toString(sortable.transform),
@@ -150,9 +156,10 @@ export function TaskCard({ task, onClick, onContextMenu, onEpicClick, isDragOver
       whileHover={!isDragOverlay && !prefersReducedMotion ? { y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' } : undefined}
       transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 300 }}
       className={cn(
-        'rounded-lg border bg-white p-3 cursor-grab active:cursor-grabbing',
+        'relative rounded-lg border bg-white p-3 cursor-grab active:cursor-grabbing',
         'dark:bg-zinc-900 dark:border-zinc-800',
         sortable.isDragging && !isDragOverlay && 'opacity-30',
+        isNestTarget && 'ring-2 ring-primary-500 ring-offset-1 dark:ring-offset-zinc-950',
       )}
       onClick={!isDragOverlay ? onClick : undefined}
       onContextMenu={
@@ -165,6 +172,16 @@ export function TaskCard({ task, onClick, onContextMenu, onEpicClick, isDragOver
           : undefined
       }
     >
+      {/* Nest affordance: shown when another card is dragged over this card's
+          center sweet spot. Purely visual (pointer-events-none) so it never
+          interferes with the drag. */}
+      {isNestTarget && (
+        <div className="pointer-events-none absolute inset-x-2 top-1/2 z-20 flex -translate-y-1/2 items-center justify-center gap-1.5 rounded-md bg-primary-600/95 py-1.5 text-xs font-medium text-white shadow-lg">
+          <CornerDownRight className="h-3.5 w-3.5" />
+          Add as child
+        </div>
+      )}
+
       {/* Row 1: State dot, Human ID, Priority, Carry-forward */}
       <div className="flex items-center gap-1.5 mb-1.5">
         <span className="h-2 w-2 rounded-full shrink-0 bg-blue-500" />
