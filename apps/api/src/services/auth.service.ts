@@ -1,4 +1,4 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import argon2 from 'argon2';
 import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
@@ -16,7 +16,8 @@ export type LoginFailureReason =
   | 'invalid_password'
   | 'account_disabled'
   | 'account_locked'
-  | 'unverified_email';
+  | 'unverified_email'
+  | 'no_active_org';
 
 export interface SessionMetadata {
   ipAddress?: string | null;
@@ -241,6 +242,43 @@ export async function login(
   const valid = await argon2.verify(user.password_hash, password);
   if (!valid) {
     throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password', 401, 'invalid_password');
+  }
+
+  // Org-context consistency with resolveOrgContext (plugins/auth.ts). That
+  // resolver — which every authenticated request runs — resolves the active
+  // org as: any membership in a NON-deleted org, else a fallback to
+  // users.org_id only if THAT org is non-deleted; otherwise it throws 403
+  // ("User has no active organization memberships"). Login historically
+  // skipped this and returned users.org_id blindly, so a user whose only org
+  // is soft-deleted (and who has no other membership) could log in (200) yet
+  // 403 on every subsequent call — and the SPA, which treats that 403 as
+  // "unauthenticated", bounced them straight back to login. Mirror the
+  // resolver here so login and the session agree: reject up front with a clear
+  // message instead of minting a session that can't do anything.
+  const [activeMembership] = await db
+    .select({ org_id: organizationMemberships.org_id })
+    .from(organizationMemberships)
+    .innerJoin(organizations, eq(organizations.id, organizationMemberships.org_id))
+    .where(and(eq(organizationMemberships.user_id, user.id), isNull(organizations.deleted_at)))
+    .limit(1);
+  if (!activeMembership) {
+    let hasActiveLegacyOrg = false;
+    if (user.org_id) {
+      const [activeOrg] = await db
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(and(eq(organizations.id, user.org_id), isNull(organizations.deleted_at)))
+        .limit(1);
+      hasActiveLegacyOrg = !!activeOrg;
+    }
+    if (!hasActiveLegacyOrg) {
+      throw new AuthError(
+        'NO_ACTIVE_ORG',
+        'Your account is not attached to an active organization. Contact an administrator.',
+        403,
+        'no_active_org',
+      );
+    }
   }
 
   const session = await createSession(user.id, meta);

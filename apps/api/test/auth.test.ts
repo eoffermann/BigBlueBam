@@ -167,9 +167,22 @@ describe('Auth Service', () => {
     function setupSelectChain(rows: unknown[]) {
       const limitFn = vi.fn().mockResolvedValue(rows);
       const whereFn = vi.fn().mockReturnValue({ limit: limitFn });
-      const fromFn = vi.fn().mockReturnValue({ where: whereFn });
+      // login()'s org-context check selects with an innerJoin; support both
+      // from→where→limit and from→innerJoin→where→limit chains.
+      const innerJoinFn = vi.fn().mockReturnValue({ where: whereFn });
+      const fromFn = vi.fn().mockReturnValue({ where: whereFn, innerJoin: innerJoinFn });
       mockDb.select.mockReturnValue({ from: fromFn });
       return { fromFn, whereFn, limitFn };
+    }
+
+    // Build one select-call chain resolving to `rows`, supporting the
+    // innerJoin variant the membership lookup uses. Use with
+    // mockReturnValueOnce to script a sequence of selects within one login().
+    function selectChainOnce(rows: unknown[]) {
+      const limitFn = vi.fn().mockResolvedValue(rows);
+      const whereFn = vi.fn().mockReturnValue({ limit: limitFn });
+      const innerJoinFn = vi.fn().mockReturnValue({ where: whereFn });
+      return { from: vi.fn().mockReturnValue({ where: whereFn, innerJoin: innerJoinFn }) };
     }
 
     function setupUpdateChain(rows: unknown[] = []) {
@@ -187,10 +200,12 @@ describe('Auth Service', () => {
     }
 
     it('validates credentials, creates session, and returns user', async () => {
-      // First select: find user by email
+      // Selects: (1) user by email, (2) active-org membership check. Both
+      // resolve to a truthy row here, so login's org-context guard passes.
       const selectLimit = vi.fn().mockResolvedValue([fakeUser]);
       const selectWhere = vi.fn().mockReturnValue({ limit: selectLimit });
-      const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
+      const selectInnerJoin = vi.fn().mockReturnValue({ where: selectWhere });
+      const selectFrom = vi.fn().mockReturnValue({ where: selectWhere, innerJoin: selectInnerJoin });
       mockDb.select.mockReturnValue({ from: selectFrom });
 
       mockArgon2.verify.mockResolvedValue(true);
@@ -248,6 +263,41 @@ describe('Auth Service', () => {
       } catch (err) {
         expect((err as AuthError).code).toBe('ACCOUNT_DISABLED');
       }
+    });
+
+    it('throws NO_ACTIVE_ORG when the only org is soft-deleted and there are no active memberships', async () => {
+      mockArgon2.verify.mockResolvedValue(true);
+      // 1) user found  2) no membership in any active org  3) legacy
+      // users.org_id resolves to no active (non-deleted) org.
+      mockDb.select
+        .mockReturnValueOnce(selectChainOnce([fakeUser]))
+        .mockReturnValueOnce(selectChainOnce([]))
+        .mockReturnValueOnce(selectChainOnce([]));
+
+      await expect(
+        login('test@example.com', 'securePassword123!'),
+      ).rejects.toMatchObject({ code: 'NO_ACTIVE_ORG', statusCode: 403 });
+    });
+
+    it('allows login via the legacy org fallback when users.org_id is still an active org', async () => {
+      mockArgon2.verify.mockResolvedValue(true);
+      // 1) user found  2) no membership rows  3) legacy users.org_id IS an
+      // active org → login proceeds.
+      mockDb.select
+        .mockReturnValueOnce(selectChainOnce([fakeUser]))
+        .mockReturnValueOnce(selectChainOnce([]))
+        .mockReturnValueOnce(selectChainOnce([fakeOrg]));
+
+      const insertReturning = vi.fn().mockResolvedValue([fakeSession]);
+      mockDb.insert.mockReturnValue({ values: vi.fn().mockReturnValue({ returning: insertReturning }) });
+      const updateReturning = vi.fn().mockResolvedValue([fakeUser]);
+      mockDb.update.mockReturnValue({
+        set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: updateReturning }) }),
+      });
+
+      const result = await login('test@example.com', 'securePassword123!');
+      expect(result).toHaveProperty('session');
+      expect(result.user.email).toBe('test@example.com');
     });
   });
 
