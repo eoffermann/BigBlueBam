@@ -41,7 +41,6 @@ import {
   listMyAdminOrgs,
   inviteBulkToOrg,
   peopleManagerApi,
-  type AdminOrg,
   type PersonMembership,
   type ProjectMembership,
   type ProjectMemberRole,
@@ -49,6 +48,8 @@ import {
   type ApiKeyScope,
   type ActivityEntry,
 } from '@/lib/api/people-manager';
+import { superuserApi } from '@/lib/api/superuser';
+import { superuserUsersApi } from '@/lib/api/superuser-users';
 import { formatDate, formatRelativeTime } from '@/lib/utils';
 
 interface PeopleManagerDetailPageProps {
@@ -674,6 +675,7 @@ function MembershipsTab({
       {showAdd && (
         <AddOrgMembershipDialog
           email={email}
+          personId={userId}
           currentOrgIds={currentOrgIds}
           onClose={() => setShowAdd(false)}
           onAdded={onChanged}
@@ -696,42 +698,61 @@ function MembershipsTab({
  */
 function AddOrgMembershipDialog({
   email,
+  personId,
   currentOrgIds,
   onClose,
   onAdded,
 }: {
   email: string;
+  personId: string;
   currentOrgIds: Set<string>;
   onClose: () => void;
   onAdded: () => void;
 }) {
-  const { data: adminOrgs, isLoading } = useQuery({
-    queryKey: ['people-manager', 'my-admin-orgs'],
-    queryFn: () => listMyAdminOrgs(),
+  // SuperUsers can attach a person to ANY org via the superuser membership
+  // endpoint; org admins/owners are limited to the orgs they administer (the
+  // invite/attach flow, server-rank-checked). Without this branch a SuperUser
+  // only saw the orgs they personally belong to — hence "no organization you
+  // administer that this person isn't already in" for orgs they didn't create.
+  const isSuperuser = useAuthStore((s) => s.user?.is_superuser === true);
+
+  const { data: orgs = [], isLoading } = useQuery({
+    queryKey: ['people-manager', 'add-org-list', isSuperuser],
+    queryFn: async (): Promise<{ id: string; name: string; slug: string }[]> => {
+      if (isSuperuser) {
+        const res = await superuserApi.listOrganizations({ limit: 200 });
+        return (res.data ?? []).map((o) => ({ id: o.id, name: o.name, slug: o.slug }));
+      }
+      const admin = await listMyAdminOrgs();
+      return admin.map((o) => ({ id: o.org_id, name: o.name, slug: o.slug }));
+    },
   });
 
-  const available = useMemo<AdminOrg[]>(
-    () => (adminOrgs ?? []).filter((o) => !currentOrgIds.has(o.org_id)),
-    [adminOrgs, currentOrgIds],
+  const available = useMemo(
+    () => orgs.filter((o) => !currentOrgIds.has(o.id)),
+    [orgs, currentOrgIds],
   );
 
   const [orgId, setOrgId] = useState<string>('');
   const [role, setRole] = useState<'member' | 'admin'>('member');
 
   useEffect(() => {
-    if (!orgId && available.length > 0) setOrgId(available[0]!.org_id);
+    if (!orgId && available.length > 0) setOrgId(available[0]!.id);
   }, [available, orgId]);
 
   const add = useMutation({
-    // The bulk-invite endpoint returns 200 with per-row results, so a rejected
-    // attach (e.g. rank check) lands in `failed` rather than throwing. Surface
-    // that as an error instead of reporting a phantom success.
     mutationFn: async () => {
+      if (isSuperuser) {
+        await superuserUsersApi.addMembership(personId, { org_id: orgId, role });
+        return;
+      }
+      // The bulk-invite endpoint returns 200 with per-row results, so a rejected
+      // attach (e.g. rank check) lands in `failed` rather than throwing. Surface
+      // that as an error instead of reporting a phantom success.
       const res = await inviteBulkToOrg(orgId, { invites: [{ email, role }] });
       if (res.total_failed > 0) {
         throw new Error(res.failed[0]?.message || 'Could not add this person to the organization.');
       }
-      return res;
     },
     onSuccess: () => {
       onAdded();
@@ -739,7 +760,7 @@ function AddOrgMembershipDialog({
     },
   });
 
-  const orgOptions = available.map((o) => ({ value: o.org_id, label: `${o.name} (${o.slug})` }));
+  const orgOptions = available.map((o) => ({ value: o.id, label: `${o.name} (${o.slug})` }));
 
   return (
     <Dialog
@@ -748,7 +769,11 @@ function AddOrgMembershipDialog({
         if (!o) onClose();
       }}
       title="Add to organization"
-      description="Add this person to an organization you administer. They keep their existing account; only the new org membership is added."
+      description={
+        isSuperuser
+          ? 'Add this person to any organization. They keep their existing account; only the new org membership is added.'
+          : 'Add this person to an organization you administer. They keep their existing account; only the new org membership is added.'
+      }
     >
       {isLoading ? (
         <div className="py-8 flex items-center justify-center">
@@ -756,7 +781,9 @@ function AddOrgMembershipDialog({
         </div>
       ) : available.length === 0 ? (
         <p className="text-sm text-zinc-500 py-4">
-          There's no organization you administer that this person isn't already in.
+          {isSuperuser
+            ? 'This person is already a member of every organization.'
+            : "There's no organization you administer that this person isn't already in."}
         </p>
       ) : (
         <form
