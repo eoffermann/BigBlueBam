@@ -67,7 +67,6 @@ export function BanterStub() {
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <div className="mb-4 flex items-center justify-center gap-2">
             <Badge variant="blue">Team Chat</Badge>
-            <Badge variant="orange">Beta</Badge>
           </div>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
             Where decisions stop getting lost
@@ -165,8 +164,8 @@ export function BanterStub() {
             <p className="text-sm font-medium text-zinc-700">
               Served at{' '}
               <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs">/banter/</code>, a dedicated
-              SPA (in beta) sharing authentication and the people directory with Bam, Helpdesk, Beacon,
-              Brief, and the rest of the suite. We are still polishing; tell us where it creaks.
+              SPA sharing authentication and the people directory with Bam, Helpdesk, Beacon,
+              Brief, and the rest of the suite.
             </p>
           </div>
           <Button href="/banter/" variant="primary" size="sm">

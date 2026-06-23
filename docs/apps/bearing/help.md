@@ -10,7 +10,7 @@ The product is built for small to medium teams running a regular OKR cadence: se
 
 Bearing can read progress from your real work when an agent or API caller links a key result to a Bam epic, project, or sprint. As linked Bam tasks reach a done state, a background job recomputes the key result and its goal automatically. That linking is available through the MCP tools and REST, not through a human screen in this build.
 
-Bearing is in **beta**. It signs you in with your existing BigBlueBam (Bam) session, so you reach it the same way you reach the other apps in the suite.
+Bearing signs you in with your existing BigBlueBam (Bam) session, so you reach it the same way you reach the other apps in the suite.
 
 ### Key concepts
 

@@ -26,8 +26,6 @@ Bolt so automations can react when a document is created, updated, published, or
 promoted. Search runs as keyword search over titles and body text, with optional
 semantic search when a vector store is configured.
 
-Brief is currently in BETA. The sidebar header shows a `beta` badge.
-
 ### Key concepts
 
 - **Document** - A single piece of writing. It has a title, a globally unique

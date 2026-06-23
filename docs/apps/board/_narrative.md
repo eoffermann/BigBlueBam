@@ -1,6 +1,6 @@
 # Board - Visual Collaboration
 
-Board is BigBlueBam's infinite canvas whiteboard for real-time visual collaboration, brainstorming, diagramming, and team workshops. Each board is one Excalidraw-powered canvas where you place sticky notes, text, shapes, connectors, freehand drawings, frames, and images, and everything auto-saves as you work. Board is in beta.
+Board is BigBlueBam's infinite canvas whiteboard for real-time visual collaboration, brainstorming, diagramming, and team workshops. Each board is one Excalidraw-powered canvas where you place sticky notes, text, shapes, connectors, freehand drawings, frames, and images, and everything auto-saves as you work.
 
 ## Key Features
 

@@ -8,7 +8,7 @@ Banter is a real-time messaging app shared by everyone in your organization. You
 
 Banter does not have its own login or its own user list. You sign in to BigBlueBam (Bam) first, and Banter uses that same identity and the same people. Everyone you can message is already a member of your org. If you open Banter while signed out, you see "Please log in to BigBlueBam first to access Banter" with a link back to the main app.
 
-Banter is in **BETA**. A "beta" pill appears next to the **Banter** wordmark in the sidebar. Posting, threading, reacting, pinning, bookmarking, mentions, DMs, search, attachments, and scheduled posts driven by automation or AI agents are all working.
+Posting, threading, reacting, pinning, bookmarking, mentions, DMs, search, attachments, and scheduled posts driven by automation or AI agents are all working.
 
 Live audio is **not** started from inside Banter. The voice and video write actions were retired; every call write endpoint returns HTTP 410 Gone, and live audio for a channel now happens in the suite-wide Bureau docked box (which joins a shared room derived from the channel). Banter keeps a read-only view of past calls and their transcripts, but you do not start or join a call from inside Banter. See "Past calls and audio" below.
 

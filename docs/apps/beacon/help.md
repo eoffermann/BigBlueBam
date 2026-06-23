@@ -23,8 +23,6 @@ and the other apps, pulls its project list from Bam, and publishes lifecycle
 events to Bolt so automations can react when knowledge is created, updated,
 verified, or retired.
 
-Beacon is currently in BETA. The sidebar logo shows a `beta` badge.
-
 ### Key concepts
 
 - **Beacon** - A single knowledge article. Has a globally unique slug, a title,

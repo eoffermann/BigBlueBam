@@ -111,9 +111,6 @@ export function BoltSidebar({ onNavigate, activePage }: BoltSidebarProps) {
           <Zap className="h-4.5 w-4.5" />
         </div>
         <span className="text-sm font-semibold text-white">Bolt</span>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-1.5 py-0.5">
-          beta
-        </span>
       </div>
 
       {/* Project scope selector */}

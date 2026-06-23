@@ -114,9 +114,6 @@ export function BeaconSidebar({ onNavigate, activePage }: BeaconSidebarProps) {
           B
         </div>
         <span className="text-sm font-semibold text-white">Beacon</span>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-1.5 py-0.5">
-          beta
-        </span>
       </div>
 
       {/* Project scope selector */}

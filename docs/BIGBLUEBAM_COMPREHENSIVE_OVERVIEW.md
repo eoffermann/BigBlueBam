@@ -180,7 +180,7 @@ The apps, in suite order:
 
 ### Banter
 
-**Purpose:** Real-time team messaging -- channels, direct messages, threads, reactions, pins, bookmarks, and scheduled/agent-driven posts -- integrated into the BigBlueBam identity and org model. Status: **BETA** (a "beta" pill is shown in the sidebar).
+**Purpose:** Real-time team messaging -- channels, direct messages, threads, reactions, pins, bookmarks, and scheduled/agent-driven posts -- integrated into the BigBlueBam identity and org model.
 
 **Problem and users:** Teams producing work in Bam, Helpdesk, Bond, and the rest of the suite need a conversation layer that lives alongside that work, not in a separate product with its own login. Banter uses the host org's identity (sign in once to Bam, Banter uses the same session and user list) and lets any tool in the suite drop a task, sprint, or ticket into a channel as a native share action.
 
@@ -213,7 +213,7 @@ The apps, in suite order:
 
 **One line:** Team knowledge base with freshness governance, hybrid semantic search, and a typed knowledge graph.
 
-**Problem and users.** Teams accumulate documentation that goes stale and misleads. Beacon solves this by treating every article as perishable: each Beacon carries an expiry date, a verification count, and a freshness signal computed from when it was last verified. Knowledge owners, org admins, and governance leads use the "Fridge Cleanout" dashboard to identify and act on expiring content. All authenticated BigBlueBam members can read and create articles; edit rights scope to owners and admins. Beacon is currently in **BETA** (sidebar shows a `beta` badge).
+**Problem and users.** Teams accumulate documentation that goes stale and misleads. Beacon solves this by treating every article as perishable: each Beacon carries an expiry date, a verification count, and a freshness signal computed from when it was last verified. Knowledge owners, org admins, and governance leads use the "Fridge Cleanout" dashboard to identify and act on expiring content. All authenticated BigBlueBam members can read and create articles; edit rights scope to owners and admins.
 
 **Key user-facing features:**
 
@@ -233,7 +233,7 @@ The apps, in suite order:
 
 **Purpose:** Goals and OKR tracker for BigBlueBam teams.
 
-**Problem and users:** Teams running a regular OKR cadence need a way to set time-boxed objectives, attach measurable key results, check in on progress, and surface goals that are drifting before the period ends. Bearing serves team leads, individual contributors, and org admins at small-to-medium orgs. It is explicitly **beta**.
+**Problem and users:** Teams running a regular OKR cadence need a way to set time-boxed objectives, attach measurable key results, check in on progress, and surface goals that are drifting before the period ends. Bearing serves team leads, individual contributors, and org admins at small-to-medium orgs.
 
 **Key user-facing features:**
 - **Periods** -- named time boxes (Quarter, Half Year, Year, Custom) with a lifecycle: planning, active, completed, archived. The whole UI scopes to one selected period.
@@ -387,7 +387,7 @@ All claims are now grounded in actual code and the help doc. Here is the result:
 
 ### Board
 
-**Purpose:** Infinite-canvas visual whiteboarding for teams, served at `/board/`. **Status: BETA** (the sidebar displays a yellow `beta` chip).
+**Purpose:** Infinite-canvas visual whiteboarding for teams, served at `/board/`.
 
 **Problem and audience:** Replaces ad-hoc screenshot decks and external whiteboard tools for teams already in BigBlueBam. Primary users are facilitators running retros, brainstorming sessions, architecture reviews, and planning workshops; any org member with BigBlueBam access can view or edit boards according to visibility rules.
 
@@ -414,7 +414,7 @@ All claims are now grounded in actual code and the help doc. Here is the result:
 - WebSocket: yes -- real-time canvas sync runs over the `/board/ws` proxy.
 - Auth: shared BigBlueBam session cookie; no separate login.
 
-**Place in the suite:** Board is the spatial-thinking complement to Bam (tasks) and Brief (documents). It integrates directionally with Bam via project scoping and promote-to-tasks, and with Bolt via events. It consumes the platform presence/audio layer rather than implementing its own. The collaborator management UI gap and the version-snapshot metadata gap (description/element-count not persisted) are the two most prominent known limitations at the current beta state.
+**Place in the suite:** Board is the spatial-thinking complement to Bam (tasks) and Brief (documents). It integrates directionally with Bam via project scoping and promote-to-tasks, and with Bolt via events. It consumes the platform presence/audio layer rather than implementing its own. The collaborator management UI gap and the version-snapshot metadata gap (description/element-count not persisted) are the two most prominent known limitations.
 
 ### Bolt
 
@@ -428,7 +428,6 @@ All claims are now grounded in actual code and the help doc. Here is the result:
 - **Execution Log** (org-wide and per-automation): status (Running/Success/Partial/Failed/Skipped), per-step timelines, raw trigger event JSON, condition evaluation scores. Failed/Partial runs are retryable.
 - **Test Run**: evaluates conditions against a simulated event without executing actions.
 - **Limits per automation**: Max Executions/Hour (1-1000, default 60) and Cooldown (0-3600 s).
-- Marked **BETA** in the UI (yellow pill in the sidebar).
 
 **AI agent usage:** 26 MCP tools (help.md count; CLAUDE.md records 24, suggesting 2 were added after that count was written). Covers authoring (`bolt_create`, `bolt_update`, `bolt_patch`, `bolt_duplicate`, `bolt_delete`), discovery (`bolt_events`, `bolt_actions`, `bolt_list_templates`, `bolt_instantiate_template`), inspection (`bolt_executions`, `bolt_execution_detail`, `bolt_event_trace`, `bolt_recent_events`), dry-run (`bolt_test`), versioning (`bolt_list_versions`, `bolt_restore_version` -- no in-app UI for versioning), and AI drafting (`bolt_generate`, `bolt_explain` -- also no in-app UI, requires an LLM provider). Agents receive the `catalog.drift_detected` platform event when an unknown event name is ingested. The `bolt-execute` and `bolt-schedule-tick` BullMQ worker jobs are Bolt's execution substrate.
 
@@ -514,7 +513,7 @@ All claims are now grounded in actual code and the help doc. Here is the result:
 
 **Technical specifics:** Internal port 4005, proxied at `/brief/api/`. WebSocket at `/brief/ws` (Yjs collaboration; a dedicated `ws/` directory exists in `apps/brief-api/src/`). 10 route files (`collaborator`, `comment`, `document`, `embed`, `export`, `folder`, `internal`, `link`, `template`, `version`). 10 Drizzle schema modules (`brief-documents`, `brief-collaborators`, `brief-comments`, `brief-embeds`, `brief-folders`, `brief-links`, `brief-templates`, `brief-versions`, `bbb-refs`, `index`). The SPA has 7 page components.
 
-**Status and suite placement:** BETA (the help doc explicitly states this; the sidebar shows a `beta` badge). Brief sits between Bam (task execution, from which it pulls the project list) and Beacon (knowledge base, into which it graduates documents). It is the authoring tier of the knowledge workflow.
+**Suite placement:** Brief sits between Bam (task execution, from which it pulls the project list) and Beacon (knowledge base, into which it graduates documents). It is the authoring tier of the knowledge workflow.
 
 ### Bureau
 
@@ -1464,7 +1463,7 @@ Each of the 17 app directories - `bam`, `banter`, `beacon`, `bearing`, `bench`, 
 #### Full file list (all six roles per app)
 
 - `docs/apps/bam/` - `_marketing_hook.md`, `_narrative.md`, `guide.md`, `help.md`, `marketing.md`, `mcp-tools.md` (flagship sprint-based Kanban project/task management).
-- `docs/apps/banter/` - `_marketing_hook.md`, `_narrative.md`, `guide.md`, `help.md`, `marketing.md`, `mcp-tools.md` (team messaging / feed, beta).
+- `docs/apps/banter/` - `_marketing_hook.md`, `_narrative.md`, `guide.md`, `help.md`, `marketing.md`, `mcp-tools.md` (team messaging / feed).
 - `docs/apps/beacon/` - `_marketing_hook.md`, `_narrative.md`, `guide.md`, `help.md`, `marketing.md`, `mcp-tools.md` (knowledge base, search, graph).
 - `docs/apps/bearing/` - `_marketing_hook.md`, `_narrative.md`, `guide.md`, `help.md`, `marketing.md`, `mcp-tools.md` (goals / OKRs).
 - `docs/apps/bench/` - `_marketing_hook.md`, `_narrative.md`, `guide.md`, `help.md`, `marketing.md`, `mcp-tools.md` (analytics dashboards / reports).

@@ -104,7 +104,7 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
 
   return (
     <div className="flex flex-col h-full text-zinc-300">
-      {/* Header: logo + wordmark + beta pill */}
+      {/* Header: logo + wordmark */}
       <button
         onClick={() => onNavigate('/')}
         className="flex items-center gap-2 px-4 py-4 border-b border-zinc-800 flex-shrink-0 hover:bg-sidebar-hover/40 transition-colors text-left"
@@ -113,9 +113,6 @@ export function BanterSidebar({ onNavigate, activeRoute }: BanterSidebarProps) {
           <MessageCircle className="h-4 w-4" />
         </div>
         <span className="font-semibold text-white text-lg">Banter</span>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-1.5 py-0.5">
-          beta
-        </span>
       </button>
 
       {/* Quick actions */}

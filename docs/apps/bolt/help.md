@@ -10,7 +10,7 @@ Other BigBlueBam apps publish events as people work: Bam emits task and sprint e
 
 Every run is recorded as an **execution** with per-action steps, so you can see exactly what fired, what passed, what failed, and why. You can browse runs for a single automation or across the whole organization in the Execution Log, and you can trace one ingested event through every rule it touched.
 
-Bolt is currently marked BETA (a yellow "beta" pill sits next to the brand in the sidebar). This document describes what the Bolt web app actually does today. Where a capability exists only through the API or an MCP tool and is not wired into the in-app UI, that is called out so you do not go looking for a button that is not there.
+This document describes what the Bolt web app actually does today. Where a capability exists only through the API or an MCP tool and is not wired into the in-app UI, that is called out so you do not go looking for a button that is not there.
 
 ### Key concepts
 
