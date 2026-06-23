@@ -28,6 +28,7 @@
     "db:migrate": "docker compose run --rm migrate",
     "db:check": "node scripts/db-check.mjs",
     "seed": "node scripts/seed-all.mjs",
+    "seed:gilligan": "node scripts/seed-gilligan/run-all.mjs",
     "avatars:build": "node scripts/build-avatar-thumbnails.mjs && node scripts/build-avatar-manifest.mjs",
     "help:index": "node scripts/help/build-help-index.mjs",
     "help:check": "node scripts/help/build-help-index.mjs --check",
