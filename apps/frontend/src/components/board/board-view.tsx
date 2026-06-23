@@ -14,10 +14,39 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Phase, Task } from '@bigbluebam/shared';
 import { useBoardStore } from '@/stores/board.store';
-import { useMoveTask } from '@/hooks/use-tasks';
+import { useMoveTask, useAddTaskParent } from '@/hooks/use-tasks';
 import { ApiError } from '@/lib/api';
 import { PhaseColumn } from './phase-column';
 import { TaskCard } from './task-card';
+import { NestTargetContext } from './board-drag-context';
+
+// Vertical-center "sweet spot" of a task card that means "nest" instead of
+// "reorder": the middle 40% (0.30–0.70). Dragging across the top/bottom 30%
+// reorders as before; releasing in the center adds the dragged task as a child
+// of the hovered one. The band is deliberately away from the edges so ordinary
+// reordering never nests by accident.
+const NEST_ZONE_MIN = 0.3;
+const NEST_ZONE_MAX = 0.7;
+
+/**
+ * Decide whether the drag is in the nest zone of the task it is over. Uses the
+ * dragged card's translated center Y relative to the over card's rect (both
+ * provided by dnd-kit), so it is independent of pointer jitter. Returns the
+ * over-task id when nesting applies, else null.
+ */
+function nestTargetFromEvent(event: DragEndEvent | DragOverEvent): string | null {
+  const { active, over } = event;
+  if (!over) return null;
+  const overData = over.data.current;
+  if (overData?.type !== 'task') return null;
+  if (over.id === active.id) return null; // can't nest into itself
+  const overRect = over.rect;
+  const activeRect = active.rect.current.translated;
+  if (!overRect || !activeRect) return null;
+  const activeCenterY = activeRect.top + activeRect.height / 2;
+  const rel = (activeCenterY - overRect.top) / overRect.height;
+  return rel >= NEST_ZONE_MIN && rel <= NEST_ZONE_MAX ? (over.id as string) : null;
+}
 
 interface BoardViewProps {
   phases: (Phase & { tasks: Task[] })[];
@@ -30,8 +59,10 @@ interface BoardViewProps {
 
 export function BoardView({ phases, onTaskClick, onTaskContextMenu, onEpicClick, onAddTask, onInlineCreate }: BoardViewProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [nestTargetId, setNestTargetId] = useState<string | null>(null);
   const moveTaskInStore = useBoardStore((s) => s.moveTask);
   const moveTaskMutation = useMoveTask();
+  const addTaskParent = useAddTaskParent();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -79,17 +110,48 @@ export function BoardView({ phases, onTaskClick, onTaskContextMenu, onEpicClick,
     if (task) setActiveTask(task);
   };
 
-  const handleDragOver = (_event: DragOverEvent) => {
-    // DragOverlay handles the visual feedback
+  const handleDragOver = (event: DragOverEvent) => {
+    // Track whether the drag is hovering a card's center sweet spot so that
+    // card can show its "add as child" affordance. DragOverlay handles the
+    // rest of the visual feedback.
+    setNestTargetId(nestTargetFromEvent(event));
+  };
+
+  const handleDragCancel = () => {
+    setActiveTask(null);
+    setNestTargetId(null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveTask(null);
 
     const { active, over } = event;
-    if (!over) return;
+    if (!over) {
+      setNestTargetId(null);
+      return;
+    }
 
     const taskId = active.id as string;
+
+    // Nesting takes precedence over reordering: a release in the center sweet
+    // spot adds the dragged task as a child of the hovered one and does NOT
+    // move it between phases/positions. The board refetches on success so the
+    // child shows its parent badge and the parent's subtask progress updates.
+    const nestParentId = nestTargetFromEvent(event);
+    setNestTargetId(null);
+    if (nestParentId && nestParentId !== taskId) {
+      addTaskParent.mutate(
+        { taskId, parentTaskId: nestParentId },
+        {
+          onError: (err: unknown) => {
+            // Cycle guard / other rejections come back from the API; surface
+            // the reason rather than silently doing nothing.
+            if (err instanceof ApiError) alert(err.message);
+          },
+        },
+      );
+      return;
+    }
     let targetPhaseId: string | undefined;
     let targetPosition = 0;
 
@@ -155,21 +217,24 @@ export function BoardView({ phases, onTaskClick, onTaskContextMenu, onEpicClick,
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
       accessibility={{ announcements }}
     >
-      <div className="flex gap-4 p-6 overflow-x-auto h-full">
-        {phases.map((phase) => (
-          <PhaseColumn
-            key={phase.id}
-            phase={phase}
-            onTaskClick={onTaskClick}
-            onTaskContextMenu={onTaskContextMenu}
-            onEpicClick={onEpicClick}
-            onAddTask={onAddTask}
-            onInlineCreate={onInlineCreate}
-          />
-        ))}
-      </div>
+      <NestTargetContext.Provider value={nestTargetId}>
+        <div className="flex gap-4 p-6 overflow-x-auto h-full">
+          {phases.map((phase) => (
+            <PhaseColumn
+              key={phase.id}
+              phase={phase}
+              onTaskClick={onTaskClick}
+              onTaskContextMenu={onTaskContextMenu}
+              onEpicClick={onEpicClick}
+              onAddTask={onAddTask}
+              onInlineCreate={onInlineCreate}
+            />
+          ))}
+        </div>
+      </NestTargetContext.Provider>
 
       <DragOverlay
         dropAnimation={{
