@@ -7,6 +7,9 @@ export default defineConfig({
   base: '/beacon/',
   plugins: [react(), tailwindcss()],
   resolve: {
+    // Yjs must be a single instance across yjs + y-websocket + y-codemirror.next,
+    // or it throws "Yjs was already imported" and CRDT updates silently no-op.
+    dedupe: ['yjs'],
     alias: {
       '@': resolve(__dirname, 'src'),
       '@bigbluebam/ui/launchpad': resolve(__dirname, '../../packages/ui/launchpad.tsx'),

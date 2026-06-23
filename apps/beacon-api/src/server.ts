@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
@@ -10,6 +11,7 @@ import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import { sql } from 'drizzle-orm';
+import { flushAllPendingYjsWrites } from './services/yjs-persistence.service.js';
 
 const fastify = Fastify({
   logger: {
@@ -64,6 +66,12 @@ await fastify.register(rateLimit, {
   timeWindow: env.RATE_LIMIT_WINDOW_MS,
 });
 
+await fastify.register(websocket, {
+  options: {
+    maxPayload: 2_097_152, // 2 MB (Yjs updates are compact binary)
+  },
+});
+
 // Security headers
 fastify.addHook('onSend', async (_req, reply) => {
   reply.header('X-Content-Type-Options', 'nosniff');
@@ -100,6 +108,7 @@ import searchRoutes from './routes/search.routes.js';
 import graphRoutes from './routes/graph.routes.js';
 import commentsRoutes from './routes/comments.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
+import websocketHandler from './ws/handler.js';
 
 await fastify.register(beaconRoutes, { prefix: '/v1' });
 await fastify.register(versionRoutes, { prefix: '/v1' });
@@ -111,11 +120,16 @@ await fastify.register(graphRoutes, { prefix: '/v1' });
 await fastify.register(commentsRoutes, { prefix: '/v1' });
 await fastify.register(attachmentsRoutes, { prefix: '/v1' });
 
+// WebSocket handler for Yjs real-time collaboration (T4 co-editing).
+// Registered AFTER the REST routes, mirroring brief-api.
+await fastify.register(websocketHandler);
+
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {
   process.on(signal, async () => {
     fastify.log.info(`Received ${signal}, shutting down gracefully...`);
+    await flushAllPendingYjsWrites();
     await fastify.close();
     await connection.end();
     process.exit(0);

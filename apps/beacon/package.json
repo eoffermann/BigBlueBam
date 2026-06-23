@@ -30,7 +30,15 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.487.0",
     "date-fns": "^4.1.0",
-    "motion": "^12.9.3"
+    "motion": "^12.9.3",
+    "yjs": "^13.6.0",
+    "y-websocket": "^2.0.3",
+    "y-codemirror.next": "^0.3.5",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.34.1",
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/language": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.3.1"
   },
   "devDependencies": {
     "vite": "^6.3.2",

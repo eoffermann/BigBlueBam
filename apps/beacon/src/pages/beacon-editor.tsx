@@ -12,6 +12,8 @@ import { Input } from '@/components/common/input';
 import { Select } from '@/components/common/select';
 import { useProjectStore } from '@/stores/project.store';
 import { useProjects } from '@/hooks/use-projects';
+import { useCollaboration } from '@/hooks/use-collaboration';
+import { MarkdownCoeditor } from '@/components/editor/markdown-coeditor';
 
 interface BeaconEditorPageProps {
   idOrSlug?: string;
@@ -44,6 +46,28 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
   // Set when a save is rejected as stale (someone changed the article since it
   // was opened). While true, the next save omits the guard to force an overwrite.
   const [staleConflict, setStaleConflict] = useState(false);
+
+  // T4 co-editing: when editing an existing article, the body lives in a shared
+  // Yjs doc (a Y.Text of the markdown) synced over /beacon/ws. Create mode has
+  // no entry id yet, so it stays on the plain textarea + `body` state until the
+  // first save mints an id. Hook is called unconditionally (before any early
+  // return) to satisfy the rules of hooks; it makes no connection for a null id.
+  const { ydoc, provider } = useCollaboration(
+    isEditMode && existing ? existing.id : null,
+  );
+
+  // The body to persist on save/publish. In edit mode prefer the live Yjs text,
+  // but only when it actually has content — before the doc has synced/seeded it
+  // is empty, and an early save must not wipe the article. (Content-based rather
+  // than isSynced-gated: the provider's sync flag can lag behind a doc that is
+  // already populated, which would otherwise drop live edits on save.)
+  const getBody = (): string => {
+    if (isEditMode && existing) {
+      const live = ydoc.getText('body').toString();
+      return live.length > 0 ? live : existing.body_markdown ?? '';
+    }
+    return body;
+  };
 
   // Pre-select the active project from the store when creating
   useEffect(() => {
@@ -85,7 +109,7 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
         await updateBeacon.mutateAsync({
           id: existing.id,
           data: {
-            title, summary, body_markdown: body, tags: parseTags(), visibility,
+            title, summary, body_markdown: getBody(), tags: parseTags(), visibility,
             // Stale-write guard: send the updated_at we loaded so the server
             // rejects (409) if it changed under us. After a stale conflict the
             // user can Save again to overwrite, which omits the guard.
@@ -97,7 +121,7 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
         const res = await createBeacon.mutateAsync({
           title,
           summary,
-          body_markdown: body,
+          body_markdown: getBody(),
           project_id: projectId || undefined,
           tags: parseTags(),
           visibility,
@@ -123,7 +147,7 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
       if (isEditMode && existing) {
         await updateBeacon.mutateAsync({
           id: existing.id,
-          data: { title, summary, body_markdown: body, tags: parseTags(), visibility },
+          data: { title, summary, body_markdown: getBody(), tags: parseTags(), visibility },
         });
         await publishBeacon.mutateAsync(existing.id);
         onNavigate(`/${idOrSlug}`);
@@ -131,7 +155,7 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
         const res = await createBeacon.mutateAsync({
           title,
           summary,
-          body_markdown: body,
+          body_markdown: getBody(),
           project_id: projectId || undefined,
           tags: parseTags(),
           visibility,
@@ -221,15 +245,23 @@ export function BeaconEditorPage({ idOrSlug, onNavigate }: BeaconEditorPageProps
           <div>
             <label htmlFor="beacon-editor-body" className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5 block">
               Body (Markdown)
+              {isEditMode && (
+                <span className="ml-2 font-normal text-xs text-zinc-400">live co-editing</span>
+              )}
             </label>
-            <textarea
-              id="beacon-editor-body"
-              placeholder="Write your knowledge article in Markdown..."
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={16}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-100 resize-y font-mono"
-            />
+            {isEditMode && existing ? (
+              // T4 collaborative markdown editor bound to the shared Yjs doc.
+              <MarkdownCoeditor ydoc={ydoc} provider={provider} editable={true} />
+            ) : (
+              <textarea
+                id="beacon-editor-body"
+                placeholder="Write your knowledge article in Markdown..."
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={16}
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-100 resize-y font-mono"
+              />
+            )}
           </div>
 
           {/* Project selector */}

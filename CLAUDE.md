@@ -27,12 +27,12 @@ apps/
   api/              Fastify REST API + WebSocket server (internal :4000, proxied at /b3/api/). 40 route files, 38 Drizzle schema modules, ~119 source files.
   frontend/         React SPA served by nginx at /b3/ (port 80). ~87 source files, 8+ pages, command palette, keyboard shortcuts.
   banter-api/       Banter Fastify REST API + WebSocket (internal :4002, proxied at /banter/api/). 17 route files, 19 schema modules, ~60 source files.
-  banter/           Banter React SPA served by nginx at /banter/. ~46 source files, 7 pages (BETA).
+  banter/           Banter React SPA served by nginx at /banter/. ~46 source files, 7 pages.
   mcp-server/       MCP protocol server (internal :3001, proxied at /mcp/). 733 tools across 46 modules (105 Bam core + 77 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Beacon + 38 Bureau + 37 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 25 Book + 24 Bolt + 20 Blank + 11 Helpdesk + 64 cross-cutting platform: agent identity/audit/heartbeat, agent policies, outbound webhooks, proposals, visibility preflight, unified activity, cross-app search, fuzzy resolvers, composite views, entity links, attachments, bolt observability, dedupe, phrase counts, expertise, pattern subscriptions, ingest fingerprint). Also hosts an internal POST /tools/call route for server-to-server invocations (Wave 0.2). confirm_action tokens are Redis-backed (mcp:confirm_token:<token> with PX TTL) with a graceful in-process fallback; the TTL is dynamic (5 min for human approvers, 60 s for agent-to-agent chains) and the register-tool wrapper enforces the §15 agent_policies kill switch + allowlist check on every service-account invocation.
   worker/           BullMQ background job processor (no exposed port). 16 job handlers (email, notification, export, sprint-close, banter-notification, banter-retention, bond-stale-deals, beacon-expiry-sweep, beacon-vector-sync, bearing-digest, bearing-recompute, bearing-snapshot, blast-send, bolt-execute, bolt-schedule-tick, helpdesk-task-create).
   helpdesk-api/     Helpdesk Fastify API (internal :4001, proxied at /helpdesk/api/). 6 route files, 12 schema modules.
   helpdesk/         Helpdesk React SPA served by nginx at /helpdesk/.
-  beacon-api/       Beacon Fastify API (internal :4004, proxied at /beacon/api/). 9 route files, 12 schema modules. Knowledge base, search, graph, policies.
+  beacon-api/       Beacon Fastify API + WebSocket (internal :4004, proxied at /beacon/api/, realtime at /beacon/ws). 9 route files, 12 schema modules. Knowledge base, search, graph, policies, and T4 real-time co-editing of article bodies (Yjs over /beacon/ws; persisted to beacon_entries.yjs_state, materialized back to body_markdown).
   beacon/           Beacon React SPA served by nginx at /beacon/. Knowledge home, graph explorer, editor.
   brief-api/        Brief Fastify REST API + WebSocket (internal :4005, proxied at /brief/api/). 9 route files, 10 schema modules.
   brief/            Brief React SPA served by nginx at /brief/.
@@ -79,11 +79,12 @@ The entire stack runs via `docker compose up`. All services are accessed through
 - `http://DOMAIN/b3/` serves the Bam SPA
 - `http://DOMAIN/b3/api/` proxies to the Fastify REST API
 - `http://DOMAIN/b3/ws` proxies WebSocket connections
-- `http://DOMAIN/banter/` serves the Banter SPA (beta)
+- `http://DOMAIN/banter/` serves the Banter SPA
 - `http://DOMAIN/banter/api/` proxies to the Banter REST API
 - `http://DOMAIN/banter/ws` proxies Banter WebSocket connections
 - `http://DOMAIN/beacon/` serves the Beacon knowledge base SPA
 - `http://DOMAIN/beacon/api/` proxies to the Beacon API
+- `http://DOMAIN/beacon/ws` proxies Beacon WebSocket connections (Yjs T4 co-editing)
 - `http://DOMAIN/brief/` serves the Brief collaborative document editor SPA
 - `http://DOMAIN/brief/api/` proxies to the Brief API
 - `http://DOMAIN/bolt/` serves the Bolt workflow automation SPA

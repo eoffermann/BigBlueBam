@@ -8,8 +8,17 @@ import {
   timestamp,
   jsonb,
   index,
+  customType,
 } from 'drizzle-orm/pg-core';
 import { users, organizations, projects } from './bbb-refs.js';
+
+// Matches the declaration in apps/brief-api/src/db/schema/brief-documents.ts so
+// Yjs binary state round-trips as a Buffer through the postgres-js driver.
+const bytea = customType<{ data: Buffer; driverInput: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 export const beaconStatusEnum = pgEnum('beacon_status', [
   'Draft',
@@ -58,6 +67,15 @@ export const beaconEntries = pgTable(
     retired_at: timestamp('retired_at', { withTimezone: true }),
     vector_id: varchar('vector_id', { length: 128 }),
     metadata: jsonb('metadata').default({}),
+    // T4 real-time co-editing — 0203_beacon_yjs_state.sql
+    // Binary Yjs CRDT state for the collaborative body (ydoc.getText('body')).
+    // NULL until the first edit; on first room open the Y.Doc is seeded from
+    // body_markdown so legacy markdown articles open intact.
+    yjs_state: bytea('yjs_state'),
+    // Tracks the last time the Yjs persistence service flushed yjs_state so we
+    // can debounce redundant writes. NOT a substitute for updated_at: body
+    // autosave deliberately leaves updated_at alone (the stale-write guard).
+    yjs_last_saved_at: timestamp('yjs_last_saved_at', { withTimezone: true }),
   },
   (table) => [
     index('idx_beacon_entries_org_project_status').on(

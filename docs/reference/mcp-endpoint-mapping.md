@@ -851,9 +851,11 @@ X-Internal-Secret gated; not user-facing, no MCP tools.
 
 ## Beacon (app)
 
-- **Service:** `apps/beacon-api` · external `/beacon/api/` · MCP module(s): `apps/mcp-server/src/tools/beacon-tools.ts`
+- **Service:** `apps/beacon-api` · external `/beacon/api/` (WS `/beacon/ws`) · MCP module(s): `apps/mcp-server/src/tools/beacon-tools.ts`
 
 All routes are registered under the `/v1` prefix, so external paths are `/beacon/api/v1/<path>`. The MCP tools target the beacon-api base URL directly (paths shown below are the in-service paths). Beacon write tools accept a UUID/slug/title and resolve via `resolveBeaconId` before calling the path.
+
+Realtime T4 co-editing of article bodies runs on a Yjs WebSocket at `/beacon/ws` (a `GET /ws` upgrade on beacon-api): `— _(skip: realtime/ws/Yjs — CRDT sync, not a wrapped tool)_`. The shared doc is a `Y.Text` of the markdown body, persisted to `beacon_entries.yjs_state` and materialized back to `body_markdown`.
 
 ### CRUD, lifecycle, versions
 

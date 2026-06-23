@@ -21,6 +21,7 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",
     "@fastify/rate-limit": "^10.0.0",
+    "@fastify/websocket": "^11.0.0",
     "@qdrant/js-client-rest": "^1.12.0",
     "argon2": "^0.41.1",
     "bullmq": "^5.0.0",
@@ -30,11 +31,14 @@
     "fastify-plugin": "^5.0.0",
     "ioredis": "^5.4.0",
     "isomorphic-dompurify": "^3.8.0",
+    "lib0": "^0.2.88",
     "minio": "^8.0.0",
     "nanoid": "^5.0.0",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
     "postgres": "^3.4.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
