@@ -467,6 +467,11 @@ const EXCLUDED_FILE_BASENAMES = new Set([
   // 'status' to 'statu'. Three real catalog rows are seeded by 0168;
   // routes call fastify.requireCan() against those ids directly.
   'slack-import.routes.ts',
+  // WebSocket upgrade routes (realtime channels) are not authz actions and
+  // are gated by their own preHandler, not requireCan(). The path-derived
+  // auto-id also mangles `GET /ws` into `<app>.w.list` (singularize ws -> w).
+  // Every app's realtime route lives in a `ws.routes.ts`.
+  'ws.routes.ts',
 ]);
 
 function isPathExcluded(routePath) {

@@ -1,8 +1,8 @@
 {
   "counts": {
-    "total": 1318,
+    "total": 1319,
     "mcp_tools_scanned": 731,
-    "rest_routes_scanned": 835,
+    "rest_routes_scanned": 836,
     "read_permissions": 514,
     "destructive_permissions": 124
   },
@@ -583,6 +583,23 @@
           "source": "rest",
           "ref": "POST /auth/api-keys/:id/rotate",
           "file": "api-key.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bam.auth_me_avatar.create",
+      "app": "bam",
+      "resource": "auth_me_avatar",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /auth/me/avatar",
+          "file": "upload.routes.ts"
         }
       ]
     },
