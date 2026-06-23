@@ -318,6 +318,9 @@ services:
       - ./infra/nginx/nginx-with-site.conf:/etc/nginx/bbb-templates/site.conf.template:ro
       - ./infra/nginx/tls-redirect.conf.template:/etc/nginx/bbb-templates/tls-redirect.conf.template:ro
       - ./docs/apps:/usr/share/nginx/html/docs/apps:ro
+      # Default profile-picture options served at /avatars/ (mirrors the docs
+      # bind-mount so newly-added avatars show without rebuilding the image).
+      - ./assets/default-avatars:/usr/share/nginx/html/avatars:ro
       # TLS certs (gitignored). If empty, entrypoint silently runs HTTP-only.
       - ./certs:/etc/nginx/certs:ro
       # ACME HTTP-01 challenge webroot — shared with the certbot sidecar
