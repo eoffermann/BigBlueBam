@@ -23,6 +23,9 @@ importers:
       postgres:
         specifier: ^3.4.0
         version: 3.4.8
+      sharp:
+        specifier: ^0.33.0
+        version: 0.33.5
       turbo:
         specifier: ^2.3.3
         version: 2.9.3

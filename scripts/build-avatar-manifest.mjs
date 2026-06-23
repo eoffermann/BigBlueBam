@@ -5,12 +5,13 @@
 //
 // Filenames follow `<category>-<NN>.png` (e.g. cat-01.png, woman-12.png).
 // Re-run after adding/removing avatars:  node scripts/build-avatar-manifest.mjs
-import { readdirSync, writeFileSync } from 'node:fs';
+import { readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = join(ROOT, 'assets', 'default-avatars');
+const THUMBS = join(DIR, 'thumbs');
 
 // Human label per filename prefix. Unknown prefixes fall back to a title-cased
 // version of the prefix so a new category works without editing this file.
@@ -24,7 +25,12 @@ const files = readdirSync(DIR)
 const avatars = files.map((file) => {
   const id = file.replace(/\.png$/i, '');
   const category = id.replace(/-\d+$/, '');
-  return { id, file, category, url: `/avatars/${file}` };
+  // Prefer the small WebP thumbnail (built by build-avatar-thumbnails.mjs) for
+  // both the picker grid and the stored avatar; fall back to the full PNG if a
+  // thumbnail is missing. The thumb covers every in-app render size.
+  const hasThumb = existsSync(join(THUMBS, `${id}.webp`));
+  const thumb = hasThumb ? `/avatars/thumbs/${id}.webp` : `/avatars/${file}`;
+  return { id, file, category, url: `/avatars/${file}`, thumb };
 });
 
 const categories = [...new Set(avatars.map((a) => a.category))].map((key) => ({

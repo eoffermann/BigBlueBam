@@ -7,7 +7,9 @@ import { useAuthStore } from '@/stores/auth.store';
 
 interface AvatarManifest {
   categories: { key: string; label: string; count: number }[];
-  avatars: { id: string; file: string; category: string; url: string }[];
+  // `thumb` is a small (~6KB) 192px WebP used for both the grid and the stored
+  // avatar; `url` is the full 512px PNG, kept for reference only.
+  avatars: { id: string; file: string; category: string; url: string; thumb: string }[];
 }
 
 /**
@@ -167,12 +169,14 @@ export function AvatarPicker() {
               </div>
               <div className="grid grid-cols-6 sm:grid-cols-8 gap-2 max-h-72 overflow-auto pr-1">
                 {shown.map((a) => {
-                  const selected = user?.avatar_url === a.url;
+                  // Stored avatar is the thumb; also match the full url so a
+                  // previously-stored full-size pick still shows as selected.
+                  const selected = user?.avatar_url === a.thumb || user?.avatar_url === a.url;
                   return (
                     <button
                       key={a.id}
                       type="button"
-                      onClick={() => setAvatar(a.url)}
+                      onClick={() => setAvatar(a.thumb)}
                       disabled={busy}
                       title={a.id}
                       className={`relative rounded-full overflow-hidden aspect-square focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 transition-transform hover:scale-105 ${
@@ -180,7 +184,7 @@ export function AvatarPicker() {
                       }`}
                     >
                       <img
-                        src={a.url}
+                        src={a.thumb}
                         alt={a.id}
                         loading="lazy"
                         className="h-full w-full object-cover"
