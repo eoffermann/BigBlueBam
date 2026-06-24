@@ -14,6 +14,7 @@ COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/db-stubs/package.json ./packages/db-stubs/
 COPY packages/permissions/package.json ./packages/permissions/
 COPY packages/storage/package.json ./packages/storage/
+COPY packages/structured-data/package.json ./packages/structured-data/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -28,6 +29,7 @@ COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
 COPY packages/storage/ ./packages/storage/
+COPY packages/structured-data/ ./packages/structured-data/
 COPY apps/bin-api/src ./apps/bin-api/src
 COPY apps/bin-api/tsconfig.json apps/bin-api/tsup.config.ts ./apps/bin-api/
 
@@ -37,6 +39,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/db-stubs build \
  && pnpm --filter @bigbluebam/permissions build \
  && pnpm --filter @bigbluebam/storage build \
+ && pnpm --filter @bigbluebam/structured-data build \
  && pnpm --filter @bigbluebam/bin-api build
 
 # Create a deploy-ready directory with all prod deps
@@ -53,6 +56,7 @@ COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
 COPY packages/storage/ ./packages/storage/
+COPY packages/structured-data/ ./packages/structured-data/
 COPY apps/bin-api/ ./apps/bin-api/
 
 WORKDIR /app/apps/bin-api
