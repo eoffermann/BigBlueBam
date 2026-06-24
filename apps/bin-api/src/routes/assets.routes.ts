@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import multipart from '@fastify/multipart';
 import { z } from 'zod';
+import { env } from '../env.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as assetService from '../services/asset.service.js';
 import { NotFoundError, ConflictError, StorageError } from '../services/asset.service.js';
@@ -45,6 +47,10 @@ function sendError(reply: FastifyReply, request: FastifyRequest, err: unknown) {
 }
 
 export default async function assetRoutes(fastify: FastifyInstance) {
+  // Proxied upload uses multipart. Scoped to this route plugin (mirrors the
+  // as-built apps/api uploadRoutes registration).
+  await fastify.register(multipart, { limits: { fileSize: env.UPLOAD_MAX_FILE_SIZE } });
+
   // GET /assets — list assets (optionally by folder/project)
   fastify.get('/assets', { preHandler: [requireAuth] }, async (request, reply) => {
     const q = request.query as Record<string, string>;
@@ -107,6 +113,68 @@ export default async function assetRoutes(fastify: FastifyInstance) {
       try {
         const result = await assetService.presignAssetDownload(request.params.id, request.user!.org_id);
         return reply.send({ data: result });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
+  // POST /assets/:id/upload — proxied upload (bytes through the service). The
+  // default upload path used by the SPA; works without a browser-reachable
+  // provider endpoint (D-7). Reserves a version, streams to the driver, and
+  // finalizes in one call.
+  fastify.post<{ Params: { id: string } }>(
+    '/assets/:id/upload',
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bin.asset_version.create')] },
+    async (request, reply) => {
+      const file = await request.file();
+      if (!file) {
+        return reply.status(400).send({
+          error: { code: 'BAD_REQUEST', message: 'No file provided', details: [], request_id: request.id },
+        });
+      }
+      const buffer = await file.toBuffer();
+      if (buffer.length > env.UPLOAD_MAX_FILE_SIZE) {
+        return reply.status(400).send({
+          error: {
+            code: 'BAD_REQUEST',
+            message: `File exceeds maximum size of ${env.UPLOAD_MAX_FILE_SIZE} bytes`,
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      try {
+        const result = await assetService.uploadVersionBytes(
+          request.params.id,
+          request.user!.org_id,
+          request.user!.id,
+          buffer,
+          { filename: file.filename, content_type: file.mimetype },
+        );
+        return reply.status(201).send({ data: result });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
+  // GET /assets/:id/raw — proxied serve (bytes through the service). The default
+  // serve path used by the SPA; gated on scan_status like /download (§9.3).
+  fastify.get<{ Params: { id: string } }>(
+    '/assets/:id/raw',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      try {
+        const { stream, contentType, size, filename } = await assetService.streamAssetDownload(
+          request.params.id,
+          request.user!.org_id,
+        );
+        reply.header('Content-Type', contentType);
+        reply.header('Content-Length', size);
+        reply.header('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`);
+        reply.header('Cache-Control', 'private, max-age=300');
+        return reply.send(stream);
       } catch (err) {
         return sendError(reply, request, err);
       }

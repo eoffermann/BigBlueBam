@@ -228,6 +228,99 @@ export async function completeVersion(versionId: string, orgId: string) {
   return { version: finalizedVersion[0]!, asset: updatedAsset[0]! };
 }
 
+// ---------------------------------------------------------------------------
+// Proxied upload/serve (Bin master §9.2/§9.3 fallback path)
+//
+// Presigned PUT/GET hands the browser a URL pointing straight at the storage
+// provider. That only works when the provider endpoint is reachable from the
+// browser. The bundled local MinIO is on the internal docker network with no
+// public/host-mapped endpoint (S3_ENDPOINT=http://minio:9000), so the suite has
+// always proxied bytes through the service for the bootstrap provider — see
+// apps/api POST /upload + GET /files/* (AB-2, D-7). Bin mirrors that: these are
+// the default upload/serve paths the SPA uses; the presigned routes above stay
+// for deployments that configure a browser-reachable provider endpoint.
+// ---------------------------------------------------------------------------
+
+/**
+ * Proxied upload: stream bytes through the service to the active driver, then
+ * finalize the version (stat + advance current_version_id + scan_status pending)
+ * in one call. Equivalent to presignVersionUpload + the client PUT +
+ * completeVersion, but the bytes traverse the API so no browser-reachable
+ * provider endpoint is required.
+ */
+export async function uploadVersionBytes(
+  assetId: string,
+  orgId: string,
+  userId: string,
+  body: Buffer,
+  opts: { filename?: string; content_type?: string } = {},
+) {
+  const asset = await getAsset(assetId, orgId);
+  const driver = getMediaDriver();
+  const contentType = opts.content_type ?? asset.content_type ?? 'application/octet-stream';
+  const filename = opts.filename ?? asset.name;
+  const versionUuid = randomUUID();
+  const objectKey = buildBinObjectKey(orgId, assetId, versionUuid, filename);
+
+  await driver.put(objectKey, body, { contentType, size: body.length });
+  const stat = await driver.stat(objectKey);
+  if (!stat) {
+    throw new StorageError('Upload did not land in storage');
+  }
+
+  const nextNumber = await nextVersionNumber(assetId);
+  const inserted = await db
+    .insert(binAssetVersions)
+    .values({
+      id: versionUuid,
+      asset_id: assetId,
+      version_number: nextNumber,
+      binding_id: null,
+      object_key: objectKey,
+      size: stat.size,
+      integrity: stat.integrity,
+      content_type: contentType,
+      uploaded_by: userId,
+    })
+    .returning();
+
+  const updatedAsset = await db
+    .update(binAssets)
+    .set({
+      current_version_id: versionUuid,
+      object_key: objectKey,
+      size: stat.size,
+      integrity: stat.integrity,
+      content_type: contentType,
+      scan_status: 'pending',
+    })
+    .where(eq(binAssets.id, assetId))
+    .returning();
+
+  return { version: inserted[0]!, asset: updatedAsset[0]! };
+}
+
+/**
+ * Proxied serve: stream an asset's current version through the service. Gated on
+ * scan_status exactly like presignAssetDownload (§9.3): only `clean`/`skipped`
+ * assets are served.
+ */
+export async function streamAssetDownload(
+  assetId: string,
+  orgId: string,
+): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; filename: string }> {
+  const asset = await getAsset(assetId, orgId);
+  if (!asset.current_version_id || !asset.object_key) {
+    throw new NotFoundError('Asset has no uploaded content yet');
+  }
+  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
+    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
+  }
+  const driver = getMediaDriver();
+  const { stream, contentType, size } = await driver.getStream(asset.object_key);
+  return { stream, contentType, size, filename: asset.name };
+}
+
 export interface PresignedDownload {
   object_key: string;
   download_url: string;

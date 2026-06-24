@@ -235,3 +235,32 @@ trusted-derived-artifact allowance — is a tiny Bin master addition).
 artifacts) and the §12 "Consumed by Bay" section expanded with BAY-1…4. No schema
 or interface change to Bin was required — confirmation that the master's
 app-agnostic storage/version/scan design was sufficient.
+
+---
+
+## Phase 3 — implementation reconciliations
+
+### D-7 — Proxied bytes are the default upload/serve path; presigned is an opt-in optimization
+
+- **Decision:** bin-api ships **both** an in-service proxied path
+  (`POST /assets/:id/upload` multipart in, `GET /assets/:id/raw` stream out) and
+  the presigned path (`POST /assets/:id/versions` → presigned PUT,
+  `GET /assets/:id/download` → presigned GET). The **proxied path is the default**
+  the SPA uses; presigned is reserved for deployments that configure a
+  browser-reachable provider endpoint.
+- **Why:** The master §9.2 leaned on presigned-to-browser ("bytes skip the API").
+  That requires the storage provider to be reachable from the browser. The
+  bundled local MinIO sits on the internal docker network as
+  `S3_ENDPOINT=http://minio:9000` with **no host/public mapping**, and SigV4
+  signs the host, so a presigned URL cannot simply be host-swapped. The as-built
+  suite already solved this for every other attachment surface by proxying bytes
+  through the service (`apps/api` `POST /upload` + `GET /files/*` streaming from
+  MinIO server-side) — see AB-2/AB-6. Bin matches that precedent so it works on
+  the bare stack and in any deployment without exposing the object store.
+- **Discovered by:** a live smoke test — the presigned PUT to `minio:9000`
+  returned `000` (host unreachable), which would have surfaced only in the
+  browser otherwise. "Check and test, don't assume."
+- **Future:** add an optional `S3_PUBLIC_ENDPOINT` (browser-reachable) used only
+  for presign host generation, plus an nginx/public mapping, to re-enable the
+  bytes-skip-the-API optimization for large media. Tracked as a follow-up; not
+  required for v1 correctness.

@@ -667,6 +667,17 @@ binding since rclone is refused there), bin-api falls back to a proxied multipar
 upload. Reads are symmetric: `presignGet` for a time-limited URL, proxied stream
 only as a fallback.
 
+**Implementation reality (D-7).** Presigned-to-browser only works when the
+provider endpoint is reachable *from the browser*. The bundled local MinIO is on
+the internal docker network (`S3_ENDPOINT=http://minio:9000`) with no public
+mapping, and SigV4 signs the host, so a presigned URL cannot be host-swapped at
+serve time. The as-built suite has always proxied bytes through the service for
+this reason (`apps/api` `POST /upload` + `GET /files/*`). bin-api therefore ships
+the proxied path as the **default** the SPA uses — `POST /assets/:id/upload`
+(multipart in, finalize in one call) and `GET /assets/:id/raw` (gated stream
+out) — and keeps the presigned routes above for deployments that configure a
+browser-reachable provider endpoint (`S3_PUBLIC_ENDPOINT`, a tracked follow-up).
+
 ### 9.3 Upload limits and virus scanning (AB-3)
 
 Bin centralizes the upload safety rules the suite already applies (core design doc
