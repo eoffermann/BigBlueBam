@@ -33,6 +33,12 @@ const appendSchema = z.object({
   rows: z.array(z.record(z.unknown())).min(1),
 });
 
+const treePatchSchema = z.object({
+  patches: z
+    .array(z.object({ path: z.array(z.union([z.string(), z.number()])).min(1), value: z.unknown() }))
+    .min(1),
+});
+
 const commentSchema = z.object({
   shape: z.enum(['record', 'tree']),
   anchor: z.unknown(),
@@ -115,6 +121,28 @@ export default async function dataRoutes(fastify: FastifyInstance) {
           body.rows,
         );
         return reply.status(201).send({ data: result });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
+  // PATCH /data/:assetId/tree — set values at paths in a tree-shaped asset
+  // (commits a new version). Backs inline editing of the JSON/YAML tree + its
+  // embedded grids.
+  fastify.patch<{ Params: { assetId: string } }>(
+    '/data/:assetId/tree',
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bin.data_tree.update')] },
+    async (request, reply) => {
+      const body = treePatchSchema.parse(request.body);
+      try {
+        const result = await dataService.patchTree(
+          request.params.assetId,
+          request.user!.org_id,
+          request.user!.id,
+          body.patches,
+        );
+        return reply.send({ data: result });
       } catch (err) {
         return sendError(reply, request, err);
       }

@@ -1,8 +1,8 @@
 {
   "counts": {
-    "total": 1342,
-    "mcp_tools_scanned": 731,
-    "rest_routes_scanned": 859,
+    "total": 1343,
+    "mcp_tools_scanned": 745,
+    "rest_routes_scanned": 860,
     "read_permissions": 524,
     "destructive_permissions": 126
   },
@@ -13324,6 +13324,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bin_asset_archive",
+          "file": "bin-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /assets/:id/archive",
           "file": "assets.routes.ts"
@@ -13340,6 +13345,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_asset_create",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /assets",
@@ -13358,6 +13368,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bin_asset_get",
+          "file": "bin-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /assets/:id",
           "file": "assets.routes.ts"
@@ -13374,6 +13389,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_asset_list",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /assets",
@@ -13392,6 +13412,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bin_data_comment_resolve",
+          "file": "bin-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /data/:assetId/comments/:commentId/resolve",
           "file": "data.routes.ts"
@@ -13408,6 +13433,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_data_comment_create",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /data/:assetId/comments",
@@ -13426,6 +13456,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bin_data_comment_list",
+          "file": "bin-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /data/:assetId/comments",
           "file": "data.routes.ts"
@@ -13442,6 +13477,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_data_append_rows",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /data/:assetId/rows",
@@ -13460,6 +13500,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bin_data_patch",
+          "file": "bin-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PATCH /data/:assetId/rows",
           "file": "data.routes.ts"
@@ -13477,8 +13522,30 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bin_data_open_session",
+          "file": "bin-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /data/:assetId/session",
+          "file": "data.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data_tree.update",
+      "app": "bin",
+      "resource": "data_tree",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PATCH /data/:assetId/tree",
           "file": "data.routes.ts"
         }
       ]
@@ -13493,6 +13560,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_data_read",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /data/:assetId",
@@ -13510,6 +13582,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_folder_create",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /folders",
@@ -13562,6 +13639,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bin_folder_list",
+          "file": "bin-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /folders",
           "file": "folders.routes.ts"
@@ -13612,6 +13694,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_version_list",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /versions/:id",

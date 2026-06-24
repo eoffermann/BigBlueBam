@@ -212,6 +212,76 @@ export async function appendRows(
 }
 
 // ---------------------------------------------------------------------------
+// Tree edits (path-based set on tree-shaped assets)
+// ---------------------------------------------------------------------------
+
+export interface TreePatch {
+  /** Path to the value, e.g. ["passengers", 2, "vip"] or ["charter", "operator"]. */
+  path: (string | number)[];
+  /** New value. Strings are coerced to the existing leaf's type (number/boolean). */
+  value?: unknown;
+}
+
+/** Coerce an incoming (usually string) value to the type of the value it replaces,
+ *  so editing a number cell keeps it a number and a boolean stays a boolean. */
+function coerceToExisting(existing: unknown, incoming: unknown): unknown {
+  if (typeof incoming !== 'string') return incoming;
+  if (typeof existing === 'number') {
+    const n = Number(incoming);
+    return incoming.trim() !== '' && !Number.isNaN(n) ? n : incoming;
+  }
+  if (typeof existing === 'boolean') {
+    if (incoming === 'true') return true;
+    if (incoming === 'false') return false;
+    return incoming;
+  }
+  return incoming;
+}
+
+function setAtPath(root: unknown, path: (string | number)[], value: unknown): void {
+  if (path.length === 0) throw new ConflictError('Empty path');
+  let cur: unknown = root;
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const key = path[i]!;
+    if (cur == null || typeof cur !== 'object') {
+      throw new ConflictError(`Path segment "${String(key)}" does not exist`);
+    }
+    cur = (cur as Record<string | number, unknown>)[key as never];
+  }
+  if (cur == null || typeof cur !== 'object') {
+    throw new ConflictError('Path does not resolve to a container');
+  }
+  const last = path[path.length - 1]!;
+  const container = cur as Record<string | number, unknown>;
+  const existing = container[last as never];
+  if (existing === undefined && !(last in container)) {
+    throw new ConflictError(`Path key "${String(last)}" does not exist`);
+  }
+  (container as Record<string | number, unknown>)[last as never] = coerceToExisting(existing, value);
+}
+
+/** Apply value-set patches to a tree-shaped asset and commit a new version. */
+export async function patchTree(
+  assetId: string,
+  orgId: string,
+  userId: string,
+  patches: TreePatch[],
+) {
+  const asset = (await assetService.getAsset(assetId, orgId)) as AssetRow;
+  const parsed = await loadParsed(asset);
+  if (parsed.shape !== 'tree') {
+    throw new ConflictError('patchTree is only valid for tree-shaped assets');
+  }
+  // Clone so a failed patch midway does not leave the in-memory tree half-edited.
+  const tree = structuredClone(parsed.data);
+  for (const p of patches) {
+    setAtPath(tree, p.path, p.value);
+  }
+  const result = await commitVersion(assetId, orgId, userId, tree, parsed.dialect, asset);
+  return { version: result.version, asset: result.asset };
+}
+
+// ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
 

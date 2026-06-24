@@ -202,6 +202,24 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['proposal_list', { id: 'platform.proposal.list', verb: 'list' }],
   ['proposal_decide', { id: 'platform.proposal.decide', verb: 'decide' }],
   ['task_upsert_by_external_id', { id: 'bam.task.upsert_by_external_id', verb: 'upsert_by_external_id' }],
+
+  // Bin tools are resource-first (bin_asset_create, bin_data_read) rather than
+  // the verb-first inference convention, so map each to the same permission id
+  // its REST endpoint already uses (the tool and endpoint share the permission).
+  ['bin_asset_list', { id: 'bin.asset.list', verb: 'list' }],
+  ['bin_asset_get', { id: 'bin.asset.get', verb: 'get' }],
+  ['bin_asset_create', { id: 'bin.asset.create', verb: 'create' }],
+  ['bin_asset_archive', { id: 'bin.asset.archive', verb: 'archive' }],
+  ['bin_version_list', { id: 'bin.version.get', verb: 'get' }],
+  ['bin_folder_list', { id: 'bin.folder.list', verb: 'list' }],
+  ['bin_folder_create', { id: 'bin.folder.create', verb: 'create' }],
+  ['bin_data_read', { id: 'bin.data.get', verb: 'get' }],
+  ['bin_data_open_session', { id: 'bin.data_session.create', verb: 'create' }],
+  ['bin_data_append_rows', { id: 'bin.data_row.create', verb: 'create' }],
+  ['bin_data_patch', { id: 'bin.data_row.update', verb: 'update' }],
+  ['bin_data_comment_list', { id: 'bin.data_comment.get', verb: 'get' }],
+  ['bin_data_comment_create', { id: 'bin.data_comment.create', verb: 'create' }],
+  ['bin_data_comment_resolve', { id: 'bin.data_comment_resolve.create', verb: 'create' }],
 ]);
 
 // ── Inference helpers ──────────────────────────────────────────────────
