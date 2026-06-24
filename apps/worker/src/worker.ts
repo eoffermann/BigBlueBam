@@ -161,6 +161,12 @@ import {
   processBookCalendarSyncJob,
   type BookCalendarSyncJobData,
 } from './jobs/book-calendar-sync.job.js';
+// Bin AV-scan sweep — the suite's first virus scanner. Flips pending bin_assets
+// to clean/infected/skipped so the §9.3 serving gate is autonomous.
+import {
+  processBinAvScanJob,
+  type BinAvScanJobData,
+} from './jobs/bin-av-scan.job.js';
 
 const env = loadEnv();
 
@@ -1628,6 +1634,40 @@ bookCalendarSyncQueue
   )
   .catch((err) => logger.error({ err }, 'Failed to register book-calendar-sync scheduler'));
 
+// Bin AV-scan sweep (every minute). It is the only scan trigger today, so it
+// runs frequently to keep upload->servable latency low. Claims pending
+// bin_assets, scans the active version's bytes, and writes the verdict back so
+// serving is gated until clean/skipped (Bin master §9.3).
+const binAvScanWorker = new Worker<BinAvScanJobData>(
+  'bin-av-scan',
+  async (job: Job<BinAvScanJobData>) => {
+    await processBinAvScanJob(job, env, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+binAvScanWorker.on('completed', (job) => {
+  logger.debug({ jobId: job.id, queue: 'bin-av-scan' }, 'Job completed');
+});
+binAvScanWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bin-av-scan', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'bin-av-scan',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const binAvScanQueue = new Queue('bin-av-scan', { connection: redis });
+binAvScanQueue
+  .upsertJobScheduler(
+    'bin-av-scan-tick',
+    { pattern: '* * * * *' }, // every minute — sole scan trigger, keep latency low
+    { name: 'sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bin-av-scan scheduler'));
+
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(
   'analytics',
@@ -1778,6 +1818,8 @@ const workers = [
   bookCalendarSyncWorker,
   // Banter Feed fan-in
   banterFeedFaninWorker,
+  // Bin AV-scan sweep
+  binAvScanWorker,
   analyticsWorker,
 ];
 
@@ -1840,6 +1882,8 @@ logger.info(
       'book-calendar-sync',
       // Banter Feed fan-in
       'banter-feed-fanin',
+      // Bin AV-scan sweep
+      'bin-av-scan',
       'analytics',
       // LiveKit advertised-address drift watchdog (hourly)
       'livekit-ip-drift',

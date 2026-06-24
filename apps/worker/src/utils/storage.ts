@@ -42,6 +42,24 @@ export async function statObject(key: string): Promise<StoredObjectStat | null> 
 }
 
 /**
+ * Read an object fully into a Buffer. Used by the Bin AV-scan job to inspect
+ * uploaded bytes (heuristic signature scan, or stream to clamd). Returns null
+ * if the object is missing or unreadable so the caller can mark scan `error`.
+ */
+export async function getObjectBuffer(key: string): Promise<Buffer | null> {
+  try {
+    const stream = await minioClient.getObject(S3_BUCKET, key);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk as Buffer);
+    }
+    return Buffer.concat(chunks);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Presigned GET URL for an object (24h default). Used to surface a directly
  * downloadable link in processed_files alongside the app-served proxy path.
  */

@@ -16,6 +16,15 @@ const envSchema = z.object({
   // against the Bam api on this URL. Default mirrors docker-compose.
   API_INTERNAL_URL: z.string().url().default('http://api:4000'),
   INTERNAL_SERVICE_SECRET: z.string().default(''),
+
+  // Bin AV-scan (Bin master §9.3). 'eicar' (default) does a dependency-free
+  // signature scan — it flags the standard EICAR test string as infected and
+  // otherwise marks the object clean, so the serving pipeline is autonomous on
+  // a bare stack. 'clamav' streams bytes to a clamd at CLAMAV_HOST:CLAMAV_PORT
+  // (INSTREAM). 'off' marks every object 'skipped' (no inspection performed).
+  BIN_AV_SCAN_MODE: z.enum(['eicar', 'clamav', 'off']).default('eicar'),
+  CLAMAV_HOST: z.string().optional(),
+  CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
 });
 
 export type Env = z.infer<typeof envSchema>;
