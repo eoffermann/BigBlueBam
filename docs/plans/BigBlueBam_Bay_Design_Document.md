@@ -11,6 +11,17 @@
 
 > Working name is **Bay** (editing / screening bay). Evocative alternative: **Backlot**. Name is a one-line find-and-replace if you'd rather go the other way. See Open Decisions (§19).
 
+> **Reconciled with Bin (2026-06-24).** Bay is built *on top of* Bin's storage
+> stack, not beside it. Canonical bytes (originals and derived proxies) flow
+> through `@bigbluebam/storage` against the org's active media binding; a Bay
+> upload's original is a `bin.asset` version referenced via `entity_links`; Bay
+> inherits Bin's AV scan, presigned serving, provider config, backups, and
+> migration, and owns only the review layer (versions' media metadata,
+> annotations, decisions, reviews, proxies, guest links). See
+> `Bin_Master_Design_Document.md` §12 and the BAY-1…BAY-4 decisions. `bay-api` is
+> port **4017**. This supersedes the storage/port assumptions written below where
+> they conflict.
+
 ---
 
 ## 1. Overview
@@ -33,7 +44,7 @@ Bay overlaps with two planned slots. The boundary the rest of this document assu
 | **Badge** (proofing, planned) | *Generic* sign-off - approve a PDF, a contract, a static deliverable. No media player. | Time-based / spatial media review |
 | **Bay** (this doc) | Version stacks, frame/timecode/region/viewpoint annotation, review sessions, per-reviewer decisions on time-based and visual media | Long-term asset cataloging (defers to Bin), generic doc approval (defers to Badge) |
 
-**Bin boundary.** Until Bin ships, Bay owns its own MinIO storage for versions under review. When Bin lands, a Bay version can be *sourced from* or *promoted to* a Bin asset, federated through the existing `attachment_list` / `attachment_get` tools and `entity_links`. Bay should not reimplement DAM cataloging.
+**Bin boundary.** Bin ships first, so Bay federates from day one (BAY-4). Bay does not own storage: it writes all bytes through `@bigbluebam/storage` against the org's active media binding (BAY-3), registers each upload's canonical original as a `bin.asset` version, and links its `bay_asset_versions` rows to that asset via `entity_links` (federated through `attachment_list` / `attachment_get`). Bay layers the review model (media metadata, annotations, decisions, reviews, proxies, guest links) on top; it does not reimplement DAM cataloging, provider config, scanning, backups, or migration — those are Bin's.
 
 **Badge boundary.** Generic non-media sign-off stays in Badge. Where an *agent* proposes a final approval that a human other than the asker must ratify, that proposal routes through the unified `/b3/approvals` surface and the `proposal_*` tools (per agent-conventions §6), not a Bay-private channel. Bay's per-reviewer `bay_review_decisions` remain the source of truth for media review state; the proposal surface is only the human-ratification path for agent-authored approvals.
 
@@ -61,24 +72,27 @@ Bay overlaps with two planned slots. The boundary the rest of this document assu
 ┌──────────────────▼───────────────────────────────▼─────────┐
 │              Single nginx container (port 80/443)           │
 │   /b3/             → BigBlueBam SPA                          │
-│   /bay/api/        → bay-api  :4005   (proposed, confirm)    │
+│   /bay/api/        → bay-api  :4017                          │
 │   /bay/ws          → bay-api  WebSocket                      │
 │   /r/{token}       → guest review SPA (public bundle)        │
 │   /b3/api/         → BBB API  :4000                          │
+│   /bin/api/        → bin-api  :4016  (storage + DAM)         │
 │   /mcp/            → MCP server :3001                        │
-│   /files/          → MinIO :9000  (presigned, time-limited)  │
+│   /files/          → presigned reads via api:4000 (binding)  │
 └──────────┬──────────────────────────────────────┬───────────┘
            │ REST + WS                              │
 ┌──────────▼──────────────┐          ┌──────────────▼──────────┐
 │  Docker: bay-api         │          │  Docker: worker (shared) │
-│  Fastify v5 :4005        │  enqueue │  BullMQ                  │
+│  Fastify v5 :4017        │  enqueue │  BullMQ                  │
 │  REST + WS (annotations) │ ───────► │  queues: bay-transcode,  │
 │  Shares DB with BBB API  │          │  bay-notify, bay-cleanup │
+│  Bytes via @bbb/storage  │          │  Bytes via @bbb/storage  │
 └──────────┬───────────────┘          └──────────┬───────────────┘
            │                                      │
 ┌──────────▼────────┬─────────────────┬───────────▼─────────────┐
-│ PostgreSQL :5432  │  Redis :6379    │  MinIO :9000            │
-│ (shared)          │  (pubsub/cache) │  bucket: bay/ prefix    │
+│ PostgreSQL :5432  │  Redis :6379    │  Storage (org binding)  │
+│ (shared)          │  (pubsub/cache) │  via @bigbluebam/storage│
+│                   │                 │  key: bay/<asset>/<ver> │
 └───────────────────┴─────────────────┴─────────────────────────┘
 ```
 
@@ -92,17 +106,24 @@ The authenticated review UI is a **section of the existing `/b3/` SPA** (a "Bay"
 
 | Deployment | Bay UI | bay-api | Notes |
 |---|---|---|---|
-| **Docker Compose** | bundled into /b3/ SPA; guest bundle at /r/ | Fastify :4005 (internal) | Default. Added to docker-compose.yml |
-| **Dev mode** | Vite (existing /b3/ dev server) | tsx watch :4005 | docker-compose.dev.yml override |
+| **Docker Compose** | bundled into /b3/ SPA; guest bundle at /r/ | Fastify :4017 (internal) | Default. Added to docker-compose.yml |
+| **Dev mode** | Vite (existing /b3/ dev server) | tsx watch :4017 | docker-compose.dev.yml override |
 | **Standalone** | static host | any Node host | Point `BAY_API_URL` + `DATABASE_URL` at the platform DB |
 
-> **Port :4005 is provisional.** Confirm against the live compose file before wiring nginx. Blueprint's API port is still open and may claim :4004; assign Bay the next free port and update this doc.
+> **Port :4017** (BAY-1). The as-built registry is full 4000–4015; Bin takes 4016, Bay the next free value, 4017.
 
 ---
 
 ## 5. Data Model
 
 All tables use the `bay_` prefix per suite convention. UUID PKs, `gen_random_uuid()`, `created_at` / `updated_at` TIMESTAMPTZ, `org_id` for tenancy.
+
+> **Storage linkage (BAY-3).** `bay_asset_versions` is the review-layer record; the
+> canonical original bytes are a `bin.asset` version, referenced via `entity_links`
+> (add a nullable `bin_asset_id` / `bin_version_id` pointer or resolve through the
+> link table). `storage_key` columns below are keys *within the org's active media
+> binding* resolved by `@bigbluebam/storage`, not raw MinIO paths. Bay reads/writes
+> bytes only through the driver.
 
 ### 5.1 `bay_assets`
 
@@ -303,13 +324,16 @@ Frame accuracy depends on capturing exact `fps_num`/`fps_den` from ffprobe (rati
 
 > **GPU note.** Video transcode (NVENC) and 3D thumbnail render are natural **Pool B** scale-to-zero GPU workloads (the same bursty profile as image gen and async TTS). The `bay-transcode` queue can dispatch to Modal/RunPod for heavy jobs and fall back to CPU ffmpeg for light ones. Decision flagged in §19.
 
-### 6.3 Storage layout (MinIO)
+### 6.3 Storage layout (via `@bigbluebam/storage`)
 
-Single bucket, `bay/` prefix:
+Bay writes through the shared storage driver (BAY-3) against the org's active
+**media** binding — never a private MinIO client — so originals and proxies land
+on whatever provider the org configured and inherit Bin's backups and migration.
+Object keys under a `bay/` keyspace within the binding:
 
 ```
-bay/{asset_id}/{version_id}/original.{ext}
-bay/{asset_id}/{version_id}/proxy_h264.mp4
+bay/{asset_id}/{version_id}/original.{ext}      ← also registered as a bin.asset version
+bay/{asset_id}/{version_id}/proxy_h264.mp4      ← trusted derived (scan_status=clean, BAY-2)
 bay/{asset_id}/{version_id}/poster.jpg
 bay/{asset_id}/{version_id}/filmstrip.jpg
 bay/{asset_id}/{version_id}/waveform.json
@@ -317,7 +341,13 @@ bay/{asset_id}/{version_id}/model.glb
 bay/{asset_id}/{version_id}/model.usdz
 ```
 
-All reads via short-TTL presigned URLs through `/files/`. Watermarked variants for guest surfaces are generated on first guest access and cached under a `wm/` subkey keyed by share-link id.
+The original is registered as a `bin.asset` version (so it is cataloged, scanned,
+versioned, and backed up by Bin) and linked from `bay_asset_versions` via
+`entity_links`. Derived proxies are trusted worker output and skip AV re-scan
+(Bin master §9.3). All reads via short-TTL presigned URLs from the driver
+(`presignGet`), exposed through `/files/`. Watermarked guest variants are
+generated on first guest access and cached under a `wm/` subkey keyed by
+share-link id.
 
 ### 6.4 Other queues
 
@@ -627,9 +657,9 @@ Estimates are padded so completions land early. Solo-dev days.
 
 1. **Badge overlap.** Confirm Bay is a distinct product (media review) and Badge stays generic sign-off, per §2 - or fold one into the other.
 2. **Name.** Bay vs Backlot vs other single-word B. (Bay assumed throughout; one find-and-replace.)
-3. **Port.** :4005 is provisional. Confirm against the live compose file; Blueprint may claim :4004.
+3. ~~**Port.**~~ **Resolved (BAY-1):** :4017 (registry full 4000–4015; Bin 4016, Bay 4017).
 4. **Service vs section.** Confirmed assumption: `bay-api` is its own service, UI is a /b3/ section, guests get a /r/ bundle. Reverse if you'd rather keep it on the core API.
 5. **Transcode on Pool B GPU vs CPU worker.** NVENC + 3D render map cleanly onto bursty scale-to-zero GPU. Decide whether `bay-transcode` dispatches to Modal/RunPod or stays CPU ffmpeg in the shared worker for now.
-6. **Bin boundary timing.** Bay owns storage until Bin ships, then federates. Confirm that's the intended sequencing.
+6. ~~**Bin boundary timing.**~~ **Resolved (BAY-3/BAY-4):** Bin ships first; Bay federates from day one and stores all bytes through `@bigbluebam/storage`. Bay never owns a private bucket.
 7. **Guest preflight isolation.** Confirm guests stay off the user-visibility preflight (token-scoped only), per §15.2.
 8. **MCP tool count reconciliation.** Architecture doc says 86 server tools, README badge says 340 - reconcile the canonical number when Bay's ~20 land.

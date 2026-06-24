@@ -180,4 +180,58 @@ the recommended option for each and record them; revisit any individually:
 
 ---
 
-_(Phase 2 / Bay decisions appended below as that work proceeds.)_
+## Phase 2 — reconciling Bay against the final Bin
+
+**Finding:** Bay works as a review layer *on top of* Bin's primitives with **no
+substantive Bin rework**. Bin's storage driver, immutable-version model, AV scan,
+presigned serving, and entity-links are exactly the building blocks Bay needs; Bin
+kept them app-agnostic on purpose (§12). The reconciliation is therefore mostly
+updating the Bay doc to consume Bin, plus four small decisions (one of which — the
+trusted-derived-artifact allowance — is a tiny Bin master addition).
+
+### BAY-1 — Bay's API port is 4017
+
+- **Decision:** `bay-api` internal port **4017**.
+- **Why:** As-built the registry is full 4000–4015; Bin takes 4016, so Bay is the
+  next free value. The Bay doc's provisional ":4005 / maybe :4004" predates the
+  current registry and is stale.
+
+### BAY-2 — Worker-derived artifacts are trusted; they bypass user-upload AV scan
+
+- **Decision:** Bin's scan gate applies to user-supplied uploads. Trusted-worker
+  derivatives of an already-scanned source (Bay transcode proxies, thumbnails,
+  filmstrips, waveforms) are written `scan_status='clean'` (or `'skipped'`) and
+  not re-queued. Added to Bin master §9.3.
+- **Why:** Without this Bay's own generated proxies would be withheld by the
+  `clean`-gated presigned read, and we'd be scanning bytes the platform itself
+  produced. The original upload is still scanned; derivatives inherit the verdict.
+- **Alternative rejected:** scanning every derived object — wasteful and would
+  stall Bay playback on the platform's own output.
+
+### BAY-3 — Bay stores all bytes through `@bigbluebam/storage`, not a private bucket
+
+- **Decision:** Bay puts/gets originals and proxies through the shared storage
+  driver against the org's active **media** binding, under a
+  `bay/<asset>/<version>/role.<ext>` keyspace. A Bay upload's canonical original is
+  registered as a `bin.asset` version and linked from `bay_asset_versions` via
+  `entity_links`; Bay retains its media-specific metadata (fps_num/den,
+  color_space, loudness_lufs, proxy roles) and its review tables.
+- **Why:** This is the whole point of "Bay relies on Bin's tech stack" — one
+  storage abstraction, one provider/binding/migration/backup story, no parallel
+  MinIO client. Bin requires no Bay-specific code; Bay is a driver consumer like
+  the federated attachment substrate.
+- **Alternative rejected:** Bay keeping its own `bay/`-prefixed MinIO storage (the
+  original Bay doc's model) — that reimplements DAM storage and bypasses the org's
+  provider config, backups, and migration.
+
+### BAY-4 — Bay federates from day one (Bin ships first)
+
+- **Decision:** Remove the Bay doc's "Bay owns its own storage until Bin ships,
+  then federates" sequencing. The build order is Bin then Bay, so Bay federates
+  immediately.
+- **Why:** Matches the actual implementation order in this effort.
+
+**Net Bin rework:** one paragraph added to Bin master §9.3 (trusted derived
+artifacts) and the §12 "Consumed by Bay" section expanded with BAY-1…4. No schema
+or interface change to Bin was required — confirmation that the master's
+app-agnostic storage/version/scan design was sufficient.

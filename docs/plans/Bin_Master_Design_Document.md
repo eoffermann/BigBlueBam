@@ -695,6 +695,15 @@ value via an additive CHECK change). Flow:
 Backups copy assets regardless of scan status, but the manifest records the
 status, so a restore never silently promotes a quarantined object to readable.
 
+**Trusted worker-derived artifacts (BAY-2).** The scan gate applies to
+*user-supplied* uploads. Artifacts the platform's own trusted worker derives from
+an already-scanned source — e.g. Bay's transcode proxies, thumbnails, filmstrips,
+waveforms generated from a scanned original — are written with `scan_status =
+'clean'` (or `'skipped'` where scanning is disabled) and are not re-queued for AV.
+The user-uploaded original is always scanned; its derivatives inherit that
+verdict. This keeps Bay's pipeline from withholding its own generated proxies and
+avoids scanning bytes the platform itself produced.
+
 ### 9.4 Entity-type registration (required gate)
 
 Per agent conventions, every entity an agent can cite or surface is registered in
@@ -981,11 +990,26 @@ as app-agnostic building blocks, not bin-internal details:
    shipping a parallel scanner.
 4. **Presigned serving** via `/files/` and the binding resolver.
 
-The Bay reconciliation (Phase 2, separate pass) verifies this composition holds
-and, if Bay needs something Bin does not yet expose, Bin is reworked to provide it
-(decisions logged as **BAY-N**). Bin's design here deliberately keeps the storage,
-version, and scan layers free of any Bin-app-specific assumptions so Bay can sit
-on them.
+The Bay reconciliation (Phase 2) verified this composition holds without
+substantive Bin rework. The outcomes (decisions log **BAY-1…BAY-4**):
+
+- **BAY-1.** Bay's API port is **4017** (the next free after Bin's 4016; the Bay
+  doc's provisional :4004/:4005 are stale).
+- **BAY-2.** Worker-derived proxies are trusted artifacts that bypass user-upload
+  AV scanning (§9.3).
+- **BAY-3.** Bay stores all bytes — originals and derived proxies — through
+  `@bigbluebam/storage` against the org's active **media** binding, under a
+  `bay/<asset>/<version>/…` keyspace, rather than a private MinIO bucket prefix.
+  A Bay upload's canonical original is registered as a `bin.asset` version and
+  referenced from `bay_asset_versions` via `entity_links`; Bay keeps its
+  media-specific metadata (fps, color space, loudness, proxy roles) in its own
+  tables. Bin needs no Bay-specific code — Bay is a driver consumer.
+- **BAY-4.** Because Bin ships before Bay in the build order, Bay federates from
+  day one; the Bay doc's "Bay owns its own storage until Bin ships" fallback is
+  removed.
+
+Bin's storage, version, and scan layers stay free of Bin-app-specific assumptions
+so Bay (and any future media app) sits on them directly.
 
 ---
 
