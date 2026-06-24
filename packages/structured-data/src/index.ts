@@ -7,6 +7,8 @@ export * from './types.js';
 export { decode, encode, detectJsonIndent } from './codecs/index.js';
 export { detectShape, type ShapeResult } from './shape.js';
 export { inferSchema, inferredToZod } from './inference.js';
+export { buildYDoc, serializeYDoc, RID } from './crdt.js';
+export { decodeYaml, encodeYaml, yamlHasAnchors, type YamlDecodeResult } from './codecs/yaml.js';
 
 import { decode } from './codecs/index.js';
 import { detectShape } from './shape.js';

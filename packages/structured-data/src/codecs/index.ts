@@ -2,10 +2,12 @@ import type { DecodeResult, Dialect, Format } from '../types.js';
 import { decodeJson, encodeJson } from './json.js';
 import { decodeJsonl, encodeJsonl } from './jsonl.js';
 import { decodeCsv, encodeCsv } from './csv.js';
+import { decodeYaml, encodeYaml } from './yaml.js';
 
 export * from './json.js';
 export * from './jsonl.js';
 export * from './csv.js';
+export * from './yaml.js';
 
 /** Decode bytes into a plain JS value + a replayable dialect, by format. */
 export function decode(text: string, format: Format): DecodeResult {
@@ -19,7 +21,7 @@ export function decode(text: string, format: Format): DecodeResult {
     case 'tsv':
       return decodeCsv(text, 'tsv');
     case 'yaml':
-      throw new Error('yaml codec not yet implemented (next increment)');
+      return decodeYaml(text);
     default: {
       const _exhaustive: never = format;
       throw new Error(`unknown format: ${_exhaustive as string}`);
@@ -38,7 +40,7 @@ export function encode(data: unknown, dialect: Dialect): string {
     case 'tsv':
       return encodeCsv(data as Record<string, unknown>[], dialect);
     case 'yaml':
-      throw new Error('yaml codec not yet implemented (next increment)');
+      return encodeYaml(data);
     default: {
       const _exhaustive: never = dialect;
       throw new Error(`unknown dialect: ${JSON.stringify(_exhaustive)}`);
