@@ -18,6 +18,7 @@
     "@bigbluebam/service-health": "workspace:*",
     "@bigbluebam/shared": "workspace:*",
     "@bigbluebam/storage": "workspace:*",
+    "@bigbluebam/structured-data": "workspace:*",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",

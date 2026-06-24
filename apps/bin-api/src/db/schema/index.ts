@@ -16,3 +16,4 @@ export {
 export { binFolders } from './bin-folders.js';
 export { binAssets } from './bin-assets.js';
 export { binAssetVersions } from './bin-asset-versions.js';
+export { binDataSessions, binDataSchemas, binDataComments } from './bin-data-editor.js';

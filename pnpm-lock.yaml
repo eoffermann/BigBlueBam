@@ -1126,6 +1126,9 @@ importers:
       '@bigbluebam/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@bigbluebam/structured-data':
+        specifier: workspace:*
+        version: link:../../packages/structured-data
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2

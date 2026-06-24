@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1333,
+    "total": 1342,
     "mcp_tools_scanned": 731,
-    "rest_routes_scanned": 850,
-    "read_permissions": 521,
+    "rest_routes_scanned": 859,
+    "read_permissions": 524,
     "destructive_permissions": 126
   },
   "permissions": [
@@ -13246,6 +13246,40 @@
       ]
     },
     {
+      "id": "bin.asset_raw.get",
+      "app": "bin",
+      "resource": "asset_raw",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets/:id/raw",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset_upload.create",
+      "app": "bin",
+      "resource": "asset_upload",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /assets/:id/upload",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bin.asset_version.create",
       "app": "bin",
       "resource": "asset_version",
@@ -13344,6 +13378,125 @@
           "source": "rest",
           "ref": "GET /assets",
           "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data_comment_resolve.create",
+      "app": "bin",
+      "resource": "data_comment_resolve",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /data/:assetId/comments/:commentId/resolve",
+          "file": "data.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data_comment.create",
+      "app": "bin",
+      "resource": "data_comment",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /data/:assetId/comments",
+          "file": "data.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data_comment.get",
+      "app": "bin",
+      "resource": "data_comment",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /data/:assetId/comments",
+          "file": "data.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data_row.create",
+      "app": "bin",
+      "resource": "data_row",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /data/:assetId/rows",
+          "file": "data.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data_row.update",
+      "app": "bin",
+      "resource": "data_row",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PATCH /data/:assetId/rows",
+          "file": "data.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data_session.create",
+      "app": "bin",
+      "resource": "data_session",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /data/:assetId/session",
+          "file": "data.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.data.get",
+      "app": "bin",
+      "resource": "data",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /data/:assetId",
+          "file": "data.routes.ts"
         }
       ]
     },

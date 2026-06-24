@@ -29,6 +29,17 @@ export function getMediaDriver(): StorageDriver {
   return driver;
 }
 
+/** Read a stored object fully into a Buffer (structured-editor reads/commits).
+ *  Streams from the active driver and concatenates. */
+export async function readObject(objectKey: string): Promise<Buffer> {
+  const { stream } = await getMediaDriver().getStream(objectKey);
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream as AsyncIterable<Buffer>) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
 /** Build the canonical object key for a Bin asset version. */
 export function buildBinObjectKey(
   orgId: string,

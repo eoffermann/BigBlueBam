@@ -93,9 +93,11 @@ await fastify.register(healthCheckPlugin, {
 // Routes (authenticated)
 import assetRoutes from './routes/assets.routes.js';
 import folderRoutes from './routes/folders.routes.js';
+import dataRoutes from './routes/data.routes.js';
 
 await fastify.register(assetRoutes, { prefix: '/v1' });
 await fastify.register(folderRoutes, { prefix: '/v1' });
+await fastify.register(dataRoutes, { prefix: '/v1' });
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
