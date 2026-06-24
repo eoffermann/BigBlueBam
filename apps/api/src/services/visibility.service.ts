@@ -27,6 +27,8 @@ import {
   billInvoicesStub,
   blankFormsStub,
   boltAutomationsStub,
+  binAssetsStub,
+  binFoldersStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -75,7 +77,9 @@ export type VisibilityEntityType =
   | 'book.event'
   | 'bill.invoice'
   | 'blank.form'
-  | 'bolt.rule';
+  | 'bolt.rule'
+  | 'bin.asset'
+  | 'bin.folder';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -99,6 +103,8 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bill.invoice',
   'blank.form',
   'bolt.rule',
+  'bin.asset',
+  'bin.folder',
 ] as const;
 
 export type PreflightReason =
@@ -112,6 +118,7 @@ export type PreflightReason =
   | 'beacon_project_not_member'
   | 'banter_not_channel_member'
   | 'board_private_no_collaborator'
+  | 'bin_private_not_owner'
   | 'unsupported_entity_type';
 
 export interface PreflightResult {
@@ -1107,6 +1114,114 @@ async function preflightBoltRule(
 }
 
 // ---------------------------------------------------------------------------
+// bin.asset
+// ---------------------------------------------------------------------------
+//
+// Mirrors Bin master §9.4:
+//  - org-scoped: a different org is not_found (do not leak existence).
+//  - visibility='private': owner (created_by) only — no org-admin bypass.
+//  - if project_id is set: project member, or org admin/owner.
+//  - otherwise (organization): any org member.
+
+async function preflightBinAsset(
+  asker: AskerContext,
+  assetId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: binAssetsStub.id,
+      org_id: binAssetsStub.org_id,
+      project_id: binAssetsStub.project_id,
+      created_by: binAssetsStub.created_by,
+      visibility: binAssetsStub.visibility,
+    })
+    .from(binAssetsStub)
+    .where(eq(binAssetsStub.id, assetId))
+    .limit(1);
+
+  const asset = rows[0];
+  if (!asset) return { allowed: false, reason: 'not_found' };
+  if (asset.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+
+  if (asset.visibility === 'private') {
+    if (asset.created_by === asker.id) {
+      return { allowed: true, reason: 'ok', entity_org_id: asset.org_id };
+    }
+    return {
+      allowed: false,
+      reason: 'bin_private_not_owner',
+      entity_org_id: asset.org_id,
+    };
+  }
+
+  if (asset.project_id) {
+    if (isOrgAdmin(asker.role)) {
+      return { allowed: true, reason: 'ok', entity_org_id: asset.org_id };
+    }
+    const member = await isProjectMember(asset.project_id, asker.id);
+    if (member) {
+      return { allowed: true, reason: 'ok', entity_org_id: asset.org_id };
+    }
+    return {
+      allowed: false,
+      reason: 'not_project_member',
+      entity_org_id: asset.org_id,
+    };
+  }
+
+  // visibility === 'organization' (or any non-private with no project).
+  return { allowed: true, reason: 'ok', entity_org_id: asset.org_id };
+}
+
+// ---------------------------------------------------------------------------
+// bin.folder
+// ---------------------------------------------------------------------------
+//
+// Folders have no per-folder visibility enum (Bin master §9.4: a folder
+// inherits the parent folder/project rule). Enforce org match + the same
+// project gate as an asset; org admin/owner override on project-scoped folders.
+
+async function preflightBinFolder(
+  asker: AskerContext,
+  folderId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: binFoldersStub.id,
+      org_id: binFoldersStub.org_id,
+      project_id: binFoldersStub.project_id,
+    })
+    .from(binFoldersStub)
+    .where(eq(binFoldersStub.id, folderId))
+    .limit(1);
+
+  const folder = rows[0];
+  if (!folder) return { allowed: false, reason: 'not_found' };
+  if (folder.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+
+  if (folder.project_id) {
+    if (isOrgAdmin(asker.role)) {
+      return { allowed: true, reason: 'ok', entity_org_id: folder.org_id };
+    }
+    const member = await isProjectMember(folder.project_id, asker.id);
+    if (member) {
+      return { allowed: true, reason: 'ok', entity_org_id: folder.org_id };
+    }
+    return {
+      allowed: false,
+      reason: 'not_project_member',
+      entity_org_id: folder.org_id,
+    };
+  }
+
+  return { allowed: true, reason: 'ok', entity_org_id: folder.org_id };
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -1176,6 +1291,10 @@ export async function preflightAccess(
       return preflightBlankForm(asker, entityId);
     case 'bolt.rule':
       return preflightBoltRule(asker, entityId);
+    case 'bin.asset':
+      return preflightBinAsset(asker, entityId);
+    case 'bin.folder':
+      return preflightBinFolder(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -1212,4 +1331,6 @@ export const __test__ = {
   preflightBillInvoice,
   preflightBlankForm,
   preflightBoltRule,
+  preflightBinAsset,
+  preflightBinFolder,
 };

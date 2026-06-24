@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1319,
+    "total": 1333,
     "mcp_tools_scanned": 731,
-    "rest_routes_scanned": 836,
-    "read_permissions": 514,
-    "destructive_permissions": 124
+    "rest_routes_scanned": 850,
+    "read_permissions": 521,
+    "destructive_permissions": 126
   },
   "permissions": [
     {
@@ -13225,6 +13225,244 @@
           "source": "mcp",
           "ref": "bill_update_settings",
           "file": "bill-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset_download.get",
+      "app": "bin",
+      "resource": "asset_download",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets/:id/download",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset_version.create",
+      "app": "bin",
+      "resource": "asset_version",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /assets/:id/versions",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset_version.get",
+      "app": "bin",
+      "resource": "asset_version",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets/:id/versions",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset.archive",
+      "app": "bin",
+      "resource": "asset",
+      "verb": "archive",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /assets/:id/archive",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset.create",
+      "app": "bin",
+      "resource": "asset",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /assets",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset.get",
+      "app": "bin",
+      "resource": "asset",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets/:id",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset.list",
+      "app": "bin",
+      "resource": "asset",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.folder.create",
+      "app": "bin",
+      "resource": "folder",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /folders",
+          "file": "folders.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.folder.delete",
+      "app": "bin",
+      "resource": "folder",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /folders/:id",
+          "file": "folders.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.folder.get",
+      "app": "bin",
+      "resource": "folder",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /folders/:id",
+          "file": "folders.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.folder.list",
+      "app": "bin",
+      "resource": "folder",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /folders",
+          "file": "folders.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.folder.update",
+      "app": "bin",
+      "resource": "folder",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PATCH /folders/:id",
+          "file": "folders.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.version_complete.create",
+      "app": "bin",
+      "resource": "version_complete",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /versions/:id/complete",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.version.get",
+      "app": "bin",
+      "resource": "version",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /versions/:id",
+          "file": "assets.routes.ts"
         }
       ]
     },

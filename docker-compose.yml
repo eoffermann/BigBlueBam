@@ -290,6 +290,8 @@ services:
         condition: service_healthy
       blank-api:
         condition: service_healthy
+      bin-api:
+        condition: service_healthy
       blueprint-api:
         condition: service_healthy
       site:
@@ -902,6 +904,64 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4013/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  # bin-api owns the storage backbone + DAM library (assets, folders, immutable
+  # versions, scan flow). In this DAM-core slice it uses the bootstrap `local`
+  # provider built from the S3_* vars; per-org provider bindings + backups +
+  # the structured-data editor are later slices. Bin master §3/§9/§15.
+  bin-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/bin-api/Dockerfile
+      target: production
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      - NODE_ENV=production
+      - PORT=4016
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      # Shared platform bucket; Bin objects are keyed under the `bin/` prefix.
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      - S3_BUCKET=${S3_BUCKET:-bigbluebam-uploads}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      # Envelope-encryption master key for provider secrets (Bin master §15).
+      # Defaulted so the DAM-core slice (which does not yet encrypt provider
+      # secrets) boots without forcing the var; set a real 32-byte key before
+      # the multi-provider slice ships. SESSION_SECRET is reused as a sane
+      # fallback so a configured stack still gets a strong value.
+      - BIN_SECRETS_KEY=${BIN_SECRETS_KEY:-${SESSION_SECRET}}
+      - BIN_SECRETS_KEY_ID=${BIN_SECRETS_KEY_ID:-local-1}
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4016/health"]
       interval: 10s
       timeout: 5s
       retries: 3

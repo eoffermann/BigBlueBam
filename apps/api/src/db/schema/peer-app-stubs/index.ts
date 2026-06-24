@@ -355,3 +355,35 @@ export const boltAutomationsStub = pgTable('bolt_automations', {
   id: uuid('id').primaryKey(),
   org_id: uuid('org_id').notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// bin - assets, folders
+// ---------------------------------------------------------------------------
+// Real schemas: apps/bin-api/src/db/schema/{bin-assets,bin-folders}.ts.
+// Mirrors Bin master §9.4 visibility:
+//  - bin.asset: org-scoped; if project_id set, project member or org admin/owner;
+//    if visibility='private', owner (created_by) only.
+//  - bin.folder: inherits the same project/private rule as an asset; org match
+//    is the floor.
+export const binAssetsStub = pgTable(
+  'bin_assets',
+  {
+    id: uuid('id').primaryKey(),
+    org_id: uuid('org_id').notNull(),
+    project_id: uuid('project_id'),
+    created_by: uuid('created_by').notNull(),
+    visibility: varchar('visibility', { length: 20 }).notNull(),
+  },
+  (table) => [index('pas_bin_assets_org_idx').on(table.org_id)],
+);
+
+export const binFoldersStub = pgTable(
+  'bin_folders',
+  {
+    id: uuid('id').primaryKey(),
+    org_id: uuid('org_id').notNull(),
+    project_id: uuid('project_id'),
+    created_by: uuid('created_by').notNull(),
+  },
+  (table) => [index('pas_bin_folders_org_idx').on(table.org_id)],
+);

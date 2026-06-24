@@ -1,0 +1,260 @@
+import { randomUUID } from 'node:crypto';
+import { and, eq, desc, isNull } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import { binAssets, binAssetVersions } from '../db/schema/index.js';
+import { getMediaDriver, buildBinObjectKey } from '../lib/storage.js';
+import { env } from '../env.js';
+import { NotFoundError } from './folder.service.js';
+
+export { NotFoundError } from './folder.service.js';
+
+export class ConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConflictError';
+  }
+}
+
+export class StorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StorageError';
+  }
+}
+
+export interface CreateAssetInput {
+  name: string;
+  content_type: string;
+  folder_id?: string | null;
+  project_id?: string | null;
+  visibility?: 'organization' | 'project' | 'private';
+}
+
+const VISIBILITIES = new Set(['organization', 'project', 'private']);
+
+export async function listAssets(
+  orgId: string,
+  opts: { folder_id?: string | null; project_id?: string; include_archived?: boolean } = {},
+) {
+  const conditions = [eq(binAssets.org_id, orgId)];
+  if (opts.folder_id === null) {
+    conditions.push(isNull(binAssets.folder_id));
+  } else if (typeof opts.folder_id === 'string') {
+    conditions.push(eq(binAssets.folder_id, opts.folder_id));
+  }
+  if (opts.project_id) {
+    conditions.push(eq(binAssets.project_id, opts.project_id));
+  }
+  if (!opts.include_archived) {
+    conditions.push(isNull(binAssets.archived_at));
+  }
+  return db
+    .select()
+    .from(binAssets)
+    .where(and(...conditions))
+    .orderBy(desc(binAssets.created_at));
+}
+
+export async function getAsset(id: string, orgId: string) {
+  const rows = await db
+    .select()
+    .from(binAssets)
+    .where(and(eq(binAssets.id, id), eq(binAssets.org_id, orgId)))
+    .limit(1);
+  if (rows.length === 0) throw new NotFoundError('Asset not found');
+  return rows[0]!;
+}
+
+export async function createAsset(input: CreateAssetInput, orgId: string, userId: string) {
+  const visibility = input.visibility && VISIBILITIES.has(input.visibility) ? input.visibility : 'organization';
+  // An asset is created with no version yet; the first POST /assets/:id/versions
+  // + complete mints version 1 and advances current_version_id. object_key on
+  // the asset row mirrors the active version's key (empty until first complete).
+  const rows = await db
+    .insert(binAssets)
+    .values({
+      org_id: orgId,
+      project_id: input.project_id ?? null,
+      folder_id: input.folder_id ?? null,
+      name: input.name,
+      content_type: input.content_type,
+      object_key: '',
+      size: 0,
+      scan_status: 'pending',
+      visibility,
+      created_by: userId,
+    })
+    .returning();
+  return rows[0]!;
+}
+
+export async function archiveAsset(id: string, orgId: string) {
+  const rows = await db
+    .update(binAssets)
+    .set({ archived_at: new Date() })
+    .where(and(eq(binAssets.id, id), eq(binAssets.org_id, orgId), isNull(binAssets.archived_at)))
+    .returning();
+  if (rows.length === 0) {
+    // Either not found or already archived — disambiguate.
+    await getAsset(id, orgId);
+    throw new ConflictError('Asset is already archived');
+  }
+  return rows[0]!;
+}
+
+export async function listVersions(assetId: string, orgId: string) {
+  await getAsset(assetId, orgId);
+  return db
+    .select()
+    .from(binAssetVersions)
+    .where(eq(binAssetVersions.asset_id, assetId))
+    .orderBy(desc(binAssetVersions.version_number));
+}
+
+export async function getVersion(versionId: string, orgId: string) {
+  const rows = await db
+    .select({ version: binAssetVersions, asset_org: binAssets.org_id })
+    .from(binAssetVersions)
+    .innerJoin(binAssets, eq(binAssets.id, binAssetVersions.asset_id))
+    .where(eq(binAssetVersions.id, versionId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.asset_org !== orgId) throw new NotFoundError('Version not found');
+  return row.version;
+}
+
+// ---------------------------------------------------------------------------
+// Upload flow (Bin master §9.2)
+// ---------------------------------------------------------------------------
+
+export interface PresignedVersionUpload {
+  version_id: string;
+  object_key: string;
+  upload_url: string;
+  expires_in: number;
+  method: 'PUT';
+}
+
+/**
+ * Step 1 of upload: reserve a version row in a `pending` storage state and hand
+ * back a presigned PUT so the browser uploads bytes directly to the provider
+ * (bytes skip the API). The row is finalized by completeVersion() after the PUT.
+ * In this slice we use the bootstrap `local` driver (binding_id stays null).
+ */
+export async function presignVersionUpload(
+  assetId: string,
+  orgId: string,
+  userId: string,
+  opts: { filename?: string; content_type?: string } = {},
+): Promise<PresignedVersionUpload> {
+  const asset = await getAsset(assetId, orgId);
+  const driver = getMediaDriver();
+  if (!driver.presignPut) {
+    throw new StorageError('Active media provider does not support presigned uploads');
+  }
+  const contentType = opts.content_type ?? asset.content_type ?? 'application/octet-stream';
+  const filename = opts.filename ?? asset.name;
+  const versionUuid = randomUUID();
+  const objectKey = buildBinObjectKey(orgId, assetId, versionUuid, filename);
+
+  const nextNumber = await nextVersionNumber(assetId);
+  const inserted = await db
+    .insert(binAssetVersions)
+    .values({
+      id: versionUuid,
+      asset_id: assetId,
+      version_number: nextNumber,
+      binding_id: null,
+      object_key: objectKey,
+      size: 0,
+      content_type: contentType,
+      uploaded_by: userId,
+    })
+    .returning();
+
+  const url = await driver.presignPut(objectKey, env.PRESIGN_PUT_TTL_SECONDS, { contentType });
+  return {
+    version_id: inserted[0]!.id,
+    object_key: objectKey,
+    upload_url: url,
+    expires_in: env.PRESIGN_PUT_TTL_SECONDS,
+    method: 'PUT',
+  };
+}
+
+async function nextVersionNumber(assetId: string): Promise<number> {
+  const rows = await db
+    .select({ n: binAssetVersions.version_number })
+    .from(binAssetVersions)
+    .where(eq(binAssetVersions.asset_id, assetId))
+    .orderBy(desc(binAssetVersions.version_number))
+    .limit(1);
+  return (rows[0]?.n ?? 0) + 1;
+}
+
+/**
+ * Step 2 of upload: the client confirms the PUT landed. stat() the object to
+ * verify size/integrity, finalize the version row, advance the asset's
+ * current_version_id + active reference shape, and (re)set scan_status='pending'
+ * so the (net-new, later slice) AV scan job gates serving.
+ */
+export async function completeVersion(versionId: string, orgId: string) {
+  const version = await getVersion(versionId, orgId);
+  const driver = getMediaDriver();
+  const stat = await driver.stat(version.object_key);
+  if (!stat) {
+    throw new ConflictError('Uploaded object not found in storage — was the PUT completed?');
+  }
+
+  const finalizedVersion = await db
+    .update(binAssetVersions)
+    .set({ size: stat.size, integrity: stat.integrity })
+    .where(eq(binAssetVersions.id, versionId))
+    .returning();
+
+  const updatedAsset = await db
+    .update(binAssets)
+    .set({
+      current_version_id: versionId,
+      object_key: version.object_key,
+      size: stat.size,
+      integrity: stat.integrity,
+      content_type: version.content_type,
+      scan_status: 'pending',
+    })
+    .where(eq(binAssets.id, version.asset_id))
+    .returning();
+
+  return { version: finalizedVersion[0]!, asset: updatedAsset[0]! };
+}
+
+export interface PresignedDownload {
+  object_key: string;
+  download_url: string;
+  expires_in: number;
+}
+
+/**
+ * Presigned GET for an asset's current version. Serving is gated on scan_status
+ * (Bin master §9.3): only `clean` / `skipped` assets are served; a `pending` /
+ * `infected` / `error` asset returns a scan-state error instead of a URL.
+ */
+export async function presignAssetDownload(assetId: string, orgId: string): Promise<PresignedDownload> {
+  const asset = await getAsset(assetId, orgId);
+  if (!asset.current_version_id || !asset.object_key) {
+    throw new NotFoundError('Asset has no uploaded content yet');
+  }
+  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
+    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
+  }
+  const driver = getMediaDriver();
+  if (!driver.presignGet) {
+    throw new StorageError('Active media provider does not support presigned reads');
+  }
+  const url = await driver.presignGet(asset.object_key, env.PRESIGN_GET_TTL_SECONDS);
+  return {
+    object_key: asset.object_key,
+    download_url: url,
+    expires_in: env.PRESIGN_GET_TTL_SECONDS,
+  };
+}
