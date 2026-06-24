@@ -1,7 +1,7 @@
 ---
 title: "Bureau"
 app: bureau
-generated: "2026-06-23T06:01:51.827Z"
+generated: "2026-06-24T21:06:05.483Z"
 ---
 
 # Bureau

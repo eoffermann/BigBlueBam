@@ -1,7 +1,7 @@
 ---
 title: "Bam (Project Management) Guide"
 app: bam
-generated: "2026-06-23T06:01:51.743Z"
+generated: "2026-06-24T21:06:05.284Z"
 ---
 
 # Bam (Project Management) Guide
@@ -91,10 +91,6 @@ A presence strip on the task drawer shows who else is on a task, and you can rin
 ### Settings Integrations
 
 ![Settings Integrations](screenshots/light/06-settings-integrations.png)
-
-### Platform Smtp
-
-![Platform Smtp](screenshots/light/07-platform-smtp.png)
 
 ### Org Smtp
 

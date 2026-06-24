@@ -76,12 +76,19 @@ export async function resolveEnvironment(opts: ResolveOptions = {}): Promise<Res
   const fileCfg = readFileConfig();
   const target = (opts.target ?? process.env.SHOTS_ENV ?? 'local').toLowerCase();
 
-  // Defaults mirror the E2E suite's seeded users (apps/e2e/src/auth/test-users.ts)
-  // so a UI-login fallback works on a freshly-seeded local stack. The preferred
-  // path reuses apps/e2e/.auth/<identity>.json storageState (see runner).
+  // MANDATORY: screenshots ALWAYS use the GILLIGAN project (org slug
+  // `gilligan-travel-ltd`) — the themed "stranded on an island" sample data
+  // (the cast: Skipper/Jonas Grumby, the Professor, Gilligan, Mary Ann, Ginger,
+  // the Howells; data like "Howell Luau RSVP", "Castaway Rescue Request",
+  // "Daily Coconut Count"). NEVER capture against generic e2e-admin /
+  // "screenshots-demo" data — that ugly placeholder data must never appear in
+  // shipped docs. These defaults therefore resolve to the gilligan cast. An
+  // explicit override (env vars / screenshots.config.json) is the ONLY way to
+  // point elsewhere, and is reserved for a deliberate, instructed change of
+  // sample data. See CLAUDE.md "Screenshots / screencaps" for the full rule.
   const identities: Record<string, Identity> = {
     admin: {
-      email: process.env.DOCS_CAPTURE_USER || process.env.E2E_ADMIN_EMAIL || fileCfg.identities?.admin?.email || 'e2e-admin@bigbluebam.test',
+      email: process.env.DOCS_CAPTURE_USER || process.env.E2E_ADMIN_EMAIL || fileCfg.identities?.admin?.email || 'skipper@gilligantravel.example',
       password:
         process.env.DOCS_CAPTURE_PASSWORD ||
         process.env.E2E_ADMIN_PASSWORD ||
@@ -89,12 +96,12 @@ export async function resolveEnvironment(opts: ResolveOptions = {}): Promise<Res
         'E2eTestP@ss123!',
     },
     member: {
-      email: process.env.E2E_MEMBER_EMAIL || fileCfg.identities?.member?.email || 'e2e-member@bigbluebam.test',
+      email: process.env.E2E_MEMBER_EMAIL || fileCfg.identities?.member?.email || 'professor@gilligantravel.example',
       password: process.env.E2E_MEMBER_PASSWORD || fileCfg.identities?.member?.password || 'E2eTestP@ss123!',
     },
     ...fileCfg.identities,
   };
-  const workspaceSlug = process.env.SHOTS_WORKSPACE || fileCfg.workspaceSlug || 'screenshots-demo';
+  const workspaceSlug = process.env.SHOTS_WORKSPACE || fileCfg.workspaceSlug || 'gilligan-travel-ltd';
 
   if (target === 'production' || target === 'prod') {
     if (!opts.allowProduction || process.env.SHOTS_ALLOW_PROD !== '1') {

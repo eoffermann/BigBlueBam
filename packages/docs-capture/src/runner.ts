@@ -62,11 +62,14 @@ async function authenticate(
   env: ResolvedEnvironment,
   identity: string,
 ): Promise<Record<string, unknown>> {
-  // Fast path: reuse the E2E suite's maintained storageState (no cred needed).
-  // Only for local/raw — never trust a checked-in session against production.
-  // SHOTS_FRESH_LOGIN=1 forces a UI login with the configured creds instead
-  // (used to capture a curated demo org, e.g. the Gilligan workspace).
-  if (env.name !== 'production' && process.env.SHOTS_FRESH_LOGIN !== '1') {
+  // GILLIGAN-FIRST (mandatory): screenshots must always come from the gilligan
+  // themed project, so by DEFAULT we do a fresh UI login with the configured
+  // gilligan creds (see environment.ts) — we do NOT silently reuse the E2E
+  // suite's storageState, which is the generic e2e-admin org and would leak
+  // ugly placeholder data into the docs. Reusing that session is opt-in only,
+  // for a deliberate, instructed change of sample data, via
+  // SHOTS_REUSE_E2E_AUTH=1. Never trust a checked-in session against production.
+  if (env.name !== 'production' && process.env.SHOTS_REUSE_E2E_AUTH === '1') {
     const stateFile = path.join(REPO_ROOT, 'apps/e2e/.auth', `${identity}.json`);
     if (fs.existsSync(stateFile)) {
       try {
