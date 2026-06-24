@@ -1,5 +1,7 @@
-import { AlertTriangle, ArrowLeft, FileWarning, Loader2 } from 'lucide-react';
-import { useAsset, useData, type InferredField } from '@/hooks/use-bin';
+import { useState } from 'react';
+import { AlertTriangle, ArrowLeft, FileWarning, Loader2, Pencil } from 'lucide-react';
+import { useAsset, useData, usePatchRows, type InferredField } from '@/hooks/use-bin';
+import { JsonTree } from '@/components/json-tree';
 import { ApiError } from '@/lib/api';
 
 interface AssetDataPageProps {
@@ -43,9 +45,71 @@ function FriendlyError({ title, message }: { title: string; message: string }) {
   );
 }
 
+// One editable table cell. Click to edit; Enter or blur commits a single-cell
+// patch (which mints a new immutable version server-side), Escape cancels.
+function EditableCell({
+  value,
+  onCommit,
+  disabled,
+}: {
+  value: unknown;
+  onCommit: (next: string) => void;
+  disabled: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  if (editing) {
+    return (
+      <td className="px-2 py-1">
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            setEditing(false);
+            if (draft !== cellText(value)) onCommit(draft);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              setEditing(false);
+              if (draft !== cellText(value)) onCommit(draft);
+            } else if (e.key === 'Escape') {
+              setEditing(false);
+            }
+          }}
+          className="w-full rounded border border-primary-400 bg-white dark:bg-zinc-900 px-2 py-1 text-sm outline-none ring-2 ring-primary-500/30"
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      onClick={() => {
+        if (disabled) return;
+        setDraft(cellText(value));
+        setEditing(true);
+      }}
+      className={`group px-4 py-2 text-zinc-700 dark:text-zinc-300 whitespace-nowrap max-w-xs truncate ${
+        disabled ? '' : 'cursor-text hover:bg-primary-50/60 dark:hover:bg-primary-900/10'
+      }`}
+      title={disabled ? undefined : 'Click to edit'}
+    >
+      <span className="inline-flex items-center gap-1.5">
+        {cellText(value) || <span className="text-zinc-300 dark:text-zinc-600">—</span>}
+        {!disabled && (
+          <Pencil className="h-3 w-3 text-zinc-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
+      </span>
+    </td>
+  );
+}
+
 export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
   const assetQuery = useAsset(assetId);
   const dataQuery = useData(assetId);
+  const patch = usePatchRows(assetId);
 
   const asset = assetQuery.data?.data;
   const heading = asset?.name ?? 'Asset';
@@ -102,20 +166,25 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
     if (!data) return null;
 
     if (data.shape === 'tree') {
-      return (
-        <pre className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 text-xs leading-relaxed overflow-auto text-zinc-800 dark:text-zinc-200 custom-scrollbar">
-          {JSON.stringify(data.data, null, 2)}
-        </pre>
-      );
+      return <JsonTree data={data.data} />;
     }
 
     // record shape
     return (
       <div>
         <SchemaChips fields={data.schema?.fields ?? []} />
-        <p className="text-xs text-zinc-500 mb-3">
-          {data.total.toLocaleString()} {data.total === 1 ? 'row' : 'rows'}
-          {data.rows.length < data.total ? ` (showing ${data.rows.length})` : ''}
+        <p className="text-xs text-zinc-500 mb-3 flex items-center gap-2">
+          <span>
+            {data.total.toLocaleString()} {data.total === 1 ? 'row' : 'rows'}
+            {data.rows.length < data.total ? ` (showing ${data.rows.length})` : ''}
+          </span>
+          <span className="text-zinc-300 dark:text-zinc-600">·</span>
+          <span className="text-zinc-400">click a cell to edit</span>
+          {patch.isPending && (
+            <span className="inline-flex items-center gap-1 text-primary-500">
+              <Loader2 className="h-3 w-3 animate-spin" /> saving…
+            </span>
+          )}
         </p>
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-auto custom-scrollbar">
           <table className="w-full text-sm">
@@ -132,18 +201,28 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
               {data.rows.map((row, i) => (
                 <tr
                   key={i}
-                  className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
+                  className="border-t border-zinc-100 dark:border-zinc-800"
                 >
                   {data.columns.map((col) => (
-                    <td key={col} className="px-4 py-2 text-zinc-700 dark:text-zinc-300 whitespace-nowrap max-w-xs truncate">
-                      {cellText(row[col])}
-                    </td>
+                    <EditableCell
+                      key={col}
+                      value={row[col]}
+                      disabled={patch.isPending}
+                      onCommit={(next) =>
+                        patch.mutate([{ index: data.offset + i, set: { [col]: next } }])
+                      }
+                    />
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        {patch.isError && (
+          <p className="text-xs text-red-500 mt-2">
+            {patch.error instanceof Error ? patch.error.message : 'Edit failed.'}
+          </p>
+        )}
       </div>
     );
   };

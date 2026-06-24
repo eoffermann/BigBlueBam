@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
@@ -79,5 +79,25 @@ export function useData(assetId: string | undefined) {
     // Servability (409) and unsupported-format (422) are deterministic outcomes,
     // not transient — don't burn a retry on them.
     retry: false,
+  });
+}
+
+// A single-cell patch: set one column on the row at `index` (0-based in the
+// current order). Each commit mints a new immutable version server-side, so we
+// refetch the data on success.
+export interface RowPatch {
+  index: number;
+  set: Record<string, unknown>;
+}
+
+export function usePatchRows(assetId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patches: RowPatch[]) =>
+      api.patch<{ data: unknown }>(`/v1/data/${assetId}/rows`, { patches }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'data', assetId] });
+      qc.invalidateQueries({ queryKey: ['bin', 'assets', assetId] });
+    },
   });
 }
