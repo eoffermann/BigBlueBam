@@ -302,6 +302,19 @@ Day-to-day development: work on feature branches off `main`, merge to `main` via
 
 **It must be COMPLETE, not just accurate.** Every REST row's MCP-tool column is either a backtick-wrapped tool name **or** `— _(skip: <short reason>)_` explaining why there is no tool (auth/credentials, multipart/binary, public-inbound, SuperUser/permission admin, internal service-to-service route, realtime/ws/Yjs, resolver-done-internally, deprecated, deferred, …). Never leave a bare `—` in the MCP column. A section that is entirely or nearly tool-less gets a `> **⚠ No MCP tools in this section — intentional.**` callout under its heading saying why. Keep the coverage summary counts in sync. Self-check (must print `0`): `grep -cE '^\| \`[^|]+\` \| — \|' docs/reference/mcp-endpoint-mapping.md`.
 
+## CRITICAL: Screenshots / screencaps use the GILLIGAN project ONLY
+
+**Every screenshot, screencap, and demo image that ships in any documentation — in-app help, the per-app guides, the marketing site, and the printed manual — MUST be captured against the GILLIGAN sample project (`gilligan-travel-ltd`).** This is the themed "stranded on a tropical island" dataset: the cast is Skipper (Jonas Grumby), the Professor, Gilligan, Mary Ann, Ginger, and the Howells; the data is things like "Howell Luau RSVP", "Castaway Rescue Request", "Daily Coconut Count", "Rescue Sighting Report". It is curated, on-brand, and interesting.
+
+**NEVER ship screenshots of the generic placeholder data** — `e2e-admin@bigbluebam.test` / the "E2E Test Organization" / the "screenshots-demo" workspace, or any other empty/auto-generated/lorem-ipsum-grade content. That ugly generic data must never appear in shipped docs, ever.
+
+How this is enforced:
+- `packages/docs-capture/src/environment.ts` defaults the capture identities to the gilligan cast (`skipper@gilligantravel.example` as admin, `professor@…` as member) and the workspace to `gilligan-travel-ltd`.
+- `packages/docs-capture/src/runner.ts` does a fresh UI login with those gilligan creds by default; it does NOT reuse the E2E suite's `apps/e2e/.auth/*.json` storageState (which is the generic e2e org). Reuse is opt-in only via `SHOTS_REUSE_E2E_AUTH=1`.
+- Before recapturing, ensure the gilligan data is seeded (`scripts/seed-gilligan/*.mjs`) and the cast can log in (the capture password is the repo demo password; reset with `cli reset-password --email skipper@gilligantravel.example --password <demo pw>` if needed).
+
+**This is a hard rule. The only way to change the sample data is an explicit, deliberate instruction to do so — at which point we build new, custom, themed, interesting sample data and update these defaults. Do not silently fall back to generic data because a recipe fails or a login is inconvenient; fix the gilligan path instead.**
+
 ## Common Commands
 
 ```bash

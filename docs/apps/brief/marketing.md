@@ -1,7 +1,7 @@
 ---
 title: "Brief (Documents)"
 app: brief
-generated: "2026-06-23T06:01:51.821Z"
+generated: "2026-06-24T21:06:05.469Z"
 ---
 
 # Brief (Documents)
