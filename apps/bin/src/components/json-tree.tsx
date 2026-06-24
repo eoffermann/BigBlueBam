@@ -11,6 +11,87 @@ function isObject(v: Json): v is Record<string, Json> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+function isScalar(v: Json): boolean {
+  return v == null || (typeof v !== 'object');
+}
+
+/**
+ * Decide whether an array is "tabular" — a list of similar dictionaries that
+ * should render as a grid (like the CSV/JSONL record editors) instead of nested
+ * tree nodes. Heuristic mirrors the structured-data shape detector: at least two
+ * object rows, every row a plain object of scalar-ish cells, and an average
+ * key-coverage of the union of keys >= 0.7 (so the rows really share a schema).
+ */
+function tabularColumns(value: Json): string[] | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  if (!value.every((v) => isObject(v))) return null;
+  const rows = value as Record<string, Json>[];
+  // Cells must be scalar (a column of nested objects/arrays is not a clean grid).
+  const colOrder: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    for (const k of Object.keys(row)) {
+      if (!seen.has(k)) {
+        seen.add(k);
+        colOrder.push(k);
+      }
+      if (!isScalar(row[k])) return null;
+    }
+  }
+  const union = colOrder.length;
+  if (union === 0) return null;
+  const avgCoverage =
+    rows.reduce((sum, r) => sum + Object.keys(r).length / union, 0) / rows.length;
+  return avgCoverage >= 0.7 ? colOrder : null;
+}
+
+function cellText(value: Json): string {
+  if (value == null) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+// A read-only grid for an embedded array-of-similar-dicts inside a tree.
+function EmbeddedTable({ columns, rows }: { columns: string[]; rows: Record<string, Json>[] }) {
+  return (
+    <div className="my-1 rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-auto custom-scrollbar">
+      <table className="w-full text-[13px] font-sans">
+        <thead>
+          <tr className="bg-zinc-100/70 dark:bg-zinc-800/60 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            {columns.map((c) => (
+              <th key={c} className="px-3 py-1.5 whitespace-nowrap">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
+              {columns.map((c) => {
+                const v = row[c];
+                return (
+                  <td key={c} className="px-3 py-1.5 whitespace-nowrap text-zinc-700 dark:text-zinc-300">
+                    {v == null ? (
+                      <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                    ) : typeof v === 'boolean' ? (
+                      <span className="text-purple-600 dark:text-purple-400">{String(v)}</span>
+                    ) : typeof v === 'number' ? (
+                      <span className="text-blue-600 dark:text-blue-400">{String(v)}</span>
+                    ) : (
+                      cellText(v)
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Scalar({ value }: { value: Json }) {
   if (value === null) return <span className="text-zinc-400 italic">null</span>;
   switch (typeof value) {
@@ -56,15 +137,21 @@ function Node({
     );
   }
 
+  // A key whose value is a list of similar dictionaries renders as a grid
+  // (like the CSV/JSONL editors) rather than nested tree nodes.
+  const tableCols = tabularColumns(value);
+
   const entries: [string | null, Json][] = Array.isArray(value)
     ? value.map((v, i) => [String(i), v])
     : Object.entries(value as Record<string, Json>);
   const count = entries.length;
   const open_brace = Array.isArray(value) ? '[' : '{';
   const close_brace = Array.isArray(value) ? ']' : '}';
-  const summary = Array.isArray(value)
-    ? `${count} ${count === 1 ? 'item' : 'items'}`
-    : `${count} ${count === 1 ? 'field' : 'fields'}`;
+  const summary = tableCols
+    ? `${count} rows × ${tableCols.length} cols`
+    : Array.isArray(value)
+      ? `${count} ${count === 1 ? 'item' : 'items'}`
+      : `${count} ${count === 1 ? 'field' : 'fields'}`;
 
   return (
     <div className="leading-6">
@@ -80,15 +167,26 @@ function Node({
         )}
         {keyLabel}
         {keyLabel && <span className="text-zinc-400">: </span>}
-        <span className="text-zinc-400">{open_brace}</span>
-        {!open && (
+        {tableCols ? (
+          <span className="text-zinc-400 text-xs">{summary}</span>
+        ) : (
           <>
-            <span className="text-zinc-400 text-xs mx-1">{summary}</span>
-            <span className="text-zinc-400">{close_brace}</span>
+            <span className="text-zinc-400">{open_brace}</span>
+            {!open && (
+              <>
+                <span className="text-zinc-400 text-xs mx-1">{summary}</span>
+                <span className="text-zinc-400">{close_brace}</span>
+              </>
+            )}
           </>
         )}
       </button>
-      {open && (
+      {open && tableCols && (
+        <div className="ml-[7px] pl-4">
+          <EmbeddedTable columns={tableCols} rows={value as Record<string, Json>[]} />
+        </div>
+      )}
+      {open && !tableCols && (
         <>
           <div className="border-l border-zinc-200 dark:border-zinc-700 ml-[7px] pl-4">
             {entries.map(([k, v], i) => (
