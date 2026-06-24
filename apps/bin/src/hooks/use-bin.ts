@@ -101,3 +101,22 @@ export function usePatchRows(assetId: string | undefined) {
     },
   });
 }
+
+// A value-set patch on a tree-shaped asset: set the value at a path
+// (e.g. ["passengers", 2, "vip"]). Commits a new immutable version server-side.
+export interface TreePatch {
+  path: (string | number)[];
+  value: unknown;
+}
+
+export function usePatchTree(assetId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patches: TreePatch[]) =>
+      api.patch<{ data: unknown }>(`/v1/data/${assetId}/tree`, { patches }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'data', assetId] });
+      qc.invalidateQueries({ queryKey: ['bin', 'assets', assetId] });
+    },
+  });
+}

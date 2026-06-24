@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AlertTriangle, ArrowLeft, FileWarning, Loader2, Pencil } from 'lucide-react';
-import { useAsset, useData, usePatchRows, type InferredField } from '@/hooks/use-bin';
+import { useAsset, useData, usePatchRows, usePatchTree, type InferredField } from '@/hooks/use-bin';
 import { JsonTree } from '@/components/json-tree';
 import { ApiError } from '@/lib/api';
 
@@ -110,6 +110,7 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
   const assetQuery = useAsset(assetId);
   const dataQuery = useData(assetId);
   const patch = usePatchRows(assetId);
+  const treePatch = usePatchTree(assetId);
 
   const asset = assetQuery.data?.data;
   const heading = asset?.name ?? 'Asset';
@@ -166,7 +167,25 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
     if (!data) return null;
 
     if (data.shape === 'tree') {
-      return <JsonTree data={data.data} />;
+      return (
+        <div>
+          {treePatch.isError && (
+            <p className="text-xs text-red-500 mb-2">
+              {treePatch.error instanceof Error ? treePatch.error.message : 'Edit failed.'}
+            </p>
+          )}
+          {treePatch.isPending && (
+            <p className="text-xs text-primary-500 mb-2 inline-flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" /> saving…
+            </p>
+          )}
+          <JsonTree
+            data={data.data}
+            disabled={treePatch.isPending}
+            onEdit={(path, value) => treePatch.mutate([{ path, value }])}
+          />
+        </div>
+      );
     }
 
     // record shape
