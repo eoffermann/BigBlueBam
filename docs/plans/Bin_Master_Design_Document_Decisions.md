@@ -264,3 +264,31 @@ app-agnostic storage/version/scan design was sufficient.
   for presign host generation, plus an nginx/public mapping, to re-enable the
   bytes-skip-the-API optimization for large media. Tracked as a follow-up; not
   required for v1 correctness.
+
+### AV-scan — autonomous serving gate via a worker sweep
+
+- **Decision:** The §9.3 scanner ships as a per-minute worker sweep
+  (`bin-av-scan`) that claims `pending` bin_assets, fetches the active version
+  bytes, scans, and writes the verdict. Modes: `eicar` (default — dependency-free
+  signature scan that flags the EICAR test string and otherwise marks `clean`),
+  `clamav` (clamd INSTREAM), `off` (mark `skipped`).
+- **Why:** Mirrors the as-built `blank-file-process` sweep, needs no new
+  bin-api→queue wiring or `bullmq` dependency in bin-api, and is resilient to a
+  missed enqueue. The `eicar` default keeps the pipeline autonomous on a bare
+  stack (no clamd container) while still making the infected path testable with
+  synthetic data.
+- **Trade-off:** up to ~1 minute upload→servable latency. Acceptable for v1; a
+  targeted on-completion enqueue can reduce it later.
+
+### D-8 — Structured-editor commits are trusted; marked clean immediately
+
+- **Decision:** When the structured editor commits an edit it mints a new
+  immutable version through the normal proxied upload path (which resets
+  `scan_status='pending'`), then immediately flips it to `clean`.
+- **Why:** A structured commit is a **server-side re-serialization** of data that
+  was already scanned clean, plus user cell edits — not an opaque external upload.
+  Structured text (CSV/JSON/YAML) is not executable, so the AV gate adds latency
+  (read-after-write would 409 until the next sweep) without materially reducing
+  risk. Same "trusted derived artifact" principle as BAY-2.
+- **Scope:** applies only to the structured-editor commit path, not to raw
+  asset uploads (those still go pending → scanned).
