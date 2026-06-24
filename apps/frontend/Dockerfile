@@ -22,6 +22,7 @@ COPY apps/bench/package.json ./apps/bench/
 COPY apps/bill/package.json ./apps/bill/
 COPY apps/blank/package.json ./apps/blank/
 COPY apps/blueprint/package.json ./apps/blueprint/
+COPY apps/bin/package.json ./apps/bin/
 COPY apps/bureau/package.json ./apps/bureau/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
@@ -129,6 +130,12 @@ COPY apps/blueprint/public ./apps/blueprint/public
 COPY apps/blueprint/index.html ./apps/blueprint/
 COPY apps/blueprint/tsconfig.json apps/blueprint/tsconfig.node.json apps/blueprint/vite.config.ts ./apps/blueprint/
 
+# Bin frontend (DAM + structured-data editor SPA)
+COPY apps/bin/src ./apps/bin/src
+COPY apps/bin/public ./apps/bin/public
+COPY apps/bin/index.html ./apps/bin/
+COPY apps/bin/tsconfig.json apps/bin/tsconfig.node.json apps/bin/vite.config.ts ./apps/bin/
+
 # Bureau client SDK (consumed by the Bureau SPA + every other SPA via mountBureauClient)
 COPY packages/bureau-client/ ./packages/bureau-client/
 
@@ -155,6 +162,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/bill build \
  && pnpm --filter @bigbluebam/blank build \
  && pnpm --filter @bigbluebam/blueprint build \
+ && pnpm --filter @bigbluebam/bin build \
  && pnpm --filter @bigbluebam/bureau build
 
 # ── Stage: production ────────────────────────────────────────────
@@ -175,6 +183,7 @@ COPY --from=build /app/apps/bench/dist /usr/share/nginx/html/bench
 COPY --from=build /app/apps/bill/dist /usr/share/nginx/html/bill
 COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
 COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint
+COPY --from=build /app/apps/bin/dist /usr/share/nginx/html/bin
 COPY --from=build /app/apps/bureau/dist /usr/share/nginx/html/bureau
 
 # Documentation files for the in-app Help viewer (served at /docs/)
