@@ -292,3 +292,28 @@ app-agnostic storage/version/scan design was sufficient.
   risk. Same "trusted derived artifact" principle as BAY-2.
 - **Scope:** applies only to the structured-editor commit path, not to raw
   asset uploads (those still go pending → scanned).
+
+### D-9 — Tree-shaped assets are editable via path patches
+
+- **Decision:** JSON/YAML (tree-shaped) assets are editable through
+  `PATCH /data/:assetId/tree` with `{ patches: [{ path, value }] }`, where `path`
+  is an array like `["passengers", 2, "vip"]`. The server walks the path, coerces
+  the incoming string to the existing leaf's type (number/boolean), and commits a
+  new immutable version (same path as record patch/append). The SPA wires both
+  scalar leaves and the embedded arrays-of-similar-dicts grids to this endpoint.
+- **Why:** Editing is the feature users value most; limiting it to record-shaped
+  assets left JSON/YAML read-only. Path patching keeps the immutable-version model
+  (D-3) without a per-keystroke version.
+- **Follow-up:** structural edits (add/remove keys, reorder, retype) and an MCP
+  `bin_data_patch_tree` tool for agent parity are not yet built.
+
+### Permissions — bin MCP tools are resource-first; need explicit overrides
+
+- **Reconciliation:** `scripts/generate-permission-manifest.mjs` infers permission
+  ids from MCP tool names with a **verb-first** convention
+  (`<app>_<verb>_<resource>`, e.g. `blueprint_read_nodes`). Bin's tools follow the
+  master's **resource-first** names (`bin_asset_create`, `bin_data_read`), which
+  the inference mis-derives. Each bin tool is therefore registered in
+  `EXPLICIT_TOOL_OVERRIDES` mapping to the same permission id its REST endpoint
+  uses, so the tool and endpoint share one permission and the catalog stays
+  consistent. (Caught as drift after the MCP layer landed; fixed with delta 0209.)
