@@ -205,6 +205,12 @@ export const ENV_HINTS = {
   BANTER_API_URL: { kind: 'computed', value: internal('banter-api') },
   BUREAU_API_URL: { kind: 'computed', value: `${internal('bureau-api')}/v1` },
   BLUEPRINT_API_URL: { kind: 'computed', value: `${internal('blueprint-api')}/v1` },
+  // bin-api / bay-api mount every route under '/v1' and their mcp clients use
+  // bare resource paths, so the base carries /v1 (matches the env.ts defaults).
+  BIN_API_URL: { kind: 'computed', value: `${internal('bin-api')}/v1` },
+  BAY_API_URL: { kind: 'computed', value: `${internal('bay-api')}/v1` },
+  // Server-to-server base (no /v1) for bay-api -> bin-api internal calls.
+  BIN_API_INTERNAL_URL: { kind: 'computed', value: internal('bin-api') },
   VOICE_AGENT_URL: { kind: 'computed', value: internal('voice-agent') },
 
   // ── MCP server ────────────────────────────────────────────────────
