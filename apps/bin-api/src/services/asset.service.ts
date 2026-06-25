@@ -377,6 +377,59 @@ export async function streamAssetDownload(
   return { stream, contentType, size, filename: asset.name };
 }
 
+/** Whether the active media driver can serve byte ranges (video/audio seeking). */
+export function hasRangeSupport(): boolean {
+  return typeof getMediaDriver().getRange === 'function';
+}
+
+/** Total size + content type of an asset's current version (scan-gated), used to
+ *  compute Range windows without buffering the object. */
+export async function statServable(
+  assetId: string,
+  orgId: string,
+): Promise<{ total: number; contentType: string; filename: string }> {
+  const asset = await getAsset(assetId, orgId);
+  if (!asset.current_version_id || !asset.object_key) {
+    throw new NotFoundError('Asset has no uploaded content yet');
+  }
+  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
+    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
+  }
+  const stat = await getMediaDriver().stat(asset.object_key);
+  if (!stat) throw new NotFoundError('Object not found in storage');
+  return {
+    total: stat.size,
+    contentType: asset.content_type ?? 'application/octet-stream',
+    filename: asset.name,
+  };
+}
+
+/**
+ * Partial (HTTP Range) serve of an asset's current version, for media seeking.
+ * Same scan gate as streamAssetDownload (§9.3). Returns the byte range plus the
+ * object's total size so the route can emit a 206 with Content-Range.
+ */
+export async function streamAssetRange(
+  assetId: string,
+  orgId: string,
+  start: number,
+  end: number,
+): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; total: number; filename: string }> {
+  const asset = await getAsset(assetId, orgId);
+  if (!asset.current_version_id || !asset.object_key) {
+    throw new NotFoundError('Asset has no uploaded content yet');
+  }
+  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
+    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
+  }
+  const driver = getMediaDriver();
+  if (!driver.getRange) {
+    throw new StorageError('Active media provider does not support range reads');
+  }
+  const r = await driver.getRange(asset.object_key, start, end);
+  return { ...r, filename: asset.name };
+}
+
 export interface PresignedDownload {
   object_key: string;
   download_url: string;

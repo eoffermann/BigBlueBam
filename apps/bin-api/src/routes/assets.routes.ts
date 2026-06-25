@@ -195,12 +195,44 @@ export default async function assetRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth] },
     async (request, reply) => {
       try {
+        // Honor HTTP Range so browsers can seek/scrub video & audio. We need
+        // the total size first; do a tiny range probe (bytes 0-0) to learn it
+        // without buffering the whole object, then serve the requested window.
+        const rangeHeader = (request.headers.range as string | undefined) ?? '';
+        const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+        if (m && assetService.hasRangeSupport()) {
+          const info = await assetService.statServable(request.params.id, request.user!.org_id);
+          const total = info.total;
+          let start = m[1] ? Number(m[1]) : 0;
+          let end = m[2] ? Number(m[2]) : total - 1;
+          if (Number.isNaN(start) || start < 0) start = 0;
+          if (Number.isNaN(end) || end > total - 1) end = total - 1;
+          if (start > end) {
+            reply.header('Content-Range', `bytes */${total}`);
+            return reply.status(416).send();
+          }
+          const { stream, contentType, size, filename } = await assetService.streamAssetRange(
+            request.params.id,
+            request.user!.org_id,
+            start,
+            end,
+          );
+          reply.header('Content-Type', contentType);
+          reply.header('Content-Length', size);
+          reply.header('Content-Range', `bytes ${start}-${end}/${total}`);
+          reply.header('Accept-Ranges', 'bytes');
+          reply.header('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`);
+          reply.header('Cache-Control', 'private, max-age=300');
+          return reply.status(206).send(stream);
+        }
+
         const { stream, contentType, size, filename } = await assetService.streamAssetDownload(
           request.params.id,
           request.user!.org_id,
         );
         reply.header('Content-Type', contentType);
         reply.header('Content-Length', size);
+        reply.header('Accept-Ranges', 'bytes');
         reply.header('Content-Disposition', `inline; filename="${filename.replace(/"/g, '')}"`);
         reply.header('Cache-Control', 'private, max-age=300');
         return reply.send(stream);

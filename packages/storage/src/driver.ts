@@ -42,6 +42,13 @@ export interface StorageDriver {
     opts?: { contentType?: string; size?: number },
   ): Promise<PutResult>;
   getStream(key: string): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number }>;
+  /** Partial read for HTTP Range responses (video/audio seeking). Returns the
+   *  byte range [start, end] inclusive plus the object's total size. */
+  getRange?(
+    key: string,
+    start: number,
+    end: number,
+  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; total: number }>;
   stat(key: string): Promise<ObjectStat | null>;
   delete(key: string): Promise<void>;
 

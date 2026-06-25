@@ -106,6 +106,23 @@ export class S3Driver implements StorageDriver {
     };
   }
 
+  async getRange(
+    key: string,
+    start: number,
+    end: number,
+  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; total: number }> {
+    const s = await this.client.statObject(this.bucket, this.k(key));
+    const length = end - start + 1;
+    // MinIO getPartialObject(bucket, key, offset, length) → a stream of [offset, offset+length).
+    const stream = await this.client.getPartialObject(this.bucket, this.k(key), start, length);
+    return {
+      stream,
+      contentType: s.metaData?.['content-type'] ?? 'application/octet-stream',
+      size: length,
+      total: s.size,
+    };
+  }
+
   async stat(key: string): Promise<ObjectStat | null> {
     try {
       const s = await this.client.statObject(this.bucket, this.k(key));

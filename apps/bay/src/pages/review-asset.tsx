@@ -119,6 +119,7 @@ function MediaStage({
   mediaRef,
   regionMode,
   regionOverlay,
+  highlightRegion,
   onRegion,
   onTime,
 }: {
@@ -127,6 +128,7 @@ function MediaStage({
   mediaRef: React.MutableRefObject<MediaEl | null>;
   regionMode: boolean;
   regionOverlay: DragRect | null;
+  highlightRegion: DragRect | null;
   onRegion: (rect: DragRect) => void;
   onTime: (t: number) => void;
 }) {
@@ -261,6 +263,17 @@ function MediaStage({
             top: `${liveRect.y * 100}%`,
             width: `${liveRect.w * 100}%`,
             height: `${liveRect.h * 100}%`,
+          }}
+        />
+      )}
+      {highlightRegion && (
+        <div
+          className="absolute border-2 border-amber-400 bg-amber-400/20 pointer-events-none ring-2 ring-amber-400/40"
+          style={{
+            left: `${highlightRegion.x * 100}%`,
+            top: `${highlightRegion.y * 100}%`,
+            width: `${highlightRegion.w * 100}%`,
+            height: `${highlightRegion.h * 100}%`,
           }}
         />
       )}
@@ -429,6 +442,7 @@ function AnnotationsPanel({
   setPendingAnchor,
   markIn,
   setMarkIn,
+  onAnchorClick,
 }: {
   versionId: string | undefined;
   kind: MediaKind;
@@ -441,6 +455,7 @@ function AnnotationsPanel({
   setPendingAnchor: (a: Anchor | null) => void;
   markIn: number | null;
   setMarkIn: (n: number | null) => void;
+  onAnchorClick: (anchor: Anchor) => void;
 }) {
   const [includeResolved, setIncludeResolved] = useState(false);
   const { data, isLoading, isError, error } = useAnnotations(versionId, includeResolved);
@@ -501,9 +516,14 @@ function AnnotationsPanel({
                 )}
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="inline-flex items-center rounded-md bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 text-xs font-medium text-primary-700 dark:text-primary-300">
+                  <button
+                    type="button"
+                    onClick={() => onAnchorClick(a.anchor)}
+                    title="Jump to this moment / show region"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 text-xs font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/40 cursor-pointer"
+                  >
                     {renderAnchor(a.anchor)}
-                  </span>
+                  </button>
                   <button
                     onClick={() => resolve.mutate({ id: a.id, resolved: !a.resolved })}
                     disabled={resolve.isPending}
@@ -726,6 +746,10 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   const [pendingAnchor, setPendingAnchor] = useState<Anchor | null>(null);
   const [markIn, setMarkIn] = useState<number | null>(null);
   const [regionMode, setRegionMode] = useState(false);
+  // Clicking an annotation drives these: a highlighted region overlay and/or a
+  // loop window for timerange anchors.
+  const [highlightRegion, setHighlightRegion] = useState<DragRect | null>(null);
+  const loopRef = useRef<{ start: number; end: number } | null>(null);
 
   useEffect(() => {
     if (activeVersionId) return;
@@ -746,6 +770,8 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
     setMarkIn(null);
     setRegionMode(false);
     setCurrentTime(0);
+    setHighlightRegion(null);
+    loopRef.current = null;
   }, [activeVersionId]);
 
   const onRegion = (rect: DragRect) => {
@@ -757,6 +783,42 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
     }
     setPendingAnchor(a);
     setRegionMode(false);
+  };
+
+  // Time updates from the media element; also enforce an active loop window.
+  const handleTime = (t: number) => {
+    setCurrentTime(t);
+    const loop = loopRef.current;
+    if (loop && mediaRef.current && (t >= loop.end || t < loop.start - 0.1)) {
+      mediaRef.current.currentTime = loop.start;
+    }
+  };
+
+  // Clicking an annotation: jump the playhead to its moment, loop a timerange,
+  // and/or highlight its region.
+  const seek = (t: number, play = false) => {
+    const el = mediaRef.current;
+    if (!el) return;
+    el.currentTime = Math.max(0, t);
+    if (play && typeof (el as HTMLVideoElement).play === 'function') void (el as HTMLVideoElement).play();
+  };
+  const onAnchorClick = (anchor: Anchor) => {
+    const a = anchor as Record<string, unknown>;
+    if (a.type === 'region') {
+      setHighlightRegion({ x: num(a.x), y: num(a.y), w: num(a.w), h: num(a.h) });
+      loopRef.current = null;
+      if (a.time_sec != null) seek(num(a.time_sec));
+    } else if (a.type === 'frame') {
+      setHighlightRegion(null);
+      loopRef.current = null;
+      seek(a.time_sec != null ? num(a.time_sec) : num(a.frame) / fps);
+    } else if (a.type === 'timerange') {
+      setHighlightRegion(null);
+      const start = num(a.start_sec ?? a.start);
+      const end = num(a.end_sec ?? a.end);
+      loopRef.current = end > start ? { start, end } : null;
+      seek(start, true);
+    }
   };
 
   const onPickVersion = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -843,8 +905,9 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
                   mediaRef={mediaRef}
                   regionMode={regionMode}
                   regionOverlay={pendingAnchor?.type === 'region' ? pendingAnchor : null}
+                  highlightRegion={highlightRegion}
                   onRegion={onRegion}
-                  onTime={setCurrentTime}
+                  onTime={handleTime}
                 />
                 {activeVersion?.media_meta && (
                   <div className="flex flex-wrap gap-1.5 p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-700">
@@ -873,6 +936,7 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
                 setPendingAnchor={setPendingAnchor}
                 markIn={markIn}
                 setMarkIn={setMarkIn}
+                onAnchorClick={onAnchorClick}
               />
             </div>
 
