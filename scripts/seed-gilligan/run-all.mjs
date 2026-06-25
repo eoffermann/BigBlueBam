@@ -64,7 +64,7 @@ const PHASES = [
   // Forms still seed; the sample submissions beyond the cap are expected to be
   // rate-limited, so those two are marked soft (won't fail the overall run).
   { name: 'Communication', soft: ['blank.mjs', 'blank-submissions.mjs'], files: ['banter.mjs', 'banter-supplement.mjs', 'blank.mjs', 'blank-submissions.mjs', 'brief.mjs'] },
-  { name: 'Knowledge & analytics', files: ['beacon.mjs', 'beacon-fixup.mjs', 'bench.mjs', 'bench-supplement.mjs', 'bin.mjs'] },
+  { name: 'Knowledge & analytics', files: ['beacon.mjs', 'beacon-fixup.mjs', 'bench.mjs', 'bench-supplement.mjs', 'bin.mjs', 'bay.mjs'] },
   { name: 'Billing', files: ['bill.mjs', 'bill-supplement.mjs', 'bill-recurring.mjs'] },
   { name: 'Spatial & async', files: ['board.mjs', 'book.mjs', 'book-connections.mjs', 'bureau.mjs', 'bureau-presence.mjs'] },
   { name: 'Diagrams & automation', files: ['blueprint.mjs', 'blueprint-collab.mjs', 'bolt.mjs', 'bearing.mjs'] },
