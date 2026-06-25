@@ -3,12 +3,14 @@ import { useAuthStore } from '@/stores/auth.store';
 import { BayLayout } from '@/components/layout/bay-layout';
 import { ReviewLibraryPage } from '@/pages/review-library';
 import { ReviewAssetPage } from '@/pages/review-asset';
+import { ReviewByBinAsset } from '@/pages/review-by-bin';
 import { HelpViewer } from '@bigbluebam/ui/help-viewer';
 import { Loader2 } from 'lucide-react';
 
 type Route =
   | { page: 'assets' }
   | { page: 'review'; id: string }
+  | { page: 'review-by-bin'; binAssetId: string }
   | { page: 'help' };
 
 const BASE_PATH = '/bay';
@@ -26,9 +28,14 @@ function parseRoute(path: string): Route {
   if (p === '/' || p === '') return { page: 'assets' };
   if (p === '/help') return { page: 'help' };
 
-  // /assets/:id — the review page
+  // /assets/:id — the review page (by Bay asset id)
   const reviewMatch = p.match(/^\/assets\/([^/]+)$/);
   if (reviewMatch) return { page: 'review', id: reviewMatch[1]! };
+
+  // /review/:binAssetId — open a review by Bin asset id (handled on first load
+  // too, so the Bin SPA can deep-link here with a full-page navigation).
+  const byBinMatch = p.match(/^\/review\/([^/]+)$/);
+  if (byBinMatch) return { page: 'review-by-bin', binAssetId: byBinMatch[1]! };
 
   return { page: 'assets' };
 }
@@ -122,6 +129,8 @@ export function App() {
         return <ReviewLibraryPage onNavigate={navigate} />;
       case 'review':
         return <ReviewAssetPage assetId={route.id} onNavigate={navigate} />;
+      case 'review-by-bin':
+        return <ReviewByBinAsset binAssetId={route.binAssetId} onNavigate={navigate} />;
       default:
         return null;
     }

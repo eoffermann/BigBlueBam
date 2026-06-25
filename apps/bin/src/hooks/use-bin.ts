@@ -15,16 +15,77 @@ export interface BinAsset {
   scan_status: ScanStatus;
   folder_id: string | null;
   project_id: string | null;
+  tags: string[];
   visibility?: string;
   current_version_id?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export function useAssets(params?: { folder_id?: string; project_id?: string }) {
+export function useAssets(params?: { folder_id?: string; project_id?: string; tag?: string }) {
   return useQuery({
     queryKey: ['bin', 'assets', params],
     queryFn: () => api.get<{ data: BinAsset[] }>('/v1/assets', params),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Folders (mirror apps/bin-api folder routes). The API returns every folder in
+// the org as a flat list; callers build the tree client-side from parent_id.
+// ---------------------------------------------------------------------------
+
+export interface BinFolder {
+  id: string;
+  org_id: string;
+  project_id: string | null;
+  parent_id: string | null;
+  name: string;
+  created_at: string;
+}
+
+export function useFolders() {
+  return useQuery({
+    queryKey: ['bin', 'folders'],
+    queryFn: () => api.get<{ data: BinFolder[] }>('/v1/folders'),
+  });
+}
+
+export function useCreateFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; parent_id?: string | null; project_id?: string | null }) =>
+      api.post<{ data: BinFolder }>('/v1/folders', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'folders'] });
+    },
+  });
+}
+
+// Distinct tags across the org, for the tag-filter chips.
+export function useTags() {
+  return useQuery({
+    queryKey: ['bin', 'tags'],
+    queryFn: () => api.get<{ data: string[] }>('/v1/tags'),
+  });
+}
+
+// Patch an asset's name, folder (move), or tags (retag). folder_id:null moves
+// the asset to root (unfiled). Refetches assets + tags so chips stay in sync.
+export interface AssetPatch {
+  name?: string;
+  folder_id?: string | null;
+  tags?: string[];
+}
+
+export function useUpdateAsset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: AssetPatch }) =>
+      api.patch<{ data: BinAsset }>(`/v1/assets/${id}`, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'assets'] });
+      qc.invalidateQueries({ queryKey: ['bin', 'tags'] });
+    },
   });
 }
 

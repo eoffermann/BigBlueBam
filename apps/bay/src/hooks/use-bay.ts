@@ -87,7 +87,7 @@ function orgHeaders(): Record<string, string> {
 
 /** Upload a file's bytes into Bin and return the new bin asset id. Bytes are
  *  scan-gated; the bin asset is `pending` until the AV sweep clears it. */
-async function uploadFileToBin(file: File): Promise<string> {
+export async function uploadFileToBin(file: File): Promise<string> {
   const createRes = await fetch('/bin/api/v1/assets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...orgHeaders() },
@@ -146,6 +146,70 @@ export function useUploadVersion(assetId: string | undefined) {
       qc.invalidateQueries({ queryKey: ['bay', 'versions', assetId] });
       qc.invalidateQueries({ queryKey: ['bay', 'assets', assetId] });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Bin media assets (Bay shows only MEDIA files from the Bin file store)
+// ---------------------------------------------------------------------------
+
+export interface BinMediaAsset {
+  id: string;
+  name: string;
+  content_type: string;
+  scan_status: string;
+  current_version_id: string | null;
+  tags?: string[];
+  created_at: string;
+}
+
+/** True when a Bin content_type is reviewable media (image/video/audio). */
+function isMediaContentType(contentType: string | null | undefined): boolean {
+  if (!contentType) return false;
+  return (
+    contentType.startsWith('image/') ||
+    contentType.startsWith('video/') ||
+    contentType.startsWith('audio/')
+  );
+}
+
+/** List Bin assets and filter to reviewable media. Bay is the place you review
+ *  the media files that live in Bin, so the library shows only those. */
+export function useBinMediaAssets() {
+  return useQuery({
+    queryKey: ['bay', 'bin-media-assets'],
+    queryFn: async (): Promise<BinMediaAsset[]> => {
+      const res = await fetch('/bin/api/v1/assets', {
+        credentials: 'include',
+        headers: orgHeaders(),
+      });
+      if (!res.ok) throw new Error(`Bin asset list failed (${res.status})`);
+      const json = (await res.json()) as { data: BinMediaAsset[] };
+      return (json.data ?? []).filter((a) => isMediaContentType(a.content_type));
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Review resolution (find-or-create the 1:1 review for a Bin asset)
+// ---------------------------------------------------------------------------
+
+export interface ResolveReviewInput {
+  bin_asset_id: string;
+  bin_version_id?: string | null;
+  name?: string;
+  media_kind?: MediaKind;
+  content_type?: string;
+}
+
+/** Find-or-create the Bay review for a Bin asset; idempotent. Returns the bay
+ *  asset whose id the review page renders. */
+export function useResolveReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ResolveReviewInput) =>
+      api.post<{ data: BayAsset }>('/v1/review/resolve', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bay', 'assets'] }),
   });
 }
 

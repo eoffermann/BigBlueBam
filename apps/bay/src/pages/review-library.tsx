@@ -1,6 +1,12 @@
 import { useRef } from 'react';
 import { Film, Image as ImageIcon, Video, Music, Box, Loader2, Upload } from 'lucide-react';
-import { useAssets, useUploadNewAsset, type MediaKind } from '@/hooks/use-bay';
+import {
+  useBinMediaAssets,
+  uploadFileToBin,
+  mediaKindFromMime,
+  type MediaKind,
+} from '@/hooks/use-bay';
+import { useMutation } from '@tanstack/react-query';
 import { cn, formatRelativeTime } from '@/lib/utils';
 
 interface ReviewLibraryPageProps {
@@ -35,14 +41,21 @@ export function MediaKindBadge({ kind }: { kind: MediaKind }) {
 }
 
 export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
-  const { data, isLoading, isError, error } = useAssets();
-  const assets = (data?.data ?? []).filter((a) => !a.archived_at);
-  const uploadNew = useUploadNewAsset();
+  const { data, isLoading, isError, error } = useBinMediaAssets();
+  const assets = data ?? [];
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Upload bytes into Bin, then open the review for the new Bin asset. The
+  // find-or-create of the Bay review happens on the review page itself.
+  const upload = useMutation({
+    mutationFn: (file: File) => uploadFileToBin(file),
+  });
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) uploadNew.mutate({ file }, { onSuccess: (asset) => onNavigate(`/assets/${asset.id}`) });
+    if (file) {
+      upload.mutate(file, { onSuccess: (binAssetId) => onNavigate(`/review/${binAssetId}`) });
+    }
     e.target.value = '';
   };
 
@@ -52,23 +65,23 @@ export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Bay — Review Library</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Media submitted for review and approval. Open an asset to inspect versions, leave annotations, and record a decision.
+            Media files from your Bin file store. Open one to inspect versions, leave annotations, and record a decision.
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <input ref={fileInput} type="file" className="hidden" onChange={onPick} />
           <button
             type="button"
-            disabled={uploadNew.isPending}
+            disabled={upload.isPending}
             onClick={() => fileInput.current?.click()}
             className="inline-flex items-center gap-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
-            {uploadNew.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {uploadNew.isPending ? 'Uploading…' : 'Upload media'}
+            {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {upload.isPending ? 'Uploading…' : 'Upload media'}
           </button>
-          {uploadNew.isError && (
+          {upload.isError && (
             <span className="text-xs text-red-500">
-              {uploadNew.error instanceof Error ? uploadNew.error.message : 'Upload failed'}
+              {upload.error instanceof Error ? upload.error.message : 'Upload failed'}
             </span>
           )}
         </div>
@@ -85,7 +98,7 @@ export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
         </div>
       ) : isError ? (
         <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 p-6">
-          <h3 className="font-medium text-red-800 dark:text-red-300">Could not load review library</h3>
+          <h3 className="font-medium text-red-800 dark:text-red-300">Could not load media library</h3>
           <p className="text-sm text-red-700 dark:text-red-400 mt-1">
             {error instanceof Error ? error.message : 'An unexpected error occurred.'}
           </p>
@@ -93,9 +106,9 @@ export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
       ) : assets.length === 0 ? (
         <div className="text-center py-16 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700">
           <Film className="h-12 w-12 text-zinc-300 dark:text-zinc-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">No assets in review</h3>
+          <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">No media files yet</h3>
           <p className="text-sm text-zinc-500 mt-1">
-            Submit media for review and it will appear here, ready for annotations and approvals.
+            Upload an image, video, or audio file and it will appear here, ready for annotations and approvals.
           </p>
         </div>
       ) : (
@@ -105,16 +118,19 @@ export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
               <tr className="bg-zinc-50 dark:bg-zinc-800/60 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Media kind</th>
+                <th className="px-4 py-3">Tags</th>
                 <th className="px-4 py-3">Created</th>
               </tr>
             </thead>
             <tbody>
               {assets.map((asset) => {
-                const Icon = mediaKindIcon[asset.media_kind] ?? Film;
+                const kind = mediaKindFromMime(asset.content_type);
+                const Icon = mediaKindIcon[kind] ?? Film;
+                const tags = asset.tags ?? [];
                 return (
                   <tr
                     key={asset.id}
-                    onClick={() => onNavigate(`/assets/${asset.id}`)}
+                    onClick={() => onNavigate(`/review/${asset.id}`)}
                     className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-primary-50/50 dark:hover:bg-primary-900/10 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3">
@@ -126,7 +142,23 @@ export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <MediaKindBadge kind={asset.media_kind} />
+                      <MediaKindBadge kind={kind} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">
                       {formatRelativeTime(asset.created_at)}

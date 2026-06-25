@@ -24,6 +24,7 @@ function breadcrumbsFor(route: ActiveRoute): Crumb[] {
     case 'assets':
       return [{ label: 'Review Library' }];
     case 'review':
+    case 'review-by-bin':
       return [{ label: 'Review Library', href: '/' }, { label: 'Review' }];
     default:
       return [];
