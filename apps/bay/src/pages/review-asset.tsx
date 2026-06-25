@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Box,
   Check,
+  Download,
   Image as ImageIcon,
   Layers,
   Loader2,
   Music,
+  Trash2,
+  Upload,
   Video,
 } from 'lucide-react';
 import {
@@ -17,12 +20,14 @@ import {
   useResolveAnnotation,
   useDecisions,
   useSetDecision,
+  useUploadVersion,
+  useArchiveAsset,
+  binRawUrl,
   type Anchor,
   type AnchorType,
   type BayVersion,
   type DecisionValue,
   type MediaKind,
-  type MediaMeta,
 } from '@/hooks/use-bay';
 import { useAuthStore } from '@/stores/auth.store';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -44,18 +49,30 @@ const mediaKindIcon: Record<MediaKind, typeof ImageIcon> = {
 // Anchor rendering
 // ---------------------------------------------------------------------------
 
-function renderAnchor(anchor: Anchor): string {
-  switch (anchor.type) {
+// Defensive: anchors are opaque JSONB and may be authored by agents or older
+// seeders with slightly different keys (e.g. start vs start_sec). Never throw —
+// an unexpected shape must not blank the whole review page.
+function num(v: unknown, fallback = 0): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function renderAnchor(anchor: Anchor | null | undefined): string {
+  if (!anchor || typeof anchor !== 'object') return 'anchor';
+  const a = anchor as Record<string, unknown>;
+  switch (a.type) {
     case 'frame':
-      return `▶ frame ${anchor.frame}`;
-    case 'timerange':
-      return `◷ ${anchor.start_sec.toFixed(1)}–${anchor.end_sec.toFixed(1)}s`;
+      return `▶ frame ${num(a.frame)}`;
+    case 'timerange': {
+      const start = num(a.start_sec ?? a.start);
+      const end = num(a.end_sec ?? a.end);
+      return `◷ ${start.toFixed(1)}–${end.toFixed(1)}s`;
+    }
     case 'region':
-      return `▱ region ${Math.round(anchor.x * 100)}%,${Math.round(anchor.y * 100)}% ${Math.round(
-        anchor.w * 100,
-      )}%×${Math.round(anchor.h * 100)}%`;
+      return `▱ region ${Math.round(num(a.x) * 100)}%,${Math.round(num(a.y) * 100)}% ${Math.round(
+        num(a.w) * 100,
+      )}%×${Math.round(num(a.h) * 100)}%`;
     case 'viewpoint':
-      return `view: ${anchor.camera ?? 'camera'}`;
+      return `view: ${typeof a.camera === 'string' ? a.camera : 'camera'}`;
     default:
       return 'anchor';
   }
@@ -74,8 +91,18 @@ function MetaLabel({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MediaPlaceholder({ kind, meta }: { kind: MediaKind; meta: MediaMeta | null }) {
+function MediaPanel({ kind, version }: { kind: MediaKind; version: BayVersion | undefined }) {
   const Icon = mediaKindIcon[kind] ?? ImageIcon;
+  const [failed, setFailed] = useState(false);
+  const meta = version?.media_meta ?? null;
+  const binId = version?.bin_asset_id ?? null;
+  const src = binId ? binRawUrl(binId) : null;
+
+  // Reset the error state when the active version changes.
+  useEffect(() => {
+    setFailed(false);
+  }, [binId]);
+
   const labels: { label: string; value: string }[] = [];
   if (meta) {
     if (meta.width != null && meta.height != null) {
@@ -89,14 +116,56 @@ function MediaPlaceholder({ kind, meta }: { kind: MediaKind; meta: MediaMeta | n
     }
   }
 
+  const renderMedia = () => {
+    if (!src || failed) {
+      return (
+        <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3">
+          <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-primary-500">
+            <Icon className="h-8 w-8" />
+          </div>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {!src
+              ? 'No media attached to this version yet — upload one below.'
+              : 'Media not available yet (still scanning, or upload incomplete).'}
+          </p>
+        </div>
+      );
+    }
+    if (kind === 'image') {
+      return (
+        <div className="w-full bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center max-h-[28rem] overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" className="max-h-[28rem] w-auto object-contain" onError={() => setFailed(true)} />
+        </div>
+      );
+    }
+    if (kind === 'video') {
+      return (
+        // biome-ignore lint/a11y/useMediaCaption: user-uploaded review media has no caption track
+        <video src={src} controls className="w-full max-h-[28rem] bg-black" onError={() => setFailed(true)} />
+      );
+    }
+    if (kind === 'audio') {
+      return (
+        <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-4 p-6">
+          <Icon className="h-10 w-10 text-primary-500" />
+          {/* biome-ignore lint/a11y/useMediaCaption: user-uploaded review media has no caption track */}
+          <audio src={src} controls className="w-full max-w-md" onError={() => setFailed(true)} />
+        </div>
+      );
+    }
+    // model / other — no inline viewer; offer the bytes via the Download button.
+    return (
+      <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3">
+        <Icon className="h-8 w-8 text-primary-500" />
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">3D preview not supported yet — download to view.</p>
+      </div>
+    );
+  };
+
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-      <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3 border-b border-zinc-200 dark:border-zinc-700">
-        <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-primary-500">
-          <Icon className="h-8 w-8" />
-        </div>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Preview proxy coming soon</p>
-      </div>
+      <div className="border-b border-zinc-200 dark:border-zinc-700">{renderMedia()}</div>
       {labels.length > 0 && (
         <div className="flex flex-wrap gap-1.5 p-3 bg-white dark:bg-zinc-900">
           {labels.map((l) => (
@@ -336,7 +405,7 @@ function AnnotationsPanel({ versionId }: { versionId: string | undefined }) {
                 </div>
                 <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">{a.body}</p>
                 <p className="text-xs text-zinc-400 mt-1.5">
-                  {a.author_id} · {formatRelativeTime(a.created_at)}
+                  {a.author_name ?? a.author_id ?? 'Unknown'} · {formatRelativeTime(a.created_at)}
                 </p>
               </li>
             ))}
@@ -459,7 +528,7 @@ function DecisionsPanel({ versionId }: { versionId: string | undefined }) {
                     {d.comment}
                   </p>
                 )}
-                <p className="text-xs text-zinc-400 mt-1.5">{d.reviewer_id}</p>
+                <p className="text-xs text-zinc-400 mt-1.5">{d.reviewer_name ?? d.reviewer_id}</p>
               </li>
             ))}
           </ul>
@@ -523,6 +592,9 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   }, [versionsQuery.data]);
 
   const [activeVersionId, setActiveVersionId] = useState<string | undefined>(undefined);
+  const uploadVersion = useUploadVersion(assetId);
+  const archive = useArchiveAsset(assetId);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // Default to the current/newest version once data arrives.
   useEffect(() => {
@@ -535,6 +607,19 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   }, [asset?.current_version_id, versions, activeVersionId]);
 
   const activeVersion = versions.find((v) => v.id === activeVersionId);
+
+  const onPickVersion = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      uploadVersion.mutate(file, { onSuccess: () => setActiveVersionId(undefined) });
+    }
+    e.target.value = '';
+  };
+
+  const onDelete = () => {
+    if (!confirm('Archive this review asset? Its review history is kept but it leaves the library.')) return;
+    archive.mutate(undefined, { onSuccess: () => onNavigate('/') });
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -558,15 +643,52 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
         </div>
       ) : asset ? (
         <>
-          <div className="flex items-center gap-3 mb-6">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{asset.name}</h1>
-            <MediaKindBadge kind={asset.media_kind} />
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{asset.name}</h1>
+              <MediaKindBadge kind={asset.media_kind} />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <input ref={fileInput} type="file" className="hidden" onChange={onPickVersion} />
+              <button
+                type="button"
+                disabled={uploadVersion.isPending}
+                onClick={() => fileInput.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+              >
+                {uploadVersion.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploadVersion.isPending ? 'Uploading…' : 'Upload version'}
+              </button>
+              {activeVersion?.bin_asset_id && (
+                <a
+                  href={binRawUrl(activeVersion.bin_asset_id)}
+                  download={asset.name}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                >
+                  <Download className="h-4 w-4" /> Download
+                </a>
+              )}
+              <button
+                type="button"
+                disabled={archive.isPending}
+                onClick={onDelete}
+                title="Archive this review asset"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 px-3 py-1.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/10 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" /> Delete
+              </button>
+            </div>
           </div>
+          {uploadVersion.isError && (
+            <p className="text-xs text-red-500 mb-3">
+              {uploadVersion.error instanceof Error ? uploadVersion.error.message : 'Upload failed.'}
+            </p>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: media + versions */}
             <div className="lg:col-span-2 space-y-6">
-              <MediaPlaceholder kind={asset.media_kind} meta={activeVersion?.media_meta ?? null} />
+              <MediaPanel kind={asset.media_kind} version={activeVersion} />
               <AnnotationsPanel versionId={activeVersionId} />
             </div>
 

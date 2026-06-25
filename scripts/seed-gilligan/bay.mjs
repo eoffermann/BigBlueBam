@@ -51,7 +51,7 @@ const ITEMS = [
     media_kind: 'video',
     meta: { width: 1920, height: 1080, duration_sec: 92, codec: 'h264', fps: 24 },
     annotations: [
-      { who: 'ginger', anchor: { type: 'timerange', start: 12.5, end: 18.0 }, body: 'Hold on the lagoon shot a beat longer.' },
+      { who: 'ginger', anchor: { type: 'timerange', start_sec: 12.5, end_sec: 18.0 }, body: 'Hold on the lagoon shot a beat longer.' },
       { who: 'professor', anchor: { type: 'frame', frame: 480 }, body: '[Auto-QC] Loudness -14 LUFS, within spec.' },
     ],
     decisions: [{ who: 'skipper', decision: 'changes_requested', comment: 'Tighten the open.' }],
@@ -61,7 +61,7 @@ const ITEMS = [
     media_kind: 'audio',
     meta: { duration_sec: 30, codec: 'aac', sample_rate: 48000 },
     annotations: [
-      { who: 'maryann', anchor: { type: 'timerange', start: 0.0, end: 4.0 }, body: 'Love the ukulele intro!' },
+      { who: 'maryann', anchor: { type: 'timerange', start_sec: 0.0, end_sec: 4.0 }, body: 'Love the ukulele intro!' },
     ],
     decisions: [{ who: 'howell', decision: 'approved', comment: 'Catchy. Approved.' }],
   },

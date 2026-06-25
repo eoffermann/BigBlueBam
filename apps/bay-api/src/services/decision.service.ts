@@ -1,6 +1,7 @@
 import { eq, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bayReviewDecisions } from '../db/schema/index.js';
+import { users } from '../db/schema/bbb-refs.js';
 import { getVersion } from './version.service.js';
 import { ConflictError } from './errors.js';
 
@@ -15,8 +16,18 @@ export async function listDecisions(versionId: string, orgId: string) {
   // Org-scope via the version resolver (joins through bay_assets).
   await getVersion(versionId, orgId);
   return db
-    .select()
+    .select({
+      id: bayReviewDecisions.id,
+      version_id: bayReviewDecisions.version_id,
+      reviewer_id: bayReviewDecisions.reviewer_id,
+      reviewer_name: users.display_name,
+      decision: bayReviewDecisions.decision,
+      comment: bayReviewDecisions.comment,
+      created_at: bayReviewDecisions.created_at,
+      updated_at: bayReviewDecisions.updated_at,
+    })
     .from(bayReviewDecisions)
+    .leftJoin(users, eq(users.id, bayReviewDecisions.reviewer_id))
     .where(eq(bayReviewDecisions.version_id, versionId))
     .orderBy(asc(bayReviewDecisions.created_at));
 }

@@ -1,6 +1,7 @@
 import { and, eq, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bayAssets, bayAssetVersions, bayAnnotations } from '../db/schema/index.js';
+import { users } from '../db/schema/bbb-refs.js';
 import { getVersion } from './version.service.js';
 import { NotFoundError } from './errors.js';
 
@@ -21,9 +22,21 @@ export async function listAnnotations(
   if (!opts.include_resolved) {
     conditions.push(eq(bayAnnotations.resolved, false));
   }
+  // Join users so the UI can show the author's name, not a raw UUID.
   return db
-    .select()
+    .select({
+      id: bayAnnotations.id,
+      version_id: bayAnnotations.version_id,
+      author_id: bayAnnotations.author_id,
+      author_name: users.display_name,
+      anchor: bayAnnotations.anchor,
+      body: bayAnnotations.body,
+      resolved: bayAnnotations.resolved,
+      thread_parent_id: bayAnnotations.thread_parent_id,
+      created_at: bayAnnotations.created_at,
+    })
     .from(bayAnnotations)
+    .leftJoin(users, eq(users.id, bayAnnotations.author_id))
     .where(and(...conditions))
     .orderBy(asc(bayAnnotations.created_at));
 }

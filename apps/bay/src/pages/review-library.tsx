@@ -1,5 +1,6 @@
-import { Film, Image as ImageIcon, Video, Music, Box } from 'lucide-react';
-import { useAssets, type MediaKind } from '@/hooks/use-bay';
+import { useRef } from 'react';
+import { Film, Image as ImageIcon, Video, Music, Box, Loader2, Upload } from 'lucide-react';
+import { useAssets, useUploadNewAsset, type MediaKind } from '@/hooks/use-bay';
 import { cn, formatRelativeTime } from '@/lib/utils';
 
 interface ReviewLibraryPageProps {
@@ -36,6 +37,14 @@ export function MediaKindBadge({ kind }: { kind: MediaKind }) {
 export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
   const { data, isLoading, isError, error } = useAssets();
   const assets = (data?.data ?? []).filter((a) => !a.archived_at);
+  const uploadNew = useUploadNewAsset();
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadNew.mutate({ file }, { onSuccess: (asset) => onNavigate(`/assets/${asset.id}`) });
+    e.target.value = '';
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -45,6 +54,23 @@ export function ReviewLibraryPage({ onNavigate }: ReviewLibraryPageProps) {
           <p className="text-sm text-zinc-500 mt-1">
             Media submitted for review and approval. Open an asset to inspect versions, leave annotations, and record a decision.
           </p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <input ref={fileInput} type="file" className="hidden" onChange={onPick} />
+          <button
+            type="button"
+            disabled={uploadNew.isPending}
+            onClick={() => fileInput.current?.click()}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            {uploadNew.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploadNew.isPending ? 'Uploading…' : 'Upload media'}
+          </button>
+          {uploadNew.isError && (
+            <span className="text-xs text-red-500">
+              {uploadNew.error instanceof Error ? uploadNew.error.message : 'Upload failed'}
+            </span>
+          )}
         </div>
       </div>
 
