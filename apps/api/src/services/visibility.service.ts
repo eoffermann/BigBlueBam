@@ -29,6 +29,7 @@ import {
   boltAutomationsStub,
   binAssetsStub,
   binFoldersStub,
+  bayAssetsStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -79,7 +80,8 @@ export type VisibilityEntityType =
   | 'blank.form'
   | 'bolt.rule'
   | 'bin.asset'
-  | 'bin.folder';
+  | 'bin.folder'
+  | 'bay.asset';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -105,6 +107,7 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bolt.rule',
   'bin.asset',
   'bin.folder',
+  'bay.asset',
 ] as const;
 
 export type PreflightReason =
@@ -1222,6 +1225,53 @@ async function preflightBinFolder(
 }
 
 // ---------------------------------------------------------------------------
+// bay.asset
+// ---------------------------------------------------------------------------
+//
+// Bay review assets have no per-asset visibility enum (BAY-3: review layer over
+// Bin). Enforce org match + the same project gate as a Bin folder; org
+// admin/owner override on project-scoped assets. Annotations/decisions/versions
+// inherit this rule through their parent asset.
+
+async function preflightBayAsset(
+  asker: AskerContext,
+  assetId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bayAssetsStub.id,
+      org_id: bayAssetsStub.org_id,
+      project_id: bayAssetsStub.project_id,
+    })
+    .from(bayAssetsStub)
+    .where(eq(bayAssetsStub.id, assetId))
+    .limit(1);
+
+  const asset = rows[0];
+  if (!asset) return { allowed: false, reason: 'not_found' };
+  if (asset.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+
+  if (asset.project_id) {
+    if (isOrgAdmin(asker.role)) {
+      return { allowed: true, reason: 'ok', entity_org_id: asset.org_id };
+    }
+    const member = await isProjectMember(asset.project_id, asker.id);
+    if (member) {
+      return { allowed: true, reason: 'ok', entity_org_id: asset.org_id };
+    }
+    return {
+      allowed: false,
+      reason: 'not_project_member',
+      entity_org_id: asset.org_id,
+    };
+  }
+
+  return { allowed: true, reason: 'ok', entity_org_id: asset.org_id };
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -1291,6 +1341,8 @@ export async function preflightAccess(
       return preflightBlankForm(asker, entityId);
     case 'bolt.rule':
       return preflightBoltRule(asker, entityId);
+    case 'bay.asset':
+      return preflightBayAsset(asker, entityId);
     case 'bin.asset':
       return preflightBinAsset(asker, entityId);
     case 'bin.folder':

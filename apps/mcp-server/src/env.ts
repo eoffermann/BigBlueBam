@@ -27,6 +27,7 @@ const envSchema = z.object({
   BLANK_API_URL: z.string().url().default('http://blank-api:4013/v1'),
   BLUEPRINT_API_URL: z.string().url().default('http://blueprint-api:4015/v1'),
   BIN_API_URL: z.string().url().default('http://bin-api:4016/v1'),
+  BAY_API_URL: z.string().url().default('http://bay-api:4017/v1'),
   BUREAU_API_URL: z.string().url().default('http://bureau-api:4015/v1'),
   REDIS_URL: z.string().url().default('redis://localhost:6379'),
   MCP_AUTH_REQUIRED: z.coerce.boolean().default(true),

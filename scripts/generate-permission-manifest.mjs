@@ -221,6 +221,21 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bin_data_comment_list', { id: 'bin.data_comment.get', verb: 'get' }],
   ['bin_data_comment_create', { id: 'bin.data_comment.create', verb: 'create' }],
   ['bin_data_comment_resolve', { id: 'bin.data_comment_resolve.create', verb: 'create' }],
+
+  // Bay tools (resource-first names) → the same permission ids their REST
+  // endpoints use (review layer on top of Bin).
+  ['bay_asset_list', { id: 'bay.asset.list', verb: 'list' }],
+  ['bay_asset_get', { id: 'bay.asset.get', verb: 'get' }],
+  ['bay_asset_create', { id: 'bay.asset.create', verb: 'create' }],
+  ['bay_asset_archive', { id: 'bay.asset.archive', verb: 'archive' }],
+  ['bay_version_list', { id: 'bay.asset_version.get', verb: 'get' }],
+  ['bay_version_get', { id: 'bay.version.get', verb: 'get' }],
+  ['bay_version_create', { id: 'bay.asset_version.create', verb: 'create' }],
+  ['bay_annotation_list', { id: 'bay.version_annotation.get', verb: 'get' }],
+  ['bay_annotation_create', { id: 'bay.version_annotation.create', verb: 'create' }],
+  ['bay_annotation_resolve', { id: 'bay.annotation_resolve.create', verb: 'create' }],
+  ['bay_decision_list', { id: 'bay.version_decision.get', verb: 'get' }],
+  ['bay_decision_set', { id: 'bay.version_decision.update', verb: 'update' }],
 ]);
 
 // ── Inference helpers ──────────────────────────────────────────────────

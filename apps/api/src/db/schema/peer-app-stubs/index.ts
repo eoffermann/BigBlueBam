@@ -387,3 +387,15 @@ export const binFoldersStub = pgTable(
   },
   (table) => [index('pas_bin_folders_org_idx').on(table.org_id)],
 );
+
+// Bay review asset (no per-asset visibility enum; org match + project gate).
+export const bayAssetsStub = pgTable(
+  'bay_assets',
+  {
+    id: uuid('id').primaryKey(),
+    org_id: uuid('org_id').notNull(),
+    project_id: uuid('project_id'),
+    created_by: uuid('created_by').notNull(),
+  },
+  (table) => [index('pas_bay_assets_org_idx').on(table.org_id)],
+);

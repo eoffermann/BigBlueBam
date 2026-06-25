@@ -1,7 +1,7 @@
 {
   "counts": {
     "total": 1355,
-    "mcp_tools_scanned": 746,
+    "mcp_tools_scanned": 758,
     "rest_routes_scanned": 872,
     "read_permissions": 530,
     "destructive_permissions": 127
@@ -8587,6 +8587,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bay_annotation_resolve",
+          "file": "bay-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /annotations/:id/resolve",
           "file": "annotations.routes.ts"
@@ -8603,6 +8608,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_version_create",
+          "file": "bay-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /assets/:id/versions",
@@ -8621,6 +8631,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bay_version_list",
+          "file": "bay-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /assets/:id/versions",
           "file": "assets.routes.ts"
@@ -8637,6 +8652,11 @@
       "requires_confirmation": true,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_asset_archive",
+          "file": "bay-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /assets/:id/archive",
@@ -8655,6 +8675,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bay_asset_create",
+          "file": "bay-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "POST /assets",
           "file": "assets.routes.ts"
@@ -8671,6 +8696,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_asset_get",
+          "file": "bay-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /assets/:id",
@@ -8689,6 +8719,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bay_asset_list",
+          "file": "bay-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /assets",
           "file": "assets.routes.ts"
@@ -8705,6 +8740,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_annotation_create",
+          "file": "bay-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "POST /versions/:id/annotations",
@@ -8723,6 +8763,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bay_annotation_list",
+          "file": "bay-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "GET /versions/:id/annotations",
           "file": "annotations.routes.ts"
@@ -8739,6 +8784,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_decision_list",
+          "file": "bay-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /versions/:id/decisions",
@@ -8757,6 +8807,11 @@
       "requires_superuser": false,
       "sources": [
         {
+          "source": "mcp",
+          "ref": "bay_decision_set",
+          "file": "bay-tools.ts"
+        },
+        {
           "source": "rest",
           "ref": "PUT /versions/:id/decision",
           "file": "decisions.routes.ts"
@@ -8773,6 +8828,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_version_get",
+          "file": "bay-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "GET /versions/:id",
