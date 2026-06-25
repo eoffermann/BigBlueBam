@@ -53,6 +53,7 @@ export const LAUNCHPAD_APP_IDS = [
   'bearing',
   'board',
   'blueprint',
+  'bin',
   'helpdesk',
   'bureau',
 ] as const;
@@ -85,6 +86,7 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'bearing', name: 'Bearing', description: 'Goals & OKRs', icon_name: 'target', color: '#0d9488', path: '/bearing/' },
   { id: 'board', name: 'Board', description: 'Whiteboards', icon_name: 'pen-tool', color: '#6366f1', path: '/board/' },
   { id: 'blueprint', name: 'Blueprint', description: 'Diagrams & Flows', icon_name: 'sparkles', color: '#0ea5e9', path: '/blueprint/' },
+  { id: 'bin', name: 'Bin', description: 'Files & Structured Data', icon_name: 'database', color: '#0369a1', path: '/bin/' },
   { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon_name: 'headset', color: '#be123c', path: '/helpdesk/' },
   { id: 'bureau', name: 'Bureau', description: 'Virtual Office', icon_name: 'building', color: '#475569', path: '/bureau/' },
 ];
