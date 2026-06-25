@@ -293,6 +293,8 @@ services:
         condition: service_healthy
       bin-api:
         condition: service_healthy
+      bay-api:
+        condition: service_healthy
       blueprint-api:
         condition: service_healthy
       site:
@@ -963,6 +965,48 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4016/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  bay-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/bay-api/Dockerfile
+      target: production
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      - BIN_API_INTERNAL_URL=http://bin-api:4016
+      - NODE_ENV=production
+      - PORT=4017
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4017/health"]
       interval: 10s
       timeout: 5s
       retries: 3

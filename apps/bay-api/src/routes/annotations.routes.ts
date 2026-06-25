@@ -51,7 +51,7 @@ export default async function annotationRoutes(fastify: FastifyInstance) {
   // POST /versions/:id/annotations — add an anchored annotation
   fastify.post<{ Params: { id: string } }>(
     '/versions/:id/annotations',
-    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bay.annotation.create')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bay.version_annotation.create')] },
     async (request, reply) => {
       const body = createAnnotationSchema.parse(request.body);
       try {

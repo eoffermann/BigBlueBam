@@ -44,7 +44,7 @@ export default async function decisionRoutes(fastify: FastifyInstance) {
   // PUT /versions/:id/decision — upsert the caller's review decision
   fastify.put<{ Params: { id: string } }>(
     '/versions/:id/decision',
-    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bay.decision.set')] },
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bay.version_decision.update')] },
     async (request, reply) => {
       const body = setDecisionSchema.parse(request.body);
       try {

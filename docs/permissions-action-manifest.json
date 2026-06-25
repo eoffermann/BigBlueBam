@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1343,
+    "total": 1355,
     "mcp_tools_scanned": 746,
-    "rest_routes_scanned": 860,
-    "read_permissions": 524,
-    "destructive_permissions": 126
+    "rest_routes_scanned": 872,
+    "read_permissions": 530,
+    "destructive_permissions": 127
   },
   "permissions": [
     {
@@ -8573,6 +8573,210 @@
           "source": "mcp",
           "ref": "banter_feed_weights_set_org",
           "file": "banter-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.annotation_resolve.create",
+      "app": "bay",
+      "resource": "annotation_resolve",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /annotations/:id/resolve",
+          "file": "annotations.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.asset_version.create",
+      "app": "bay",
+      "resource": "asset_version",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /assets/:id/versions",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.asset_version.get",
+      "app": "bay",
+      "resource": "asset_version",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets/:id/versions",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.asset.archive",
+      "app": "bay",
+      "resource": "asset",
+      "verb": "archive",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /assets/:id/archive",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.asset.create",
+      "app": "bay",
+      "resource": "asset",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /assets",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.asset.get",
+      "app": "bay",
+      "resource": "asset",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets/:id",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.asset.list",
+      "app": "bay",
+      "resource": "asset",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /assets",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.version_annotation.create",
+      "app": "bay",
+      "resource": "version_annotation",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "POST /versions/:id/annotations",
+          "file": "annotations.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.version_annotation.get",
+      "app": "bay",
+      "resource": "version_annotation",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /versions/:id/annotations",
+          "file": "annotations.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.version_decision.get",
+      "app": "bay",
+      "resource": "version_decision",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /versions/:id/decisions",
+          "file": "decisions.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.version_decision.update",
+      "app": "bay",
+      "resource": "version_decision",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "PUT /versions/:id/decision",
+          "file": "decisions.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.version.get",
+      "app": "bay",
+      "resource": "version",
+      "verb": "get",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /versions/:id",
+          "file": "assets.routes.ts"
         }
       ]
     },

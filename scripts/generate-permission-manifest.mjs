@@ -74,7 +74,7 @@ function computeRequiresSuperuser(id, resource) {
 const APP_PREFIXES = new Set([
   'bam', 'banter', 'beacon', 'brief', 'bolt', 'bearing',
   'board', 'bond', 'blast', 'bench', 'book', 'blank', 'bill',
-  'bin', 'helpdesk',
+  'bin', 'bay', 'helpdesk',
 ]);
 
 // ── Tool name → permission ID overrides. Tools that don't fit the
@@ -331,6 +331,7 @@ const APP_TO_PREFIX = {
   'blank-api': 'blank',
   'bill-api': 'bill',
   'bin-api': 'bin',
+  'bay-api': 'bay',
   'helpdesk-api': 'helpdesk',
 };
 
