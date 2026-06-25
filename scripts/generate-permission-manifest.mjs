@@ -221,6 +221,7 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bin_data_comment_list', { id: 'bin.data_comment.get', verb: 'get' }],
   ['bin_data_comment_create', { id: 'bin.data_comment.create', verb: 'create' }],
   ['bin_data_comment_resolve', { id: 'bin.data_comment_resolve.create', verb: 'create' }],
+  ['bin_data_array_op', { id: 'bin.data_array.create', verb: 'create' }],
 
   // Bay tools (resource-first names) → the same permission ids their REST
   // endpoints use (review layer on top of Bin).

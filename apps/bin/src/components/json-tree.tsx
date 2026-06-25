@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 
 // A collapsible, type-aware hierarchical viewer/editor for tree-shaped structured
 // data (JSON / YAML). Objects and arrays are expandable nodes; scalars render
@@ -10,6 +10,13 @@ import { ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 type Json = unknown;
 type Path = (string | number)[];
 type OnEdit = (path: Path, value: string) => void;
+export interface TreeArrayOp {
+  op: 'append' | 'insert' | 'delete';
+  path?: Path;
+  value?: Record<string, unknown>;
+  index?: number;
+}
+type OnArrayOp = (op: TreeArrayOp) => void;
 
 function isObject(v: Json): v is Record<string, Json> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -133,47 +140,75 @@ function EmbeddedTable({
   rows,
   basePath,
   onEdit,
+  onArrayOp,
   disabled,
 }: {
   columns: string[];
   rows: Record<string, Json>[];
   basePath: Path;
   onEdit?: OnEdit;
+  onArrayOp?: OnArrayOp;
   disabled: boolean;
 }) {
   return (
-    <div className="my-1 rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-auto custom-scrollbar">
-      <table className="w-full text-[13px] font-sans">
-        <thead>
-          <tr className="bg-zinc-100/70 dark:bg-zinc-800/60 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            {columns.map((c) => (
-              <th key={c} className="px-3 py-1.5 whitespace-nowrap">
-                {c}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
+    <div className="my-1">
+      <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-auto custom-scrollbar">
+        <table className="w-full text-[13px] font-sans">
+          <thead>
+            <tr className="bg-zinc-100/70 dark:bg-zinc-800/60 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               {columns.map((c) => (
-                <td key={c} className="px-3 py-1.5 whitespace-nowrap text-zinc-700 dark:text-zinc-300">
-                  {c in row ? (
-                    <EditableScalar
-                      value={row[c]}
-                      path={[...basePath, i, c]}
-                      onEdit={onEdit}
-                      disabled={disabled}
-                    />
-                  ) : (
-                    <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                  )}
-                </td>
+                <th key={c} className="px-3 py-1.5 whitespace-nowrap">
+                  {c}
+                </th>
               ))}
+              {onArrayOp && <th className="px-2 py-1.5 w-8" aria-label="Row actions" />}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800 group/erow">
+                {columns.map((c) => (
+                  <td key={c} className="px-3 py-1.5 whitespace-nowrap text-zinc-700 dark:text-zinc-300">
+                    {c in row ? (
+                      <EditableScalar
+                        value={row[c]}
+                        path={[...basePath, i, c]}
+                        onEdit={onEdit}
+                        disabled={disabled}
+                      />
+                    ) : (
+                      <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                    )}
+                  </td>
+                ))}
+                {onArrayOp && (
+                  <td className="px-2 py-1.5 text-center">
+                    <button
+                      type="button"
+                      title="Delete row"
+                      disabled={disabled}
+                      onClick={() => onArrayOp({ op: 'delete', path: basePath, index: i })}
+                      className="text-zinc-300 dark:text-zinc-600 hover:text-red-500 opacity-0 group-hover/erow:opacity-100 transition-opacity disabled:opacity-30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {onArrayOp && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onArrayOp({ op: 'append', path: basePath })}
+          className="mt-1 inline-flex items-center gap-1 rounded border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 text-[11px] font-sans text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 disabled:opacity-50"
+        >
+          <Plus className="h-3 w-3" /> Add row
+        </button>
+      )}
     </div>
   );
 }
@@ -185,6 +220,7 @@ function Node({
   isLast,
   path,
   onEdit,
+  onArrayOp,
   disabled,
 }: {
   label: string | null;
@@ -193,6 +229,7 @@ function Node({
   isLast: boolean;
   path: Path;
   onEdit?: OnEdit;
+  onArrayOp?: OnArrayOp;
   disabled: boolean;
 }) {
   const container = Array.isArray(value) || isObject(value);
@@ -260,6 +297,7 @@ function Node({
             rows={value as Record<string, Json>[]}
             basePath={path}
             onEdit={onEdit}
+            onArrayOp={onArrayOp}
             disabled={disabled}
           />
         </div>
@@ -276,6 +314,7 @@ function Node({
                 isLast={i === count - 1}
                 path={[...path, Array.isArray(value) ? i : (k as string)]}
                 onEdit={onEdit}
+                onArrayOp={onArrayOp}
                 disabled={disabled}
               />
             ))}
@@ -293,20 +332,31 @@ function Node({
 export function JsonTree({
   data,
   onEdit,
+  onArrayOp,
   disabled = false,
 }: {
   data: Json;
   onEdit?: OnEdit;
+  onArrayOp?: OnArrayOp;
   disabled?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 font-mono text-[13px] overflow-auto custom-scrollbar text-zinc-700 dark:text-zinc-300">
       {onEdit && (
         <p className="text-[11px] text-zinc-400 mb-2 font-sans inline-flex items-center gap-1">
-          <Pencil className="h-3 w-3" /> click any value or grid cell to edit
+          <Pencil className="h-3 w-3" /> click any value or grid cell to edit · use the grid row controls to add/delete rows
         </p>
       )}
-      <Node label={null} value={data} depth={0} isLast path={[]} onEdit={onEdit} disabled={disabled} />
+      <Node
+        label={null}
+        value={data}
+        depth={0}
+        isLast
+        path={[]}
+        onEdit={onEdit}
+        onArrayOp={onArrayOp}
+        disabled={disabled}
+      />
     </div>
   );
 }

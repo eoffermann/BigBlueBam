@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { AlertTriangle, ArrowLeft, FileWarning, Loader2, Pencil } from 'lucide-react';
-import { useAsset, useData, usePatchRows, usePatchTree, type InferredField } from '@/hooks/use-bin';
+import { AlertTriangle, ArrowLeft, FileWarning, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useAsset, useData, usePatchRows, usePatchTree, useArrayOp, type InferredField } from '@/hooks/use-bin';
 import { JsonTree } from '@/components/json-tree';
 import { ApiError } from '@/lib/api';
 
@@ -111,6 +111,7 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
   const dataQuery = useData(assetId);
   const patch = usePatchRows(assetId);
   const treePatch = usePatchTree(assetId);
+  const arrayOp = useArrayOp(assetId);
 
   const asset = assetQuery.data?.data;
   const heading = asset?.name ?? 'Asset';
@@ -181,8 +182,9 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
           )}
           <JsonTree
             data={data.data}
-            disabled={treePatch.isPending}
+            disabled={treePatch.isPending || arrayOp.isPending}
             onEdit={(path, value) => treePatch.mutate([{ path, value }])}
+            onArrayOp={(op) => arrayOp.mutate(op)}
           />
         </div>
       );
@@ -214,13 +216,14 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
                     {col}
                   </th>
                 ))}
+                <th className="px-2 py-2.5 w-10" aria-label="Row actions" />
               </tr>
             </thead>
             <tbody>
               {data.rows.map((row, i) => (
                 <tr
                   key={i}
-                  className="border-t border-zinc-100 dark:border-zinc-800"
+                  className="border-t border-zinc-100 dark:border-zinc-800 group/row"
                 >
                   {data.columns.map((col) => (
                     <EditableCell
@@ -232,14 +235,42 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
                       }
                     />
                   ))}
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      title="Delete row"
+                      disabled={arrayOp.isPending}
+                      onClick={() => arrayOp.mutate({ op: 'delete', index: data.offset + i })}
+                      className="text-zinc-300 dark:text-zinc-600 hover:text-red-500 opacity-0 group-hover/row:opacity-100 transition-opacity disabled:opacity-30"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {patch.isError && (
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            disabled={arrayOp.isPending}
+            onClick={() => arrayOp.mutate({ op: 'append' })}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" /> Add row
+          </button>
+          {arrayOp.isPending && (
+            <span className="inline-flex items-center gap-1 text-xs text-primary-500">
+              <Loader2 className="h-3 w-3 animate-spin" /> saving…
+            </span>
+          )}
+        </div>
+        {(patch.isError || arrayOp.isError) && (
           <p className="text-xs text-red-500 mt-2">
-            {patch.error instanceof Error ? patch.error.message : 'Edit failed.'}
+            {(patch.error || arrayOp.error) instanceof Error
+              ? ((patch.error || arrayOp.error) as Error).message
+              : 'Edit failed.'}
           </p>
         )}
       </div>

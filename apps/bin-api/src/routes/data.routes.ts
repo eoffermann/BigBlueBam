@@ -39,6 +39,13 @@ const treePatchSchema = z.object({
     .min(1),
 });
 
+const arrayOpSchema = z.object({
+  path: z.array(z.union([z.string(), z.number()])).optional(),
+  op: z.enum(['append', 'insert', 'delete']),
+  value: z.record(z.unknown()).optional(),
+  index: z.number().int().min(0).optional(),
+});
+
 const commentSchema = z.object({
   shape: z.enum(['record', 'tree']),
   anchor: z.unknown(),
@@ -141,6 +148,28 @@ export default async function dataRoutes(fastify: FastifyInstance) {
           request.user!.org_id,
           request.user!.id,
           body.patches,
+        );
+        return reply.send({ data: result });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
+  // POST /data/:assetId/array — add/delete a row in any grid (commits a new
+  // version). path=[] targets a record asset's top-level rows; a path like
+  // ["passengers"] targets a tree embedded grid.
+  fastify.post<{ Params: { assetId: string } }>(
+    '/data/:assetId/array',
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bin.data_array.create')] },
+    async (request, reply) => {
+      const body = arrayOpSchema.parse(request.body);
+      try {
+        const result = await dataService.arrayRowOp(
+          request.params.assetId,
+          request.user!.org_id,
+          request.user!.id,
+          body,
         );
         return reply.send({ data: result });
       } catch (err) {

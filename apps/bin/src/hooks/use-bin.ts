@@ -120,3 +120,23 @@ export function usePatchTree(assetId: string | undefined) {
     },
   });
 }
+
+// Add/delete a row in any grid. path omitted/[] = a record asset's top-level
+// rows; a path like ["passengers"] = a tree embedded grid. Commits a new version.
+export interface ArrayOp {
+  op: 'append' | 'insert' | 'delete';
+  path?: (string | number)[];
+  value?: Record<string, unknown>;
+  index?: number;
+}
+
+export function useArrayOp(assetId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (op: ArrayOp) => api.post<{ data: unknown }>(`/v1/data/${assetId}/array`, op),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'data', assetId] });
+      qc.invalidateQueries({ queryKey: ['bin', 'assets', assetId] });
+    },
+  });
+}

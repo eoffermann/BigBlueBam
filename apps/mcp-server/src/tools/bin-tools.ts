@@ -282,6 +282,24 @@ export function registerBinTools(server: McpServer, api: ApiClient, binApiUrl: s
   });
 
   registerTool(server, {
+    name: 'bin_data_array_op',
+    description:
+      'Add or delete a row in any structured-data grid. path=[] targets a record asset\'s top-level rows; a path like ["passengers"] targets a tree embedded grid (array-of-dicts). op is "append" (add a row at the end; value optional), "insert" (at index), or "delete" (remove index). Commits a new immutable version.',
+    input: {
+      asset_id: z.string().uuid().describe('Asset ID'),
+      op: z.enum(['append', 'insert', 'delete']),
+      path: z.array(z.union([z.string(), z.number()])).optional().describe('Array path; omit/[] for a record asset'),
+      value: z.record(z.unknown()).optional().describe('Row object for append/insert'),
+      index: z.number().int().min(0).optional().describe('Target index for insert/delete'),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ asset_id, ...body }) => {
+      const result = await client.request('POST', `/data/${asset_id}/array`, body);
+      return result.ok ? ok(result.data) : err('bin array row op', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'bin_data_comment_list',
     description: 'List review comments on a structured-data asset (open by default; pass include_resolved).',
     input: {

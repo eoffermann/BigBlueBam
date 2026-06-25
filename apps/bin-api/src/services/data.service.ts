@@ -287,6 +287,84 @@ export async function patchTree(
 }
 
 // ---------------------------------------------------------------------------
+// Array row operations (add/delete a row in ANY grid)
+// ---------------------------------------------------------------------------
+//
+// Works for both grid kinds with one path-addressed mechanism:
+//   - record asset (CSV/JSONL/JSON-array): path = []  → the top-level rows array
+//   - tree embedded grid (array-of-dicts): path = ["passengers"] etc.
+// op 'append' adds a row at the end, 'insert' at index, 'delete' removes index.
+
+export interface ArrayRowOp {
+  path?: (string | number)[];
+  op: 'append' | 'insert' | 'delete';
+  /** Row object for append/insert (defaults to an empty row shaped by columns). */
+  value?: Record<string, unknown>;
+  /** Target index for insert/delete (0-based). */
+  index?: number;
+}
+
+function navigateToArray(root: unknown, path: (string | number)[]): unknown[] {
+  let cur: unknown = root;
+  for (const key of path) {
+    if (cur == null || typeof cur !== 'object') {
+      throw new ConflictError(`Path segment "${String(key)}" does not exist`);
+    }
+    cur = (cur as Record<string | number, unknown>)[key as never];
+  }
+  if (!Array.isArray(cur)) {
+    throw new ConflictError('Path does not resolve to an array (grid)');
+  }
+  return cur;
+}
+
+export async function arrayRowOp(
+  assetId: string,
+  orgId: string,
+  userId: string,
+  opInput: ArrayRowOp,
+) {
+  const asset = (await assetService.getAsset(assetId, orgId)) as AssetRow;
+  const parsed = await loadParsed(asset);
+  const path = opInput.path ?? [];
+
+  // Build a mutable root to commit: for a record asset the document IS the rows
+  // array; for a tree asset it is the object (navigate to the embedded array).
+  const root: unknown =
+    parsed.shape === 'record' ? [...(parsed.rows ?? [])] : structuredClone(parsed.data);
+
+  const target = path.length === 0 ? (root as unknown[]) : navigateToArray(root, path);
+  if (!Array.isArray(target)) {
+    throw new ConflictError('Target is not a grid array');
+  }
+
+  if (opInput.op === 'delete') {
+    const i = opInput.index;
+    if (i === undefined || i < 0 || i >= target.length) {
+      throw new ConflictError(`Row index ${i} is out of range (0..${target.length - 1})`);
+    }
+    target.splice(i, 1);
+  } else {
+    // append / insert. For a record grid default to an empty row keyed by the
+    // detected columns so the new CSV/record row has the right shape.
+    const emptyRow: Record<string, unknown> = {};
+    if (path.length === 0 && parsed.shape === 'record') {
+      for (const c of parsed.columns ?? []) emptyRow[c] = '';
+    }
+    const row = opInput.value ?? emptyRow;
+    if (opInput.op === 'insert') {
+      const at = opInput.index ?? target.length;
+      target.splice(Math.max(0, Math.min(at, target.length)), 0, row);
+    } else {
+      target.push(row);
+    }
+  }
+
+  const result = await commitVersion(assetId, orgId, userId, root, parsed.dialect, asset);
+  return { version: result.version, asset: result.asset, length: target.length };
+}
+
+// ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
 
