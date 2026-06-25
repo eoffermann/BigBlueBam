@@ -110,6 +110,40 @@ class ApiClient {
   delete<T = void>(path: string): Promise<T> {
     return this.request<T>('DELETE', path);
   }
+
+  /** Multipart upload (bytes through the service). Lets the browser set the
+   *  multipart boundary; forwards org + impersonation headers + session cookie. */
+  async upload<T>(path: string, file: File): Promise<T> {
+    const url = new URL(`${this.baseUrl}${path}`, window.location.origin);
+    const headers: Record<string, string> = {};
+    const orgId = this.getOrgId();
+    if (orgId) headers['X-Org-Id'] = orgId;
+    Object.assign(headers, impersonateHeader());
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: fd,
+    });
+    if (!response.ok) {
+      let e: { error?: { code?: string; message?: string } } = {};
+      try {
+        e = await response.json();
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(response.status, e.error?.code ?? 'UNKNOWN', e.error?.message ?? `Upload failed (${response.status})`);
+    }
+    return (await response.json()) as T;
+  }
+
+  /** Absolute, same-origin URL for a raw byte stream (download/preview). The
+   *  session cookie rides along automatically, so an <a download> just works. */
+  rawUrl(path: string): string {
+    return `${this.baseUrl}${path}`;
+  }
 }
 
 export const api = new ApiClient();

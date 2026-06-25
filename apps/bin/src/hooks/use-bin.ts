@@ -28,6 +28,27 @@ export function useAssets(params?: { folder_id?: string; project_id?: string }) 
   });
 }
 
+// Upload a brand-new asset: create the metadata row, then stream the bytes
+// (proxied multipart). The new version lands scan_status='pending' until the AV
+// sweep clears it (~1 min); the list refetches so the badge updates.
+export function useUploadAsset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const created = await api.post<{ data: BinAsset }>('/v1/assets', {
+        name: file.name,
+        content_type: file.type || 'application/octet-stream',
+      });
+      const id = created.data.id;
+      await api.upload<{ data: unknown }>(`/v1/assets/${id}/upload`, file);
+      return created.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'assets'] });
+    },
+  });
+}
+
 export function useAsset(id: string | undefined) {
   return useQuery({
     queryKey: ['bin', 'assets', id],

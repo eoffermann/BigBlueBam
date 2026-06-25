@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { AlertTriangle, ArrowLeft, FileWarning, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Download, FileWarning, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useAsset, useData, usePatchRows, usePatchTree, useArrayOp, type InferredField } from '@/hooks/use-bin';
 import { JsonTree } from '@/components/json-tree';
-import { ApiError } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 
 interface AssetDataPageProps {
   assetId: string;
@@ -286,12 +286,25 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
         <ArrowLeft className="h-4 w-4" /> Back to Asset Library
       </button>
 
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-1">{heading}</h1>
-      {asset?.content_type && (
-        <p className="text-sm text-zinc-500 mb-6">
-          <code className="text-xs">{asset.content_type}</code>
-        </p>
-      )}
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-1">{heading}</h1>
+          {asset?.content_type && (
+            <p className="text-sm text-zinc-500">
+              <code className="text-xs">{asset.content_type}</code>
+            </p>
+          )}
+        </div>
+        {asset && (asset.scan_status === 'clean' || asset.scan_status === 'skipped') && (
+          <a
+            href={api.rawUrl(`/v1/assets/${asset.id}/raw`)}
+            download={asset.name}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 shrink-0"
+          >
+            <Download className="h-4 w-4" /> Download
+          </a>
+        )}
+      </div>
 
       {renderBody()}
     </div>

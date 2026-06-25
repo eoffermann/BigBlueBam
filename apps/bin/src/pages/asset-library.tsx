@@ -1,5 +1,7 @@
-import { Archive, FileBox } from 'lucide-react';
-import { useAssets, type ScanStatus } from '@/hooks/use-bin';
+import { useRef } from 'react';
+import { Archive, Download, FileBox, Loader2, Upload } from 'lucide-react';
+import { useAssets, useUploadAsset, type BinAsset, type ScanStatus } from '@/hooks/use-bin';
+import { api } from '@/lib/api';
 import { cn, formatBytes, formatRelativeTime } from '@/lib/utils';
 
 interface AssetLibraryPageProps {
@@ -26,9 +28,42 @@ function ScanBadge({ status }: { status: ScanStatus }) {
   );
 }
 
+function DownloadButton({ asset }: { asset: BinAsset }) {
+  const servable = asset.scan_status === 'clean' || asset.scan_status === 'skipped';
+  if (!servable) {
+    return (
+      <span
+        className="inline-flex items-center text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
+        title={`Not downloadable yet (scan status: ${asset.scan_status})`}
+      >
+        <Download className="h-4 w-4" />
+      </span>
+    );
+  }
+  return (
+    <a
+      href={api.rawUrl(`/v1/assets/${asset.id}/raw`)}
+      download={asset.name}
+      onClick={(e) => e.stopPropagation()}
+      title={`Download ${asset.name}`}
+      className="inline-flex items-center text-zinc-400 hover:text-primary-600 dark:hover:text-primary-400"
+    >
+      <Download className="h-4 w-4" />
+    </a>
+  );
+}
+
 export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
   const { data, isLoading } = useAssets();
   const assets = data?.data ?? [];
+  const upload = useUploadAsset();
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) upload.mutate(file);
+    e.target.value = ''; // allow re-selecting the same file
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -38,6 +73,23 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
           <p className="text-sm text-zinc-500 mt-1">
             Every file and dataset stored in your organization. Open a structured file to view its data.
           </p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <input ref={fileInput} type="file" className="hidden" onChange={onPick} />
+          <button
+            type="button"
+            disabled={upload.isPending}
+            onClick={() => fileInput.current?.click()}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {upload.isPending ? 'Uploading…' : 'Upload file'}
+          </button>
+          {upload.isError && (
+            <span className="text-xs text-red-500">
+              {upload.error instanceof Error ? upload.error.message : 'Upload failed'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -52,7 +104,7 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
           <Archive className="h-12 w-12 text-zinc-300 dark:text-zinc-600 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">No assets yet</h3>
           <p className="text-sm text-zinc-500 mt-1">
-            Upload files or datasets and they will appear here in your Asset Library.
+            Use <span className="font-medium">Upload file</span> to add files or datasets — they will appear here.
           </p>
         </div>
       ) : (
@@ -65,6 +117,7 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
                 <th className="px-4 py-3 text-right">Size</th>
                 <th className="px-4 py-3">Scan status</th>
                 <th className="px-4 py-3">Created</th>
+                <th className="px-4 py-3 text-center">Download</th>
               </tr>
             </thead>
             <tbody>
@@ -91,6 +144,9 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
                   </td>
                   <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">
                     {formatRelativeTime(asset.created_at)}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <DownloadButton asset={asset} />
                   </td>
                 </tr>
               ))}
