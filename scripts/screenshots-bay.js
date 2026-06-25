@@ -57,29 +57,29 @@ async function safe(label, fn) {
     await snap(page, 'bay-review-library.png', 'Bay review library (Gilligan rescue creative)');
   });
 
-  // ===== BAY: Review page (open the poster) =====
+  // ===== BAY: Review page (open the poster image — real preview + capture toolbar) =====
   await safe('bay review page', async () => {
     await page.goto('http://localhost/bay/', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(1200);
-    const row = page.locator('table tbody tr', { hasText: 'Rescue Beacon Promo' }).first();
+    const row = page.locator('table tbody tr', { hasText: 'rescue-beacon-promo' }).first();
     if (await row.count()) {
       await row.click();
     } else {
       await page.locator('table tbody tr').first().click();
     }
-    await page.waitForTimeout(1800);
-    await snap(page, 'bay-review-page.png', 'Bay review page — annotations + decisions');
+    await page.waitForTimeout(2200);
+    await snap(page, 'bay-review-page.png', 'Bay review — image preview, capture toolbar, annotations, decisions');
   });
 
-  // ===== BAY: Video review page (regression — used to blank on timerange anchors) =====
-  await safe('bay video review page', async () => {
+  // ===== BAY: Audio review (real WAV preview + timecode annotations) =====
+  await safe('bay audio review page', async () => {
     await page.goto('http://localhost/bay/', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(1200);
-    const row = page.locator('table tbody tr', { hasText: 'Castaway Rescue Reel' }).first();
+    const row = page.locator('table tbody tr', { hasText: 'coconut-radio-jingle' }).first();
     if (await row.count()) {
       await row.click();
-      await page.waitForTimeout(1800);
-      await snap(page, 'bay-review-video.png', 'Bay video review page (no longer crashes)');
+      await page.waitForTimeout(2000);
+      await snap(page, 'bay-review-audio.png', 'Bay audio review (no crash, timecode annotations, names)');
     }
   });
 
