@@ -155,10 +155,21 @@ notes: |
   after last time.
 `;
 
+const JSON_SALUTATIONS = JSON.stringify(
+  {
+    greetings: ['Ahoy there!', 'Welcome aboard, little buddy.', 'Howdy, castaway!'],
+    farewells: ['So long!', 'Until the next tour…', 'Mind the lagoon on your way out.'],
+    distress_calls: ['SOS — three short, three long, three short.', 'Mayday from the S.S. Minnow!'],
+  },
+  null,
+  2,
+) + '\n';
+
 const ASSETS = [
   { name: 'daily-coconut-count.csv', type: 'text/csv', text: CSV_COCONUTS, tags: ['provisions', 'daily-log'] },
   { name: 'rescue-sightings.jsonl', type: 'application/x-ndjson', text: JSONL_SIGHTINGS, tags: ['rescue', 'log'] },
   { name: 'minnow-manifest.json', type: 'application/json', text: JSON_MANIFEST, tags: ['vessel', 'manifest'] },
+  { name: 'salutations.json', type: 'application/json', text: JSON_SALUTATIONS, tags: ['radio', 'phrases'] },
   { name: 'luau-menu.yaml', type: 'application/x-yaml', text: YAML_LUAU, tags: ['howell', 'event'] },
 ];
 
