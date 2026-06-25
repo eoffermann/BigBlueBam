@@ -16,6 +16,13 @@ const createAssetSchema = z.object({
   folder_id: z.string().uuid().nullable().optional(),
   project_id: z.string().uuid().nullable().optional(),
   visibility: z.enum(['organization', 'project', 'private']).optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+const updateAssetSchema = z.object({
+  name: z.string().min(1).max(512).optional(),
+  folder_id: z.string().uuid().nullable().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 const presignVersionSchema = z.object({
@@ -58,8 +65,15 @@ export default async function assetRoutes(fastify: FastifyInstance) {
       folder_id: q.folder_id === 'root' ? null : q.folder_id,
       project_id: q.project_id,
       include_archived: q.include_archived === 'true',
+      tag: q.tag,
     });
     return reply.send({ data: assets });
+  });
+
+  // GET /tags — distinct tags across the org's non-archived assets
+  fastify.get('/tags', { preHandler: [requireAuth] }, async (request, reply) => {
+    const tags = await assetService.listTags(request.user!.org_id);
+    return reply.send({ data: tags });
   });
 
   // POST /assets — create an asset (metadata only; upload follows)
@@ -84,6 +98,21 @@ export default async function assetRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const asset = await assetService.getAsset(request.params.id, request.user!.org_id);
+        return reply.send({ data: asset });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
+  // PATCH /assets/:id — update an asset's name/folder/tags
+  fastify.patch<{ Params: { id: string } }>(
+    '/assets/:id',
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bin.asset.update')] },
+    async (request, reply) => {
+      const body = updateAssetSchema.parse(request.body ?? {});
+      try {
+        const asset = await assetService.updateAsset(request.params.id, request.user!.org_id, body);
         return reply.send({ data: asset });
       } catch (err) {
         return sendError(reply, request, err);

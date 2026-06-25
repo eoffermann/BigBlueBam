@@ -222,6 +222,8 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bin_data_comment_create', { id: 'bin.data_comment.create', verb: 'create' }],
   ['bin_data_comment_resolve', { id: 'bin.data_comment_resolve.create', verb: 'create' }],
   ['bin_data_array_op', { id: 'bin.data_array.create', verb: 'create' }],
+  ['bin_asset_update', { id: 'bin.asset.update', verb: 'update' }],
+  ['bin_tag_list', { id: 'bin.tag.list', verb: 'list' }],
 
   // Bay tools (resource-first names) → the same permission ids their REST
   // endpoints use (review layer on top of Bin).
@@ -237,6 +239,7 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bay_annotation_resolve', { id: 'bay.annotation_resolve.create', verb: 'create' }],
   ['bay_decision_list', { id: 'bay.version_decision.get', verb: 'get' }],
   ['bay_decision_set', { id: 'bay.version_decision.update', verb: 'update' }],
+  ['bay_review_resolve', { id: 'bay.review_resolve.create', verb: 'create' }],
 ]);
 
 // ── Inference helpers ──────────────────────────────────────────────────

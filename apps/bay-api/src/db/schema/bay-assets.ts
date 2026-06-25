@@ -24,9 +24,15 @@ export const bayAssets = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     project_id: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    // Optional folder placement (FK to bay_folders, declared in migration).
+    folder_id: uuid('folder_id'),
     name: varchar('name', { length: 512 }).notNull(),
     // image | video | audio | model  (CHECK in migration).
     media_kind: text('media_kind').notNull(),
+    // Arbitrary user-applied tags for cross-cutting organization + filtering.
+    tags: text('tags').array().notNull().default([]),
+    // 1:1 link to the canonical Bin asset this review surface wraps.
+    bin_asset_id: uuid('bin_asset_id'),
     // Denormalized pointer to the active version (FK declared in migration).
     current_version_id: uuid('current_version_id'),
     created_by: uuid('created_by')

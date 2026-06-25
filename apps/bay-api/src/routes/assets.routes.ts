@@ -21,6 +21,14 @@ const createVersionSchema = z.object({
   media_meta: z.record(z.unknown()).optional(),
 });
 
+const resolveReviewSchema = z.object({
+  bin_asset_id: z.string().uuid(),
+  bin_version_id: z.string().uuid().optional(),
+  name: z.string().min(1).max(512).optional(),
+  media_kind: z.enum(['image', 'video', 'audio', 'model']).optional(),
+  content_type: z.string().min(1).max(255).optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Error envelope mapping
 // ---------------------------------------------------------------------------
@@ -46,9 +54,31 @@ export default async function assetRoutes(fastify: FastifyInstance) {
     const assets = await assetService.listAssets(request.user!.org_id, {
       project_id: q.project_id,
       include_archived: q.include_archived === 'true',
+      folder_id: q.folder_id === 'root' ? null : q.folder_id,
+      tag: q.tag,
     });
     return reply.send({ data: assets });
   });
+
+  // POST /review/resolve — idempotently resolve the Bay review surface for a
+  // Bin asset (find-or-create the bay_asset + initial version linking Bin bytes)
+  fastify.post(
+    '/review/resolve',
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bay.review_resolve.create')] },
+    async (request, reply) => {
+      const body = resolveReviewSchema.parse(request.body);
+      try {
+        const bayAsset = await assetService.resolveReviewByBinAsset(
+          request.user!.org_id,
+          request.user!.id,
+          body,
+        );
+        return reply.send({ data: bayAsset });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
 
   // POST /assets — create an asset (metadata only; versions follow)
   fastify.post(

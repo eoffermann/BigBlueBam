@@ -13,6 +13,7 @@ export {
 } from './bbb-refs.js';
 
 // Bay-specific tables
+export { bayFolders } from './bay-folders.js';
 export { bayAssets } from './bay-assets.js';
 export { bayAssetVersions } from './bay-asset-versions.js';
 export { bayAnnotations } from './bay-annotations.js';

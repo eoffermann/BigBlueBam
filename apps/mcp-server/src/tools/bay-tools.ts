@@ -63,6 +63,24 @@ export function registerBayTools(server: McpServer, api: ApiClient, bayApiUrl: s
   const client = createBayClient(bayApiUrl, api);
 
   registerTool(server, {
+    name: 'bay_review_resolve',
+    description:
+      'Open (find-or-create) the Bay review for a Bin media asset. Given the Bin asset id (and optionally its content_type/name/current bin_version_id), returns the Bay review asset — creating it + an initial version on first call, idempotent thereafter. This is how a media file in Bin is opened for review in Bay.',
+    input: {
+      bin_asset_id: z.string().uuid().describe('The Bin asset holding the media bytes'),
+      bin_version_id: z.string().uuid().nullable().optional(),
+      name: z.string().optional(),
+      media_kind: z.enum(['image', 'video', 'audio', 'model']).optional(),
+      content_type: z.string().optional().describe('Used to infer media_kind when not given'),
+    },
+    returns: z.object({ data: z.record(z.unknown()) }),
+    handler: async (params) => {
+      const r = await client.request('POST', '/review/resolve', params);
+      return r.ok ? ok(r.data) : err('resolving bay review', r.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'bay_asset_list',
     description:
       'List Bay review assets (the durable things under review: a shot, cut, track, or model), optionally filtered by project or including archived. Returns metadata; use bay_version_list for the version stack.',

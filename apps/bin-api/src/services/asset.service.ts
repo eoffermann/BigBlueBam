@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, desc, isNull } from 'drizzle-orm';
+import { and, eq, desc, isNull, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { binAssets, binAssetVersions } from '../db/schema/index.js';
 import { getMediaDriver, buildBinObjectKey } from '../lib/storage.js';
@@ -28,13 +28,25 @@ export interface CreateAssetInput {
   folder_id?: string | null;
   project_id?: string | null;
   visibility?: 'organization' | 'project' | 'private';
+  tags?: string[];
+}
+
+export interface UpdateAssetInput {
+  name?: string;
+  folder_id?: string | null;
+  tags?: string[];
 }
 
 const VISIBILITIES = new Set(['organization', 'project', 'private']);
 
 export async function listAssets(
   orgId: string,
-  opts: { folder_id?: string | null; project_id?: string; include_archived?: boolean } = {},
+  opts: {
+    folder_id?: string | null;
+    project_id?: string;
+    include_archived?: boolean;
+    tag?: string;
+  } = {},
 ) {
   const conditions = [eq(binAssets.org_id, orgId)];
   if (opts.folder_id === null) {
@@ -44,6 +56,9 @@ export async function listAssets(
   }
   if (opts.project_id) {
     conditions.push(eq(binAssets.project_id, opts.project_id));
+  }
+  if (opts.tag) {
+    conditions.push(sql`${binAssets.tags} @> ARRAY[${opts.tag}]::text[]`);
   }
   if (!opts.include_archived) {
     conditions.push(isNull(binAssets.archived_at));
@@ -82,10 +97,51 @@ export async function createAsset(input: CreateAssetInput, orgId: string, userId
       size: 0,
       scan_status: 'pending',
       visibility,
+      tags: input.tags ?? [],
       created_by: userId,
     })
     .returning();
   return rows[0]!;
+}
+
+/**
+ * Patch an asset's mutable metadata (name, folder, tags). Org-scoped; only the
+ * fields present in `input` are written. folder_id may be set to null to move
+ * the asset back to root. Throws NotFoundError if the asset does not exist in
+ * this org.
+ */
+export async function updateAsset(id: string, orgId: string, input: UpdateAssetInput) {
+  const updates: Partial<typeof binAssets.$inferInsert> = {};
+  if (input.name !== undefined) updates.name = input.name;
+  if (input.folder_id !== undefined) updates.folder_id = input.folder_id;
+  if (input.tags !== undefined) updates.tags = input.tags;
+  if (Object.keys(updates).length === 0) {
+    // Nothing to change — return the current row (still org-scoped).
+    return getAsset(id, orgId);
+  }
+  const rows = await db
+    .update(binAssets)
+    .set(updates)
+    .where(and(eq(binAssets.id, id), eq(binAssets.org_id, orgId)))
+    .returning();
+  if (rows.length === 0) throw new NotFoundError('Asset not found');
+  return rows[0]!;
+}
+
+/**
+ * Distinct tags applied across all non-archived assets in the org, sorted
+ * alphabetically. Powers tag-filter pickers.
+ */
+export async function listTags(orgId: string): Promise<string[]> {
+  const result = await db.execute<{ t: string }>(
+    sql`SELECT DISTINCT unnest(tags) AS t FROM bin_assets WHERE org_id = ${orgId} AND archived_at IS NULL ORDER BY t`,
+  );
+  // db.execute returns an array-like RowList directly (postgres-js); fall back to
+  // a { rows } envelope defensively to match the rest of the codebase.
+  const rows = Array.isArray(result)
+    ? (result as unknown as { t: string }[])
+    : ((result as { rows?: { t: string }[] })?.rows ?? []);
+  return rows.map((r) => r.t);
 }
 
 export async function archiveAsset(id: string, orgId: string) {

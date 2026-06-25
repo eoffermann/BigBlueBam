@@ -5,6 +5,7 @@ import {
   bigint,
   timestamp,
   index,
+  text,
 } from 'drizzle-orm/pg-core';
 import { organizations, users, projects } from './bbb-refs.js';
 import { binFolders } from './bin-folders.js';
@@ -43,6 +44,8 @@ export const binAssets = pgTable(
     scan_status: varchar('scan_status', { length: 20 }).notNull().default('pending'),
     // organization | project | private (denormalized for the visibility gate).
     visibility: varchar('visibility', { length: 20 }).notNull().default('organization'),
+    // Arbitrary user-applied tags for cross-cutting organization + filtering.
+    tags: text('tags').array().notNull().default([]),
     created_by: uuid('created_by')
       .notNull()
       .references(() => users.id),

@@ -1,9 +1,9 @@
 {
   "counts": {
-    "total": 1356,
-    "mcp_tools_scanned": 759,
-    "rest_routes_scanned": 873,
-    "read_permissions": 530,
+    "total": 1359,
+    "mcp_tools_scanned": 762,
+    "rest_routes_scanned": 876,
+    "read_permissions": 531,
     "destructive_permissions": 127
   },
   "permissions": [
@@ -8731,6 +8731,28 @@
       ]
     },
     {
+      "id": "bay.review_resolve.create",
+      "app": "bay",
+      "resource": "review_resolve",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_review_resolve",
+          "file": "bay-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "POST /review/resolve",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bay.version_annotation.create",
       "app": "bay",
       "resource": "version_annotation",
@@ -13666,6 +13688,28 @@
       ]
     },
     {
+      "id": "bin.asset.update",
+      "app": "bin",
+      "resource": "asset",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_asset_update",
+          "file": "bin-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "PATCH /assets/:id",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "bin.data_array.create",
       "app": "bin",
       "resource": "data_array",
@@ -13955,6 +13999,28 @@
           "source": "rest",
           "ref": "PATCH /folders/:id",
           "file": "folders.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.tag.list",
+      "app": "bin",
+      "resource": "tag",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_tag_list",
+          "file": "bin-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "GET /tags",
+          "file": "assets.routes.ts"
         }
       ]
     },

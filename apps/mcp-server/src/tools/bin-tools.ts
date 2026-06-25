@@ -133,6 +133,34 @@ export function registerBinTools(server: McpServer, api: ApiClient, binApiUrl: s
   });
 
   registerTool(server, {
+    name: 'bin_asset_update',
+    description:
+      "Update a Bin asset's mutable metadata: rename, move to a folder (folder_id, or null for root), and/or set its arbitrary tags (replaces the tag list). Used to organize the file hierarchy and make assets searchable.",
+    input: {
+      id: z.string().uuid().describe('Asset ID'),
+      name: z.string().min(1).max(512).optional(),
+      folder_id: z.string().uuid().nullable().optional().describe('Containing folder, or null for root'),
+      tags: z.array(z.string()).optional().describe('Replaces the asset’s tags'),
+    },
+    returns: z.object({ data: assetShape }),
+    handler: async ({ id, ...body }) => {
+      const result = await client.request('PATCH', `/assets/${id}`, body);
+      return result.ok ? ok(result.data) : err('updating bin asset', result.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'bin_tag_list',
+    description: 'List the distinct tags used across the org’s Bin assets (for tag pickers/filters).',
+    input: {},
+    returns: z.object({ data: z.array(z.string()) }),
+    handler: async () => {
+      const result = await client.request('GET', '/tags');
+      return result.ok ? ok(result.data) : err('listing bin tags', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'bin_asset_archive',
     description:
       'Archive (soft-delete) a Bin asset. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed. The asset is hidden from default listings but versions are retained.',
