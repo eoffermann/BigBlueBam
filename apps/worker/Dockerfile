@@ -33,6 +33,9 @@ RUN pnpm --filter @bigbluebam/worker deploy --prod /app/deployed
 # ── Stage: dev ────────────────────────────────────────────────────
 FROM deps AS dev
 
+# ffmpeg/ffprobe for the bin-transcode job (media proxies + posters).
+RUN apk add --no-cache ffmpeg
+
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
 COPY packages/smtp-resolver/ ./packages/smtp-resolver/
@@ -45,7 +48,8 @@ CMD ["npx", "tsx", "watch", "src/worker.ts"]
 # ── Stage: production ────────────────────────────────────────────
 FROM node:22-alpine AS production
 
-RUN apk add --no-cache tini curl
+# tini+curl for PID1/healthcheck; ffmpeg/ffprobe for the bin-transcode job.
+RUN apk add --no-cache tini curl ffmpeg
 
 WORKDIR /app
 

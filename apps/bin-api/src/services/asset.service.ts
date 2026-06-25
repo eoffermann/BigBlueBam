@@ -277,6 +277,12 @@ export async function completeVersion(versionId: string, orgId: string) {
       integrity: stat.integrity,
       content_type: version.content_type,
       scan_status: 'pending',
+      // New bytes invalidate any prior proxy/poster — the worker re-derives them.
+      transcode_status: 'pending',
+      proxy_object_key: null,
+      poster_object_key: null,
+      proxy_content_type: null,
+      duration_sec: null,
     })
     .where(eq(binAssets.id, version.asset_id))
     .returning();
@@ -349,6 +355,12 @@ export async function uploadVersionBytes(
       integrity: stat.integrity,
       content_type: contentType,
       scan_status: 'pending',
+      // New bytes invalidate any prior proxy/poster — the worker re-derives them.
+      transcode_status: 'pending',
+      proxy_object_key: null,
+      poster_object_key: null,
+      proxy_content_type: null,
+      duration_sec: null,
     })
     .where(eq(binAssets.id, assetId))
     .returning();
@@ -356,25 +368,62 @@ export async function uploadVersionBytes(
   return { version: inserted[0]!, asset: updatedAsset[0]! };
 }
 
+// A served representation of an asset: the canonical bytes, or a worker-derived
+// web-friendly proxy / poster (transcode follow-up). Proxy/poster are served via
+// /assets/:id/raw?variant=proxy|poster; the player prefers them and falls back
+// to the original on 404.
+export type ServeVariant = 'original' | 'proxy' | 'poster';
+
+type AssetRow = Awaited<ReturnType<typeof getAsset>>;
+
+/** Scan gate (§9.3): only clean/skipped assets are ever served. */
+function assertServable(asset: AssetRow): void {
+  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
+    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
+  }
+}
+
+/** Resolve the object key + content type for a variant. Throws NotFoundError if
+ *  the requested artifact does not exist (no bytes yet, or no proxy/poster). */
+function resolveServeTarget(
+  asset: AssetRow,
+  variant: ServeVariant,
+): { objectKey: string; contentType: string } {
+  if (variant === 'proxy') {
+    if (!asset.proxy_object_key) throw new NotFoundError('No proxy available for this asset');
+    return {
+      objectKey: asset.proxy_object_key,
+      contentType: asset.proxy_content_type ?? 'application/octet-stream',
+    };
+  }
+  if (variant === 'poster') {
+    if (!asset.poster_object_key) throw new NotFoundError('No poster available for this asset');
+    return {
+      objectKey: asset.poster_object_key,
+      contentType: asset.poster_object_key.endsWith('.png') ? 'image/png' : 'image/jpeg',
+    };
+  }
+  if (!asset.current_version_id || !asset.object_key) {
+    throw new NotFoundError('Asset has no uploaded content yet');
+  }
+  return { objectKey: asset.object_key, contentType: asset.content_type ?? 'application/octet-stream' };
+}
+
 /**
- * Proxied serve: stream an asset's current version through the service. Gated on
+ * Proxied serve: stream an asset variant through the service. Gated on
  * scan_status exactly like presignAssetDownload (§9.3): only `clean`/`skipped`
  * assets are served.
  */
 export async function streamAssetDownload(
   assetId: string,
   orgId: string,
+  variant: ServeVariant = 'original',
 ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; filename: string }> {
   const asset = await getAsset(assetId, orgId);
-  if (!asset.current_version_id || !asset.object_key) {
-    throw new NotFoundError('Asset has no uploaded content yet');
-  }
-  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
-    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
-  }
-  const driver = getMediaDriver();
-  const { stream, contentType, size } = await driver.getStream(asset.object_key);
-  return { stream, contentType, size, filename: asset.name };
+  assertServable(asset);
+  const { objectKey, contentType } = resolveServeTarget(asset, variant);
+  const r = await getMediaDriver().getStream(objectKey);
+  return { stream: r.stream, contentType: contentType || r.contentType, size: r.size, filename: asset.name };
 }
 
 /** Whether the active media driver can serve byte ranges (video/audio seeking). */
@@ -382,52 +431,42 @@ export function hasRangeSupport(): boolean {
   return typeof getMediaDriver().getRange === 'function';
 }
 
-/** Total size + content type of an asset's current version (scan-gated), used to
- *  compute Range windows without buffering the object. */
+/** Total size + content type of an asset variant (scan-gated), used to compute
+ *  Range windows without buffering the object. */
 export async function statServable(
   assetId: string,
   orgId: string,
+  variant: ServeVariant = 'original',
 ): Promise<{ total: number; contentType: string; filename: string }> {
   const asset = await getAsset(assetId, orgId);
-  if (!asset.current_version_id || !asset.object_key) {
-    throw new NotFoundError('Asset has no uploaded content yet');
-  }
-  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
-    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
-  }
-  const stat = await getMediaDriver().stat(asset.object_key);
+  assertServable(asset);
+  const { objectKey, contentType } = resolveServeTarget(asset, variant);
+  const stat = await getMediaDriver().stat(objectKey);
   if (!stat) throw new NotFoundError('Object not found in storage');
-  return {
-    total: stat.size,
-    contentType: asset.content_type ?? 'application/octet-stream',
-    filename: asset.name,
-  };
+  return { total: stat.size, contentType, filename: asset.name };
 }
 
 /**
- * Partial (HTTP Range) serve of an asset's current version, for media seeking.
- * Same scan gate as streamAssetDownload (§9.3). Returns the byte range plus the
- * object's total size so the route can emit a 206 with Content-Range.
+ * Partial (HTTP Range) serve of an asset variant, for media seeking. Same scan
+ * gate as streamAssetDownload (§9.3). Returns the byte range plus the object's
+ * total size so the route can emit a 206 with Content-Range.
  */
 export async function streamAssetRange(
   assetId: string,
   orgId: string,
   start: number,
   end: number,
+  variant: ServeVariant = 'original',
 ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; total: number; filename: string }> {
   const asset = await getAsset(assetId, orgId);
-  if (!asset.current_version_id || !asset.object_key) {
-    throw new NotFoundError('Asset has no uploaded content yet');
-  }
-  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
-    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
-  }
+  assertServable(asset);
+  const { objectKey, contentType } = resolveServeTarget(asset, variant);
   const driver = getMediaDriver();
   if (!driver.getRange) {
     throw new StorageError('Active media provider does not support range reads');
   }
-  const r = await driver.getRange(asset.object_key, start, end);
-  return { ...r, filename: asset.name };
+  const r = await driver.getRange(objectKey, start, end);
+  return { stream: r.stream, contentType: contentType || r.contentType, size: r.size, total: r.total, filename: asset.name };
 }
 
 export interface PresignedDownload {

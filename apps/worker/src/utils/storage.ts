@@ -5,6 +5,8 @@
 // confirm uploaded submission objects actually landed and to mint download
 // URLs for the stored objects.
 
+import { createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import * as Minio from 'minio';
 
 const endpoint = new URL(process.env.S3_ENDPOINT ?? 'http://minio:9000');
@@ -57,6 +59,34 @@ export async function getObjectBuffer(key: string): Promise<Buffer | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Stream an object straight to a local file. Used by the media-transcode job:
+ * ffmpeg needs a seekable file on disk, not a buffer. Returns false if the
+ * object is missing/unreadable.
+ */
+export async function downloadObjectToFile(key: string, destPath: string): Promise<boolean> {
+  try {
+    const stream = await minioClient.getObject(S3_BUCKET, key);
+    await pipeline(stream, createWriteStream(destPath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Upload a local file to an object key (fputObject). Used to store transcoded
+ * proxy/poster artifacts. Throws on failure so the caller can mark the asset
+ * transcode_status='error'.
+ */
+export async function putObjectFromFile(
+  key: string,
+  srcPath: string,
+  contentType: string,
+): Promise<void> {
+  await minioClient.fPutObject(S3_BUCKET, key, srcPath, { 'Content-Type': contentType });
 }
 
 /**

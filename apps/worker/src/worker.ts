@@ -167,6 +167,11 @@ import {
   processBinAvScanJob,
   type BinAvScanJobData,
 } from './jobs/bin-av-scan.job.js';
+// Bin media transcode — proxy/poster generation for clean media versions.
+import {
+  processBinTranscodeJob,
+  type BinTranscodeJobData,
+} from './jobs/bin-transcode.job.js';
 
 const env = loadEnv();
 
@@ -1667,6 +1672,37 @@ binAvScanQueue
     { name: 'sweep', data: {} },
   )
   .catch((err) => logger.error({ err }, 'Failed to register bin-av-scan scheduler'));
+
+// Bin media transcode sweep — generates web-friendly proxies + posters for
+// clean media versions (Bay player polish). ffmpeg is CPU-heavy, so concurrency
+// is 1 and each sweep claims a small batch.
+const binTranscodeWorker = new Worker<BinTranscodeJobData>(
+  'bin-transcode',
+  async (job: Job<BinTranscodeJobData>) => {
+    await processBinTranscodeJob(job, env, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+binTranscodeWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bin-transcode' }, 'Job completed');
+});
+binTranscodeWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bin-transcode', err }, 'Job failed');
+  void recordWorkerError({
+    queueName: 'bin-transcode',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const binTranscodeQueue = new Queue('bin-transcode', { connection: redis });
+binTranscodeQueue
+  .upsertJobScheduler(
+    'bin-transcode-tick',
+    { pattern: '* * * * *' }, // every minute — proxy lands shortly after the AV scan clears
+    { name: 'sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bin-transcode scheduler'));
 
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(

@@ -6,6 +6,7 @@ import {
   timestamp,
   index,
   text,
+  doublePrecision,
 } from 'drizzle-orm/pg-core';
 import { organizations, users, projects } from './bbb-refs.js';
 import { binFolders } from './bin-folders.js';
@@ -42,6 +43,15 @@ export const binAssets = pgTable(
     integrity: varchar('integrity', { length: 255 }),
     // pending | clean | infected | error | skipped  (CHECK in migration).
     scan_status: varchar('scan_status', { length: 20 }).notNull().default('pending'),
+    // Media transcode bookkeeping (0216). The worker generates a web-friendly
+    // proxy + poster for clean media versions; serving prefers them. Reset to
+    // 'pending' (and keys nulled) on every new version.
+    // pending | done | skipped | error
+    transcode_status: varchar('transcode_status', { length: 20 }).notNull().default('pending'),
+    proxy_object_key: varchar('proxy_object_key', { length: 1024 }),
+    poster_object_key: varchar('poster_object_key', { length: 1024 }),
+    proxy_content_type: varchar('proxy_content_type', { length: 255 }),
+    duration_sec: doublePrecision('duration_sec'),
     // organization | project | private (denormalized for the visibility gate).
     visibility: varchar('visibility', { length: 20 }).notNull().default('organization'),
     // Arbitrary user-applied tags for cross-cutting organization + filtering.

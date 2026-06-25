@@ -190,18 +190,23 @@ export default async function assetRoutes(fastify: FastifyInstance) {
 
   // GET /assets/:id/raw — proxied serve (bytes through the service). The default
   // serve path used by the SPA; gated on scan_status like /download (§9.3).
-  fastify.get<{ Params: { id: string } }>(
+  fastify.get<{ Params: { id: string }; Querystring: { variant?: string } }>(
     '/assets/:id/raw',
     { preHandler: [requireAuth] },
     async (request, reply) => {
       try {
+        // ?variant=proxy|poster serves the worker-derived web-friendly
+        // representation; anything else (incl. absent) serves the original.
+        const rawVariant = (request.query as { variant?: string }).variant;
+        const variant: assetService.ServeVariant =
+          rawVariant === 'proxy' || rawVariant === 'poster' ? rawVariant : 'original';
         // Honor HTTP Range so browsers can seek/scrub video & audio. We need
         // the total size first; do a tiny range probe (bytes 0-0) to learn it
         // without buffering the whole object, then serve the requested window.
         const rangeHeader = (request.headers.range as string | undefined) ?? '';
         const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
         if (m && assetService.hasRangeSupport()) {
-          const info = await assetService.statServable(request.params.id, request.user!.org_id);
+          const info = await assetService.statServable(request.params.id, request.user!.org_id, variant);
           const total = info.total;
           let start = m[1] ? Number(m[1]) : 0;
           let end = m[2] ? Number(m[2]) : total - 1;
@@ -216,6 +221,7 @@ export default async function assetRoutes(fastify: FastifyInstance) {
             request.user!.org_id,
             start,
             end,
+            variant,
           );
           reply.header('Content-Type', contentType);
           reply.header('Content-Length', size);
@@ -229,6 +235,7 @@ export default async function assetRoutes(fastify: FastifyInstance) {
         const { stream, contentType, size, filename } = await assetService.streamAssetDownload(
           request.params.id,
           request.user!.org_id,
+          variant,
         );
         reply.header('Content-Type', contentType);
         reply.header('Content-Length', size);

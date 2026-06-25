@@ -70,9 +70,12 @@ export function mediaKindFromMime(mime: string): MediaKind {
   return 'model';
 }
 
-/** Same-origin URL for a version's bytes, served (scan-gated) by Bin. */
-export function binRawUrl(binAssetId: string): string {
-  return `/bin/api/v1/assets/${binAssetId}/raw`;
+/** Same-origin URL for a version's bytes, served (scan-gated) by Bin. Pass
+ *  variant='proxy' for the web-friendly transcode or 'poster' for the still;
+ *  both 404 gracefully (the player falls back to the original). */
+export function binRawUrl(binAssetId: string, variant?: 'proxy' | 'poster'): string {
+  const base = `/bin/api/v1/assets/${binAssetId}/raw`;
+  return variant ? `${base}?variant=${variant}` : base;
 }
 
 function orgHeaders(): Record<string, string> {

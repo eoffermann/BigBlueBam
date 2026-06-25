@@ -139,13 +139,29 @@ function MediaStage({
 
   const binId = version?.bin_asset_id ?? null;
   const src = binId ? binRawUrl(binId) : null;
+  // Prefer the worker-generated web-friendly proxy for video/audio (reliable
+  // seeking + broad codec support); fall back to the original on error. Images
+  // serve fine natively. The poster is a still/waveform; it 404s harmlessly
+  // before the transcode lands.
+  const [useProxy, setUseProxy] = useState(true);
+  const poster = binId && kind === 'video' ? binRawUrl(binId, 'poster') : undefined;
+  const playableSrc =
+    binId && (kind === 'video' || kind === 'audio') && useProxy ? binRawUrl(binId, 'proxy') : src;
   // Region capture is available on spatial media (image always; video only in
   // "draw region" mode so it doesn't fight the native transport controls).
   const regionEnabled = src != null && (kind === 'image' || (kind === 'video' && regionMode));
 
   useEffect(() => {
     setFailed(false);
+    setUseProxy(true);
   }, [binId]);
+
+  // First failure on a proxy → retry with the original; failure on the original
+  // → show the placeholder.
+  const onMediaError = () => {
+    if (useProxy) setUseProxy(false);
+    else setFailed(true);
+  };
 
   const clamp = (n: number) => Math.min(1, Math.max(0, n));
   const posOf = (e: React.PointerEvent) => {
@@ -216,11 +232,12 @@ function MediaStage({
         // biome-ignore lint/a11y/useMediaCaption: user-uploaded review media has no caption track
         <video
           ref={mediaRef as React.RefObject<HTMLVideoElement>}
-          src={src}
+          src={playableSrc ?? undefined}
+          poster={poster}
           controls
           onTimeUpdate={(e) => onTime((e.target as HTMLVideoElement).currentTime)}
           className="block w-full max-h-[28rem] bg-black"
-          onError={() => setFailed(true)}
+          onError={onMediaError}
         />
       );
     } else if (kind === 'audio') {
@@ -230,11 +247,11 @@ function MediaStage({
           {/* biome-ignore lint/a11y/useMediaCaption: user-uploaded review media has no caption track */}
           <audio
             ref={mediaRef as React.RefObject<HTMLAudioElement>}
-            src={src}
+            src={playableSrc ?? undefined}
             controls
             onTimeUpdate={(e) => onTime((e.target as HTMLAudioElement).currentTime)}
             className="w-full max-w-md"
-            onError={() => setFailed(true)}
+            onError={onMediaError}
           />
         </div>
       );
