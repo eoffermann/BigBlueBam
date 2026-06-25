@@ -208,7 +208,7 @@ export function usePatchTree(assetId: string | undefined) {
 export interface ArrayOp {
   op: 'append' | 'insert' | 'delete';
   path?: (string | number)[];
-  value?: Record<string, unknown>;
+  value?: unknown;
   index?: number;
 }
 

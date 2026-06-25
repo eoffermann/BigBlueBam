@@ -42,7 +42,8 @@ const treePatchSchema = z.object({
 const arrayOpSchema = z.object({
   path: z.array(z.union([z.string(), z.number()])).optional(),
   op: z.enum(['append', 'insert', 'delete']),
-  value: z.record(z.unknown()).optional(),
+  // A row object (grids) OR a scalar (string lists).
+  value: z.unknown().optional(),
   index: z.number().int().min(0).optional(),
 });
 

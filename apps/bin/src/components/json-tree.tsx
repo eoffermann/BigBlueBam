@@ -13,7 +13,7 @@ type OnEdit = (path: Path, value: string) => void;
 export interface TreeArrayOp {
   op: 'append' | 'insert' | 'delete';
   path?: Path;
-  value?: Record<string, unknown>;
+  value?: unknown;
   index?: number;
 }
 type OnArrayOp = (op: TreeArrayOp) => void;
@@ -24,6 +24,13 @@ function isObject(v: Json): v is Record<string, Json> {
 
 function isScalar(v: Json): boolean {
   return v == null || typeof v !== 'object';
+}
+
+/** An array of scalars (strings/numbers/bools) — rendered as a list of plain
+ *  editable fields rather than numbered tree nodes. Empty arrays count too, so a
+ *  list a user just cleared can still take new items. */
+function isScalarArray(value: Json): boolean {
+  return Array.isArray(value) && value.every(isScalar);
 }
 
 /**
@@ -80,13 +87,15 @@ function EditableScalar({
   path,
   onEdit,
   disabled,
-  quoteStrings,
+  fullWidth,
 }: {
   value: Json;
   path: Path;
   onEdit?: OnEdit;
   disabled: boolean;
-  quoteStrings?: boolean;
+  /** Render the input/display across the full available width (string lists),
+   *  vs. a compact inline field (object leaves). */
+  fullWidth?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -110,13 +119,17 @@ function EditableScalar({
             setEditing(false);
           }
         }}
-        className="rounded border border-primary-400 bg-white dark:bg-zinc-900 px-1.5 py-0.5 text-[13px] outline-none ring-2 ring-primary-500/30 min-w-[6rem]"
+        className={`rounded border border-primary-400 bg-white dark:bg-zinc-900 px-2 py-1 text-[13px] outline-none ring-2 ring-primary-500/30 ${
+          fullWidth ? 'w-full' : 'min-w-[18rem] max-w-full'
+        }`}
       />
     );
   }
 
-  const display =
-    value === null ? 'null' : quoteStrings && typeof value === 'string' ? `"${value}"` : String(value);
+  // No quotes — consistent with the grid editors; cleaner for non-technical
+  // editors. (null shows as the literal `null`.)
+  const display = value === null ? 'null' : String(value);
+  const empty = display === '';
 
   return (
     <span
@@ -125,13 +138,65 @@ function EditableScalar({
         setDraft(cellText(value));
         setEditing(true);
       }}
-      className={`${scalarClass(value)} ${
-        editable ? 'cursor-text hover:bg-primary-50/60 dark:hover:bg-primary-900/10 rounded px-0.5' : ''
+      className={`${empty ? 'text-zinc-300 dark:text-zinc-600 italic' : scalarClass(value)} ${
+        fullWidth ? 'block w-full' : ''
+      } ${
+        editable ? 'cursor-text hover:bg-primary-50/60 dark:hover:bg-primary-900/10 rounded px-1' : ''
       } break-words whitespace-pre-wrap`}
       title={editable ? 'Click to edit' : undefined}
     >
-      {display}
+      {empty ? '(empty)' : display}
     </span>
+  );
+}
+
+/** A scalar array rendered as plain, full-width editable string fields with
+ *  add/delete — no list indices, no quotes (salutations.json-style lists). */
+function StringList({
+  items,
+  basePath,
+  onEdit,
+  onArrayOp,
+  disabled,
+}: {
+  items: Json[];
+  basePath: Path;
+  onEdit?: OnEdit;
+  onArrayOp?: OnArrayOp;
+  disabled: boolean;
+}) {
+  return (
+    <div className="my-1 space-y-1">
+      {items.length === 0 && <p className="text-xs text-zinc-400 italic px-1">empty list</p>}
+      {items.map((v, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: array index IS the identity here
+        <div key={i} className="flex items-start gap-2 group/sitem">
+          <span className="text-zinc-300 dark:text-zinc-600 mt-1.5 shrink-0 select-none">•</span>
+          <div className="flex-1 min-w-0 font-sans">
+            <EditableScalar value={v} path={[...basePath, i]} onEdit={onEdit} disabled={disabled} fullWidth />
+          </div>
+          {onArrayOp && !disabled && (
+            <button
+              type="button"
+              title="Delete item"
+              onClick={() => onArrayOp({ op: 'delete', path: basePath, index: i })}
+              className="mt-1 shrink-0 text-zinc-300 dark:text-zinc-600 hover:text-red-500 opacity-0 group-hover/sitem:opacity-100 transition-opacity"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+      {onArrayOp && !disabled && (
+        <button
+          type="button"
+          onClick={() => onArrayOp({ op: 'append', path: basePath, value: '' })}
+          className="mt-1 inline-flex items-center gap-1 rounded border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 text-[11px] font-sans text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+        >
+          <Plus className="h-3 w-3" /> Add item
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -243,13 +308,15 @@ function Node({
       <div className="leading-6">
         {keyLabel}
         {keyLabel && <span className="text-zinc-400">: </span>}
-        <EditableScalar value={value} path={path} onEdit={onEdit} disabled={disabled} quoteStrings />
+        <EditableScalar value={value} path={path} onEdit={onEdit} disabled={disabled} />
         {!isLast && <span className="text-zinc-300 dark:text-zinc-600">,</span>}
       </div>
     );
   }
 
   const tableCols = tabularColumns(value);
+  const scalarArr = !tableCols && isScalarArray(value);
+  const listLike = !!tableCols || scalarArr;
   const entries: [string | null, Json][] = Array.isArray(value)
     ? value.map((v, i) => [String(i), v])
     : Object.entries(value as Record<string, Json>);
@@ -276,7 +343,7 @@ function Node({
         )}
         {keyLabel}
         {keyLabel && <span className="text-zinc-400">: </span>}
-        {tableCols ? (
+        {listLike ? (
           <span className="text-zinc-400 text-xs">{summary}</span>
         ) : (
           <>
@@ -302,7 +369,18 @@ function Node({
           />
         </div>
       )}
-      {open && !tableCols && (
+      {open && scalarArr && (
+        <div className="ml-[7px] pl-4">
+          <StringList
+            items={value as Json[]}
+            basePath={path}
+            onEdit={onEdit}
+            onArrayOp={onArrayOp}
+            disabled={disabled}
+          />
+        </div>
+      )}
+      {open && !listLike && (
         <>
           <div className="border-l border-zinc-200 dark:border-zinc-700 ml-[7px] pl-4">
             {entries.map(([k, v], i) => (

@@ -298,8 +298,9 @@ export async function patchTree(
 export interface ArrayRowOp {
   path?: (string | number)[];
   op: 'append' | 'insert' | 'delete';
-  /** Row object for append/insert (defaults to an empty row shaped by columns). */
-  value?: Record<string, unknown>;
+  /** Row object for grids, or a scalar for string lists. Defaults to an empty
+   *  row (grids) or an empty string (scalar arrays) when omitted. */
+  value?: unknown;
   /** Target index for insert/delete (0-based). */
   index?: number;
 }
@@ -345,13 +346,19 @@ export async function arrayRowOp(
     }
     target.splice(i, 1);
   } else {
-    // append / insert. For a record grid default to an empty row keyed by the
-    // detected columns so the new CSV/record row has the right shape.
-    const emptyRow: Record<string, unknown> = {};
+    // append / insert. Default depends on the target's shape:
+    //  - record grid (top-level) → an empty row keyed by the detected columns
+    //  - array of scalars (string list) → an empty string
+    //  - array of objects (embedded grid) → an empty object
+    let fallback: unknown = {};
     if (path.length === 0 && parsed.shape === 'record') {
+      const emptyRow: Record<string, unknown> = {};
       for (const c of parsed.columns ?? []) emptyRow[c] = '';
+      fallback = emptyRow;
+    } else if (target.length === 0 || target.every((el) => el === null || typeof el !== 'object')) {
+      fallback = '';
     }
-    const row = opInput.value ?? emptyRow;
+    const row = opInput.value !== undefined ? opInput.value : fallback;
     if (opInput.op === 'insert') {
       const at = opInput.index ?? target.length;
       target.splice(Math.max(0, Math.min(at, target.length)), 0, row);
