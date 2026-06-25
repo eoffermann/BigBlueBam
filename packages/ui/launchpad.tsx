@@ -34,6 +34,7 @@ import {
   Sparkles,
   Building,
   Database,
+  Clapperboard,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -76,6 +77,7 @@ const ICONS: Record<string, LucideIcon> = {
   sparkles: Sparkles,
   building: Building,
   database: Database,
+  clapperboard: Clapperboard,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very
