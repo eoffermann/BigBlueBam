@@ -40,15 +40,36 @@ async function listAssets() {
   return Array.isArray(d) ? d : (d.data ?? []);
 }
 
-async function createAsset(name, contentType) {
+async function createAsset(name, contentType, opts = {}) {
   const r = await fetch(`${BIN}/assets`, {
     method: 'POST',
     headers: { ...authHeader(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, content_type: contentType, visibility: 'organization' }),
+    body: JSON.stringify({
+      name,
+      content_type: contentType,
+      visibility: 'organization',
+      folder_id: opts.folder_id ?? null,
+      tags: opts.tags ?? [],
+    }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`POST /assets -> ${r.status} ${JSON.stringify(d).slice(0, 200)}`);
   return d.data;
+}
+
+async function findOrCreateFolder(name) {
+  const r = await fetch(`${BIN}/folders`, { headers: authHeader() });
+  const d = await r.json().catch(() => ({}));
+  const existing = (Array.isArray(d) ? d : (d.data ?? [])).find((f) => f.name === name);
+  if (existing) return existing.id;
+  const cr = await fetch(`${BIN}/folders`, {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  const cd = await cr.json().catch(() => ({}));
+  if (!cr.ok) throw new Error(`POST /folders -> ${cr.status} ${JSON.stringify(cd).slice(0, 200)}`);
+  return cd.data.id;
 }
 
 async function uploadBytes(assetId, name, contentType, text) {
@@ -135,10 +156,10 @@ notes: |
 `;
 
 const ASSETS = [
-  { name: 'daily-coconut-count.csv', type: 'text/csv', text: CSV_COCONUTS },
-  { name: 'rescue-sightings.jsonl', type: 'application/x-ndjson', text: JSONL_SIGHTINGS },
-  { name: 'minnow-manifest.json', type: 'application/json', text: JSON_MANIFEST },
-  { name: 'luau-menu.yaml', type: 'application/x-yaml', text: YAML_LUAU },
+  { name: 'daily-coconut-count.csv', type: 'text/csv', text: CSV_COCONUTS, tags: ['provisions', 'daily-log'] },
+  { name: 'rescue-sightings.jsonl', type: 'application/x-ndjson', text: JSONL_SIGHTINGS, tags: ['rescue', 'log'] },
+  { name: 'minnow-manifest.json', type: 'application/json', text: JSON_MANIFEST, tags: ['vessel', 'manifest'] },
+  { name: 'luau-menu.yaml', type: 'application/x-yaml', text: YAML_LUAU, tags: ['howell', 'event'] },
 ];
 
 // ---------------------------------------------------------------------------
@@ -149,6 +170,8 @@ async function main() {
   if (!KEYS[OWNER]) throw new Error('GKEYS missing the skipper key; run via run-all.mjs');
   const existing = await listAssets();
   const byName = new Set(existing.map((a) => a.name));
+  // Organize the island records into a folder, tagged for search.
+  const folderId = await findOrCreateFolder('Island Records');
 
   const seededIds = [];
   let created = 0;
@@ -159,7 +182,7 @@ async function main() {
       skipped += 1;
       continue;
     }
-    const asset = await createAsset(a.name, a.type);
+    const asset = await createAsset(a.name, a.type, { folder_id: folderId, tags: a.tags });
     await uploadBytes(asset.id, a.name, a.type, a.text);
     seededIds.push(asset.id);
     created += 1;
