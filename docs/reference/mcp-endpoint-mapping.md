@@ -1342,6 +1342,41 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `— *(client-side)*` | `blueprint_search` | Client-side name/description filter | — |
 
 
+## Bin (app)
+
+- **Service:** `apps/bin-api` · external `/bin/api/` · MCP module(s): `bin-tools.ts`
+- Storage backbone + DAM + structured-data editor. Bytes flow through the
+  proxied upload/serve path (presigned routes exist for deployments with a
+  browser-reachable provider endpoint). The canonical artifact is the immutable
+  asset **version**; structured edits mint a new version (never in-place).
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /assets` | `bin_asset_list` | List DAM assets (folder/project filters) | `apps/bin/src/hooks/use-bin.ts` |
+| `POST /assets` | `bin_asset_create` | Create an asset (metadata; bytes follow) | `apps/bin/src/hooks/use-bin.ts` |
+| `GET /assets/:id` | `bin_asset_get` | Get asset metadata (scan status, version) | `apps/bin/src/hooks/use-bin.ts` |
+| `POST /assets/:id/archive` | `bin_asset_archive` | Archive (soft delete) | — |
+| `POST /assets/:id/upload` | `— _(skip: multipart/binary upload)_` | Proxied multipart upload → new version | `apps/bin/src/lib/api.ts` |
+| `GET /assets/:id/raw` | `— _(skip: binary stream)_` | Scan-gated byte stream | `apps/bin/src/hooks/use-bin.ts` |
+| `GET /assets/:id/download` | `— _(skip: presigned URL/binary)_` | Presigned GET (public-endpoint deploys) | — |
+| `GET /assets/:id/versions` | `bin_version_list` | List immutable versions | — |
+| `POST /assets/:id/versions` | `— _(skip: presigned PUT/binary)_` | Reserve version + presigned PUT | — |
+| `GET /versions/:id` | `— _(skip: covered by bin_version_list)_` | Get one version | — |
+| `POST /versions/:id/complete` | `— _(skip: upload-finalize, pairs with presigned PUT)_` | Finalize an uploaded version | — |
+| `GET /folders` | `bin_folder_list` | List folders | `apps/bin/src/hooks/use-bin.ts` |
+| `POST /folders` | `bin_folder_create` | Create a folder | — |
+| `PATCH /folders/:id` | `— _(skip: deferred — no folder-edit tool yet)_` | Rename/move a folder | — |
+| `DELETE /folders/:id` | `— _(skip: deferred — no folder-delete tool yet)_` | Delete a folder | — |
+| `GET /data/:id` | `bin_data_read` | Read records/tree (filter/columns/paging + schema) | `apps/bin/src/hooks/use-bin.ts` |
+| `POST /data/:id/session` | `bin_data_open_session` | Open/resume editing session (ws room) | — |
+| `POST /data/:id/rows` | `bin_data_append_rows` | Append rows → new version | `apps/bin/src/hooks/use-bin.ts` |
+| `PATCH /data/:id/rows` | `bin_data_patch` | Patch record cells → new version | `apps/bin/src/hooks/use-bin.ts` |
+| `PATCH /data/:id/tree` | `bin_data_patch_tree` | Set tree values at paths → new version | `apps/bin/src/hooks/use-bin.ts` |
+| `GET /data/:id/comments` | `bin_data_comment_list` | List review comments | — |
+| `POST /data/:id/comments` | `bin_data_comment_create` | Add an anchored comment | — |
+| `POST /data/:id/comments/:cid/resolve` | `bin_data_comment_resolve` | Resolve/reopen a comment | — |
+
+
 ## Book · Blank · Bill · Bureau · Helpdesk — REST ↔ MCP map
 
 External-path note: all five APIs are reached through nginx. Book/Blank/Bill/Bureau nginx
