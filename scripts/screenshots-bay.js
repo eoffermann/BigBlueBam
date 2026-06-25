@@ -71,6 +71,18 @@ async function safe(label, fn) {
     await snap(page, 'bay-review-page.png', 'Bay review page — annotations + decisions');
   });
 
+  // ===== BAY: Video review page (regression — used to blank on timerange anchors) =====
+  await safe('bay video review page', async () => {
+    await page.goto('http://localhost/bay/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForTimeout(1200);
+    const row = page.locator('table tbody tr', { hasText: 'Castaway Rescue Reel' }).first();
+    if (await row.count()) {
+      await row.click();
+      await page.waitForTimeout(1800);
+      await snap(page, 'bay-review-video.png', 'Bay video review page (no longer crashes)');
+    }
+  });
+
   await browser.close();
   for (const f of captured) {
     fs.copyFileSync(path.join(IMAGES_DIR, f), path.join(SITE_DIR, f));
