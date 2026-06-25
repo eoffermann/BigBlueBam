@@ -10,6 +10,7 @@ import {
   Layers,
   Loader2,
   Music,
+  Share2,
   SquareDashedMousePointer,
   Trash2,
   Upload,
@@ -25,6 +26,7 @@ import {
   useSetDecision,
   useUploadVersion,
   useArchiveAsset,
+  useCreateReviewLink,
   binRawUrl,
   type Anchor,
   type BayVersion,
@@ -38,6 +40,74 @@ import { MediaKindBadge } from '@/pages/review-library';
 interface ReviewAssetPageProps {
   assetId: string;
   onNavigate: (path: string) => void;
+}
+
+// Mints a public, token-gated share link and copies it to the clipboard. The
+// guest opens it at /bay/r/:token (no login) to view + comment.
+function ShareReviewButton({ assetId }: { assetId: string }) {
+  const createLink = useCreateReviewLink(assetId);
+  const [url, setUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const copy = (u: string) => {
+    navigator.clipboard?.writeText(u).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => undefined,
+    );
+  };
+
+  const mint = async () => {
+    const res = await createLink.mutateAsync({ allow_comments: true });
+    setUrl(res.data.url);
+    copy(res.data.url);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={createLink.isPending}
+        onClick={mint}
+        title="Create a public review link"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 disabled:opacity-60"
+      >
+        {createLink.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+        Share
+      </button>
+      {url && (
+        <div className="absolute right-0 top-full mt-2 z-20 w-80 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 shadow-lg">
+          <p className="text-xs text-zinc-500 mb-1.5">
+            Public review link {copied && <span className="text-emerald-600">· copied!</span>}
+          </p>
+          <div className="flex gap-1.5">
+            <input
+              readOnly
+              value={url}
+              onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 text-xs"
+            />
+            <button
+              type="button"
+              onClick={() => copy(url)}
+              className="rounded bg-primary-600 hover:bg-primary-700 text-white px-2 py-1 text-xs"
+            >
+              Copy
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUrl(null)}
+            className="mt-2 text-xs text-zinc-400 hover:text-zinc-600"
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement;
@@ -887,6 +957,7 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
                 {uploadVersion.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 {uploadVersion.isPending ? 'Uploading…' : 'Upload version'}
               </button>
+              <ShareReviewButton assetId={asset.id} />
               {activeVersion?.bin_asset_id && (
                 <a
                   href={binRawUrl(activeVersion.bin_asset_id)}

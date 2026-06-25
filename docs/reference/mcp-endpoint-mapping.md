@@ -1386,12 +1386,19 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 - Media review & approval, federated on top of Bin (BAY-1…4): canonical bytes are
   a `bin.asset` version; Bay owns the review layer (versions' media metadata,
   coordinate-anchored annotations, per-reviewer decisions). Agents review with the
-  same tools/identity/audit trail as humans. SPA + transcode/proxies + guest
-  review (`/r/`) are follow-ups; this is the foundational REST + MCP surface.
+  same tools/identity/audit trail as humans. The SPA, ffmpeg transcode/proxies
+  (served via Bin `/raw?variant=`), and public guest review (`/bay/r/:token`) are
+  all shipped.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
 | `POST /review/resolve` | `bay_review_resolve` | Find-or-create the review for a Bin media asset | `apps/bay/src/pages/review-by-bin.tsx` |
+| `POST /review-links` | `bay_review_link_create` | Mint a public guest-review share link | `apps/bay/src/pages/review-asset.tsx` |
+| `GET /review-links` | — _(skip: SPA share-management list; resolver-done-internally)_ | List a review's share links | `apps/bay/src/hooks/use-bay.ts` |
+| `DELETE /review-links/:id` | — _(skip: SPA share-management revoke)_ | Revoke (soft) a share link | `apps/bay/src/hooks/use-bay.ts` |
+| `GET /v1/public/review/:token` | — _(skip: public-inbound, unauthenticated guest surface)_ | Public read-only review bundle | `apps/bay/src/pages/guest-review.tsx` |
+| `GET /v1/public/review/:token/media` | — _(skip: public-inbound binary/range media stream)_ | Stream media for a guest (variant=proxy/poster) | `apps/bay/src/pages/guest-review.tsx` |
+| `POST /v1/public/review/:token/comments` | — _(skip: public-inbound unauthenticated guest comment)_ | Guest comment on a shared review | `apps/bay/src/pages/guest-review.tsx` |
 | `GET /assets` | `bay_asset_list` | List review assets (project filter) | `apps/bay/src/hooks/use-bay.ts` |
 | `POST /assets` | `bay_asset_create` | Create a review asset (media_kind) | — _(skip: SPA is a follow-up)_ |
 | `GET /assets/:id` | `bay_asset_get` | Get asset metadata | — _(skip: SPA is a follow-up)_ |

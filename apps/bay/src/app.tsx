@@ -4,6 +4,7 @@ import { BayLayout } from '@/components/layout/bay-layout';
 import { ReviewLibraryPage } from '@/pages/review-library';
 import { ReviewAssetPage } from '@/pages/review-asset';
 import { ReviewByBinAsset } from '@/pages/review-by-bin';
+import { GuestReviewPage } from '@/pages/guest-review';
 import { HelpViewer } from '@bigbluebam/ui/help-viewer';
 import { Loader2 } from 'lucide-react';
 
@@ -11,6 +12,7 @@ type Route =
   | { page: 'assets' }
   | { page: 'review'; id: string }
   | { page: 'review-by-bin'; binAssetId: string }
+  | { page: 'guest-review'; token: string }
   | { page: 'help' };
 
 const BASE_PATH = '/bay';
@@ -27,6 +29,11 @@ function parseRoute(path: string): Route {
 
   if (p === '/' || p === '') return { page: 'assets' };
   if (p === '/help') return { page: 'help' };
+
+  // /r/:token — public guest review (no auth). Checked early; rendered before
+  // the auth guard so anonymous browsers can open shared links.
+  const guestMatch = p.match(/^\/r\/([^/]+)$/);
+  if (guestMatch) return { page: 'guest-review', token: guestMatch[1]! };
 
   // /assets/:id — the review page (by Bay asset id)
   const reviewMatch = p.match(/^\/assets\/([^/]+)$/);
@@ -88,6 +95,12 @@ export function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigate]);
+
+  // Public guest review bypasses auth entirely — render before the loading/auth
+  // gate so a shared /r/:token link works for anonymous browsers.
+  if (route.page === 'guest-review') {
+    return <GuestReviewPage token={route.token} />;
+  }
 
   if (isLoading) {
     return (

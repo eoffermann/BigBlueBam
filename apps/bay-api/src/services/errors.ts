@@ -15,3 +15,19 @@ export class ConflictError extends Error {
     this.name = 'ConflictError';
   }
 }
+
+/** A share link that existed but is no longer usable (expired or revoked). */
+export class GoneError extends Error {
+  constructor(message = 'This link is no longer available') {
+    super(message);
+    this.name = 'GoneError';
+  }
+}
+
+/** The action is understood but not permitted (e.g. comments disabled). */
+export class ForbiddenError extends Error {
+  constructor(message = 'Forbidden') {
+    super(message);
+    this.name = 'ForbiddenError';
+  }
+}

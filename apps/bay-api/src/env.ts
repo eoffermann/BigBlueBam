@@ -28,6 +28,16 @@ const envSchema = z.object({
   BIN_API_INTERNAL_URL: z.string().default('http://bin-api:4016'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
+  // Object store (shared bucket). Bay streams the canonical bytes itself for
+  // the public guest-review surface (the authenticated player still goes
+  // through Bin's /raw proxy). Mirrors the bin-api S3_* defaults so both read
+  // the same MinIO/S3 with the same keys.
+  S3_ENDPOINT: z.string().default('http://minio:9000'),
+  S3_ACCESS_KEY: z.string().default('minioadmin'),
+  S3_SECRET_KEY: z.string().default('minioadmin'),
+  S3_BUCKET: z.string().default('bigbluebam-uploads'),
+  S3_REGION: z.string().default('us-east-1'),
+
   PUBLIC_URL: z.string().default('http://localhost'),
 
   COOKIE_DOMAIN: z.string().optional(),

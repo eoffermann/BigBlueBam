@@ -217,6 +217,47 @@ export function useResolveReview() {
 }
 
 // ---------------------------------------------------------------------------
+// Public share links (guest review)
+// ---------------------------------------------------------------------------
+
+export interface ReviewLink {
+  id: string;
+  asset_id: string;
+  token: string;
+  url: string;
+  allow_comments: boolean;
+  expires_at: string | null;
+  revoked_at: string | null;
+  view_count: number;
+  created_at: string;
+}
+
+export function useReviewLinks(assetId: string | undefined) {
+  return useQuery({
+    queryKey: ['bay', 'review-links', assetId],
+    queryFn: () => api.get<{ data: ReviewLink[] }>('/v1/review-links', { asset_id: assetId! }),
+    enabled: !!assetId,
+  });
+}
+
+export function useCreateReviewLink(assetId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { expires_in_days?: number | null; allow_comments?: boolean }) =>
+      api.post<{ data: ReviewLink }>('/v1/review-links', { asset_id: assetId, ...input }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bay', 'review-links', assetId] }),
+  });
+}
+
+export function useRevokeReviewLink(assetId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ data: ReviewLink }>(`/v1/review-links/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bay', 'review-links', assetId] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Version types
 // ---------------------------------------------------------------------------
 

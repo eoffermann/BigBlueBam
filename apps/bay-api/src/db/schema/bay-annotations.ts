@@ -4,6 +4,7 @@ import {
   text,
   jsonb,
   boolean,
+  varchar,
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
@@ -30,6 +31,9 @@ export const bayAnnotations = pgTable(
     body: text('body').notNull(),
     resolved: boolean('resolved').default(false).notNull(),
     thread_parent_id: uuid('thread_parent_id'),
+    // Display name for guest (unauthenticated) comments; null for member
+    // comments (their name comes from the users join). (0217)
+    guest_name: varchar('guest_name', { length: 120 }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('idx_bay_annotations_version').on(table.version_id)],

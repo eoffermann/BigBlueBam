@@ -13,6 +13,7 @@ COPY packages/logging/package.json ./packages/logging/
 COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/db-stubs/package.json ./packages/db-stubs/
 COPY packages/permissions/package.json ./packages/permissions/
+COPY packages/storage/package.json ./packages/storage/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -26,6 +27,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
+COPY packages/storage/ ./packages/storage/
 COPY apps/bay-api/src ./apps/bay-api/src
 COPY apps/bay-api/tsconfig.json apps/bay-api/tsup.config.ts ./apps/bay-api/
 
@@ -34,6 +36,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/service-health build \
  && pnpm --filter @bigbluebam/db-stubs build \
  && pnpm --filter @bigbluebam/permissions build \
+ && pnpm --filter @bigbluebam/storage build \
  && pnpm --filter @bigbluebam/bay-api build
 
 # Create a deploy-ready directory with all prod deps
@@ -49,6 +52,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
+COPY packages/storage/ ./packages/storage/
 COPY apps/bay-api/ ./apps/bay-api/
 
 WORKDIR /app/apps/bay-api

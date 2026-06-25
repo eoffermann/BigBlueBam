@@ -240,6 +240,7 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bay_decision_list', { id: 'bay.version_decision.get', verb: 'get' }],
   ['bay_decision_set', { id: 'bay.version_decision.update', verb: 'update' }],
   ['bay_review_resolve', { id: 'bay.review_resolve.create', verb: 'create' }],
+  ['bay_review_link_create', { id: 'bay.review_link.create', verb: 'create' }],
 ]);
 
 // ── Inference helpers ──────────────────────────────────────────────────

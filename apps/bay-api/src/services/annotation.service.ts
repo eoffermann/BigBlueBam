@@ -1,4 +1,4 @@
-import { and, eq, asc } from 'drizzle-orm';
+import { and, eq, asc, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bayAssets, bayAssetVersions, bayAnnotations } from '../db/schema/index.js';
 import { users } from '../db/schema/bbb-refs.js';
@@ -28,7 +28,8 @@ export async function listAnnotations(
       id: bayAnnotations.id,
       version_id: bayAnnotations.version_id,
       author_id: bayAnnotations.author_id,
-      author_name: users.display_name,
+      // Member name from the users join; guest comments carry their own name.
+      author_name: sql<string | null>`COALESCE(${users.display_name}, ${bayAnnotations.guest_name})`,
       anchor: bayAnnotations.anchor,
       body: bayAnnotations.body,
       resolved: bayAnnotations.resolved,

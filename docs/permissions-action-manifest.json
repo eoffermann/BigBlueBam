@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1359,
-    "mcp_tools_scanned": 762,
-    "rest_routes_scanned": 876,
-    "read_permissions": 531,
-    "destructive_permissions": 127
+    "total": 1362,
+    "mcp_tools_scanned": 763,
+    "rest_routes_scanned": 879,
+    "read_permissions": 532,
+    "destructive_permissions": 128
   },
   "permissions": [
     {
@@ -8727,6 +8727,62 @@
           "source": "rest",
           "ref": "GET /assets",
           "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.review_link.create",
+      "app": "bay",
+      "resource": "review_link",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bay_review_link_create",
+          "file": "bay-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "POST /review-links",
+          "file": "review-links.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.review_link.delete",
+      "app": "bay",
+      "resource": "review_link",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "DELETE /review-links/:id",
+          "file": "review-links.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bay.review_link.list",
+      "app": "bay",
+      "resource": "review_link",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "GET /review-links",
+          "file": "review-links.routes.ts"
         }
       ]
     },

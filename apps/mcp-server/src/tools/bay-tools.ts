@@ -81,6 +81,22 @@ export function registerBayTools(server: McpServer, api: ApiClient, bayApiUrl: s
   });
 
   registerTool(server, {
+    name: 'bay_review_link_create',
+    description:
+      'Mint a public, token-gated share link for a Bay review so an unauthenticated guest can view the media + annotations + decisions (and optionally comment) at /bay/r/:token. Optionally set an expiry (days) and whether guest comments are allowed. Returns the link including its shareable url.',
+    input: {
+      asset_id: z.string().uuid().describe('The Bay review asset to share'),
+      expires_in_days: z.number().int().positive().max(365).nullable().optional(),
+      allow_comments: z.boolean().optional().describe('Allow guests to comment (default true)'),
+    },
+    returns: z.object({ data: z.record(z.unknown()) }),
+    handler: async (params) => {
+      const r = await client.request('POST', '/review-links', params);
+      return r.ok ? ok(r.data) : err('creating bay review link', r.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'bay_asset_list',
     description:
       'List Bay review assets (the durable things under review: a shot, cut, track, or model), optionally filtered by project or including archived. Returns metadata; use bay_version_list for the version stack.',

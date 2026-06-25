@@ -441,6 +441,9 @@ importers:
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@bigbluebam/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2

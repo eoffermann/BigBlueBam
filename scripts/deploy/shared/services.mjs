@@ -363,16 +363,21 @@ export const APP_SERVICES = [
   },
   {
     name: 'bay-api',
-    description: 'Bay API — media review & approval (annotations, decisions)',
+    description: 'Bay API — media review & approval (annotations, decisions, public guest links)',
     dockerfile: 'apps/bay-api/Dockerfile',
     port: 4017,
     healthcheck: '/health',
     start_command: 'node dist/server.js',
     required: true,
-    needs: ['postgres', 'redis', 'api', 'bin-api'],
+    // Bay streams canonical bytes itself for the public guest-review surface,
+    // so it needs minio in addition to postgres/redis/api/bin-api.
+    needs: ['postgres', 'redis', 'minio', 'api', 'bin-api'],
     public_paths: ['/bay/api/'],
     env: {
-      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
+      required: [
+        'DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL',
+        'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
+      ],
       optional: [
         'CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'PUBLIC_URL',
         'BIN_API_INTERNAL_URL', 'BOLT_API_INTERNAL_URL',

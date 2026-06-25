@@ -94,10 +94,15 @@ await fastify.register(healthCheckPlugin, {
 import assetRoutes from './routes/assets.routes.js';
 import annotationRoutes from './routes/annotations.routes.js';
 import decisionRoutes from './routes/decisions.routes.js';
+import reviewLinkRoutes from './routes/review-links.routes.js';
+// Public guest-review surface (no auth; the path token is the credential).
+import publicReviewRoutes from './routes/public-review.routes.js';
 
 await fastify.register(assetRoutes, { prefix: '/v1' });
 await fastify.register(annotationRoutes, { prefix: '/v1' });
 await fastify.register(decisionRoutes, { prefix: '/v1' });
+await fastify.register(reviewLinkRoutes, { prefix: '/v1' });
+await fastify.register(publicReviewRoutes, { prefix: '/v1' });
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

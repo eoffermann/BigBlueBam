@@ -18,3 +18,4 @@ export { bayAssets } from './bay-assets.js';
 export { bayAssetVersions } from './bay-asset-versions.js';
 export { bayAnnotations } from './bay-annotations.js';
 export { bayReviewDecisions } from './bay-review-decisions.js';
+export { bayReviewLinks } from './bay-review-links.js';
