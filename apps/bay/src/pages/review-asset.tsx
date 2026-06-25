@@ -33,6 +33,7 @@ import {
   type DecisionValue,
   type MediaKind,
 } from '@/hooks/use-bay';
+import { useBayRealtime } from '@/hooks/use-bay-realtime';
 import { useAuthStore } from '@/stores/auth.store';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { MediaKindBadge } from '@/pages/review-library';
@@ -850,6 +851,10 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   const activeVersion = versions.find((v) => v.id === activeVersionId);
   const kind = asset?.media_kind ?? 'image';
   const fps = num((activeVersion?.media_meta as { fps?: number } | null)?.fps, 30) || 30;
+
+  // Live updates: annotations/decisions from other reviewers (and guests)
+  // appear without a manual refresh.
+  useBayRealtime(activeVersionId);
 
   // Reset capture state when the active version changes.
   useEffect(() => {

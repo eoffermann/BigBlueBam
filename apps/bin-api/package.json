@@ -23,6 +23,7 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",
     "@fastify/rate-limit": "^10.0.0",
+    "@fastify/websocket": "^11.0.0",
     "argon2": "^0.41.1",
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.36.0",

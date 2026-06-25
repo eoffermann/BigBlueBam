@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle, ArrowLeft, Download, FileWarning, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useAsset, useData, usePatchRows, usePatchTree, useArrayOp, type InferredField } from '@/hooks/use-bin';
+import { useBinRealtime } from '@/hooks/use-bin-realtime';
 import { JsonTree } from '@/components/json-tree';
 import { api, ApiError } from '@/lib/api';
 
@@ -115,6 +116,10 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
 
   const asset = assetQuery.data?.data;
   const heading = asset?.name ?? 'Asset';
+
+  // Live edits + presence: other editors' commits refetch this view, and we
+  // show who else is in the editor.
+  const { members } = useBinRealtime(assetId);
 
   const renderBody = () => {
     if (dataQuery.isLoading) {
@@ -295,15 +300,36 @@ export function AssetDataPage({ assetId, onNavigate }: AssetDataPageProps) {
             </p>
           )}
         </div>
-        {asset && (asset.scan_status === 'clean' || asset.scan_status === 'skipped') && (
-          <a
-            href={api.rawUrl(`/v1/assets/${asset.id}/raw`)}
-            download={asset.name}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 shrink-0"
-          >
-            <Download className="h-4 w-4" /> Download
-          </a>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {members.length > 0 && (
+            <div className="flex items-center -space-x-2" title={`${members.map((m) => m.name).join(', ')} also here`}>
+              {members.slice(0, 5).map((m) => (
+                <span
+                  key={m.conn_id}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-white dark:border-zinc-900 text-[11px] font-semibold text-white"
+                  style={{ backgroundColor: m.color }}
+                  title={m.name}
+                >
+                  {m.name.slice(0, 2).toUpperCase()}
+                </span>
+              ))}
+              {members.length > 5 && (
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-white dark:border-zinc-900 bg-zinc-400 text-[11px] font-semibold text-white">
+                  +{members.length - 5}
+                </span>
+              )}
+            </div>
+          )}
+          {asset && (asset.scan_status === 'clean' || asset.scan_status === 'skipped') && (
+            <a
+              href={api.rawUrl(`/v1/assets/${asset.id}/raw`)}
+              download={asset.name}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+            >
+              <Download className="h-4 w-4" /> Download
+            </a>
+          )}
+        </div>
       </div>
 
       {renderBody()}

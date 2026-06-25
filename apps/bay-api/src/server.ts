@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
@@ -81,6 +82,9 @@ await fastify.register(authPlugin);
 import permissionsPlugin from './plugins/permissions.js';
 await fastify.register(permissionsPlugin);
 
+// Realtime fanout (live annotations/decisions across reviewers).
+await fastify.register(websocket, { options: { maxPayload: 8192 } });
+
 // Health + readiness probes (shared plugin)
 await fastify.register(healthCheckPlugin, {
   service: 'bay-api',
@@ -97,12 +101,15 @@ import decisionRoutes from './routes/decisions.routes.js';
 import reviewLinkRoutes from './routes/review-links.routes.js';
 // Public guest-review surface (no auth; the path token is the credential).
 import publicReviewRoutes from './routes/public-review.routes.js';
+// Realtime WS hub (subscribe to a review version's live events).
+import wsRoutes from './routes/ws.routes.js';
 
 await fastify.register(assetRoutes, { prefix: '/v1' });
 await fastify.register(annotationRoutes, { prefix: '/v1' });
 await fastify.register(decisionRoutes, { prefix: '/v1' });
 await fastify.register(reviewLinkRoutes, { prefix: '/v1' });
 await fastify.register(publicReviewRoutes, { prefix: '/v1' });
+await fastify.register(wsRoutes);
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

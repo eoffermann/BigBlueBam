@@ -348,7 +348,7 @@ export const APP_SERVICES = [
     // Bin writes bytes straight to the object store (getMediaDriver), so it
     // needs minio in addition to postgres/redis/api.
     needs: ['postgres', 'redis', 'minio', 'api'],
-    public_paths: ['/bin/api/'],
+    public_paths: ['/bin/api/', '/bin/ws'],
     env: {
       required: [
         'DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL',
@@ -372,7 +372,7 @@ export const APP_SERVICES = [
     // Bay streams canonical bytes itself for the public guest-review surface,
     // so it needs minio in addition to postgres/redis/api/bin-api.
     needs: ['postgres', 'redis', 'minio', 'api', 'bin-api'],
-    public_paths: ['/bay/api/'],
+    public_paths: ['/bay/api/', '/bay/ws'],
     env: {
       required: [
         'DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL',

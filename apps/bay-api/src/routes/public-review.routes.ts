@@ -3,6 +3,7 @@ import { z } from 'zod';
 import * as reviewLinkService from '../services/review-link.service.js';
 import * as binMedia from '../lib/bin-media.js';
 import { NotFoundError, GoneError, ForbiddenError } from '../services/errors.js';
+import { broadcastToVersion } from '../lib/broadcast.js';
 
 // Public guest-review surface. NO auth — the path token is the sole credential.
 // Mounted under /v1/public so the existing /bay/api/ nginx proxy serves it with
@@ -110,6 +111,12 @@ export default async function publicReviewRoutes(fastify: FastifyInstance) {
       const body = guestCommentSchema.parse(request.body);
       try {
         const annotation = await reviewLinkService.addGuestComment(request.params.token, body);
+        // Members watching this version see the guest comment appear live.
+        await broadcastToVersion(fastify.redis, annotation.version_id, {
+          type: 'bay.annotation.created',
+          version_id: annotation.version_id,
+          annotation_id: annotation.id,
+        });
         return reply.status(201).send({ data: annotation });
       } catch (err) {
         return sendError(reply, request, err);

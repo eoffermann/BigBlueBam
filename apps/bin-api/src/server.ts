@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
@@ -81,6 +82,9 @@ await fastify.register(authPlugin);
 import permissionsPlugin from './plugins/permissions.js';
 await fastify.register(permissionsPlugin);
 
+// Realtime fanout (live structured-data edits + editor presence).
+await fastify.register(websocket, { options: { maxPayload: 8192 } });
+
 // Health + readiness probes (shared plugin)
 await fastify.register(healthCheckPlugin, {
   service: 'bin-api',
@@ -94,10 +98,12 @@ await fastify.register(healthCheckPlugin, {
 import assetRoutes from './routes/assets.routes.js';
 import folderRoutes from './routes/folders.routes.js';
 import dataRoutes from './routes/data.routes.js';
+import wsRoutes from './routes/ws.routes.js';
 
 await fastify.register(assetRoutes, { prefix: '/v1' });
 await fastify.register(folderRoutes, { prefix: '/v1' });
 await fastify.register(dataRoutes, { prefix: '/v1' });
+await fastify.register(wsRoutes);
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

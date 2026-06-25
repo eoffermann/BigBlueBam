@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as dataService from '../services/data.service.js';
 import { NotFoundError, ConflictError, UnsupportedFormatError } from '../services/data.service.js';
+import { broadcastToAsset } from '../lib/broadcast.js';
 
 function sendError(reply: FastifyReply, request: FastifyRequest, err: unknown) {
   if (err instanceof NotFoundError) {
@@ -108,6 +109,10 @@ export default async function dataRoutes(fastify: FastifyInstance) {
           request.user!.id,
           body.patches,
         );
+        await broadcastToAsset(fastify.redis, request.params.assetId, {
+          type: 'bin.data.updated',
+          asset_id: request.params.assetId,
+        });
         return reply.send({ data: result });
       } catch (err) {
         return sendError(reply, request, err);
@@ -128,6 +133,10 @@ export default async function dataRoutes(fastify: FastifyInstance) {
           request.user!.id,
           body.rows,
         );
+        await broadcastToAsset(fastify.redis, request.params.assetId, {
+          type: 'bin.data.updated',
+          asset_id: request.params.assetId,
+        });
         return reply.status(201).send({ data: result });
       } catch (err) {
         return sendError(reply, request, err);
@@ -150,6 +159,10 @@ export default async function dataRoutes(fastify: FastifyInstance) {
           request.user!.id,
           body.patches,
         );
+        await broadcastToAsset(fastify.redis, request.params.assetId, {
+          type: 'bin.data.updated',
+          asset_id: request.params.assetId,
+        });
         return reply.send({ data: result });
       } catch (err) {
         return sendError(reply, request, err);
@@ -172,6 +185,10 @@ export default async function dataRoutes(fastify: FastifyInstance) {
           request.user!.id,
           body,
         );
+        await broadcastToAsset(fastify.redis, request.params.assetId, {
+          type: 'bin.data.updated',
+          asset_id: request.params.assetId,
+        });
         return reply.send({ data: result });
       } catch (err) {
         return sendError(reply, request, err);

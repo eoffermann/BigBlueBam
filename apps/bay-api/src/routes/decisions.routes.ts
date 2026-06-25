@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as decisionService from '../services/decision.service.js';
 import { NotFoundError, ConflictError } from '../services/errors.js';
+import { broadcastToVersion } from '../lib/broadcast.js';
 
 const setDecisionSchema = z.object({
   decision: z.enum(['approved', 'rejected', 'changes_requested', 'pending']),
@@ -54,6 +55,10 @@ export default async function decisionRoutes(fastify: FastifyInstance) {
           request.user!.id,
           body,
         );
+        await broadcastToVersion(fastify.redis, request.params.id, {
+          type: 'bay.decision.set',
+          version_id: request.params.id,
+        });
         return reply.send({ data: decision });
       } catch (err) {
         return sendError(reply, request, err);

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as annotationService from '../services/annotation.service.js';
 import { NotFoundError, ConflictError } from '../services/errors.js';
+import { broadcastToVersion } from '../lib/broadcast.js';
 
 const createAnnotationSchema = z.object({
   anchor: z.record(z.unknown()).optional(),
@@ -61,6 +62,11 @@ export default async function annotationRoutes(fastify: FastifyInstance) {
           request.user!.id,
           body,
         );
+        await broadcastToVersion(fastify.redis, request.params.id, {
+          type: 'bay.annotation.created',
+          version_id: request.params.id,
+          annotation_id: annotation.id,
+        });
         return reply.status(201).send({ data: annotation });
       } catch (err) {
         return sendError(reply, request, err);
@@ -80,6 +86,12 @@ export default async function annotationRoutes(fastify: FastifyInstance) {
           request.user!.org_id,
           body.resolved ?? true,
         );
+        await broadcastToVersion(fastify.redis, annotation.version_id, {
+          type: 'bay.annotation.resolved',
+          version_id: annotation.version_id,
+          annotation_id: annotation.id,
+          resolved: annotation.resolved,
+        });
         return reply.send({ data: annotation });
       } catch (err) {
         return sendError(reply, request, err);

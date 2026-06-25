@@ -219,6 +219,7 @@ export async function addGuestComment(token: string, input: GuestCommentInput) {
   const a = rows[0]!;
   return {
     id: a.id,
+    version_id: versionId,
     author_name: input.guest_name.slice(0, 120),
     is_guest: true,
     anchor: a.anchor,

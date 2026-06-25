@@ -1378,6 +1378,7 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `GET /data/:id/comments` | `bin_data_comment_list` | List review comments | — |
 | `POST /data/:id/comments` | `bin_data_comment_create` | Add an anchored comment | — |
 | `POST /data/:id/comments/:cid/resolve` | `bin_data_comment_resolve` | Resolve/reopen a comment | — |
+| `GET /ws` (`/bin/ws`) | — _(skip: realtime/ws — live edits + editor presence)_ | WebSocket: subscribe to an asset's live data-updated + presence events | `apps/bin/src/hooks/use-bin-realtime.ts` |
 
 
 ## Bay (app)
@@ -1399,6 +1400,7 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `GET /v1/public/review/:token` | — _(skip: public-inbound, unauthenticated guest surface)_ | Public read-only review bundle | `apps/bay/src/pages/guest-review.tsx` |
 | `GET /v1/public/review/:token/media` | — _(skip: public-inbound binary/range media stream)_ | Stream media for a guest (variant=proxy/poster) | `apps/bay/src/pages/guest-review.tsx` |
 | `POST /v1/public/review/:token/comments` | — _(skip: public-inbound unauthenticated guest comment)_ | Guest comment on a shared review | `apps/bay/src/pages/guest-review.tsx` |
+| `GET /ws` (`/bay/ws`) | — _(skip: realtime/ws — live annotations/decisions)_ | WebSocket: subscribe to a review version's live annotation/decision events | `apps/bay/src/hooks/use-bay-realtime.ts` |
 | `GET /assets` | `bay_asset_list` | List review assets (project filter) | `apps/bay/src/hooks/use-bay.ts` |
 | `POST /assets` | `bay_asset_create` | Create a review asset (media_kind) | — _(skip: SPA is a follow-up)_ |
 | `GET /assets/:id` | `bay_asset_get` | Get asset metadata | — _(skip: SPA is a follow-up)_ |
