@@ -1355,6 +1355,8 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `GET /assets` | `bin_asset_list` | List DAM assets (folder/project filters) | `apps/bin/src/hooks/use-bin.ts` |
 | `POST /assets` | `bin_asset_create` | Create an asset (metadata; bytes follow) | `apps/bin/src/hooks/use-bin.ts` |
 | `GET /assets/:id` | `bin_asset_get` | Get asset metadata (scan status, version) | `apps/bin/src/hooks/use-bin.ts` |
+| `PATCH /assets/:id` | `bin_asset_update` | Rename / move to folder / set tags | `apps/bin/src/hooks/use-bin.ts` |
+| `GET /tags` | `bin_tag_list` | Distinct org tags (filter pickers) | `apps/bin/src/hooks/use-bin.ts` |
 | `POST /assets/:id/archive` | `bin_asset_archive` | Archive (soft delete) | — |
 | `POST /assets/:id/upload` | `— _(skip: multipart/binary upload)_` | Proxied multipart upload → new version | `apps/bin/src/lib/api.ts` |
 | `GET /assets/:id/raw` | `— _(skip: binary stream)_` | Scan-gated byte stream | `apps/bin/src/hooks/use-bin.ts` |
@@ -1389,7 +1391,8 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
-| `GET /assets` | `bay_asset_list` | List review assets (project filter) | — _(skip: SPA is a follow-up)_ |
+| `POST /review/resolve` | `bay_review_resolve` | Find-or-create the review for a Bin media asset | `apps/bay/src/pages/review-by-bin.tsx` |
+| `GET /assets` | `bay_asset_list` | List review assets (project filter) | `apps/bay/src/hooks/use-bay.ts` |
 | `POST /assets` | `bay_asset_create` | Create a review asset (media_kind) | — _(skip: SPA is a follow-up)_ |
 | `GET /assets/:id` | `bay_asset_get` | Get asset metadata | — _(skip: SPA is a follow-up)_ |
 | `POST /assets/:id/archive` | `bay_asset_archive` | Archive (soft delete) | — _(skip: SPA is a follow-up)_ |
