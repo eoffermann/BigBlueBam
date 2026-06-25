@@ -3,11 +3,14 @@ import {
   ArrowLeft,
   Box,
   Check,
+  Crosshair,
   Download,
+  FlagTriangleRight,
   Image as ImageIcon,
   Layers,
   Loader2,
   Music,
+  SquareDashedMousePointer,
   Trash2,
   Upload,
   Video,
@@ -24,7 +27,6 @@ import {
   useArchiveAsset,
   binRawUrl,
   type Anchor,
-  type AnchorType,
   type BayVersion,
   type DecisionValue,
   type MediaKind,
@@ -38,6 +40,8 @@ interface ReviewAssetPageProps {
   onNavigate: (path: string) => void;
 }
 
+type MediaEl = HTMLVideoElement | HTMLAudioElement;
+
 const mediaKindIcon: Record<MediaKind, typeof ImageIcon> = {
   image: ImageIcon,
   video: Video,
@@ -46,41 +50,48 @@ const mediaKindIcon: Record<MediaKind, typeof ImageIcon> = {
 };
 
 // ---------------------------------------------------------------------------
-// Anchor rendering
+// Helpers
 // ---------------------------------------------------------------------------
 
-// Defensive: anchors are opaque JSONB and may be authored by agents or older
-// seeders with slightly different keys (e.g. start vs start_sec). Never throw —
-// an unexpected shape must not blank the whole review page.
 function num(v: unknown, fallback = 0): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
+function fmtTime(sec: number): string {
+  const s = Math.max(0, sec);
+  const m = Math.floor(s / 60);
+  const r = (s - m * 60).toFixed(2);
+  return `${m}:${r.padStart(5, '0')}`;
+}
+
+// Defensive: anchors are opaque JSONB authored by humans, agents, or older
+// seeders — never throw on an unexpected shape.
 function renderAnchor(anchor: Anchor | null | undefined): string {
   if (!anchor || typeof anchor !== 'object') return 'anchor';
   const a = anchor as Record<string, unknown>;
   switch (a.type) {
-    case 'frame':
-      return `▶ frame ${num(a.frame)}`;
+    case 'frame': {
+      const t = a.time_sec != null ? ` @ ${fmtTime(num(a.time_sec))}` : '';
+      return `▶ frame ${num(a.frame)}${t}`;
+    }
     case 'timerange': {
       const start = num(a.start_sec ?? a.start);
       const end = num(a.end_sec ?? a.end);
-      return `◷ ${start.toFixed(1)}–${end.toFixed(1)}s`;
+      return `◷ ${fmtTime(start)}–${fmtTime(end)}`;
     }
-    case 'region':
-      return `▱ region ${Math.round(num(a.x) * 100)}%,${Math.round(num(a.y) * 100)}% ${Math.round(
+    case 'region': {
+      const box = `▱ region ${Math.round(num(a.x) * 100)}%,${Math.round(num(a.y) * 100)}% ${Math.round(
         num(a.w) * 100,
       )}%×${Math.round(num(a.h) * 100)}%`;
+      const t = a.time_sec != null ? ` @ ${fmtTime(num(a.time_sec))}` : '';
+      return box + t;
+    }
     case 'viewpoint':
       return `view: ${typeof a.camera === 'string' ? a.camera : 'camera'}`;
     default:
       return 'anchor';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Media placeholder
-// ---------------------------------------------------------------------------
 
 function MetaLabel({ label, value }: { label: string; value: string }) {
   return (
@@ -91,87 +102,167 @@ function MetaLabel({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MediaPanel({ kind, version }: { kind: MediaKind; version: BayVersion | undefined }) {
+// ---------------------------------------------------------------------------
+// Interactive media stage (drag-select region; reports playback time)
+// ---------------------------------------------------------------------------
+
+interface DragRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function MediaStage({
+  kind,
+  version,
+  mediaRef,
+  regionMode,
+  regionOverlay,
+  onRegion,
+  onTime,
+}: {
+  kind: MediaKind;
+  version: BayVersion | undefined;
+  mediaRef: React.MutableRefObject<MediaEl | null>;
+  regionMode: boolean;
+  regionOverlay: DragRect | null;
+  onRegion: (rect: DragRect) => void;
+  onTime: (t: number) => void;
+}) {
   const Icon = mediaKindIcon[kind] ?? ImageIcon;
   const [failed, setFailed] = useState(false);
-  const meta = version?.media_meta ?? null;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+
   const binId = version?.bin_asset_id ?? null;
   const src = binId ? binRawUrl(binId) : null;
+  // Region capture is available on spatial media (image always; video only in
+  // "draw region" mode so it doesn't fight the native transport controls).
+  const regionEnabled = src != null && (kind === 'image' || (kind === 'video' && regionMode));
 
-  // Reset the error state when the active version changes.
   useEffect(() => {
     setFailed(false);
   }, [binId]);
 
-  const labels: { label: string; value: string }[] = [];
-  if (meta) {
-    if (meta.width != null && meta.height != null) {
-      labels.push({ label: 'dimensions', value: `${meta.width}×${meta.height}` });
-    }
-    if (meta.duration_sec != null) {
-      labels.push({ label: 'duration', value: `${meta.duration_sec.toFixed(1)}s` });
-    }
-    if (meta.codec) {
-      labels.push({ label: 'codec', value: String(meta.codec) });
-    }
-  }
+  const clamp = (n: number) => Math.min(1, Math.max(0, n));
+  const posOf = (e: React.PointerEvent) => {
+    const r = boxRef.current!.getBoundingClientRect();
+    return { x: clamp((e.clientX - r.left) / r.width), y: clamp((e.clientY - r.top) / r.height) };
+  };
 
-  const renderMedia = () => {
-    if (!src || failed) {
-      return (
-        <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3">
-          <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-primary-500">
-            <Icon className="h-8 w-8" />
-          </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {!src
-              ? 'No media attached to this version yet — upload one below.'
-              : 'Media not available yet (still scanning, or upload incomplete).'}
-          </p>
-        </div>
-      );
-    }
+  const handlers = regionEnabled
+    ? {
+        onPointerDown: (e: React.PointerEvent) => {
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+          const p = posOf(e);
+          setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+        },
+        onPointerMove: (e: React.PointerEvent) => {
+          if (!drag) return;
+          const p = posOf(e);
+          setDrag({ ...drag, x1: p.x, y1: p.y });
+        },
+        onPointerUp: () => {
+          if (!drag) return;
+          const x = Math.min(drag.x0, drag.x1);
+          const y = Math.min(drag.y0, drag.y1);
+          const w = Math.abs(drag.x1 - drag.x0);
+          const h = Math.abs(drag.y1 - drag.y0);
+          setDrag(null);
+          if (w > 0.01 && h > 0.01) {
+            onRegion({
+              x: Number(x.toFixed(4)),
+              y: Number(y.toFixed(4)),
+              w: Number(w.toFixed(4)),
+              h: Number(h.toFixed(4)),
+            });
+          }
+        },
+      }
+    : {};
+
+  const liveRect = drag
+    ? {
+        x: Math.min(drag.x0, drag.x1),
+        y: Math.min(drag.y0, drag.y1),
+        w: Math.abs(drag.x1 - drag.x0),
+        h: Math.abs(drag.y1 - drag.y0),
+      }
+    : regionOverlay;
+
+  const placeholder = (
+    <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3">
+      <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-primary-500">
+        <Icon className="h-8 w-8" />
+      </div>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        {!src
+          ? 'No media attached to this version yet — upload one above.'
+          : 'Media not available yet (still scanning, or upload incomplete).'}
+      </p>
+    </div>
+  );
+
+  let media: React.ReactNode = placeholder;
+  if (src && !failed) {
     if (kind === 'image') {
-      return (
-        <div className="w-full bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center max-h-[28rem] overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt="" className="max-h-[28rem] w-auto object-contain" onError={() => setFailed(true)} />
-        </div>
-      );
-    }
-    if (kind === 'video') {
-      return (
+      // eslint-disable-next-line @next/next/no-img-element
+      media = <img src={src} alt="" className="block max-h-[28rem] w-full object-contain bg-zinc-50 dark:bg-zinc-900" onError={() => setFailed(true)} />;
+    } else if (kind === 'video') {
+      media = (
         // biome-ignore lint/a11y/useMediaCaption: user-uploaded review media has no caption track
-        <video src={src} controls className="w-full max-h-[28rem] bg-black" onError={() => setFailed(true)} />
+        <video
+          ref={mediaRef as React.RefObject<HTMLVideoElement>}
+          src={src}
+          controls
+          onTimeUpdate={(e) => onTime((e.target as HTMLVideoElement).currentTime)}
+          className="block w-full max-h-[28rem] bg-black"
+          onError={() => setFailed(true)}
+        />
       );
-    }
-    if (kind === 'audio') {
-      return (
+    } else if (kind === 'audio') {
+      media = (
         <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-4 p-6">
           <Icon className="h-10 w-10 text-primary-500" />
           {/* biome-ignore lint/a11y/useMediaCaption: user-uploaded review media has no caption track */}
-          <audio src={src} controls className="w-full max-w-md" onError={() => setFailed(true)} />
+          <audio
+            ref={mediaRef as React.RefObject<HTMLAudioElement>}
+            src={src}
+            controls
+            onTimeUpdate={(e) => onTime((e.target as HTMLAudioElement).currentTime)}
+            className="w-full max-w-md"
+            onError={() => setFailed(true)}
+          />
+        </div>
+      );
+    } else {
+      media = (
+        <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3">
+          <Icon className="h-8 w-8 text-primary-500" />
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">3D preview not supported yet — download to view.</p>
         </div>
       );
     }
-    // model / other — no inline viewer; offer the bytes via the Download button.
-    return (
-      <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3">
-        <Icon className="h-8 w-8 text-primary-500" />
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">3D preview not supported yet — download to view.</p>
-      </div>
-    );
-  };
+  }
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-      <div className="border-b border-zinc-200 dark:border-zinc-700">{renderMedia()}</div>
-      {labels.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 p-3 bg-white dark:bg-zinc-900">
-          {labels.map((l) => (
-            <MetaLabel key={l.label} label={l.label} value={l.value} />
-          ))}
-        </div>
+    <div
+      ref={boxRef}
+      className={cn('relative select-none', regionEnabled && 'cursor-crosshair')}
+      {...handlers}
+    >
+      {media}
+      {liveRect && (
+        <div
+          className="absolute border-2 border-primary-500 bg-primary-500/15 pointer-events-none"
+          style={{
+            left: `${liveRect.x * 100}%`,
+            top: `${liveRect.y * 100}%`,
+            width: `${liveRect.w * 100}%`,
+            height: `${liveRect.h * 100}%`,
+          }}
+        />
       )}
     </div>
   );
@@ -194,9 +285,7 @@ function VersionStack({
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60">
         <Layers className="h-4 w-4 text-zinc-400" />
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          Versions
-        </h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Versions</h3>
       </div>
       {versions.length === 0 ? (
         <p className="px-4 py-4 text-sm text-zinc-500">No versions yet.</p>
@@ -231,86 +320,94 @@ function VersionStack({
 }
 
 // ---------------------------------------------------------------------------
-// Anchor builder
+// Capture toolbar — media-driven anchor capture
 // ---------------------------------------------------------------------------
 
-const ANCHOR_TYPES: AnchorType[] = ['frame', 'timerange', 'region', 'viewpoint'];
+function CaptureToolbar({
+  kind,
+  mediaRef,
+  fps,
+  currentTime,
+  regionMode,
+  setRegionMode,
+  setAnchor,
+  markIn,
+  setMarkIn,
+}: {
+  kind: MediaKind;
+  mediaRef: React.MutableRefObject<MediaEl | null>;
+  fps: number;
+  currentTime: number;
+  regionMode: boolean;
+  setRegionMode: (b: boolean) => void;
+  setAnchor: (a: Anchor) => void;
+  markIn: number | null;
+  setMarkIn: (n: number | null) => void;
+}) {
+  const now = () => mediaRef.current?.currentTime ?? currentTime;
+  const timed = kind === 'video' || kind === 'audio';
+  const spatial = kind === 'image' || kind === 'video';
 
-function defaultAnchorFor(type: AnchorType): Anchor {
-  switch (type) {
-    case 'frame':
-      return { type: 'frame', frame: 0 };
-    case 'timerange':
-      return { type: 'timerange', start_sec: 0, end_sec: 1 };
-    case 'region':
-      return { type: 'region', x: 0, y: 0, w: 0.2, h: 0.2 };
-    case 'viewpoint':
-      return { type: 'viewpoint', camera: 'front' };
-  }
-}
+  if (!timed && !spatial) return null;
 
-function numInput(value: number, onChange: (n: number) => void, label: string, step = 1) {
+  const btn =
+    'inline-flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60';
+
   return (
-    <label className="flex flex-col gap-0.5 text-xs text-zinc-500">
-      {label}
-      <input
-        type="number"
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-20 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-primary-500/30"
-      />
-    </label>
-  );
-}
-
-function AnchorBuilder({ anchor, onChange }: { anchor: Anchor; onChange: (a: Anchor) => void }) {
-  return (
-    <div className="flex flex-wrap items-end gap-3">
-      <label className="flex flex-col gap-0.5 text-xs text-zinc-500">
-        Anchor type
-        <select
-          value={anchor.type}
-          onChange={(e) => onChange(defaultAnchorFor(e.target.value as AnchorType))}
-          className="rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-primary-500/30"
+    <div className="flex flex-wrap items-center gap-2">
+      {timed && (
+        <>
+          <span className="text-xs text-zinc-400 tabular-nums">{fmtTime(currentTime)}</span>
+          <button
+            type="button"
+            className={btn}
+            onClick={() => {
+              const t = now();
+              setMarkIn(Number(t.toFixed(2)));
+              setAnchor({ type: 'timerange', start_sec: Number(t.toFixed(2)), end_sec: Number(t.toFixed(2)) });
+            }}
+          >
+            <FlagTriangleRight className="h-3.5 w-3.5" /> Mark in
+          </button>
+          <button
+            type="button"
+            className={btn}
+            onClick={() => {
+              const t = Number(now().toFixed(2));
+              const start = markIn ?? t;
+              setAnchor({ type: 'timerange', start_sec: Math.min(start, t), end_sec: Math.max(start, t) });
+            }}
+          >
+            <FlagTriangleRight className="h-3.5 w-3.5 rotate-180" /> Mark out
+          </button>
+          {kind === 'video' && (
+            <button
+              type="button"
+              className={btn}
+              onClick={() => {
+                const t = now();
+                setAnchor({ type: 'frame', frame: Math.round(t * fps), time_sec: Number(t.toFixed(2)) });
+              }}
+            >
+              <Crosshair className="h-3.5 w-3.5" /> Capture frame
+            </button>
+          )}
+        </>
+      )}
+      {kind === 'video' && (
+        <button
+          type="button"
+          aria-pressed={regionMode}
+          className={cn(btn, regionMode && 'bg-primary-50 dark:bg-primary-900/20 border-primary-400 text-primary-700 dark:text-primary-300')}
+          onClick={() => setRegionMode(!regionMode)}
         >
-          {ANCHOR_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {anchor.type === 'frame' &&
-        numInput(anchor.frame, (n) => onChange({ ...anchor, frame: n }), 'frame')}
-
-      {anchor.type === 'timerange' && (
-        <>
-          {numInput(anchor.start_sec, (n) => onChange({ ...anchor, start_sec: n }), 'start (s)', 0.1)}
-          {numInput(anchor.end_sec, (n) => onChange({ ...anchor, end_sec: n }), 'end (s)', 0.1)}
-        </>
+          <SquareDashedMousePointer className="h-3.5 w-3.5" /> {regionMode ? 'Drawing… drag on video' : 'Draw region'}
+        </button>
       )}
-
-      {anchor.type === 'region' && (
-        <>
-          {numInput(anchor.x, (n) => onChange({ ...anchor, x: n }), 'x', 0.05)}
-          {numInput(anchor.y, (n) => onChange({ ...anchor, y: n }), 'y', 0.05)}
-          {numInput(anchor.w, (n) => onChange({ ...anchor, w: n }), 'w', 0.05)}
-          {numInput(anchor.h, (n) => onChange({ ...anchor, h: n }), 'h', 0.05)}
-        </>
-      )}
-
-      {anchor.type === 'viewpoint' && (
-        <label className="flex flex-col gap-0.5 text-xs text-zinc-500">
-          camera
-          <input
-            type="text"
-            value={anchor.camera ?? ''}
-            onChange={(e) => onChange({ ...anchor, camera: e.target.value })}
-            className="w-28 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-primary-500/30"
-          />
-        </label>
+      {kind === 'image' && (
+        <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+          <SquareDashedMousePointer className="h-3.5 w-3.5" /> drag on the image to select a region
+        </span>
       )}
     </div>
   );
@@ -320,25 +417,48 @@ function AnchorBuilder({ anchor, onChange }: { anchor: Anchor; onChange: (a: Anc
 // Annotations panel
 // ---------------------------------------------------------------------------
 
-function AnnotationsPanel({ versionId }: { versionId: string | undefined }) {
+function AnnotationsPanel({
+  versionId,
+  kind,
+  mediaRef,
+  fps,
+  currentTime,
+  regionMode,
+  setRegionMode,
+  pendingAnchor,
+  setPendingAnchor,
+  markIn,
+  setMarkIn,
+}: {
+  versionId: string | undefined;
+  kind: MediaKind;
+  mediaRef: React.MutableRefObject<MediaEl | null>;
+  fps: number;
+  currentTime: number;
+  regionMode: boolean;
+  setRegionMode: (b: boolean) => void;
+  pendingAnchor: Anchor | null;
+  setPendingAnchor: (a: Anchor | null) => void;
+  markIn: number | null;
+  setMarkIn: (n: number | null) => void;
+}) {
   const [includeResolved, setIncludeResolved] = useState(false);
   const { data, isLoading, isError, error } = useAnnotations(versionId, includeResolved);
   const create = useCreateAnnotation(versionId);
   const resolve = useResolveAnnotation(versionId);
-
   const [body, setBody] = useState('');
-  const [anchor, setAnchor] = useState<Anchor>(() => defaultAnchorFor('frame'));
-
   const annotations = data?.data ?? [];
 
   const submit = () => {
-    if (!body.trim() || !versionId) return;
+    if (!body.trim() || !versionId || !pendingAnchor) return;
     create.mutate(
-      { anchor, body: body.trim() },
+      { anchor: pendingAnchor, body: body.trim() },
       {
         onSuccess: () => {
           setBody('');
-          setAnchor(defaultAnchorFor('frame'));
+          setPendingAnchor(null);
+          setMarkIn(null);
+          setRegionMode(false);
         },
       },
     );
@@ -347,9 +467,7 @@ function AnnotationsPanel({ versionId }: { versionId: string | undefined }) {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          Annotations
-        </h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Annotations</h3>
         <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer">
           <input
             type="checkbox"
@@ -362,15 +480,12 @@ function AnnotationsPanel({ versionId }: { versionId: string | undefined }) {
       </div>
 
       <div className="p-4 space-y-3">
-        {/* List */}
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-zinc-400">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : isError ? (
-          <p className="text-sm text-red-500">
-            {error instanceof Error ? error.message : 'Could not load annotations.'}
-          </p>
+          <p className="text-sm text-red-500">{error instanceof Error ? error.message : 'Could not load annotations.'}</p>
         ) : annotations.length === 0 ? (
           <p className="text-sm text-zinc-500 py-2">No annotations on this version yet.</p>
         ) : (
@@ -415,6 +530,30 @@ function AnnotationsPanel({ versionId }: { versionId: string | undefined }) {
         {/* Composer */}
         {versionId && (
           <div className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 p-3 space-y-3">
+            <CaptureToolbar
+              kind={kind}
+              mediaRef={mediaRef}
+              fps={fps}
+              currentTime={currentTime}
+              regionMode={regionMode}
+              setRegionMode={setRegionMode}
+              setAnchor={setPendingAnchor}
+              markIn={markIn}
+              setMarkIn={setMarkIn}
+            />
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-zinc-400">Anchor:</span>
+              {pendingAnchor ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 font-medium text-primary-700 dark:text-primary-300">
+                  {renderAnchor(pendingAnchor)}
+                  <button onClick={() => setPendingAnchor(null)} className="ml-1 text-primary-400 hover:text-primary-600" title="Clear anchor">
+                    ✕
+                  </button>
+                </span>
+              ) : (
+                <span className="text-zinc-400 italic">capture one above (mark in/out, frame, or drag a region)</span>
+              )}
+            </div>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -422,12 +561,12 @@ function AnnotationsPanel({ versionId }: { versionId: string | undefined }) {
               rows={2}
               className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 outline-none focus:ring-2 focus:ring-primary-500/30 resize-y"
             />
-            <AnchorBuilder anchor={anchor} onChange={setAnchor} />
             <div className="flex items-center gap-3">
               <button
                 onClick={submit}
-                disabled={!body.trim() || create.isPending}
+                disabled={!body.trim() || !pendingAnchor || create.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                title={!pendingAnchor ? 'Capture an anchor first' : undefined}
               >
                 {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Add annotation
@@ -479,26 +618,19 @@ function DecisionsPanel({ versionId }: { versionId: string | undefined }) {
   const currentUserId = useAuthStore((s) => s.user?.id);
   const { data, isLoading, isError, error } = useDecisions(versionId);
   const setDecision = useSetDecision(versionId);
-
   const decisions = useMemo(() => data?.data ?? [], [data]);
   const myDecision = decisions.find((d) => d.reviewer_id === currentUserId);
-
   const [comment, setComment] = useState('');
 
   const choose = (decision: DecisionValue) => {
     if (!versionId) return;
-    setDecision.mutate(
-      { decision, comment: comment.trim() || undefined },
-      { onSuccess: () => setComment('') },
-    );
+    setDecision.mutate({ decision, comment: comment.trim() || undefined }, { onSuccess: () => setComment('') });
   };
 
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
       <div className="px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          Decisions
-        </h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Decisions</h3>
       </div>
 
       <div className="p-4 space-y-3">
@@ -507,26 +639,19 @@ function DecisionsPanel({ versionId }: { versionId: string | undefined }) {
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : isError ? (
-          <p className="text-sm text-red-500">
-            {error instanceof Error ? error.message : 'Could not load decisions.'}
-          </p>
+          <p className="text-sm text-red-500">{error instanceof Error ? error.message : 'Could not load decisions.'}</p>
         ) : decisions.length === 0 ? (
           <p className="text-sm text-zinc-500 py-2">No decisions recorded for this version yet.</p>
         ) : (
           <ul className="space-y-2">
             {decisions.map((d) => (
-              <li
-                key={d.id}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3"
-              >
+              <li key={d.id} className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <DecisionBadge decision={d.decision} />
                   <span className="text-xs text-zinc-400">{formatRelativeTime(d.created_at)}</span>
                 </div>
                 {d.comment && (
-                  <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-1.5 whitespace-pre-wrap">
-                    {d.comment}
-                  </p>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300 mt-1.5 whitespace-pre-wrap">{d.comment}</p>
                 )}
                 <p className="text-xs text-zinc-400 mt-1.5">{d.reviewer_name ?? d.reviewer_id}</p>
               </li>
@@ -534,7 +659,6 @@ function DecisionsPanel({ versionId }: { versionId: string | undefined }) {
           </ul>
         )}
 
-        {/* My decision control */}
         {versionId && (
           <div className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 p-3 space-y-3">
             <div className="flex items-center justify-between">
@@ -596,7 +720,13 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   const archive = useArchiveAsset(assetId);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // Default to the current/newest version once data arrives.
+  // Interactive-anchoring state.
+  const mediaRef = useRef<MediaEl | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [pendingAnchor, setPendingAnchor] = useState<Anchor | null>(null);
+  const [markIn, setMarkIn] = useState<number | null>(null);
+  const [regionMode, setRegionMode] = useState(false);
+
   useEffect(() => {
     if (activeVersionId) return;
     if (asset?.current_version_id && versions.some((v) => v.id === asset.current_version_id)) {
@@ -607,12 +737,31 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   }, [asset?.current_version_id, versions, activeVersionId]);
 
   const activeVersion = versions.find((v) => v.id === activeVersionId);
+  const kind = asset?.media_kind ?? 'image';
+  const fps = num((activeVersion?.media_meta as { fps?: number } | null)?.fps, 30) || 30;
+
+  // Reset capture state when the active version changes.
+  useEffect(() => {
+    setPendingAnchor(null);
+    setMarkIn(null);
+    setRegionMode(false);
+    setCurrentTime(0);
+  }, [activeVersionId]);
+
+  const onRegion = (rect: DragRect) => {
+    const a: Anchor = { type: 'region', ...rect };
+    if (kind === 'video') {
+      const t = mediaRef.current?.currentTime ?? currentTime;
+      a.time_sec = Number(t.toFixed(2));
+      a.frame = Math.round(t * fps);
+    }
+    setPendingAnchor(a);
+    setRegionMode(false);
+  };
 
   const onPickVersion = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      uploadVersion.mutate(file, { onSuccess: () => setActiveVersionId(undefined) });
-    }
+    if (file) uploadVersion.mutate(file, { onSuccess: () => setActiveVersionId(undefined) });
     e.target.value = '';
   };
 
@@ -686,24 +835,54 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: media + versions */}
             <div className="lg:col-span-2 space-y-6">
-              <MediaPanel kind={asset.media_kind} version={activeVersion} />
-              <AnnotationsPanel versionId={activeVersionId} />
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                <MediaStage
+                  kind={kind}
+                  version={activeVersion}
+                  mediaRef={mediaRef}
+                  regionMode={regionMode}
+                  regionOverlay={pendingAnchor?.type === 'region' ? pendingAnchor : null}
+                  onRegion={onRegion}
+                  onTime={setCurrentTime}
+                />
+                {activeVersion?.media_meta && (
+                  <div className="flex flex-wrap gap-1.5 p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-700">
+                    {activeVersion.media_meta.width != null && activeVersion.media_meta.height != null && (
+                      <MetaLabel label="dimensions" value={`${activeVersion.media_meta.width}×${activeVersion.media_meta.height}`} />
+                    )}
+                    {activeVersion.media_meta.duration_sec != null && (
+                      <MetaLabel label="duration" value={`${activeVersion.media_meta.duration_sec.toFixed(1)}s`} />
+                    )}
+                    {(activeVersion.media_meta as { fps?: number }).fps != null && (
+                      <MetaLabel label="fps" value={String((activeVersion.media_meta as { fps?: number }).fps)} />
+                    )}
+                    {activeVersion.media_meta.codec && <MetaLabel label="codec" value={String(activeVersion.media_meta.codec)} />}
+                  </div>
+                )}
+              </div>
+              <AnnotationsPanel
+                versionId={activeVersionId}
+                kind={kind}
+                mediaRef={mediaRef}
+                fps={fps}
+                currentTime={currentTime}
+                regionMode={regionMode}
+                setRegionMode={setRegionMode}
+                pendingAnchor={pendingAnchor}
+                setPendingAnchor={setPendingAnchor}
+                markIn={markIn}
+                setMarkIn={setMarkIn}
+              />
             </div>
 
-            {/* Right: version stack + decisions */}
             <div className="space-y-6">
               {versionsQuery.isLoading ? (
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-4">
                   <Loader2 className="h-5 w-5 animate-spin text-zinc-400 mx-auto" />
                 </div>
               ) : (
-                <VersionStack
-                  versions={versions}
-                  activeId={activeVersionId}
-                  onSelect={setActiveVersionId}
-                />
+                <VersionStack versions={versions} activeId={activeVersionId} onSelect={setActiveVersionId} />
               )}
               <DecisionsPanel versionId={activeVersionId} />
             </div>

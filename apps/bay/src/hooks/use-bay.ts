@@ -214,6 +214,8 @@ export type AnchorType = 'frame' | 'timerange' | 'region' | 'viewpoint';
 export interface FrameAnchor {
   type: 'frame';
   frame: number;
+  /** Playback time the frame was captured at (video). */
+  time_sec?: number;
 }
 
 export interface TimerangeAnchor {
@@ -228,6 +230,10 @@ export interface RegionAnchor {
   y: number;
   w: number;
   h: number;
+  /** For video: the timecode/frame the region belongs to — a region only
+   *  identifies what was annotated together with WHEN. */
+  time_sec?: number;
+  frame?: number;
 }
 
 export interface ViewpointAnchor {
