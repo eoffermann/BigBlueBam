@@ -1,7 +1,7 @@
 {
   "counts": {
     "total": 1343,
-    "mcp_tools_scanned": 745,
+    "mcp_tools_scanned": 746,
     "rest_routes_scanned": 860,
     "read_permissions": 524,
     "destructive_permissions": 126
@@ -13543,6 +13543,11 @@
       "requires_confirmation": false,
       "requires_superuser": false,
       "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_data_patch_tree",
+          "file": "bin-tools.ts"
+        },
         {
           "source": "rest",
           "ref": "PATCH /data/:assetId/tree",

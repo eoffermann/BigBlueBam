@@ -264,6 +264,24 @@ export function registerBinTools(server: McpServer, api: ApiClient, binApiUrl: s
   });
 
   registerTool(server, {
+    name: 'bin_data_patch_tree',
+    description:
+      'Edit a tree-shaped structured-data asset (JSON/YAML) by setting values at paths. Each patch is { path, value } where path is an array like ["passengers", 2, "vip"] or ["charter", "operator"]. Strings are coerced to the existing leaf\'s type (number/boolean). Commits a new immutable version.',
+    input: {
+      asset_id: z.string().uuid().describe('Asset ID'),
+      patches: z
+        .array(z.object({ path: z.array(z.union([z.string(), z.number()])).min(1), value: z.unknown() }))
+        .min(1)
+        .describe('e.g. [{ path: ["charter","tour_length_hours"], value: 4 }]'),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ asset_id, patches }) => {
+      const result = await client.request('PATCH', `/data/${asset_id}/tree`, { patches });
+      return result.ok ? ok(result.data) : err('patching bin tree', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'bin_data_comment_list',
     description: 'List review comments on a structured-data asset (open by default; pass include_resolved).',
     input: {

@@ -1711,6 +1711,7 @@ export const TOOL_TO_PERMISSION: ReadonlyMap<string, string> = new Map([
   ["bin_data_append_rows", "bin.data_row.create"],
   ["bin_data_patch", "bin.data_row.update"],
   ["bin_data_open_session", "bin.data_session.create"],
+  ["bin_data_patch_tree", "bin.data_tree.update"],
   ["bin_data_read", "bin.data.get"],
   ["bin_folder_create", "bin.folder.create"],
   ["bin_folder_list", "bin.folder.list"],

@@ -217,6 +217,7 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bin_data_open_session', { id: 'bin.data_session.create', verb: 'create' }],
   ['bin_data_append_rows', { id: 'bin.data_row.create', verb: 'create' }],
   ['bin_data_patch', { id: 'bin.data_row.update', verb: 'update' }],
+  ['bin_data_patch_tree', { id: 'bin.data_tree.update', verb: 'update' }],
   ['bin_data_comment_list', { id: 'bin.data_comment.get', verb: 'get' }],
   ['bin_data_comment_create', { id: 'bin.data_comment.create', verb: 'create' }],
   ['bin_data_comment_resolve', { id: 'bin.data_comment_resolve.create', verb: 'create' }],
