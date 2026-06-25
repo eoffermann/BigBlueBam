@@ -161,6 +161,11 @@ async function commitVersion(
     .update(binAssets)
     .set({ scan_status: 'clean' })
     .where(and(eq(binAssets.id, assetId), eq(binAssets.scan_status, 'pending')));
+  // Reflect the clean state in the returned asset (uploadVersionBytes captured
+  // it as 'pending' before this flip), so the mutation response is accurate.
+  if (result.asset && result.asset.scan_status === 'pending') {
+    result.asset.scan_status = 'clean';
+  }
   return result;
 }
 
