@@ -1372,9 +1372,35 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `POST /data/:id/rows` | `bin_data_append_rows` | Append rows → new version | `apps/bin/src/hooks/use-bin.ts` |
 | `PATCH /data/:id/rows` | `bin_data_patch` | Patch record cells → new version | `apps/bin/src/hooks/use-bin.ts` |
 | `PATCH /data/:id/tree` | `bin_data_patch_tree` | Set tree values at paths → new version | `apps/bin/src/hooks/use-bin.ts` |
+| `POST /data/:id/array` | `bin_data_array_op` | Add/delete a row in any grid → new version | `apps/bin/src/hooks/use-bin.ts` |
 | `GET /data/:id/comments` | `bin_data_comment_list` | List review comments | — |
 | `POST /data/:id/comments` | `bin_data_comment_create` | Add an anchored comment | — |
 | `POST /data/:id/comments/:cid/resolve` | `bin_data_comment_resolve` | Resolve/reopen a comment | — |
+
+
+## Bay (app)
+
+- **Service:** `apps/bay-api` · external `/bay/api/` · MCP module(s): `bay-tools.ts`
+- Media review & approval, federated on top of Bin (BAY-1…4): canonical bytes are
+  a `bin.asset` version; Bay owns the review layer (versions' media metadata,
+  coordinate-anchored annotations, per-reviewer decisions). Agents review with the
+  same tools/identity/audit trail as humans. SPA + transcode/proxies + guest
+  review (`/r/`) are follow-ups; this is the foundational REST + MCP surface.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /assets` | `bay_asset_list` | List review assets (project filter) | — _(skip: SPA is a follow-up)_ |
+| `POST /assets` | `bay_asset_create` | Create a review asset (media_kind) | — _(skip: SPA is a follow-up)_ |
+| `GET /assets/:id` | `bay_asset_get` | Get asset metadata | — _(skip: SPA is a follow-up)_ |
+| `POST /assets/:id/archive` | `bay_asset_archive` | Archive (soft delete) | — _(skip: SPA is a follow-up)_ |
+| `GET /assets/:id/versions` | `bay_version_list` | List the immutable version stack | — _(skip: SPA is a follow-up)_ |
+| `POST /assets/:id/versions` | `bay_version_create` | Add a version (refs Bin bytes + media_meta) | — _(skip: SPA is a follow-up)_ |
+| `GET /versions/:id` | `bay_version_get` | Get one version | — _(skip: SPA is a follow-up)_ |
+| `GET /versions/:id/annotations` | `bay_annotation_list` | List coordinate-anchored annotations | — _(skip: SPA is a follow-up)_ |
+| `POST /versions/:id/annotations` | `bay_annotation_create` | Post a frame/region/timecode/viewpoint note | — _(skip: SPA is a follow-up)_ |
+| `POST /annotations/:id/resolve` | `bay_annotation_resolve` | Resolve/reopen an annotation | — _(skip: SPA is a follow-up)_ |
+| `GET /versions/:id/decisions` | `bay_decision_list` | List per-reviewer decisions | — _(skip: SPA is a follow-up)_ |
+| `PUT /versions/:id/decision` | `bay_decision_set` | Upsert the caller's review decision | — _(skip: SPA is a follow-up)_ |
 
 
 ## Book · Blank · Bill · Bureau · Helpdesk — REST ↔ MCP map
