@@ -552,6 +552,26 @@ export class RailwayClient {
   }
 
   /**
+   * Create + attach a persistent volume to a service at `mountPath`. Without
+   * this, self-hosted stateful services (minio, qdrant) store their data on the
+   * container's ephemeral filesystem and LOSE EVERYTHING on every redeploy/
+   * restart. A service can hold only one volume, so re-runs raise an
+   * already-exists GraphQL error — the orchestrator treats that as success.
+   */
+  async createVolume({ projectId, environmentId, serviceId, mountPath } = {}) {
+    const input = stripUndefined({ projectId, environmentId, serviceId, mountPath });
+    const data = await this.query(
+      `
+      mutation volumeCreate($input: VolumeCreateInput!) {
+        volumeCreate(input: $input) { id }
+      }
+      `,
+      { input },
+    );
+    return data?.volumeCreate ?? null;
+  }
+
+  /**
    * Bulk upsert variables. Defaulting `skipDeploys=true` is deliberate: the
    * orchestrator pushes dozens of variables per service and we want a single
    * deploy at the end instead of one auto-deploy per variable change.

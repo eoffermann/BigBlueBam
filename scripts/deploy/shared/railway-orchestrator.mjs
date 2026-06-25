@@ -538,6 +538,48 @@ export class RailwayOrchestrator {
         },
         { service: svc.name },
       );
+
+      // ── Volume (stateful self-hosted services: minio, qdrant). A Railway
+      // volume persists across redeploys; WITHOUT one, MinIO objects and Qdrant
+      // vectors are wiped on every restart (the DB survives because Postgres is
+      // managed). Fail-soft: a volume error must never abort the whole deploy —
+      // we warn the operator to add it by hand instead.
+      if (svc.volume?.mount_path) {
+        await this._step(
+          'service-volume',
+          `Attaching persistent volume for "${svc.name}" at ${svc.volume.mount_path}`,
+          async () => {
+            try {
+              await this.client.createVolume({
+                projectId: this.projectId,
+                environmentId: this.defaultEnvironmentId,
+                serviceId: created.id,
+                mountPath: svc.volume.mount_path,
+              });
+            } catch (err) {
+              const msg = String(err?.message ?? err);
+              // A service can hold only one volume; a re-run is a no-op.
+              if (/already|exist|duplicate|one volume|has a volume/i.test(msg)) return;
+              // Otherwise warn loudly but keep going — losing the deploy over a
+              // volume call is worse than a manual dashboard step.
+              this._emit({
+                phase: 'service-volume',
+                step: this.step,
+                total: this.total,
+                service: svc.name,
+                ok: true,
+                warning: true,
+                message:
+                  `WARNING: could not auto-create the persistent volume for "${svc.name}" ` +
+                  `at ${svc.volume.mount_path} (${msg}). Add it manually in the Railway ` +
+                  `dashboard (${svc.name} → Volumes → mount path ${svc.volume.mount_path}) ` +
+                  `or its data will be wiped on every redeploy.`,
+              });
+            }
+          },
+          { service: svc.name },
+        );
+      }
     }
   }
 
@@ -571,11 +613,13 @@ export class RailwayOrchestrator {
     //                      + 1 (project)
     //                      + 1 (plugin prompt)
     //                      + 3 * plan.length (create + config + vars per service)
+    //                      + 1 per service that gets a persistent volume
     //                      + plan.length (deploy trigger per service)
     //                      + 1 (done).
     // The caller uses these for a progress bar; the exact number doesn't
     // need to match Railway's own internals, it just needs to be stable.
-    this.total = 2 + 1 + 1 + 4 * this.plan.length + 1;
+    const volumeCount = this.plan.filter((s) => s.volume?.mount_path).length;
+    this.total = 2 + 1 + 1 + 4 * this.plan.length + volumeCount + 1;
     this.step = 0;
 
     await this._phaseValidate();

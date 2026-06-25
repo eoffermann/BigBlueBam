@@ -70,7 +70,27 @@ async function loadParsed(asset: AssetRow) {
   if (!format) {
     throw new UnsupportedFormatError(`Asset "${asset.name}" is not a structured-data format`);
   }
-  const buf = await readObject(asset.object_key);
+  let buf: Buffer;
+  try {
+    buf = await readObject(asset.object_key);
+  } catch (err) {
+    // The DB row points at an object the active store doesn't have. This happens
+    // when asset metadata exists without its bytes — e.g. a DB seeded/restored
+    // into an environment whose object store was never populated (the bytes were
+    // uploaded to a different MinIO/S3, or never at all). Surface a clear 404
+    // naming the cause instead of letting a raw S3Error bubble up as a 500. Only
+    // convert genuine not-found; re-throw transient storage errors as-is.
+    const e = err as { code?: string; message?: string };
+    const missing = e?.code === 'NotFound' || e?.code === 'NoSuchKey' || /not found/i.test(e?.message ?? '');
+    if (missing) {
+      throw new NotFoundError(
+        `The stored file for "${asset.name}" is missing from this environment's object store ` +
+          `(key "${asset.object_key}"). The asset metadata exists but its bytes were never ` +
+          `uploaded here — re-upload the file (or re-run the seed) against this deployment.`,
+      );
+    }
+    throw err;
+  }
   return parseAsset(buf.toString('utf8'), format);
 }
 
