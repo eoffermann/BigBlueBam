@@ -1,0 +1,146 @@
+# Blip — telemetry, log, and profiling intake (Blip §22).
+# Captured against the seeded Gilligan dataset (Rescue Beacon iOS/Android).
+# The iOS tracked-app id is deterministic from the seeder (uuid5).
+# Volatile regions (seq, received_at, relative "Ns ago") are masked so diffs
+# are stable; the live viewer is captured against the seeded backlog with tail
+# paused (the §8.2 backfill state), never an open socket.
+
+- id: blip-app-list
+  app: blip
+  demonstrates: "The tracked-app list: the two Rescue Beacon apps with collection status and recent-volume badges"
+  route: /blip/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "App list" }
+  masks: ["time", "[datetime]"]
+
+- id: blip-launchpad
+  app: blip
+  demonstrates: "The Launchpad open over Blip, showing all suite apps listed alphabetically with Blip among them"
+  route: /blip/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: click, selector: 'button[title="Launchpad — switch between apps"]' }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 11, label: "Launchpad (alphabetical)" }
+
+- id: blip-app-detail
+  app: blip
+  demonstrates: "App detail / health: collection toggle, recent-volume stats, and the report-type list"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "App detail / health" }
+  masks: ["time", "[datetime]"]
+
+- id: blip-key-management
+  app: blip
+  demonstrates: "Key management: active, suspended, and revoked ingest keys for the app"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/keys
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Key management" }
+  masks: ["time", "[datetime]"]
+
+- id: blip-client-setup
+  app: blip
+  demonstrates: "Client setup / quickstart: the C#, Python, and curl integration snippets with the ingest URL"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/client-setup
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 600 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Client setup" }
+
+- id: blip-live-viewer
+  app: blip
+  demonstrates: "The live viewer on fn_timing with the Slow frames view: reserved columns over the seeded backlog (tail paused)"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/types/fn_timing
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Live viewer + custom view" }
+  masks: ["time", "[datetime]"]
+
+- id: blip-watch-management
+  app: blip
+  demonstrates: "Watch management: the slow-frame match watch and error-spike window watch with one firing in history"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/watches
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Watch management + history" }
+  masks: ["time", "[datetime]"]
+
+- id: blip-saved-views
+  app: blip
+  demonstrates: "Saved-view management: the Errors only and Slow frames views plus each type's auto default"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/views
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 600 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Saved-view management" }
+
+- id: blip-transform-editor
+  app: blip
+  demonstrates: "The PII transform editor: the seeded drop/truncate redaction rules"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/transform
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 600 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 8, label: "PII transform editor" }
+
+- id: blip-retention
+  app: blip
+  demonstrates: "Retention / rate-limit settings: the 14-day default policy and seeded caps"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/retention
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 600 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 9, label: "Retention / rate-limit" }
+
+- id: blip-report-types
+  app: blip
+  demonstrates: "The report-type browser + field catalog: inferred types with the declared elapsed_ms metric"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/types
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 800 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 10, label: "Report-type browser + field catalog" }
+  masks: ["time", "[datetime]"]
+
+- id: blip-live-viewer-dark
+  app: blip
+  demonstrates: "The live viewer in dark theme (marketing/retina)"
+  route: /blip/apps/f3ee645a-d767-516b-8a21-350cd6cdee8f/types/fn_timing
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 5, label: "Live viewer + custom view" }
+  masks: ["time", "[datetime]"]

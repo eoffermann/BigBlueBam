@@ -386,6 +386,31 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'blip-api',
+    description: 'Blip API — realtime + public ingest satellite',
+    dockerfile: 'apps/blip-api/Dockerfile',
+    port: 4018,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    // Blip shares Bin's object store and posts events to Bolt, so it needs
+    // minio in addition to postgres/redis/api.
+    needs: ['postgres', 'redis', 'minio', 'api'],
+    public_paths: ['/blip/api/', '/blip/ingest/', '/blip/ws'],
+    env: {
+      required: [
+        'DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL',
+        'S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION',
+        'BLIP_INGEST_PEPPER',
+      ],
+      optional: [
+        'CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET', 'PUBLIC_URL',
+        'BIN_API_INTERNAL_URL', 'BOLT_API_INTERNAL_URL',
+        'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS',
+      ],
+    },
+  },
+  {
     name: 'mcp-server',
     description: 'MCP Protocol Server — tool orchestration for AI agents',
     dockerfile: 'apps/mcp-server/Dockerfile',
@@ -397,7 +422,7 @@ export const APP_SERVICES = [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
       'bench-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
-      'bin-api', 'bay-api', 'redis',
+      'bin-api', 'bay-api', 'blip-api', 'redis',
     ],
     public_paths: ['/mcp/'],
     env: {
@@ -406,7 +431,7 @@ export const APP_SERVICES = [
         'HELPDESK_API_URL', 'BANTER_API_URL', 'BEACON_API_URL', 'BRIEF_API_URL', 'BOLT_API_URL',
         'BEARING_API_URL', 'BOARD_API_URL', 'BOND_API_URL', 'BLAST_API_URL',
         'BOOK_API_URL', 'BENCH_API_URL', 'BILL_API_URL', 'BLANK_API_URL',
-        'BLUEPRINT_API_URL', 'BUREAU_API_URL', 'BIN_API_URL', 'BAY_API_URL',
+        'BLUEPRINT_API_URL', 'BUREAU_API_URL', 'BIN_API_URL', 'BAY_API_URL', 'BLIP_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',
       ],
@@ -502,7 +527,7 @@ export const APP_SERVICES = [
       'bench-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];

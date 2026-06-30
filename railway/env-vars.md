@@ -366,6 +366,81 @@ with **R**, optional with `o`.
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
+### bin-api
+
+*Bin API — DAM storage backbone + structured-data editor*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| **R** | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
+| **R** | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
+| **R** | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
+| **R** | `S3_BUCKET` | literal | `bigbluebam-uploads` |  |
+| **R** | `S3_REGION` | literal | `us-east-1` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
+| o | `UPLOAD_MAX_FILE_SIZE` | unknown | `<see app docs>` |  |
+| o | `RATE_LIMIT_MAX` | literal | `100` |  |
+| o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
+| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BIN_SECRETS_KEY` | unknown | `<see app docs>` |  |
+| o | `BIN_SECRETS_KEY_ID` | unknown | `<see app docs>` |  |
+
+### bay-api
+
+*Bay API — media review & approval (annotations, decisions, public guest links)*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| **R** | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
+| **R** | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
+| **R** | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
+| **R** | `S3_BUCKET` | literal | `bigbluebam-uploads` |  |
+| **R** | `S3_REGION` | literal | `us-east-1` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
+| o | `BIN_API_INTERNAL_URL` | computed | `http://bin-api.railway.internal:8080` |  |
+| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `RATE_LIMIT_MAX` | literal | `100` |  |
+| o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
+
+### blip-api
+
+*Blip API — realtime + public ingest satellite*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| **R** | `S3_ENDPOINT` | computed | `http://minio.railway.internal:9000` |  |
+| **R** | `S3_ACCESS_KEY` | reference | `${{minio.MINIO_ROOT_USER}}` |  |
+| **R** | `S3_SECRET_KEY` | reference | `${{minio.MINIO_ROOT_PASSWORD}}` |  |
+| **R** | `S3_BUCKET` | literal | `bigbluebam-uploads` |  |
+| **R** | `S3_REGION` | literal | `us-east-1` |  |
+| **R** | `BLIP_INGEST_PEPPER` | unknown | `<see app docs>` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
+| o | `BIN_API_INTERNAL_URL` | computed | `http://bin-api.railway.internal:8080` |  |
+| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `RATE_LIMIT_MAX` | literal | `100` |  |
+| o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
+
 ### mcp-server
 
 *MCP Protocol Server — tool orchestration for AI agents*
@@ -390,6 +465,9 @@ with **R**, optional with `o`.
 | o | `BLANK_API_URL` | computed | `http://blank-api.railway.internal:8080/v1` |  |
 | o | `BLUEPRINT_API_URL` | computed | `http://blueprint-api.railway.internal:8080/v1` |  |
 | o | `BUREAU_API_URL` | computed | `http://bureau-api.railway.internal:8080/v1` |  |
+| o | `BIN_API_URL` | computed | `http://bin-api.railway.internal:8080/v1` |  |
+| o | `BAY_API_URL` | computed | `http://bay-api.railway.internal:8080/v1` |  |
+| o | `BLIP_API_URL` | unknown | `<see app docs>` |  |
 | o | `MCP_AUTH_REQUIRED` | literal | `true` | Recommended for production deployments |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
@@ -493,8 +571,8 @@ _No environment variables required._
 These are the secrets and references that MUST be identical across
 several services. Set them once, then copy/reference everywhere.
 
-- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api
+- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
-- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, mcp-server, worker, livekit
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
 - `LIVEKIT_API_KEY` — banter-api, board-api, bureau-api, livekit
 - `LIVEKIT_API_SECRET` — banter-api, board-api, bureau-api, livekit

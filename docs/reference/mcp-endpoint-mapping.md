@@ -55,9 +55,10 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Blank | 24 | 18 | 6 | 1 |
 | Bill | 52 | 47 | 5 | 0 |
 | Bureau | 42 | 37 | 5 | 0 |
+| Blip | 40 | 38 | 2 | 0 |
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **971** | **718** | **253** | **16** |
+| **Total** | **1011** | **756** | **255** | **16** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1413,6 +1414,64 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `POST /annotations/:id/resolve` | `bay_annotation_resolve` | Resolve/reopen an annotation | — _(skip: SPA is a follow-up)_ |
 | `GET /versions/:id/decisions` | `bay_decision_list` | List per-reviewer decisions | — _(skip: SPA is a follow-up)_ |
 | `PUT /versions/:id/decision` | `bay_decision_set` | Upsert the caller's review decision | — _(skip: SPA is a follow-up)_ |
+
+
+## Blip (app)
+
+- **Service:** `apps/blip-api` (internal `:4018/v1`) · external `/blip/api/` · MCP module(s): `blip-tools.ts`
+- Telemetry / log-ingest. Tracked apps ship reports through write-only ingest
+  keys; entries land in an append-only monthly-partitioned store; humans and
+  agents query, tail, watch, and compile them with the same tools/identity/audit
+  trail. Canonical bytes for screen captures and JSONL exports live in Bin. The
+  public-inbound ingest POST and the live-tail WebSocket are intentionally
+  MCP-skipped (§15). Destructive tools (`blip_app_delete`, `blip_key_revoke`,
+  `blip_entry_purge`, `blip_watch_delete`) use the inline `confirm_action`
+  two-step preview, the `bin_asset_archive` pattern. (REST paths below are
+  relative to the `:4018/v1` base the MCP module targets; the external surface
+  prefixes them with `/blip/api`.)
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `POST /blip/ingest/v1` | — _(skip: public-inbound — ingest-key write path)_ | Ingest one/many reports | — |
+| `GET /blip/ws` | — _(skip: realtime/ws — live tail)_ | Live-tail WebSocket | `apps/blip` viewer |
+| `POST /apps` | `blip_app_create` | Declare a tracked app | `apps/blip` |
+| `GET /apps` | `blip_app_list` | List tracked apps | `apps/blip` |
+| `GET /apps/:id` | `blip_app_get` | App detail + health | `apps/blip` |
+| `PATCH /apps/:id` | `blip_app_update` | Edit app config | `apps/blip` |
+| `DELETE /apps/:id` | `blip_app_delete` | Delete app + its data (confirm) | `apps/blip` |
+| `POST /apps/:id/collection` | `blip_collection_set` | Start/stop collection | `apps/blip` |
+| `POST /apps/:id/keys` | `blip_key_create` | Mint a key (token shown once) | `apps/blip` |
+| `GET /apps/:id/keys` | `blip_key_list` | List keys (never the secret) | `apps/blip` |
+| `POST /keys/:id/suspend` | `blip_key_suspend` | Suspend / resume | `apps/blip` |
+| `POST /keys/:id/revoke` | `blip_key_revoke` | Revoke (terminal, confirm) | `apps/blip` |
+| `PATCH /keys/:id` | `blip_key_update` | Label / rate-limit override | `apps/blip` |
+| `PUT /apps/:id/rate-limit` | `blip_ratelimit_set` | App default rate limit | `apps/blip` |
+| `PUT /apps/:id/retention` | `blip_retention_set` | Retention policy (per type) | `apps/blip` |
+| `PUT /apps/:id/transform` | `blip_transform_set` | PII transform rules | `apps/blip` |
+| `GET /apps/:id/types` | `blip_report_types_list` | Observed report types | `apps/blip` |
+| `GET /apps/:id/types/:t/fields` | `blip_field_catalog_list` | Field catalog for a type | `apps/blip` |
+| `POST /apps/:id/types/:t/fields/:f/index` | `blip_field_index` | Promote a field to indexed | `apps/blip` |
+| `POST /apps/:id/types/:t/fields/:f/metric` | `blip_field_set_metric` | Mark/unmark a Bench metric | `apps/blip` |
+| `POST /apps/:id/entries/query` | `blip_entry_query` | Filter/sort/paginate (`format=jsonl` option) | `apps/blip` |
+| `POST /apps/:id/entries/tail` | `blip_entry_tail` | Incremental pull: entries with `seq > cursor` | `apps/blip` |
+| `POST /apps/:id/entries/purge` | `blip_entry_purge` | Purge a collection (confirm) | `apps/blip` |
+| `POST /apps/:id/entries/export` | `blip_entry_export` | Freeze a collection to a Bin JSONL asset | `apps/blip` |
+| `GET /captures/:ref/url` | `blip_capture_url` | Presigned GET URL (short TTL) for a capture/thumbnail | `apps/blip` |
+| `POST /apps/:id/timelapse` | `blip_timelapse_create` | Compile capture-bearing entries into a video | `apps/blip` |
+| `GET /timelapse/:id` | `blip_timelapse_get` | Job status + Bin video asset when ready | `apps/blip` |
+| `GET /apps/:id/timelapse` | `blip_timelapse_list` | List timelapse jobs for an app | `apps/blip` |
+| `POST /apps/:id/watches` | `blip_watch_create` | Create a match/window watch | `apps/blip` |
+| `GET /apps/:id/watches` | `blip_watch_list` | List watches for an app | `apps/blip` |
+| `GET /watches/:id` | `blip_watch_get` | Watch detail | `apps/blip` |
+| `PATCH /watches/:id` | `blip_watch_update` | Edit a watch | `apps/blip` |
+| `POST /watches/:id/enabled` | `blip_watch_set_enabled` | Enable / disable | `apps/blip` |
+| `DELETE /watches/:id` | `blip_watch_delete` | Delete a watch (confirm) | `apps/blip` |
+| `POST /apps/:id/watches/test` | `blip_watch_test` | Dry-run a predicate over recent entries | `apps/blip` |
+| `GET /watches/:id/history` | `blip_watch_history` | Recent firings of a watch | `apps/blip` |
+| `POST /views` | `blip_view_create` | Create a saved view | `apps/blip` |
+| `GET /apps/:id/types/:t/views` | `blip_view_list` | List views for a type | `apps/blip` |
+| `PATCH /views/:id` | `blip_view_update` | Edit a view | `apps/blip` |
+| `DELETE /views/:id` | `blip_view_delete` | Delete a view | `apps/blip` |
 
 
 ## Book · Blank · Bill · Bureau · Helpdesk — REST ↔ MCP map

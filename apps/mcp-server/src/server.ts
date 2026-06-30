@@ -39,6 +39,7 @@ import { registerBlankTools } from './tools/blank-tools.js';
 import { registerBlueprintTools } from './tools/blueprint-tools.js';
 import { registerBinTools } from './tools/bin-tools.js';
 import { registerBayTools } from './tools/bay-tools.js';
+import { registerBlipTools } from './tools/blip-tools.js';
 import { registerBureauTools } from './tools/bureau-tools.js';
 import { registerMeTools } from './tools/me-tools.js';
 import { registerPlatformTools } from './tools/platform-tools.js';
@@ -225,6 +226,7 @@ function createMcpServer(
   registerBlueprintTools(server, apiClient, env.BLUEPRINT_API_URL);
   registerBinTools(server, apiClient, env.BIN_API_URL);
   registerBayTools(server, apiClient, env.BAY_API_URL);
+  registerBlipTools(server, apiClient, env.BLIP_API_URL);
   registerBureauTools(server, apiClient, env.BUREAU_API_URL);
   registerMeTools(server, apiClient);
   registerPlatformTools(server, apiClient);

@@ -74,7 +74,7 @@ function computeRequiresSuperuser(id, resource) {
 const APP_PREFIXES = new Set([
   'bam', 'banter', 'beacon', 'brief', 'bolt', 'bearing',
   'board', 'bond', 'blast', 'bench', 'book', 'blank', 'bill',
-  'bin', 'bay', 'helpdesk',
+  'bin', 'bay', 'blip', 'helpdesk',
 ]);
 
 // ── Tool name → permission ID overrides. Tools that don't fit the
@@ -241,6 +241,52 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bay_decision_set', { id: 'bay.version_decision.update', verb: 'update' }],
   ['bay_review_resolve', { id: 'bay.review_resolve.create', verb: 'create' }],
   ['bay_review_link_create', { id: 'bay.review_link.create', verb: 'create' }],
+
+  // Blip tools (verb-second names like blip_app_create, blip_field_set_metric)
+  // → the canonical `<app>.<resource>.<verb>` ids from the Blip design doc §16,
+  //   which are exactly the ids the blip-api routes enforce via requireCan().
+  //   blip-api is intentionally NOT in APP_TO_PREFIX, so these tool overrides
+  //   are the sole source of the blip.* catalog rows; every requireCan id must
+  //   appear here. Reads collapse onto the *.read ids and carry a read verb so
+  //   is_read classification is order-independent.
+  ['blip_app_create', { id: 'blip.app.create', verb: 'create' }],
+  ['blip_app_get', { id: 'blip.app.read', verb: 'get' }],
+  ['blip_app_list', { id: 'blip.app.read', verb: 'list' }],
+  ['blip_app_update', { id: 'blip.app.update', verb: 'update' }],
+  ['blip_app_delete', { id: 'blip.app.delete', verb: 'delete' }],
+  ['blip_report_types_list', { id: 'blip.app.read', verb: 'list' }],
+  ['blip_field_catalog_list', { id: 'blip.app.read', verb: 'list' }],
+  ['blip_collection_set', { id: 'blip.collection.toggle', verb: 'toggle' }],
+  ['blip_key_create', { id: 'blip.key.create', verb: 'create' }],
+  ['blip_key_list', { id: 'blip.key.list', verb: 'list' }],
+  ['blip_key_suspend', { id: 'blip.key.suspend', verb: 'suspend' }],
+  ['blip_key_revoke', { id: 'blip.key.revoke', verb: 'revoke' }],
+  ['blip_key_update', { id: 'blip.key.update', verb: 'update' }],
+  ['blip_ratelimit_set', { id: 'blip.ratelimit.manage', verb: 'manage' }],
+  ['blip_retention_set', { id: 'blip.retention.manage', verb: 'manage' }],
+  ['blip_transform_set', { id: 'blip.transform.manage', verb: 'manage' }],
+  ['blip_field_index', { id: 'blip.field.index', verb: 'index' }],
+  ['blip_field_set_metric', { id: 'blip.field.metric', verb: 'metric' }],
+  ['blip_entry_query', { id: 'blip.entry.read', verb: 'query' }],
+  ['blip_entry_tail', { id: 'blip.entry.read', verb: 'read' }],
+  ['blip_entry_purge', { id: 'blip.entry.purge', verb: 'purge' }],
+  ['blip_entry_export', { id: 'blip.entry.export', verb: 'export' }],
+  ['blip_view_create', { id: 'blip.view.create', verb: 'create' }],
+  ['blip_view_update', { id: 'blip.view.update', verb: 'update' }],
+  ['blip_view_delete', { id: 'blip.view.delete', verb: 'delete' }],
+  ['blip_view_list', { id: 'blip.view.read', verb: 'list' }],
+  ['blip_watch_create', { id: 'blip.watch.create', verb: 'create' }],
+  ['blip_watch_get', { id: 'blip.watch.read', verb: 'get' }],
+  ['blip_watch_list', { id: 'blip.watch.read', verb: 'list' }],
+  ['blip_watch_history', { id: 'blip.watch.read', verb: 'read' }],
+  ['blip_watch_update', { id: 'blip.watch.update', verb: 'update' }],
+  ['blip_watch_delete', { id: 'blip.watch.delete', verb: 'delete' }],
+  ['blip_watch_set_enabled', { id: 'blip.watch.enable', verb: 'enable' }],
+  ['blip_watch_test', { id: 'blip.watch.test', verb: 'test' }],
+  ['blip_capture_url', { id: 'blip.timelapse.read', verb: 'get' }],
+  ['blip_timelapse_create', { id: 'blip.timelapse.create', verb: 'create' }],
+  ['blip_timelapse_get', { id: 'blip.timelapse.read', verb: 'get' }],
+  ['blip_timelapse_list', { id: 'blip.timelapse.read', verb: 'list' }],
 ]);
 
 // ── Inference helpers ──────────────────────────────────────────────────

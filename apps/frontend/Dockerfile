@@ -24,6 +24,7 @@ COPY apps/blank/package.json ./apps/blank/
 COPY apps/blueprint/package.json ./apps/blueprint/
 COPY apps/bin/package.json ./apps/bin/
 COPY apps/bay/package.json ./apps/bay/
+COPY apps/blip/package.json ./apps/blip/
 COPY apps/bureau/package.json ./apps/bureau/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
@@ -143,6 +144,12 @@ COPY apps/bay/public ./apps/bay/public
 COPY apps/bay/index.html ./apps/bay/
 COPY apps/bay/tsconfig.json apps/bay/tsconfig.node.json apps/bay/vite.config.ts ./apps/bay/
 
+# Blip frontend SPA
+COPY apps/blip/src ./apps/blip/src
+COPY apps/blip/public ./apps/blip/public
+COPY apps/blip/index.html ./apps/blip/
+COPY apps/blip/tsconfig.json apps/blip/tsconfig.node.json apps/blip/vite.config.ts ./apps/blip/
+
 # Bureau client SDK (consumed by the Bureau SPA + every other SPA via mountBureauClient)
 COPY packages/bureau-client/ ./packages/bureau-client/
 
@@ -171,6 +178,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/blueprint build \
  && pnpm --filter @bigbluebam/bin build \
  && pnpm --filter @bigbluebam/bay build \
+ && pnpm --filter @bigbluebam/blip build \
  && pnpm --filter @bigbluebam/bureau build
 
 # ── Stage: production ────────────────────────────────────────────
@@ -193,6 +201,7 @@ COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
 COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint
 COPY --from=build /app/apps/bin/dist /usr/share/nginx/html/bin
 COPY --from=build /app/apps/bay/dist /usr/share/nginx/html/bay
+COPY --from=build /app/apps/blip/dist /usr/share/nginx/html/blip
 COPY --from=build /app/apps/bureau/dist /usr/share/nginx/html/bureau
 
 # Documentation files for the in-app Help viewer (served at /docs/)

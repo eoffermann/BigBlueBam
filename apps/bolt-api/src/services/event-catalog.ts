@@ -2636,6 +2636,180 @@ const bureauEvents: EventDefinition[] = [
   },
 ];
 
+// Blip telemetry intake (BigBlueBam_Blip_Design_Document.md §12.2). Source
+// 'blip'. Event names are bare/un-prefixed and emitted via the shared
+// publishBoltEvent helper (positional: event name first, source 'blip' second).
+// Blip never emits a Bolt event for a raw entry — entry.matched / window.* fire
+// only for entries that satisfy an explicitly configured, throttled watch (§12.1).
+const blipEvents: EventDefinition[] = [
+  {
+    source: 'blip',
+    event_type: 'tracked_app.created',
+    description: 'Fired when a new app is declared for tracking.',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app ID' },
+      { name: 'tracked_app_name', type: 'string', description: 'Tracked app name' },
+      { name: 'actor.id', type: 'uuid', description: 'User who declared the app' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'collection.started',
+    description: 'Fired when collection is turned on for a tracked app.',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app ID' },
+      { name: 'tracked_app_name', type: 'string', description: 'Tracked app name' },
+      { name: 'actor.id', type: 'uuid', description: 'User who toggled collection' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'collection.stopped',
+    description: 'Fired when collection is turned off for a tracked app.',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app ID' },
+      { name: 'tracked_app_name', type: 'string', description: 'Tracked app name' },
+      { name: 'actor.id', type: 'uuid', description: 'User who toggled collection' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'key.created',
+    description: 'Fired when an ingest key is minted for a tracked app (the secret token itself is never carried in the payload).',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the key belongs to' },
+      { name: 'key.id', type: 'uuid', description: 'Ingest key row ID' },
+      { name: 'key.key_id', type: 'string', description: 'Public lookup id embedded in the token (cleartext)' },
+      { name: 'key.label', type: 'string?', description: 'Human label for the key (e.g. "iOS prod")' },
+      { name: 'actor.id', type: 'uuid', description: 'User who created the key' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'key.suspended',
+    description: 'Fired when an ingest key is suspended (reversible).',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the key belongs to' },
+      { name: 'key.id', type: 'uuid', description: 'Ingest key row ID' },
+      { name: 'key.key_id', type: 'string', description: 'Public lookup id embedded in the token' },
+      { name: 'actor.id', type: 'uuid', description: 'User who suspended the key' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'key.revoked',
+    description: 'Fired when an ingest key is revoked (terminal — the token never works again).',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the key belongs to' },
+      { name: 'key.id', type: 'uuid', description: 'Ingest key row ID' },
+      { name: 'key.key_id', type: 'string', description: 'Public lookup id embedded in the token' },
+      { name: 'actor.id', type: 'uuid', description: 'User who revoked the key' },
+      { name: 'actor.name', type: 'string?', description: 'Actor display name' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'report_type.first_seen',
+    description: 'Fired when a never-before-seen report type arrives for a tracked app. React to new telemetry kinds (notify Banter, auto-create a default view).',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the report type belongs to' },
+      { name: 'report_type', type: 'string', description: 'The newly observed report type' },
+      { name: 'first_seen_at', type: 'datetime', description: 'When the report type was first observed (UTC ISO-8601)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'entries.purged',
+    description: 'Fired when a manual or policy purge completed (counts in payload).',
+    payload_schema: [
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app whose entries were purged' },
+      { name: 'report_type', type: 'string?', description: 'Report type targeted (null for an app-wide purge)' },
+      { name: 'deleted_count', type: 'number', description: 'Number of entries removed' },
+      { name: 'reason', type: 'string', description: 'What drove the purge: manual | retention_age | retention_rows | retention_bytes' },
+      { name: 'actor.id', type: 'uuid?', description: 'User who triggered a manual purge (null for a worker-driven policy purge)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'entry.matched',
+    description: 'Fired when a match watch fired. Carries an entry summary plus a viewer deep link, not the full entry. Throttled by the watch cooldown.',
+    payload_schema: [
+      { name: 'watch_id', type: 'uuid', description: 'Watch that fired' },
+      { name: 'watch_name', type: 'string', description: 'Stable watch handle Bolt rules filter on' },
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the entry belongs to' },
+      { name: 'report_type', type: 'string', description: 'Report type of the matched entry' },
+      { name: 'entry.seq', type: 'number', description: 'Monotonic cursor seq of the matched entry' },
+      { name: 'entry.received_at', type: 'datetime', description: 'Server receive time of the entry (UTC ISO-8601)' },
+      { name: 'entry.level', type: 'string?', description: 'Promoted severity level (debug|info|warn|error|fatal) if present' },
+      { name: 'entry.session_id', type: 'string?', description: 'Promoted session_id if present' },
+      { name: 'entry.app_version', type: 'string?', description: 'Promoted app_version if present' },
+      { name: 'entry.platform', type: 'string?', description: 'Promoted platform if present' },
+      { name: 'entry.elapsed_ms', type: 'number?', description: 'Promoted elapsed_ms if present' },
+      { name: 'entry.payload', type: 'object', description: 'Truncated redacted payload summary' },
+      { name: 'entry.url', type: 'string', description: 'Viewer deep link to the matched entry' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'window.breached',
+    description: 'Fired when a window watch crossed its threshold (upward crossing). One event on breach, paired with window.recovered on return.',
+    payload_schema: [
+      { name: 'watch_id', type: 'uuid', description: 'Window watch that breached' },
+      { name: 'watch_name', type: 'string', description: 'Stable watch handle Bolt rules filter on' },
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the watch covers' },
+      { name: 'report_type', type: 'string?', description: 'Report type the watch covers (null = all types for the app)' },
+      { name: 'value', type: 'number', description: 'Observed aggregate value over the window' },
+      { name: 'threshold', type: 'number', description: 'Configured comparator threshold' },
+      { name: 'window_sec', type: 'number', description: 'Length of the trailing window in seconds' },
+      { name: 'sample_count', type: 'number', description: 'Number of samples in the window' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'window.recovered',
+    description: 'Fired when a window watch cleared its threshold (return below it).',
+    payload_schema: [
+      { name: 'watch_id', type: 'uuid', description: 'Window watch that recovered' },
+      { name: 'watch_name', type: 'string', description: 'Stable watch handle Bolt rules filter on' },
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the watch covers' },
+      { name: 'report_type', type: 'string?', description: 'Report type the watch covers (null = all types for the app)' },
+      { name: 'value', type: 'number', description: 'Observed aggregate value over the window' },
+      { name: 'threshold', type: 'number', description: 'Configured comparator threshold' },
+      { name: 'window_sec', type: 'number', description: 'Length of the trailing window in seconds' },
+      { name: 'sample_count', type: 'number', description: 'Number of samples in the window' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'blip',
+    event_type: 'timelapse.ready',
+    description: 'Fired when a timelapse compilation job finished. Carries the resulting Bin video asset ref.',
+    payload_schema: [
+      { name: 'job_id', type: 'uuid', description: 'Timelapse job ID' },
+      { name: 'tracked_app_id', type: 'uuid', description: 'Tracked app the timelapse was compiled from' },
+      { name: 'bin_asset_id', type: 'uuid', description: 'The Bin video asset produced by the job' },
+      { name: 'frame_count', type: 'number', description: 'Number of frames in the compiled video' },
+      { name: 'duration_ms', type: 'number', description: 'Duration of the compiled video in milliseconds' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -2658,6 +2832,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...blueprintEvents,
   ...bureauEvents,
   ...wave1bEvents,
+  ...blipEvents,
 ];
 
 export function getAllEvents(): EventDefinition[] {

@@ -44,6 +44,9 @@ and optional env-var list.
 | `bill-api` | app | railway/bill-api.json |
 | `blueprint-api` | app | railway/blueprint-api.json |
 | `bureau-api` | app | railway/bureau-api.json |
+| `bin-api` | app | railway/bin-api.json |
+| `bay-api` | app | railway/bay-api.json |
+| `blip-api` | app | railway/blip-api.json |
 | `mcp-server` | app | railway/mcp-server.json |
 | `worker` | app | railway/worker.json |
 | `voice-agent` | app | railway/voice-agent.json |

@@ -10,12 +10,12 @@
  * What it does, idempotently:
  *   1. Bootstraps the "Gilligan Travel Ltd" org (slug gilligan-travel-ltd) and
  *      the 7 castaway users at the EXACT fixed UUIDs the individual seeders
- *      hardcode — so those 28 seeders run unchanged. Inserts org memberships,
+ *      hardcode — so those 31 seeders run unchanged. Inserts org memberships,
  *      role group memberships, and default priorities (mirrors what
  *      `cli create-admin`/`create-user` do, but with deterministic ids).
  *   2. Mints a read_write API key per castaway (and best-effort admin keys for
  *      the SMTP step) and assembles the GKEYS map the seeders expect.
- *   3. Runs all 28 seeders in dependency order inside the `api` container
+ *   3. Runs all 31 seeders in dependency order inside the `api` container
  *      (`docker compose exec -T -e GKEYS=… api node - < <file>`), which is how
  *      they reach the internal app hosts and the DATABASE_URL/REDIS_URL/S3 env.
  *
@@ -68,7 +68,11 @@ const PHASES = [
   { name: 'Billing', files: ['bill.mjs', 'bill-supplement.mjs', 'bill-recurring.mjs'] },
   { name: 'Spatial & async', files: ['board.mjs', 'book.mjs', 'book-connections.mjs', 'bureau.mjs', 'bureau-presence.mjs'] },
   { name: 'Diagrams & automation', files: ['blueprint.mjs', 'blueprint-collab.mjs', 'bolt.mjs', 'bearing.mjs'] },
-  { name: 'Campaigns & detail', files: ['blast.mjs', 'blast-blueprint-fixup.mjs', 'detail-fixup.mjs'] },
+  // blip.mjs is placed here because it runs AFTER both banter.mjs (Communication)
+  // and bolt.mjs (Diagrams & automation): its seeded watches emit entry.matched,
+  // and a seeded Bolt rule fans that into a real castaway Banter channel, so both
+  // targets must already exist. Its live-path ingest proof is soft internally.
+  { name: 'Campaigns & detail', files: ['blast.mjs', 'blast-blueprint-fixup.mjs', 'blip.mjs', 'detail-fixup.mjs'] },
   { name: 'Support & email', files: ['helpdesk.mjs', 'smtp.mjs'] },
 ];
 

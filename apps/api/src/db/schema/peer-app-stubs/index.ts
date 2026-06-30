@@ -399,3 +399,34 @@ export const bayAssetsStub = pgTable(
   },
   (table) => [index('pas_bay_assets_org_idx').on(table.org_id)],
 );
+
+// ---------------------------------------------------------------------------
+// blip - tracked apps, saved views
+// ---------------------------------------------------------------------------
+// Real schemas: apps/blip-api/src/db/schema/{blip-tracked-apps,blip-saved-views}.ts
+// (docs/plans/BigBlueBam_Blip_Design_Document.md §2, §3, §7).
+// blip.tracked_app is the gating entity: it is visible iff its org_id matches
+// the asker's org (org match is the entire rule — entries and saved views all
+// inherit it, mirroring how Bin assets gate through their container). A
+// blip.saved_view gates through its parent tracked_app (joined via
+// tracked_app_id); the org match on the tracked_app is the access decision.
+export const blipTrackedAppsStub = pgTable(
+  'blip_tracked_apps',
+  {
+    id: uuid('id').primaryKey(),
+    org_id: uuid('org_id').notNull(),
+  },
+  (table) => [index('pas_blip_tracked_apps_org_idx').on(table.org_id)],
+);
+
+export const blipSavedViewsStub = pgTable(
+  'blip_saved_views',
+  {
+    id: uuid('id').primaryKey(),
+    org_id: uuid('org_id').notNull(),
+    tracked_app_id: uuid('tracked_app_id').notNull(),
+    owner_id: uuid('owner_id').notNull(),
+    scope: varchar('scope', { length: 20 }).notNull(),
+  },
+  (table) => [index('pas_blip_saved_views_app_idx').on(table.tracked_app_id)],
+);

@@ -188,6 +188,7 @@ services:
       BLANK_API_URL: http://blank-api:4013/v1
       BIN_API_URL: http://bin-api:4016/v1
       BAY_API_URL: http://bay-api:4017/v1
+      BLIP_API_URL: http://blip-api:4018/v1
       BUREAU_API_URL: http://bureau-api:4015/v1
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
@@ -295,6 +296,8 @@ services:
       bin-api:
         condition: service_healthy
       bay-api:
+        condition: service_healthy
+      blip-api:
         condition: service_healthy
       blueprint-api:
         condition: service_healthy
@@ -1015,6 +1018,58 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4017/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  blip-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/blip-api/Dockerfile
+      target: production
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      - BIN_API_INTERNAL_URL=http://bin-api:4016
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - NODE_ENV=production
+      - PORT=4018
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      # Wave D Phase 3: per-action permission enforcement at this satellite.
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+      # Server-side pepper mixed into the public ingest endpoint's token/HMAC
+      # so inbound /blip/ingest/ payloads can be verified without a session.
+      - BLIP_INGEST_PEPPER=${BLIP_INGEST_PEPPER:-blip-dev-ingest-pepper-change-me}
+      # Object store — shares Bin's bucket + keys.
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      - S3_BUCKET=${S3_BUCKET:-bigbluebam-uploads}
+      - S3_REGION=${S3_REGION:-us-east-1}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4018/health"]
       interval: 10s
       timeout: 5s
       retries: 3

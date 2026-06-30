@@ -103,3 +103,57 @@ export async function presignedGetUrl(
     return null;
   }
 }
+
+/**
+ * Upload an in-memory Buffer to an object key. Used by the Blip ingest job to
+ * offload decoded JPEG captures + sharp thumbnails (Blip §23.2). Throws on
+ * failure so the caller can decide whether to drop the capture or fail the row.
+ */
+export async function putObjectBuffer(
+  key: string,
+  body: Buffer,
+  contentType: string,
+): Promise<void> {
+  await minioClient.putObject(S3_BUCKET, key, body, body.length, {
+    'Content-Type': contentType,
+  });
+}
+
+/**
+ * List every object key under a prefix (paged internally, bounded by `limit`).
+ * The MinIO/S3 backbone has no bulk/prefix delete, so capture GC (Blip §11.2)
+ * is a list-then-delete-per-key loop; this is the list half. Returns [] on
+ * error so a GC sweep degrades to a no-op rather than throwing.
+ */
+export async function listObjectKeys(prefix: string, limit = 100_000): Promise<string[]> {
+  return new Promise((resolve) => {
+    const keys: string[] = [];
+    try {
+      const stream = minioClient.listObjectsV2(S3_BUCKET, prefix, true);
+      stream.on('data', (obj) => {
+        if (obj.name) keys.push(obj.name);
+        if (keys.length >= limit) {
+          stream.destroy();
+          resolve(keys);
+        }
+      });
+      stream.on('error', () => resolve(keys));
+      stream.on('end', () => resolve(keys));
+      stream.on('close', () => resolve(keys));
+    } catch {
+      resolve(keys);
+    }
+  });
+}
+
+/**
+ * Delete a single object. Best-effort: a missing object or unreachable store is
+ * swallowed so capture GC never throws mid-sweep.
+ */
+export async function removeObject(key: string): Promise<void> {
+  try {
+    await minioClient.removeObject(S3_BUCKET, key);
+  } catch {
+    /* swallow */
+  }
+}

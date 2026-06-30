@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1362,
-    "mcp_tools_scanned": 763,
+    "total": 1392,
+    "mcp_tools_scanned": 801,
     "rest_routes_scanned": 879,
-    "read_permissions": 532,
-    "destructive_permissions": 128
+    "read_permissions": 539,
+    "destructive_permissions": 132
   },
   "permissions": [
     {
@@ -15715,6 +15715,556 @@
           "source": "rest",
           "ref": "POST /webhooks/complaint",
           "file": "webhooks.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.app.create",
+      "app": "blip",
+      "resource": "app",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_app_create",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.app.delete",
+      "app": "blip",
+      "resource": "app",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_app_delete",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.app.read",
+      "app": "blip",
+      "resource": "app",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_app_list",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_app_get",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_report_types_list",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_field_catalog_list",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.app.update",
+      "app": "blip",
+      "resource": "app",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_app_update",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.collection.toggle",
+      "app": "blip",
+      "resource": "collection",
+      "verb": "toggle",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_collection_set",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.entry.export",
+      "app": "blip",
+      "resource": "entry",
+      "verb": "export",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_entry_export",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.entry.purge",
+      "app": "blip",
+      "resource": "entry",
+      "verb": "purge",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_entry_purge",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.entry.read",
+      "app": "blip",
+      "resource": "entry",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_entry_query",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_entry_tail",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.field.index",
+      "app": "blip",
+      "resource": "field",
+      "verb": "index",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_field_index",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.field.metric",
+      "app": "blip",
+      "resource": "field",
+      "verb": "metric",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_field_set_metric",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.key.create",
+      "app": "blip",
+      "resource": "key",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_key_create",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.key.list",
+      "app": "blip",
+      "resource": "key",
+      "verb": "list",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_key_list",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.key.revoke",
+      "app": "blip",
+      "resource": "key",
+      "verb": "revoke",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_key_revoke",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.key.suspend",
+      "app": "blip",
+      "resource": "key",
+      "verb": "suspend",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_key_suspend",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.key.update",
+      "app": "blip",
+      "resource": "key",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_key_update",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.ratelimit.manage",
+      "app": "blip",
+      "resource": "ratelimit",
+      "verb": "manage",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_ratelimit_set",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.retention.manage",
+      "app": "blip",
+      "resource": "retention",
+      "verb": "manage",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_retention_set",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.timelapse.create",
+      "app": "blip",
+      "resource": "timelapse",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_timelapse_create",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.timelapse.read",
+      "app": "blip",
+      "resource": "timelapse",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_capture_url",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_timelapse_get",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_timelapse_list",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.transform.manage",
+      "app": "blip",
+      "resource": "transform",
+      "verb": "manage",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_transform_set",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.view.create",
+      "app": "blip",
+      "resource": "view",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_view_create",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.view.delete",
+      "app": "blip",
+      "resource": "view",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_view_delete",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.view.read",
+      "app": "blip",
+      "resource": "view",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_view_list",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.view.update",
+      "app": "blip",
+      "resource": "view",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_view_update",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.watch.create",
+      "app": "blip",
+      "resource": "watch",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_watch_create",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.watch.delete",
+      "app": "blip",
+      "resource": "watch",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_watch_delete",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.watch.enable",
+      "app": "blip",
+      "resource": "watch",
+      "verb": "enable",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_watch_set_enabled",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.watch.read",
+      "app": "blip",
+      "resource": "watch",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_watch_list",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_watch_get",
+          "file": "blip-tools.ts"
+        },
+        {
+          "source": "mcp",
+          "ref": "blip_watch_history",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.watch.test",
+      "app": "blip",
+      "resource": "watch",
+      "verb": "test",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_watch_test",
+          "file": "blip-tools.ts"
+        }
+      ]
+    },
+    {
+      "id": "blip.watch.update",
+      "app": "blip",
+      "resource": "watch",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "blip_watch_update",
+          "file": "blip-tools.ts"
         }
       ]
     },

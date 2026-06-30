@@ -172,6 +172,34 @@ import {
   processBinTranscodeJob,
   type BinTranscodeJobData,
 } from './jobs/bin-transcode.job.js';
+// Blip telemetry worker jobs (docs/plans/BigBlueBam_Blip_Design_Document.md §4.2,
+// §11.2, §12, §14, §23). Queue contracts live in @bigbluebam/shared.
+import {
+  BLIP_INGEST_QUEUE,
+  BLIP_EXPORT_JSONL_QUEUE,
+  BLIP_TIMELAPSE_QUEUE,
+  BLIP_FIELD_INDEX_QUEUE,
+  type BlipIngestJobData,
+  type BlipExportJobData,
+  type BlipTimelapseJobData,
+  type BlipFieldIndexJobData,
+} from '@bigbluebam/shared';
+import { processBlipIngestJob } from './jobs/blip-ingest.job.js';
+import {
+  processBlipPartitionProvisionJob,
+  type BlipPartitionProvisionJobData,
+} from './jobs/blip-partition-provision.job.js';
+import {
+  processBlipRetentionSweepJob,
+  type BlipRetentionSweepJobData,
+} from './jobs/blip-retention-sweep.job.js';
+import {
+  processBlipWatchEvalJob,
+  type BlipWatchEvalJobData,
+} from './jobs/blip-watch-eval.job.js';
+import { processBlipFieldIndexJob } from './jobs/blip-field-index.job.js';
+import { processBlipExportJsonlJob } from './jobs/blip-export-jsonl.job.js';
+import { processBlipTimelapseJob } from './jobs/blip-timelapse.job.js';
 
 const env = loadEnv();
 
@@ -1704,6 +1732,188 @@ binTranscodeQueue
   )
   .catch((err) => logger.error({ err }, 'Failed to register bin-transcode scheduler'));
 
+// ---------------------------------------------------------------------------
+// Blip telemetry workers (§17). Seven handlers: an enqueue-driven durable-write
+// fan-in, two scheduled sweeps (partition provision, retention), a 30s
+// window-watch eval tick, and three on-demand jobs (field index, JSONL export,
+// timelapse). Capture offload/thumbnailing uses sharp; timelapse uses ffmpeg
+// (already in the worker image).
+// ---------------------------------------------------------------------------
+
+// Blip durable-write fan-in (drain + capture offload + catalog upsert + insert).
+const blipIngestWorker = new Worker<BlipIngestJobData>(
+  BLIP_INGEST_QUEUE,
+  async (job: Job<BlipIngestJobData>) => {
+    await processBlipIngestJob(job, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+blipIngestWorker.on('completed', (job) => {
+  logger.debug({ jobId: job.id, queue: BLIP_INGEST_QUEUE }, 'Job completed');
+});
+blipIngestWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BLIP_INGEST_QUEUE, err }, 'Job failed');
+  void recordWorkerError({
+    queueName: BLIP_INGEST_QUEUE,
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
+// Blip partition provisioning (daily at 03:00 UTC — keeps the leading edge of
+// monthly blip_entries partitions topped up).
+const blipPartitionProvisionWorker = new Worker<BlipPartitionProvisionJobData>(
+  'blip-partition-provision',
+  async (job: Job<BlipPartitionProvisionJobData>) => {
+    await processBlipPartitionProvisionJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+blipPartitionProvisionWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'blip-partition-provision' }, 'Job completed');
+});
+blipPartitionProvisionWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'blip-partition-provision', err }, 'Job failed');
+  void recordWorkerError({
+    queueName: 'blip-partition-provision',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const blipPartitionProvisionQueue = new Queue('blip-partition-provision', { connection: redis });
+blipPartitionProvisionQueue
+  .upsertJobScheduler(
+    'blip-partition-provision-daily',
+    { pattern: '0 3 * * *' }, // 03:00 UTC daily
+    { name: 'provision', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register blip-partition-provision scheduler'));
+
+// Blip retention sweep (daily at 03:15 UTC — partition drops + ranged deletes +
+// paired capture-object GC).
+const blipRetentionSweepWorker = new Worker<BlipRetentionSweepJobData>(
+  'blip-retention-sweep',
+  async (job: Job<BlipRetentionSweepJobData>) => {
+    await processBlipRetentionSweepJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+blipRetentionSweepWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'blip-retention-sweep' }, 'Job completed');
+});
+blipRetentionSweepWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'blip-retention-sweep', err }, 'Job failed');
+  void recordWorkerError({
+    queueName: 'blip-retention-sweep',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const blipRetentionSweepQueue = new Queue('blip-retention-sweep', { connection: redis });
+blipRetentionSweepQueue
+  .upsertJobScheduler(
+    'blip-retention-sweep-daily',
+    { pattern: '15 3 * * *' }, // 03:15 UTC daily — after partition provision
+    { name: 'sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register blip-retention-sweep scheduler'));
+
+// Blip window-watch eval tick (every 30s; cron can't express sub-minute, so use
+// `every`).
+const blipWatchEvalWorker = new Worker<BlipWatchEvalJobData>(
+  'blip-watch-eval',
+  async (job: Job<BlipWatchEvalJobData>) => {
+    await processBlipWatchEvalJob(job, redis, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+blipWatchEvalWorker.on('completed', (job) => {
+  logger.debug({ jobId: job.id, queue: 'blip-watch-eval' }, 'Job completed');
+});
+blipWatchEvalWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'blip-watch-eval', err }, 'Job failed');
+  void recordWorkerError({
+    queueName: 'blip-watch-eval',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const blipWatchEvalQueue = new Queue('blip-watch-eval', { connection: redis });
+blipWatchEvalQueue
+  .upsertJobScheduler(
+    'blip-watch-eval-tick',
+    { every: 30_000 }, // every 30s per §12.1
+    { name: 'tick', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register blip-watch-eval scheduler'));
+
+// Blip field-index creation (on-demand; CONCURRENTLY expression index).
+const blipFieldIndexWorker = new Worker<BlipFieldIndexJobData>(
+  BLIP_FIELD_INDEX_QUEUE,
+  async (job: Job<BlipFieldIndexJobData>) => {
+    await processBlipFieldIndexJob(job, logger);
+  },
+  { ...connection, concurrency: 1 }, // serialize heavy index builds
+);
+blipFieldIndexWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BLIP_FIELD_INDEX_QUEUE }, 'Job completed');
+});
+blipFieldIndexWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BLIP_FIELD_INDEX_QUEUE, err }, 'Job failed');
+  void recordWorkerError({
+    queueName: BLIP_FIELD_INDEX_QUEUE,
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
+// Blip JSONL export / freeze (on-demand).
+const blipExportJsonlWorker = new Worker<BlipExportJobData>(
+  BLIP_EXPORT_JSONL_QUEUE,
+  async (job: Job<BlipExportJobData>) => {
+    await processBlipExportJsonlJob(job, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+blipExportJsonlWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BLIP_EXPORT_JSONL_QUEUE }, 'Job completed');
+});
+blipExportJsonlWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BLIP_EXPORT_JSONL_QUEUE, err }, 'Job failed');
+  void recordWorkerError({
+    queueName: BLIP_EXPORT_JSONL_QUEUE,
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
+// Blip timelapse compilation (on-demand; ffmpeg). Concurrency 1 — CPU-heavy.
+const blipTimelapseWorker = new Worker<BlipTimelapseJobData>(
+  BLIP_TIMELAPSE_QUEUE,
+  async (job: Job<BlipTimelapseJobData>) => {
+    await processBlipTimelapseJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+blipTimelapseWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BLIP_TIMELAPSE_QUEUE }, 'Job completed');
+});
+blipTimelapseWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BLIP_TIMELAPSE_QUEUE, err }, 'Job failed');
+  void recordWorkerError({
+    queueName: BLIP_TIMELAPSE_QUEUE,
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
 // Analytics worker (placeholder — processes analytics aggregation jobs)
 const analyticsWorker = new Worker(
   'analytics',
@@ -1856,6 +2066,16 @@ const workers = [
   banterFeedFaninWorker,
   // Bin AV-scan sweep
   binAvScanWorker,
+  // Bin media transcode
+  binTranscodeWorker,
+  // Blip telemetry (§17)
+  blipIngestWorker,
+  blipPartitionProvisionWorker,
+  blipRetentionSweepWorker,
+  blipWatchEvalWorker,
+  blipFieldIndexWorker,
+  blipExportJsonlWorker,
+  blipTimelapseWorker,
   analyticsWorker,
 ];
 
@@ -1920,6 +2140,16 @@ logger.info(
       'banter-feed-fanin',
       // Bin AV-scan sweep
       'bin-av-scan',
+      // Bin media transcode
+      'bin-transcode',
+      // Blip telemetry (§17)
+      BLIP_INGEST_QUEUE,
+      'blip-partition-provision',
+      'blip-retention-sweep',
+      'blip-watch-eval',
+      BLIP_FIELD_INDEX_QUEUE,
+      BLIP_EXPORT_JSONL_QUEUE,
+      BLIP_TIMELAPSE_QUEUE,
       'analytics',
       // LiveKit advertised-address drift watchdog (hourly)
       'livekit-ip-drift',

@@ -30,6 +30,8 @@ import {
   binAssetsStub,
   binFoldersStub,
   bayAssetsStub,
+  blipTrackedAppsStub,
+  blipSavedViewsStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -81,7 +83,10 @@ export type VisibilityEntityType =
   | 'bolt.rule'
   | 'bin.asset'
   | 'bin.folder'
-  | 'bay.asset';
+  | 'bay.asset'
+  // Blip telemetry entity-type registration (BigBlueBam_Blip_Design_Document.md §2)
+  | 'blip.tracked_app'
+  | 'blip.saved_view';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -108,6 +113,9 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bin.asset',
   'bin.folder',
   'bay.asset',
+  // Blip telemetry entity-type registration (BigBlueBam_Blip_Design_Document.md §2)
+  'blip.tracked_app',
+  'blip.saved_view',
 ] as const;
 
 export type PreflightReason =
@@ -1272,6 +1280,63 @@ async function preflightBayAsset(
 }
 
 // ---------------------------------------------------------------------------
+// blip.tracked_app / blip.saved_view
+// ---------------------------------------------------------------------------
+//
+// Blip telemetry (BigBlueBam_Blip_Design_Document.md §2). The tracked_app is
+// the gating entity: it has no per-app visibility enum, so org match is the
+// entire rule (entries inherit it, the same way Bin assets gate through their
+// container rather than registering one entity per object). A saved_view gates
+// through its parent tracked_app — joined via tracked_app_id — and is reachable
+// iff that parent tracked_app is reachable (the org match on the parent).
+
+async function preflightBlipTrackedApp(
+  asker: AskerContext,
+  trackedAppId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: blipTrackedAppsStub.id,
+      org_id: blipTrackedAppsStub.org_id,
+    })
+    .from(blipTrackedAppsStub)
+    .where(eq(blipTrackedAppsStub.id, trackedAppId))
+    .limit(1);
+
+  const app = rows[0];
+  if (!app) return { allowed: false, reason: 'not_found' };
+  if (app.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: app.org_id };
+}
+
+async function preflightBlipSavedView(
+  asker: AskerContext,
+  savedViewId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: blipSavedViewsStub.id,
+      org_id: blipTrackedAppsStub.org_id,
+    })
+    .from(blipSavedViewsStub)
+    .innerJoin(
+      blipTrackedAppsStub,
+      eq(blipTrackedAppsStub.id, blipSavedViewsStub.tracked_app_id),
+    )
+    .where(eq(blipSavedViewsStub.id, savedViewId))
+    .limit(1);
+
+  const view = rows[0];
+  if (!view) return { allowed: false, reason: 'not_found' };
+  if (view.org_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: view.org_id };
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -1347,6 +1412,11 @@ export async function preflightAccess(
       return preflightBinAsset(asker, entityId);
     case 'bin.folder':
       return preflightBinFolder(asker, entityId);
+    // Blip telemetry entity-type registration (BigBlueBam_Blip_Design_Document.md §2)
+    case 'blip.tracked_app':
+      return preflightBlipTrackedApp(asker, entityId);
+    case 'blip.saved_view':
+      return preflightBlipSavedView(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -1385,4 +1455,6 @@ export const __test__ = {
   preflightBoltRule,
   preflightBinAsset,
   preflightBinFolder,
+  preflightBlipTrackedApp,
+  preflightBlipSavedView,
 };

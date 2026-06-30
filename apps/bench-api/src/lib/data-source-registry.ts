@@ -357,6 +357,68 @@ const DATA_SOURCES: BenchDataSource[] = [
       { field: 'sent_at', label: 'Sent', operators: ['gte', 'lte', 'between'], type: 'date' },
     ],
   },
+
+  // ── Blip (Telemetry rollups) ──────────────────────────────────
+  //
+  // Blip does NOT point Bench at raw blip_entries (BigBlueBam_Blip_Design_Document.md
+  // §13). Instead it ships two org-scoped materialized-view rollups (migration
+  // 0221_blip_bench_rollups.sql), refreshed by the existing bench-mv-refresh
+  // worker. Both carry an explicit org_id column, so `orgColumn` is overridden to
+  // 'org_id' — without it the query builder would emit `organization_id = $org`
+  // and every Blip widget would 42703 and return nothing (the
+  // bench:daily_task_throughput mistake).
+  {
+    product: 'blip',
+    entity: 'entries_rollup',
+    label: 'Blip Entry Volume (Hourly)',
+    description: 'Hourly telemetry entry counts per (tracked app, report type, level). Volume and rate over time, with per-level breakdown.',
+    baseTable: 'blip_entries_rollup',
+    orgColumn: 'org_id',
+    measures: [
+      { field: 'entry_count', label: 'Entry Count', aggregations: ['sum', 'count'], type: 'integer' },
+    ],
+    dimensions: [
+      { field: 'tracked_app_id', label: 'Tracked App', type: 'categorical' },
+      { field: 'report_type', label: 'Report Type', type: 'categorical' },
+      { field: 'level', label: 'Level', type: 'categorical' },
+      { field: 'bucket_hour', label: 'Hour', type: 'temporal' },
+    ],
+    filters: [
+      { field: 'tracked_app_id', label: 'Tracked App', operators: ['eq', 'in'], type: 'string' },
+      { field: 'report_type', label: 'Report Type', operators: ['eq', 'neq', 'in'], type: 'string' },
+      { field: 'level', label: 'Level', operators: ['eq', 'neq', 'in'], type: 'enum', enumValues: ['debug', 'info', 'warn', 'error', 'fatal'] },
+      { field: 'bucket_hour', label: 'Hour', operators: ['gte', 'lte', 'between'], type: 'date' },
+    ],
+  },
+  {
+    product: 'blip',
+    entity: 'metric_rollup',
+    label: 'Blip Metric Rollup (Hourly)',
+    description: 'Hourly numeric-field aggregates per (tracked app, report type, field path). Precomputed percentiles (p50/p95/p99) over elapsed_ms via percentile_cont, since Bench cannot compute percentiles on the fly.',
+    baseTable: 'blip_metric_rollup',
+    orgColumn: 'org_id',
+    measures: [
+      { field: 'n', label: 'Sample Count', aggregations: ['sum', 'avg', 'max'], type: 'integer' },
+      { field: 'sum', label: 'Sum', aggregations: ['sum', 'avg', 'max'], type: 'numeric' },
+      { field: 'min', label: 'Min', aggregations: ['min', 'avg'], type: 'numeric' },
+      { field: 'max', label: 'Max', aggregations: ['max', 'avg'], type: 'numeric' },
+      { field: 'p50', label: 'p50', aggregations: ['avg', 'max'], type: 'numeric' },
+      { field: 'p95', label: 'p95', aggregations: ['avg', 'max'], type: 'numeric' },
+      { field: 'p99', label: 'p99', aggregations: ['avg', 'max'], type: 'numeric' },
+    ],
+    dimensions: [
+      { field: 'tracked_app_id', label: 'Tracked App', type: 'categorical' },
+      { field: 'report_type', label: 'Report Type', type: 'categorical' },
+      { field: 'field_path', label: 'Field Path', type: 'categorical' },
+      { field: 'bucket_hour', label: 'Hour', type: 'temporal' },
+    ],
+    filters: [
+      { field: 'tracked_app_id', label: 'Tracked App', operators: ['eq', 'in'], type: 'string' },
+      { field: 'report_type', label: 'Report Type', operators: ['eq', 'neq', 'in'], type: 'string' },
+      { field: 'field_path', label: 'Field Path', operators: ['eq', 'in'], type: 'string' },
+      { field: 'bucket_hour', label: 'Hour', operators: ['gte', 'lte', 'between'], type: 'date' },
+    ],
+  },
 ];
 
 const sourceMap = new Map<string, BenchDataSource>();

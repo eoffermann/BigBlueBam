@@ -7,6 +7,56 @@
 /** Task-link external title-fetch (bam-csv-import plan §4.3 item 3). */
 export const TASK_LINK_TITLE_FETCH_QUEUE = 'task-link-title-fetch';
 
+/**
+ * Blip durable-write fan-in (Blip §4.2). The ingest edge enqueues a redacted
+ * batch; the worker extracts promoted fields, offloads captures, upserts the
+ * field catalog, and bulk-inserts into the partitioned blip_entries table.
+ */
+export const BLIP_INGEST_QUEUE = 'blip-ingest';
+
+/** One already-redacted report element queued for durable write. */
+export interface BlipQueuedEntry {
+  report_type: string;
+  /** Full redacted payload (screen_captures still inline as base64 for offload). */
+  payload: Record<string, unknown>;
+}
+
+export interface BlipIngestJobData {
+  org_id: string;
+  tracked_app_id: string;
+  ingest_key_id: string;
+  received_at: string; // ISO; server stamp from the edge
+  entries: BlipQueuedEntry[];
+}
+
+/** Freeze a filtered collection to a Bin JSONL asset (Blip §14). */
+export const BLIP_EXPORT_JSONL_QUEUE = 'blip-export-jsonl';
+export interface BlipExportJobData {
+  org_id: string;
+  tracked_app_id: string;
+  report_type: string;
+  filter?: unknown;
+  requested_by: string | null;
+  asset_name: string;
+}
+
+/** Compile a timelapse video from capture-bearing entries (Blip §23.4). */
+export const BLIP_TIMELAPSE_QUEUE = 'blip-timelapse';
+export interface BlipTimelapseJobData {
+  job_id: string;
+  org_id: string;
+  tracked_app_id: string;
+}
+
+/** Concurrent expression-index creation for a promoted field (Blip §7.3). */
+export const BLIP_FIELD_INDEX_QUEUE = 'blip-field-index';
+export interface BlipFieldIndexJobData {
+  org_id: string;
+  tracked_app_id: string;
+  report_type: string;
+  field_path: string;
+}
+
 export interface TaskLinkTitleFetchJobData {
   task_id: string;
   link_id: string;

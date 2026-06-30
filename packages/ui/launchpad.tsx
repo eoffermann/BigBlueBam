@@ -35,6 +35,7 @@ import {
   Building,
   Database,
   Clapperboard,
+  Activity,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -78,6 +79,7 @@ const ICONS: Record<string, LucideIcon> = {
   building: Building,
   database: Database,
   clapperboard: Clapperboard,
+  activity: Activity,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very
@@ -188,9 +190,13 @@ export function Launchpad({ isOpen, onClose, currentApp }: LaunchpadProps) {
   // minimal hard-coded list if the API is unreachable on first open. The
   // currentApp id is always shown so the user can see "you are here".
   const catalog = state?.catalog ?? FALLBACK_APPS;
-  const visibleApps = state?.enabledIds
-    ? catalog.filter((app) => state.enabledIds!.has(app.id) || app.id === currentApp)
-    : catalog;
+  // Always present the apps alphabetically by display name, regardless of the
+  // catalog/enabled order returned by the API.
+  const visibleApps = (
+    state?.enabledIds
+      ? catalog.filter((app) => state.enabledIds!.has(app.id) || app.id === currentApp)
+      : [...catalog]
+  ).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

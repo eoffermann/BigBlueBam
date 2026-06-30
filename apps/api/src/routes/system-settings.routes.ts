@@ -55,6 +55,7 @@ export const LAUNCHPAD_APP_IDS = [
   'blueprint',
   'bin',
   'bay',
+  'blip',
   'helpdesk',
   'bureau',
 ] as const;
@@ -89,6 +90,7 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'blueprint', name: 'Blueprint', description: 'Diagrams & Flows', icon_name: 'sparkles', color: '#0ea5e9', path: '/blueprint/' },
   { id: 'bin', name: 'Bin', description: 'Files & Structured Data', icon_name: 'database', color: '#0369a1', path: '/bin/' },
   { id: 'bay', name: 'Bay', description: 'Media Review & Approval', icon_name: 'clapperboard', color: '#db2777', path: '/bay/' },
+  { id: 'blip', name: 'Blip', description: 'Telemetry & Logs', icon_name: 'activity', color: '#0891b2', path: '/blip/' },
   { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon_name: 'headset', color: '#be123c', path: '/helpdesk/' },
   { id: 'bureau', name: 'Bureau', description: 'Virtual Office', icon_name: 'building', color: '#475569', path: '/bureau/' },
 ];
