@@ -247,6 +247,13 @@ export async function processBinTranscodeJob(
         AND content_type NOT LIKE 'image/%'
         AND content_type NOT LIKE 'video/%'
         AND content_type NOT LIKE 'audio/%'
+        -- Models are claimed by bin-model-process (Bay FBX 3D review); do NOT
+        -- retire them to 'skipped' here or they never get a GLB proxy.
+        AND NOT (
+          lower(name) ~ '\.(fbx|obj|stl|glb|gltf|ply|dae|usd|usdz|usdc|usda)$'
+          OR lower(object_key) ~ '\.(fbx|obj|stl|glb|gltf|ply|dae|usd|usdz|usdc|usda)$'
+          OR content_type LIKE 'model/%'
+        )
     `);
   }
 

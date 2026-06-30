@@ -1,0 +1,29 @@
+# Bay — media review & approval (incl. FBX / 3D model review).
+# The 3D viewer is captured by opening the seeded "rescue-beacon.glb" model from
+# the Review Library (navigated by name, so it is robust to the asset id).
+
+- id: bay-review-library
+  app: bay
+  demonstrates: "The Bay Review Library: media assets (image, video, audio, 3D model) awaiting review with status pills"
+  route: /bay/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1200 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Review library" }
+  masks: ["time", "[datetime]"]
+
+- id: bay-model-viewer
+  app: bay
+  demonstrates: "The FBX / 3D review viewer: a converted GLB rendered in three.js with orbit controls, model stats (tris/materials/animation), and viewpoint annotations in the rail"
+  route: /bay/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1000 }
+    - { action: click, selector: 'tr:has-text("rescue-beacon.glb")' }
+    - { action: wait, ms: 5500 }
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "FBX 3D review viewer" }
+  masks: ["time", "[datetime]"]

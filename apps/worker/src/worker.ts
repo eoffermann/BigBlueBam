@@ -172,6 +172,11 @@ import {
   processBinTranscodeJob,
   type BinTranscodeJobData,
 } from './jobs/bin-transcode.job.js';
+// Bin model processing — FBX/OBJ/STL/... -> GLB proxy + probe (Bay FBX 3D review).
+import {
+  processBinModelProcessJob,
+  type BinModelProcessJobData,
+} from './jobs/bin-model-process.job.js';
 // Blip telemetry worker jobs (docs/plans/BigBlueBam_Blip_Design_Document.md §4.2,
 // §11.2, §12, §14, §23). Queue contracts live in @bigbluebam/shared.
 import {
@@ -1732,6 +1737,39 @@ binTranscodeQueue
   )
   .catch((err) => logger.error({ err }, 'Failed to register bin-transcode scheduler'));
 
+// Bin model processing sweep — converts clean FBX/OBJ/STL/USD/... model assets
+// to self-contained GLB proxies + probes them (Bay FBX 3D review). Conversion
+// (assimpjs WASM + gltf-transform) is CPU/memory heavy, so concurrency is 1 and
+// each sweep claims a small batch. Shares transcode_status with bin-transcode
+// but claims disjoint rows by the model predicate.
+const binModelProcessWorker = new Worker<BinModelProcessJobData>(
+  'bin-model-process',
+  async (job: Job<BinModelProcessJobData>) => {
+    await processBinModelProcessJob(job, env, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+binModelProcessWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bin-model-process' }, 'Job completed');
+});
+binModelProcessWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bin-model-process', err }, 'Job failed');
+  void recordWorkerError({
+    queueName: 'bin-model-process',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+const binModelProcessQueue = new Queue('bin-model-process', { connection: redis });
+binModelProcessQueue
+  .upsertJobScheduler(
+    'bin-model-process-tick',
+    { pattern: '* * * * *' }, // every minute — GLB proxy lands shortly after the AV scan clears
+    { name: 'sweep', data: {} },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register bin-model-process scheduler'));
+
 // ---------------------------------------------------------------------------
 // Blip telemetry workers (§17). Seven handlers: an enqueue-driven durable-write
 // fan-in, two scheduled sweeps (partition provision, retention), a 30s
@@ -2068,6 +2106,8 @@ const workers = [
   binAvScanWorker,
   // Bin media transcode
   binTranscodeWorker,
+  // Bin model processing (Bay FBX 3D review)
+  binModelProcessWorker,
   // Blip telemetry (§17)
   blipIngestWorker,
   blipPartitionProvisionWorker,
@@ -2142,6 +2182,8 @@ logger.info(
       'bin-av-scan',
       // Bin media transcode
       'bin-transcode',
+      // Bin model processing (Bay FBX 3D review)
+      'bin-model-process',
       // Blip telemetry (§17)
       BLIP_INGEST_QUEUE,
       'blip-partition-provision',

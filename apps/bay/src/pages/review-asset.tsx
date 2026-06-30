@@ -29,10 +29,16 @@ import {
   useCreateReviewLink,
   binRawUrl,
   type Anchor,
+  type BayAnnotation,
   type BayVersion,
   type DecisionValue,
   type MediaKind,
+  type MediaMeta,
+  type ModelAnimationClip,
+  type ViewpointAnchor,
+  type ViewpointAnnotation,
 } from '@/hooks/use-bay';
+import { ModelViewer } from '@/components/model-viewer';
 import { useBayRealtime } from '@/hooks/use-bay-realtime';
 import { useAuthStore } from '@/stores/auth.store';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -157,11 +163,70 @@ function renderAnchor(anchor: Anchor | null | undefined): string {
       const t = a.time_sec != null ? ` @ ${fmtTime(num(a.time_sec))}` : '';
       return box + t;
     }
-    case 'viewpoint':
-      return `view: ${typeof a.camera === 'string' ? a.camera : 'camera'}`;
+    case 'viewpoint': {
+      const surface = a.surface as { mode?: string } | undefined;
+      const time = a.time as { frame?: number } | undefined;
+      const suffix = time?.frame != null ? ` · f${num(time.frame)}` : '';
+      if (surface?.mode === 'geometry') return `◉ spot${suffix}`;
+      if (surface?.mode === 'screen') return `▱ spot (screen)${suffix}`;
+      return `⊕ viewpoint${suffix}`;
+    }
     default:
       return 'anchor';
   }
+}
+
+// One annotation row in the rail. Shared by the flat list and the grouped
+// (per-clip) model layout.
+function AnnotationRow({
+  a,
+  onAnchorClick,
+  onToggleResolve,
+  resolving,
+}: {
+  a: BayAnnotation;
+  onAnchorClick: (anchor: Anchor) => void;
+  onToggleResolve: () => void;
+  resolving: boolean;
+}) {
+  return (
+    <li
+      className={cn(
+        'rounded-lg border p-3',
+        a.resolved
+          ? 'border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30 opacity-75'
+          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <button
+          type="button"
+          onClick={() => onAnchorClick(a.anchor)}
+          title="Jump to this moment / show region"
+          className="inline-flex items-center gap-1 rounded-md bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 text-xs font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/40 cursor-pointer"
+        >
+          {renderAnchor(a.anchor)}
+        </button>
+        <button
+          onClick={onToggleResolve}
+          disabled={resolving}
+          className={cn(
+            'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50',
+            a.resolved
+              ? 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20',
+          )}
+        >
+          <Check className="h-3.5 w-3.5" />
+          {a.resolved ? 'Reopen' : 'Resolve'}
+        </button>
+      </div>
+      <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">{a.body}</p>
+      <p className="text-xs text-zinc-400 mt-1.5">
+        {a.author_name ?? a.author_id ?? 'Unknown'} · {formatRelativeTime(a.created_at)}
+      </p>
+    </li>
+  );
 }
 
 function MetaLabel({ label, value }: { label: string; value: string }) {
@@ -170,6 +235,33 @@ function MetaLabel({ label, value }: { label: string; value: string }) {
       <span className="text-zinc-400">{label}</span>
       <span className="font-medium text-zinc-800 dark:text-zinc-200">{value}</span>
     </span>
+  );
+}
+
+// Compact triangle count, e.g. 1850000 → "1.85M tris".
+function fmtTris(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+// Model stats from media_meta (§7.5): tris, materials, unit, up-axis.
+function ModelMetaChips({ meta }: { meta: MediaMeta }) {
+  const tris = meta.counts?.triangles;
+  const materials = meta.counts?.materials;
+  const unit = meta.source_unit;
+  const up = meta.source_up_axis;
+  const anims = meta.animations?.length ?? 0;
+  return (
+    <>
+      {tris != null && <MetaLabel label="tris" value={`${fmtTris(tris)} tris`} />}
+      {materials != null && <MetaLabel label="materials" value={String(materials)} />}
+      {unit && <MetaLabel label="scale" value={`1 unit = 1 ${unit}`} />}
+      {up && <MetaLabel label="axis" value={`y-up (src ${up}-up)`} />}
+      {meta.has_animation && anims > 0 && (
+        <MetaLabel label="animation" value={`${anims} clip${anims === 1 ? '' : 's'}`} />
+      )}
+    </>
   );
 }
 
@@ -193,6 +285,9 @@ function MediaStage({
   highlightRegion,
   onRegion,
   onTime,
+  modelAnnotations,
+  onCaptureViewpoint,
+  focusAnchor,
 }: {
   kind: MediaKind;
   version: BayVersion | undefined;
@@ -202,6 +297,9 @@ function MediaStage({
   highlightRegion: DragRect | null;
   onRegion: (rect: DragRect) => void;
   onTime: (t: number) => void;
+  modelAnnotations: ViewpointAnnotation[];
+  onCaptureViewpoint: (anchor: ViewpointAnchor) => void;
+  focusAnchor: ViewpointAnchor | null;
 }) {
   const Icon = mediaKindIcon[kind] ?? ImageIcon;
   const [failed, setFailed] = useState(false);
@@ -326,6 +424,16 @@ function MediaStage({
           />
         </div>
       );
+    } else if (kind === 'model' && binId) {
+      media = (
+        <ModelViewer
+          src={binRawUrl(binId, 'proxy')}
+          mediaMeta={version?.media_meta as MediaMeta | null | undefined}
+          annotations={modelAnnotations}
+          onCaptureViewpoint={onCaptureViewpoint}
+          focusAnchor={focusAnchor}
+        />
+      );
     } else {
       media = (
         <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800/50 flex flex-col items-center justify-center gap-3">
@@ -449,6 +557,14 @@ function CaptureToolbar({
   const timed = kind === 'video' || kind === 'audio';
   const spatial = kind === 'image' || kind === 'video';
 
+  if (kind === 'model') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+        <Crosshair className="h-3.5 w-3.5" /> use “Remember viewpoint” or “Spot” on the 3D viewer to set the anchor
+      </span>
+    );
+  }
+
   if (!timed && !spatial) return null;
 
   const btn =
@@ -531,6 +647,7 @@ function AnnotationsPanel({
   markIn,
   setMarkIn,
   onAnchorClick,
+  modelClips,
 }: {
   versionId: string | undefined;
   kind: MediaKind;
@@ -544,6 +661,7 @@ function AnnotationsPanel({
   markIn: number | null;
   setMarkIn: (n: number | null) => void;
   onAnchorClick: (anchor: Anchor) => void;
+  modelClips?: ModelAnimationClip[];
 }) {
   const [includeResolved, setIncludeResolved] = useState(false);
   const { data, isLoading, isError, error } = useAnnotations(versionId, includeResolved);
@@ -551,6 +669,39 @@ function AnnotationsPanel({
   const resolve = useResolveAnnotation(versionId);
   const [body, setBody] = useState('');
   const annotations = data?.data ?? [];
+
+  // For model assets, group the rail (§7.4): static/viewpoint notes (no time)
+  // first, then per-clip notes grouped by clip_id and sorted by frame.
+  const modelGroups = useMemo(() => {
+    if (kind !== 'model') return null;
+    const timeOf = (a: BayAnnotation) =>
+      (a.anchor as { time?: { clip_id?: string | null; frame?: number } })?.time;
+    const statics: BayAnnotation[] = [];
+    const byClip = new Map<string, BayAnnotation[]>();
+    for (const a of annotations) {
+      const t = timeOf(a);
+      if (!t || t.clip_id == null) {
+        statics.push(a);
+      } else {
+        const list = byClip.get(t.clip_id) ?? [];
+        list.push(a);
+        byClip.set(t.clip_id, list);
+      }
+    }
+    const clipName = (id: string) => modelClips?.find((c) => c.id === id)?.name ?? id;
+    const clipSections = [...byClip.entries()]
+      .map(([clipId, list]) => ({
+        clipId,
+        name: clipName(clipId),
+        items: [...list].sort(
+          (a, b) =>
+            ((a.anchor as { time?: { frame?: number } }).time?.frame ?? 0) -
+            ((b.anchor as { time?: { frame?: number } }).time?.frame ?? 0),
+        ),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { statics, clipSections };
+  }, [kind, annotations, modelClips]);
 
   const submit = () => {
     if (!body.trim() || !versionId || !pendingAnchor) return;
@@ -591,46 +742,51 @@ function AnnotationsPanel({
           <p className="text-sm text-red-500">{error instanceof Error ? error.message : 'Could not load annotations.'}</p>
         ) : annotations.length === 0 ? (
           <p className="text-sm text-zinc-500 py-2">No annotations on this version yet.</p>
+        ) : modelGroups ? (
+          // Model rail (§7.4): static/viewpoint notes, then per-clip groups.
+          <div className="space-y-3">
+            {modelGroups.statics.length > 0 && (
+              <ul className="space-y-2">
+                {modelGroups.statics.map((a) => (
+                  <AnnotationRow
+                    key={a.id}
+                    a={a}
+                    onAnchorClick={onAnchorClick}
+                    onToggleResolve={() => resolve.mutate({ id: a.id, resolved: !a.resolved })}
+                    resolving={resolve.isPending}
+                  />
+                ))}
+              </ul>
+            )}
+            {modelGroups.clipSections.map((section) => (
+              <div key={section.clipId} className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                  {section.name}
+                </p>
+                <ul className="space-y-2">
+                  {section.items.map((a) => (
+                    <AnnotationRow
+                      key={a.id}
+                      a={a}
+                      onAnchorClick={onAnchorClick}
+                      onToggleResolve={() => resolve.mutate({ id: a.id, resolved: !a.resolved })}
+                      resolving={resolve.isPending}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         ) : (
           <ul className="space-y-2">
             {annotations.map((a) => (
-              <li
+              <AnnotationRow
                 key={a.id}
-                className={cn(
-                  'rounded-lg border p-3',
-                  a.resolved
-                    ? 'border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30 opacity-75'
-                    : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900',
-                )}
-              >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <button
-                    type="button"
-                    onClick={() => onAnchorClick(a.anchor)}
-                    title="Jump to this moment / show region"
-                    className="inline-flex items-center gap-1 rounded-md bg-primary-50 dark:bg-primary-900/20 px-2 py-0.5 text-xs font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/40 cursor-pointer"
-                  >
-                    {renderAnchor(a.anchor)}
-                  </button>
-                  <button
-                    onClick={() => resolve.mutate({ id: a.id, resolved: !a.resolved })}
-                    disabled={resolve.isPending}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50',
-                      a.resolved
-                        ? 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                        : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20',
-                    )}
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    {a.resolved ? 'Reopen' : 'Resolve'}
-                  </button>
-                </div>
-                <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">{a.body}</p>
-                <p className="text-xs text-zinc-400 mt-1.5">
-                  {a.author_name ?? a.author_id ?? 'Unknown'} · {formatRelativeTime(a.created_at)}
-                </p>
-              </li>
+                a={a}
+                onAnchorClick={onAnchorClick}
+                onToggleResolve={() => resolve.mutate({ id: a.id, resolved: !a.resolved })}
+                resolving={resolve.isPending}
+              />
             ))}
           </ul>
         )}
@@ -838,6 +994,9 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   // loop window for timerange anchors.
   const [highlightRegion, setHighlightRegion] = useState<DragRect | null>(null);
   const loopRef = useRef<{ start: number; end: number } | null>(null);
+  // Model review: clicking a viewpoint note flies the 3D camera back to it. A
+  // fresh object each time so the viewer re-runs its focus even for the same note.
+  const [focusAnchor, setFocusAnchor] = useState<ViewpointAnchor | null>(null);
 
   useEffect(() => {
     if (activeVersionId) return;
@@ -852,6 +1011,22 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   const kind = asset?.media_kind ?? 'image';
   const fps = num((activeVersion?.media_meta as { fps?: number } | null)?.fps, 30) || 30;
 
+  // Model markers: read the same (unresolved) annotations the rail shows and keep
+  // only viewpoint anchors. TanStack dedupes this against the panel's own query.
+  const modelAnnotationsQuery = useAnnotations(kind === 'model' ? activeVersionId : undefined, false);
+  const modelAnnotations = useMemo<ViewpointAnnotation[]>(() => {
+    if (kind !== 'model') return [];
+    return (modelAnnotationsQuery.data?.data ?? [])
+      .filter((a) => (a.anchor as { type?: string })?.type === 'viewpoint')
+      .map((a) => ({
+        id: a.id,
+        anchor: a.anchor as ViewpointAnchor,
+        body: a.body,
+        author_name: a.author_name,
+        resolved: a.resolved,
+      }));
+  }, [kind, modelAnnotationsQuery.data]);
+
   // Live updates: annotations/decisions from other reviewers (and guests)
   // appear without a manual refresh.
   useBayRealtime(activeVersionId);
@@ -863,6 +1038,7 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
     setRegionMode(false);
     setCurrentTime(0);
     setHighlightRegion(null);
+    setFocusAnchor(null);
     loopRef.current = null;
   }, [activeVersionId]);
 
@@ -910,6 +1086,12 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
       const end = num(a.end_sec ?? a.end);
       loopRef.current = end > start ? { start, end } : null;
       seek(start, true);
+    } else if (a.type === 'viewpoint') {
+      // Fly the 3D camera back to the remembered view (fresh object each click so
+      // the viewer re-focuses even when the same note is clicked twice).
+      setHighlightRegion(null);
+      loopRef.current = null;
+      setFocusAnchor({ ...(anchor as ViewpointAnchor) });
     }
   };
 
@@ -1001,19 +1183,28 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
                   highlightRegion={highlightRegion}
                   onRegion={onRegion}
                   onTime={handleTime}
+                  modelAnnotations={modelAnnotations}
+                  onCaptureViewpoint={(anchor) => setPendingAnchor(anchor)}
+                  focusAnchor={focusAnchor}
                 />
                 {activeVersion?.media_meta && (
                   <div className="flex flex-wrap gap-1.5 p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-700">
-                    {activeVersion.media_meta.width != null && activeVersion.media_meta.height != null && (
-                      <MetaLabel label="dimensions" value={`${activeVersion.media_meta.width}×${activeVersion.media_meta.height}`} />
+                    {kind === 'model' ? (
+                      <ModelMetaChips meta={activeVersion.media_meta as MediaMeta} />
+                    ) : (
+                      <>
+                        {activeVersion.media_meta.width != null && activeVersion.media_meta.height != null && (
+                          <MetaLabel label="dimensions" value={`${activeVersion.media_meta.width}×${activeVersion.media_meta.height}`} />
+                        )}
+                        {activeVersion.media_meta.duration_sec != null && (
+                          <MetaLabel label="duration" value={`${activeVersion.media_meta.duration_sec.toFixed(1)}s`} />
+                        )}
+                        {(activeVersion.media_meta as { fps?: number }).fps != null && (
+                          <MetaLabel label="fps" value={String((activeVersion.media_meta as { fps?: number }).fps)} />
+                        )}
+                        {activeVersion.media_meta.codec && <MetaLabel label="codec" value={String(activeVersion.media_meta.codec)} />}
+                      </>
                     )}
-                    {activeVersion.media_meta.duration_sec != null && (
-                      <MetaLabel label="duration" value={`${activeVersion.media_meta.duration_sec.toFixed(1)}s`} />
-                    )}
-                    {(activeVersion.media_meta as { fps?: number }).fps != null && (
-                      <MetaLabel label="fps" value={String((activeVersion.media_meta as { fps?: number }).fps)} />
-                    )}
-                    {activeVersion.media_meta.codec && <MetaLabel label="codec" value={String(activeVersion.media_meta.codec)} />}
                   </div>
                 )}
               </div>
@@ -1030,6 +1221,7 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
                 markIn={markIn}
                 setMarkIn={setMarkIn}
                 onAnchorClick={onAnchorClick}
+                modelClips={(activeVersion?.media_meta as MediaMeta | null | undefined)?.animations}
               />
             </div>
 

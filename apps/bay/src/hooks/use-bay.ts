@@ -167,13 +167,21 @@ export interface BinMediaAsset {
 }
 
 /** True when a Bin content_type is reviewable media (image/video/audio). */
-function isMediaContentType(contentType: string | null | undefined): boolean {
-  if (!contentType) return false;
-  return (
-    contentType.startsWith('image/') ||
-    contentType.startsWith('video/') ||
-    contentType.startsWith('audio/')
-  );
+const MODEL_EXT_RE = /\.(fbx|obj|stl|glb|gltf|ply|dae|usd|usdz|usdc|usda)$/i;
+
+/** Reviewable media: image/video/audio/model by MIME prefix, or a known 3D model
+ *  extension (FBX et al. commonly upload as application/octet-stream). */
+function isReviewableMedia(asset: { content_type?: string | null; name?: string | null }): boolean {
+  const ct = asset.content_type ?? '';
+  if (
+    ct.startsWith('image/') ||
+    ct.startsWith('video/') ||
+    ct.startsWith('audio/') ||
+    ct.startsWith('model/')
+  ) {
+    return true;
+  }
+  return MODEL_EXT_RE.test(asset.name ?? '');
 }
 
 /** List Bin assets and filter to reviewable media. Bay is the place you review
@@ -188,7 +196,7 @@ export function useBinMediaAssets() {
       });
       if (!res.ok) throw new Error(`Bin asset list failed (${res.status})`);
       const json = (await res.json()) as { data: BinMediaAsset[] };
-      return (json.data ?? []).filter((a) => isMediaContentType(a.content_type));
+      return (json.data ?? []).filter((a) => isReviewableMedia(a));
     },
   });
 }
@@ -261,11 +269,50 @@ export function useRevokeReviewLink(assetId: string | undefined) {
 // Version types
 // ---------------------------------------------------------------------------
 
+/** Bounding box / sphere of a model proxy (drives auto-framing + spot scale). */
+export interface ModelBounds {
+  min?: [number, number, number];
+  max?: [number, number, number];
+  center?: [number, number, number];
+  radius?: number;
+}
+
+/** One animation clip on an animated model take (Phase B transport). */
+export interface ModelAnimationClip {
+  id: string;
+  name: string;
+  duration_sec: number;
+  fps: number;
+  frame_count: number;
+}
+
 export interface MediaMeta {
   width?: number;
   height?: number;
   duration_sec?: number;
   codec?: string;
+  // ---- Model fields (Bay FBX 3D review, §3). All optional; the probe fills
+  //      them for media_kind='model'. Kept permissive via the index signature. ----
+  /** 'model' when this version is a 3D proxy. */
+  kind?: string;
+  /** Authored format the GLB proxy was converted from, e.g. 'fbx'. */
+  source_format?: string;
+  /** Up-axis as authored ('z'); the GLB is normalized to y-up. */
+  source_up_axis?: string;
+  /** Source unit for the "1 unit = 1 cm" label, e.g. 'cm'. */
+  source_unit?: string;
+  bounds?: ModelBounds;
+  counts?: {
+    nodes?: number;
+    meshes?: number;
+    triangles?: number;
+    materials?: number;
+    textures?: number;
+  };
+  skeleton?: { present?: boolean; bones?: number };
+  has_animation?: boolean;
+  animations?: ModelAnimationClip[];
+  proxy?: { format?: string; compression?: string; triangles?: number };
   [key: string]: unknown;
 }
 
@@ -344,13 +391,66 @@ export interface RegionAnchor {
   frame?: number;
 }
 
+/** Remembered camera for a 3D viewpoint note (§5). Click the note → fly back. */
+export interface ViewpointCamera {
+  position: [number, number, number];
+  target: [number, number, number];
+  up: [number, number, number];
+  fov: number;
+  projection: 'perspective' | 'orthographic';
+  ortho_height?: number;
+}
+
+/** Animated-take time pin (§5). Present only for animated models (Phase B). */
+export interface ViewpointTime {
+  clip_id: string | null;
+  frame: number;
+  time_sec: number;
+  fps: number;
+}
+
+/** Highlighted spot on the mesh (§5/§6). Two robustness tiers: geometry | screen. */
+export interface ViewpointSurface {
+  mode: 'geometry' | 'screen';
+  // geometry mode: glued to the surface, survives orbit.
+  node?: string;
+  primitive?: number;
+  tri?: number;
+  bary?: [number, number, number];
+  local_point?: [number, number, number];
+  radius?: number;
+  // screen mode: a normalized box in the captured camera frame.
+  rect?: { x: number; y: number; w: number; h: number };
+}
+
+/** Screen-space freehand markup relative to the captured camera (§5). */
+export interface ViewpointDraw {
+  strokes?: Array<{ color: string; width: number; points: Array<[number, number]> }>;
+  shapes?: Array<{ type: string; from: [number, number]; to: [number, number] }>;
+}
+
 export interface ViewpointAnchor {
   type: 'viewpoint';
-  camera?: string;
+  /** The remembered view. Object per §5; a bare string is tolerated for legacy
+   *  rows. Always present for notes captured by the 3D viewer. */
+  camera?: ViewpointCamera | string;
+  time?: ViewpointTime;
+  surface?: ViewpointSurface;
+  draw?: ViewpointDraw;
   [key: string]: unknown;
 }
 
 export type Anchor = FrameAnchor | TimerangeAnchor | RegionAnchor | ViewpointAnchor;
+
+/** A Bay annotation whose anchor is a 3D viewpoint — the shape the model viewer
+ *  consumes for rail markers and focus. */
+export interface ViewpointAnnotation {
+  id: string;
+  anchor: ViewpointAnchor;
+  body?: string;
+  author_name?: string | null;
+  resolved?: boolean;
+}
 
 export interface BayAnnotation {
   id: string;

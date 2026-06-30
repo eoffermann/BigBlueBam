@@ -7,6 +7,7 @@ import {
   index,
   text,
   doublePrecision,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { organizations, users, projects } from './bbb-refs.js';
 import { binFolders } from './bin-folders.js';
@@ -52,6 +53,11 @@ export const binAssets = pgTable(
     poster_object_key: varchar('poster_object_key', { length: 1024 }),
     proxy_content_type: varchar('proxy_content_type', { length: 255 }),
     duration_sec: doublePrecision('duration_sec'),
+    // Probe metadata describing the bytes (0223). For models: bounds, counts,
+    // skeleton, animations, source up-axis/unit (Bay FBX §3). Copied forward to
+    // bay_asset_versions.media_meta at version create so the viewer reads it
+    // without a byte round-trip. Generic jsonb; null/{} for un-probed assets.
+    media_meta: jsonb('media_meta'),
     // organization | project | private (denormalized for the visibility gate).
     visibility: varchar('visibility', { length: 20 }).notNull().default('organization'),
     // Arbitrary user-applied tags for cross-cutting organization + filtering.

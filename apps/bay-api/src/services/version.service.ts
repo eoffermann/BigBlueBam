@@ -1,4 +1,4 @@
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { bayAssets, bayAssetVersions } from '../db/schema/index.js';
 import { getAsset } from './asset.service.js';
@@ -58,6 +58,26 @@ export async function createVersion(
 ) {
   await getAsset(assetId, orgId);
   const nextNumber = await nextVersionNumber(assetId);
+
+  // Copy forward the Bin probe metadata (Bay FBX §3, §9). When the bin asset has
+  // already been probed (e.g. re-versioning a model), merge its media_meta as the
+  // base so the player reads bounds/counts/animations without a byte round-trip;
+  // any client-supplied fields win. On first upload the probe usually has not run
+  // yet, so this is empty and the bin-model-process worker propagates it later.
+  let baseMeta: Record<string, unknown> = {};
+  if (input.bin_asset_id) {
+    try {
+      const r = await db.execute(
+        sql`SELECT media_meta FROM bin_assets WHERE id = ${input.bin_asset_id} LIMIT 1`,
+      );
+      const rows = Array.isArray(r) ? r : ((r as { rows?: unknown[] }).rows ?? []);
+      const bm = (rows[0] as { media_meta?: Record<string, unknown> } | undefined)?.media_meta;
+      if (bm && typeof bm === 'object') baseMeta = bm;
+    } catch {
+      // best-effort; the worker propagation is the backstop
+    }
+  }
+
   const inserted = await db
     .insert(bayAssetVersions)
     .values({
@@ -65,7 +85,7 @@ export async function createVersion(
       version_number: nextNumber,
       bin_asset_id: input.bin_asset_id ?? null,
       bin_version_id: input.bin_version_id ?? null,
-      media_meta: input.media_meta ?? {},
+      media_meta: { ...baseMeta, ...(input.media_meta ?? {}) },
       uploaded_by: userId,
     })
     .returning();

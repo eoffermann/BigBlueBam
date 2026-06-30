@@ -106,6 +106,17 @@ function makeWav(seconds, freq, rate = 8000) {
   return Buffer.concat([header, data]);
 }
 
+// A tiny self-contained animated GLB ("Rescue Beacon": body + base + a spinning
+// beacon light with a BeaconSpin rotation clip), authored with gltf-transform and
+// base64-embedded so the FBX/3D model-review demo seeds without an external binary
+// or toolchain. The model-process worker probes it (counts/bounds/animation) and
+// serves it as the GLB proxy the three.js viewer loads.
+const RESCUE_BEACON_GLB_B64 =
+  'Z2xURgIAAAAcEAAAtAkAAEpTT057ImFzc2V0Ijp7ImdlbmVyYXRvciI6ImdsVEYtVHJhbnNmb3JtIHY0LjQuMCIsInZlcnNpb24iOiIyLjAifSwiYWNjZXNzb3JzIjpbeyJ0eXBlIjoiVkVDMyIsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50IjozNiwibWF4IjpbMSwwLjY5OTk5OTk4ODA3OTA3MSwwLjYwMDAwMDAyMzg0MTg1NzldLCJtaW4iOlstMSwtMC42OTk5OTk5ODgwNzkwNzEsLTAuNjAwMDAwMDIzODQxODU3OV0sImJ1ZmZlclZpZXciOjAsImJ5dGVPZmZzZXQiOjB9LHsidHlwZSI6IlNDQUxBUiIsImNvbXBvbmVudFR5cGUiOjUxMjMsImNvdW50IjozNiwiYnVmZmVyVmlldyI6MSwiYnl0ZU9mZnNldCI6MH0seyJ0eXBlIjoiU0NBTEFSIiwiY29tcG9uZW50VHlwZSI6NTEyMywiY291bnQiOjM2LCJidWZmZXJWaWV3IjoxLCJieXRlT2Zmc2V0Ijo3Mn0seyJ0eXBlIjoiU0NBTEFSIiwiY29tcG9uZW50VHlwZSI6NTEyMywiY291bnQiOjM2LCJidWZmZXJWaWV3IjoxLCJieXRlT2Zmc2V0IjoxNDR9LHsidHlwZSI6IlZFQzMiLCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6MzYsIm1heCI6WzEuMjk5OTk5OTUyMzE2Mjg0MiwwLjA3OTk5OTk5ODIxMTg2MDY2LDAuODUwMDAwMDIzODQxODU3OV0sIm1pbiI6Wy0xLjI5OTk5OTk1MjMxNjI4NDIsLTAuMDc5OTk5OTk4MjExODYwNjYsLTAuODUwMDAwMDIzODQxODU3OV0sImJ1ZmZlclZpZXciOjIsImJ5dGVPZmZzZXQiOjB9LHsidHlwZSI6IlZFQzMiLCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6MzYsIm1heCI6WzAuMjE5OTk5OTk4ODA3OTA3MSwwLjE1OTk5OTk5NjQyMzcyMTMsMC4yMTk5OTk5OTg4MDc5MDcxXSwibWluIjpbLTAuMjE5OTk5OTk4ODA3OTA3MSwtMC4xNTk5OTk5OTY0MjM3MjEzLC0wLjIxOTk5OTk5ODgwNzkwNzFdLCJidWZmZXJWaWV3IjozLCJieXRlT2Zmc2V0IjowfSx7InR5cGUiOiJTQ0FMQVIiLCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6NSwibWF4IjpbMl0sIm1pbiI6WzBdLCJidWZmZXJWaWV3Ijo0LCJieXRlT2Zmc2V0IjowfSx7InR5cGUiOiJWRUM0IiwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjUsImJ1ZmZlclZpZXciOjQsImJ5dGVPZmZzZXQiOjIwfV0sImJ1ZmZlclZpZXdzIjpbeyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjAsImJ5dGVMZW5ndGgiOjQzMiwiYnl0ZVN0cmlkZSI6MTIsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0Ijo0MzIsImJ5dGVMZW5ndGgiOjIxNiwidGFyZ2V0IjozNDk2M30seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjY0OCwiYnl0ZUxlbmd0aCI6NDMyLCJieXRlU3RyaWRlIjoxMiwidGFyZ2V0IjozNDk2Mn0seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjEwODAsImJ5dGVMZW5ndGgiOjQzMiwiYnl0ZVN0cmlkZSI6MTIsInRhcmdldCI6MzQ5NjJ9LHsiYnVmZmVyIjowLCJieXRlT2Zmc2V0IjoxNTEyLCJieXRlTGVuZ3RoIjoxMDB9XSwiYnVmZmVycyI6W3siYnl0ZUxlbmd0aCI6MTYxMn1dLCJtYXRlcmlhbHMiOlt7Im5hbWUiOiJCb2R5X21hdCIsInBick1ldGFsbGljUm91Z2huZXNzIjp7ImJhc2VDb2xvckZhY3RvciI6WzAuMDUsMC41LDAuNTUsMV0sInJvdWdobmVzc0ZhY3RvciI6MC42fX0seyJuYW1lIjoiQmFzZV9tYXQiLCJwYnJNZXRhbGxpY1JvdWdobmVzcyI6eyJiYXNlQ29sb3JGYWN0b3IiOlswLjEsMC4xLDAuMTIsMV0sInJvdWdobmVzc0ZhY3RvciI6MC42fX0seyJuYW1lIjoiQmVhY29uX21hdCIsInBick1ldGFsbGljUm91Z2huZXNzIjp7ImJhc2VDb2xvckZhY3RvciI6WzAuOTUsMC4yLDAu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rkdhvq5HYT4K1yO+rkdhvq5HYT4K1yM+rkdhvq5HYb4K1yO+rkdhvq5HYT4K1yM+rkdhvq5HYb4K1yM+rkdhvq5HYT4K1yO+rkdhPq5HYb4K1yO+rkdhPq5HYb4K1yM+rkdhPq5HYT4K1yO+rkdhPq5HYb4K1yM+rkdhPq5HYT4K1yM+rkdhPq5HYb4K1yO+rkdhPq5HYb4K1yO+rkdhvq5HYb4K1yM+rkdhvq5HYb4K1yO+rkdhPq5HYb4K1yM+rkdhvq5HYb4K1yM+rkdhPq5HYT4K1yO+rkdhvq5HYT4K1yO+rkdhPq5HYT4K1yM+rkdhPq5HYT4K1yO+rkdhvq5HYT4K1yM+rkdhPq5HYT4K1yM+rkdhvq5HYb4K1yO+rkdhPq5HYT4K1yO+rkdhPq5HYT4K1yO+rkdhvq5HYb4K1yO+rkdhPq5HYT4K1yO+rkdhvq5HYb4K1yO+rkdhvq5HYb4K1yM+rkdhvq5HYT4K1yM+rkdhvq5HYT4K1yM+rkdhPq5HYb4K1yM+rkdhvq5HYT4K1yM+rkdhPq5HYb4K1yM+rkdhPgAAAAAAAAA/AACAPwAAwD8AAABAAAAAAAAAAAAAAAAAAACAPwAAAADzBDU/AAAAAPMENT8AAAAAAACAPwAAAAAyMY0kAAAAAPMENT8AAAAA8wQ1vwAAAAAyMQ0lAAAAAAAAgL8=';
+function makeModelGlb() {
+  return Buffer.from(RESCUE_BEACON_GLB_B64, 'base64');
+}
+
 // ── Bin (file store) + Bay (review) helpers ─────────────────────────────────
 
 async function findOrCreateBinFolder(who, name) {
@@ -151,6 +162,34 @@ const ITEMS = [
       { who: 'professor', anchor: { type: 'timerange', start_sec: 0.0, end_sec: 3.0 }, body: '[Auto-QC] Peak -6 dBFS, mono, 8 kHz.' },
     ],
     decisions: [{ who: 'howell', decision: 'approved', comment: 'Catchy. Approved.' }],
+  },
+  {
+    // 3D model review (Bay FBX feature). A small animated GLB; the model-process
+    // worker probes + serves it as the GLB proxy the three.js viewer renders.
+    name: 'rescue-beacon.glb',
+    content_type: 'model/gltf-binary',
+    tags: ['3d', 'model', 'rescue'],
+    bytes: () => makeModelGlb(),
+    annotations: [
+      {
+        who: 'professor',
+        anchor: {
+          type: 'viewpoint',
+          camera: { position: [3, 2.6, 4], target: [0, 1, 0], up: [0, 1, 0], fov: 35, projection: 'perspective' },
+          surface: { mode: 'geometry', node: 'Beacon', primitive: 0, tri: 2, bary: [0.3, 0.3, 0.4], local_point: [0, 1.7, 0], radius: 0.08 },
+        },
+        body: 'Beacon strobe mesh reads well from this angle; spin rate looks right for an SOS pattern.',
+      },
+      {
+        who: 'skipper',
+        anchor: {
+          type: 'viewpoint',
+          camera: { position: [0, 1.8, 5], target: [0, 0.9, 0], up: [0, 1, 0], fov: 35, projection: 'perspective' },
+        },
+        body: 'Widen the base so it stands in soft sand without tipping.',
+      },
+    ],
+    decisions: [{ who: 'howell', decision: 'changes_requested', comment: 'Wider base, then approved.' }],
   },
 ];
 

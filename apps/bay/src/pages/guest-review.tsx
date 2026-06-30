@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ModelViewer } from '@/components/model-viewer';
+import type { ViewpointAnchor, ViewpointAnnotation } from '@/hooks/use-bay';
 
 // Public, unauthenticated guest review page (served at /bay/r/:token). It talks
 // only to the token-scoped public API and never touches the auth store, so it
@@ -117,6 +119,20 @@ export function GuestReviewPage({ token }: { token: string }) {
 
   const kind = review.media_kind;
   const hasMedia = Boolean(review.version?.bin_asset_id);
+  // Viewpoint annotations become clickable 3D markers (view-only for guests:
+  // public comments carry no anchor, so there is no capture path here).
+  const modelAnnotations: ViewpointAnnotation[] =
+    kind === 'model'
+      ? review.annotations
+          .filter((a) => (a.anchor as { type?: string })?.type === 'viewpoint')
+          .map((a) => ({
+            id: a.id,
+            anchor: a.anchor as unknown as ViewpointAnchor,
+            body: a.body,
+            author_name: a.author_name,
+            resolved: a.resolved,
+          }))
+      : [];
   const playableSrc =
     kind === 'video' || kind === 'audio' ? mediaUrl(token, useProxy ? 'proxy' : undefined) : mediaUrl(token);
   const onMediaError = () => {
@@ -161,6 +177,8 @@ export function GuestReviewPage({ token }: { token: string }) {
                 {/* biome-ignore lint/a11y/useMediaCaption: shared review media has no caption track */}
                 <audio src={playableSrc} controls className="w-full max-w-md" onError={onMediaError} />
               </div>
+            ) : kind === 'model' ? (
+              <ModelViewer src={mediaUrl(token, 'proxy')} annotations={modelAnnotations} />
             ) : (
               <div className="aspect-video flex flex-col items-center justify-center gap-2 text-sm text-zinc-500">
                 <p>Preview not available for this media type.</p>
