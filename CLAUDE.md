@@ -28,8 +28,8 @@ apps/
   frontend/         React SPA served by nginx at /b3/ (port 80). ~87 source files, 8+ pages, command palette, keyboard shortcuts.
   banter-api/       Banter Fastify REST API + WebSocket (internal :4002, proxied at /banter/api/). 17 route files, 19 schema modules, ~60 source files.
   banter/           Banter React SPA served by nginx at /banter/. ~46 source files, 7 pages.
-  mcp-server/       MCP protocol server (internal :3001, proxied at /mcp/). 733 tools across 46 modules (105 Bam core + 77 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Beacon + 38 Bureau + 37 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 25 Book + 24 Bolt + 20 Blank + 11 Helpdesk + 64 cross-cutting platform: agent identity/audit/heartbeat, agent policies, outbound webhooks, proposals, visibility preflight, unified activity, cross-app search, fuzzy resolvers, composite views, entity links, attachments, bolt observability, dedupe, phrase counts, expertise, pattern subscriptions, ingest fingerprint). Also hosts an internal POST /tools/call route for server-to-server invocations (Wave 0.2). confirm_action tokens are Redis-backed (mcp:confirm_token:<token> with PX TTL) with a graceful in-process fallback; the TTL is dynamic (5 min for human approvers, 60 s for agent-to-agent chains) and the register-tool wrapper enforces the §15 agent_policies kill switch + allowlist check on every service-account invocation.
-  worker/           BullMQ background job processor (no exposed port). 16 job handlers (email, notification, export, sprint-close, banter-notification, banter-retention, bond-stale-deals, beacon-expiry-sweep, beacon-vector-sync, bearing-digest, bearing-recompute, bearing-snapshot, blast-send, bolt-execute, bolt-schedule-tick, helpdesk-task-create).
+  mcp-server/       MCP protocol server (internal :3001, proxied at /mcp/). 765 tools across 48 modules (105 Bam core + 77 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Beacon + 38 Bureau + 37 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 25 Book + 24 Bolt + 20 Blank + 18 Bin + 14 Bay + 11 Helpdesk + 64 cross-cutting platform: agent identity/audit/heartbeat, agent policies, outbound webhooks, proposals, visibility preflight, unified activity, cross-app search, fuzzy resolvers, composite views, entity links, attachments, bolt observability, dedupe, phrase counts, expertise, pattern subscriptions, ingest fingerprint). Also hosts an internal POST /tools/call route for server-to-server invocations (Wave 0.2). confirm_action tokens are Redis-backed (mcp:confirm_token:<token> with PX TTL) with a graceful in-process fallback; the TTL is dynamic (5 min for human approvers, 60 s for agent-to-agent chains) and the register-tool wrapper enforces the §15 agent_policies kill switch + allowlist check on every service-account invocation.
+  worker/           BullMQ background job processor (no exposed port). ~54 queue workers + 28 scheduled (repeatable) jobs in apps/worker/src/worker.ts (representative, not exhaustive: email, notification, export, sprint-close; banter-transcription/scheduled-post/feed-fanin; bond-stale-deals/bulk-score; beacon-expiry-sweep/vector-sync; bearing-digest/recompute/snapshot/watcher-notify; blast-send; bolt-execute/schedule-tick/execution-cleanup; helpdesk-task-create/sla-monitor/email-notify; bench-mv-refresh/report-deliver; bill-pdf-generate/email-send/overdue-reminder/recurring-generate; brief-embed/snapshot/export/cleanup; blank-confirmation-email/file-process; board-thumbnail; bin-av-scan/bin-transcode; the bureau suite presence-reap/chat-expiry/summon-fanout/knock-timeout/booking-activate/booking-release/analytics-rollup; agent-webhook-dispatch/dlq; livekit-ip-drift). NOTE: Bay does no background processing (no bay-* worker).
   helpdesk-api/     Helpdesk Fastify API (internal :4001, proxied at /helpdesk/api/). 6 route files, 12 schema modules.
   helpdesk/         Helpdesk React SPA served by nginx at /helpdesk/.
   beacon-api/       Beacon Fastify API + WebSocket (internal :4004, proxied at /beacon/api/, realtime at /beacon/ws). 9 route files, 12 schema modules. Knowledge base, search, graph, policies, and T4 real-time co-editing of article bodies (Yjs over /beacon/ws; persisted to beacon_entries.yjs_state, materialized back to body_markdown).
@@ -56,6 +56,12 @@ apps/
   bill/             Bill React SPA served by nginx at /bill/.
   blueprint-api/    Blueprint Fastify REST API + WebSocket (internal :4015, proxied at /blueprint/api/). 4 route files, 8 schema modules, 19 endpoints. Structured-diagram product: typed graph nodes + edges, ELK auto-layout, versions, anchored comments, collaborators, Mermaid import/export, cross-product entity references.
   blueprint/        Blueprint React SPA served by nginx at /blueprint/. Diagram list + editor with React Flow canvas, shape palette, inspector, toolbar.
+  bureau-api/       Bureau Fastify REST API + WebSocket (internal :4015, proxied at /bureau/api/, realtime at /bureau/ws). 15 route files, 2 schema modules. Virtual floors, rooms, presence aggregation, knocks, summons (teleport), LiveKit token minting, and the WS hub. NOTE: deliberately shares port number 4015 with blueprint-api as a distinct container (nginx routes by upstream hostname, not port).
+  bureau/           Bureau React SPA served by nginx at /bureau/.
+  bin-api/          Bin Fastify REST API + WebSocket (internal :4016, proxied at /bin/api/, realtime at /bin/ws). 4 route files, 4 schema modules. DAM / object-storage backbone + structured-data editor; writes bytes straight to MinIO/S3 via @bigbluebam/storage. Does NOT emit Bolt events.
+  bin/              Bin React SPA served by nginx at /bin/.
+  bay-api/          Bay Fastify REST API + WebSocket (internal :4017, proxied at /bay/api/, realtime at /bay/ws). 6 route files, 6 schema modules. Media review & approval (annotations, decisions) with public token-gated guest links served under /bay/api/v1/public/review/:token (a 48-hex path token is the sole credential; no session auth). needs bin-api + minio.
+  bay/              Bay React SPA served by nginx at /bay/.
   voice-agent/      AI voice agent (Python/FastAPI, internal :4003). LiveKit Agents SDK, STT/TTS pipeline (placeholder).
   integration-tests/  Cross-app integration harness (Wave 3). Vitest runner + mock service clients exercising cross-app event flows.
   e2e/              Playwright end-to-end suite.
@@ -66,8 +72,14 @@ packages/
   service-health/   Shared /healthz + /readyz plugin used by every Fastify service (@bigbluebam/service-health, added Wave 1.A).
   db-stubs/         Shared Drizzle stubs and helpers for tests and isolated DB bootstraps (@bigbluebam/db-stubs, added Wave 1.A).
   livekit-tokens/   LiveKit access-token minting shared by board-api and voice-agent callers (@bigbluebam/livekit-tokens, added Wave 1.A).
+  storage/          Pluggable storage-driver substrate (S3/MinIO) shared by api, bin-api, bay-api, worker; consolidates the previously-triplicated MinIO clients. Exposes put/getStream/getRange/stat/delete/list/copyTo + presignGet/presignPut. The per-org provider "binding" is designed but not yet implemented (single bootstrap driver, binding_id null). (@bigbluebam/storage).
+  permissions/      Fastify permissions plugin + resolver + Redis-cached PermissionContext (requireCan/canResolve). Identifiers are app.resource.verb; the catalog is generated from docs/permissions-action-manifest.json (@bigbluebam/permissions).
+  structured-data/  Codecs (CSV/JSONL/YAML/...), shape detection, schema inference, and Yjs CRDT for Bin's structured-data editor; shared by bin-api, worker, and the /bin SPA (@bigbluebam/structured-data).
+  docs-capture/     Recipe-driven (YAML) populated-screenshot capture engine for docs/marketing; defaults to the gilligan cast/workspace. Driven by the root docs:generate pipeline (@bigbluebam/docs-capture).
+  bureau-client/    Suite-wide React LiveKit "docked box" client: ActiveCallManager, chat panel, knock/ring/summon handlers, cross-app navigation, presence widgets (@bigbluebam/bureau-client).
+  smtp-resolver/    Pure shared SMTP-config precedence resolver used by api + worker to agree on whether SMTP is configured (@bigbluebam/smtp-resolver).
 infra/
-  postgres/         migrations/ (numbered, idempotent SQL migrations). 163 files as of tip 0201_banter_feed.sql (Banter feed schema).
+  postgres/         migrations/ (numbered, idempotent SQL migrations). 180 files as of tip 0218_permissions_seed_actions_delta_017.sql.
   nginx/            nginx.conf, certs.
   livekit/          LiveKit SFU configuration (livekit.yaml).
 scripts/            Utility scripts: deploy adapters, seed-all.mjs master orchestrator, per-app seeders, check-bolt-catalog.mjs drift guard, db-check.mjs, lint-migrations.mjs, and screenshot generators.
@@ -111,6 +123,15 @@ The entire stack runs via `docker compose up`. All services are accessed through
 - `http://DOMAIN/blueprint/` serves the Blueprint SPA
 - `http://DOMAIN/blueprint/api/` proxies to the Blueprint API
 - `http://DOMAIN/blueprint/ws` proxies Blueprint WebSocket (Hocuspocus follow-up)
+- `http://DOMAIN/bureau/` serves the Bureau virtual-office SPA
+- `http://DOMAIN/bureau/api/` proxies to the Bureau API
+- `http://DOMAIN/bureau/ws` proxies Bureau WebSocket connections (presence, knocks, summons)
+- `http://DOMAIN/bin/` serves the Bin DAM / structured-data SPA
+- `http://DOMAIN/bin/api/` proxies to the Bin API
+- `http://DOMAIN/bin/ws` proxies Bin WebSocket connections (live structured-data edits + presence)
+- `http://DOMAIN/bay/` serves the Bay media-review SPA
+- `http://DOMAIN/bay/api/` proxies to the Bay API (incl. public token-gated guest review under /bay/api/v1/public/review/:token)
+- `http://DOMAIN/bay/ws` proxies Bay WebSocket connections (live annotations/decisions)
 - `http://DOMAIN/helpdesk/` serves the Helpdesk portal SPA
 - `http://DOMAIN/helpdesk/api/` proxies to the Helpdesk API
 - `http://DOMAIN/files/` serves uploaded files from MinIO
@@ -118,7 +139,7 @@ The entire stack runs via `docker compose up`. All services are accessed through
 
 **The marketing `site` is also a Docker Compose service, run the same way locally and on Railway.** It is the top-level `site/` Vite app (React, not part of `apps/`), built by `infra/site/Dockerfile` (`npm run build`, then `serve -s dist` on `:3000`) and defined as the `site` service in `docker-compose.yml`. Two non-obvious things that have tripped this up before: (1) it is NOT fronted by the app nginx above (there is no `site` / `:3000` route in `infra/nginx/nginx.conf`); it serves itself on its own port/domain, which is why it is absent from the route list. Do not assume it lives outside the stack just because nginx does not mention it. (2) Anything under `site/public/` (including the committed `site/public/downloads/BigBlueBam-Manual.{pdf,docx}` book artifacts) is copied into `dist` and baked into the image at build time, so after changing site source or those artifacts you must `docker compose build site && docker compose up -d --force-recreate site` to see it locally; on Railway it ships on push to `stable`.
 
-Application containers (api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, mcp-server, worker, helpdesk-api, frontend, site, voice-agent) are stateless and scale horizontally. Data services (postgres, redis, minio, qdrant) can be swapped for managed cloud equivalents by changing environment variables only.
+Application containers (api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, mcp-server, worker, helpdesk-api, frontend, site, voice-agent) are stateless and scale horizontally. Data services (postgres, redis, minio, qdrant) can be swapped for managed cloud equivalents by changing environment variables only.
 
 ## CRITICAL: Response style
 
@@ -192,9 +213,9 @@ If the work is purely internal (refactor, comment cleanup, no observable behavio
 
 ## Database Schema and Migrations
 
-**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 163 migration files with tip `0201_banter_feed.sql` (Banter feed schema).
+**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 180 migration files with tip `0218_permissions_seed_actions_delta_017.sql`.
 
-The `migrate` service (reuses the api image, runs `node dist/migrate.js`) is a `service_completed_successfully` dependency of every DB-using service: api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, worker. It runs automatically on every `docker compose up`, tracks applied migrations in the `schema_migrations` table with SHA-256 checksums, and is a no-op once the DB is current.
+The `migrate` service (reuses the api image, runs `node dist/migrate.js`) is a `service_completed_successfully` dependency of every DB-using service: api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, worker. It runs automatically on every `docker compose up`, tracks applied migrations in the `schema_migrations` table with SHA-256 checksums, and is a no-op once the DB is current.
 
 **When you change the schema:**
 
@@ -206,7 +227,7 @@ Every migration must be idempotent so the same migration file is safe to run aga
 
 ### Drift guard
 
-`pnpm db:check` runs `scripts/db-check.mjs`, which parses every Drizzle `pgTable(...)` declaration across `apps/api`, `apps/helpdesk-api`, and `apps/banter-api`, then diffs the union against the live database pointed to by `DATABASE_URL`. It prints any table/column declared in Drizzle but missing in the DB, or present in the DB but not declared in any Drizzle schema, and exits 1 on drift (type mismatches are warnings only). Start the stack first: `docker compose up -d postgres migrate`.
+`pnpm db:check` runs `scripts/db-check.mjs`, which **auto-discovers every** `apps/<name>/src/db/schema/` directory (no longer just api/helpdesk-api/banter-api — the hard-coded three-root list was replaced precisely so new products like bin-api, bay-api, and bureau-api are not silently missed; set `DEBUG_DB_CHECK=1` to print the discovered `SCHEMA_ROOTS`, and see `scripts/db-check.coverage.test.mjs` for the regression test that asserts every on-disk schema dir is covered), parses their Drizzle `pgTable(...)` declarations, then diffs the union against the live database pointed to by `DATABASE_URL`. It prints any table/column declared in Drizzle but missing in the DB, or present in the DB but not declared in any Drizzle schema, and exits 1 on drift (type mismatches are warnings only). Start the stack first: `docker compose up -d postgres migrate`.
 
 CI runs it on every PR and every push to `main` via `.github/workflows/db-drift.yml`, against a fresh `postgres:16-alpine` service container with `init.sql` + all migrations applied. **When it fails: do not edit an existing migration.** Update the Drizzle schema file and add a new numbered migration in `infra/postgres/migrations/` with the same change in idempotent form, then rerun.
 
