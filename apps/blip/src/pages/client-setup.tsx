@@ -22,8 +22,9 @@ export function ClientSetupPage({ appId }: ClientSetupPageProps) {
         </h1>
         <p className="text-sm text-zinc-500 mt-1">
           Embed one of these snippets in your app, replace the placeholder token with a key minted on
-          the Keys page, and POST JSON reports. The only mandatory field is <code className="font-mono">report_type</code>;
-          everything else is free-form and discovered server-side.
+          the Keys page, and POST JSON reports. The only mandatory field is{' '}
+          <code className="font-mono">report_type</code>. Everything else is free-form and discovered
+          server-side.
         </p>
       </div>
 
