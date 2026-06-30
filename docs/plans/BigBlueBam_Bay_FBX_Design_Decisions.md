@@ -39,4 +39,43 @@ pulling a headless-GL stack into the worker image. (Revisit in Phase C.)
 
 ---
 
-_(entries appended as implementation proceeds)_
+## 2. Phase A + B delivered (verified end to end)
+
+- **Pipeline proven on a real FBX** (Samba Dancing.fbx, skinned + animated): upload
+  -> assimpjs WASM conversion -> GLB proxy (model/gltf-binary, servable) + full
+  media_meta probe (counts, bounds, skeleton 52 bones, animation 546f @ 30fps) ->
+  copy-forward to bay_asset_versions. Worker registered the `bin-model-process`
+  queue + tick.
+- **Viewer verified** (Phase A static + Phase B animated): the three.js viewer
+  renders the model, the timeline transport scrubs the animation, viewpoint/spot
+  annotations create and re-resolve. Captured screenshots of the Review Library
+  (models listed) and the model viewer with the timeline + seeded annotations +
+  decision.
+- **Reproducible demo:** a tiny self-contained animated GLB ("rescue-beacon.glb",
+  BeaconSpin clip) is base64-embedded in the gilligan bay seeder, with seeded
+  viewpoint/spot annotations + a decision. The docs-capture recipe navigates to it
+  by name.
+
+## 3. Bugs caught + fixed via the live test/screenshot loop
+
+- `res.GetFileCount()` -> `res.FileCount()` (assimpjs API; conversion crashed).
+- Skinned-resolution strict-null (`ix[k]` index) typecheck fix.
+- **Review Library filtered out model/* assets** (`isMediaContentType`) so models
+  never appeared in the UI -> `isReviewableMedia` now includes model MIME +
+  extensions. This was the bug that made the feature unreachable; caught only by
+  screenshotting the library.
+
+## 4. CI + promotion
+
+- Local: bay/worker/bin-api/bay-api typecheck + lint clean; lint:migrations clean.
+- main CI all green (Migration Replay, DB Drift, Seed Smoke, Lint, Test,
+  Typecheck) on the first push. Promoted main -> stable.
+
+## 5. Phase C (not done; explicit polish/follow-up per design §11)
+
+Deferred as the design doc's polish phase: worker-side meshopt geometry
+compression (decoder already shipped in the frontend), A/B compare with synced
+orbit + clip playhead, screen-space freehand `draw` overlay rendering, optional
+model-viewer USDZ mobile quicklook, and a headless-GL poster render. Model QC
+needs no new code (agents post findings via the existing bay_annotation_create
+with a viewpoint anchor). Core review (static + animated) is complete without these.
