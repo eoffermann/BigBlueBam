@@ -16,6 +16,7 @@ import { PermissionsGroupsListPage } from './permissions/groups-list';
 import { DeploySettingsCard } from '@/components/superuser/deploy-settings-card';
 import { PasswordPolicyCard } from '@/components/superuser/password-policy-card';
 import { SmtpSettingsCard } from '@/components/superuser/smtp-settings-card';
+import { AvScanSettingsCard } from '@/components/superuser/av-scan-settings-card';
 import { SuperuserLogsTab } from './logs';
 
 interface SuperuserPageProps {
@@ -989,6 +990,7 @@ function PlatformTab() {
 
       <LaunchpadDefaultsCard />
       <SmtpSettingsCard />
+      <AvScanSettingsCard />
       <PasswordPolicyCard />
       <DeploySettingsCard />
     </div>

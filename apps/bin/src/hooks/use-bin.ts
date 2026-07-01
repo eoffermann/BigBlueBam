@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 // Asset types (mirror apps/bin-api/src/services/asset.service.ts)
 // ---------------------------------------------------------------------------
 
-export type ScanStatus = 'pending' | 'clean' | 'infected' | 'skipped';
+export type ScanStatus = 'pending' | 'clean' | 'infected' | 'error' | 'skipped';
 
 export interface BinAsset {
   id: string;
@@ -13,6 +13,10 @@ export interface BinAsset {
   content_type: string | null;
   size: number | null;
   scan_status: ScanStatus;
+  // Set when an admin/SuperUser has persistently cleared this file's scan
+  // block (false-positive resolution) — servable to everyone regardless of
+  // scan_status.
+  scan_override_at?: string | null;
   folder_id: string | null;
   project_id: string | null;
   tags: string[];
@@ -106,6 +110,79 @@ export function useUploadAsset() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bin', 'assets'] });
+    },
+  });
+}
+
+// Hard-delete assets (row + bytes). Returns per-id results; a missing/
+// already-deleted id is reported, not thrown. Invalidates the library + tags.
+export interface DeleteAssetResult {
+  id: string;
+  deleted: boolean;
+  storage_removed: number;
+  storage_missing: number;
+  error?: string;
+}
+
+export function useDeleteAssets() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      api.post<{ data: DeleteAssetResult[] }>('/v1/assets/bulk-delete', { ids }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'assets'] });
+      qc.invalidateQueries({ queryKey: ['bin', 'tags'] });
+      qc.invalidateQueries({ queryKey: ['bin', 'scan-overview'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Scan progress + policy + per-file override
+// ---------------------------------------------------------------------------
+
+export interface ScanOverview {
+  counts: { pending: number; clean: number; infected: number; error: number; skipped: number };
+  scan_mode: string;
+  allow_unscanned_access: boolean;
+  oldest_pending_age_sec: number | null;
+  recent_errors: { id: string; name: string; updated_at: string | null }[];
+  can_override: boolean;
+}
+
+// Poll scan progress so the badge/strip stay live while a sweep runs. 8s is
+// well under the ~1-min sweep cadence without hammering the API.
+export function useScanOverview() {
+  return useQuery({
+    queryKey: ['bin', 'scan-overview'],
+    queryFn: () => api.get<{ data: ScanOverview }>('/v1/scan/overview'),
+    refetchInterval: 8000,
+  });
+}
+
+// Admin/SuperUser: set (or clear with null) the org's "allow work before scan
+// completes" override. Returns the refreshed overview.
+export function useSetScanPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (allow_unscanned_access: boolean | null) =>
+      api.put<{ data: ScanOverview }>('/v1/scan/policy', { allow_unscanned_access }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'scan-overview'] });
+    },
+  });
+}
+
+// Admin/SuperUser: persistently override (allow:true) or clear (allow:false) a
+// single file's scan block. Refreshes the library so the badge/download update.
+export function useScanOverride() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, allow, reason }: { id: string; allow: boolean; reason?: string }) =>
+      api.post<{ data: unknown }>(`/v1/assets/${id}/scan-override`, { allow, reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bin', 'assets'] });
+      qc.invalidateQueries({ queryKey: ['bin', 'scan-overview'] });
     },
   });
 }

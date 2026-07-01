@@ -158,6 +158,90 @@ export async function archiveAsset(id: string, orgId: string) {
   return rows[0]!;
 }
 
+export interface DeleteAssetResult {
+  id: string;
+  deleted: boolean;
+  storage_removed: number;
+  storage_missing: number;
+  error?: string;
+}
+
+/**
+ * Hard-delete an asset: remove its bytes (best-effort, decoupled) and its
+ * catalog row. Child rows (versions, data sessions/schemas/comments) all
+ * cascade on the bin_assets delete (migrations 0205/0207), so one DELETE
+ * suffices.
+ *
+ * Byte removal is best-effort per key: a missing/already-gone object is a
+ * NORMAL outcome (counted as storage_missing), never an error. This is what
+ * lets us clear assets whose upload never completed (object_key='') and the
+ * two production rows stuck at scan_status='pending' forever. The row is
+ * deleted regardless of whether any bytes were found.
+ *
+ * Note: bay_assets.bin_asset_id is a soft link (no FK, migration 0214), so a
+ * Bin asset under Bay review can be deleted and leaves a dangling link. That
+ * is accepted and intentional.
+ */
+export async function deleteAsset(id: string, orgId: string): Promise<DeleteAssetResult> {
+  const asset = await getAsset(id, orgId); // 404 if not in this org
+
+  // Gather every object key this asset owns: each version's bytes plus the
+  // asset's active/derived keys. De-dupe and drop empties.
+  const versionRows = await db
+    .select({ object_key: binAssetVersions.object_key })
+    .from(binAssetVersions)
+    .where(eq(binAssetVersions.asset_id, id));
+  const keys = new Set<string>();
+  for (const v of versionRows) if (v.object_key) keys.add(v.object_key);
+  for (const k of [asset.object_key, asset.proxy_object_key, asset.poster_object_key]) {
+    if (k) keys.add(k);
+  }
+
+  const driver = getMediaDriver();
+  let removed = 0;
+  let missing = 0;
+  for (const key of keys) {
+    try {
+      // stat first so a genuinely-gone object is counted as missing rather
+      // than removed; delete() itself is idempotent on most drivers.
+      const stat = await driver.stat(key).catch(() => null);
+      await driver.delete(key);
+      if (stat) removed += 1;
+      else missing += 1;
+    } catch {
+      // A failed delete (transient provider error, or object already gone)
+      // must not block removing the catalog row — count it as missing.
+      missing += 1;
+    }
+  }
+
+  await db.delete(binAssets).where(and(eq(binAssets.id, id), eq(binAssets.org_id, orgId)));
+  return { id, deleted: true, storage_removed: removed, storage_missing: missing };
+}
+
+/**
+ * Hard-delete many assets. Never throws for a missing/already-deleted id —
+ * that id is reported with deleted:false and an error string so the caller
+ * (and UI) can surface partial outcomes.
+ */
+export async function deleteAssets(ids: string[], orgId: string): Promise<DeleteAssetResult[]> {
+  const results: DeleteAssetResult[] = [];
+  for (const id of ids) {
+    try {
+      results.push(await deleteAsset(id, orgId));
+    } catch (err) {
+      results.push({
+        id,
+        deleted: false,
+        storage_removed: 0,
+        storage_missing: 0,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return results;
+}
+
 export async function listVersions(assetId: string, orgId: string) {
   await getAsset(assetId, orgId);
   return db
@@ -376,11 +460,41 @@ export type ServeVariant = 'original' | 'proxy' | 'poster';
 
 type AssetRow = Awaited<ReturnType<typeof getAsset>>;
 
-/** Scan gate (§9.3): only clean/skipped assets are ever served. */
-function assertServable(asset: AssetRow): void {
-  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
-    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
+/**
+ * Caller context for the serving gate. Resolved by the route handler from the
+ * authenticated user + effective org policy:
+ *   - acknowledgeRisk: the caller passed ?acknowledge_risk=true
+ *   - canOverride:     caller is a SuperUser or org owner/admin
+ *   - allowUnscanned:  the effective org "work before scan completes" policy
+ */
+export interface ServeOpts {
+  acknowledgeRisk?: boolean;
+  canOverride?: boolean;
+  allowUnscanned?: boolean;
+}
+
+/**
+ * Scan gate (§9.3). Servable when:
+ *   - a persistent per-file override is set (false-positive clear) — anyone; OR
+ *   - scan_status is clean/skipped; OR
+ *   - pending/error AND the caller acknowledged the risk AND (the org allows
+ *     unscanned access OR the caller is admin/SuperUser); OR
+ *   - infected AND the caller is admin/SuperUser AND acknowledged the risk
+ *     (transient inspection only — regular users never reach infected).
+ * Otherwise a 409 ConflictError. See the plan's serving-gate diagram.
+ */
+function assertServable(asset: AssetRow, opts: ServeOpts = {}): void {
+  if (asset.scan_override_at) return;
+  const status = asset.scan_status;
+  if (status === 'clean' || status === 'skipped') return;
+
+  const ack = opts.acknowledgeRisk === true;
+  if (status === 'pending' || status === 'error') {
+    if (ack && (opts.allowUnscanned === true || opts.canOverride === true)) return;
+  } else if (status === 'infected') {
+    if (ack && opts.canOverride === true) return;
   }
+  throw new ConflictError(`Asset is not servable (scan status: ${status})`);
 }
 
 /** Resolve the object key + content type for a variant. Throws NotFoundError if
@@ -418,9 +532,10 @@ export async function streamAssetDownload(
   assetId: string,
   orgId: string,
   variant: ServeVariant = 'original',
+  opts: ServeOpts = {},
 ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; filename: string }> {
   const asset = await getAsset(assetId, orgId);
-  assertServable(asset);
+  assertServable(asset, opts);
   const { objectKey, contentType } = resolveServeTarget(asset, variant);
   const r = await getMediaDriver().getStream(objectKey);
   return { stream: r.stream, contentType: contentType || r.contentType, size: r.size, filename: asset.name };
@@ -437,9 +552,10 @@ export async function statServable(
   assetId: string,
   orgId: string,
   variant: ServeVariant = 'original',
+  opts: ServeOpts = {},
 ): Promise<{ total: number; contentType: string; filename: string }> {
   const asset = await getAsset(assetId, orgId);
-  assertServable(asset);
+  assertServable(asset, opts);
   const { objectKey, contentType } = resolveServeTarget(asset, variant);
   const stat = await getMediaDriver().stat(objectKey);
   if (!stat) throw new NotFoundError('Object not found in storage');
@@ -457,9 +573,10 @@ export async function streamAssetRange(
   start: number,
   end: number,
   variant: ServeVariant = 'original',
+  opts: ServeOpts = {},
 ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number; total: number; filename: string }> {
   const asset = await getAsset(assetId, orgId);
-  assertServable(asset);
+  assertServable(asset, opts);
   const { objectKey, contentType } = resolveServeTarget(asset, variant);
   const driver = getMediaDriver();
   if (!driver.getRange) {
@@ -480,14 +597,16 @@ export interface PresignedDownload {
  * (Bin master §9.3): only `clean` / `skipped` assets are served; a `pending` /
  * `infected` / `error` asset returns a scan-state error instead of a URL.
  */
-export async function presignAssetDownload(assetId: string, orgId: string): Promise<PresignedDownload> {
+export async function presignAssetDownload(
+  assetId: string,
+  orgId: string,
+  opts: ServeOpts = {},
+): Promise<PresignedDownload> {
   const asset = await getAsset(assetId, orgId);
   if (!asset.current_version_id || !asset.object_key) {
     throw new NotFoundError('Asset has no uploaded content yet');
   }
-  if (asset.scan_status !== 'clean' && asset.scan_status !== 'skipped') {
-    throw new ConflictError(`Asset is not servable (scan status: ${asset.scan_status})`);
-  }
+  assertServable(asset, opts);
   const driver = getMediaDriver();
   if (!driver.presignGet) {
     throw new StorageError('Active media provider does not support presigned reads');

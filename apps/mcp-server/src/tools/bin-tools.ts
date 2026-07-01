@@ -183,6 +183,38 @@ export function registerBinTools(server: McpServer, api: ApiClient, binApiUrl: s
   });
 
   registerTool(server, {
+    name: 'bin_asset_delete',
+    description:
+      'Hard-delete a Bin asset: removes the catalog entry AND its stored bytes (all versions + derived proxy/poster). Irreversible — unlike bin_asset_archive, nothing is retained. Missing bytes are not an error (the row is deleted regardless). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.',
+    input: {
+      id: z.string().uuid().describe('Asset ID'),
+      confirm_action: z.boolean().optional().describe('Set true to actually delete'),
+    },
+    returns: z.object({
+      data: z
+        .object({
+          id: z.string(),
+          deleted: z.boolean(),
+          storage_removed: z.number(),
+          storage_missing: z.number(),
+        })
+        .optional(),
+      preview: z.string().optional(),
+    }),
+    handler: async ({ id, confirm_action }) => {
+      if (!confirm_action) {
+        const a = await client.request('GET', `/assets/${id}`);
+        return ok({
+          preview: `Will PERMANENTLY delete asset ${id} and its bytes (irreversible). Call again with confirm_action:true to proceed.`,
+          asset: a.data,
+        });
+      }
+      const result = await client.request('DELETE', `/assets/${id}`);
+      return result.ok ? ok(result.data) : err('deleting bin asset', result.data);
+    },
+  });
+
+  registerTool(server, {
     name: 'bin_version_list',
     description:
       'List the immutable versions of a Bin asset, newest first. Each upload or structured-editor commit mints a monotonic version_number; bytes are never edited in place.',

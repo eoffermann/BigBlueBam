@@ -53,6 +53,13 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),
 
+  // Platform default for "may a user work with a file before its AV scan
+  // completes?". This is the lowest-precedence layer: an org override
+  // (organizations.settings.av.allow_unscanned_access) and the platform
+  // system_settings['av.allow_unscanned_access'] both win over it. Default
+  // off — serving is gated until the scan clears unless someone opts in.
+  BIN_ALLOW_UNSCANNED_ACCESS: z.coerce.boolean().default(false),
+
   // Wave D Phase 3: per-action permission enforcement. Mirrors the api's
   // BBB_PERMISSIONS_ENFORCE. 'warn' calls the resolver and records
   // divergence; 'on' additionally blocks on resolver-deny.
