@@ -63,6 +63,7 @@ function makeOptions(overrides = {}) {
       MINIO_ROOT_PASSWORD: 'minio-password',
       LIVEKIT_API_KEY: 'lk-key',
       LIVEKIT_API_SECRET: 'lk-secret',
+      BLIP_INGEST_PEPPER: 'blip-pepper',
     },
     publicUrl: 'https://example.up.railway.app',
     userIntegrations: {
@@ -114,6 +115,7 @@ function fullContext() {
       MINIO_ROOT_PASSWORD: 'minio-password',
       LIVEKIT_API_KEY: 'lk-key',
       LIVEKIT_API_SECRET: 'lk-secret',
+      BLIP_INGEST_PEPPER: 'blip-pepper',
     },
     publicUrl: 'https://example.up.railway.app',
     userIntegrations: {

@@ -1,0 +1,71 @@
+# Auto-provision new Railway services on push to `stable`.
+#
+# WHY THIS EXISTS
+#   Railway's GitHub integration already redeploys services that ALREADY EXIST
+#   in the project whenever `stable` moves. What it cannot do is notice that the
+#   catalog gained a brand-new app (e.g. blip-api) and create that service — a
+#   service Railway has never seen is never deployed, so a new app 404s / falls
+#   through to the marketing site in production until someone hand-creates it in
+#   the dashboard. This job closes that gap: on every push to `stable` it
+#   reconciles the live Railway project against scripts/deploy/shared/services.mjs,
+#   CREATES any missing service (wiring it exactly like the interactive deploy,
+#   copying shared secrets off the live stack), triggers its first deploy, and
+#   refreshes the public ingress so its nginx routes appear. Parity with how
+#   `docker compose up` creates a newly-added service locally — zero manual steps.
+#
+# ONE-TIME SETUP (the single credential the whole thing needs)
+#   Add a repository secret named RAILWAY_API_TOKEN:
+#     Railway → Account Settings → Tokens → Create Token (an ACCOUNT API token;
+#     unlike `railway login` it does not expire), then in this repo:
+#     Settings → Secrets and variables → Actions → New repository secret
+#       Name:  RAILWAY_API_TOKEN
+#       Value: <the token>
+#   Until that secret exists this job no-ops (it logs a warning and exits 0), so
+#   landing this file is harmless.
+
+name: Deploy (Railway auto-provision)
+
+on:
+  push:
+    branches: [stable]
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Apply changes (unchecked = dry run, read-only)'
+        type: boolean
+        default: true
+
+concurrency:
+  # Never let two provisioning runs race on the same Railway project.
+  group: railway-auto-deploy
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Reconcile + provision new Railway services
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          # GITHUB_REPOSITORY is provided automatically; the driver reads it to
+          # wire new services to this repo. Force the ingress to refresh so a
+          # new app's nginx routes go live even if Railway's auto-deploy skips it.
+          RAILWAY_ALWAYS_REDEPLOY: frontend
+        run: |
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo "::warning title=RAILWAY_API_TOKEN not set::Skipping Railway auto-provision. Add the RAILWAY_API_TOKEN repository secret to enable automatic new-app deployment (see .github/workflows/deploy.yml header)."
+            exit 0
+          fi
+          # workflow_dispatch with apply=false → dry run; push and default → apply.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.apply }}" != "true" ]; then
+            echo "Dry run (workflow_dispatch apply=false)"
+            node scripts/deploy/railway-auto-deploy.mjs
+          else
+            node scripts/deploy/railway-auto-deploy.mjs --apply
+          fi
