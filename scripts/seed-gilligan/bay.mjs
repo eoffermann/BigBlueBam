@@ -188,6 +188,16 @@ const ITEMS = [
         },
         body: 'Widen the base so it stands in soft sand without tipping.',
       },
+      {
+        // Model QC posted as an automated finding (Bay FBX design doc §9: agents
+        // post model-QC results through the same bay_annotation_create path).
+        who: 'professor',
+        anchor: {
+          type: 'viewpoint',
+          camera: { position: [2.5, 2, 3], target: [0, 0.9, 0], up: [0, 1, 0], fov: 35, projection: 'perspective' },
+        },
+        body: '[Auto-QC] 36 tris, 3 materials, 1 animation clip (BeaconSpin, 60f @ 30fps). Tri/material budget OK. Note: root not at origin (base offset +0.05 on Y).',
+      },
     ],
     decisions: [{ who: 'howell', decision: 'changes_requested', comment: 'Wider base, then approved.' }],
   },

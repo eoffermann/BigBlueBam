@@ -71,11 +71,28 @@ pulling a headless-GL stack into the worker image. (Revisit in Phase C.)
 - main CI all green (Migration Replay, DB Drift, Seed Smoke, Lint, Test,
   Typecheck) on the first push. Promoted main -> stable.
 
-## 5. Phase C (not done; explicit polish/follow-up per design §11)
+## 5. Phase C delivered (polish/follow-up per design §11)
 
-Deferred as the design doc's polish phase: worker-side meshopt geometry
-compression (decoder already shipped in the frontend), A/B compare with synced
-orbit + clip playhead, screen-space freehand `draw` overlay rendering, optional
-model-viewer USDZ mobile quicklook, and a headless-GL poster render. Model QC
-needs no new code (agents post findings via the existing bay_annotation_create
-with a viewpoint anchor). Core review (static + animated) is complete without these.
+- **Worker meshopt geometry compression** (`bin-model-process.job.ts`): after the
+  weld/dedup/prune optimize pass, the proxy runs EXT_meshopt_compression via the
+  `meshoptimizer` encoder, wired as `NodeIO().registerExtensions(ALL_EXTENSIONS)
+  .registerDependencies({ 'meshopt.encoder': MeshoptEncoder })` +
+  `await MeshoptEncoder.ready` before `doc.transform(meshopt({ encoder }))`.
+  Default-on behind `BIN_MODEL_OPTIMIZE`; isolated try/catch means a WASM/encoder
+  failure falls back to the uncompressed (but welded) proxy with
+  `compression:'none'` and never fails the job. Validated in scratch at ~84% size
+  reduction with skins/animation intact; the frontend GLTFLoader already ships the
+  meshopt DECODER so a compressed proxy loads with no client change.
+- **A/B version compare** (`review-asset.tsx` `ModelCompare` + a "Compare versions"
+  toggle): two `ModelViewer`s side by side with synced orbit (`cameraPose`/
+  `onCameraChange`) and a shared clip playhead (`playhead`/`transportControlled`/
+  `onClipsLoaded`), so a reviewer can scrub two versions in lockstep.
+- **Screen-space draw overlay** (`model-viewer.tsx`): a Draw/Arrow toolbar renders
+  a freehand/arrow SVG overlay; entering draw mode disables orbit so the overlay
+  receives the pointer (`controls.enabled = drawTool == null`). `focusedDraw`
+  highlights the annotation being viewed.
+- **Model QC demo**: a third seeded `[Auto-QC]` model annotation (professor) in
+  `scripts/seed-gilligan/bay.mjs` demonstrates §9 — agents post findings through
+  the existing `bay_annotation_create` with a viewpoint anchor; no new endpoint.
+- **Deferred (still)**: USDZ mobile quicklook and the headless-GL poster render
+  (needs an offscreen GL stack — see §1). Neither blocks review.

@@ -12,9 +12,12 @@
  *      self-contained `.glb` via assimpjs (Assimp compiled to WASM, BSD-3,
  *      pure Node — no native CLI, no Dockerfile change). A source that is
  *      already `.glb` skips Assimp and is normalized through gltf-transform.
- *   2. Optionally runs a gltf-transform optimize pass (weld/dedup/prune) behind
- *      BIN_MODEL_OPTIMIZE. meshopt geometry compression needs the meshoptimizer
- *      encoder, which is not wired here, so `proxy.compression` stays `'none'`.
+ *   2. Runs a gltf-transform optimize pass (weld/dedup/prune) and then meshopt
+ *      geometry compression (EXT_meshopt_compression via the meshoptimizer
+ *      encoder), default-on for proxies behind BIN_MODEL_OPTIMIZE. The frontend
+ *      viewer already ships the meshopt DECODER, so a compressed proxy loads
+ *      directly. `proxy.compression` is `'meshopt'` on success, `'none'` when
+ *      optimization is disabled OR the encoder fails (graceful fallback).
  *   3. Probes the GLB document and emits `media_meta` (§3): bounds, counts,
  *      skeleton, animations, source format/up-axis/unit, proxy descriptor.
  *   4. (Poster render is DEFERRED for v1 — no headless GL in the worker image,
@@ -40,7 +43,9 @@ import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { NodeIO, getBounds } from '@gltf-transform/core';
 import type { Document } from '@gltf-transform/core';
-import { dedup, prune, weld } from '@gltf-transform/functions';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { dedup, meshopt, prune, weld } from '@gltf-transform/functions';
+import { MeshoptEncoder } from 'meshoptimizer';
 import assimpjs from 'assimpjs';
 import { getDb } from '../utils/db.js';
 import { downloadObjectToFile, putObjectFromFile } from '../utils/storage.js';
@@ -81,9 +86,12 @@ const MODEL_EXT_REGEX = `\\.(${MODEL_EXTS.join('|')})$`;
 const MODEL_MAX_BYTES = Number(process.env.BIN_MODEL_MAX_BYTES ?? 314_572_800); // ~300MB
 // Per-invocation wall-clock cap so a pathological file can't wedge the sweep.
 const MODEL_TIMEOUT_MS = Number(process.env.BIN_MODEL_TIMEOUT_MS ?? 5 * 60_000);
-// Optional gltf-transform optimize pass; off by default (aggressive welding
-// moves vertices and is wrong for geometry-integrity reviews, §2.2 step 2).
-const MODEL_OPTIMIZE = ['1', 'true', 'yes', 'on'].includes(
+// gltf-transform optimize pass (weld/dedup/prune) + meshopt geometry
+// compression. DEFAULT ON for proxies (§2.2 leans default-on; the frontend
+// already ships the meshopt decoder). Disable only for geometry-integrity
+// reviews where welding's vertex merging is undesirable, via
+// BIN_MODEL_OPTIMIZE=0 (or false/no/off).
+const MODEL_OPTIMIZE = !['0', 'false', 'no', 'off'].includes(
   String(process.env.BIN_MODEL_OPTIMIZE ?? '').toLowerCase(),
 );
 
@@ -151,6 +159,7 @@ function countTriangles(doc: Document): number {
 function probeMediaMeta(
   doc: Document,
   sourceFormat: string | null,
+  sourceTriangles: number,
   proxyTriangles: number,
   compression: 'none' | 'meshopt',
 ): Record<string, unknown> {
@@ -216,7 +225,9 @@ function probeMediaMeta(
     counts: {
       nodes: root.listNodes().length,
       meshes: root.listMeshes().length,
-      triangles: countTriangles(doc),
+      // Source (pre-optimize) triangle count; the post-optimize proxy count
+      // lives in `proxy.triangles`.
+      triangles: sourceTriangles,
       materials: root.listMaterials().length,
       textures: root.listTextures().length,
     },
@@ -247,7 +258,12 @@ async function processModelOne(
 
     const ext = extOf(asset.name, asset.object_key);
     const sourceFormat = ext;
-    const io = new NodeIO();
+    // Register ALL_EXTENSIONS (incl. EXT_meshopt_compression) so the writer can
+    // emit the compressed proxy, and wire the meshopt encoder as a write
+    // dependency. Reading plain assimp-produced GLB is unaffected.
+    const io = new NodeIO()
+      .registerExtensions(ALL_EXTENSIONS)
+      .registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
 
     // 1. Obtain GLB bytes. `.glb` reads directly; everything else converts.
     let glbBytes: Uint8Array;
@@ -287,11 +303,38 @@ async function processModelOne(
           'bin-model-process: optimize pass failed; serving unoptimized proxy',
         );
       }
+
+      // meshopt geometry compression. Isolated try/catch: if the encoder fails
+      // for any reason we keep the weld/prune'd-but-uncompressed document,
+      // record compression='none', and never fail the job. The proxy is always
+      // written below. The frontend GLTFLoader is wired with MeshoptDecoder, so
+      // a successful compressed GLB loads without any client change.
+      try {
+        await MeshoptEncoder.ready;
+        await doc.transform(meshopt({ encoder: MeshoptEncoder }));
+        compression = 'meshopt';
+        logger.info({ assetId: asset.id }, 'bin-model-process: meshopt compression applied');
+      } catch (err) {
+        compression = 'none';
+        logger.warn(
+          { assetId: asset.id, err: err instanceof Error ? err.message : String(err) },
+          'bin-model-process: meshopt compression failed; serving uncompressed proxy',
+        );
+      }
     }
+    // meshopt compression does not change triangle count; weld/prune may. The
+    // post-optimize count is the proxy's geometry; counts.triangles keeps the
+    // pre-optimize source count.
     const proxyTriangles = MODEL_OPTIMIZE ? countTriangles(doc) : sourceTriangles;
 
     // 3. Probe -> media_meta (§3).
-    const mediaMeta = probeMediaMeta(doc, sourceFormat, proxyTriangles, compression);
+    const mediaMeta = probeMediaMeta(
+      doc,
+      sourceFormat,
+      sourceTriangles,
+      proxyTriangles,
+      compression,
+    );
 
     // 4. Write the normalized GLB proxy next to the canonical object.
     const proxyBytes = await io.writeBinary(doc);
