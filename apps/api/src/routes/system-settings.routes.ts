@@ -196,6 +196,24 @@ const KEY_VALIDATORS: Record<string, z.ZodType> = {
   'calling.voice_agent_url': externalUrlSchema(2048),
   'calling.global_enabled': z.boolean(),
 
+  // ── AV / virus scanning (SuperUser only) ─────────────────────────────
+  // Read by the worker's bin-av-scan job via apps/worker/src/utils/
+  // av-config.ts (system_settings first, env vars as fallback). Changing a
+  // value here takes effect within the resolver's ~30s cache TTL without a
+  // worker restart. av.allow_unscanned_access is the PLATFORM DEFAULT for
+  // "may a user work with a file before its AV scan completes?"; a per-org
+  // override (organizations.settings.av.allow_unscanned_access) wins over it.
+  'av.scan_mode': z.enum(['off', 'eicar', 'clamav']),
+  'av.clamav_host': z.union([z.null(), z.string().min(1).max(255)]),
+  'av.clamav_port': z.union([
+    z.number().int().min(1).max(65535),
+    z.string().regex(/^\d+$/).refine((v) => {
+      const n = Number.parseInt(v, 10);
+      return n >= 1 && n <= 65535;
+    }, 'av.clamav_port must be an integer between 1 and 65535'),
+  ]),
+  'av.allow_unscanned_access': z.boolean(),
+
   // ── Password generation policy (SuperUser only) ──────────────────────
   // Controls every server-side password mint: admin-issued password
   // resets, CLI reset-password, future flows. The full default + clamps

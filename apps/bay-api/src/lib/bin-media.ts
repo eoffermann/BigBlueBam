@@ -34,6 +34,7 @@ interface BinAssetMediaRow {
   object_key: string;
   content_type: string | null;
   scan_status: string;
+  scan_override_at: string | null;
   proxy_object_key: string | null;
   poster_object_key: string | null;
   proxy_content_type: string | null;
@@ -41,7 +42,7 @@ interface BinAssetMediaRow {
 
 async function getBinAssetMedia(binAssetId: string): Promise<BinAssetMediaRow | null> {
   const raw = await db.execute(sql`
-    SELECT object_key, content_type, scan_status,
+    SELECT object_key, content_type, scan_status, scan_override_at,
            proxy_object_key, poster_object_key, proxy_content_type
     FROM bin_assets WHERE id = ${binAssetId} LIMIT 1
   `);
@@ -56,7 +57,13 @@ function resolveTarget(
   row: BinAssetMediaRow,
   variant: ServeVariant,
 ): { objectKey: string; contentType: string } | null {
-  if (row.scan_status !== 'clean' && row.scan_status !== 'skipped') return null;
+  // Guest links are anonymous (no session/role/policy), so only the two
+  // safe-by-default states OR a persistent per-file override (false-positive
+  // clear, set by an admin/SuperUser) extend servability here. Risk-ack and
+  // admin-inspect deliberately do NOT apply on the guest path.
+  const servable =
+    row.scan_status === 'clean' || row.scan_status === 'skipped' || row.scan_override_at != null;
+  if (!servable) return null;
   if (variant === 'proxy') {
     if (!row.proxy_object_key) return null;
     return {

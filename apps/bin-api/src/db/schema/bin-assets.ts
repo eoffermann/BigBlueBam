@@ -58,6 +58,14 @@ export const binAssets = pgTable(
     // bay_asset_versions.media_meta at version create so the viewer reads it
     // without a byte round-trip. Generic jsonb; null/{} for un-probed assets.
     media_meta: jsonb('media_meta'),
+    // Persistent per-file scan override (0225). When scan_override_at is set an
+    // admin/SuperUser has cleared this specific file's scan prohibition for
+    // everyone (false-positive resolution): the serving gate treats it as
+    // servable regardless of scan_status, including over Bay guest review links.
+    // scan_overridden_by/scan_override_reason are the audit trail (who/why).
+    scan_override_at: timestamp('scan_override_at', { withTimezone: true }),
+    scan_overridden_by: uuid('scan_overridden_by'),
+    scan_override_reason: text('scan_override_reason'),
     // organization | project | private (denormalized for the visibility gate).
     visibility: varchar('visibility', { length: 20 }).notNull().default('organization'),
     // Arbitrary user-applied tags for cross-cutting organization + filtering.

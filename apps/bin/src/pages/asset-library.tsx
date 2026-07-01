@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
   ChevronRight,
@@ -10,19 +10,27 @@ import {
   Layers,
   Loader2,
   Plus,
+  ShieldAlert,
+  ShieldCheck,
   Tag,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react';
 import {
   useAssets,
   useCreateFolder,
+  useDeleteAssets,
   useFolders,
+  useScanOverride,
+  useScanOverview,
+  useSetScanPolicy,
   useTags,
   useUpdateAsset,
   useUploadAsset,
   type BinAsset,
   type BinFolder,
+  type ScanOverview,
   type ScanStatus,
 } from '@/hooks/use-bin';
 import { api } from '@/lib/api';
@@ -40,10 +48,21 @@ const scanStatusStyles: Record<ScanStatus, string> = {
   pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   clean: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   infected: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  error: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   skipped: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
 };
 
-function ScanBadge({ status }: { status: ScanStatus }) {
+function ScanBadge({ asset }: { asset: BinAsset }) {
+  // A per-file override wins over the scan verdict: show it explicitly so the
+  // operator knows this file was manually cleared.
+  if (asset.scan_override_at) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+        <ShieldCheck className="h-3 w-3" /> allowed
+      </span>
+    );
+  }
+  const status = asset.scan_status;
   return (
     <span
       className={cn(
@@ -79,28 +98,141 @@ function assetKind(asset: BinAsset): AssetKind {
   return 'other';
 }
 
-function DownloadButton({ asset }: { asset: BinAsset }) {
-  const servable = asset.scan_status === 'clean' || asset.scan_status === 'skipped';
-  if (!servable) {
-    return (
-      <span
-        className="inline-flex items-center text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
-        title={`Not downloadable yet (scan status: ${asset.scan_status})`}
-      >
-        <Download className="h-4 w-4" />
-      </span>
-    );
-  }
+// Download + risk-ack + override controls for one asset. `canOverride` and
+// `allowUnscanned` come from GET /scan/overview (org-scoped policy + caller
+// role); the override toggle calls POST /assets/:id/scan-override.
+function ServeControls({
+  asset,
+  canOverride,
+  allowUnscanned,
+  onOverride,
+  overridePending,
+}: {
+  asset: BinAsset;
+  canOverride: boolean;
+  allowUnscanned: boolean;
+  onOverride: (id: string, allow: boolean) => void;
+  overridePending: boolean;
+}) {
+  const status = asset.scan_status;
+  const servable = status === 'clean' || status === 'skipped' || !!asset.scan_override_at;
+  // Who may transiently open an unservable file by acknowledging the risk:
+  // pending/error → org policy OR admin; infected → admin only.
+  const canAck =
+    status === 'pending' || status === 'error'
+      ? allowUnscanned || canOverride
+      : status === 'infected'
+        ? canOverride
+        : false;
+
   return (
-    <a
-      href={api.rawUrl(`/v1/assets/${asset.id}/raw`)}
-      download={asset.name}
-      onClick={(e) => e.stopPropagation()}
-      title={`Download ${asset.name}`}
-      className="inline-flex items-center text-zinc-400 hover:text-primary-600 dark:hover:text-primary-400"
-    >
-      <Download className="h-4 w-4" />
-    </a>
+    <div className="inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      {servable ? (
+        <a
+          href={api.rawUrl(`/v1/assets/${asset.id}/raw`)}
+          download={asset.name}
+          title={`Download ${asset.name}`}
+          className="inline-flex items-center text-zinc-400 hover:text-primary-600 dark:hover:text-primary-400"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      ) : canAck ? (
+        <a
+          href={api.rawUrl(`/v1/assets/${asset.id}/raw?acknowledge_risk=true`)}
+          download={asset.name}
+          title={
+            status === 'infected'
+              ? 'Inspect this flagged file (risk acknowledged)'
+              : 'Open anyway — acknowledge the file is not yet scanned'
+          }
+          className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 text-xs font-medium"
+        >
+          <ShieldAlert className="h-4 w-4" />
+          Open anyway
+        </a>
+      ) : (
+        <span
+          className="inline-flex items-center text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
+          title={`Not downloadable yet (scan status: ${status})`}
+        >
+          <Download className="h-4 w-4" />
+        </span>
+      )}
+
+      {/* Admin/SuperUser: persistently clear a false-positive block, or revoke. */}
+      {canOverride && !servable && (
+        <button
+          type="button"
+          disabled={overridePending}
+          onClick={() => onOverride(asset.id, true)}
+          title="Allow this file for everyone (clear a false-positive block)"
+          className="inline-flex items-center text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 disabled:opacity-50"
+        >
+          <ShieldCheck className="h-4 w-4" />
+        </button>
+      )}
+      {canOverride && !!asset.scan_override_at && (
+        <button
+          type="button"
+          disabled={overridePending}
+          onClick={() => onOverride(asset.id, false)}
+          title="Revoke the override for this file (re-apply the scan block)"
+          className="inline-flex items-center text-emerald-600 hover:text-red-600 dark:text-emerald-400 disabled:opacity-50"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Compact scan-progress strip above the table. Shows live counts, the mode,
+// surfaced errored files, and (for admins) the per-org allow-unscanned toggle.
+function ScanStrip({
+  overview,
+  onSetPolicy,
+  policyPending,
+}: {
+  overview: ScanOverview;
+  onSetPolicy: (v: boolean) => void;
+  policyPending: boolean;
+}) {
+  const c = overview.counts;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 px-3 py-2 text-xs">
+      {c.pending > 0 ? (
+        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+          <Loader2 className="h-3 w-3 animate-spin" /> scanning: {c.pending} pending
+        </span>
+      ) : (
+        <span className="text-zinc-500 dark:text-zinc-400">no files pending scan</span>
+      )}
+      <span className="text-green-700 dark:text-green-400">{c.clean} clean</span>
+      {c.infected > 0 && (
+        <span className="text-red-700 dark:text-red-400">{c.infected} infected</span>
+      )}
+      {c.error > 0 && (
+        <span className="text-orange-700 dark:text-orange-400">{c.error} errored</span>
+      )}
+      <span className="text-zinc-400 dark:text-zinc-500">scanner: {overview.scan_mode}</span>
+      {overview.recent_errors.length > 0 && (
+        <span className="text-zinc-500 dark:text-zinc-400 truncate max-w-[20rem]">
+          failed: {overview.recent_errors.map((e) => e.name).join(', ')}
+        </span>
+      )}
+      {overview.can_override && (
+        <label className="ml-auto inline-flex items-center gap-1.5 cursor-pointer text-zinc-600 dark:text-zinc-300">
+          <input
+            type="checkbox"
+            checked={overview.allow_unscanned_access}
+            disabled={policyPending}
+            onChange={(e) => onSetPolicy(e.target.checked)}
+            className="rounded border-zinc-300 dark:border-zinc-700 text-primary-600 focus:ring-primary-500"
+          />
+          Allow work before scan completes
+        </label>
+      )}
+    </div>
   );
 }
 
@@ -273,6 +405,15 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
 
   const createFolder = useCreateFolder();
   const updateAsset = useUpdateAsset();
+  const deleteAssets = useDeleteAssets();
+  const scanOverride = useScanOverride();
+  const setScanPolicy = useSetScanPolicy();
+
+  const scanOverviewQuery = useScanOverview();
+  const overview = scanOverviewQuery.data?.data;
+
+  // Multi-select for bulk delete.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Translate the panel selection into the `folder_id` query param.
   const folderParam =
@@ -283,6 +424,39 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
     tag: activeTag ?? undefined,
   });
   const assets = data?.data ?? [];
+
+  // Reset the selection whenever the visible set changes scope, so a stale id
+  // from another folder/tag can't be deleted out from under the user.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [folderParam, activeTag]);
+
+  const allSelected = assets.length > 0 && assets.every((a) => selected.has(a.id));
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(assets.map((a) => a.id)));
+  };
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const onBulkDelete = () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const ok = window.confirm(
+      `Permanently delete ${ids.length} file${ids.length === 1 ? '' : 's'}? This removes the files and all their contents and versions, and cannot be undone.`,
+    );
+    if (!ok) return;
+    deleteAssets.mutate(ids, { onSuccess: () => setSelected(new Set()) });
+  };
+
+  const onOverride = (id: string, allow: boolean) => {
+    scanOverride.mutate({ id, allow });
+  };
 
   const upload = useUploadAsset();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -493,6 +667,43 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
             </div>
           )}
 
+          {/* Scan progress strip */}
+          {overview && <ScanStrip overview={overview} onSetPolicy={(v) => setScanPolicy.mutate(v)} policyPending={setScanPolicy.isPending} />}
+
+          {/* Bulk action bar (appears once something is selected) */}
+          {selected.size > 0 && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-primary-200 dark:border-primary-800 bg-primary-50/60 dark:bg-primary-900/20 px-3 py-2 text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                {selected.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={onBulkDelete}
+                disabled={deleteAssets.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-xs font-medium disabled:opacity-60"
+              >
+                {deleteAssets.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              >
+                Clear
+              </button>
+              {deleteAssets.isError && (
+                <span className="text-xs text-red-500">
+                  {deleteAssets.error instanceof Error ? deleteAssets.error.message : 'Delete failed'}
+                </span>
+              )}
+            </div>
+          )}
+
           {isLoading ? (
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -519,6 +730,15 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-zinc-50 dark:bg-zinc-800/60 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all assets"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        className="rounded border-zinc-300 dark:border-zinc-700 text-primary-600 focus:ring-primary-500"
+                      />
+                    </th>
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">Tags</th>
@@ -550,6 +770,15 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
                               : undefined
                         }
                       >
+                        <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${asset.name}`}
+                            checked={selected.has(asset.id)}
+                            onChange={() => toggleSelect(asset.id)}
+                            className="rounded border-zinc-300 dark:border-zinc-700 text-primary-600 focus:ring-primary-500"
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 min-w-0">
                             <FileBox className="h-4 w-4 text-primary-500 shrink-0" />
@@ -582,7 +811,7 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
                           {formatBytes(asset.size)}
                         </td>
                         <td className="px-4 py-3">
-                          <ScanBadge status={asset.scan_status} />
+                          <ScanBadge asset={asset} />
                         </td>
                         <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
                           {formatRelativeTime(asset.created_at)}
@@ -620,7 +849,13 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
                             >
                               <Tag className="h-4 w-4" />
                             </button>
-                            <DownloadButton asset={asset} />
+                            <ServeControls
+                              asset={asset}
+                              canOverride={overview?.can_override ?? false}
+                              allowUnscanned={overview?.allow_unscanned_access ?? false}
+                              onOverride={onOverride}
+                              overridePending={scanOverride.isPending}
+                            />
                           </div>
                         </td>
                       </tr>

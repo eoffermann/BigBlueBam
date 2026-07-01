@@ -210,6 +210,7 @@ const EXPLICIT_TOOL_OVERRIDES = new Map([
   ['bin_asset_get', { id: 'bin.asset.get', verb: 'get' }],
   ['bin_asset_create', { id: 'bin.asset.create', verb: 'create' }],
   ['bin_asset_archive', { id: 'bin.asset.archive', verb: 'archive' }],
+  ['bin_asset_delete', { id: 'bin.asset.delete', verb: 'delete' }],
   ['bin_version_list', { id: 'bin.version.get', verb: 'get' }],
   ['bin_folder_list', { id: 'bin.folder.list', verb: 'list' }],
   ['bin_folder_create', { id: 'bin.folder.create', verb: 'create' }],
@@ -511,6 +512,13 @@ const EXCLUDED_PATH_PREFIXES = [
   '/root-redirect',
   '/v1/agents/heartbeat',
   '/v1/guests/accept/',
+  // Bin scan surfaces. bulk-delete is gated by the shared destructive
+  // bin.asset.delete permission (the DELETE /assets/:id route already mints
+  // it); scan-override is gated in-handler to org owner/admin/SuperUser.
+  // Path-derived ids here would be non-destructive-shaped duplicates
+  // (…_bulk_delete.create / …_scan_override.create), so exclude them.
+  '/assets/bulk-delete',
+  '/assets/:id/scan-override',
 ];
 
 // File basenames whose every route is non-action (unauthenticated, internal-
@@ -542,6 +550,10 @@ const EXCLUDED_FILE_BASENAMES = new Set([
   // which the generator already correctly derives from the path; including
   // here as belt-and-suspenders so the audit doesn't churn the manifest.
   'permissions-divergences.routes.ts',
+  // Bin scan routes: GET /scan/overview is authenticated scan-progress data
+  // and PUT /scan/policy is gated in-handler to org owner/admin/SuperUser.
+  // Neither maps to an asset resource.verb, so exclude from path derivation.
+  'scan.routes.ts',
   // Deploy-settings backend: routes use the hand-authored ids
   // bam.superuser_deploy_settings.{get,update,verify}. The path-derived
   // auto-ids would singularize 'settings' to 'setting' and would not

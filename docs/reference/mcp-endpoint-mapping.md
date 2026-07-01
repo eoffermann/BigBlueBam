@@ -1359,9 +1359,14 @@ omitted from each row; see the per-app header line). UI call sites are best-effo
 | `PATCH /assets/:id` | `bin_asset_update` | Rename / move to folder / set tags | `apps/bin/src/hooks/use-bin.ts` |
 | `GET /tags` | `bin_tag_list` | Distinct org tags (filter pickers) | `apps/bin/src/hooks/use-bin.ts` |
 | `POST /assets/:id/archive` | `bin_asset_archive` | Archive (soft delete) | — |
+| `DELETE /assets/:id` | `bin_asset_delete` | Hard-delete (row + bytes, decoupled) | `apps/bin/src/hooks/use-bin.ts` |
+| `POST /assets/bulk-delete` | `— _(skip: bulk convenience over bin_asset_delete; same bin.asset.delete gate)_` | Hard-delete many assets | `apps/bin/src/hooks/use-bin.ts` |
+| `POST /assets/:id/scan-override` | `— _(skip: SuperUser/admin scan-block override — in-handler role gate)_` | Persistent per-file false-positive clear | `apps/bin/src/hooks/use-bin.ts` |
 | `POST /assets/:id/upload` | `— _(skip: multipart/binary upload)_` | Proxied multipart upload → new version | `apps/bin/src/lib/api.ts` |
-| `GET /assets/:id/raw` | `— _(skip: binary stream)_` | Scan-gated byte stream | `apps/bin/src/hooks/use-bin.ts` |
+| `GET /assets/:id/raw` | `— _(skip: binary stream)_` | Scan-gated byte stream (`?acknowledge_risk` opens unscanned) | `apps/bin/src/hooks/use-bin.ts` |
 | `GET /assets/:id/download` | `— _(skip: presigned URL/binary)_` | Presigned GET (public-endpoint deploys) | — |
+| `GET /scan/overview` | `— _(skip: org scan-progress dashboard data)_` | Scan counts + policy + override capability | `apps/bin/src/hooks/use-bin.ts` |
+| `PUT /scan/policy` | `— _(skip: SuperUser/admin org policy — in-handler role gate)_` | Set org allow-unscanned override | `apps/bin/src/hooks/use-bin.ts` |
 | `GET /assets/:id/versions` | `bin_version_list` | List immutable versions | — |
 | `POST /assets/:id/versions` | `— _(skip: presigned PUT/binary)_` | Reserve version + presigned PUT | — |
 | `GET /versions/:id` | `— _(skip: covered by bin_version_list)_` | Get one version | — |

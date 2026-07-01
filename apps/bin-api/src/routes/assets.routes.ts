@@ -5,6 +5,31 @@ import { env } from '../env.js';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as assetService from '../services/asset.service.js';
 import { NotFoundError, ConflictError, StorageError } from '../services/asset.service.js';
+import { resolveScanPolicy, setScanOverride } from '../services/scan.service.js';
+
+// A caller is allowed to persistently override / transiently inspect an
+// otherwise-unservable file when they are a SuperUser or an org owner/admin.
+function callerCanOverride(user: { is_superuser: boolean; role: string } | null): boolean {
+  if (!user) return false;
+  return user.is_superuser === true || user.role === 'owner' || user.role === 'admin';
+}
+
+/**
+ * Build the serving-gate opts from the request. The common path (no
+ * ?acknowledge_risk) needs no policy read — clean/skipped/overridden assets
+ * serve and everything else 409s regardless of the org policy. We only resolve
+ * the effective allow-unscanned policy when the caller actually acknowledged
+ * the risk, keeping the hot media-serve path free of extra queries.
+ */
+async function buildServeOpts(
+  request: FastifyRequest,
+): Promise<assetService.ServeOpts> {
+  const acknowledgeRisk = (request.query as { acknowledge_risk?: string }).acknowledge_risk === 'true';
+  const canOverride = callerCanOverride(request.user);
+  if (!acknowledgeRisk) return { acknowledgeRisk: false, canOverride };
+  const policy = await resolveScanPolicy(request.user!.org_id);
+  return { acknowledgeRisk: true, canOverride, allowUnscanned: policy.allow_unscanned_access };
+}
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -134,13 +159,83 @@ export default async function assetRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // GET /assets/:id/download — presigned GET for the current version
+  // GET /assets/:id/download — presigned GET for the current version.
+  // ?acknowledge_risk=true lets a caller with the org policy (or an
+  // admin/SuperUser) fetch a still-unscanned/errored file; an overridden file
+  // is always downloadable.
   fastify.get<{ Params: { id: string } }>(
     '/assets/:id/download',
     { preHandler: [requireAuth] },
     async (request, reply) => {
       try {
-        const result = await assetService.presignAssetDownload(request.params.id, request.user!.org_id);
+        const opts = await buildServeOpts(request);
+        const result = await assetService.presignAssetDownload(
+          request.params.id,
+          request.user!.org_id,
+          opts,
+        );
+        return reply.send({ data: result });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
+  // DELETE /assets/:id — hard-delete an asset (row + bytes, decoupled).
+  fastify.delete<{ Params: { id: string } }>(
+    '/assets/:id',
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bin.asset.delete')] },
+    async (request, reply) => {
+      try {
+        const result = await assetService.deleteAsset(request.params.id, request.user!.org_id);
+        return reply.send({ data: result });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
+  // POST /assets/bulk-delete — hard-delete many assets; returns per-id results.
+  const bulkDeleteSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
+  fastify.post(
+    '/assets/bulk-delete',
+    { preHandler: [requireAuth, requireScope('read_write'), fastify.requireCan('bin.asset.delete')] },
+    async (request, reply) => {
+      const body = bulkDeleteSchema.parse(request.body);
+      const results = await assetService.deleteAssets(body.ids, request.user!.org_id);
+      return reply.send({ data: results });
+    },
+  );
+
+  // POST /assets/:id/scan-override — persistent per-file scan override
+  // (false-positive clear). Admin/SuperUser only. allow:false clears it.
+  const scanOverrideSchema = z.object({
+    allow: z.boolean(),
+    reason: z.string().max(2000).optional(),
+  });
+  fastify.post<{ Params: { id: string } }>(
+    '/assets/:id/scan-override',
+    { preHandler: [requireAuth, requireScope('read_write')] },
+    async (request, reply) => {
+      if (!callerCanOverride(request.user)) {
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Only an org owner/admin or SuperUser may override a scan block',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      const body = scanOverrideSchema.parse(request.body ?? {});
+      try {
+        const result = await setScanOverride(
+          request.params.id,
+          request.user!.org_id,
+          request.user!.id,
+          body.allow,
+          body.reason ?? null,
+        );
         return reply.send({ data: result });
       } catch (err) {
         return sendError(reply, request, err);
@@ -200,13 +295,19 @@ export default async function assetRoutes(fastify: FastifyInstance) {
         const rawVariant = (request.query as { variant?: string }).variant;
         const variant: assetService.ServeVariant =
           rawVariant === 'proxy' || rawVariant === 'poster' ? rawVariant : 'original';
+        const serveOpts = await buildServeOpts(request);
         // Honor HTTP Range so browsers can seek/scrub video & audio. We need
         // the total size first; do a tiny range probe (bytes 0-0) to learn it
         // without buffering the whole object, then serve the requested window.
         const rangeHeader = (request.headers.range as string | undefined) ?? '';
         const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
         if (m && assetService.hasRangeSupport()) {
-          const info = await assetService.statServable(request.params.id, request.user!.org_id, variant);
+          const info = await assetService.statServable(
+            request.params.id,
+            request.user!.org_id,
+            variant,
+            serveOpts,
+          );
           const total = info.total;
           let start = m[1] ? Number(m[1]) : 0;
           let end = m[2] ? Number(m[2]) : total - 1;
@@ -222,6 +323,7 @@ export default async function assetRoutes(fastify: FastifyInstance) {
             start,
             end,
             variant,
+            serveOpts,
           );
           reply.header('Content-Type', contentType);
           reply.header('Content-Length', size);
@@ -236,6 +338,7 @@ export default async function assetRoutes(fastify: FastifyInstance) {
           request.params.id,
           request.user!.org_id,
           variant,
+          serveOpts,
         );
         reply.header('Content-Type', contentType);
         reply.header('Content-Length', size);

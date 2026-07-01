@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1392,
-    "mcp_tools_scanned": 801,
-    "rest_routes_scanned": 879,
+    "total": 1393,
+    "mcp_tools_scanned": 802,
+    "rest_routes_scanned": 880,
     "read_permissions": 539,
-    "destructive_permissions": 132
+    "destructive_permissions": 133
   },
   "permissions": [
     {
@@ -13695,6 +13695,28 @@
         {
           "source": "rest",
           "ref": "POST /assets",
+          "file": "assets.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bin.asset.delete",
+      "app": "bin",
+      "resource": "asset",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "mcp",
+          "ref": "bin_asset_delete",
+          "file": "bin-tools.ts"
+        },
+        {
+          "source": "rest",
+          "ref": "DELETE /assets/:id",
           "file": "assets.routes.ts"
         }
       ]

@@ -98,11 +98,13 @@ await fastify.register(healthCheckPlugin, {
 import assetRoutes from './routes/assets.routes.js';
 import folderRoutes from './routes/folders.routes.js';
 import dataRoutes from './routes/data.routes.js';
+import scanRoutes from './routes/scan.routes.js';
 import wsRoutes from './routes/ws.routes.js';
 
 await fastify.register(assetRoutes, { prefix: '/v1' });
 await fastify.register(folderRoutes, { prefix: '/v1' });
 await fastify.register(dataRoutes, { prefix: '/v1' });
+await fastify.register(scanRoutes, { prefix: '/v1' });
 await fastify.register(wsRoutes);
 
 // Graceful shutdown
