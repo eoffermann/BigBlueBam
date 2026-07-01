@@ -15,4 +15,12 @@ Dockerfile* text eol=lf
 # LF so autocrlf on Windows hosts cannot introduce spurious CRLF churn.
 railway/** text eol=lf
 
+# nginx configs are consumed by the Linux nginx container AND are the input to
+# scripts/gen-railway-configs.mjs. Pin to LF: a lone CR from an autocrlf Windows
+# checkout made the generator's `/^\s*__HTTP_LISTEN__\s*$/m` regex treat the CR
+# as a line boundary and weld `listen 8080;` onto the preceding comment (nginx
+# then defaulted to port 80 and every Railway healthcheck on 8080 failed). LF-
+# only removes the enabling condition; the generator also strips CR defensively.
+infra/nginx/** text eol=lf
+
 # SQL migrations and docs are fine as default (LF on Unix, whatever on Win)

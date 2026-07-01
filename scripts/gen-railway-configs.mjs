@@ -225,7 +225,16 @@ writeFileSync(join(OUT_DIR, 'README.md'), readmeLines.join('\n'));
 function generateRailwayNginxConf() {
   const sourcePath = join(ROOT, 'infra/nginx/nginx-with-site.conf');
   const outPath = join(ROOT, 'infra/nginx/nginx.railway.conf');
-  const source = readFileSync(sourcePath, 'utf8');
+  // Normalize CRLF → LF before any regex work. On a Windows checkout the source
+  // has CRLF terminators, and JS regex in `m` mode treats a lone `\r` as its own
+  // line boundary — so `/^\s*__HTTP_LISTEN__\s*$/m` would start matching at the
+  // `\r` after the preceding comment and its `\s*` would swallow the following
+  // `\n`, welding `listen 8080;` onto the comment line (commenting it out).
+  // nginx then has no valid listen directive, falls back to port 80, and every
+  // Railway healthcheck on 8080 fails — which silently froze the frontend at an
+  // old build in production. Stripping `\r` up front makes generation
+  // deterministic regardless of the checkout's line endings.
+  const source = readFileSync(sourcePath, 'utf8').replace(/\r\n?/g, '\n');
 
   // Build the set of valid service hostnames (matches docker-compose service
   // names, which are the same as upstream names in the source nginx config).
