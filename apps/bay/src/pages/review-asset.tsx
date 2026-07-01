@@ -3,18 +3,24 @@ import {
   ArrowLeft,
   Box,
   Check,
+  Columns2,
   Crosshair,
   Download,
+  FastForward,
   FlagTriangleRight,
   Image as ImageIcon,
   Layers,
   Loader2,
   Music,
+  Pause,
+  Play,
+  Rewind,
   Share2,
   SquareDashedMousePointer,
   Trash2,
   Upload,
   Video,
+  X,
 } from 'lucide-react';
 import {
   useAsset,
@@ -37,8 +43,9 @@ import {
   type ModelAnimationClip,
   type ViewpointAnchor,
   type ViewpointAnnotation,
+  type ViewpointCamera,
 } from '@/hooks/use-bay';
-import { ModelViewer } from '@/components/model-viewer';
+import { ModelViewer, type ClipMeta } from '@/components/model-viewer';
 import { useBayRealtime } from '@/hooks/use-bay-realtime';
 import { useAuthStore } from '@/stores/auth.store';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -529,6 +536,214 @@ function VersionStack({
 }
 
 // ---------------------------------------------------------------------------
+// A/B compare (§8) — two model viewers with synchronized orbit + playhead
+// ---------------------------------------------------------------------------
+
+function ModelCompare({
+  versions,
+  onClose,
+}: {
+  // Pre-sorted newest-first (matches the page's `versions`).
+  versions: BayVersion[];
+  onClose: () => void;
+}) {
+  const withBin = useMemo(() => versions.filter((v) => v.bin_asset_id), [versions]);
+  // Default: baseline = the older of the two newest, right = newest.
+  const [leftId, setLeftId] = useState<string>(withBin[1]?.id ?? withBin[0]?.id ?? '');
+  const [rightId, setRightId] = useState<string>(withBin[0]?.id ?? '');
+  const left = withBin.find((v) => v.id === leftId);
+  const right = withBin.find((v) => v.id === rightId);
+
+  // One shared camera pose drives both panes. Either viewer emits its orbit; we
+  // store it and feed it back to BOTH (each viewer epsilon-guards the echo).
+  const [pose, setPose] = useState<ViewpointCamera | null>(null);
+
+  // One shared transport drives both mixers to the same clip + frame. Clip
+  // metadata is taken from the left (baseline) pane.
+  const [clips, setClips] = useState<ClipMeta[]>([]);
+  const [clipIndex, setClipIndex] = useState(0);
+  const [frame, setFrame] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const animated = clips.length > 0;
+  const activeClip = clips[clipIndex];
+  const playhead = animated && activeClip ? { clip_id: activeClip.id, frame } : null;
+
+  // Reset the playhead whenever the clip set changes (model swap).
+  useEffect(() => {
+    setClipIndex(0);
+    setFrame(0);
+    setPlaying(false);
+  }, [clips]);
+
+  // Shared play loop: advance the frame by real time, both panes follow.
+  useEffect(() => {
+    if (!playing || !activeClip) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      setFrame((f) => {
+        const nf = f + dt * activeClip.fps;
+        if (nf >= activeClip.frameCount - 1) {
+          setPlaying(false);
+          return activeClip.frameCount - 1;
+        }
+        return nf;
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, activeClip]);
+
+  const leftSrc = left?.bin_asset_id ? binRawUrl(left.bin_asset_id, 'proxy') : null;
+  const rightSrc = right?.bin_asset_id ? binRawUrl(right.bin_asset_id, 'proxy') : null;
+
+  const btn =
+    'inline-flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60';
+
+  const versionSelect = (value: string, onChange: (id: string) => void, label: string) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={label}
+      className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-200 outline-none"
+    >
+      {withBin.map((v) => (
+        <option key={v.id} value={v.id}>
+          v{v.version_number}
+        </option>
+      ))}
+    </select>
+  );
+
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60">
+        <div className="flex items-center gap-2">
+          <Columns2 className="h-4 w-4 text-zinc-400" />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Compare versions
+          </h3>
+          <span className="text-[11px] text-zinc-400">synchronized orbit{animated ? ' + playhead' : ''}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        >
+          <X className="h-3.5 w-3.5" /> Close
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-px bg-zinc-200 dark:bg-zinc-800">
+        <div className="bg-black">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/90">
+            <span className="text-[11px] uppercase tracking-wide text-zinc-400">Baseline</span>
+            {versionSelect(leftId, setLeftId, 'Baseline version')}
+          </div>
+          {left && leftSrc ? (
+            <ModelViewer
+              key={left.id}
+              src={leftSrc}
+              mediaMeta={left.media_meta as MediaMeta | null | undefined}
+              label={`v${left.version_number}`}
+              cameraPose={pose}
+              onCameraChange={setPose}
+              transportControlled
+              playhead={playhead}
+              onClipsLoaded={setClips}
+            />
+          ) : (
+            <div className="aspect-video flex items-center justify-center text-xs text-zinc-500">No proxy</div>
+          )}
+        </div>
+        <div className="bg-black">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/90">
+            <span className="text-[11px] uppercase tracking-wide text-zinc-400">Compare</span>
+            {versionSelect(rightId, setRightId, 'Compare version')}
+          </div>
+          {right && rightSrc ? (
+            <ModelViewer
+              key={right.id}
+              src={rightSrc}
+              mediaMeta={right.media_meta as MediaMeta | null | undefined}
+              label={`v${right.version_number}`}
+              cameraPose={pose}
+              onCameraChange={setPose}
+              transportControlled
+              playhead={playhead}
+            />
+          ) : (
+            <div className="aspect-video flex items-center justify-center text-xs text-zinc-500">No proxy</div>
+          )}
+        </div>
+      </div>
+
+      {/* Shared transport drives both mixers to the same clip + frame. */}
+      {animated && activeClip && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-t border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+          <button type="button" className={btn} title="Step back" onClick={() => setFrame((f) => Math.max(0, Math.round(f) - 1))}>
+            <Rewind className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className={cn(btn, playing && 'border-primary-400 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300')}
+            title={playing ? 'Pause' : 'Play'}
+            onClick={() => setPlaying((p) => !p)}
+          >
+            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            className={btn}
+            title="Step forward"
+            onClick={() => setFrame((f) => Math.min(activeClip.frameCount - 1, Math.round(f) + 1))}
+          >
+            <FastForward className="h-3.5 w-3.5" />
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, activeClip.frameCount - 1)}
+            step={1}
+            value={Math.round(frame)}
+            onChange={(e) => {
+              setPlaying(false);
+              setFrame(Number(e.target.value));
+            }}
+            className="h-1.5 flex-1 min-w-[6rem] cursor-pointer accent-primary-500"
+            aria-label="Scrub both versions"
+          />
+          <span className="tabular-nums text-[11px] text-zinc-500">
+            f{Math.round(frame)} / {activeClip.frameCount} · {activeClip.fps}fps
+          </span>
+          {clips.length > 1 && (
+            <select
+              value={clipIndex}
+              onChange={(e) => {
+                setPlaying(false);
+                setClipIndex(Number(e.target.value));
+                setFrame(0);
+              }}
+              aria-label="Animation clip"
+              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-1.5 py-1 text-[11px] text-zinc-700 dark:text-zinc-200 outline-none"
+            >
+              {clips.map((c, i) => (
+                <option key={c.id} value={i}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Capture toolbar — media-driven anchor capture
 // ---------------------------------------------------------------------------
 
@@ -997,6 +1212,8 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
   // Model review: clicking a viewpoint note flies the 3D camera back to it. A
   // fresh object each time so the viewer re-runs its focus even for the same note.
   const [focusAnchor, setFocusAnchor] = useState<ViewpointAnchor | null>(null);
+  // Model A/B compare (§8): split two versions with synchronized orbit/playhead.
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     if (activeVersionId) return;
@@ -1009,6 +1226,8 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
 
   const activeVersion = versions.find((v) => v.id === activeVersionId);
   const kind = asset?.media_kind ?? 'image';
+  // A/B compare is available for models with >= 2 versions that have a proxy.
+  const canCompare = kind === 'model' && versions.filter((v) => v.bin_asset_id).length >= 2;
   const fps = num((activeVersion?.media_meta as { fps?: number } | null)?.fps, 30) || 30;
 
   // Model markers: read the same (unresolved) annotations the rail shows and keep
@@ -1173,6 +1392,27 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
+              {canCompare && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setCompareOpen((v) => !v)}
+                    aria-pressed={compareOpen}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                      compareOpen
+                        ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                        : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60',
+                    )}
+                  >
+                    <Columns2 className="h-4 w-4" />
+                    {compareOpen ? 'Exit compare' : 'Compare versions'}
+                  </button>
+                </div>
+              )}
+              {canCompare && compareOpen ? (
+                <ModelCompare versions={versions} onClose={() => setCompareOpen(false)} />
+              ) : (
               <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
                 <MediaStage
                   kind={kind}
@@ -1208,6 +1448,7 @@ export function ReviewAssetPage({ assetId, onNavigate }: ReviewAssetPageProps) {
                   </div>
                 )}
               </div>
+              )}
               <AnnotationsPanel
                 versionId={activeVersionId}
                 kind={kind}

@@ -3746,6 +3746,9 @@ importers:
       '@gltf-transform/core':
         specifier: ^4.4.0
         version: 4.4.0
+      '@gltf-transform/extensions':
+        specifier: ^4.4.0
+        version: 4.4.0
       '@gltf-transform/functions':
         specifier: ^4.4.0
         version: 4.4.0
@@ -3767,6 +3770,9 @@ importers:
       ioredis:
         specifier: ^5.4.0
         version: 5.10.1
+      meshoptimizer:
+        specifier: ^0.22.0
+        version: 0.22.0
       minio:
         specifier: ^8.0.0
         version: 8.0.7

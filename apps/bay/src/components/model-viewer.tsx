@@ -4,11 +4,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import {
+  ArrowUpRight,
   Crosshair,
+  Eraser,
   FastForward,
   Loader2,
   Maximize2,
   Pause,
+  Pen,
   Play,
   Repeat,
   Rewind,
@@ -21,6 +24,7 @@ import type {
   ViewpointAnchor,
   ViewpointAnnotation,
   ViewpointCamera,
+  ViewpointDraw,
   ViewpointSurface,
   ViewpointTime,
 } from '@/hooks/use-bay';
@@ -53,6 +57,54 @@ interface ModelViewerProps {
   /** When set/changed, fly the camera back to this anchor and show its spot. */
   focusAnchor?: ViewpointAnchor | null;
   className?: string;
+  // --- Phase C compare: camera + playhead sync (§8) ----------------------
+  /** Controlled camera pose. When it changes, this viewer snaps its camera to
+   *  match (epsilon-guarded so an echo of its own emission is ignored). The
+   *  compare component lifts a single pose and feeds it to both viewers. */
+  cameraPose?: ViewpointCamera | null;
+  /** Emitted (per-frame, epsilon-throttled) whenever the user orbits/zooms this
+   *  viewer, so the compare component can mirror it onto the other pane. */
+  onCameraChange?: (pose: ViewpointCamera) => void;
+  /** Controlled animation transport: pose the mixer to this clip + frame. */
+  playhead?: { clip_id: string | null; frame: number } | null;
+  /** When true, suppress this viewer's own transport UI/playback/keys; the
+   *  playhead is driven externally (one shared transport for both panes). */
+  transportControlled?: boolean;
+  /** Reports resolved clip metadata once the model loads, so an external
+   *  transport (compare) can render its scrubber/clip selector. */
+  onClipsLoaded?: (clips: ClipMeta[]) => void;
+  /** A small corner label (e.g. "v3") to identify a compare pane. */
+  label?: string;
+}
+
+/** Screen-space freehand markup primitives (mirror the video draw overlay). */
+type DrawStroke = NonNullable<ViewpointDraw['strokes']>[number];
+type DrawShape = NonNullable<ViewpointDraw['shapes']>[number];
+
+// Default stroke style for new markup. Red high-contrast scribble per §5's
+// example anchor; width is normalized 0..1 to the viewport (mirrors video).
+const DRAW_COLOR = '#ff3b30';
+const DRAW_WIDTH = 0.004;
+
+/** Scale-aware pose equality: true when two camera poses are within a small
+ *  tolerance (relative to view distance), used to suppress sync feedback loops. */
+function posesClose(a: ViewpointCamera, b: ViewpointCamera): boolean {
+  const scale = Math.max(
+    1,
+    Math.hypot(
+      a.position[0] - a.target[0],
+      a.position[1] - a.target[1],
+      a.position[2] - a.target[2],
+    ),
+  );
+  const tol = scale * 1e-3;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs((a.position[i] ?? 0) - (b.position[i] ?? 0)) > tol) return false;
+    if (Math.abs((a.target[i] ?? 0) - (b.target[i] ?? 0)) > tol) return false;
+    if (Math.abs((a.up[i] ?? 0) - (b.up[i] ?? 0)) > 2e-3) return false;
+  }
+  if (Math.abs((a.fov ?? 35) - (b.fov ?? 35)) > 0.01) return false;
+  return true;
 }
 
 // --- pure three.js helpers -------------------------------------------------
@@ -272,7 +324,7 @@ interface ResolvedClip {
 }
 
 /** Light, serializable mirror of ResolvedClip for the transport UI. */
-type ClipMeta = Omit<ResolvedClip, 'clip'>;
+export type ClipMeta = Omit<ResolvedClip, 'clip'>;
 
 /** Re-glue the active spot + annotation markers to the current pose. Cheap: only
  *  the hit triangle of each shown surface is re-skinned. */
@@ -380,6 +432,12 @@ export function ModelViewer({
   annotations,
   focusAnchor,
   className,
+  cameraPose,
+  onCameraChange,
+  playhead,
+  transportControlled = false,
+  onClipsLoaded,
+  label,
 }: ModelViewerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -391,6 +449,34 @@ export function ModelViewer({
   spotModeRef.current = spotMode;
   // Screen-mode highlight (camera-relative box) drawn as an HTML overlay.
   const [screenRect, setScreenRect] = useState<ViewpointSurface['rect'] | null>(null);
+
+  // -- Screen-space draw overlay (§6.3 / §7). Freehand pen + arrow markup, ----
+  //    normalized 0..1 to the viewport, mirroring the video region overlay.
+  const [drawTool, setDrawTool] = useState<null | 'pen' | 'arrow'>(null);
+  const [authoredStrokes, setAuthoredStrokes] = useState<DrawStroke[]>([]);
+  const [authoredShapes, setAuthoredShapes] = useState<DrawShape[]>([]);
+  const [liveStroke, setLiveStroke] = useState<Array<[number, number]> | null>(null);
+  const [liveArrow, setLiveArrow] = useState<{ from: [number, number]; to: [number, number] } | null>(
+    null,
+  );
+  // Read-only markup shown after flying to an annotation that carries `draw`;
+  // cleared the moment the user orbits away (it only reads from anchor.camera).
+  const [focusedDraw, setFocusedDraw] = useState<ViewpointDraw | null>(null);
+  const focusedDrawRef = useRef(focusedDraw);
+  focusedDrawRef.current = focusedDraw;
+  const hasAuthoredDraw = authoredStrokes.length > 0 || authoredShapes.length > 0;
+
+  // Camera-sync plumbing (compare mode).
+  const onCameraChangeRef = useRef(onCameraChange);
+  onCameraChangeRef.current = onCameraChange;
+  const onClipsLoadedRef = useRef(onClipsLoaded);
+  onClipsLoadedRef.current = onClipsLoaded;
+  // The last pose this viewer emitted OR applied — guards the feedback loop so a
+  // viewer never re-emits a pose it just received from the shared sync.
+  const lastPoseRef = useRef<ViewpointCamera | null>(null);
+  // True while applying an external pose, so the resulting controls 'change'
+  // does not echo back out through onCameraChange.
+  const applyingExternalRef = useRef(false);
 
   // -- Animated-transport state (Phase B). Empty for static models. ----------
   const [clipMetas, setClipMetas] = useState<ClipMeta[]>([]);
@@ -521,6 +607,8 @@ export function ModelViewer({
     const e = engineRef.current;
     if (!e || !anchor) return;
     const cam = anchor.camera;
+    // Focusing is a read-only recall: drop any in-progress authoring tool.
+    setDrawTool(null);
 
     // Animated note: select the clip + scrub to the pinned frame BEFORE resolving
     // the surface, so the spot lands on the deformed geometry at that frame.
@@ -545,6 +633,9 @@ export function ModelViewer({
     }
 
     const placeSpot = () => {
+      // After arriving, surface the remembered freehand markup (if any) as a
+      // read-only overlay — pinned to this camera, cleared when the user orbits.
+      setFocusedDraw(anchor.draw ?? null);
       // After arriving, resolve + show the surface highlight. Remember the surface
       // so the render loop re-glues it to the deformed mesh while scrubbing/playing.
       e.shownSurface = anchor.surface?.mode === 'geometry' ? anchor.surface : null;
@@ -768,6 +859,27 @@ export function ModelViewer({
     renderer.domElement.addEventListener('pointerdown', onDown);
     renderer.domElement.addEventListener('pointerup', onUp);
 
+    // Camera sync (compare mode): mirror this viewer's orbit onto its partner.
+    // 'change' fires on every orbit/zoom/damp tick; we emit only when the pose
+    // has meaningfully drifted from the last one we sent or received.
+    const onControlsChange = () => {
+      if (applyingExternalRef.current) return; // don't echo an applied pose
+      if (!engine.controls.enabled) return; // skip tween-driven updates
+      const emit = onCameraChangeRef.current;
+      if (!emit) return;
+      const pose = snapshotCamera();
+      if (lastPoseRef.current && posesClose(lastPoseRef.current, pose)) return;
+      lastPoseRef.current = pose;
+      emit(pose);
+    };
+    // A user grabbing the camera invalidates any focused-annotation draw overlay
+    // (it is only meaningful from the remembered camera).
+    const onControlsStart = () => {
+      if (focusedDrawRef.current) setFocusedDraw(null);
+    };
+    controls.addEventListener('change', onControlsChange);
+    controls.addEventListener('start', onControlsStart);
+
     const loop = (now?: number) => {
       engine.raf = requestAnimationFrame(loop);
       controls.update();
@@ -789,6 +901,8 @@ export function ModelViewer({
       ro.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
+      controls.removeEventListener('change', onControlsChange);
+      controls.removeEventListener('start', onControlsStart);
       controls.dispose();
       // Dispose everything in the scene graph.
       scene.traverse((o) => {
@@ -977,7 +1091,6 @@ export function ModelViewer({
   }, [annotations, ready]);
 
   // -- Fly to a focused annotation when the page sets focusAnchor. ------------
-  // biome-ignore lint/correctness/useExhaustiveDependencies: focusRef is stable
   useEffect(() => {
     if (!ready || !focusAnchor) return;
     focusRef.current(focusAnchor);
@@ -989,10 +1102,61 @@ export function ModelViewer({
     if (e) e.loop = loopOn;
   }, [loopOn]);
 
+  // -- Compare: apply an externally-controlled camera pose. ------------------
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshotCamera is stable
+  useEffect(() => {
+    const e = engineRef.current;
+    if (!e || !cameraPose || typeof cameraPose === 'string') return;
+    const cur = snapshotCamera();
+    if (posesClose(cur, cameraPose)) {
+      // Already here (this is the echo of our own emission) — just record it.
+      lastPoseRef.current = cameraPose;
+      return;
+    }
+    applyingExternalRef.current = true;
+    e.camera.position.set(...cameraPose.position);
+    e.controls.target.set(...cameraPose.target);
+    e.camera.up.set(...cameraPose.up).normalize();
+    if (cameraPose.fov) {
+      e.camera.fov = cameraPose.fov;
+      e.camera.updateProjectionMatrix();
+    }
+    e.controls.update();
+    lastPoseRef.current = cameraPose;
+    applyingExternalRef.current = false;
+  }, [cameraPose]);
+
+  // -- Compare: drive the mixer from an externally-controlled playhead. ------
+  useEffect(() => {
+    if (!transportControlled || !ready || !playhead) return;
+    const e = engineRef.current;
+    if (!e || !e.mixer || !e.clips.length) return;
+    let idx = e.clips.findIndex((c) => c.id === playhead.clip_id);
+    if (idx < 0) idx = clampN(e.activeClipIndex, 0, e.clips.length - 1);
+    if (idx !== e.activeClipIndex) {
+      selectClipInternal(e, idx);
+      setClipIndex(idx);
+    }
+    e.playing = false;
+    poseFrame(e, playhead.frame);
+    setFrame(playhead.frame);
+  }, [playhead, transportControlled, ready]);
+
+  // -- Report clip metadata up once loaded (for an external transport). ------
+  useEffect(() => {
+    if (ready) onClipsLoadedRef.current?.(clipMetas);
+  }, [clipMetas, ready]);
+
+  // -- Draw mode disables orbit so the overlay receives the pointer. ---------
+  useEffect(() => {
+    const e = engineRef.current;
+    if (e) e.controls.enabled = drawTool == null;
+  }, [drawTool]);
+
   // -- Keyboard transport: J/K/L, ',' / '.' frame step, space = play/pause. ---
   // biome-ignore lint/correctness/useExhaustiveDependencies: handlers read live refs
   useEffect(() => {
-    if (!animated) return;
+    if (!animated || transportControlled) return;
     const onKey = (ev: KeyboardEvent) => {
       const tgt = ev.target as HTMLElement | null;
       if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) {
@@ -1027,14 +1191,73 @@ export function ModelViewer({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [animated]);
+  }, [animated, transportControlled]);
 
   const btn =
     'inline-flex items-center gap-1 rounded-md border border-white/15 bg-black/40 px-2 py-1 text-xs font-medium text-white/90 backdrop-blur hover:bg-black/60';
 
+  // -- Draw overlay pointer handling (normalized 0..1 to the viewport). -------
+  const normPoint = (ev: React.PointerEvent): [number, number] => {
+    const host = hostRef.current;
+    if (!host) return [0, 0];
+    const r = host.getBoundingClientRect();
+    return [clamp01((ev.clientX - r.left) / r.width), clamp01((ev.clientY - r.top) / r.height)];
+  };
+  const onDrawDown = (ev: React.PointerEvent) => {
+    if (!drawTool) return;
+    (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+    const p = normPoint(ev);
+    if (drawTool === 'pen') setLiveStroke([p]);
+    else setLiveArrow({ from: p, to: p });
+  };
+  const onDrawMove = (ev: React.PointerEvent) => {
+    if (!drawTool) return;
+    const p = normPoint(ev);
+    if (drawTool === 'pen') setLiveStroke((s) => (s ? [...s, p] : s));
+    else setLiveArrow((a) => (a ? { ...a, to: p } : a));
+  };
+  const onDrawUp = () => {
+    if (drawTool === 'pen' && liveStroke && liveStroke.length > 1) {
+      setAuthoredStrokes((s) => [
+        ...s,
+        {
+          color: DRAW_COLOR,
+          width: DRAW_WIDTH,
+          points: liveStroke.map(
+            ([x, y]) => [Number(x.toFixed(4)), Number(y.toFixed(4))] as [number, number],
+          ),
+        },
+      ]);
+    } else if (drawTool === 'arrow' && liveArrow) {
+      const dx = liveArrow.to[0] - liveArrow.from[0];
+      const dy = liveArrow.to[1] - liveArrow.from[1];
+      if (Math.hypot(dx, dy) > 0.02) {
+        setAuthoredShapes((s) => [...s, { type: 'arrow', from: liveArrow.from, to: liveArrow.to }]);
+      }
+    }
+    setLiveStroke(null);
+    setLiveArrow(null);
+  };
+
+  // Strokes/shapes currently visible: the read-only focused markup, or the
+  // markup being authored. Both render through the same SVG vocabulary.
+  const overlayDraw: ViewpointDraw | null = focusedDraw ?? (
+    hasAuthoredDraw || liveStroke || liveArrow
+      ? { strokes: authoredStrokes, shapes: authoredShapes }
+      : null
+  );
+  const showOverlay = drawTool != null || overlayDraw != null || liveStroke != null || liveArrow != null;
+
   return (
     <div className={cn('relative aspect-video w-full bg-[#0b0b0f]', className)}>
       <div ref={hostRef} className="absolute inset-0" />
+
+      {/* Compare pane label (e.g. "v3"). */}
+      {label && (
+        <div className="absolute left-3 top-3 z-10 rounded-md border border-white/15 bg-black/55 px-2 py-0.5 text-xs font-semibold text-white/90 backdrop-blur pointer-events-none">
+          {label}
+        </div>
+      )}
 
       {/* Screen-mode highlight overlay (camera-relative box). */}
       {screenRect && (
@@ -1047,6 +1270,87 @@ export function ModelViewer({
             height: `${screenRect.h * 100}%`,
           }}
         />
+      )}
+
+      {/* Screen-space freehand draw overlay (§6.3/§7). Normalized 0..1 to the
+          viewport, mirroring the video region overlay. Captures the pointer only
+          while a draw tool is active; otherwise it is a passive markup layer. */}
+      {showOverlay && (
+        <svg
+          className="absolute inset-0 h-full w-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={{ touchAction: 'none', cursor: drawTool ? 'crosshair' : 'default' }}
+          onPointerDown={drawTool ? onDrawDown : undefined}
+          onPointerMove={drawTool ? onDrawMove : undefined}
+          onPointerUp={drawTool ? onDrawUp : undefined}
+          pointerEvents={drawTool ? 'auto' : 'none'}
+          aria-label="Markup overlay"
+        >
+          <title>Markup overlay</title>
+          <defs>
+            <marker
+              id="bay-draw-arrow"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              markerUnits="strokeWidth"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L10,5 L0,10 z" fill={DRAW_COLOR} />
+            </marker>
+          </defs>
+          {(overlayDraw?.strokes ?? []).map((s, i) => (
+            <polyline
+              // biome-ignore lint/suspicious/noArrayIndexKey: static authored order
+              key={`stroke-${i}`}
+              points={s.points.map(([x, y]) => `${x * 100},${y * 100}`).join(' ')}
+              fill="none"
+              stroke={s.color || DRAW_COLOR}
+              strokeWidth={Math.max(0.4, (s.width ?? DRAW_WIDTH) * 100)}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+          {(overlayDraw?.shapes ?? []).map((sh, i) => (
+            <line
+              // biome-ignore lint/suspicious/noArrayIndexKey: static authored order
+              key={`shape-${i}`}
+              x1={sh.from[0] * 100}
+              y1={sh.from[1] * 100}
+              x2={sh.to[0] * 100}
+              y2={sh.to[1] * 100}
+              stroke={DRAW_COLOR}
+              strokeWidth={Math.max(0.4, DRAW_WIDTH * 100)}
+              strokeLinecap="round"
+              markerEnd="url(#bay-draw-arrow)"
+            />
+          ))}
+          {liveStroke && liveStroke.length > 1 && (
+            <polyline
+              points={liveStroke.map(([x, y]) => `${x * 100},${y * 100}`).join(' ')}
+              fill="none"
+              stroke={DRAW_COLOR}
+              strokeWidth={Math.max(0.4, DRAW_WIDTH * 100)}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+          {liveArrow && (
+            <line
+              x1={liveArrow.from[0] * 100}
+              y1={liveArrow.from[1] * 100}
+              x2={liveArrow.to[0] * 100}
+              y2={liveArrow.to[1] * 100}
+              stroke={DRAW_COLOR}
+              strokeWidth={Math.max(0.4, DRAW_WIDTH * 100)}
+              strokeLinecap="round"
+              markerEnd="url(#bay-draw-arrow)"
+            />
+          )}
+        </svg>
       )}
 
       {/* Loading / error states. */}
@@ -1065,8 +1369,9 @@ export function ModelViewer({
       {/* Bottom controls: animated transport (§7.3) above the viewport toolbar. */}
       {ready && (
         <div className="absolute inset-x-3 bottom-3 flex flex-col gap-2">
-          {/* Animated transport — mirrors the video player's vocabulary. */}
-          {animated && activeClip && (
+          {/* Animated transport — mirrors the video player's vocabulary. Hidden
+              when an external (compare) transport is driving this viewer. */}
+          {!transportControlled && animated && activeClip && (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-white/15 bg-black/50 px-2 py-1.5 backdrop-blur">
               <button
                 type="button"
@@ -1151,50 +1456,112 @@ export function ModelViewer({
             </div>
           )}
 
-          {/* Viewport toolbar (§7.5): reset · remember viewpoint · spot. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={btn}
-              title="Reset view"
-              onClick={() => {
-                const e = engineRef.current;
-                if (e) frameCamera(e.sphere);
-                setSpotMode(false);
-              }}
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Reset view
-            </button>
-            <button
-              type="button"
-              className={btn}
-              title="Remember this viewpoint as the anchor for a note"
-              onClick={() => {
-                if (!engineRef.current) return;
-                setSpotMode(false);
-                engineRef.current.spot.visible = false;
-                engineRef.current.shownSurface = null;
-                setScreenRect(null);
-                const time = snapshotTime();
-                captureRef.current?.({
-                  type: 'viewpoint',
-                  camera: snapshotCamera(),
-                  ...(time ? { time } : {}),
-                });
-              }}
-            >
-              <Maximize2 className="h-3.5 w-3.5" /> Remember viewpoint
-            </button>
-            <button
-              type="button"
-              aria-pressed={spotMode}
-              className={cn(btn, spotMode && 'border-amber-400 bg-amber-500/30 text-white')}
-              title="Click the surface to anchor a spot"
-              onClick={() => setSpotMode((s) => !s)}
-            >
-              <Crosshair className="h-3.5 w-3.5" /> {spotMode ? 'Click the model…' : 'Spot'}
-            </button>
-          </div>
+          {/* Viewport toolbar (§7.5): reset · remember viewpoint · spot · draw.
+              Hidden in a compare pane (capture happens in the single viewer). */}
+          {!transportControlled && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={btn}
+                title="Reset view"
+                onClick={() => {
+                  const e = engineRef.current;
+                  if (e) frameCamera(e.sphere);
+                  setSpotMode(false);
+                }}
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Reset view
+              </button>
+              <button
+                type="button"
+                className={btn}
+                title="Remember this viewpoint (and any draw markup) as the anchor for a note"
+                onClick={() => {
+                  if (!engineRef.current) return;
+                  setSpotMode(false);
+                  setDrawTool(null);
+                  setFocusedDraw(null);
+                  engineRef.current.spot.visible = false;
+                  engineRef.current.shownSurface = null;
+                  setScreenRect(null);
+                  const time = snapshotTime();
+                  const draw: ViewpointDraw | undefined = hasAuthoredDraw
+                    ? {
+                        ...(authoredStrokes.length ? { strokes: authoredStrokes } : {}),
+                        ...(authoredShapes.length ? { shapes: authoredShapes } : {}),
+                      }
+                    : undefined;
+                  captureRef.current?.({
+                    type: 'viewpoint',
+                    camera: snapshotCamera(),
+                    ...(time ? { time } : {}),
+                    ...(draw ? { draw } : {}),
+                  });
+                  setAuthoredStrokes([]);
+                  setAuthoredShapes([]);
+                }}
+              >
+                <Maximize2 className="h-3.5 w-3.5" /> Remember viewpoint
+              </button>
+              <button
+                type="button"
+                aria-pressed={spotMode}
+                className={cn(btn, spotMode && 'border-amber-400 bg-amber-500/30 text-white')}
+                title="Click the surface to anchor a spot"
+                onClick={() =>
+                  setSpotMode((s) => {
+                    const next = !s;
+                    if (next) {
+                      setDrawTool(null);
+                      setFocusedDraw(null);
+                    }
+                    return next;
+                  })
+                }
+              >
+                <Crosshair className="h-3.5 w-3.5" /> {spotMode ? 'Click the model…' : 'Spot'}
+              </button>
+              <button
+                type="button"
+                aria-pressed={drawTool === 'pen'}
+                className={cn(btn, drawTool === 'pen' && 'border-amber-400 bg-amber-500/30 text-white')}
+                title="Freehand draw on the viewport (markup is attached on Remember viewpoint)"
+                onClick={() => {
+                  setSpotMode(false);
+                  setFocusedDraw(null);
+                  setDrawTool((t) => (t === 'pen' ? null : 'pen'));
+                }}
+              >
+                <Pen className="h-3.5 w-3.5" /> Draw
+              </button>
+              <button
+                type="button"
+                aria-pressed={drawTool === 'arrow'}
+                className={cn(btn, drawTool === 'arrow' && 'border-amber-400 bg-amber-500/30 text-white')}
+                title="Drag an arrow on the viewport"
+                onClick={() => {
+                  setSpotMode(false);
+                  setFocusedDraw(null);
+                  setDrawTool((t) => (t === 'arrow' ? null : 'arrow'));
+                }}
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" /> Arrow
+              </button>
+              {hasAuthoredDraw && (
+                <button
+                  type="button"
+                  className={btn}
+                  title="Clear the markup you have drawn"
+                  onClick={() => {
+                    setAuthoredStrokes([]);
+                    setAuthoredShapes([]);
+                  }}
+                >
+                  <Eraser className="h-3.5 w-3.5" /> Clear
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
