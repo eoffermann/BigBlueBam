@@ -457,6 +457,17 @@ export class RailwayOrchestrator {
     };
 
     for (const svc of this.plan) {
+      await this._provisionService(svc, varContext);
+    }
+  }
+
+  // Create + configure + set-vars + attach-volume for ONE service. Extracted
+  // from _phaseServices so the non-interactive syncNew() flow can provision an
+  // individual missing service with the exact same logic the full run() uses.
+  // Idempotent: createService returns the existing service by name, and the
+  // volume step tolerates an already-attached volume.
+  async _provisionService(svc, varContext) {
+    {
       // ── Create
       const created = await this._step(
         'service-create',
@@ -601,6 +612,139 @@ export class RailwayOrchestrator {
         { service: svc.name },
       );
     }
+  }
+
+  // ─── Sync new services (non-interactive, additive) ─────────────────
+  //
+  // The parity primitive for CI: given the current catalog, create every
+  // service that does NOT yet exist on Railway (a brand-new app like blip-api),
+  // wire it exactly the way run() would, and trigger its first deploy — then
+  // redeploy the public ingress (frontend) so its nginx routes + SPA bundle
+  // pick up the new app. Existing services are left alone (Railway's GitHub
+  // integration already redeploys those on push); use reconcile() separately
+  // to self-heal drifted deploy-owned variables on the existing set.
+  //
+  // This is what closes the "added two new apps → now do manual Railway steps"
+  // gap: it is a pure function of the catalog + Railway's live state, so it
+  // runs headlessly from a single API token with no operator prompts.
+  //
+  // Options:
+  //   dryRun          — report what WOULD be created/deployed, write nothing.
+  //   redeployOnNew   — service names to also redeploy when ≥1 new service was
+  //                     created (default ['frontend']; the ingress must rebuild
+  //                     to expose a new app's routes). Skipped when nothing new.
+  //   alwaysRedeploy  — service names to redeploy every run regardless (default
+  //                     []). Use to force the ingress even with no new services.
+  //   projectId       — pre-resolved Railway project id. REQUIRED in practice:
+  //                     when supplied (with environmentId) syncNew uses it
+  //                     directly and NEVER creates a project — a reconcile that
+  //                     silently spun up a duplicate project would be a disaster.
+  //   environmentId   — pre-resolved environment id, paired with projectId.
+  async syncNew({
+    dryRun = false,
+    redeployOnNew = ['frontend'],
+    alwaysRedeploy = [],
+    projectId = null,
+    environmentId = null,
+  } = {}) {
+    await this._phaseValidate();
+    if (projectId && environmentId) {
+      // Caller resolved the project already (the CI driver does this to read
+      // shared secrets first). Use it verbatim — do NOT run _phaseProject,
+      // whose "not found → create" path must never fire during a sync.
+      this.projectId = projectId;
+      this.defaultEnvironmentId = environmentId;
+      this._emit({ phase: 'project', message: `Using pre-resolved project ${projectId}`, ok: true });
+    } else {
+      await this._phaseProject();
+    }
+
+    const liveServices = await this.client.listServices(this.projectId);
+    const liveByName = new Map(liveServices.map((s) => [s.name, s.id]));
+    // Seed serviceIds with everything that already exists so deploy triggers
+    // for frontend/existing services can resolve an id.
+    for (const [name, id] of liveByName) this.serviceIds.set(name, id);
+
+    const plan = buildDeployPlan();
+    const missing = plan.filter((svc) => !liveByName.has(svc.name));
+
+    // Rough progress ceiling — best-effort, _step only uses it for display.
+    this.total = missing.length * 4 + redeployOnNew.length + alwaysRedeploy.length + 2;
+    this.step = 0;
+
+    this._emit({
+      phase: 'sync',
+      message: missing.length
+        ? `${missing.length} catalog service(s) not on Railway: ${missing.map((s) => s.name).join(', ')}`
+        : 'All catalog services already exist on Railway',
+      ok: true,
+      missing: missing.map((s) => s.name),
+    });
+
+    const varContext = {
+      generatedSecrets: this.generatedSecrets,
+      publicUrl: this.publicUrl,
+      userIntegrations: this.userIntegrations,
+    };
+
+    const provisioned = [];
+    for (const svc of missing) {
+      if (dryRun) {
+        this._emit({ phase: 'sync', service: svc.name, message: `would create + deploy "${svc.name}"`, ok: true });
+        provisioned.push(svc.name);
+        continue;
+      }
+      await this._provisionService(svc, varContext);
+      provisioned.push(svc.name);
+    }
+
+    // Decide the redeploy set. Newly-created services always deploy. The
+    // ingress (and any alwaysRedeploy targets) redeploy per the rules above.
+    const toDeploy = new Set(provisioned);
+    if (provisioned.length > 0) for (const n of redeployOnNew) toDeploy.add(n);
+    for (const n of alwaysRedeploy) toDeploy.add(n);
+
+    const deployed = [];
+    for (const name of toDeploy) {
+      const serviceId = this.serviceIds.get(name);
+      if (!serviceId) continue; // never provisioned and not live — skip
+      if (dryRun) {
+        this._emit({ phase: 'deploy-trigger', service: name, message: `would trigger deploy for "${name}"`, ok: true });
+        deployed.push(name);
+        continue;
+      }
+      await this._step(
+        'deploy-trigger',
+        `Triggering deploy for "${name}"`,
+        async () => {
+          await this.client.triggerDeploy({
+            projectId: this.projectId,
+            environmentId: this.defaultEnvironmentId,
+            serviceId,
+          });
+        },
+        { service: name },
+      );
+      deployed.push(name);
+    }
+
+    const summary = {
+      dryRun,
+      projectId: this.projectId,
+      environmentId: this.defaultEnvironmentId,
+      provisioned,
+      deployed,
+      missing: missing.map((s) => s.name),
+    };
+    this._emit({
+      phase: 'sync-done',
+      message: dryRun
+        ? `Sync (dry run): ${provisioned.length} service(s) would be created, ${deployed.length} deploy(s) would trigger`
+        : `Sync complete: ${provisioned.length} service(s) created, ${deployed.length} deploy(s) triggered`,
+      ok: true,
+      summary,
+    });
+    return summary;
   }
 
   // ─── Public entry point ────────────────────────────────────────────

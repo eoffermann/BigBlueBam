@@ -75,6 +75,11 @@ export const ENV_HINTS = {
     value: '<generate>',
     note: 'openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars.',
   },
+  BLIP_INGEST_PEPPER: {
+    kind: 'secret',
+    value: '<generate>',
+    note: 'openssl rand -hex 32 — blip-api HMAC pepper for hashing public ingest keys. Blip-local (nothing else references it), but must stay STABLE for blip-api: rotating it invalidates every already-issued ingest key. Generate once and keep.',
+  },
 
   // ── MinIO (object storage) ────────────────────────────────────────
   MINIO_ROOT_USER: {

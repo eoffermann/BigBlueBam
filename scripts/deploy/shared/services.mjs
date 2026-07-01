@@ -511,7 +511,16 @@ export const APP_SERVICES = [
     description: 'Public nginx ingress — serves all SPAs and proxies APIs',
     dockerfile: 'apps/frontend/Dockerfile',
     port: 8080,
-    healthcheck: '/',
+    // NOT '/'. On Railway the `/` location proxies to the `site` upstream, and
+    // Railway runs the deploy healthcheck BEFORE the new container has private-
+    // network access to sibling services — so a `/` healthcheck fails
+    // deterministically ("service unavailable" for the whole window) and the
+    // deploy rolls back to the old image. That silently froze the frontend at
+    // its Jun-25 build (no /blip/ routes) even though every build SUCCEEDED.
+    // `/b3/` is served straight off disk (alias + try_files, no upstream), so it
+    // returns 200 the moment nginx is up — a dependency-free ingress health
+    // signal. See docs/deploy/railway-auto-deploy.md.
+    healthcheck: '/b3/',
     start_command: null,
     required: true,
     is_public_ingress: true, // single externally-exposed service
