@@ -69,21 +69,36 @@ const { mockDb, ctx } = vi.hoisted(() => {
           return this;
         },
         where(cond: any) {
-          const { val } = extractWhere(cond);
+          const { colName, val } = extractWhere(cond);
           const projKeys = Object.keys(projection);
-          // task_parent_links read: parents of a task via the join table.
+          // task_parent_links reads — direction depends on the bound column.
           if (table === 'task_parent_links') {
+            if (colName === 'parent_task_id') {
+              // children of `val` via the join table
+              const rows = ctx.links
+                .filter((l) => l.parent_task_id === val)
+                .map((l) => ({ id: l.task_id }));
+              return resolvable(rows);
+            }
+            // parents of `val` via the join table (bound on task_id)
             const rows = ctx.links
               .filter((l) => l.task_id === val)
               .map((l) => ({ id: l.parent_task_id }));
             return resolvable(rows);
           }
           // tasks reads.
+          if (colName === 'parent_task_id') {
+            // children of `val` via the legacy self-FK
+            const rows = [...ctx.tasks.values()]
+              .filter((t) => t.legacyParent === val)
+              .map((t) => ({ id: t.id }));
+            return resolvable(rows);
+          }
           if (projKeys.includes('start_date')) {
             const t = ctx.tasks.get(val as string);
             return resolvable(t ? [{ start_date: t.start_date, due_date: t.due_date }] : []);
           }
-          // {id: tasks.parent_task_id} — the legacy single-FK parent.
+          // {id: tasks.parent_task_id} — the legacy single-FK parent of `val`.
           const t = ctx.tasks.get(val as string);
           return resolvable(t ? [{ id: t.legacyParent }] : []);
         },
@@ -152,7 +167,7 @@ vi.mock('../src/env.js', () => ({
 }));
 
 // ---------- imports (after mocks) ----------
-import { expandParentsToEncompass } from '../src/services/task.service.js';
+import { expandParentsToEncompass, shiftSubtreeDates } from '../src/services/task.service.js';
 import { broadcastToProject } from '../src/services/realtime.service.js';
 
 // ---------- helpers ----------
@@ -275,5 +290,116 @@ describe('expandParentsToEncompass', () => {
     expect(get('B').due_date).toBe('2026-06-10');
     expect(get('A').start_date).toBe('2026-06-01');
     expect(get('A').due_date).toBe('2026-06-10');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Whole-bar MOVE (feat/timeline-move-children).
+//
+// shiftSubtreeDates walks DOWN the subtree (both parent models) and slides every
+// descendant's set date bounds by a fixed day delta, so dragging a parent bar
+// carries its children along. The root itself is excluded — it has already been
+// moved by the edit that triggered the shift. A visited-set makes a diamond-
+// reachable descendant shift exactly once (writes are absolute date reads +
+// delta, so a double-visit would double-shift).
+// ---------------------------------------------------------------------------
+describe('shiftSubtreeDates (whole-bar move)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ctx.tasks = new Map();
+    ctx.links = [];
+  });
+
+  it('(g) slides every descendant by the delta; the root itself is untouched', async () => {
+    seed([
+      task('P', '2026-06-10', '2026-06-20'),
+      task('C', '2026-06-05', '2026-06-25', 'P'),
+      task('GC', '2026-06-06', '2026-06-08', 'C'),
+    ]);
+
+    await shiftSubtreeDates('P', 5, 'user-1');
+
+    // root already moved by the caller — shift must not touch it again
+    expect(get('P').start_date).toBe('2026-06-10');
+    expect(get('P').due_date).toBe('2026-06-20');
+    // direct child and grandchild both slide +5 days
+    expect(get('C').start_date).toBe('2026-06-10');
+    expect(get('C').due_date).toBe('2026-06-30');
+    expect(get('GC').start_date).toBe('2026-06-11');
+    expect(get('GC').due_date).toBe('2026-06-13');
+  });
+
+  it('(h) shifts backward on a negative delta', async () => {
+    seed([
+      task('P', '2026-06-10', '2026-06-20'),
+      task('C', '2026-06-10', '2026-06-20', 'P'),
+    ]);
+
+    await shiftSubtreeDates('P', -3, 'user-1');
+
+    expect(get('C').start_date).toBe('2026-06-07');
+    expect(get('C').due_date).toBe('2026-06-17');
+  });
+
+  it('(i) shifts only the dates that are set; a null bound stays null', async () => {
+    seed([
+      task('P', '2026-06-10', '2026-06-20'),
+      task('C', null, '2026-06-25', 'P'),
+    ]);
+
+    await shiftSubtreeDates('P', 5, 'user-1');
+
+    expect(get('C').start_date).toBeNull();
+    expect(get('C').due_date).toBe('2026-06-30');
+  });
+
+  it('(j) shifts a diamond-reachable descendant exactly once', async () => {
+    // D is a child of B (legacy FK) AND C (join table); both B and C are
+    // children of A. The visited-set must keep D from shifting twice.
+    seed(
+      [
+        task('A', '2026-06-10', '2026-06-20'),
+        task('B', '2026-06-10', '2026-06-12', 'A'),
+        task('C', '2026-06-10', '2026-06-12', 'A'),
+        task('D', '2026-06-11', '2026-06-11', 'B'),
+      ],
+      [{ task_id: 'D', parent_task_id: 'C' }],
+    );
+
+    await shiftSubtreeDates('A', 5, 'user-1');
+
+    // +5 once, not +10
+    expect(get('D').start_date).toBe('2026-06-16');
+    expect(get('D').due_date).toBe('2026-06-16');
+  });
+
+  it('(k) a zero delta is a no-op (no writes, no broadcast)', async () => {
+    seed([
+      task('P', '2026-06-10', '2026-06-20'),
+      task('C', '2026-06-10', '2026-06-20', 'P'),
+    ]);
+
+    await shiftSubtreeDates('P', 0, 'user-1');
+
+    expect(get('C').start_date).toBe('2026-06-10');
+    expect(get('C').due_date).toBe('2026-06-20');
+    expect(broadcastToProject).not.toHaveBeenCalled();
+  });
+
+  it('(l) a null-dated descendant is skipped but its own children still shift', async () => {
+    // P → M (no dates) → L (dated). M can't shift, but the walk must not stop
+    // at M — L underneath it still slides.
+    seed([
+      task('P', '2026-06-10', '2026-06-20'),
+      task('M', null, null, 'P'),
+      task('L', '2026-06-12', '2026-06-14', 'M'),
+    ]);
+
+    await shiftSubtreeDates('P', 5, 'user-1');
+
+    expect(get('M').start_date).toBeNull();
+    expect(get('M').due_date).toBeNull();
+    expect(get('L').start_date).toBe('2026-06-17');
+    expect(get('L').due_date).toBe('2026-06-19');
   });
 });

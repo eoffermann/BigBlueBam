@@ -394,14 +394,15 @@ async function getDirectParentIds(taskId: string): Promise<string[]> {
 }
 
 /**
- * Focused date-only writer for ancestor rollup. Persists ONLY the supplied
+ * Focused date-only writer for derived date propagation (ancestor widening or
+ * descendant shifting). Persists ONLY the supplied
  * date column(s) + updated_at and broadcasts task.updated. Deliberately does
  * NOT route through updateTask: an ancestor widening is a derived side effect,
  * not a user edit, so it must skip the cycle re-check, the subtask_count /
  * subtask_done_count bumps, the done-gate, and the Bolt / notification
  * fan-out. Writes are attributed to `actorId` via the standard broadcast.
  */
-async function writeAncestorDates(
+async function writeDerivedTaskDates(
   taskId: string,
   patch: { start_date?: string; due_date?: string },
   actorId?: string,
@@ -479,13 +480,65 @@ export async function expandParentsToEncompass(
         }
 
         if (patch.start_date !== undefined || patch.due_date !== undefined) {
-          await writeAncestorDates(parentId, patch, actorId);
+          await writeDerivedTaskDates(parentId, patch, actorId);
           // Recurse upward only when this parent actually widened.
           changedParents.add(parentId);
         }
       }
     }
     frontier = changedParents;
+  }
+}
+
+/** Add whole days to a YYYY-MM-DD date string, returning YYYY-MM-DD. DATE columns
+ *  are timezone-free, so anchor at UTC midnight to avoid DST drift. */
+function addDaysToDateStr(dateStr: string, days: number): string {
+  return new Date(Date.parse(dateStr) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Rigidly slide EVERY descendant of `rootTaskId` by `deltaDays` so a whole-bar
+ * MOVE of a parent (both bounds shifted by the same delta) drags its subtree
+ * along and keeps children aligned. Only set dates are shifted (null bounds stay
+ * null). Walks downward through BOTH parent representations (collectChildTaskIds),
+ * visited-guarded so a task reachable via multiple parents (diamond) shifts
+ * exactly once; the depth cap of 256 mirrors the upward cascade as a hard
+ * termination backstop. The root itself is excluded (it was already moved), and
+ * this does NOT re-run the upward expand for shifted nodes — a rigid shift
+ * preserves their alignment within the moved subtree.
+ */
+export async function shiftSubtreeDates(
+  rootTaskId: string,
+  deltaDays: number,
+  actorId?: string,
+): Promise<void> {
+  if (deltaDays === 0) return;
+  const visited = new Set<string>([rootTaskId]);
+  let frontier = [rootTaskId];
+  for (let depth = 0; depth < 256 && frontier.length > 0; depth++) {
+    const next: string[] = [];
+    for (const parentId of frontier) {
+      const childIds = await collectChildTaskIds(parentId);
+      for (const childId of childIds) {
+        if (visited.has(childId)) continue;
+        visited.add(childId);
+        const [child] = await db
+          .select({ start_date: tasks.start_date, due_date: tasks.due_date })
+          .from(tasks)
+          .where(eq(tasks.id, childId))
+          .limit(1);
+        if (child) {
+          const patch: { start_date?: string; due_date?: string } = {};
+          if (child.start_date != null) patch.start_date = addDaysToDateStr(child.start_date, deltaDays);
+          if (child.due_date != null) patch.due_date = addDaysToDateStr(child.due_date, deltaDays);
+          if (patch.start_date !== undefined || patch.due_date !== undefined) {
+            await writeDerivedTaskDates(childId, patch, actorId);
+          }
+        }
+        next.push(childId);
+      }
+    }
+    frontier = next;
   }
 }
 
@@ -765,6 +818,20 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
     await assertSubtasksDoneBeforeTerminal(taskId, data.phase_id);
   }
 
+  // Capture the pre-update dates so a whole-bar MOVE (both bounds shifted by the
+  // same delta) can be told apart from a resize and slide the descendant subtree.
+  let oldStartDate: string | null = null;
+  let oldDueDate: string | null = null;
+  if (data.start_date !== undefined || data.due_date !== undefined) {
+    const [prevDates] = await db
+      .select({ start_date: tasks.start_date, due_date: tasks.due_date })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1);
+    oldStartDate = prevDates?.start_date ?? null;
+    oldDueDate = prevDates?.due_date ?? null;
+  }
+
   const [task] = await db
     .update(tasks)
     .set(updateValues)
@@ -815,6 +882,25 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
     // is written so the cascade reads the persisted bounds.
     if (changedFields.includes('start_date') || changedFields.includes('due_date')) {
       await expandParentsToEncompass(taskId, actorId);
+
+      // Whole-bar MOVE: if BOTH bounds shifted by the SAME nonzero delta (dragging
+      // the whole task, not resizing one edge), slide the entire descendant subtree
+      // by that delta so children stay aligned under the parent. A resize (only one
+      // bound changed, or unequal deltas) leaves children where they are.
+      if (
+        changedFields.includes('start_date') &&
+        changedFields.includes('due_date') &&
+        oldStartDate != null &&
+        oldDueDate != null &&
+        task.start_date != null &&
+        task.due_date != null
+      ) {
+        const deltaStart = (Date.parse(task.start_date) - Date.parse(oldStartDate)) / 86_400_000;
+        const deltaDue = (Date.parse(task.due_date) - Date.parse(oldDueDate)) / 86_400_000;
+        if (deltaStart === deltaDue && deltaStart !== 0) {
+          await shiftSubtreeDates(taskId, deltaStart, actorId);
+        }
+      }
     }
 
     // Log activity
