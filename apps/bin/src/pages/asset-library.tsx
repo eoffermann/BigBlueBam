@@ -83,19 +83,69 @@ type AssetKind = 'media' | 'structured' | 'other';
 
 const STRUCTURED_EXTS = ['csv', 'tsv', 'json', 'jsonl', 'ndjson', 'yaml', 'yml'];
 
+// 3D model formats open in Bay for review just like images/video/audio. FBX
+// (and often OBJ/STL) uploads as application/octet-stream with no usable MIME,
+// so match by extension too — mirrors the worker's model detection.
+const MODEL_EXTS = ['fbx', 'obj', 'stl', 'glb', 'gltf', 'ply', 'dae', 'usd', 'usdz', 'usdc', 'usda'];
+
 function assetKind(asset: BinAsset): AssetKind {
   const ct = (asset.content_type ?? '').toLowerCase();
-  if (ct.startsWith('image/') || ct.startsWith('video/') || ct.startsWith('audio/')) {
+  const ext = asset.name.includes('.') ? asset.name.split('.').pop()?.toLowerCase() : undefined;
+  // Media = anything Bay reviews: images, video, audio, and 3D models.
+  if (
+    ct.startsWith('image/') ||
+    ct.startsWith('video/') ||
+    ct.startsWith('audio/') ||
+    ct.startsWith('model/') ||
+    (ext ? MODEL_EXTS.includes(ext) : false)
+  ) {
     return 'media';
   }
   if (/csv|json|yaml|ndjson/.test(ct)) {
     return 'structured';
   }
-  const ext = asset.name.includes('.') ? asset.name.split('.').pop()?.toLowerCase() : undefined;
   if (ext && STRUCTURED_EXTS.includes(ext)) {
     return 'structured';
   }
   return 'other';
+}
+
+// Asset-name cell: clamps to the column width and, on hover, pans left to
+// reveal the full name when it overflows — so a very long filename can't blow
+// out the table layout. Falls back to a native title tooltip.
+function AssetName({ name }: { name: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [shift, setShift] = useState(0);
+
+  const onEnter = () => {
+    const wrap = wrapRef.current;
+    const text = textRef.current;
+    if (!wrap || !text) return;
+    const overflow = text.scrollWidth - wrap.clientWidth;
+    setShift(overflow > 0 ? overflow : 0);
+  };
+
+  // ~25ms/px (min 600ms) so a long name reveals at a readable pace, not a whip.
+  const durationMs = Math.max(600, Math.round(shift * 25));
+
+  return (
+    <div
+      ref={wrapRef}
+      className="min-w-0 max-w-[22rem] overflow-hidden"
+      title={name}
+      onMouseEnter={onEnter}
+      onMouseLeave={() => setShift(0)}
+    >
+      <span
+        ref={textRef}
+        className="inline-block whitespace-nowrap font-medium text-zinc-900 dark:text-zinc-100 will-change-transform"
+        style={{ transform: `translateX(-${shift}px)`, transition: `transform ${durationMs}ms linear` }}
+      >
+        {name}
+      </span>
+    </div>
+  );
 }
 
 // Download + risk-ack + override controls for one asset. `canOverride` and
@@ -782,9 +832,7 @@ export function AssetLibraryPage({ onNavigate }: AssetLibraryPageProps) {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 min-w-0">
                             <FileBox className="h-4 w-4 text-primary-500 shrink-0" />
-                            <span className="font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                              {asset.name}
-                            </span>
+                            <AssetName name={asset.name} />
                           </div>
                         </td>
                         <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">
