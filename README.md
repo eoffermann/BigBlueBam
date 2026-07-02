@@ -772,6 +772,34 @@ All services are accessed through a single nginx container on port 80:
 | `/board/ws` | Fastify `:4008` | Board WebSocket (real-time canvas sync) |
 | `/bond/` | nginx | Bond CRM SPA |
 | `/bond/api/` | Fastify `:4009` | Bond REST API |
+| `/blast/` | nginx | Blast email campaigns SPA |
+| `/blast/api/` | Fastify `:4010` | Blast REST API |
+| `/t/` | Fastify `:4010` | Blast open/click tracking (pixel + redirect) |
+| `/unsub/` | Fastify `:4010` | Blast unsubscribe endpoint |
+| `/bench/` | nginx | Bench analytics SPA |
+| `/bench/api/` | Fastify `:4011` | Bench REST API |
+| `/book/` | nginx | Book scheduling SPA |
+| `/book/api/` | Fastify `:4012` | Book REST API |
+| `/blank/` | nginx | Blank forms SPA |
+| `/blank/api/` | Fastify `:4013` | Blank REST API |
+| `/bill/` | nginx | Bill invoicing SPA |
+| `/bill/api/` | Fastify `:4014` | Bill REST API |
+| `/blueprint/` | nginx | Blueprint structured-diagrams SPA |
+| `/blueprint/api/` | Fastify `:4015` | Blueprint REST API |
+| `/blueprint/ws` | Fastify `:4015` | Blueprint WebSocket |
+| `/bureau/` | nginx | Bureau virtual-office SPA |
+| `/bureau/api/` | Fastify `:4015` | Bureau REST API (distinct container; shares port :4015) |
+| `/bureau/ws` | Fastify `:4015` | Bureau WebSocket (presence, knocks, summons) |
+| `/bin/` | nginx | Bin DAM / structured-data SPA |
+| `/bin/api/` | Fastify `:4016` | Bin REST API |
+| `/bin/ws` | Fastify `:4016` | Bin WebSocket (live structured-data edits + presence) |
+| `/bay/` | nginx | Bay media-review SPA |
+| `/bay/api/` | Fastify `:4017` | Bay REST API (incl. token-gated guest review) |
+| `/bay/ws` | Fastify `:4017` | Bay WebSocket (live annotations/decisions) |
+| `/blip/` | nginx | Blip telemetry SPA |
+| `/blip/api/` | Fastify `:4018` | Blip REST API |
+| `/blip/ws` | Fastify `:4018` | Blip WebSocket (live log stream) |
+| `/blip/ingest/` | Fastify `:4018` | Blip telemetry ingest (bearer-token) |
 | `/mcp/` | MCP Server `:3001` | Model Context Protocol (804 tools) |
 
 Infrastructure services (internal, not exposed via nginx):
@@ -783,7 +811,6 @@ Infrastructure services (internal, not exposed via nginx):
 | MinIO | `:9000` | S3-compatible file storage |
 | Worker | -- | BullMQ background job processor |
 | LiveKit | `:7880` | Voice/video SFU (WebRTC media server) |
-| Beacon API | `:4004` | Beacon knowledge base REST API |
 | Qdrant | `:6333` | Vector search engine (semantic embeddings) |
 | Voice Agent | `:4003` | AI voice call participation (Python/FastAPI) |
 
@@ -836,6 +863,8 @@ pnpm test  # 900+ tests across all packages
 │  /helpdesk/api/→ Helpdesk API :4001            ││
 │  /files/       → MinIO :9000                   ││
 │  /mcp/         → MCP Server :3001              ││
+│  + Bay, Bin, Blip, Blast, Bench, Book, Blank,  ││
+│    Bill, Blueprint, Bureau (see Services table)││
 └──────┬──────────┬──────────┬───────────────────┘│
        │          │          │                     │
 ┌──────▼────┐ ┌──▼───────┐ ┌▼──────────┐ ┌──────────┐ ┌───────▼──────┐ ┌──────────┐
@@ -854,7 +883,7 @@ pnpm test  # 900+ tests across all packages
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React 19, TailwindCSS v4, Motion, TanStack Query, Zustand, dnd-kit, Radix UI |
+| **Frontend** | React 19, TailwindCSS v4, Motion, TanStack Query, Zustand, dnd-kit, Radix UI, three.js (Bay 3D viewer) |
 | **API** | Node.js 22, Fastify v5, Drizzle ORM, Zod |
 | **Realtime** | WebSocket + Redis PubSub |
 | **MCP** | @modelcontextprotocol/sdk (Streamable HTTP + SSE) |
@@ -886,6 +915,11 @@ apps/
   book-api/         → Book Fastify REST API (scheduling with mixed human/agent availability)
   blank-api/        → Blank Fastify REST API (forms, submissions, conditional routing)
   bill-api/         → Bill Fastify REST API (invoicing, expenses, PDF generation, recurring billing)
+  blueprint-api/    → Blueprint Fastify REST API + WebSocket (typed graph diagrams, ELK auto-layout, Mermaid I/O)
+  bureau-api/       → Bureau Fastify API + WebSocket (virtual office: floors, rooms, presence, knocks, LiveKit tokens)
+  bin-api/          → Bin Fastify API + WebSocket (DAM / object storage + structured-data editor)
+  bay-api/          → Bay Fastify API + WebSocket (media review & approval, incl. FBX/3D; token-gated guest links)
+  blip-api/         → Blip Fastify API + WebSocket + ingest (app telemetry / log-ingest & observability)
   voice-agent/      → AI voice agent (Python/FastAPI, LiveKit Agents SDK)
   integration-tests/→ Cross-app integration harness (Vitest + mock service clients)
   e2e/              → Playwright end-to-end suite
@@ -896,6 +930,12 @@ packages/
   service-health/   → /healthz + /readyz Fastify plugin
   db-stubs/         → Drizzle stubs and test bootstraps
   livekit-tokens/   → LiveKit access-token minting
+  storage/          → Pluggable S3/MinIO storage driver (shared by api, bin-api, bay-api, worker)
+  permissions/      → Fastify permissions plugin + resolver (app.resource.verb catalog)
+  structured-data/  → CSV/JSONL/YAML codecs + Yjs CRDT for Bin's structured-data editor
+  smtp-resolver/    → Shared SMTP-config precedence resolver (api + worker)
+  bureau-client/    → Suite-wide LiveKit "docked box" client (calls, presence, knock/summon)
+  docs-capture/     → Recipe-driven populated-screenshot capture engine (gilligan cast)
 infra/
   postgres/         → 187 idempotent numbered migrations (tip 0225)
   nginx/            → Reverse proxy config (single nginx serves every SPA)
@@ -937,12 +977,15 @@ site/               → Marketing site (served at /)
 | **Per-App Guides** | |
 | [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
 | [Banter (Team Messaging) Guide](docs/apps/banter/guide.md) | User guide and MCP tool reference |
+| [Bay (Media Review) Guide](docs/apps/bay/guide.md) | User guide and MCP tool reference |
 | [Beacon (Knowledge Base) Guide](docs/apps/beacon/guide.md) | User guide and MCP tool reference |
 | [Bearing (Goals & OKRs) Guide](docs/apps/bearing/guide.md) | User guide and MCP tool reference |
 | [Bench (Analytics) Guide](docs/apps/bench/guide.md) | User guide and MCP tool reference |
 | [Bill (Invoicing) Guide](docs/apps/bill/guide.md) | User guide and MCP tool reference |
+| Bin (Digital Asset Management) | Guide coming soon |
 | [Blank (Forms) Guide](docs/apps/blank/guide.md) | User guide and MCP tool reference |
 | [Blast (Email Campaigns) Guide](docs/apps/blast/guide.md) | User guide and MCP tool reference |
+| [Blip (App Telemetry) Guide](docs/apps/blip/guide.md) | User guide and MCP tool reference |
 | [Blueprint Guide](docs/apps/blueprint/guide.md) | User guide and MCP tool reference |
 | [Board (Visual Collaboration) Guide](docs/apps/board/guide.md) | User guide and MCP tool reference |
 | [Bolt (Workflow Automation) Guide](docs/apps/bolt/guide.md) | User guide and MCP tool reference |
