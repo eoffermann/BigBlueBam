@@ -91,6 +91,13 @@ export function useUpdateTask() {
       // (Cheap — the drawer is typically open on at most one task at a time.)
       queryClient.invalidateQueries({ queryKey: ['tasks', 'subtasks'] });
     },
+    // A failed drag (optimistic write already applied in onMutate) OR a
+    // server-side parent-date expansion that recomputes bounds must reconcile
+    // against the source of truth. onSettled fires on both success and error,
+    // so the board always refetches to the authoritative dates.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['board'] });
+    },
   });
 }
 

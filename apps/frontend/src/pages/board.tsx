@@ -568,6 +568,7 @@ export function BoardPage({ projectId, onNavigate }: BoardPageProps) {
           <TimelineView
             phases={filteredPhases}
             onTaskClick={handleTaskClick}
+            onUpdateTask={handleUpdateTask}
             projectName={project?.name}
           />
         );

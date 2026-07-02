@@ -367,6 +367,128 @@ export async function listTaskSubtasks(taskId: string) {
   return rows;
 }
 
+// ─── Timeline parent-expansion cascade (feat/timeline-interactive) ──────────
+
+/**
+ * Direct parents of `taskId`: the union of the legacy tasks.parent_task_id
+ * self-FK and every task_parent_links.parent_task_id where task_id = taskId.
+ * Same dual-model union assertNoParentCycle / listTaskParents walk, trimmed to
+ * just the parent ids one level up (no full-row join — the cascade only needs
+ * dates, which it reads per-parent).
+ */
+async function getDirectParentIds(taskId: string): Promise<string[]> {
+  const fromLegacy = await db
+    .select({ id: tasks.parent_task_id })
+    .from(tasks)
+    .where(eq(tasks.id, taskId));
+  const fromLinks = await db
+    .select({ id: taskParentLinks.parent_task_id })
+    .from(taskParentLinks)
+    .where(eq(taskParentLinks.task_id, taskId));
+  return Array.from(
+    new Set([
+      ...fromLegacy.map((r) => r.id).filter((id): id is string => id != null),
+      ...fromLinks.map((r) => r.id),
+    ]),
+  );
+}
+
+/**
+ * Focused date-only writer for ancestor rollup. Persists ONLY the supplied
+ * date column(s) + updated_at and broadcasts task.updated. Deliberately does
+ * NOT route through updateTask: an ancestor widening is a derived side effect,
+ * not a user edit, so it must skip the cycle re-check, the subtask_count /
+ * subtask_done_count bumps, the done-gate, and the Bolt / notification
+ * fan-out. Writes are attributed to `actorId` via the standard broadcast.
+ */
+async function writeAncestorDates(
+  taskId: string,
+  patch: { start_date?: string; due_date?: string },
+  actorId?: string,
+): Promise<void> {
+  const [row] = await db
+    .update(tasks)
+    .set({ ...patch, updated_at: new Date() })
+    .where(eq(tasks.id, taskId))
+    .returning();
+  if (row) {
+    broadcastToProject(
+      row.project_id,
+      'task.updated',
+      { id: taskId, changes: patch, task: row },
+      actorId,
+    );
+  }
+}
+
+/**
+ * Expand every ancestor of `taskId` so each parent's [start_date, due_date]
+ * window fully encompasses its child's. EXPAND-ONLY: a bound is only ever
+ * pushed outward (start earlier, due later) or POPULATED when the parent's
+ * bound is null (the confirmed product decision — a null parent bound is
+ * filled from the child so the parent encompasses it); a bound is never
+ * shrunk. Dates compare as YYYY-MM-DD strings (lexicographic == chronological
+ * for ISO dates).
+ *
+ * Walks upward through BOTH the legacy tasks.parent_task_id self-FK and the
+ * task_parent_links join table, so a subtask with multiple parents widens all
+ * of them, and each changed parent recurses to ITS parents (a parent is itself
+ * a subtask of its grandparents). Only parents that actually changed are
+ * re-queued, so propagation halts naturally once no bound moves; the depth cap
+ * of 256 mirrors assertNoParentCycle as a hard backstop that guarantees
+ * termination even on shared/diamond/cyclic data.
+ */
+export async function expandParentsToEncompass(
+  taskId: string,
+  actorId?: string,
+): Promise<void> {
+  let frontier = new Set<string>([taskId]);
+  for (let depth = 0; depth < 256 && frontier.size > 0; depth++) {
+    const changedParents = new Set<string>();
+    for (const childId of frontier) {
+      const [child] = await db
+        .select({ start_date: tasks.start_date, due_date: tasks.due_date })
+        .from(tasks)
+        .where(eq(tasks.id, childId))
+        .limit(1);
+      // Nothing to propagate if the child has no dates at all.
+      if (!child || (child.start_date == null && child.due_date == null)) continue;
+
+      const parentIds = await getDirectParentIds(childId);
+      for (const parentId of parentIds) {
+        if (parentId === childId) continue; // self-loop: nothing to widen
+        const [parent] = await db
+          .select({ start_date: tasks.start_date, due_date: tasks.due_date })
+          .from(tasks)
+          .where(eq(tasks.id, parentId))
+          .limit(1);
+        if (!parent) continue;
+
+        const patch: { start_date?: string; due_date?: string } = {};
+        if (
+          child.start_date != null &&
+          (parent.start_date == null || child.start_date < parent.start_date)
+        ) {
+          patch.start_date = child.start_date;
+        }
+        if (
+          child.due_date != null &&
+          (parent.due_date == null || child.due_date > parent.due_date)
+        ) {
+          patch.due_date = child.due_date;
+        }
+
+        if (patch.start_date !== undefined || patch.due_date !== undefined) {
+          await writeAncestorDates(parentId, patch, actorId);
+          // Recurse upward only when this parent actually widened.
+          changedParents.add(parentId);
+        }
+      }
+    }
+    frontier = changedParents;
+  }
+}
+
 export async function createTask(
   projectId: string,
   data: CreateTaskInput,
@@ -482,6 +604,13 @@ export async function createTask(
         updated_at: new Date(),
       })
       .where(eq(tasks.id, data.parent_task_id));
+  }
+
+  // Timeline rollup: a newly-created subtask that carries a date widens its
+  // parent chain so every ancestor encompasses it. EXPAND-ONLY. Only worth a
+  // walk when the task actually has a parent AND at least one date to project.
+  if (data.parent_task_id && (data.start_date != null || data.due_date != null)) {
+    await expandParentsToEncompass(task!.id, reporterId);
   }
 
   // Broadcast realtime event
@@ -680,6 +809,13 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
       changes,
       task,
     });
+
+    // Timeline rollup: if this edit moved either date, widen every ancestor so
+    // each parent still encompasses this task. EXPAND-ONLY, runs AFTER the row
+    // is written so the cascade reads the persisted bounds.
+    if (changedFields.includes('start_date') || changedFields.includes('due_date')) {
+      await expandParentsToEncompass(taskId, actorId);
+    }
 
     // Log activity
     if (actorId) {

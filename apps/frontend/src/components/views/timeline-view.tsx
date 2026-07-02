@@ -34,6 +34,12 @@ type GroupBy = 'assignee' | 'phase' | 'epic';
 interface TimelineViewProps {
   phases: (Phase & { tasks: Task[] })[];
   onTaskClick: (taskId: string) => void;
+  /**
+   * Commit a drag-edit of a task's dates. Sends ONLY the changed field(s):
+   * a left-resize sends `{ start_date }`, a right-resize `{ due_date }`, a
+   * move both. When omitted, range bars fall back to click-only behavior.
+   */
+  onUpdateTask?: (taskId: string, data: { start_date?: string; due_date?: string }) => void;
   projectName?: string;
 }
 
@@ -95,7 +101,192 @@ function getTaskDot(task: Task): Date {
   return parseISO(task.created_at);
 }
 
-export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewProps) {
+// Pixel travel below which a pointer gesture is treated as a click (open the
+// inspector) rather than a drag (edit dates).
+const DRAG_THRESHOLD_PX = 5;
+// Width of each resize hit-zone at the bar's leading/trailing edge.
+const EDGE_PX = 8;
+
+type DragMode = 'move' | 'start' | 'end';
+
+interface DragSession {
+  mode: DragMode;
+  startClientX: number;
+  origLeft: number;
+  origWidth: number;
+  pointerId: number;
+  moved: boolean;
+  newStart?: Date;
+  newEnd?: Date;
+}
+
+interface TimelineTaskBarProps {
+  task: Task;
+  range: { start: Date; end: Date };
+  left: number;
+  width: number;
+  top: number;
+  colorClass: string;
+  borderClass: string;
+  dateToX: (date: Date) => number;
+  xToDate: (px: number) => Date;
+  onTaskClick: (taskId: string) => void;
+  onUpdateTask: (taskId: string, data: { start_date?: string; due_date?: string }) => void;
+}
+
+/**
+ * A directly-manipulable timeline bar. Three hit zones by pointer x: the left
+ * ~8px edge resizes start_date, the right ~8px edge resizes due_date, the
+ * middle moves both (preserving span). A local draft drives the live preview
+ * during the gesture; the change is committed to the server on pointer-up.
+ *
+ * Click vs drag: total pointer travel < 5px is a click (native onClick opens
+ * the inspector, which also keeps keyboard Enter working); a real drag sets a
+ * suppression flag so the trailing synthetic click does not re-open it.
+ */
+function TimelineTaskBar({
+  task,
+  range,
+  left,
+  width,
+  top,
+  colorClass,
+  borderClass,
+  dateToX,
+  xToDate,
+  onTaskClick,
+  onUpdateTask,
+}: TimelineTaskBarProps) {
+  const [draft, setDraft] = useState<{ left: number; width: number } | null>(null);
+  const session = useRef<DragSession | null>(null);
+  // Set true when a gesture resolved as a drag, so the synthetic click that
+  // follows pointer-up is swallowed instead of opening the inspector.
+  const draggedRef = useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    // Ignore secondary buttons; let the native context menu / etc. through.
+    if (e.button !== 0) return;
+    draggedRef.current = false;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    let mode: DragMode = 'move';
+    if (offsetX <= EDGE_PX) mode = 'start';
+    else if (offsetX >= rect.width - EDGE_PX) mode = 'end';
+    session.current = {
+      mode,
+      startClientX: e.clientX,
+      origLeft: left,
+      origWidth: width,
+      pointerId: e.pointerId,
+      moved: false,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const s = session.current;
+    if (!s) return;
+    const delta = e.clientX - s.startClientX;
+    if (Math.abs(delta) >= DRAG_THRESHOLD_PX) s.moved = true;
+
+    if (s.mode === 'move') {
+      const newStart = xToDate(s.origLeft + delta);
+      const dayShift = differenceInDays(newStart, range.start);
+      const newEnd = addDays(range.end, dayShift);
+      s.newStart = newStart;
+      s.newEnd = newEnd;
+      const l = dateToX(newStart);
+      setDraft({ left: l, width: Math.max(dateToX(newEnd) - l, 4) });
+    } else if (s.mode === 'start') {
+      let newStart = xToDate(s.origLeft + delta);
+      // Can't push the start onto or past the end: keep at least a 1-day span.
+      const maxStart = addDays(range.end, -1);
+      if (newStart > maxStart) newStart = maxStart;
+      s.newStart = newStart;
+      const l = dateToX(newStart);
+      setDraft({ left: l, width: Math.max(dateToX(range.end) - l, 4) });
+    } else {
+      let newEnd = xToDate(s.origLeft + s.origWidth + delta);
+      const minEnd = addDays(range.start, 1);
+      if (newEnd < minEnd) newEnd = minEnd;
+      s.newEnd = newEnd;
+      const l = dateToX(range.start);
+      setDraft({ left: l, width: Math.max(dateToX(newEnd) - l, 4) });
+    }
+  };
+
+  const endGesture = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const s = session.current;
+    session.current = null;
+    setDraft(null);
+    if (!s) return;
+    try {
+      e.currentTarget.releasePointerCapture(s.pointerId);
+    } catch {
+      /* capture may already be gone (e.g. pointercancel) */
+    }
+    if (!s.moved) {
+      // A click: leave it to the native onClick handler below.
+      return;
+    }
+    draggedRef.current = true;
+    if (s.mode === 'move' && s.newStart && s.newEnd) {
+      onUpdateTask(task.id, {
+        start_date: format(s.newStart, 'yyyy-MM-dd'),
+        due_date: format(s.newEnd, 'yyyy-MM-dd'),
+      });
+    } else if (s.mode === 'start' && s.newStart) {
+      onUpdateTask(task.id, { start_date: format(s.newStart, 'yyyy-MM-dd') });
+    } else if (s.mode === 'end' && s.newEnd) {
+      onUpdateTask(task.id, { due_date: format(s.newEnd, 'yyyy-MM-dd') });
+    }
+  };
+
+  const displayLeft = draft?.left ?? left;
+  const displayWidth = draft?.width ?? width;
+  const dragging = draft !== null;
+
+  return (
+    <button
+      type="button"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endGesture}
+      onPointerCancel={endGesture}
+      onClick={() => {
+        // Swallow the synthetic click that trails a real drag; otherwise a
+        // genuine single click (or keyboard Enter) opens the inspector.
+        if (draggedRef.current) {
+          draggedRef.current = false;
+          return;
+        }
+        onTaskClick(task.id);
+      }}
+      className={cn(
+        'group absolute h-6 rounded-md border text-[10px] font-medium text-white px-1.5 truncate shadow-sm select-none touch-none transition-[filter]',
+        dragging ? 'cursor-grabbing brightness-110' : 'cursor-grab hover:brightness-110',
+        colorClass,
+        borderClass,
+      )}
+      style={{ left: displayLeft, top, width: displayWidth }}
+      title={`${task.human_id ?? ''} ${task.title}`}
+    >
+      {/* Left resize grip */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-2 cursor-col-resize rounded-l-md bg-white/50 opacity-0 transition-opacity group-hover:opacity-100"
+      />
+      {task.title}
+      {/* Right resize grip */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 right-0 w-2 cursor-col-resize rounded-r-md bg-white/50 opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </button>
+  );
+}
+
+export function TimelineView({ phases, onTaskClick, onUpdateTask, projectName }: TimelineViewProps) {
   const [zoom, setZoom] = useState<ZoomLevel>('week');
   const [groupBy, setGroupBy] = useState<GroupBy>('phase');
   const [laneSort, setLaneSort] = useState<LaneSort>('priority-desc');
@@ -218,6 +409,36 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
     const totalDays = differenceInDays(timelineEnd, timelineStart) || 1;
     const dayOffset = differenceInDays(date, timelineStart);
     return (dayOffset / totalDays) * totalWidth;
+  };
+
+  // Inverse of dateToX: map a pixel X back to a whole-day Date. Used by the
+  // drag surface to translate pointer positions into concrete task dates.
+  const xToDate = (px: number): Date => {
+    if (zoom === 'month') {
+      if (columns.length === 0) return timelineStart;
+      // Locate the column whose [left, left+width) window owns px; anything
+      // past the last column resolves against the last column (extrapolates).
+      let idx = columns.length - 1;
+      for (let i = 0; i < columns.length; i++) {
+        const w = columns[i]?.width ?? 0;
+        if (px < (columnLefts[i] ?? 0) + w) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0) idx = 0;
+      const col = columns[idx];
+      if (!col) return timelineStart;
+      const left = columnLefts[idx] ?? 0;
+      const frac = col.width > 0 ? (px - left) / col.width : 0;
+      const colStart = col.date;
+      const colEnd = columns[idx + 1] ? columns[idx + 1]!.date : addMonths(colStart, 1);
+      const spanDays = (colEnd.getTime() - colStart.getTime()) / 86_400_000;
+      return addDays(colStart, Math.round(frac * spanDays));
+    }
+    const totalDays = differenceInDays(timelineEnd, timelineStart) || 1;
+    const pxPerDay = totalWidth / totalDays;
+    return addDays(timelineStart, Math.round(pxPerDay > 0 ? px / pxPerDay : 0));
   };
 
   // Build groups
@@ -485,6 +706,33 @@ export function TimelineView({ phases, onTaskClick, projectName }: TimelineViewP
                         const left = dateToX(range.start);
                         const right = dateToX(range.end);
                         const width = Math.max(right - left, 4);
+
+                        // Only bars backed by BOTH dates are directly editable:
+                        // there are two real handles to drag. Start-only /
+                        // due-only bars (a single date, synthesized into a
+                        // short range) stay click-only, like dots.
+                        const hasBothDates = Boolean(
+                          (task as Task & { start_date?: string | null }).start_date && task.due_date,
+                        );
+
+                        if (hasBothDates && onUpdateTask) {
+                          return (
+                            <TimelineTaskBar
+                              key={task.id}
+                              task={task}
+                              range={range}
+                              left={left}
+                              width={width}
+                              top={top}
+                              colorClass={PRIORITY_COLORS[task.priority] ?? 'bg-zinc-400'}
+                              borderClass={PRIORITY_BORDER_COLORS[task.priority] ?? 'border-zinc-500'}
+                              dateToX={dateToX}
+                              xToDate={xToDate}
+                              onTaskClick={onTaskClick}
+                              onUpdateTask={onUpdateTask}
+                            />
+                          );
+                        }
 
                         return (
                           <button
