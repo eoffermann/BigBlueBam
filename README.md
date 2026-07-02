@@ -35,8 +35,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/tests-900%2B%20passing-brightgreen" alt="Tests" />
-  <img src="https://img.shields.io/badge/MCP%20tools-340-blue" alt="MCP Tools" />
-  <img src="https://img.shields.io/badge/apps-14-blueviolet" alt="Apps" />
+  <img src="https://img.shields.io/badge/MCP%20tools-804-blue" alt="MCP Tools" />
+  <img src="https://img.shields.io/badge/apps-19-blueviolet" alt="Apps" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
@@ -44,7 +44,7 @@
 
 ## The Vision
 
-Most work platforms are built for humans talking to humans. BigBlueBam is built for **human-AI collaboration**, a world where your team and AI agents plan projects, message each other, close deals, write docs, track goals, automate workflows, and support customers in the same suite, at the same time.
+Most work platforms are built for humans talking to humans. Bolt an AI agent onto one and you get a bot poking at a UI it was never meant to touch. BigBlueBam starts from the other end: it is built for **human-AI collaboration** from the ground up — a world where your team and AI agents plan projects, message each other, close deals, write docs, track goals, automate workflows, and support customers in the same suite, at the same time, with the same permissions.
 
 **Humans** own the strategy: setting priorities, defining epics, closing deals, reviewing deliverables, talking to customers.
 
@@ -52,13 +52,13 @@ Most work platforms are built for humans talking to humans. BigBlueBam is built 
 
 The **suite** is the shared workspace. When an AI agent creates a task, replies to a customer, updates a deal, or posts to a Banter channel, it shows up in real time, right alongside everything your team is doing. No separate dashboards. No hidden automation. Full transparency.
 
-This is made possible by **340 MCP tools** that give AI assistants (Claude, Claude Code, custom agents) full read-write access to project boards, sprints, team messaging (with scheduled posts and pattern subscriptions), helpdesk tickets, knowledge base, collaborative docs, workflow automations with runtime observability, goals and OKRs, whiteboards, CRM pipelines with dedupe, email campaigns, analytics dashboards, scheduling with mixed human-and-agent rosters, forms, invoicing, plus cross-cutting platform capabilities (cross-app search, composite subject views, entity linking, durable proposal queues, per-agent kill switches, HMAC-signed outbound webhooks). Service-account agents run behind a fail-closed policy gate with confirm-action tokens backed by Redis so destructive flows survive rolling deploys.
+This is made possible by **804 MCP tools** that give AI assistants (Claude, Claude Code, custom agents) full read-write access to project boards, sprints, team messaging (with scheduled posts and pattern subscriptions), helpdesk tickets, knowledge base, collaborative docs, workflow automations with runtime observability, goals and OKRs, whiteboards, CRM pipelines with dedupe, email campaigns, analytics dashboards, scheduling with mixed human-and-agent rosters, forms, invoicing, plus cross-cutting platform capabilities (cross-app search, composite subject views, entity linking, durable proposal queues, per-agent kill switches, HMAC-signed outbound webhooks). Service-account agents run behind a fail-closed policy gate with confirm-action tokens backed by Redis so destructive flows survive rolling deploys.
 
 ---
 
 ## The Suite at a Glance
 
-Fourteen apps, one workspace. If you've used the tools on the right you already know most of how each app works — the difference is that all fourteen live under the same auth, the same org and project permissions, and the same 340-tool MCP surface, so AI agents can work across them without integration glue.
+Nineteen apps, one workspace. If you've used the tools on the right you already know most of how each app works — the twist is that all nineteen live under the same auth, the same org and project permissions, and the same 804-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
 
 | App | What it is | Comparable to |
 |-----|------------|---------------|
@@ -75,6 +75,9 @@ Fourteen apps, one workspace. If you've used the tools on the right you already 
 | **Book** | Scheduling with public booking pages and mixed human-plus-agent availability | Calendly, Cal.com |
 | **Blank** | Forms with conditional logic routing, submissions export, AI-generated form definitions | Typeform, Google Forms, Tally |
 | **Bill** | Invoicing, expenses, recurring billing, PDF generation, profitability reports | FreshBooks, QuickBooks, Wave |
+| **Bay** | Media review and approval — frame/timecode/region annotations, per-reviewer decisions, token-gated guest links, and 3D/FBX model review | Frame.io, Ziflow |
+| **Bin** | Digital asset management — object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing | Dropbox/Box, plus an Airtable-style data grid |
+| **Blip** | App telemetry — log ingest, live viewer, saved views, watches/alerts, transforms, retention, and scheduled reports | Datadog Logs, Grafana Loki, Papertrail |
 | **Helpdesk** | Customer support portal with ticket tracking, similar-ticket dedupe, and auto task creation | Zendesk, Intercom, Help Scout |
 
 **What the comparison table doesn't show:** every one of these apps is wired into the same MCP surface, so an AI agent triaging a Helpdesk ticket can upsert the requester in Bond, create a Bam task, post a Banter update to the engineering channel, and schedule a Book meeting with the customer — in one cross-app flow, with visibility preflight and a durable approval queue gating anything destructive.
@@ -84,7 +87,7 @@ Fourteen apps, one workspace. If you've used the tools on the right you already 
 ## Product Tour
 
 <p align="center">
-  <img src="images/03-board.png" alt="Kanban Board" width="100%" />
+  <img src="site/public/screenshots/bam/light/01-board.png" alt="Kanban Board" width="100%" />
 </p>
 <p align="center"><em>The Kanban board — the central hub where human and AI work converges.</em></p>
 
@@ -92,15 +95,15 @@ Fourteen apps, one workspace. If you've used the tools on the right you already 
 
 <table>
   <tr>
-    <td width="50%"><img src="images/07-timeline.png" alt="Timeline View" width="100%" /></td>
-    <td width="50%"><img src="images/08-calendar.png" alt="Calendar View" width="100%" /></td>
+    <td width="50%"><img src="site/public/screenshots/bam/light/09-timeline.png" alt="Timeline View" width="100%" /></td>
+    <td width="50%"><img src="site/public/screenshots/bam/light/10-calendar.png" alt="Calendar View" width="100%" /></td>
   </tr>
   <tr>
     <td align="center"><em>Timeline / Gantt view</em></td>
     <td align="center"><em>Calendar view</em></td>
   </tr>
   <tr>
-    <td width="50%"><img src="images/06-list-view.png" alt="List View" width="100%" /></td>
+    <td width="50%"><img src="site/public/screenshots/bam/light/04-list-view.png" alt="List View" width="100%" /></td>
     <td width="50%"><img src="images/09-project-dashboard.png" alt="Project Analytics" width="100%" /></td>
   </tr>
   <tr>
@@ -108,7 +111,7 @@ Fourteen apps, one workspace. If you've used the tools on the right you already 
     <td align="center"><em>Project analytics dashboard</em></td>
   </tr>
   <tr>
-    <td width="50%"><img src="images/16-helpdesk-tickets.png" alt="Helpdesk Tickets" width="100%" /></td>
+    <td width="50%"><img src="site/public/screenshots/helpdesk/light/02-ticket-list.png" alt="Helpdesk Tickets" width="100%" /></td>
     <td width="50%"><img src="images/14-command-palette.png" alt="Command Palette" width="100%" /></td>
   </tr>
   <tr>
@@ -126,14 +129,9 @@ Fourteen apps, one workspace. If you've used the tools on the right you already 
 Drag-and-drop cards across 5 configurable phases with WIP limits. Each card shows priority, assignee, story points, due date, and comment count at a glance. Motion spring physics make the interactions feel natural.
 
 <p align="center">
-  <img src="images/03-board.png" alt="Kanban Board — Dark Mode" width="100%" />
+  <img src="site/public/screenshots/bam/light/01-board.png" alt="Kanban Board" width="100%" />
 </p>
-<p align="center"><em>Dark mode — the default for late-night deploys.</em></p>
-
-<p align="center">
-  <img src="images/13-board-light.png" alt="Kanban Board — Light Mode" width="100%" />
-</p>
-<p align="center"><em>Light mode — because some people like the sun.</em></p>
+<p align="center"><em>Every screen is theme-aware — light for daytime, dark for late-night deploys (see the Theme-aware UI section below).</em></p>
 
 ### Swimlanes
 
@@ -157,8 +155,8 @@ Every project supports five views — switch between them without losing your fi
 
 <table>
   <tr>
-    <td width="50%"><img src="images/06-list-view.png" alt="List View" width="100%" /></td>
-    <td width="50%"><img src="images/07-timeline.png" alt="Timeline View" width="100%" /></td>
+    <td width="50%"><img src="site/public/screenshots/bam/light/04-list-view.png" alt="List View" width="100%" /></td>
+    <td width="50%"><img src="site/public/screenshots/bam/light/09-timeline.png" alt="Timeline View" width="100%" /></td>
   </tr>
   <tr>
     <td align="center"><em>List view with sortable columns</em></td>
@@ -167,7 +165,7 @@ Every project supports five views — switch between them without losing your fi
 </table>
 
 <p align="center">
-  <img src="images/08-calendar.png" alt="Calendar View" width="100%" />
+  <img src="site/public/screenshots/bam/light/10-calendar.png" alt="Calendar View" width="100%" />
 </p>
 <p align="center"><em>Calendar view — monthly navigation with task due dates</em></p>
 
@@ -176,7 +174,7 @@ Every project supports five views — switch between them without losing your fi
 Click any card to open the detail drawer. Full rich-text description with image support, assignee, priority, phase, sprint, story points, start and due dates, subtasks, file attachments, comments with emoji reactions, and a complete activity feed.
 
 <p align="center">
-  <img src="images/04-task-detail.png" alt="Task Detail Drawer" width="100%" />
+  <img src="site/public/screenshots/bam/light/02-task-detail.png" alt="Task Detail Drawer" width="100%" />
 </p>
 
 ### Sprint Management
@@ -196,7 +194,7 @@ Charts and widgets for sprint progress, priority breakdown, overdue tasks, task 
 A cross-project view of everything assigned to you, grouped by project. One place to see your full plate.
 
 <p align="center">
-  <img src="images/10-my-work.png" alt="My Work View" width="100%" />
+  <img src="site/public/screenshots/bam/light/05-my-work.png" alt="My Work View" width="100%" />
 </p>
 
 ### Command Palette
@@ -212,7 +210,7 @@ Press **Ctrl+K** to open the command palette. Search tasks, switch projects, nav
 BigBlueBam ships a dedicated **People** surface (not buried under Settings) that covers the full identity lifecycle — invite, edit, assign, disable — with strict role-based gating.
 
 <p align="center">
-  <img src="images/people-list.png" alt="People list — searchable, filterable, bulk-selectable" width="100%" />
+  <img src="site/public/screenshots/bam/light/04-people.png" alt="People list — searchable, filterable, bulk-selectable" width="100%" />
 </p>
 
 Filter by role or status, search by name or email, and act on individual members or in bulk.
@@ -330,14 +328,14 @@ Every screen adapts to light and dark mode. Most of the shots in this README are
 Configure calendar feeds, API keys, and webhooks under Settings:
 
 <p align="center">
-  <img src="images/12-integrations.png" alt="Integrations Settings" width="100%" />
+  <img src="site/public/screenshots/bam/light/06-settings-integrations.png" alt="Integrations Settings" width="100%" />
 </p>
 
 ---
 
 ## For AI Agents
 
-BigBlueBam exposes **340 MCP (Model Context Protocol) tools** that give AI assistants full access to every app in the suite plus cross-cutting platform capabilities. Connect Claude, Claude Code, or any MCP-compatible agent and let it work alongside your team.
+This is the part most work suites bolt on as an afterthought. BigBlueBam exposes **804 MCP (Model Context Protocol) tools** that give AI assistants first-class, read-write access to every app in the suite plus cross-cutting platform capabilities — the same operations a human gets through the UI, gated by the same permissions. Connect Claude, Claude Code, or any MCP-compatible agent and let it work alongside your team.
 
 ### What AI Agents Can Do
 
@@ -349,7 +347,7 @@ BigBlueBam exposes **340 MCP (Model Context Protocol) tools** that give AI assis
 - **Message the team via Banter** — post messages immediately or schedule for later while respecting per-channel quiet hours, manage channels, react, search conversations and call transcripts, subscribe to message patterns, and participate in voice calls as spoken participants
 - **Manage the knowledge base via Beacon** — create, publish, upsert-by-slug, search with semantic plus graph retrieval, verify content freshness, link related knowledge, manage governance policies, and save reusable queries
 - **Author collaborative documents via Brief** — create, edit, upsert-by-slug, search documents, manage version history, leave inline comments, apply templates, and graduate finished documents into Beacons
-- **Automate workflows with Bolt** — create trigger-condition-action rules, inspect executions, trace why each rule fired or skipped, browse templates, and orchestrate cross-product automations against the full 340-tool catalog
+- **Automate workflows with Bolt** — create trigger-condition-action rules, inspect executions, trace why each rule fired or skipped, browse templates, and orchestrate cross-product automations against the full 804-tool catalog
 - **Track goals and OKRs with Bearing** — create time-boxed periods, define goals with key results, link KRs to Bam tasks for automatic progress, post status updates, and generate at-risk reports
 - **Collaborate visually on Board** — create and manage whiteboard rooms, add and arrange shapes, read canvas content for AI analysis, manage participants, embed cross-product content, and run sticky-to-task pipelines
 - **Manage CRM pipeline with Bond** — create, update, upsert-by-email, merge contacts, advance deals through pipeline stages, detect likely duplicates with confidence scores, log activities, and generate pipeline reports
@@ -381,7 +379,7 @@ BigBlueBam exposes **340 MCP (Model Context Protocol) tools** that give AI assis
 
 ### MCP Tools Reference
 
-**340 tools** across the fourteen apps plus cross-cutting agentic platform surfaces:
+**804 tools** across the nineteen apps plus cross-cutting agentic platform surfaces:
 
 | Category | Count | What they cover |
 |----------|------:|-----------------|
@@ -474,6 +472,16 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 
 [Guide](docs/apps/banter/guide.md) | [Overview](docs/apps/banter/marketing.md) | [MCP Tools](docs/apps/banter/mcp-tools.md)
 
+### Bay (Media Review)
+
+6 routes, 6 schemas, 14 MCP tools
+
+Media review and approval — frame/timecode/region annotations, per-reviewer decisions, token-gated public guest review links, and FBX/3D model review in a three.js viewer.
+
+<img src="site/public/screenshots/bay/light/model-viewer.png" width="400" alt="Bay (Media Review)">
+
+[Guide](docs/apps/bay/guide.md) | [Overview](docs/apps/bay/marketing.md) | [MCP Tools](docs/apps/bay/mcp-tools.md)
+
 ### Beacon (Knowledge Base)
 
 9 routes, 12 schemas, 38 MCP tools
@@ -506,6 +514,16 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 
 [Guide](docs/apps/bill/guide.md) | [Overview](docs/apps/bill/marketing.md) | [MCP Tools](docs/apps/bill/mcp-tools.md)
 
+### Bin (Digital Asset Management)
+
+4 routes, 4 schemas, 19 MCP tools
+
+DAM / object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing and virus scanning — the storage layer behind Bay and Blip.
+
+<img src="site/public/screenshots/bin/light/asset-library.png" width="400" alt="Bin (Digital Asset Management)">
+
+_(Guide coming soon.)_
+
 ### Blank (Forms)
 
 4 routes, 5 schemas, 20 MCP tools
@@ -522,9 +540,19 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 
 [Guide](docs/apps/blast/guide.md) | [Overview](docs/apps/blast/marketing.md) | [MCP Tools](docs/apps/blast/mcp-tools.md)
 
+### Blip (App Telemetry)
+
+12 routes, 12 schemas, 38 MCP tools
+
+App telemetry and observability — bearer-token log ingest, a live log viewer, saved views with field indexing, watches/alerts, transforms, retention, timelapse, and scheduled reports.
+
+<img src="site/public/screenshots/blip/light/live-viewer.png" width="400" alt="Blip (App Telemetry)">
+
+[Guide](docs/apps/blip/guide.md) | [Overview](docs/apps/blip/marketing.md) | [MCP Tools](docs/apps/blip/mcp-tools.md)
+
 ### Blueprint
 
-6 routes, 11 schemas, 36 MCP tools
+6 routes, 11 schemas, 37 MCP tools
 
 <img src="docs/apps/blueprint/screenshots/light/01-diagram-list.png" width="400" alt="Blueprint">
 
@@ -572,7 +600,7 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 
 ### Bureau
 
-15 routes, 4 schemas, 37 MCP tools
+15 routes, 4 schemas, 38 MCP tools
 
 <img src="docs/apps/bureau/screenshots/light/01-floor-directory.png" width="400" alt="Bureau">
 
@@ -588,7 +616,7 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 
 ### Introduction to BigBlueBam
 
-An overview of the whole suite: the sixteen apps, how they connect, and how AI agents work alongside your team.
+An overview of the whole suite: the nineteen apps, how they connect, and how AI agents work alongside your team.
 
 [Guide](docs/apps/introduction/guide.md) | [Overview](docs/apps/introduction/marketing.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
@@ -742,7 +770,7 @@ All services are accessed through a single nginx container on port 80:
 | `/board/ws` | Fastify `:4008` | Board WebSocket (real-time canvas sync) |
 | `/bond/` | nginx | Bond CRM SPA |
 | `/bond/api/` | Fastify `:4009` | Bond REST API |
-| `/mcp/` | MCP Server `:3001` | Model Context Protocol (340 tools) |
+| `/mcp/` | MCP Server `:3001` | Model Context Protocol (804 tools) |
 
 Infrastructure services (internal, not exposed via nginx):
 
@@ -811,7 +839,7 @@ pnpm test  # 900+ tests across all packages
 ┌──────▼────┐ ┌──▼───────┐ ┌▼──────────┐ ┌──────────┐ ┌───────▼──────┐ ┌──────────┐
 │ Bam API   │ │ Banter   │ │ MCP Server│ │ Brief    │ │ Bolt API │ │ LiveKit SFU  │ │ Worker   │
 │ :4000     │ │ API :4002│ │ :3001     │ │ API :4005│ │ :4006    │ │ :7880 (voice)│ │ BullMQ   │
-│ +WebSocket│ │ +WS      │ │ 340 tools │ │ +WS      │ │          │ │ +voice-agent │ │ jobs     │
+│ +WebSocket│ │ +WS      │ │ 804 tools │ │ +WS      │ │          │ │ +voice-agent │ │ jobs     │
 └─────┬─────┘ └────┬─────┘ └─────┬─────┘ └────┬─────┘ └──────────────┘ └────┬─────┘
       │             │             │            │                  │
 ┌─────▼─────────────▼─────────────▼────────────▼───────────────────▼───┐
@@ -841,7 +869,7 @@ pnpm test  # 900+ tests across all packages
 apps/
   api/              → Bam Fastify REST API + WebSocket (project management core)
   frontend/         → Every React SPA under one container
-  mcp-server/       → MCP protocol server (340 tools, Redis-backed confirm tokens)
+  mcp-server/       → MCP protocol server (804 tools, Redis-backed confirm tokens)
   worker/           → BullMQ background jobs (emails, notifications, scheduled Banter posts, webhook dispatch + DLQ)
   helpdesk-api/     → Helpdesk Fastify API (tickets, messages, similar-tickets lookup, user upsert)
   banter-api/       → Banter Fastify API + WebSocket (channels, threads, calls, quiet hours, scheduled posts, agent subscriptions)
@@ -867,7 +895,7 @@ packages/
   db-stubs/         → Drizzle stubs and test bootstraps
   livekit-tokens/   → LiveKit access-token minting
 infra/
-  postgres/         → 140 idempotent numbered migrations (tip 0140)
+  postgres/         → 187 idempotent numbered migrations (tip 0225)
   nginx/            → Reverse proxy config (single nginx serves every SPA)
   livekit/          → LiveKit SFU configuration
   helm/             → Kubernetes Helm chart
@@ -880,11 +908,11 @@ site/               → Marketing site (served at /)
 
 | Metric | Count |
 |--------|-------|
-| Apps | 14 (Bam, Banter, Beacon, Bearing, Bench, Bill, Blank, Blast, Board, Bolt, Bond, Book, Brief, Helpdesk) |
-| MCP tools | 340 (54 Bam core + 53 Banter + 30 Beacon + 23 Bond + 18 Brief + 16 Bill + 14 Board + 14 Blast + 13 Bolt + 12 Bearing + 11 Helpdesk + 11 Book + 11 Blank + 11 Bench + 49 cross-cutting platform) |
-| Bolt event catalog | 109 registered events across app and platform sources |
+| Apps | 19 (Bam, Banter, Bay, Beacon, Bearing, Bench, Bill, Bin, Blank, Blast, Blip, Blueprint, Board, Bolt, Bond, Book, Brief, Bureau, Helpdesk) |
+| MCP tools | 804 across 49 modules (123 Bam + 77 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Beacon + 38 Blip + 38 Bureau + 37 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 25 Book + 24 Bolt + 20 Blank + 19 Bin + 14 Bay + 11 Helpdesk + 46 cross-cutting platform) |
+| Bolt event catalog | 122 registered events across app and platform sources |
 | Test cases | 900+ |
-| Migrations | 140 (tip 0140, additive + idempotent) |
+| Migrations | 187 (tip 0225, additive + idempotent) |
 
 ---
 
