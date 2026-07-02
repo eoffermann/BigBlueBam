@@ -8,6 +8,8 @@ const categoryLinks = [
   { label: 'Communication & Knowledge', href: '/communicate' },
   { label: 'Sales & Marketing', href: '/sales' },
   { label: 'Operations & Automation', href: '/operations' },
+  { label: 'Media Review & Assets', href: '/media' },
+  { label: 'Telemetry & Observability', href: '/telemetry' },
 ];
 
 function isHomepage() {

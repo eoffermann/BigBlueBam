@@ -17,6 +17,9 @@ import {
   ArrowRight,
   GitBranch,
   Building2,
+  Clapperboard,
+  HardDrive,
+  Activity,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
@@ -218,11 +221,54 @@ const categories: Category[] = [
       },
     ],
   },
+  {
+    title: 'Media Review & Assets',
+    badge: 'Media',
+    badgeVariant: 'green',
+    href: '/media',
+    products: [
+      {
+        name: 'Bay',
+        subtitle: 'Media Review',
+        description: 'Media review & approval with FBX/3D model review, frame-accurate annotations, decisions, and token-gated guest links.',
+        icon: Clapperboard,
+        color: 'bg-orange-100 text-orange-600',
+        borderColor: 'border-l-orange-500',
+        anchor: 'bay',
+      },
+      {
+        name: 'Bin',
+        subtitle: 'Asset Management',
+        description: 'DAM / object storage plus a live structured-data editor. The storage backbone the whole suite writes bytes to.',
+        icon: HardDrive,
+        color: 'bg-teal-100 text-teal-600',
+        borderColor: 'border-l-teal-500',
+        anchor: 'bin',
+      },
+    ],
+  },
+  {
+    title: 'Telemetry & Observability',
+    badge: 'Telemetry',
+    badgeVariant: 'blue',
+    href: '/telemetry',
+    products: [
+      {
+        name: 'Blip',
+        subtitle: 'Telemetry',
+        description: 'App telemetry and log ingest with a live viewer, watches, transforms, retention policies, and scheduled reports.',
+        icon: Activity,
+        color: 'bg-lime-100 text-lime-600',
+        borderColor: 'border-l-lime-500',
+        anchor: 'blip',
+      },
+    ],
+  },
 ];
 
 const mcpServer: Product = {
   name: 'MCP Server',
-  subtitle: '720+ AI Tools',
+  subtitle: '804 AI Tools',
   description: 'One Model Context Protocol server that hands AI agents every app plus cross-cutting platform powers (search, composite views, proposals, policies, webhooks). It is the front door the whole suite shares.',
   icon: Bot,
   color: 'bg-slate-100 text-slate-600',
@@ -257,17 +303,18 @@ export function ProductGrid() {
       <AnimatedReveal>
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <Badge variant="blue" className="mb-4">
-            16 Apps + MCP Platform, One Stack
+            19 Apps + MCP Platform, One Stack
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Not a 17th tab. The sixteen you stop opening tabs for.
+            Not a 20th tab. The nineteen you stop opening tabs for.
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             "All-in-one" usually means a pile of shallow features that don't quite replace the
-            specialist tools you're already paying for. This isn't that. Sixteen genuinely capable
-            apps (work, communication, sales, operations), built as one system, self-hosted, and
-            wired together through a single MCP server with 720+ tools. No tab-switching, no
-            integration spreadsheet, no app that didn't get the memo.
+            specialist tools you're already paying for. This isn't that. Nineteen genuinely capable
+            apps (work, communication, sales, operations, media review, telemetry), built as one
+            system, self-hosted, and wired together through a single MCP server with 804 tools
+            across 49 modules. No tab-switching, no integration spreadsheet, no app that didn't get
+            the memo.
           </p>
         </div>
       </AnimatedReveal>

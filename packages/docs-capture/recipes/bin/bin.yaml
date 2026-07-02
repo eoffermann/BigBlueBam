@@ -1,0 +1,17 @@
+# Bin — digital asset management (object storage) + structured-data editor.
+# Captures the Asset Library against the seeded gilligan bin dataset. Bin is the
+# storage backbone that also powers Bay (media bytes) and Blip (capture/export).
+
+- id: bin-asset-library
+  app: bin
+  demonstrates: "The Bin asset library: folders plus media + dataset assets with scan-status pills, per-file actions, and multi-select delete"
+  route: /bin/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main }
+    - { action: wait, ms: 1400 }
+  expect: ["text=Asset Library"]
+  expectNot: ["input#password"]
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Asset library" }
+  masks: ["time", "[datetime]"]

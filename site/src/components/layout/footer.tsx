@@ -1,15 +1,32 @@
 const productLinks = [
   { label: 'Bam', href: '/work#features' },
   { label: 'Banter', href: '/communicate#banter' },
-  { label: 'Helpdesk', href: '/communicate#helpdesk' },
+  { label: 'Bay', href: '/media#bay' },
   { label: 'Beacon', href: '/communicate#beacon' },
-  { label: 'Brief', href: '/communicate#brief' },
-  { label: 'Bolt', href: '/operations#bolt' },
   { label: 'Bearing', href: '/work#bearing' },
-  { label: 'Board', href: '/work#board' },
-  { label: 'Bond', href: '/sales#bond' },
-  { label: 'Blast', href: '/sales#blast' },
   { label: 'Bench', href: '/operations#bench' },
+  { label: 'Bill', href: '/operations#bill' },
+  { label: 'Bin', href: '/media#bin' },
+  { label: 'Blank', href: '/operations#blank' },
+  { label: 'Blast', href: '/sales#blast' },
+  { label: 'Blip', href: '/telemetry#blip' },
+  { label: 'Blueprint', href: '/work#blueprint' },
+  { label: 'Board', href: '/work#board' },
+  { label: 'Bolt', href: '/operations#bolt' },
+  { label: 'Bond', href: '/sales#bond' },
+  { label: 'Book', href: '/operations#book' },
+  { label: 'Brief', href: '/communicate#brief' },
+  { label: 'Bureau', href: '/communicate#bureau' },
+  { label: 'Helpdesk', href: '/communicate#helpdesk' },
+];
+
+const categoryLinks = [
+  { label: 'Work Management', href: '/work' },
+  { label: 'Communication & Knowledge', href: '/communicate' },
+  { label: 'Sales & Marketing', href: '/sales' },
+  { label: 'Operations & Automation', href: '/operations' },
+  { label: 'Media Review & Assets', href: '/media' },
+  { label: 'Telemetry & Observability', href: '/telemetry' },
   { label: 'Architecture', href: '/#architecture' },
 ];
 
@@ -24,7 +41,7 @@ export function Footer() {
   return (
     <footer className="bg-zinc-950 text-zinc-400">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-12 md:grid-cols-3">
+        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div>
             <div className="mb-4 flex items-center gap-2.5">
@@ -46,6 +63,22 @@ export function Footer() {
             </h3>
             <ul className="space-y-2.5">
               {productLinks.map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-sm transition-colors hover:text-white">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Categories */}
+          <div>
+            <h3 className="mb-4 text-sm font-semibold tracking-wider text-zinc-300 uppercase">
+              Categories
+            </h3>
+            <ul className="space-y-2.5">
+              {categoryLinks.map((link) => (
                 <li key={link.label}>
                   <a href={link.href} className="text-sm transition-colors hover:text-white">
                     {link.label}

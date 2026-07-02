@@ -15,6 +15,8 @@ const OperationsPage = lazy(() => import('@/pages/operations').then((m) => ({ de
 const DeployGuidePage = lazy(() => import('@/pages/deploy-guide').then((m) => ({ default: m.DeployGuidePage })));
 const ManualPage = lazy(() => import('@/pages/manual').then((m) => ({ default: m.ManualPage })));
 const TechnicalPage = lazy(() => import('@/pages/technical').then((m) => ({ default: m.TechnicalPage })));
+const MediaPage = lazy(() => import('@/pages/media'));
+const TelemetryPage = lazy(() => import('@/pages/telemetry'));
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
@@ -61,6 +63,22 @@ export function App() {
     return (
       <PageShell>
         <OperationsPage />
+      </PageShell>
+    );
+  }
+
+  if (path.startsWith('/media')) {
+    return (
+      <PageShell>
+        <MediaPage />
+      </PageShell>
+    );
+  }
+
+  if (path.startsWith('/telemetry')) {
+    return (
+      <PageShell>
+        <TelemetryPage />
       </PageShell>
     );
   }
