@@ -519,6 +519,12 @@ const EXCLUDED_PATH_PREFIXES = [
   // (…_bulk_delete.create / …_scan_override.create), so exclude them.
   '/assets/bulk-delete',
   '/assets/:id/scan-override',
+  // Member email change is deliberately gated by the shared
+  // bam.org_member_profile.update permission (it is a profile-management
+  // action that admins/owners already hold), not a distinct path-derived
+  // org_member_email.update. Exclude so the generator doesn't mint an
+  // unused duplicate action. Same rationale as /assets/bulk-delete above.
+  '/org/members/:userId/email',
 ];
 
 // File basenames whose every route is non-action (unauthenticated, internal-
