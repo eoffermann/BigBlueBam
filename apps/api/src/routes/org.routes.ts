@@ -13,8 +13,15 @@ import { shadowOnly } from '../middleware/dual-read.js';
 import {
   sendMemberInvitationEmail,
   sendPasswordResetEmail,
+  sendEmailVerificationEmail,
+  sendEmailChangeNoticeEmail,
   isSmtpConfigured,
 } from '../lib/email-queue.js';
+import { randomBytes } from 'node:crypto';
+import {
+  initiateEmailChange,
+  findUserByEmail,
+} from '../services/superuser-users.service.js';
 import {
   SMTP_SETTING_KEYS,
   clearOrgSmtpConfigCache,
@@ -551,6 +558,152 @@ export default async function orgRoutes(fastify: FastifyInstance) {
         if (handleRankError(request, reply, err)) return;
         throw err;
       }
+    },
+  );
+
+  // ─── PATCH /org/members/:userId/email ─────────────────────────────────────
+  //
+  // Org admin/owner changes a member's email. Like the self-service and
+  // SuperUser flows, this only STAGES the new address (pending_email) and
+  // emails a verification link to it — the swap lands when the member clicks
+  // the link. Same rank model as send-password-reset: a caller may only act on
+  // a member ranked strictly below them (SuperUsers bypass). Reuses the
+  // profile-update permission — no new action id, so existing admins already
+  // hold it.
+  fastify.patch<{ Params: { userId: string } }>(
+    '/org/members/:userId/email',
+    {
+      preHandler: [
+        requireAuth,
+        fastify.requireCan('bam.org_member_profile.update'),
+        requireScope('admin'),
+      ],
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const schema = z.object({ new_email: z.string().email().max(320) });
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request body',
+            details: parsed.error.issues.map((i) => ({
+              field: i.path.join('.'),
+              issue: i.message,
+            })),
+            request_id: request.id,
+          },
+        });
+      }
+
+      const newEmail = parsed.data.new_email.toLowerCase().trim();
+      const targetUserId = request.params.userId;
+
+      const [target] = await db
+        .select({ id: users.id, email: users.email, display_name: users.display_name })
+        .from(users)
+        .where(eq(users.id, targetUserId))
+        .limit(1);
+
+      if (!target) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Target user not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      // Rank check for non-superusers: caller must outrank the target and the
+      // target must be a member of the caller's org.
+      if (!request.user!.is_superuser && targetUserId !== request.user!.id) {
+        const targetRole = await orgService.getMembershipRole(
+          request.user!.org_id,
+          targetUserId,
+        );
+        if (!targetRole) {
+          return reply.status(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Target user is not a member of this org',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+        const rank = orgService.checkRankAbove(
+          request.user!.role,
+          targetRole,
+          request.user!.is_superuser,
+        );
+        if (!rank.allowed) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message:
+                rank.reason ??
+                'You cannot change the email for a user at or above your own role',
+              details: [],
+              request_id: request.id,
+            },
+          });
+        }
+      }
+
+      if (newEmail === target.email.toLowerCase()) {
+        return reply.status(400).send({
+          error: {
+            code: 'SAME_EMAIL',
+            message: 'That is already the current email address for this member',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const taken = await findUserByEmail(newEmail);
+      if (taken && taken.id !== targetUserId) {
+        return reply.status(400).send({
+          error: {
+            code: 'EMAIL_TAKEN',
+            message: 'That email is already in use',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      await initiateEmailChange(targetUserId, newEmail, token);
+
+      const email_sent = await sendEmailVerificationEmail({
+        to: newEmail,
+        token,
+        userName: target.display_name,
+      });
+      await sendEmailChangeNoticeEmail({
+        to: target.email,
+        userName: target.display_name,
+        newEmail,
+      });
+
+      request.log.info(
+        {
+          event: 'admin.email_change_requested',
+          caller_id: request.user!.id,
+          target_id: targetUserId,
+          org_id: request.user!.org_id,
+          email_sent,
+        },
+        'Admin requested a member email change',
+      );
+
+      return reply.send({
+        data: { user_id: targetUserId, pending_email: newEmail, email_sent },
+      });
     },
   );
 

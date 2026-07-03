@@ -102,6 +102,12 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
   const [resetResult, setResetResult] = useState<string | null>(null);
   const [resetCopied, setResetCopied] = useState(false);
 
+  // Change-email dialog
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailPending, setEmailPending] = useState<{ address: string; sent: boolean } | null>(null);
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ['people'] });
   };
@@ -119,6 +125,32 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
       setIdentityDirty(false);
     },
   });
+
+  const changeEmail = useMutation({
+    mutationFn: (newEmail: string) => peopleApi.changeEmail(userId, newEmail),
+    onSuccess: (res) => {
+      setEmailPending({ address: res.data.pending_email, sent: res.data.email_sent });
+      setEmailInput('');
+      setEmailError(null);
+    },
+    onError: (err) => {
+      if (err instanceof ApiError) {
+        if (err.code === 'EMAIL_TAKEN') setEmailError('That email is already in use.');
+        else if (err.code === 'SAME_EMAIL')
+          setEmailError('That is already the current email address for this member.');
+        else setEmailError(err.message || 'Could not request the email change.');
+      } else {
+        setEmailError('Could not request the email change.');
+      }
+    },
+  });
+
+  const closeEmailDialog = () => {
+    setEmailOpen(false);
+    setEmailInput('');
+    setEmailError(null);
+    setEmailPending(null);
+  };
 
   // P1-25: banner shown when a PATCH races another admin (HTTP 409).
   const [versionConflict, setVersionConflict] = useState<string | null>(null);
@@ -311,6 +343,18 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
               {canAct && (
                 <DropdownMenuItem onSelect={() => setResetOpen(true)}>
                   <KeyRound className="h-4 w-4" /> Reset password
+                </DropdownMenuItem>
+              )}
+              {canAct && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setEmailPending(null);
+                    setEmailError(null);
+                    setEmailInput('');
+                    setEmailOpen(true);
+                  }}
+                >
+                  <Mail className="h-4 w-4" /> Change email
                 </DropdownMenuItem>
               )}
               {canAct && (
@@ -766,6 +810,75 @@ export function PersonDetailPage({ userId, onNavigate }: PersonDetailPageProps) 
               <Button onClick={closeResetDialog}>Done</Button>
             </div>
           </div>
+        )}
+      </Dialog>
+
+      {/* Change email */}
+      <Dialog
+        open={emailOpen}
+        onOpenChange={(open) => {
+          if (!open) closeEmailDialog();
+        }}
+        title={emailPending ? 'Confirmation link sent' : 'Change email'}
+        description={
+          emailPending
+            ? undefined
+            : `Change the email address for ${member.display_name || member.email}. A confirmation link is sent to the new address; the change only lands once ${member.display_name || 'the member'} clicks it.`
+        }
+      >
+        {emailPending ? (
+          <div className="space-y-4">
+            <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-200">
+              A confirmation link was sent to <strong>{emailPending.address}</strong>. The member
+              must click it to finish the change. Their current address ({member.email}) stays active
+              until then.
+              {!emailPending.sent && (
+                <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300">
+                  Note: email delivery is not configured on this server, so the link could not be
+                  sent.
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-end">
+              <Button onClick={closeEmailDialog}>Done</Button>
+            </div>
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const next = emailInput.trim().toLowerCase();
+              if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(next)) {
+                setEmailError('Enter a valid email address.');
+                return;
+              }
+              changeEmail.mutate(next);
+            }}
+            className="space-y-4"
+          >
+            <Input
+              id="member-new-email"
+              label="New email address"
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="member@example.com"
+              autoFocus
+            />
+            {emailError && (
+              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 dark:bg-red-950 dark:border-red-900 dark:text-red-300">
+                {emailError}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={closeEmailDialog}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={changeEmail.isPending}>
+                Send confirmation link
+              </Button>
+            </div>
+          </form>
         )}
       </Dialog>
     </AppLayout>

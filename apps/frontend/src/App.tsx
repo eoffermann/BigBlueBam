@@ -30,6 +30,7 @@ import { PeopleManagerDetailPage } from '@/pages/people-manager/detail';
 import { GuestAcceptPage } from '@/pages/guest-accept';
 import { PasswordChangePage } from '@/pages/password-change';
 import { PasswordResetPage } from '@/pages/password-reset';
+import { VerifyEmailPage } from '@/pages/verify-email';
 import { TaskRefResolverPage } from '@/pages/task-ref-resolver';
 import { BetaGatePage } from '@/pages/beta-gate';
 import { BetaNotifyPage } from '@/pages/beta-notify';
@@ -44,6 +45,7 @@ type Route =
   | { page: 'register' }
   | { page: 'password-change' }
   | { page: 'password-reset'; token: string | null }
+  | { page: 'verify-email'; token: string }
   | { page: 'dashboard' }
   | { page: 'board'; projectId: string }
   | { page: 'epic-detail'; projectId: string; epicId: string }
@@ -84,6 +86,10 @@ function parseRoute(path: string): Route {
   const guestAcceptMatch = p.match(/^\/guests\/accept\/(.+)$/);
   if (guestAcceptMatch) {
     return { page: 'guest-accept', token: guestAcceptMatch[1]! };
+  }
+  const verifyEmailMatch = p.match(/^\/verify-email\/(.+)$/);
+  if (verifyEmailMatch) {
+    return { page: 'verify-email', token: verifyEmailMatch[1]! };
   }
   const taskRefMatch = p.match(/^\/tasks\/ref\/([^/]+)$/);
   if (taskRefMatch) {
@@ -309,6 +315,13 @@ export function App() {
   // on success. The page handles its own redirect to /login afterwards.
   if (route.page === 'password-reset') {
     return <PasswordResetPage token={route.token} onNavigate={navigate} />;
+  }
+
+  // Email-change confirmation is public — the user clicks the link from their
+  // new inbox (often not signed in), and every session is invalidated on
+  // success. The page auto-confirms and redirects to /login.
+  if (route.page === 'verify-email') {
+    return <VerifyEmailPage token={route.token} onNavigate={navigate} />;
   }
 
   // Beta-gate + notify-me are public marketing-ish surfaces reachable from

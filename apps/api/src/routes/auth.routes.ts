@@ -5,7 +5,17 @@ import { z } from 'zod';
 import * as authService from '../services/auth.service.js';
 import * as orgService from '../services/org.service.js';
 import * as passwordResetService from '../services/password-reset.service.js';
-import { sendPasswordResetEmail, isSmtpConfigured } from '../lib/email-queue.js';
+import {
+  sendPasswordResetEmail,
+  sendEmailVerificationEmail,
+  sendEmailChangeNoticeEmail,
+  isSmtpConfigured,
+} from '../lib/email-queue.js';
+import { randomBytes } from 'node:crypto';
+import {
+  initiateEmailChange,
+  findUserByEmail,
+} from '../services/superuser-users.service.js';
 import { computePermissionMatrix } from '../services/permissions.service.js';
 import { requireAuth } from '../plugins/auth.js';
 import { env } from '../env.js';
@@ -792,4 +802,109 @@ export default async function authRoutes(fastify: FastifyInstance) {
       },
     });
   });
+
+  // ─── POST /auth/me/email ──────────────────────────────────────────────────
+  //
+  // Self-service email change. The new address is staged in pending_email and
+  // a verification link is emailed to it; the swap only lands when the user
+  // clicks that link (POST /auth/verify-email/:token). The current address
+  // stays active until then, and gets a courtesy "someone changed your email"
+  // notice. Rate-limited per user so a compromised session can't spray change
+  // requests. Mirrors PATCH /superuser/users/:id/email but scoped to self.
+  fastify.post(
+    '/auth/me/email',
+    {
+      preHandler: [requireAuth],
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '5 minutes',
+          keyGenerator: (req) => req.user?.id ?? req.ip,
+        },
+      },
+    },
+    async (request, reply) => {
+      const schema = z.object({ new_email: z.string().email().max(320) });
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid request body',
+            details: parsed.error.issues.map((i) => ({
+              field: i.path.join('.'),
+              issue: i.message,
+            })),
+            request_id: request.id,
+          },
+        });
+      }
+
+      const newEmail = parsed.data.new_email.toLowerCase().trim();
+      const userId = request.user!.id;
+
+      const [current] = await db
+        .select({ id: users.id, email: users.email, display_name: users.display_name })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!current) {
+        return reply.status(404).send({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'User not found',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      if (newEmail === current.email.toLowerCase()) {
+        return reply.status(400).send({
+          error: {
+            code: 'SAME_EMAIL',
+            message: 'That is already your email address',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const taken = await findUserByEmail(newEmail);
+      if (taken && taken.id !== userId) {
+        return reply.status(400).send({
+          error: {
+            code: 'EMAIL_TAKEN',
+            message: 'That email is already in use',
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      await initiateEmailChange(userId, newEmail, token);
+
+      const email_sent = await sendEmailVerificationEmail({
+        to: newEmail,
+        token,
+        userName: current.display_name,
+      });
+      await sendEmailChangeNoticeEmail({
+        to: current.email,
+        userName: current.display_name,
+        newEmail,
+      });
+
+      request.log.info(
+        { event: 'auth.email_change_requested', user_id: userId, email_sent },
+        'Self-service email change requested',
+      );
+
+      return reply.send({
+        data: { user_id: userId, pending_email: newEmail, email_sent },
+      });
+    },
+  );
 }

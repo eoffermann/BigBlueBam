@@ -364,6 +364,7 @@ MCP tool modules in scope: `me-tools`, `member-tools`, `user-resolver-tools`, `p
 | `PATCH /org/members/:userId/projects/:projectId` | — _(skip: member/project-role admin — conservative scope)_ | Update member's project role | `apps/frontend/src/pages/people/detail.tsx` |
 | `DELETE /org/members/:userId/projects/:projectId` | — _(skip: member/project-role admin — conservative scope)_ | Remove member from a project | `apps/frontend/src/pages/people/detail.tsx` |
 | `PATCH /org/members/:userId/active` | — _(skip: account enable/disable admin — conservative scope)_ | Enable/disable a member | `apps/frontend/src/pages/people/detail.tsx` |
+| `PATCH /org/members/:userId/email` | — _(skip: email verification admin — confirm-at-new-address, conservative scope)_ | Initiate member email change (stages `pending_email`, emails link) | `apps/frontend/src/pages/people/detail.tsx` |
 | `PATCH /org/members/:userId/profile` | — _(skip: member-profile admin — conservative scope)_ | Update member display name/timezone | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/:userId/reset-password` | `bam_admin_reset_password` | Reset member password, return new value | `apps/frontend/src/pages/people/detail.tsx` |
 | `POST /org/members/:userId/send-password-reset` | `bam_send_password_reset_link` | Email member a reset link | `apps/frontend/src/pages/people/detail.tsx` |
@@ -398,6 +399,7 @@ Scoped, permission-graded, **multi-org** people surface (plan `docs/plans/user-m
 | `POST /auth/change-password` | `change_my_password` | Change own password | `apps/frontend/src/pages/settings.tsx` |
 | `POST /auth/login` | — _(skip: auth/session)_ | Password (+TOTP) login, sets cookie | `apps/frontend/src/pages/login.tsx` |
 | `POST /auth/logout` | `logout` | Invalidate cookie session | `apps/frontend/src/components/layout/app-layout.tsx` |
+| `POST /auth/me/email` | — _(skip: auth/email verification — self-service, confirm-at-new-address)_ | Initiate self email change (stages `pending_email`, emails link) | `apps/frontend/src/pages/settings.tsx` |
 | `POST /auth/password-reset/consume` | — _(skip: auth/credential)_ | Consume reset token, set password | `apps/frontend/src/pages/password-reset.tsx` |
 | `POST /auth/password-reset/request` | — _(skip: auth/credential)_ | Request self-serve reset email (opaque) | `apps/frontend/src/pages/login.tsx` |
 | `POST /auth/register` | — _(skip: public-inbound signup)_ | Public signup (kill-switchable) | `apps/frontend/src/pages/login.tsx` |

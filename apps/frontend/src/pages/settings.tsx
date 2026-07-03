@@ -134,6 +134,15 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Self-service email change (Profile tab). The swap is confirmed via a link
+  // emailed to the new address; here we only stage the request.
+  const [emailFormOpen, setEmailFormOpen] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailPending, setEmailPending] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(true);
+
   // Password tab state (self-service change-password form)
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -663,6 +672,40 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
     }
   };
 
+  const handleChangeEmail = async () => {
+    setEmailError(null);
+    const next = emailInput.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(next)) {
+      setEmailError('Enter a valid email address.');
+      return;
+    }
+    if (next === (user?.email ?? '').toLowerCase()) {
+      setEmailError('That is already your email address.');
+      return;
+    }
+    setEmailSubmitting(true);
+    try {
+      const res = await api.post<{ data: { pending_email: string; email_sent: boolean } }>(
+        '/auth/me/email',
+        { new_email: next },
+      );
+      setEmailPending(res.data.pending_email);
+      setEmailSent(res.data.email_sent);
+      setEmailFormOpen(false);
+      setEmailInput('');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === 'EMAIL_TAKEN') setEmailError('That email is already in use.');
+        else if (err.code === 'SAME_EMAIL') setEmailError('That is already your email address.');
+        else setEmailError(err.message || 'Could not request the email change.');
+      } else {
+        setEmailError('Could not request the email change.');
+      }
+    } finally {
+      setEmailSubmitting(false);
+    }
+  };
+
   const handleChangePassword = async () => {
     setPwError(null);
     setPwSaved(false);
@@ -780,12 +823,71 @@ export function SettingsPage({ onNavigate, ftue = false, onFtueComplete }: Setti
                     onChange={(e) => setDisplayName(e.target.value)}
                   />
                 </div>
-                <Input
-                  id="email"
-                  label="Email"
-                  value={user?.email ?? ''}
-                  disabled
-                />
+                <div className="space-y-2">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Input id="email" label="Email" value={user?.email ?? ''} disabled />
+                    </div>
+                    {!emailFormOpen && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setEmailError(null);
+                          setEmailFormOpen(true);
+                        }}
+                      >
+                        Change
+                      </Button>
+                    )}
+                  </div>
+
+                  {emailPending && (
+                    <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-800 dark:text-blue-200">
+                      A confirmation link was sent to <strong>{emailPending}</strong>. Click the link
+                      in that email to finish the change — your current address stays active until you
+                      do.
+                      {!emailSent && (
+                        <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300">
+                          Note: email delivery is not configured on this server, so the link could
+                          not be sent. Ask an administrator for help.
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {emailFormOpen && (
+                    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3 space-y-3">
+                      <Input
+                        id="new-email"
+                        label="New email address"
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="you@example.com"
+                      />
+                      <p className="text-xs text-zinc-500">
+                        We'll email a confirmation link to the new address. The change only takes
+                        effect once you click it.
+                      </p>
+                      {emailError && <p className="text-sm text-red-600">{emailError}</p>}
+                      <div className="flex items-center gap-2">
+                        <Button onClick={handleChangeEmail} loading={emailSubmitting}>
+                          Send confirmation link
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setEmailFormOpen(false);
+                            setEmailInput('');
+                            setEmailError(null);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="flex flex-col gap-1.5" data-ftue="timezone">
                   <Select
                     label="Timezone"

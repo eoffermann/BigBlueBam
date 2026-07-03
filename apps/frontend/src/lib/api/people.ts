@@ -102,6 +102,19 @@ export const peopleApi = {
     return api.patch<{ data: PersonDetail }>(`/org/members/${userId}/profile`, body);
   },
 
+  // Stage an email change for a member. The swap is not applied here — a
+  // confirmation link is emailed to the new address and the member must click
+  // it to finalize (POST /auth/verify-email/:token).
+  changeEmail(
+    userId: string,
+    newEmail: string,
+  ): Promise<{ data: { user_id: string; pending_email: string; email_sent: boolean } }> {
+    return api.patch<{ data: { user_id: string; pending_email: string; email_sent: boolean } }>(
+      `/org/members/${userId}/email`,
+      { new_email: newEmail },
+    );
+  },
+
   setActive(
     userId: string,
     isActive: boolean,
