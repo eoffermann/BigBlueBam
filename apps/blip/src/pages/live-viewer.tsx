@@ -44,6 +44,38 @@ const LEVEL_STYLE: Record<string, string> = {
   fatal: 'text-red-600 font-bold',
 };
 
+// Payload keys that are already surfaced elsewhere (reserved columns, captures,
+// the report_type discriminator) and so are redundant in the inline preview.
+const PREVIEW_SKIP_KEYS = new Set([
+  'level',
+  'session_id',
+  'app_version',
+  'platform',
+  'elapsed_ms',
+  'screen_captures',
+  'report_type',
+]);
+
+/**
+ * Compact key=value preview of a report's custom (non-reserved) payload fields.
+ * Without this, a report that carries only custom fields (e.g. a Unity client
+ * sending { message, device_model, user_id }) renders as a row of "—" under the
+ * reserved columns, so it looks empty even though it arrived. The preview makes
+ * the report's own content visible without expanding the row.
+ */
+function payloadPreview(payload: unknown): Array<[string, string]> {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+  const out: Array<[string, string]> = [];
+  for (const [k, v] of Object.entries(payload as Record<string, unknown>)) {
+    if (PREVIEW_SKIP_KEYS.has(k) || v == null) continue;
+    let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    if (s.length > 64) s = `${s.slice(0, 64)}…`;
+    out.push([k, s]);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
 function CaptureThumb({ refKey }: { refKey: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -110,6 +142,7 @@ function CaptureStrip({ entry }: { entry: BlipEntry }) {
 
 function EntryRow({ entry }: { entry: BlipEntry }) {
   const [open, setOpen] = useState(false);
+  const preview = payloadPreview(entry.payload);
   return (
     <>
       <tr
@@ -133,13 +166,25 @@ function EntryRow({ entry }: { entry: BlipEntry }) {
             </td>
           );
         })}
+        <td className="px-2 py-1.5 text-zinc-500 dark:text-zinc-400 max-w-lg truncate">
+          {preview.length === 0 ? (
+            <span className="text-zinc-300 dark:text-zinc-600">—</span>
+          ) : (
+            preview.map(([k, v]) => (
+              <span key={k} className="mr-3 whitespace-nowrap">
+                <span className="text-zinc-400 dark:text-zinc-500">{k}=</span>
+                <span className="text-zinc-700 dark:text-zinc-200">{v}</span>
+              </span>
+            ))
+          )}
+        </td>
         <td className="px-2 py-1.5 text-zinc-400">
           {entry.capture_count > 0 ? `${entry.capture_count} img` : ''}
         </td>
       </tr>
       {open && (
         <tr className="bg-zinc-50 dark:bg-zinc-900/60">
-          <td colSpan={RESERVED_COLUMNS.length + 2} className="px-4 py-2">
+          <td colSpan={RESERVED_COLUMNS.length + 3} className="px-4 py-2">
             <CaptureStrip entry={entry} />
             <pre className="mt-2 overflow-x-auto rounded-md bg-zinc-950 text-zinc-100 p-3 text-xs">
               <code>{JSON.stringify(entry.payload, null, 2)}</code>
@@ -291,13 +336,14 @@ export function LiveViewerPage({ appId, reportType }: LiveViewerPageProps) {
                   {c.label}
                 </th>
               ))}
+              <th className="px-2 py-2 font-mono">fields</th>
               <th className="px-2 py-2">captures</th>
             </tr>
           </thead>
           <tbody>
             {tail.entries.length === 0 ? (
               <tr>
-                <td colSpan={RESERVED_COLUMNS.length + 2} className="px-4 py-12 text-center text-sm text-zinc-500">
+                <td colSpan={RESERVED_COLUMNS.length + 3} className="px-4 py-12 text-center text-sm text-zinc-500">
                   {tail.paused
                     ? 'Paused. Resume to stream live entries.'
                     : 'Waiting for entries… run your instrumented client to see them arrive.'}
