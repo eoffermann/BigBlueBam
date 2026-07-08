@@ -19,6 +19,29 @@ export interface SetTransformInput {
 }
 
 /**
+ * Read the app-wide (report_type = null) transform ruleset for the editor.
+ * The Blip SPA's transform editor GETs /apps/:id/transform on load; without this
+ * the page 404s and can never show or edit the existing rules. Returns an empty
+ * default when no ruleset has been saved yet so the editor renders cleanly.
+ */
+export async function getTransform(appId: string, orgId: string) {
+  await getApp(appId, orgId);
+  const rows = await db
+    .select()
+    .from(blipTransforms)
+    .where(
+      and(
+        eq(blipTransforms.tracked_app_id, appId),
+        eq(blipTransforms.org_id, orgId),
+        isNull(blipTransforms.report_type),
+      ),
+    )
+    .limit(1);
+  if (rows.length > 0) return rows[0]!;
+  return { report_type: null, enabled: true, rules: [] as unknown[], version: 0 };
+}
+
+/**
  * Upsert the transform ruleset for (app, report_type) and bump the app's
  * transform_version so the edge picks up the change. Returns the stored row.
  */
