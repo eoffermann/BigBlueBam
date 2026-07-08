@@ -24,7 +24,10 @@ interface BlipSidebarProps {
 const appNav = [
   { label: 'Health', icon: Activity, suffix: '', pages: ['app-detail'] },
   { label: 'Keys', icon: KeyRound, suffix: '/keys', pages: ['keys'] },
-  { label: 'Viewer', icon: Radio, suffix: '/types', pages: ['types', 'viewer'] },
+  // 'Viewer' lands on the report-types list (pick a type to tail) but only
+  // highlights once you are in an actual live viewer, so it no longer
+  // double-highlights with 'Types' on the shared /types route.
+  { label: 'Viewer', icon: Radio, suffix: '/types', pages: ['viewer'] },
   { label: 'Watches', icon: Bell, suffix: '/watches', pages: ['watches'] },
   { label: 'Views', icon: Layers, suffix: '/views', pages: ['views'] },
   { label: 'Transform', icon: ShieldAlert, suffix: '/transform', pages: ['transform'] },

@@ -72,8 +72,10 @@ export default async function appsRoutes(fastify: FastifyInstance) {
     { preHandler: [requireAuth] },
     async (request, reply) => {
       try {
-        const app = await appService.getApp(request.params.id, request.user!.active_org_id);
-        return reply.send({ data: app });
+        const orgId = request.user!.active_org_id;
+        const app = await appService.getApp(request.params.id, orgId);
+        const health = await appService.getAppHealth(request.params.id, orgId);
+        return reply.send({ data: { ...app, health } });
       } catch (err) {
         return sendError(reply, request, err);
       }
