@@ -16,6 +16,24 @@ const setRetentionSchema = z.object({
 });
 
 export default async function retentionRoutes(fastify: FastifyInstance) {
+  // GET all retention policies for the app (member read). Without this the SPA's
+  // retention page 404s on load and can never show the configured policy.
+  fastify.get<{ Params: { id: string } }>(
+    '/apps/:id/retention',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      try {
+        const rows = await retentionService.listRetention(
+          request.params.id,
+          request.user!.active_org_id,
+        );
+        return reply.send({ data: rows });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
   fastify.put<{ Params: { id: string } }>(
     '/apps/:id/retention',
     {

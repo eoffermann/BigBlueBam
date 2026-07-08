@@ -15,6 +15,24 @@ const setTransformSchema = z.object({
 });
 
 export default async function transformsRoutes(fastify: FastifyInstance) {
+  // GET the app-wide transform ruleset (member read). Without this the SPA's
+  // transform editor 404s on load and can never display the saved rules.
+  fastify.get<{ Params: { id: string } }>(
+    '/apps/:id/transform',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      try {
+        const row = await transformService.getTransform(
+          request.params.id,
+          request.user!.active_org_id,
+        );
+        return reply.send({ data: row });
+      } catch (err) {
+        return sendError(reply, request, err);
+      }
+    },
+  );
+
   fastify.put<{ Params: { id: string } }>(
     '/apps/:id/transform',
     {
