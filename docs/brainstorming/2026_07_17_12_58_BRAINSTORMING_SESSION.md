@@ -639,7 +639,67 @@ registration of the 6 `metric.*` events; shared-Redis backpressure.
 `{data:...}` envelope matches Bench; structured QueryConfig path is not a SQL-injection
 surface; Basis tables carry `organization_id` + `app.current_org_id` RLS.
 
-_Batched to `brainstorm-spec-writer` for round-1 fold-in; round 2 will re-review._
+_Batched to `brainstorm-spec-writer` for round-1 fold-in._ All 30+ findings accepted
+(0 rejected, 2 accepted-with-modification); load-bearing change was killing the
+cross-user leak (explanations persist only the deterministic aggregate; concrete
+entities resolved + `can_access`-filtered per user at read time) and splitting the
+flagship into two fenced computations.
+
+### Round 2 - findings (3 blockers, ~16 majors, 8 minors)
+
+Round 2's job was to verify the round-1 fixes and hunt for defects the revision
+INTRODUCED. It did both. Headline convergence: **the per-org `bbam_svc_`
+service-account model** (a round-1 invention) was flagged as a **blocker by BOTH
+security and infrastructure**, with the same recommended fix.
+
+**Blockers (3):**
+1. [security] The shared `drivers` cache re-opens the round-1 leak: a decomposition
+   dimension can itself be an entity FK (`company_id`, `project_id`), so
+   entity-valued driver rows in the shared cache expose names/deltas a restricted
+   user can't see in Bond/Bam. The round-1 fix fenced only the correlation list, not
+   the drivers.
+2. [stability] A per-org retention window driving a *global* monthly-partition DROP
+   deletes other tenants' snapshots (cross-tenant data loss) - `basis_metric_snapshots`
+   is one shared partition set but retention was a per-org knob.
+3. [security+infra CONVERGED] The per-org `bbam_svc_` service-account model is
+   unimplementable (no org-creation mint hook, N stored+rotated tokens, huge secret
+   aggregation). Both recommend: drop it; the bench internal route accepts an explicit
+   `org_id` only under `INTERNAL_SERVICE_SECRET` first-party trust (org from row-data
+   + `app.current_org_id`, exactly how banter-feed-fanin fans out cross-org), keeping
+   bearer-derived-org solely for user requests.
+
+**Majors (~16):** correlation scoping ("drivers' apps") excludes the cross-app signal
+and `v_activity_unified` omits Bill; the flagship "one fused sentence" is impossible
+under the aggregate-only-narrative + per-user-correlation split; cache identity hashes
+the requested not the resolved dimension (two competing default-dimension authorities);
+MCP tools omit `asker_user_id` and the platform precedent fails open; the bench
+internal route must validate the forwarded bearer as a live credential (not a decoded
+claim); the correlation `dst_type`->visibility mapping is undefined with a free-text
+leak fallback; the hour->day retention rollup collides with the daily pass on the
+UNIQUE key and 24x-mis-aggregates stock metrics; snapshot idempotency only holds if
+`captured_at` is bucket-aligned; partition provisioning is a SPOF with no DEFAULT
+catch-all; the "reuses shared QueryConfig" claim rests on a schema (`benchQueryConfigSchema`)
+that lacks the claimed shape and isn't what Bench's executor consumes; migration
+numbering is generator-assigned and collision-prone; nginx wiring omits the third
+config (`nginx-with-site.conf`); the `nginx.railway.conf` route form
+(`rw_upstream`/`:8080`/rewrite-break) differs from compose; `basis-api` depends_on
+bench-api violates the sibling pattern; and `gen-railway-configs.mjs` regeneration was
+omitted.
+
+**Minors (8):** `snapshots.dims` dead data; `resolve_status` only for certified
+metrics; the wedge-vs-per-user-correlation coherence tension; `explanation.ready` WS
+payload must be refs-only; four daily jobs need cron separation (retention's DROP takes
+ACCESS EXCLUSIVE); the narrative-only retry emits no second WS event; make the
+`threshold_breached` leak-safety a unit test; the deps-stage Dockerfile COPY line.
+
+**Non-findings confirmed sound:** no boot-order cycle; the UNIQUE key includes the
+partition key (enforceable on the parent); explain never reads snapshots so retention
+can't corrupt an in-flight explain; `db:check` handles partitioned parents; the
+Redis-noeviction mitigation is right; confirm-token class + dotted VisibilityEntityType
++ positional publishBoltEvent signature are correct.
+
+_Batched to `brainstorm-spec-writer` for round-2 fold-in; round 3 (the cap) will
+re-review to confirm convergence._
 
 ---
 
