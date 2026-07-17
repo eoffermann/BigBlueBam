@@ -15,6 +15,7 @@ export * from './banter.js';
 export * from './beacon.js';
 export * from './blank.js';
 export * from './blast.js';
+export * from './basis.js';
 export * from './bench.js';
 export * from './bill.js';
 export * from './board.js';
