@@ -453,19 +453,124 @@ anomaly-detection + spend-governance as non-negotiable."
 
 ## Phase 3 - Submissions
 
-_Pending._
+Each seat submitted one app (full text; "why this one" reason quoted).
+
+**SUBMISSION - Seat A: Brigade** (Autonomous Mission Control). Goal-directed
+multi-agent orchestration: NL objective -> plan DAG -> plan/execute/observe/replan
+over the 804-tool MCP catalog, HITL gates, pause/step-in/kill mid-mission, replan
+on failure. Wedge **speed + integration**. Why this one: "the one idea no other seat
+proposed and that Bolt structurally cannot become; Backstop/Bylaw/Badger/Bridle all
+slot in as features around it."
+
+**SUBMISSION - Seat B: Basis** (governed metric layer + causal why). Define each
+metric once; every app/chart/agent reads the certified definition; AI decomposes any
+delta and correlates it to concrete cross-app events ("MRR fell 8% because 3 Bond
+deals slipped and 2 Bill invoices went overdue"). Wedge **trust + speed**. Why this
+one: "most defensible on every rubric axis at once; sits cleanly above Bench; the
+foundation Bellwether/Benchmark build on."
+
+**SUBMISSION - Seat C: Baton** (meetings that write themselves into the suite).
+Meeting-intelligence layer over LiveKit surfaces; extracts decisions/owners/dates
+and executes them through the MCP write plane (Bam tasks, Bond notes, Bearing
+nudges), then DMs owners their commitments and tracks landing. Wedge **integration**.
+Why this one: "zero collisions and the strongest integration wedge - the only app
+whose value literally *is* the rest of the suite."
+
+**SUBMISSION - Seat D: Brace** (on-site multimodal fault diagnosis). Tech points a
+phone at broken equipment; vision model reads nameplate/serial/error codes, ranks
+faults against a trade corpus + site history, emits priced estimate lines. Wedge
+**speed + trust**. Why this one: "my only idea whose core is a multimodal AI judgment
+that provably cannot be assembled from existing apps - the strongest rebuttal to the
+'too niche / just Bill+Bin' attack."
+
+**SUBMISSION - Seat E: Bespoke** (self-extending tool & connector forge). Describe a
+tool/integration in plain language; an authoring agent generates schema+handler,
+sandbox-tests against real endpoints, and publishes into the MCP catalog under
+policy - no code deploy. Wedge **speed + integration**. Why this one: "the only app
+that makes the platform itself extensible, uncontested by every seat, AI-native by
+construction rather than compliance plumbing."
 
 ---
 
 ## Phase 4 - Overlap resolution
 
-_Pending._
+**Orchestrator pairwise analysis of the five submissions:**
+
+| Pair | Verdict | Reason |
+|------|---------|--------|
+| Brigade × Basis | Distinct | Agent orchestration vs governed metric layer. No shared surface. |
+| Brigade × Baton | Distinct | Baton is a narrow meeting->action specialist agent; Brigade is a general goal-directed mission board. Baton would be a *callable step* inside Brigade, not the same product. Different primary surface and wedge. |
+| Brigade × Brace | Distinct | Horizontal orchestration vs vertical on-site vision diagnosis. |
+| Brigade × Bespoke | Distinct (complementary) | Bespoke *creates* MCP tools; Brigade *consumes* them to run missions. Opposite ends of the same platform, not the same app. |
+| Basis × Baton | Distinct | Metric semantics vs meeting capture. |
+| Basis × Brace | Distinct | |
+| Basis × Bespoke | Distinct | |
+| Baton × Brace | Distinct | |
+| Baton × Bespoke | Distinct | |
+| Brace × Bespoke | Distinct | |
+
+**Outcome:** No perfect overlap (no collapse) and no "very similar but not
+identical" pair (no forced merge negotiation, no discards). This is a direct result
+of Phase 2: the two agent-platform seats (A, E) deliberately de-conflicted their
+flagships, and B/C/D each held a distinct lane. **Five surviving apps proceed to the
+vote:** Brigade, Basis, Baton, Brace, Bespoke.
 
 ---
 
 ## Phase 5 - Voting
 
-_Pending._
+Single round. Each seat scored every finalist 1-5 and abstained on its own app.
+No self-votes cast.
+
+**Vote matrix (seat x app):**
+
+| Seat \ App | Brigade | Basis | Baton | Brace | Bespoke |
+|---|---|---|---|---|---|
+| A | abstain | 4 | 3 | 4 | 5 |
+| B | 3 | abstain | 4 | 4 | 5 |
+| C | 4 | 5 | abstain | 3 | 4 |
+| D | 3 | 4 | 4 | abstain | 3 |
+| E | 4 | 5 | 3 | 4 | abstain |
+| **Total** | **14** | **18** | **14** | **15** | **17** |
+
+**Selected reasons (verbatim highlights):**
+- Basis: C "makes every other app's data trustworthy"; E "solves a real, unmet SMB
+  pain, is AI-native, and reuses entity_links + cross-app search cleanly"; A
+  "certified-once metric layer + AI causal 'why did it move' is a real trust wedge,
+  cleanly adjacent to Bench" (docked to 4 as edging toward known territory).
+- Bespoke: A & B both 5 ("highest-leverage... makes the entire suite compound over
+  time"); but D scored it 3 ("operator/dev plumbing most SMB teams never touch")
+  and C 4 ("sandboxed self-extension carries the highest trust/safety risk"), which
+  cost it the top spot.
+- Brace: consistent 4s from A/B/E on the multimodal wedge; C/D lower on horizontal
+  fit.
+- Brigade & Baton tied at 14: both dinged as "crowded category" (mission-control
+  frameworks; meeting note-takers) despite genuine AI-native integration.
+
+**Outcome:** No tie at the top. **Winner: Basis (18 points)**, one point clear of
+Bespoke (17). No elimination round required.
+
+### WINNER - Basis (Seat B)
+
+- **One-line pitch:** A governed metric layer that gives every number in the suite
+  one trusted definition and then explains, in plain language, *why* it moved.
+- **Description:** A semantic layer where each metric is defined once (revenue = Bill
+  paid invoices minus refunds; pipeline = Bond open deals by stage) and every app,
+  chart, and agent reads the same certified definition. Its AI core does automatic
+  contribution analysis: when a metric shifts it decomposes the delta across
+  dimensions and correlates it to concrete cross-app events, returning "MRR fell 8%
+  because 3 enterprise Bond deals slipped from Won and 2 Bill invoices went overdue,"
+  each drill-down linked.
+- **Scope (in):** metric catalog with owners/lineage; NL "why did X change" causal
+  decomposition; driver ranking by contribution; certified-metric badges Bench
+  widgets bind to; Bolt event on definition change.
+- **Scope (out):** no chart rendering (Bench); no dashboards; no external-source ETL
+  in v1.
+- **Wedge:** trust + speed - one definition of truth plus instant root-cause that no
+  BI tool the size of a small team can afford.
+- **Reuses:** Bench (binds certified metrics), Bolt events,
+  `search_everything`/`v_activity_unified` for driver correlation, MCP catalog, RLS,
+  `entity_links`.
 
 ---
 
@@ -477,4 +582,14 @@ _Pending._
 
 ## Outcome
 
-_Pending._
+**Winner: Basis** - a governed metric layer with AI causal "why did it move"
+decomposition (Seat B, Data/intelligence lens). 18 points.
+
+**Runner-up: Bespoke** - self-extending MCP tool & connector forge (Seat E). 17
+points. Worth flagging for a future session: two seats scored it a perfect 5, and
+it is the highest-leverage *platform* play on the slate; it lost only on SMB
+end-user reach and self-extension safety risk.
+
+The winning app now proceeds to Phase 6: a full design spec is drafted by
+`brainstorm-spec-writer` and hardened across adversarial review rounds. See
+`2026_07_17_12_58_APP_DESIGN_basis.md`.
