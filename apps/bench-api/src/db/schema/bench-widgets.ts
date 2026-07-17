@@ -23,6 +23,9 @@ export const benchWidgets = pgTable(
     query_config: jsonb('query_config').notNull(),
     viz_config: jsonb('viz_config').default({}),
     kpi_config: jsonb('kpi_config'),
+    // Optional binding to a certified Basis metric (migration 0228). When set,
+    // Bench resolves the query + presentation envelope from Basis /resolve.
+    basis_metric_id: uuid('basis_metric_id'),
     cache_ttl_seconds: integer('cache_ttl_seconds'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
