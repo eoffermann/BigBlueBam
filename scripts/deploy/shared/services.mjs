@@ -237,6 +237,34 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'basis-api',
+    description: 'Basis API — governed metric layer + why-did-it-change explanations',
+    dockerfile: 'apps/basis-api/Dockerfile',
+    port: 4019,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    // bench-api is a request-time dependency (Basis runs Bench-governed queries
+    // server-to-server); listed in needs for deploy ordering, NOT in compose
+    // depends_on (spec 8.1 sibling-dependency pattern).
+    needs: ['postgres', 'redis', 'api', 'bench-api'],
+    public_paths: ['/basis/api/', '/basis/ws'],
+    env: {
+      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL'],
+      optional: [
+        'DATABASE_READ_URL',
+        'CORS_ORIGIN',
+        'LOG_LEVEL',
+        'BENCH_API_INTERNAL_URL',
+        'BOLT_API_INTERNAL_URL',
+        'INTERNAL_SERVICE_SECRET',
+        'QUERY_TIMEOUT_MS',
+        'LLM_TIMEOUT_MS',
+        'EXPLANATION_CACHE_TTL_SECONDS',
+      ],
+    },
+  },
+  {
     name: 'book-api',
     description: 'Book API — calendar events, booking pages, meetings',
     dockerfile: 'apps/book-api/Dockerfile',
@@ -533,10 +561,10 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
+      'bench-api', 'basis-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];
