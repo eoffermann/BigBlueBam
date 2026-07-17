@@ -751,8 +751,41 @@ correlation->`can_access` fail-closed boundary, bucket-aligned snapshot idempote
 across the two grain producers, the two-tier retention MAX-window (one org's window
 can't drop another's rows), and the definition-shape/drift-guard correction.
 
-_Batched to `brainstorm-spec-writer` for round-3 fold-in, followed by one targeted
-convergence verification of the round-3 fixes (see below)._
+_Round-3 fold-in accepted in full (1 blocker + 3 majors + 2 minors; 1 major
+accept-with-mod)._
+
+### Convergence verification (targeted) - one residual blocker, then CONVERGED
+
+A single targeted verification of the round-3 fixes confirmed fixes 2-5 held but
+caught a subtle residual **blocker** the "Other (N hidden)" bucket did not close:
+**complementary disclosure.** Because the shared row serves the exact certified
+`delta_abs` and `sum(contributions) == delta_abs`, a restricted viewer could recover
+a single denied entity's amount by subtraction (`residual = delta_abs - sum(allowed
+rows)`); when exactly one entity is hidden (N=1), that residual *is* its exact figure.
+The round-3 fix "mirrored the correlation path," but correlation has no
+exact-sum-to-a-public-total invariant - so drop-the-row is safe there and a category
+error here.
+
+**Fix (folded in, then re-verified):** standard k-anonymous secondary suppression -
+the hidden aggregate must cover **k >= 2** entities (fold the smallest allowed row into
+"Other" when exactly one would be suppressed), and never serve an exact per-decomposition
+"Other" amount alongside the exact `delta_abs` when any cell is suppressed; the
+`basis_rank_drivers` absent-asker fallback collapses Class-B to a single "Other (all N
+hidden)" aggregate with no per-entity amounts. The honest tradeoff is stated in §1/§2.2:
+the certified *number* stays exact and shared (the wedge), but its per-entity *breakdown*
+is access-scoped and deliberately non-invertible. A §9 test asserts the N=1 case cannot
+be arithmetically derived.
+
+The re-verification walked §2.2 / §4.5 / §9 and the cross-dimension/cross-period
+differencing surface and returned: **"CONVERGED - blocker closed, no remaining
+blocker/major."** (Full query-auditing/differencing resistance is noted as a known
+theoretical limit of tabular k-anonymity, out of v1 scope and beyond what any sibling
+app attempts.)
+
+**Phase 6 result:** the Basis design spec survived three full adversarial rounds plus
+a targeted convergence verification, ending with **zero remaining blocker or major
+findings**. Spec: `2026_07_17_12_58_APP_DESIGN_basis.md` (~470 lines, 10 sections + a
+per-round Changelog).
 
 ---
 
@@ -766,6 +799,11 @@ points. Worth flagging for a future session: two seats scored it a perfect 5, an
 it is the highest-leverage *platform* play on the slate; it lost only on SMB
 end-user reach and self-extension safety risk.
 
-The winning app now proceeds to Phase 6: a full design spec is drafted by
-`brainstorm-spec-writer` and hardened across adversarial review rounds. See
-`2026_07_17_12_58_APP_DESIGN_basis.md`.
+The winning app proceeded to Phase 6: a full design spec drafted by
+`brainstorm-spec-writer` and hardened across three adversarial rounds plus a
+targeted convergence verification, ending with **zero remaining blocker or major
+findings**. See `2026_07_17_12_58_APP_DESIGN_basis.md`.
+
+**Session complete.** Both deliverables are on the `suite-brainstorm` branch under
+`docs/brainstorming/`. Nothing was scaffolded or shipped - the design spec is the
+input to a later, separate build decision.
