@@ -576,7 +576,70 @@ Bespoke (17). No elimination round required.
 
 ## Phase 6 - Spec hardening
 
-_Pending._
+Winner **Basis** -> `brainstorm-spec-writer` drafted the full spec (port 4019,
+`/basis/`, 10 sections, migrations 0226-0229, 12 MCP tools). Then five adversarial
+reviewers (design, security, stability, best-practices, infrastructure) pressure-
+tested it, findings batched back to the spec-writer each round.
+
+### Round 1 - findings (7 blockers, ~22 majors, 8 minors)
+
+Strong cross-reviewer convergence (two independent reviewers on the same defect =
+high confidence):
+
+- **entity_type namespace mismatch** (design + security): spec used `bond_deal`;
+  the canonical `SUPPORTED_ENTITY_TYPES` in `visibility.service.ts` is dotted
+  (`bond.deal`), so `can_access` would drop 100% of cited drivers and render every
+  explanation empty.
+- **snapshot retention/partitioning** (stability + infra): `basis_metric_snapshots`
+  is unbounded high-cardinality with no partitioning/retention, unlike activity_log
+  and blip_entries.
+- **LLM failure degradation** (stability + security + infra): a single LLM call
+  gates the whole explanation; no timeout, no separation of the trustworthy
+  deterministic math from the retryable narrative.
+- **explanation cache identity/idempotency** (design + stability): cache keyed on
+  `(metric, dimension)` only, missing version/period; concurrent identical requests
+  both recompute.
+
+**Blockers (7):**
+1. [security+design] Cached explanations leak per-asker `can_access` entities across
+   users (cache keyed without asker; serves A's visible deals to B).
+2. [security] Internal Bench query path collapses org isolation to a caller-supplied
+   header under a shared secret -> any secret holder reads any org.
+3. [security] Background workers precompute explanations with no asker, so
+   `can_access` can't run and concrete drivers leak org-wide.
+4. [stability] `basis_metric_snapshots` has no idempotency key -> retries + scaled
+   workers double-write and corrupt every downstream delta.
+5. [infra] The SPA isn't a compose service; it must be built into the single
+   `apps/frontend/Dockerfile` and COPY'd into the nginx html tree, else `/basis/`
+   404s.
+6. [infra] `proxy_pass` to `basis-api` without adding it to `frontend.depends_on`
+   crashes the whole nginx ingress (literal upstream resolved at load).
+7. [infra] The core value/explain path depends on a bench-api internal query route
+   that does not exist and was left as an open question.
+
+**Majors (~22):** the entity_type mismatch; the decomposition-vs-event-correlation
+fusion producing an unsourced causal figure; the `bench_saved_queries` adjacency gap
++ QueryConfig duplication; `/resolve` omitting the presentation envelope; missing
+dimension-label resolution; cache identity/idempotency; LLM prompt-injection + PII
+egress; certify/deprecate needing Redis-backed confirm tokens; snapshot
+retention/partitioning; no LLM graceful degradation; movement-scan false breaches
+across a version change + no per-breach idempotency marker; snapshot fan-out with no
+per-item error isolation; runtime-dependency outage handling + a wrong "only
+Postgres/Redis" claim; missing shared Zod schema module; missing Drizzle schema
+modules (would turn `db:check` CI red); no test posture for the additive-decomposition
+invariant; under-specified manifest-generated permissions; LLM credential
+path/timeout/cost ceiling; and Railway/catalog wiring gaps.
+
+**Minors (8):** snapshot purpose contradiction; definition-builder scope-creep vs
+Bench's widget wizard; `/resolve`+`/data-sources` auth; `basis.*` fail-closed policy
+seeding; progress logging in slow jobs; surface-map completeness; Bolt-catalog
+registration of the 6 `metric.*` events; shared-Redis backpressure.
+
+**Non-findings confirmed sound:** port 4019 free; `migrate` dependency correct;
+`{data:...}` envelope matches Bench; structured QueryConfig path is not a SQL-injection
+surface; Basis tables carry `organization_id` + `app.current_org_id` RLS.
+
+_Batched to `brainstorm-spec-writer` for round-1 fold-in; round 2 will re-review._
 
 ---
 
