@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              ".claude/hooks/post-commit-reminder.ps1"
+            ],
+            "timeout": 15,
+            "statusMessage": "Checking whether a commit landed..."
+          }
+        ]
+      }
+    ]
+  }
+}

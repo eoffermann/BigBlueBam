@@ -149,12 +149,23 @@ it all to the end.
 - **Discards are real** - a failed 10-turn merge drops the app; say so.
 - **Keep seats alive across rounds** via SendMessage; re-spawning resets memory
   and breaks the negotiation.
-- **Nothing ships.** This skill produces two documents (session + design spec) on
-  the `suite-brainstorm` branch. It does not scaffold the app, write migrations,
-  or touch other apps. Building the winner is a separate, later effort.
+- **Nothing merges.** This skill and the build it launches stay entirely on the
+  `suite-brainstorm` branch (feature branches off it). Merging brainstorming work
+  into `main`/`stable` is the human maintainer's decision alone - never do it here.
 - Follow repo norms in anything you write: no `Co-Authored-By` footer, no em
   dashes are fine to keep out of committed docs per house style, commit the two
   docs at milestones.
+
+## Phase 7 - Hand off to the autonomous build (automatic)
+
+Once the spec has converged (Phase 6 complete, zero remaining blocker/major
+findings) and both documents are committed on `suite-brainstorm`, **immediately
+invoke the `app-build-from-spec` skill** (via the Skill tool) with the winner's
+spec path `docs/brainstorming/<stamp>_APP_DESIGN_<appname>.md`. This chains the
+session directly into building the app - scaffolding, local Docker deploy, extensive
+tests, Launchpad + infra wiring, docs, gilligan screenshots, and the marketing site,
+all on `suite-brainstorm` with the post-commit-review pipeline running after each
+push. The build skill owns its own branch/merge gates; it never merges to `main`.
 
 ## Done means
 

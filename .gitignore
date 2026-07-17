@@ -49,6 +49,11 @@ __pycache__/
 !.claude/agents/**
 !.claude/skills
 !.claude/skills/**
+# Also share the autonomous-build hook + its PostToolUse wiring (settings.json is
+# the project-shared settings; settings.local.json stays personal/ignored).
+!.claude/settings.json
+!.claude/hooks
+!.claude/hooks/**
 
 # Help-docs build scratch (working artifacts, not deliverables)
 docs/.help-build/
