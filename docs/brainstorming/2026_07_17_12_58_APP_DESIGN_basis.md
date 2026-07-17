@@ -2,7 +2,7 @@
 
 > Governed metric layer for BigBlueBam. One trusted definition per number, and an AI core that explains why it moved.
 >
-> Status: design draft (suite-brainstorm winner, Seat B / data-intelligence lens). New app.
+> Status: design draft, revised after adversarial review round 1. New app.
 > Chosen internal port: **4019** (first free port after Blip's 4018; 4015 is shared by blueprint/bureau).
 > Routes: SPA at `/basis/`, REST at `/basis/api/`, realtime at `/basis/ws`.
 
@@ -10,69 +10,82 @@
 
 ## 1. Overview & positioning
 
-**One-liner.** Basis is a governed *semantic layer*: each business metric is defined once (revenue = Bill paid invoices minus refunds; pipeline = Bond open deals by stage), certified by an owner, and read by every app, chart, and agent from the same definition. When a certified metric moves, Basis decomposes the delta across dimensions and correlates it to concrete cross-app events, returning plain-language root cause with linked drill-downs.
+**One-liner.** Basis is a governed *semantic layer*: each business metric is defined once (revenue = Bill paid invoices minus refunds; pipeline = Bond open deals by stage), certified by an owner, and read by every app, chart, and agent from the same definition. When a certified metric moves, Basis decomposes the delta across dimensions and, separately, surfaces concrete cross-app activity that may have contributed, returning plain-language root cause with per-user access-filtered drill-downs.
 
 **Customer wedge.** Trust plus speed. Today an SMB gets three different "revenue" numbers from Bench, Bond, and Bill and nobody can say why a KPI moved without an afternoon of pivot-table archaeology. Basis gives one definition of truth and instant root-cause, a capability that only enterprise BI tools (Looker's LookML, dbt Semantic Layer, Cube) ship today and that no team of 2-50 can afford or staff.
 
 **How it sits adjacent to existing apps (not on top of them).**
 - Basis does **not** render charts or own dashboards. Bench does (`apps/bench/src/components/widgets/chart-renderer.tsx`, `apps/bench-api/`). Basis produces *definitions and explanations*; Bench *displays* them.
-- Basis does **not** own the underlying source data. It defines metrics *over* data that already lives in Bond, Bill, Bam, Blast, etc., and reaches that data through Bench's existing governed query layer (`apps/bench-api/src/services/query.service.ts`, `apps/bench-api/src/lib/data-source-registry.ts`).
+- Basis does **not** own the underlying source data. It defines metrics *over* data that already lives in Bond, Bill, Bam, Blast, etc., and reaches that data through Bench's existing governed query builder (`apps/bench-api/src/services/query.service.ts`, `apps/bench-api/src/lib/data-source-registry.ts`).
 - Basis does **not** do external-source ETL or warehousing in v1.
 
-**Positioning against Bench specifically.** Bench answers "show me a chart of X." Basis answers "what *is* X, who owns it, is it certified, and why did it change." A Bench widget binds to a Basis metric so that the KPI card labeled "MRR" everywhere in the suite resolves to exactly one certified definition.
+**Relationship to Bench `bench_saved_queries` (adjacency clarified per review).** `apps/bench-api/src/db/schema/bench-saved-queries.ts` is already a named, org-scoped saved query (`data_source`, `entity`, `query_config`) - structurally a metric definition *minus governance*. Basis is deliberately **not** just a certified saved query, for three reasons: (1) governance is first-class (owner, certification state, immutable version lineage, Bolt events on change) rather than a flag; (2) a metric is consumed by many surfaces (widgets, agents, workers) and must have a stable `slug` identity independent of any one saved query; (3) a metric carries presentation governance (unit, favorable direction, target) that a saved query does not. Basis's version `definition` **reuses the Bench `QueryConfig` Zod shape from `packages/shared/src/schemas/bench.ts`** rather than re-describing it, so the two cannot silently drift. A future consolidation (a metric wrapping a `bench_saved_queries.id`) is noted in Open Questions; v1 keeps the definition inline but typed from the shared schema.
+
+**Positioning against Bench widgets.** Bench answers "show me a chart of X." Basis answers "what *is* X, who owns it, is it certified, and why did it change." A Bench widget binds to a Basis metric so the KPI card labeled "MRR" everywhere in the suite resolves to exactly one certified definition and one certified presentation envelope.
 
 **Chosen final name:** **Basis** (single word). Alternatives Baseline and Bedrock were considered and rejected.
 
-**Explicitly out of v1 scope (future consumers, not built here):**
-- **Bellwether** (forecasting) would consume Basis certified metrics as its input series.
-- **Benchmark** (peer comparison) would consume Basis certified metrics for cross-org comparison.
-Both are named only so the data model leaves room for them; neither is designed or built in v1.
+**Explicitly out of v1 scope (future consumers, not built here):** **Bellwether** (forecasting) and **Benchmark** (peer comparison) would each consume Basis certified metrics. Named only so the data model leaves room; neither is designed or built in v1.
 
 ---
 
 ## 2. AI-native design
 
-Basis's AI core is **deterministic contribution analysis with an LLM-phrased narrative on top**. The math is reproducible and auditable; the language model only turns the ranked decomposition into a sentence. This keeps the "why" trustworthy (a governance product cannot hallucinate its numbers).
+Basis's AI core is **deterministic contribution analysis with a best-effort LLM-phrased narrative on top**. The math is reproducible and auditable; the language model only turns the ranked decomposition into a sentence, and its failure never blocks the result. This keeps a governance product from ever hallucinating its numbers.
 
-### 2.1 The mechanism: contribution analysis
+### 2.1 Two independent computations, never fused into one figure
 
-Given a metric `M`, a baseline period `A`, and a comparison period `B`:
+A hard lesson from review: Bench's `executeQuery` returns **grouped aggregates only, never row-level entity IDs**, and concrete entities come only from a time-window activity correlation that can disagree with the delta. So Basis keeps two computations strictly separate and labels them as such:
 
-1. **Resolve** the metric's current certified definition to a canonical Bench query (`{source_product, source_entity, measure, filters, time_column}`). See `basis_metric_versions.definition` in Section 3.
-2. **Total delta.** Execute the metric for `A` and `B` through Bench's query layer; compute `delta_abs = value_B - value_A` and `delta_pct`.
-3. **Dimensional decomposition.** For each candidate dimension `d` (from the metric's `default_dimensions`, or a caller-supplied one), re-run the metric grouped by `d` for both periods and compute each dimension value's contribution to the delta. For an additive measure (`sum`/`count`) this is exact: `contribution(g) = value_B(g) - value_A(g)` and `sum(contributions) == delta_abs`. Drivers are ranked by absolute contribution.
-4. **Event correlation.** For the top drivers, query cross-app activity in the `[A.end, B.end]` window (`v_activity_unified`, migration `infra/postgres/migrations/0129_activity_unified_view.sql`) and recent Bolt events (`bolt_recent_events` / `bolt_event_trace`) filtered to the driver's app and entity, to attach concrete causes: "3 enterprise Bond deals slipped from Won", "2 Bill invoices went overdue."
-5. **Visibility preflight.** Every cited entity is passed through the MCP `can_access(asker_user_id, entity_type, entity_id)` tool / `POST /v1/visibility/can_access` (`apps/api/src/services/visibility.service.ts`) and dropped if the asker cannot see it. This is mandatory per the platform agent convention in `docs/reference/agent-conventions.md`.
-6. **Narrative.** The ranked, access-filtered drivers plus correlated events are handed to the platform LLM provider (the same `llm-provider` surface the Bam api exposes; see the `llm-provider` per-route rate limit note in `CLAUDE.md`) with a strict template that forbids inventing numbers and requires hedged causal language ("correlates with", not "caused by"). Output: "MRR fell 8% ($4.1k) because 3 enterprise Bond deals slipped from Won ($3.2k) and 2 Bill invoices went overdue ($0.9k)", each clause carrying a drill-down link to the entity.
+1. **Deterministic dimensional decomposition (the drivers).** For an additive measure (`sum`/`count`), re-run the metric grouped by a decomposition dimension for both periods; each dimension value's contribution is `value_B(g) - value_A(g)`, and `sum(contributions) == delta_abs` exactly. Drivers are **dimension-value contributions** (e.g. "Enterprise segment contributed -$3.2k"), not entities.
+2. **Possibly-related activity (the correlation).** A **separate, explicitly-labeled** list assembled from `v_activity_unified` (`infra/postgres/migrations/0129_activity_unified_view.sql`) and `bolt_recent_events` in the `[A.end, B.end]` window, filtered to the drivers' apps. This is presented as "possibly related activity," never summed into the delta and never asserted as *the* cause.
 
-### 2.2 What an agent can do autonomously vs. HITL
+The flagship output therefore reads: *"MRR fell 8% ($4.1k). Largest contributions to the decline: Enterprise segment -$3.2k, Overdue bucket -$0.9k. Possibly related activity in this window: 3 Bond deals left the Won stage; 2 Bill invoices became overdue."* The `$` figures come only from decomposition; the deals/invoices are correlation, clearly fenced.
+
+If per-driver entity attribution is ever required (post-v1), it needs a governed bounded "top contributing rows" query whose sum is reconciled to the aggregate delta before any attribution is asserted. Not in v1.
+
+### 2.2 Dimension-value labels (raw UUIDs are not human-readable)
+
+Bench dimensions are frequently raw FK UUIDs (`stage_id`, `owner_id`) and `buildQuery` ignores `source.joins`, so a grouped re-query returns UUID buckets, not "Won" or "Enterprise." v1 handles this two ways: the decomposition-dimension allowlist is restricted to **self-labeling columns** (enum/text such as `status`, `level`, `lifecycle_stage`, or MV label columns like `bench_mv_pipeline_snapshot.stage_name`), **or** a dimension has a **registered per-source label resolver** in Basis that maps its UUIDs to names. `lineage.joins` is descriptive metadata only and does **not** participate in query execution. A dimension with neither self-labeling nor a resolver is not offered for decomposition in v1.
+
+### 2.3 Per-user visibility (the leak fix)
+
+Correlated activity is **resolved live per requesting user at read time**, never persisted with a single computer's visibility. Before any cited entity appears, it is mapped to a **canonical dotted `VisibilityEntityType`** (`bond.deal`, `bill.invoice`, `bam.task`; the exact allowlist is `SUPPORTED_ENTITY_TYPES` in `apps/api/src/services/visibility.service.ts:91`) and passed through MCP `can_access(asker_user_id, entity_type, entity_id)` / `POST /v1/visibility/can_access`. Any type not in the allowlist, and any entity the asker cannot see, is dropped fail-closed. The `entity_links.dst_type` string convention (Section 3.3) is kept separate from the visibility type and mapped to it.
+
+Because correlation is per-user, the shared explanation cache (Section 3.1) stores **only the deterministic aggregate decomposition** (delta, dimension contributions). No entity references or correlated-event lists are ever persisted in a shared row. Concrete drivers/drill-downs are recomputed and re-`can_access`-filtered on every read, per the requesting user.
+
+### 2.4 Prompt-injection and PII isolation
+
+Cross-app text (deal names, invoice memos) is attacker-controllable. The narrative step therefore: (a) passes drivers to the LLM as **opaque tokens** (`DRIVER_1`, `DRIVER_2`) plus their numeric contributions, never raw third-party strings; the SPA re-hydrates real names client-side after generation; (b) uses **only the internal platform llm-provider** surface (`apps/api/src/routes/internal-llm.routes.ts` / `apps/api/src/services/llm-provider.service.ts`, reached via `BBB_API_INTERNAL_URL` + `INTERNAL_SERVICE_SECRET`), so no PII egresses to a third-party endpoint Basis chose; (c) renders the returned narrative as **plain text** - no model-emitted HTML or markdown links (links are attached by the SPA from the structured driver list).
+
+### 2.5 What an agent can do autonomously vs. HITL
 
 | Action | Autonomy | Mechanism |
 | --- | --- | --- |
-| Read a certified metric's value | Autonomous | `basis_metric_value` MCP tool |
-| Ask "why did X change" | Autonomous (read-only, `can_access`-filtered) | `basis_explain_change` |
+| Read a certified metric's value | Autonomous | `basis_metric_value` |
+| Ask "why did X change" | Autonomous, `can_access`-filtered per caller | `basis_explain_change` |
 | Rank drivers of a delta | Autonomous | `basis_rank_drivers` |
 | List / search metric catalog | Autonomous | `basis_list_metrics`, `basis_search_metrics` |
-| Define a *new draft* metric | Autonomous (draft only, never certified) | `basis_define_metric` |
-| Add a new definition **version** to an existing metric | HITL | policy-gated; `confirm_action` two-step when the metric is already certified (org-wide truth change) |
-| **Certify / decertify** a metric | HITL | `basis_certify_metric` requires `confirm_action:true`; permission `basis.metric.certify` |
-| **Deprecate / delete** a metric | HITL, destructive | `basis_deprecate_metric` requires `confirm_action:true` |
+| Define a *new draft* metric | Autonomous (draft only) | `basis_define_metric` |
+| Add a definition **version** to a **draft** metric | Autonomous, policy-gated, inline `confirm_action` | `basis_add_metric_version` |
+| Add a version to a **certified** metric | HITL, Redis-backed confirm token | `basis_add_metric_version` |
+| **Certify / decertify** a metric | HITL, Redis-backed confirm token | `basis_certify_metric` / `basis_decertify_metric` |
+| **Deprecate** a metric | HITL, destructive, Redis-backed confirm token | `basis_deprecate_metric` |
 
-The two-step `confirm_action` pattern mirrors Blip's terminal-action tools (`apps/mcp-server/src/tools/blip-tools.ts:155` and `:241`): call with `confirm_action` omitted to get a preview of impact, call again with `confirm_action:true` to proceed. Redis-backed confirm tokens are not needed for these because the inline-boolean idempotent pattern is sufficient (definition changes are versioned, not destructive), matching Blip's precedent.
+Per review, the org-wide "truth flip" actions (certify/decertify/deprecate, and versioning an already-certified metric) use the **Redis-backed dynamic-TTL confirm-token store** (`apps/mcp-server/src/lib/confirm-token-store.ts`, key prefix `mcp:confirm_token:`, 60s agent-to-agent TTL), the same class `CLAUDE.md` mandates for destructive MCP actions. Only versioning a still-`draft` metric uses the lighter inline-boolean pattern (`apps/mcp-server/src/tools/blip-tools.ts:155`).
 
-### 2.3 Guardrails
+### 2.6 Guardrails summary
 
-- **agent_policies** (`infra/postgres/migrations/0139_*`, enforced in `apps/mcp-server/src/lib/register-tool.ts:503`): every `basis.*` tool invocation by a service account passes through the §15 kill-switch + glob allowlist (`basis.*`). No new mechanism; Basis just registers its tools through the standard `registerTool` wrapper.
-- **Per-action permissions** (`@bigbluebam/permissions`): `basis.metric.read`, `basis.metric.define`, `basis.metric.certify`, `basis.metric.deprecate`, `basis.explain.run`. Enforced by the same permissions plugin Bench uses (`apps/bench-api/src/plugins/permissions.ts`).
-- **can_access preflight** on every cited driver entity before it appears in an explanation (Section 2.1 step 5).
-- **Correlation-not-causation guard**: the narrative template hard-requires hedged language and always links the raw contribution numbers so a human can audit the claim.
-- **No autonomous certification**: an agent can draft a definition but only a human (or an explicitly permissioned service account clearing `confirm_action`) can flip `certification` to `certified`.
+- **agent_policies** (`0139_*`, enforced in `apps/mcp-server/src/lib/register-tool.ts:503`): every `basis.*` service-account call passes the §15 kill-switch + glob allowlist. **Operational note:** `basis.*` is **not** in the always-permitted core set (`get_server_info`, `get_me`, `agent_heartbeat`), so Basis tools fail closed until an operator adds `basis.*` (or specific tools) to each agent's allowlist. This is documented for operators and covered by a `register-tool` policy test for the new source.
+- **Per-action permissions** (`@bigbluebam/permissions`, plugin pattern `apps/bench-api/src/plugins/permissions.ts`): full verb set in Section 4.4.
+- **can_access preflight** on every cited driver, per requesting user, at read time (Section 2.3).
+- **Correlation-not-causation guard**: narrative template requires hedged language; the two computations are never fused (Section 2.1).
 
 ---
 
 ## 3. Data model
 
-All Basis tables are org-scoped and carry `organization_id`, with RLS policies gated on the `app.current_org_id` GUC exactly as `infra/postgres/migrations/0132_entity_links.sql:52-56` and `0116_rls_foundation.sql` establish. Policies are advisory until `BBB_RLS_ENFORCE=1` flips the app role to NOBYPASSRLS.
+All Basis tables are org-scoped, carry `organization_id`, and have RLS policies gated on `app.current_org_id` exactly as `infra/postgres/migrations/0132_entity_links.sql:52-56` and `0116_rls_foundation.sql`. Policies are advisory until `BBB_RLS_ENFORCE=1`. Each table gets a **1:1 Drizzle schema module** under `apps/basis-api/src/db/schema/` (`basis-metrics.ts`, `basis-metric-versions.ts`, `basis-metric-snapshots.ts`, `basis-explanations.ts`, `index.ts`), mirroring `apps/bench-api/src/db/schema/`, so `pnpm db:check` / `.github/workflows/db-drift.yml` stay green.
 
 ### 3.1 Tables
 
@@ -82,187 +95,197 @@ All Basis tables are org-scoped and carry `organization_id`, with RLS policies g
 | --- | --- | --- |
 | `id` | uuid PK | `gen_random_uuid()` |
 | `organization_id` | uuid NOT NULL | FK `organizations(id)` ON DELETE CASCADE |
-| `slug` | varchar(80) NOT NULL | stable machine key, unique per org (e.g. `mrr`, `pipeline_open`) |
+| `slug` | varchar(80) NOT NULL | stable machine key, unique per org |
 | `name` | varchar(160) NOT NULL | display name |
 | `description` | text | plain-language definition for humans |
-| `unit` | varchar(20) NOT NULL | enum-like: `currency` \| `count` \| `percent` \| `ratio` \| `duration_ms` |
-| `favorable_direction` | varchar(8) NOT NULL DEFAULT `'up'` | `up` \| `down` \| `neutral` (drives "good/bad" coloring in consumers) |
-| `owner_id` | uuid | FK `users(id)` ON DELETE SET NULL; the accountable steward |
+| `unit` | varchar(20) NOT NULL | `currency` \| `count` \| `percent` \| `ratio` \| `duration_ms` |
+| `favorable_direction` | varchar(8) NOT NULL DEFAULT `'up'` | `up` \| `down` \| `neutral` |
+| `owner_id` | uuid | FK `users(id)` ON DELETE SET NULL |
 | `certification` | varchar(12) NOT NULL DEFAULT `'draft'` | `draft` \| `certified` \| `deprecated` |
-| `current_version_id` | uuid | FK `basis_metric_versions(id)`; the active definition |
-| `target` | jsonb | optional `{ value, comparison }` for threshold breach detection; nullable |
+| `current_version_id` | uuid | FK `basis_metric_versions(id)` |
+| `target` | jsonb | optional `{ value, comparison }` for breach detection |
+| `resolve_status` | varchar(12) NOT NULL DEFAULT `'ok'` | `ok` \| `resolve_failed`; set by the snapshot sweep when a definition no longer resolves against Bench (drift guard) |
+| `resolve_failed_at` | timestamptz | when drift was last detected |
+| `last_breach_at` | timestamptz | breach idempotency marker (mirrors `bond_deals.rotting_alerted_at`) |
+| `last_breach_direction` | varchar(8) | direction of the last fired breach; cleared when value recovers so a breach fires once per crossing |
 | `created_by` | uuid | FK `users(id)` |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
 Indexes: `UNIQUE (organization_id, slug)`, `(organization_id, certification)`, `(organization_id, owner_id)`.
 
-**`basis_metric_versions`** - immutable, append-only lineage/audit trail of definitions.
+**`basis_metric_versions`** - immutable, append-only definition lineage.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `metric_id` | uuid NOT NULL | FK `basis_metrics(id)` ON DELETE CASCADE |
 | `organization_id` | uuid NOT NULL | denormalized for RLS |
-| `version_number` | integer NOT NULL | monotonically increasing per metric |
-| `definition` | jsonb NOT NULL | canonical spec bound to a Bench data source: `{ source_product, source_entity, measure: { field, agg }, filters: [...], default_dimensions: [...], time_column }` (shapes mirror `apps/bench-api/src/services/query.service.ts` `QueryConfig`) |
-| `lineage` | jsonb NOT NULL | derived from the Bench data source: upstream `{ apps: [...], base_table, joins }` copied from `data-source-registry.ts` at version-create time |
-| `change_note` | text | why this version exists |
+| `version_number` | integer NOT NULL | monotonic per metric |
+| `definition` | jsonb NOT NULL | `{ source_product, source_entity, measure: {field, agg}, filters, default_dimensions, time_column }`, **validated by the shared Bench `QueryConfig` schema** (`packages/shared/src/schemas/bench.ts`) so it cannot drift from what Bench executes |
+| `lineage` | jsonb NOT NULL | descriptive `{ apps, base_table, joins }` from `data-source-registry.ts` at create time; **not executed** |
+| `change_note` | text | |
 | `created_by` | uuid | FK `users(id)` |
 | `created_at` | timestamptz NOT NULL DEFAULT now() | |
 
-Indexes: `UNIQUE (metric_id, version_number)`, `(organization_id, created_at DESC)`. Rows are never updated or deleted (audit integrity); deprecating a metric flips `basis_metrics.certification`, it does not delete versions.
+Indexes: `UNIQUE (metric_id, version_number)`, `(organization_id, created_at DESC)`. Never updated or deleted.
 
-**`basis_metric_snapshots`** - periodic captured values that power movement detection and give "why did X change" a baseline without a live re-query.
+**`basis_metric_snapshots`** - periodic captured values for **movement detection and sparklines only** (explanations do *not* read snapshots; they live-query periods A and B directly - see Section 2.1). **Monthly range-partitioned by `captured_at`** (mirroring `activity_log` and `blip_entries`), provisioned by a worker (Section 6) modeled on `apps/worker/src/jobs/blip-partition-provision.job.ts`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `id` | uuid PK | |
+| `id` | uuid | part of composite PK with `captured_at` (partition key) |
 | `metric_id` | uuid NOT NULL | FK `basis_metrics(id)` ON DELETE CASCADE |
 | `organization_id` | uuid NOT NULL | |
-| `version_id` | uuid NOT NULL | FK `basis_metric_versions(id)`; which definition produced this value |
-| `captured_at` | timestamptz NOT NULL | |
+| `version_id` | uuid NOT NULL | FK `basis_metric_versions(id)`; the definition that produced the value |
+| `captured_at` | timestamptz NOT NULL | partition key |
 | `grain` | varchar(10) NOT NULL | `hour` \| `day` \| `week` \| `month` |
-| `value` | numeric NOT NULL | the scalar metric value for the bucket |
-| `dims` | jsonb | optional per-dimension breakdown snapshot for cheap decomposition |
+| `value` | numeric NOT NULL | scalar value |
+| `dims` | jsonb | per-dimension breakdown, **captured only for additive measures** (nulled for ratio/percentile) |
 
-Indexes: `(metric_id, grain, captured_at DESC)`, `(organization_id, captured_at DESC)`.
+**Idempotency (blocker fix):** `UNIQUE (metric_id, grain, captured_at, version_id)` and the snapshot job writes with `INSERT ... ON CONFLICT (metric_id, grain, captured_at, version_id) DO UPDATE`, so BullMQ retries and horizontally-scaled workers cannot double-write and corrupt downstream deltas. Indexes: `(metric_id, grain, captured_at DESC)`.
 
-**`basis_explanations`** - cached contribution analyses (expensive to compute, safe to reuse within a TTL).
+**`basis_explanations`** - cached **deterministic** contribution analyses. Stores no entity references (leak fix); concrete correlation is resolved per-user at read time.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `metric_id` | uuid NOT NULL | FK `basis_metrics(id)` ON DELETE CASCADE |
 | `organization_id` | uuid NOT NULL | |
-| `period_a` / `period_b` | jsonb NOT NULL | `{ start, end }` each |
-| `dimension` | varchar(80) | the decomposition dimension used |
-| `delta_abs` | numeric | |
-| `delta_pct` | numeric | |
-| `drivers` | jsonb NOT NULL | ranked `[{ dimension_value, contribution_abs, contribution_pct, entity_refs: [...] }]` |
-| `correlated_events` | jsonb | `[{ source, event_type, entity_type, entity_id, at }]`, already `can_access`-filtered |
-| `narrative` | text | LLM-phrased sentence |
-| `model` | varchar(60) | provider/model used for the narrative (auditability) |
-| `computed_by` | uuid | actor (user or agent) |
+| `version_id` | uuid NOT NULL | FK `basis_metric_versions(id)`; part of cache identity |
+| `cache_key` | varchar(64) NOT NULL | `hash(metric_id, version_id, period_a, period_b, dimension)` via `hashQueryConfig` (`apps/bench-api/src/services/cache.service.ts`) |
+| `period_a` / `period_b` | jsonb NOT NULL | `{ start, end }` |
+| `dimension` | varchar(80) | decomposition dimension |
+| `delta_abs` / `delta_pct` | numeric | |
+| `drivers` | jsonb NOT NULL | ranked `[{ dimension_value, label, contribution_abs, contribution_pct }]` - **dimension-value contributions only, no entities** |
+| `narrative` | text | best-effort; nullable when the LLM leg failed |
+| `model` | varchar(60) | provider/model used (auditability) |
 | `computed_at` | timestamptz NOT NULL DEFAULT now() | |
 
-Indexes: `(metric_id, computed_at DESC)`, a partial/covering index on `(metric_id, dimension)` for cache lookup.
+Indexes: `UNIQUE (cache_key)` (correct cache identity; the prior `(metric_id, dimension)` index would have served a June answer to a July question), `(metric_id, computed_at DESC)`.
 
 ### 3.2 Cross-app additive change (Bench binding)
 
-**`bench_widgets` gains `basis_metric_id uuid NULL`** (additive), so a Bench widget can bind to a certified metric instead of an ad-hoc `query_config`. When set, Bench resolves the metric via `GET /basis/api/v1/metrics/:id/resolve` and executes it through its own existing query layer. No FK across the app boundary is declared in Drizzle (both apps share one DB, but Bench's schema module stays authoritative for the table); the column is a soft reference validated at bind time. The Drizzle schema `apps/bench-api/src/db/schema/bench-widgets.ts` is updated in the same change to keep `pnpm db:check` green.
+`bench_widgets` gains `basis_metric_id uuid NULL` (additive). When set, Bench resolves the metric via `GET /basis/api/v1/metrics/:id/resolve`, which returns both the query config **and the presentation envelope** (`display_name`, `unit`, `favorable_direction`, `target`); Bench **prefers these over its local `kpi_config`** so there is one certified presentation, not two. The Drizzle module `apps/bench-api/src/db/schema/bench-widgets.ts` is updated in the same change.
 
 ### 3.3 Reused platform tables (not created here)
 
-- `entity_links` (`0132_entity_links.sql`): explanation-to-driver links (`src_type='basis_explanation'`, `dst_type` = the driver entity type, `link_kind='references'`).
-- `v_activity_unified` (`0129_activity_unified_view.sql`): read source for event correlation.
-- `organizations`, `users` (via `apps/*/src/db/schema/bbb-refs.ts` style refs).
+- `entity_links` (`0132_entity_links.sql`): used **only** for optional human-curated "canonical driver" pins on a metric (`src_type='basis_metric'` -> `dst_type` = mapped entity type, `link_kind='references'`), written `ON CONFLICT DO NOTHING`. **Not** auto-written from per-user correlation (that would re-introduce the leak and is ephemeral).
+- `v_activity_unified` (`0129_*`), `bolt_recent_events` / `bolt_event_trace`: read at request time for correlation.
+- `organizations`, `users`.
 
 ### 3.4 Numbered, idempotent migration plan
 
-Migration tip observed on this branch is `0225_bin_scan_override.sql`, so Basis appends from `0226`. Every file follows the conventions in `CLAUDE.md` (filename `^[0-9]{4}_[a-z...]`, header block with `-- Why:` / `-- Client impact:`, `IF NOT EXISTS`, guarded destructive ALTERs, guarded enum creation via `DO $$ ... EXCEPTION WHEN duplicate_object THEN NULL`).
+Migration tip observed on this branch is `0225_bin_scan_override.sql`; the `permissions_seed_actions_delta` series tip is `0224_..._delta_019`. Basis appends from `0226`. All files follow `CLAUDE.md` conventions (filename regex, `-- Why:` / `-- Client impact:` header, `IF NOT EXISTS`, guarded enums via `DO $$ ... EXCEPTION WHEN duplicate_object`, guarded destructive ALTERs).
 
-1. **`0226_basis_core.sql`** - `basis_metrics` + `basis_metric_versions`, their indexes, RLS enable + `basis_*_org_isolation` policies on `app.current_org_id`. Client impact: additive only.
-2. **`0227_basis_snapshots_explanations.sql`** - `basis_metric_snapshots` + `basis_explanations`, indexes, RLS policies. Client impact: additive only.
-3. **`0228_bench_widget_metric_binding.sql`** - `ALTER TABLE bench_widgets ADD COLUMN IF NOT EXISTS basis_metric_id uuid;` + `CREATE INDEX IF NOT EXISTS idx_bench_widgets_basis_metric ON bench_widgets(basis_metric_id);`. Client impact: additive only (nullable column).
-4. **`0229_permissions_seed_actions_delta_020.sql`** - seed the `basis.*` action catalog rows following the existing `..._permissions_seed_actions_delta_NNN.sql` pattern (`0224` is the current tip of that series). Client impact: additive only. Regenerate `docs/permissions-action-manifest.json` in the same change.
+1. **`0226_basis_core.sql`** - `basis_metrics` (incl. `resolve_status`, `last_breach_*` markers) + `basis_metric_versions`, indexes, RLS policies. Client impact: additive only.
+2. **`0227_basis_snapshots_explanations.sql`** - **partitioned** `basis_metric_snapshots` parent (RANGE on `captured_at`) with its `UNIQUE (metric_id, grain, captured_at, version_id)`, an initial month partition, and `basis_explanations` with `UNIQUE (cache_key)` + `version_id`; RLS on both. Client impact: additive only.
+3. **`0228_bench_widget_metric_binding.sql`** - `ALTER TABLE bench_widgets ADD COLUMN IF NOT EXISTS basis_metric_id uuid;` + `CREATE INDEX IF NOT EXISTS idx_bench_widgets_basis_metric ...`. Client impact: additive only.
+4. **`0229_permissions_seed_actions_delta_020.sql`** - **generated** by regenerating `docs/permissions-action-manifest.json` with the full `basis.*` verb set (Section 4.4); do not hand-write the SQL. Client impact: additive only.
 
-Bolt event registration is **not** a migration; it is a TypeScript edit to `apps/bolt-api/src/services/event-catalog.ts` (Section 7), guarded by `scripts/check-bolt-catalog.mjs`.
+Bolt event registration is a TypeScript edit to `apps/bolt-api/src/services/event-catalog.ts` (Section 7), not a migration.
 
 ---
 
 ## 4. API surface
 
-Base path `/basis/api/`, Fastify routes registered under `/v1` (mirroring `apps/bench-api/src/server.ts:111-118`). All responses use the shared envelope conventions: success `{ data: ... }`, errors the canonical `{ error: { code, message, details, request_id } }` from `@bigbluebam/logging` `createErrorHandler`. List endpoints use cursor pagination, `?filter[field]=value`, and `?sort=-field` per `CLAUDE.md` "Key Design Decisions."
+Base path `/basis/api/`, Fastify routes under `/v1` (mirroring `apps/bench-api/src/server.ts:111-118`). Success `{ data: ... }`; errors the canonical `{ error: { code, message, details, request_id } }` from `@bigbluebam/logging` `createErrorHandler`. Cursor pagination, `?filter[field]=value`, `?sort=-field`. **All request/response shapes come from a shared Zod module `packages/shared/src/schemas/basis.ts`** (exported from `schemas/index.ts`, imported by both `basis-api` routes and the SPA), mirroring `packages/shared/src/schemas/bench.ts` per design decision #1.
 
-### 4.1 REST endpoints
+### 4.1 The underlying-data access decision (promoted from Open Question to prerequisite)
+
+The value/explain path depends on running Bench-governed queries server-to-server. **This is now a required prerequisite, not an open question**, because Bench's org isolation is *entirely* the `orgId` argument to `buildQuery` (there is no RLS on that read path), so a naive secret-guarded route that trusts a caller-supplied org would let any `INTERNAL_SERVICE_SECRET` holder read any org.
+
+**Design (follows `apps/mcp-server/src/routes/tools-call.ts` and the satellite -> api `/internal/permissions/dual-read` pattern):**
+- Land a new **internal query route on `bench-api`** guarded by `INTERNAL_SERVICE_SECRET`, that derives the org **from the caller's credential, not from a header**:
+  - For **user-initiated** `/value` and `/explain`, Basis **forwards the caller's bearer token** to bench-api; org = `request.user.org_id` resolved from that token. Any `X-Org-Id` is advisory-only and must match, or the request is rejected.
+  - For **background workers**, use a **locked `bbam_svc_` per-org service account**; org is derived from that token. A request whose asserted org is not derivable from the credential is rejected.
+- `INTERNAL_SERVICE_SECRET` **must be non-empty** in every environment running Basis (platform default is empty, which correctly fails closed). Documented in Section 8 and `.env.example`.
+- `bench-api` is added to `basis-api.depends_on` and to `needs` in the deploy catalog (Section 8).
+
+### 4.2 REST endpoints
 
 | Method | Path | Purpose | Notes |
 | --- | --- | --- | --- |
-| GET | `/v1/metrics` | List metrics | `filter[certification]`, `filter[owner_id]`, `q` search, cursor paginated |
+| GET | `/v1/metrics` | List metrics | `filter[certification]`, `filter[owner_id]`, `q`, cursor paginated; `requireAuth`, org from `request.user.org_id` |
 | POST | `/v1/metrics` | Create metric (draft) + first version | emits `metric.created` |
 | GET | `/v1/metrics/:id` | Get metric + current version | |
 | PATCH | `/v1/metrics/:id` | Update metadata (name, owner, unit, direction, target) | non-definition fields only |
-| POST | `/v1/metrics/:id/versions` | Add a new definition version, set as current | emits `metric.definition_changed` |
+| POST | `/v1/metrics/:id/versions` | New definition version, set current | emits `metric.definition_changed` |
 | GET | `/v1/metrics/:id/versions` | Version history / lineage audit | |
 | POST | `/v1/metrics/:id/certify` | Flip to `certified` | perm `basis.metric.certify`; emits `metric.certified` |
-| POST | `/v1/metrics/:id/decertify` | Flip back to `draft` | emits `metric.decertified` |
-| DELETE | `/v1/metrics/:id` | Deprecate (soft; sets `deprecated`) | emits `metric.deprecated`; destructive-confirm on MCP |
-| GET | `/v1/metrics/:id/resolve` | **Binding contract**: canonical Bench `{product, entity, query_config}` for the current certified version | consumed by Bench service-to-service |
-| GET | `/v1/metrics/:id/value` | Single current value for a period | resolves definition, executes via Bench query layer |
-| POST | `/v1/metrics/:id/explain` | Contribution analysis for `{period_a, period_b, dimension?}` | returns cached `basis_explanations` row or computes; large ranges offloaded to the `basis-explain` queue and returned `{ status: 'computing', job_id }` |
-| GET | `/v1/metrics/:id/explanations` | List cached explanations | |
-| GET | `/v1/metrics/:id/snapshots` | Movement history from `basis_metric_snapshots` | |
-| GET | `/v1/metrics/:id/lineage` | Upstream apps/tables for the current version | reads `basis_metric_versions.lineage` |
-| GET | `/v1/data-sources` | Pass-through of Bench's data-source catalog for the definition builder | proxies `bench-api` `listDataSources()` |
-| GET | `/health` / `/readyz` | Liveness/readiness | via `@bigbluebam/service-health` |
+| POST | `/v1/metrics/:id/decertify` | Flip to `draft` | emits `metric.decertified` |
+| DELETE | `/v1/metrics/:id` | Deprecate (soft) | emits `metric.deprecated`; destructive-confirm on MCP |
+| GET | `/v1/metrics/:id/resolve` | **Binding contract**: query config **plus presentation envelope** | `requireAuth`, org from `request.user.org_id`; Bench forwards its caller's token/service-cred |
+| GET | `/v1/metrics/:id/value` | Single current value for a period | forwards caller token to bench-api internal query route |
+| POST | `/v1/metrics/:id/explain` | Contribution analysis `{period_a, period_b, dimension?}` | returns cached deterministic row + **live per-user correlation**; large ranges offloaded to `basis-explain` queue returning `{ status:'computing', job_id }` |
+| GET | `/v1/metrics/:id/explanations` | List cached deterministic analyses | correlation re-resolved per-user on open |
+| GET | `/v1/metrics/:id/snapshots` | Movement history / sparkline data | |
+| GET | `/v1/metrics/:id/lineage` | Upstream apps/tables (descriptive) | |
+| GET | `/v1/data-sources` | Pass-through of Bench's data-source catalog | `requireAuth`, org-scoped; used by the definition builder |
+| GET | `/health` / `/readyz` | Liveness/readiness | `@bigbluebam/service-health`; **`/readyz` checks only Postgres + Redis, never bench-api/LLM/Qdrant** (Section 8.4) |
 
-**Underlying-data access decision.** Basis does not re-implement SQL generation. It reaches source data through Bench's governed builder in `apps/bench-api/src/services/query.service.ts` (`buildQuery`/`executeQuery`), which already enforces per-source org isolation, identifier allowlisting, and statement timeouts. The concrete integration path (internal service-to-service route on bench-api guarded by `INTERNAL_SERVICE_SECRET`, vs. forwarding the caller's bearer token, vs. extracting the builder into a shared package) is an open question in Section 10; the spec assumes an internal, secret-guarded query route added to bench-api.
+### 4.3 Realtime (`/basis/ws`)
 
-### 4.2 Realtime (`/basis/ws`)
+Lightweight WebSocket, cross-instance via Redis PubSub (`CLAUDE.md` "WebSocket realtime"). Org-scoped rooms. Broadcasts `metric.certified` / `metric.definition_changed` (badge live-update) and `explanation.ready` (queued explain finished; UI renders the deterministic bars even if `narrative` is null). Notification channel only; no Yjs.
 
-A lightweight WebSocket, cross-instance via Redis PubSub (same pattern as the Bam/Bench realtime described in `CLAUDE.md` "WebSocket realtime"). Rooms scoped to org. Broadcasts:
-- `metric.certified` / `metric.definition_changed` so an open catalog view live-updates a badge.
-- `explanation.ready` when a queued `basis-explain` job finishes, so the "why" explorer swaps its spinner for the result.
+### 4.4 Permissions (expanded per review)
 
-No collaborative editing / Yjs; this is a notification channel only.
+Manifest-generated in `docs/permissions-action-manifest.json`, `app.resource.verb` form: `basis.metric.read`, `basis.metric.define`, `basis.metric.version`, `basis.metric.certify`, `basis.metric.decertify`, `basis.metric.deprecate`, `basis.metric.update`, `basis.explain.run`, `basis.datasource.read`. Regenerating the catalog produces `0229_permissions_seed_actions_delta_020.sql`.
 
-### 4.3 MCP tools
+### 4.5 MCP tools
 
-Registered in a new `apps/mcp-server/src/tools/basis-tools.ts` using `registerTool` (`apps/mcp-server/src/lib/register-tool.ts:488`), calling `basis-api` over HTTP with the same client shape as `apps/mcp-server/src/tools/bench-tools.ts:9` (`createBenchClient`). Env `BASIS_API_URL=http://basis-api:4019/v1`.
+New `apps/mcp-server/src/tools/basis-tools.ts` using `registerTool` (`apps/mcp-server/src/lib/register-tool.ts:488`), HTTP client shaped like `apps/mcp-server/src/tools/bench-tools.ts:9`. Env `BASIS_API_URL=http://basis-api:4019/v1`.
 
 | Tool | Backs | Autonomy |
 | --- | --- | --- |
-| `basis_list_metrics` | GET `/metrics` | read |
-| `basis_search_metrics` | GET `/metrics?q=` | read |
+| `basis_list_metrics` / `basis_search_metrics` | GET `/metrics` | read |
 | `basis_get_metric` | GET `/metrics/:id` | read |
 | `basis_metric_value` | GET `/metrics/:id/value` | read |
 | `basis_metric_lineage` | GET `/metrics/:id/lineage` | read |
-| `basis_explain_change` | POST `/metrics/:id/explain` | read, `can_access`-filtered (the flagship tool) |
+| `basis_explain_change` | POST `/metrics/:id/explain` | read, per-caller `can_access` (flagship) |
 | `basis_rank_drivers` | POST `/metrics/:id/explain` (drivers only) | read |
 | `basis_define_metric` | POST `/metrics` | write, draft only, policy-gated |
-| `basis_add_metric_version` | POST `/metrics/:id/versions` | write, `confirm_action` when metric is certified |
-| `basis_certify_metric` | POST `/metrics/:id/certify` | write, `confirm_action:true` required |
-| `basis_decertify_metric` | POST `/metrics/:id/decertify` | write, `confirm_action:true` required |
-| `basis_deprecate_metric` | DELETE `/metrics/:id` | destructive, `confirm_action:true` required |
+| `basis_add_metric_version` | POST `/metrics/:id/versions` | inline `confirm_action` (draft) / Redis token (certified) |
+| `basis_certify_metric` / `basis_decertify_metric` | POST certify/decertify | Redis-backed confirm token |
+| `basis_deprecate_metric` | DELETE `/metrics/:id` | destructive, Redis-backed confirm token |
 
-**Endpoints intentionally with no MCP tool** (record in `docs/reference/mcp-endpoint-mapping.md`):
-- `GET /metrics/:id/resolve` - _(skip: internal service-to-service binding contract for Bench, not agent-facing)_
-- `GET /metrics/:id/snapshots`, `GET /metrics/:id/versions`, `GET /metrics/:id/explanations` - _(skip: folded into `basis_get_metric` / `basis_explain_change` responses; separate tools would be redundant)_
-- `GET /data-sources` - _(skip: Bench already exposes `bench_list_data_sources`; Basis reuses it)_
+**Endpoints intentionally with no tool** (record in `docs/reference/mcp-endpoint-mapping.md`, keep coverage counts in sync, run the zero-bare-dash grep):
+- `GET /metrics/:id/resolve` - _(skip: internal service-to-service binding contract for Bench)_
+- `GET /metrics/:id/snapshots|versions|explanations` - _(skip: folded into `basis_get_metric` / `basis_explain_change`)_
+- `GET /data-sources` - _(skip: Bench already exposes `bench_list_data_sources`)_
 - `PATCH /metrics/:id` - _(skip: metadata edit deferred; definition changes go through `basis_add_metric_version`)_
 - `/basis/ws`, `/health`, `/readyz` - _(skip: realtime/probe)_
 
-Also register a Basis provider in `search_everything` (`apps/mcp-server/src/tools/search-tools.ts`) so a metric surfaces in cross-app search as "Revenue (certified metric)".
+Also register a Basis provider in `search_everything` (`apps/mcp-server/src/tools/search-tools.ts`) so certified metrics surface in cross-app search with `can_access`-aware scoring.
 
 ---
 
 ## 5. Frontend
 
-`apps/basis/` React SPA, served by nginx at `/basis/`, modeled on `apps/bench/` structure (`app.tsx`, `main.tsx`, `pages/`, `hooks/`, `stores/auth.store.ts`, `lib/api.ts`). State: **TanStack Query v5** for server state (per-resource hooks like `apps/bench/src/hooks/use-widgets.ts`), **Zustand** for auth/session (`apps/bench/src/stores/auth.store.ts`). Components from **`@bigbluebam/ui`**; layout/sidebar modeled on `apps/bench/src/components/layout/`.
+`apps/basis/` React SPA served at `/basis/`, modeled on `apps/bench/` (`app.tsx`, `main.tsx`, `pages/`, `hooks/`, `stores/auth.store.ts`, `lib/api.ts`). **TanStack Query v5** for server state (per-resource hooks like `apps/bench/src/hooks/use-widgets.ts`), **Zustand** for auth (`apps/bench/src/stores/auth.store.ts`), components from **`@bigbluebam/ui`**, request/response types from `packages/shared/src/schemas/basis.ts`.
 
 ### Pages
 
-1. **Metric Catalog** (`pages/metric-list.tsx`) - searchable/filterable table of metrics with certification badges (draft/certified/deprecated), owner avatars, unit, and last-movement sparkline. Reuses the list/filter patterns from `apps/bench/src/pages/dashboard-list.tsx`.
-2. **Metric Detail** (`pages/metric-detail.tsx`) - definition summary, lineage panel (upstream apps/tables), current value, snapshot movement sparkline, version history, and certify/decertify/deprecate actions (permission-gated buttons).
-3. **Definition Builder** (`pages/definition-builder.tsx`) - pick a Bench data source (from `GET /v1/data-sources`), choose measure + aggregation + filters + default dimensions; a "Preview value" button runs `GET /metrics/:id/value` (or a dry-run) to validate. Reuses the Bench widget-wizard mental model (`apps/bench/src/pages/widget-wizard.tsx`) without importing its chart code.
-4. **Why-Did-It-Change Explorer** (`pages/explain.tsx`) - pick a metric, two periods, and an optional dimension; renders the ranked driver list with contribution bars, the plain-language narrative, and per-driver drill-down links that deep-link into the source app (Bond deal, Bill invoice). Live-updates via `/basis/ws` `explanation.ready`.
-5. **Settings** (`pages/settings.tsx`) - metric owners/stewards, default decomposition dimensions, explanation cache TTL.
+1. **Metric Catalog** (`pages/metric-list.tsx`) - searchable table with certification badges, owner avatars, unit, last-movement sparkline, and a `resolve_status='resolve_failed'` warning badge for drifted definitions.
+2. **Metric Detail** (`pages/metric-detail.tsx`) - definition, lineage panel, current value, movement sparkline, version history, permission-gated certify/decertify/deprecate.
+3. **Definition Builder** (`pages/definition-builder.tsx`) - **build-time reuse commitment (scope-creep fix):** the query-form (data source -> measure/agg/filters) is **extracted from Bench's widget wizard into a shared component** consumed by both apps, and "Preview value" **POSTs the draft to bench-api for validation** rather than Basis re-implementing preview. Basis adds only governance fields (owner, unit, direction, target) around that shared form.
+4. **Why-Did-It-Change Explorer** (`pages/explain.tsx`) - metric + two periods + optional dimension; renders ranked contribution bars, the "possibly related activity" list (separate, per-user filtered), and drill-down links the SPA attaches from structured drivers (never from model-emitted markup). Live-updates via `/basis/ws` `explanation.ready`; shows "summary unavailable" when `narrative` is null.
+5. **Settings** (`pages/settings.tsx`) - owners/stewards, default decomposition dimensions, explanation cache TTL, snapshot retention window.
 
-**Chart-scope discipline.** Per the out-of-scope rule, Basis renders only minimal *explanatory* visuals (ranked horizontal contribution bars, a value sparkline), not a general charting engine or dashboards. Rich visualization and dashboards remain Bench's job. The exact line (does a contribution waterfall count as "chart rendering"?) is flagged in Section 10; the conservative default is a bar-list, not a charting library.
+**Chart-scope discipline.** Basis renders only minimal explanatory visuals (ranked horizontal contribution bars, a value sparkline) with `@bigbluebam/ui` primitives - no charting library, no dashboards. Rich visualization stays in Bench.
 
 ---
 
 ## 6. Background work
 
-New BullMQ workers in `apps/worker`, following the queue-plus-repeatable convention in `apps/worker/src/worker.ts` (`{ pattern: '<cron>' }` for scheduled jobs, e.g. the Bond stale-deals job at `worker.ts` ~line 823).
+New BullMQ workers in `apps/worker`, following the queue-plus-repeatable convention in `apps/worker/src/worker.ts` (`{ pattern: '<cron>' }`). All fan-out jobs use `bbam_svc_` per-org service accounts (Section 4.1), set `app.current_org_id` per org, wrap each `(org, metric)` in **try/catch log-and-continue with per-item error isolation**, are **resumable** (a mid-tick failure never re-writes already-captured items - the snapshot `ON CONFLICT` makes re-runs safe), and emit **progress logging** via `@bigbluebam/logging` (start line with elapsed, per-N progress, a completion line with duration, and a line *before* the LLM call), per the house rule. Job options set `removeOnComplete`/`removeOnFail` and keep payloads to refs (not materialized driver sets) given the shared 256MB noeviction Redis.
 
 | Queue / job | Schedule | Purpose |
 | --- | --- | --- |
-| `basis-metric-snapshot` | repeatable, hourly (`0 * * * *`) for `hour` grain; a daily `0 4 * * *` pass rolls up `day` grain | For each org's certified metrics, resolve the definition and execute via the Bench query layer, writing `basis_metric_snapshots`. Gives explanations a cheap baseline and powers movement detection. |
-| `basis-explain` | on-demand queue (no schedule) | Offloads heavy `POST /explain` requests (large ranges / many dimensions) from the API; writes `basis_explanations` and broadcasts `explanation.ready` on `/basis/ws`. |
-| `basis-movement-scan` | repeatable, daily (`30 4 * * *`, offset from snapshot) | Detects certified metrics whose latest snapshot breached `basis_metrics.target` or moved beyond a threshold vs. the prior period; precomputes an explanation and emits `metric.threshold_breached`. |
-
-All three respect `SEED_ORG_SLUG`-agnostic multi-org iteration and set `app.current_org_id` per org before querying, consistent with the RLS posture.
+| `basis-partition-provision` | daily | Pre-creates next month's `basis_metric_snapshots` partition (mirrors `apps/worker/src/jobs/blip-partition-provision.job.ts`). |
+| `basis-metric-snapshot` | hourly (`0 * * * *`) + daily `day`-grain pass | Resolve + execute each certified metric via the Bench internal query route; `INSERT ON CONFLICT` into `basis_metric_snapshots`. On bench 5xx: **skip-and-reschedule** that item; on a definition that no longer resolves: set `basis_metrics.resolve_status='resolve_failed'` and continue (no abort). A per-org concurrency cap bounds the fan-out. |
+| `basis-explain` | on-demand queue | Two phases: (1) run the **deterministic** decomposition (Bench queries) and persist the `basis_explanations` row immediately (`ON CONFLICT (cache_key) DO UPDATE`), emit `explanation.ready`; (2) attempt the narrative with a **bounded LLM timeout** - on failure leave `narrative=null` and enqueue a cheap **narrative-only retry** that re-runs no Bench queries. **Job id = the `cache_key` hash** so concurrent identical "why" requests dedupe onto one job. |
+| `basis-movement-scan` | daily (`30 4 * * *`) | Compare only snapshots **sharing the same `version_id`** (a `metric.definition_changed` re-baselines, never masquerades as movement). Fire `metric.threshold_breached` **once per crossing** using the `last_breach_*` marker (cleared on recovery). Emitted payload carries **metric + magnitude only, never concrete driver entities** (no asker context here). Per-org call ceiling on any LLM use. |
+| `basis-retention-sweep` | daily | Roll `hour`-grain snapshots up to `day` grain, drop snapshot partitions older than the retention window (settings knob), and age out expired `basis_explanations` (mirrors `apps/worker/src/jobs/blip-retention-sweep.job.ts`). |
 
 ---
 
@@ -270,59 +293,47 @@ All three respect `SEED_ORG_SLUG`-agnostic multi-org iteration and set `app.curr
 
 ### 7.1 Bolt events published (source `basis`)
 
-Published via `publishBoltEvent(eventType, 'basis', payload, orgId, actorId?, actorType?)` from `@bigbluebam/shared` (`packages/shared/src/bolt-events.ts:35`), using bare event names per the naming convention. Each must be registered in `apps/bolt-api/src/services/event-catalog.ts` (with a `payload_schema`) or `scripts/check-bolt-catalog.mjs` fails CI.
+Via `publishBoltEvent(eventType, 'basis', payload, orgId, actorId?, actorType?)` (`packages/shared/src/bolt-events.ts:35`), bare event names. Each is registered with a `payload_schema` in `apps/bolt-api/src/services/event-catalog.ts` or `scripts/check-bolt-catalog.mjs` fails CI. The guard also scans the worker emit site for `metric.threshold_breached`.
 
 | `event_type` | Fired when | Key payload |
 | --- | --- | --- |
-| `metric.created` | a new metric is defined | `metric.id`, `metric.slug`, `metric.name`, `actor.*`, `org.*` |
-| `metric.definition_changed` | a new definition version becomes current | `metric.id`, `version.number`, `version.change_note`, `definition` summary |
-| `metric.certified` | certification flips to certified | `metric.id`, `metric.slug`, `actor.*` |
-| `metric.decertified` | certification flips back to draft | `metric.id`, `actor.*` |
-| `metric.deprecated` | metric soft-deprecated | `metric.id`, `actor.*` |
-| `metric.threshold_breached` | movement scan detects a target/threshold breach | `metric.id`, `delta_abs`, `delta_pct`, `explanation.id` |
-
-These make Basis a first-class Bolt publisher, so a workflow can, for example, trigger a Banter post when `metric.threshold_breached` fires. `metric.definition_changed` is the governance signal the winning description calls out: downstream consumers (Bench widgets, future Bellwether/Benchmark) learn that a definition moved.
+| `metric.created` | metric defined | `metric.id/slug/name`, `actor.*`, `org.*` |
+| `metric.definition_changed` | new version becomes current | `metric.id`, `version.number`, `version.change_note` |
+| `metric.certified` | flips to certified | `metric.id/slug`, `actor.*` |
+| `metric.decertified` | flips to draft | `metric.id`, `actor.*` |
+| `metric.deprecated` | soft-deprecated | `metric.id`, `actor.*` |
+| `metric.threshold_breached` | movement scan detects breach | `metric.id`, `delta_abs`, `delta_pct`, `direction` - **magnitude only, no driver entities** |
 
 ### 7.2 entity_links
 
-Each explanation creates `entity_links` rows (`0132_entity_links.sql`) from `src_type='basis_explanation'`, `src_id=<explanation.id>` to each cited driver entity (`dst_type` = e.g. `bond_deal`, `bill_invoice`; `link_kind='references'`). This lets any consumer answer "what explanations cite this deal?" without Basis-specific knowledge.
+Only optional human-curated metric-to-driver pins (`src_type='basis_metric'`), `ON CONFLICT DO NOTHING`. No automatic per-user correlation links (leak-safe).
 
 ### 7.3 Unified activity & cross-app search
 
-- **search_everything**: register a Basis provider so certified metrics are findable in cross-app search (`apps/mcp-server/src/tools/search-tools.ts`), with `can_access`-aware scoring.
-- **v_activity_unified**: Basis's own catalog changes flow as Bolt events (consumed by Bolt) rather than being UNIONed into the fixed `v_activity_unified` view in v1; extending that view to include a `basis_metric_versions` arm is noted as optional future work (Section 10). The correlation *reads* from `v_activity_unified`; it does not require writing to it.
+Register a Basis provider in `search_everything` (`apps/mcp-server/src/tools/search-tools.ts`); when Qdrant is down, cross-app search degrades to keyword-only. Basis catalog changes flow as Bolt events (consumed by Bolt), not into the fixed `v_activity_unified` UNION in v1; extending that view is optional future work. Correlation *reads* `v_activity_unified`; it never writes to it.
 
 ---
 
 ## 8. Infrastructure
 
-### 8.1 New compose service
+### 8.1 New api compose service
 
-`basis-api` added to `docker-compose.yml`, modeled on the `bench-api` service block:
-- Internal port **4019** (`PORT: 4019`), stateless, horizontally scalable.
-- `depends_on`: `migrate` (`service_completed_successfully`), `postgres`, `redis`.
-- Env: `DATABASE_URL`, `REDIS_URL`/`REDIS_PASSWORD`, `SESSION_SECRET`, `INTERNAL_SERVICE_SECRET`, `BBB_API_INTERNAL_URL=http://api:4000`, `BENCH_API_INTERNAL_URL=http://bench-api:4011`, `BOLT_API_INTERNAL_URL=http://bolt-api:4006`, `CORS_ORIGIN`, rate-limit and query-timeout knobs matching bench-api's `env.ts`.
-- Healthcheck: `curl -sf http://localhost:4019/health` via `@bigbluebam/service-health`.
+`basis-api` in `docker-compose.yml`, modeled on the `bench-api` block: `PORT: 4019`, stateless, horizontally scalable. `depends_on`: `migrate` (`service_completed_successfully`), `postgres` + `redis` (`service_healthy`), and **`bench-api` (`service_healthy`)** since the value/explain path calls its internal query route. Env: `DATABASE_URL`, `REDIS_URL`/`REDIS_PASSWORD`, `SESSION_SECRET`, **`INTERNAL_SERVICE_SECRET` (must be non-empty)**, `BBB_API_INTERNAL_URL=http://api:4000` (for the internal llm-provider route), `BENCH_API_INTERNAL_URL=http://bench-api:4011`, `BOLT_API_INTERNAL_URL=http://bolt-api:4006`, `CORS_ORIGIN`, rate-limit + query-timeout + LLM-timeout knobs. Healthcheck: `curl -sf http://localhost:4019/health`.
 
-`basis` frontend service builds the SPA into the nginx html tree, same as other `apps/*` SPAs.
+### 8.2 SPA build (blocker fix - the SPA is not its own service)
 
-### 8.2 nginx routing (`infra/nginx/nginx.conf`)
+Every SPA is built inside the single `apps/frontend/Dockerfile` multi-stage build and `COPY`'d into `/usr/share/nginx/html/<app>`. Basis edits `apps/frontend/Dockerfile` in **four places mirroring the blip lines**: (1) deps `COPY` of `apps/basis`, (2) build-stage `COPY`, (3) add `pnpm --filter @bigbluebam/basis build` to the build `RUN`, (4) production `COPY` of `apps/basis/dist` -> `html/basis`. Add `basis` to the static-asset cache regex in `infra/nginx/nginx.conf`. There is **no** separate `basis` compose service.
 
-Add, mirroring the bench block (`nginx.conf:280-296`):
-```
-location /basis/ { alias /usr/share/nginx/html/basis/; try_files $uri $uri/ /basis/index.html; }
-location /basis/api/ { proxy_pass http://basis-api:4019/; ... }
-location /basis/ws  { proxy_pass http://basis-api:4019/; ...upgrade headers... }
-```
-Railway needs the parallel entries in `nginx.railway.conf` plus a `scripts/deploy/.../services.mjs` catalog entry (per the "Railway new-app checklist" memory; provisioning is automated on push to `stable`).
+### 8.3 nginx routing
 
-### 8.3 MCP wiring
+Add to `infra/nginx/nginx.conf`, mirroring the bench block (`nginx.conf:280-296`): `/basis/` alias with SPA fallback, `/basis/api/` -> `http://basis-api:4019/`, `/basis/ws` with upgrade headers. **Blocker fix:** because nginx resolves literal upstreams at load and crashloops on host-not-found (taking the whole ingress down), add **`basis-api` (`condition: service_healthy`) to the `frontend` service `depends_on`** in `docker-compose.yml`. Hand-add the same three routes to `nginx.railway.conf` (static file, not generated).
 
-Add `BASIS_API_URL: http://basis-api:4019/v1` to the `mcp-server` service env (alongside the existing `BENCH_API_URL` etc. in `docker-compose.yml`), and register `basis-tools.ts` in the MCP server tool bootstrap.
+### 8.4 Deploy catalog, MCP wiring, dependencies, health
 
-### 8.4 Scaling & health
-
-Stateless api container scales horizontally; realtime fan-out is cross-instance via Redis PubSub. Snapshot/explain workers run in the existing `apps/worker` process (no new container). Postgres/Redis are the only stateful dependencies and are the managed-swappable services already in the stack.
+- `scripts/deploy/shared/services.mjs`: add a `basis-api` `APP_SERVICES` block (port `4019`, `public_paths: ['/basis/api/','/basis/ws']`, `needs: ['postgres','redis','api','bench-api']`), add `/basis/` to the `frontend` entry's `public_paths` and `basis-api` to its `needs`, and add `basis-api` to `mcp-server.needs` + `depends_on`.
+- Add `BASIS_API_URL: http://basis-api:4019/v1` to `mcp-server` env in compose and catalog; register `basis-tools.ts` in the MCP bootstrap.
+- **Runtime-dependency posture (stability fix):** `/readyz` checks **only Postgres and Redis** - not bench-api, the LLM, or Qdrant - so a Bench outage never cascades into a Basis "not ready." The Bench query client uses a short timeout and a circuit breaker returning a typed `UPSTREAM_UNAVAILABLE` error; the snapshot sweep skips-and-reschedules on bench 5xx; the narrative is best-effort (drivers render with `narrative=null` on LLM failure); Qdrant-down degrades search to keyword-only. Section 8.1's `depends_on: bench-api` governs *startup ordering*, not liveness.
+- Stateful dependencies are Postgres and Redis only; Basis reaches source data and the LLM through other services at request time (those are runtime dependencies, handled by timeouts/circuit-breaking above, not `/readyz`). New Basis queues share the 256MB noeviction Redis, so payloads stay small and jobs set `removeOnComplete`/`removeOnFail`.
 
 ---
 
@@ -330,48 +341,84 @@ Stateless api container scales horizontally; realtime fan-out is cross-instance 
 
 | Capability | Reuses (real file/package) | Genuinely new in Basis |
 | --- | --- | --- |
-| Underlying data query / SQL generation / org isolation | `apps/bench-api/src/services/query.service.ts` (`buildQuery`/`executeQuery`), `apps/bench-api/src/lib/data-source-registry.ts` | Metric-to-query resolution layer; nothing about SQL building |
-| Data-source catalog for the definition builder | `apps/bench-api/src/routes/data-sources.routes.ts`, `listDataSources()` | Pass-through only |
-| Chart/dashboard rendering | `apps/bench/` (widgets, chart-renderer) + new `bench_widgets.basis_metric_id` binding | One nullable binding column + a `/resolve` contract |
-| Bolt event publishing | `@bigbluebam/shared` `publishBoltEvent` (`packages/shared/src/bolt-events.ts:35`); catalog `apps/bolt-api/src/services/event-catalog.ts`; guard `scripts/check-bolt-catalog.mjs` | 6 new `metric.*` event definitions |
-| Cross-app event correlation | `v_activity_unified` (`0129_*`), `bolt_recent_events`/`bolt_event_trace` MCP tools | Decomposition + correlation logic |
-| Visibility guardrail | `apps/api/src/services/visibility.service.ts`, MCP `can_access` / `POST /v1/visibility/can_access` | Applying it to cited drivers |
-| Cross-app linking | `entity_links` (`0132_entity_links.sql`) | Writing explanation-to-driver links |
-| Cross-app search | `apps/mcp-server/src/tools/search-tools.ts` `search_everything` | A Basis search provider |
-| RLS / org scoping | `app.current_org_id` GUC pattern (`0116_*`, `0132_*:52-56`) | Basis table policies (mechanical) |
-| Per-action permissions | `@bigbluebam/permissions`, `apps/bench-api/src/plugins/permissions.ts` | 5 `basis.*` action rows |
-| MCP tool registration + policy gate + confirm_action | `apps/mcp-server/src/lib/register-tool.ts:488`; confirm pattern `apps/mcp-server/src/tools/blip-tools.ts:155` | 12 `basis_*` tool handlers |
-| Fastify service skeleton (cors/cookie/rate-limit/redis/auth) | `apps/bench-api/src/server.ts` | Basis routes/services |
-| Health/readiness | `@bigbluebam/service-health` | Config only |
-| Structured logging + 5xx recording | `@bigbluebam/logging` (`createErrorHandler`, `httpSystemErrorRecorder`) | Config only |
-| Background jobs | `apps/worker` BullMQ conventions (`worker.ts`) | 3 `basis-*` job handlers |
-| SPA scaffold (TanStack Query + Zustand + `@bigbluebam/ui`) | `apps/bench/src/` structure | 5 Basis pages |
-| LLM narrative | platform `llm-provider` surface (Bam api) | Prompt template + hedging guard |
+| Underlying query / SQL gen / org isolation | `apps/bench-api/src/services/query.service.ts`, `data-source-registry.ts` (+ new internal query route) | Metric-to-query resolution; token-forwarding; no SQL building |
+| Saved query prior art | `apps/bench-api/src/db/schema/bench-saved-queries.ts` | Governance/versioning/presentation layer on top |
+| Chart/dashboard rendering | `apps/bench/` + new `bench_widgets.basis_metric_id` | One binding column + `/resolve` envelope |
+| Shared query/type shape | `packages/shared/src/schemas/bench.ts` (`QueryConfig`) | `packages/shared/src/schemas/basis.ts` |
+| Bolt events | `@bigbluebam/shared` `publishBoltEvent`; catalog + `check-bolt-catalog.mjs` | 6 `metric.*` definitions |
+| Event correlation | `v_activity_unified` (`0129_*`), `bolt_recent_events`/`bolt_event_trace` | Two-computation decomposition + labeled correlation |
+| Visibility guardrail | `apps/api/src/services/visibility.service.ts` (dotted `SUPPORTED_ENTITY_TYPES`), `can_access` | Per-user read-time filtering; type mapping |
+| Cross-app linking | `entity_links` (`0132_*`) | Human-pinned metric drivers only |
+| Cross-app search | `apps/mcp-server/src/tools/search-tools.ts` | Basis search provider |
+| RLS / org scoping | `app.current_org_id` GUC (`0116_*`, `0132_*:52-56`) | Basis table policies |
+| Per-action permissions | `@bigbluebam/permissions`, `apps/bench-api/src/plugins/permissions.ts` | 9 `basis.*` actions |
+| MCP registration + policy gate + Redis confirm token | `register-tool.ts:488`, `confirm-token-store.ts`, blip inline pattern | 12 `basis_*` handlers |
+| Internal service-to-service auth | `apps/mcp-server/src/routes/tools-call.ts` (bearer-derived org) | Bench query-route integration |
+| LLM narrative | `apps/api/src/routes/internal-llm.routes.ts`, `llm-provider.service.ts` | Opaque-token prompt + hedging + timeout |
+| Fastify skeleton / health / logging | `apps/bench-api/src/server.ts`, `@bigbluebam/service-health`, `@bigbluebam/logging` | Config + routes |
+| Snapshot idempotency | `apps/worker/src/jobs/bearing-snapshot.job.ts` | Applying `ON CONFLICT` to metric snapshots |
+| Partitioning + retention | `blip-partition-provision.job.ts`, `blip-retention-sweep.job.ts` | Basis provisioning/sweep |
+| Background jobs | `apps/worker/src/worker.ts` | 5 `basis-*` jobs |
+| SPA scaffold | `apps/bench/src/` + extracted shared query-form | 5 Basis pages |
 
-The ledger is the proof of the thesis: Basis is mostly wiring. The genuinely new surface is the metric catalog data model, the contribution-analysis math, and the narrative prompt.
+### Test posture (per review)
+
+- `basis-api` unit tests assert the **decomposition invariant** `sum(contributions) == delta_abs` for additive measures, and the **ratio/percentile directional fallback** (labeled non-exact).
+- A `packages/shared` test covering `basis.ts` schemas.
+- A `register-tool` policy test confirming `basis.*` tools fail closed until allowlisted.
+- Confirm the 6 events pass `scripts/check-bolt-catalog.mjs`; confirm `pnpm db:check` is clean against the 4 new Drizzle modules.
 
 ---
 
 ## 10. Open questions & risks
 
-1. **Bench query access path (integration decision, needs a human call).** Basis must run Bench-governed queries server-to-server. Options: (a) add an internal query route to `bench-api` guarded by `INTERNAL_SERVICE_SECRET`; (b) forward the caller's bearer token from Basis to bench-api; (c) extract `query.service.ts`'s builder into a shared package both apps import. Recommendation: (a), because it keeps one governed builder and one org-isolation implementation. This is the single biggest cross-app coupling in the spec and should be decided before implementation.
-
-2. **Ratio / average / percentile metrics are not cleanly decomposable.** Exact additive decomposition (`sum(contributions) == delta_abs`) only holds for `sum` and `count` measures. Rates and averages need mix-vs-rate decomposition; percentiles (Blip's `p95` rollups) cannot be summed at all. v1 should ship exact decomposition for additive metrics and clearly label ratio/percentile explanations as "directional, not exact." Needs sign-off on that limitation.
-
-3. **"No chart rendering" boundary.** The why-explorer wants a contribution waterfall, which is arguably a chart and thus arguably Bench's territory. Conservative v1: a ranked bar-list rendered with `@bigbluebam/ui` primitives, no charting library. Confirm whether a waterfall is acceptable within Basis or must be delegated to a Bench widget.
-
-4. **Correlation is not causation.** The narrative asserts "why" from correlation in a time window. Mitigations (hedged language, linked raw numbers, `can_access` filtering) reduce but do not eliminate the risk of a confidently-wrong story. Accept as a labeled limitation; never let an agent treat an explanation as ground truth for an autonomous write.
-
-5. **Certification governance.** Who may certify? v1 gates on `basis.metric.certify` (org admin/owner by default). Whether service accounts can ever certify autonomously (vs. always requiring a human `confirm_action`) is a policy question.
-
-6. **`v_activity_unified` extension.** Whether Basis catalog changes should be UNIONed into the unified activity view (vs. living only as Bolt events) is deferred; the view is a fixed UNION and touching it is a platform-wide change.
-
-7. **Snapshot cost at scale.** Hourly snapshots of every certified metric for every org is O(metrics x orgs) Bench queries per hour. For large tenants this needs batching/caching (reuse `apps/bench-api/src/services/cache.service.ts`) and possibly a lower default grain. Capacity plan needed before enabling by default.
-
-8. **Definition drift vs. Bench data-source drift.** A metric's `definition` references a Bench data source (`product:entity`, fields). If Bench renames a field or an MV loses org isolation (see the cautionary comments in `data-source-registry.ts` about `bench_mv_daily_task_throughput`), a certified metric can silently break. Basis needs a validation pass (part of `basis-metric-snapshot`) that flags metrics whose resolve fails, rather than serving a broken number.
+1. **Ratio / average / percentile decomposition is directional, not exact.** Exact additive decomposition holds only for `sum`/`count`. Rates/averages need mix-vs-rate decomposition; percentiles cannot be summed. v1 ships exact additive decomposition and labels ratio/percentile explanations "directional." Needs sign-off.
+2. **Dimension-label coverage.** v1 restricts decomposition to self-labeling columns or dimensions with a registered resolver (Section 2.2). Which resolvers ship in v1 (stage, owner, pipeline?) is a scoping call.
+3. **Per-driver entity attribution.** Deferred; requires a governed bounded "top contributing rows" query reconciled to the aggregate delta before any entity-level attribution is asserted.
+4. **Bench internal query route.** Now a prerequisite (Section 4.1), but it is an out-of-Basis change to `bench-api` that must land first and be owned by the Bench maintainers.
+5. **Metric-vs-saved-query consolidation.** Whether a Basis metric should eventually *wrap* a `bench_saved_queries.id` rather than embed a definition (Section 1). v1 embeds (typed from shared schema); revisit once both stabilize.
+6. **`/resolve` precedence rollout.** Bench must be updated to prefer the Basis presentation envelope over local `kpi_config` when `basis_metric_id` is set; until Bench ships that, bound widgets still read local config. Coordinate the two changes.
+7. **Certification governance.** Default gate is `basis.metric.certify` (org admin/owner). Whether a permissioned service account may ever certify without a human is a policy question.
+8. **Snapshot cost at scale.** O(orgs x certified-metrics x buckets) Bench round-trips; bounded by per-org concurrency caps + retention rollup, but large tenants need a capacity review before enabling hourly grain by default.
+9. **Correlation is not causation.** Mitigated by fencing the two computations, hedged language, and per-user filtering; never let an agent treat an explanation as ground truth for an autonomous write.
+10. **`v_activity_unified` extension** for Basis catalog changes is deferred (fixed UNION; platform-wide change).
 
 ---
 
 ## Changelog
 
-- Initial draft (round 0): full spec authored against Bench sibling, shared packages, MCP tool-registration pattern, and migration conventions. Chose internal port 4019 and routes `/basis/`, `/basis/api/`, `/basis/ws`.
+Round 1 (adversarial review). Findings addressed:
+
+**Blockers - all accepted:**
+- [security+design, converged] Cached-explanation cross-user leak: **accepted.** `basis_explanations` now stores only deterministic aggregate decomposition (no entity refs); concrete correlation is resolved and `can_access`-filtered per requesting user at read time (§2.1, §2.3, §3.1).
+- [security] Bench query org-bypass: **accepted.** Org is now derived from the caller's credential, not a header - user requests forward the bearer token, workers use per-org `bbam_svc_` accounts, `X-Org-Id` advisory-only, following `tools-call.ts` (§4.1).
+- [security] Worker precompute leaks concrete drivers: **accepted.** Workers precompute aggregate-only; all entity-level correlation is deferred to per-user read time; `threshold_breached` carries magnitude only (§2.3, §6, §7.1).
+- [stability] Snapshot idempotency: **accepted.** `UNIQUE (metric_id, grain, captured_at, version_id)` + `INSERT ON CONFLICT DO UPDATE` (§3.1).
+- [infrastructure] SPA not a separate service: **accepted.** Four `apps/frontend/Dockerfile` edits + nginx static-asset regex; removed the phantom `basis` compose service (§8.2).
+- [infrastructure] nginx upstream crashloop: **accepted.** `basis-api` added to `frontend.depends_on` (service_healthy) + `services.mjs` (§8.3, §8.4).
+- [infrastructure] Bench route non-existent / secret fails closed: **accepted.** Promoted to a required prerequisite; internal bench route guarded by non-empty `INTERNAL_SERVICE_SECRET`; `bench-api` added to `basis-api.depends_on` and `needs` (§4.1, §8).
+
+**Majors:**
+- [design+security, converged] Entity_type namespace: **accepted.** Use dotted `VisibilityEntityType` (`bond.deal`, etc.); map + fail-closed; keep `entity_links.dst_type` separate (§2.3).
+- [design] Fused causal figure: **accepted.** Drivers = dimension-value contributions only; correlation is a separate "possibly related activity" list; flagship example reworded (§2.1).
+- [design] `bench_saved_queries` adjacency: **accepted.** Added to positioning + reuse ledger; definition typed from shared `bench.ts` `QueryConfig` (§1, §3.1, §9).
+- [design] `/resolve` presentation envelope: **accepted.** Returns unit/direction/target/display name; Bench precedence specified (§3.2, §4.2).
+- [design] Narrative labels from UUIDs: **accepted.** Self-labeling-or-resolver dimension allowlist; `lineage.joins` marked non-executing (§2.2).
+- [design+stability, converged] Cache identity + async idempotency: **accepted.** `cache_key = hash(metric_id, version_id, period_a, period_b, dimension)`, `version_id` added, `UNIQUE (cache_key)`, BullMQ job id = cache_key, upsert, links `ON CONFLICT DO NOTHING` (§3.1, §6).
+- [security] LLM injection/PII: **accepted.** Opaque `DRIVER_n` tokens, internal-only llm-provider, plain-text output (§2.4).
+- [security] Confirm-token class: **accepted.** Redis-backed dynamic-TTL tokens for certify/decertify/deprecate + versioning a certified metric; inline-boolean only for draft versioning (§2.5).
+- [stability+infrastructure, converged] Snapshot/explanation retention: **accepted.** Monthly partitioning + `basis-partition-provision` + `basis-retention-sweep`; retention knob (§3.1, §6).
+- [stability] LLM degradation: **accepted.** Deterministic phase persisted first, bounded narrative timeout, `narrative=null` + `explanation.ready` on failure, cheap narrative-only retry (§6).
+- [stability] Movement-scan version-mixing + breach storm: **accepted.** Compare same `version_id` only; `last_breach_*` once-per-crossing marker (§3.1, §6).
+- [stability] Sweep error isolation: **accepted.** Per-item try/catch, `resolve_failed` marker, resumable (§6).
+- [stability] Runtime-dependency posture: **accepted.** `/readyz` = Postgres+Redis only; Bench circuit-breaker `UPSTREAM_UNAVAILABLE`; skip-and-reschedule; Qdrant-down keyword-only (§8.4). Corrected the earlier "only deps are Postgres/Redis" wording.
+- [best-practices] Shared Zod module: **accepted.** `packages/shared/src/schemas/basis.ts` (§4, §5).
+- [best-practices] Drizzle modules: **accepted.** 4 modules + index, 1:1 with migrations (§3).
+- [best-practices] Test posture: **accepted.** Decomposition-invariant, fallback, schema, policy, and catalog tests (§9).
+- [best-practices] Permissions expansion: **accepted.** 9 `basis.*` actions, manifest-generated `0229_..._delta_020` (§4.4, §3.4).
+- [infrastructure] LLM path/timeout/degradation/ceiling: **accepted.** Internal llm-provider via `BBB_API_INTERNAL_URL`+`INTERNAL_SERVICE_SECRET`, bounded timeout, best-effort, per-org ceiling + concurrency cap (§2.4, §6, §8.1).
+- [infrastructure] Railway/catalog wiring: **accepted.** Enumerated `services.mjs`, `mcp-server` needs/depends_on/env, `nginx.railway.conf`, `BASIS_API_URL` (§8.4).
+
+**Minors - all accepted:** snapshot-vs-explain purpose reworded and dims gated to additive (§3.1); Definition Builder extracts Bench's shared query-form + POSTs to bench-api for preview (§5); `/resolve` and `/data-sources` behind `requireAuth`, org from `request.user.org_id` (§4.2); `basis.*` not in always-permitted core documented + policy test (§2.6, §9); progress logging in fan-out jobs (§6); surface-map counts/CLI/zero-bare-dash self-check (§4.5); 6 events registered with payload_schema + guard scans worker emit site (§7.1); shared-Redis payload discipline + removeOnComplete/removeOnFail (§6, §8.4).
+
+**Rejected:** none. Every finding was accepted or accepted-with-modification. Accept-with-modification of note: the entity-type finding suggested mapping `bond_deal`->`bond.deal`; I kept `entity_links.dst_type` on its own convention and map it to the visibility type at the boundary rather than changing either subsystem's native vocabulary. The cache-idempotency finding's suggestion to write `entity_links` from correlation was narrowed to human-pinned links only, because auto-writing per-user correlation links would reintroduce the leak the first blocker fixes.
