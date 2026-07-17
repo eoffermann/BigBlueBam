@@ -172,5 +172,7 @@ push. The build skill owns its own branch/merge gates; it never merges to `main`
 `docs/brainstorming/<stamp>_BRAINSTORMING_SESSION.md` fully narrates the session
 through the declared winner, and `docs/brainstorming/<stamp>_APP_DESIGN_<appname>.md`
 holds a top-tier, reuse-maximizing spec that survived (at least) two adversarial
-rounds with no remaining blocker/major findings. Report the winner, the runner-up,
-and the two file paths to the user, with a "How to see it in action" block.
+rounds with no remaining blocker/major findings. Record the winner, the runner-up, and
+the two file paths in the session doc, then **immediately continue to Phase 7** (the
+autonomous build). This loop never pauses for human review or approval between phases -
+it flows brainstorm -> spec -> build without waiting for anyone.

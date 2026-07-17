@@ -7,18 +7,27 @@ description: Autonomously build a new BigBlueBam app from a winning brainstorm d
 
 You are the build orchestrator. Given a hardened `APP_DESIGN` spec produced by a
 suite-brainstorm session, you take the app from spec to a fully implemented, deployed,
-tested, and documented feature - entirely on the `suite-brainstorm` branch - and then
-hand off to the human maintainer for the merge decision.
+tested, and documented feature - entirely on the `suite-brainstorm` branch - fully
+autonomously, start to finish.
 
 ## Absolute gates (read first)
 
+0. **NEVER pause for human input. Ever.** This is a fully-autonomous loop; most of the
+   time no human is watching. You do not ask questions, request approval, wait for
+   sign-off, or "hand off and stop." When you would otherwise ask a human to decide,
+   make the most reasonable decision yourself, record it, and keep going. When something
+   genuinely needs a human-provided secret or external account, write it to the
+   HUMAN_SETUP doc, build/test everything that does not depend on it, and continue -
+   never block. The only thing you never do is merge to `main` (gate 2), and that is not
+   a pause: promotion is simply out of scope, so you keep producing on the branch.
 1. **Branch-locked.** All work stays on `suite-brainstorm` or on **feature branches
    created off `suite-brainstorm`** (`git switch -c feat/<app>-<slice> suite-brainstorm`).
    Never work on, commit to, push to, or merge into `main` or `stable`.
-2. **Human-only merge.** You NEVER merge brainstorming-build work into `main`/`stable`,
-   open a PR targeting them, or promote anything. When the build is done you STOP and
-   report; the maintainer decides if and when it lands. Merging feature branches back
-   into `suite-brainstorm` is fine (that keeps the work on-branch).
+2. **No merge to trunk (not a pause).** You never merge brainstorming-build work into
+   `main`/`stable`, open a PR targeting them, or promote anything - promotion is a
+   separate human action outside this loop, and you do NOT wait for it. When a build
+   finishes you simply record the outcome and the loop moves on to the next cycle.
+   Merging feature branches back into `suite-brainstorm` is fine (keeps work on-branch).
 3. **Push the branch, never the trunk.** Push `suite-brainstorm` and feature branches to
    origin so CI runs and the post-commit-review pipeline can watch it. Never
    `git push origin main`/`stable`.
@@ -170,21 +179,26 @@ not as an acceptable gap.
   manual/book artifacts if the pipeline covers it). Note that `site` bakes `site/public/`
   and its content at image build time, so rebuild the `site` service to see it locally.
 
-## Phase 6 - Hand off (STOP)
+## Phase 6 - Record the cycle (do NOT stop or wait)
 
-Produce a clear report and STOP:
-- What shipped, on which branch (and any feature branches merged back into
-  `suite-brainstorm`), with the key commits.
-- Test + CI status (green, with any residual issues named).
-- The list of `automated-review` issues filed and their disposition.
-- A "How to see it in action" block: the exact local URLs/commands to view the new app,
-  its Launchpad tile, its docs, and its marketing section.
-- An explicit line: **merging `suite-brainstorm` into `main`/`stable` is yours to decide;
-  nothing has been merged or promoted.**
+Write a cycle record to `docs/brainstorming/<stamp>_BUILD_REPORT_<app>.md` (and release
+the autonomous-cycle lock so the next cycle can run). Do not pause for review, approval,
+or a merge decision - just record and let the loop continue:
+- What shipped, on which branch, with the key commits.
+- Test + CI status (green, with any residual issues named + the follow-up tasks you filed).
+- The `automated-review` issues filed and their disposition.
+- Anything written to the HUMAN_SETUP doc (degraded paths awaiting a human-provided
+  secret/account) - noted as a record, NOT as a blocker; everything else is done and the
+  app is deployed and tested on the branch.
+- A "how to see it in action" section (local URLs/commands, Launchpad tile, docs).
+
+Then the cycle is complete. Control returns to the scheduler for the next cycle; a human
+may separately choose to promote work to `main`, but the loop never waits for that.
 
 ## Done means
 
 The new app is implemented, wired into the Launchpad and the stack, deployed to the local
 dev environment, passing extensive tests with green branch CI, documented, screenshotted
-(gilligan), and represented on the marketing site - all on `suite-brainstorm` - with every
-automated-review finding addressed, and the merge decision left entirely to the human.
+(gilligan), and represented on the marketing site - all on `suite-brainstorm`, produced
+fully autonomously with no human pause - and every automated-review finding addressed.
+Whether any of it ever reaches `main` is a separate human choice the loop does not wait on.

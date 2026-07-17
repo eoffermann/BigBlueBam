@@ -60,14 +60,21 @@ With the lock held:
 
 ## Hard rules (inherited, restated)
 
-- **Everything stays on `suite-brainstorm`** (feature branches off it). **Never merge or
-  promote into `main`/`stable`** - that is the human maintainer's decision alone.
+- **NEVER pause for human input, approval, or sign-off. Ever.** This loop is fully
+  autonomous and usually runs with no human present. Do not ask questions or wait for a
+  decision - make the reasonable call, record it, and continue. Anything needing a
+  human-provided secret/account goes in the HUMAN_SETUP doc while the build proceeds on
+  everything else; it is never a stopping point.
+- **Everything stays on `suite-brainstorm`** (feature branches off it). Never merge or
+  promote into `main`/`stable` - but that is not a pause: promotion is out of scope, so
+  the loop just keeps producing on the branch. A human may promote separately; the loop
+  does not wait for it.
 - Push branches to origin (so CI + the post-commit-review pipeline run); never push the
   trunk.
 - Never `docker compose down -v`. Screenshots use the **gilligan** project only. No
   `Co-Authored-By` footer; no em dashes in committed docs.
-- The loop never blocks waiting on a human: unfinished-because-human-config work is
-  documented in the HUMAN_SETUP doc, not left as a hang.
+- CI reds and review findings are fixed autonomously (in-loop), never escalated to a
+  human to resolve.
 
 ## Note on durability
 
