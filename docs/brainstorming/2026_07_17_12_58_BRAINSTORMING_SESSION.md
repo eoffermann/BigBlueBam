@@ -698,8 +698,61 @@ can't corrupt an in-flight explain; `db:check` handles partitioned parents; the
 Redis-noeviction mitigation is right; confirm-token class + dotted VisibilityEntityType
 + positional publishBoltEvent signature are correct.
 
-_Batched to `brainstorm-spec-writer` for round-2 fold-in; round 3 (the cap) will
-re-review to confirm convergence._
+_Batched to `brainstorm-spec-writer` for round-2 fold-in._ All findings accepted
+(0 rejected); the biggest change removed the per-org service-account fleet in favor
+of two-mode bench auth, and closed the driver-path leak with the Class-A/Class-B
+dimension split.
+
+### Round 3 - findings (1 blocker, 3 majors, 2 minors) + convergence verdict
+
+Round 3 (the capped final review) consolidated into three convergence-check
+reviewers (security; stability; combined design/best-practices/infra) tasked to
+verify the round-2 fixes cohere and to be decisive about build-readiness. The spec
+is now close to converged - findings are surgical internal-consistency cracks, not
+architecture faults - but one real blocker remained.
+
+**Blocker (1):**
+- [security] Class-B per-entity contribution **amounts** still leak via the shared
+  cache. Round 2 stripped the entity *label* but the shared `drivers` array +
+  narrative still carry `contribution_abs` per opaque entity - and for a by-company
+  / by-owner decomposition the *amount* is the sensitive payload, so a restricted
+  user still learns the revenue delta of entities they can't see (and it's the
+  default explanation whenever `default_dimensions[0]` is an entity FK). Fix: drop
+  the whole denied row / "Other (N hidden)" bucket at read time, and keep Class-B
+  prose out of the shared narrative.
+
+**Majors (3):** Class-A admits entity-derived *label* columns (a materialized
+`company_name` column has no UUID and sails into the shared-cache class), reopening
+the leak - Class-A must be a curated enum-only allowlist; no table exists to store
+the per-org retention window / cache TTL / default dimension that the round-2
+two-tier retention and cache-precedence fixes read (needs a `basis_org_settings`
+table modeled on `blip_retention_policies`); and the `DEFAULT` catch-all partition +
+provisioner don't compose - once `DEFAULT` holds a month's rows, `CREATE ... PARTITION
+OF ... FOR VALUES` aborts ("default partition would be violated"), so re-provisioning
+fails permanently (an inherited blip latent bug) - must either redistribute rows or
+document DEFAULT as a manual-runbook, not a graceful-degradation guarantee.
+
+**Minors (2):** `cache_key` cited `hashQueryConfig` (a bench-api instance method, not
+importable cross-service) - basis-api must own its own hash; and the "distinct crons"
+guarantee is incomplete because the hourly snapshot owns minute `:00`, so retention/
+provision must be pinned to a non-zero minute.
+
+**Invalid finding corrected by the orchestrator:** a reviewer claimed the flagship
+"2 Bill invoices" example must be dropped because `bill.invoice` isn't in the
+visibility allowlist. **Verified false** - `bill.invoice` IS in `SUPPORTED_ENTITY_TYPES`
+(`visibility.service.ts:81`). The example stays; the only true residual is that Bill
+is absent from `v_activity_unified`, so Bill correlation depends on `bolt_recent_events`
+coverage (a documentation caveat, folded in as such, not a blocker).
+
+**Convergence verdict (reviewers, verbatim gist):** apart from the findings above,
+the round-2 fixes are "coherent and build-ready." Reviewers pressure-tested and
+confirmed sound: the two-mode bench auth (no confused-deputy/cross-org hole), the
+correlation->`can_access` fail-closed boundary, bucket-aligned snapshot idempotency
+across the two grain producers, the two-tier retention MAX-window (one org's window
+can't drop another's rows), and the definition-shape/drift-guard correction.
+
+_Batched to `brainstorm-spec-writer` for round-3 fold-in, followed by one targeted
+convergence verification of the round-3 fixes (see below)._
 
 ---
 
