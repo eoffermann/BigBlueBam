@@ -118,14 +118,46 @@ docker compose restart frontend                              # after any *-api c
 Never `-v`. Confirm the migration applied (`docker compose exec -T postgres psql ... "\d <table>"`)
 and the service is healthy before testing.
 
+**When the app needs human configuration to fully work** (an external API key or secret,
+an OAuth app registration, a third-party account, DNS, a paid provider, a manual env var,
+or any step you cannot complete autonomously), do NOT silently stub or skip it. Write a
+setup doc alongside the session and design docs:
+`docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md`. It must state, for each item: exactly
+**what** is needed, **why** (which feature is degraded/blocked without it), **where** to
+put it (the precise env var / file / admin screen), and how to verify it once provided.
+Build and test everything that does not depend on the missing piece, mark the dependent
+paths as "pending human setup" in the doc and the Phase 6 report, and keep going -
+the cycle never blocks waiting on a human.
+
 ## Phase 4 - Extensive tests
 
-Run and make green: `pnpm typecheck`; `pnpm test` (targeted package first, then the suite);
-`pnpm db:check` and `pnpm lint:migrations`; `node scripts/check-bolt-catalog.mjs`; the
-surface-map self-check grep; integration-tests and e2e where the app warrants them; and a
-**live smoke** on the local stack (curl the new routes, a `psql` read, exercise the SPA
-path). Distinguish flaky from real reds and fix flakiness durably (shard/raise timeouts) -
-do not paper over it. CI on the pushed branch must be green.
+**Static + unit gates.** Run and make green: `pnpm typecheck`; `pnpm test` (targeted
+package first, then the suite); `pnpm db:check` and `pnpm lint:migrations`;
+`node scripts/check-bolt-catalog.mjs`; the surface-map self-check grep; integration-tests.
+Distinguish flaky from real reds and fix flakiness durably (shard/raise timeouts) - do not
+paper over it. CI on the pushed branch must be green.
+
+**End-to-end user-story testing (required for every deployed app).** Once the app is live
+on the local Docker dev stack, exercise it the way a user would:
+
+1. **Author user stories** from the spec's scope - a handful of concrete flows a real user
+   would perform (e.g. for a metric layer: "define a metric -> certify it -> ask why it
+   changed -> see the driver breakdown -> bind it to a Bench widget"). Cover the primary
+   happy path plus at least one permission/negative case.
+2. **Drive each story with Playwright** against the local stack (extend `apps/e2e/`,
+   reusing its fixtures and the login helpers). Log in as a seeded **gilligan** user, walk
+   the UI through the story, and assert the visible outcomes. Capture a trace on failure.
+3. **Verify the backend actually changed.** After each story, confirm the right data was
+   created/updated: read it back via the app's own API (`curl` the route as the same user)
+   AND directly in Postgres (`docker compose exec -T postgres psql ... "select ... where
+   organization_id = ..."`). A green Playwright run that left no correct backend state is a
+   failure - the UI must have produced the real rows/events the spec promises (including
+   the expected Bolt events and org-scoping).
+4. Keep the E2E specs in the branch so the story suite grows with the suite; make them
+   self-cleaning (tear down what they create) so re-runs stay deterministic.
+
+Treat any story that can't be completed end-to-end as a build defect (file it / fix it),
+not as an acceptable gap.
 
 ## Phase 5 - Docs, screenshots, marketing (all on-branch)
 
