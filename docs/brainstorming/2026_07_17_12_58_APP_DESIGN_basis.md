@@ -2,7 +2,7 @@
 
 > Governed metric layer for BigBlueBam. One trusted definition per number, and an AI core that explains why it moved.
 >
-> Status: design draft, revised after adversarial review rounds 1 and 2. New app.
+> Status: design draft, revised after adversarial review rounds 1, 2, and 3. New app.
 > Chosen internal port: **4019** (first free port after Blip's 4018; 4015 is shared by blueprint/bureau).
 > Routes: SPA at `/basis/`, REST at `/basis/api/`, realtime at `/basis/ws`.
 
@@ -48,14 +48,22 @@ Bench's `executeQuery` returns **grouped aggregates only, never row-level entity
 
 An implementer must never put per-viewer correlation counts into the shared `narrative` column; doing so re-opens the leak the round-1 fix closed.
 
+**Correlation coverage caveat (round 3).** `bill.invoice` **is** in `SUPPORTED_ENTITY_TYPES` (`apps/api/src/services/visibility.service.ts:81`), so the Bill example is a legitimate, `can_access`-checkable correlation candidate and is kept. The only residual is that **Bill is not in `v_activity_unified`** (which UNIONs bam/bond/helpdesk only), so Bill-sourced correlation must come from `bolt_recent_events` - i.e. it depends on Bill emitting typed `invoice.*` Bolt events. The same holds for any app absent from `v_activity_unified` (Open Question 10).
+
 **Invariant (record and rely on):** `/explain` **never reads `basis_metric_snapshots`**; it live-queries periods A and B directly. Snapshots exist only for movement detection and sparklines. This invariant is what lets retention safely delete snapshot rows without corrupting an in-flight explain (Section 6).
 
 ### 2.2 Decomposition-dimension classification (round-2 leak fix + label + cache-key rules)
 
 A decomposition dimension is one of two classes, decided at **resolver-registration time**:
 
-- **Class A - org-global self-labeling enum** (`status`, `stage`, `lifecycle_stage`, `level`, or an MV label column such as `bench_mv_pipeline_snapshot.stage_name`). Values are not per-user-restricted, so driver rows may be **shared-cached with concrete labels**.
-- **Class B - entity-FK dimension** (`owner_id`, `company_id`, `project_id`, `stage_id`, any dimension whose values map to a `SUPPORTED_ENTITY_TYPES` entity). These have per-user visibility gates (e.g. `bond.company`, `bam.project`, restricted `bond.deal`). Driver rows for Class B are stored **opaque - the raw UUID only, no label** - and the label is **re-resolved and `can_access`-filtered per requesting user at read time**, exactly like the correlation path. A restricted user therefore never receives a company name or a revenue delta for an entity they cannot see in the source app.
+- **Class A - a CURATED allowlist of bounded org-global ENUM columns** (`status`, `stage`, `lifecycle_stage`, `level`, plus explicitly-enumerated MV *enum* columns). Class A is **not** inferred from "the value isn't a UUID" - it is a hand-maintained allowlist. Values are not per-user-restricted, so driver rows may be **shared-cached with concrete labels and amounts**.
+- **Class B - entity-derived dimension** (`owner_id`, `company_id`, `project_id`, `stage_id`, and **any column that is the display/label form of a `SUPPORTED_ENTITY_TYPES` entity**, e.g. a materialized `company_name`/`owner_name`). Class B is keyed on the underlying *entity*, not on whether the stored value is a UUID: **a label column joined from a restricted entity is Class B**, stored as the opaque entity FK and re-resolved per user. (This closes the round-3 hole where an MV `company_name` column would have sailed into Class A carrying a per-entity-restricted name.)
+
+**Invariant:** any column that is the display form of a Class-B entity MUST register Class B. A **registration-time test** asserts that a label column joined from a restricted entity cannot register Class A.
+
+**Class-B amount leak fix (round-3 blocker).** For Class B, the sensitive payload is the **per-entity contribution amount**, not just the label. So the **shared** cache for a Class-B decomposition carries **neither a per-driver narrative nor per-entity amounts**. Concretely:
+- The shared `basis_explanations` row for a Class-B dimension stores drivers as `{ dimension_value (opaque uuid), contribution_abs, contribution_pct }` **only as an intermediate that is never served raw**, and its `narrative` is **null** (no Class-B prose is ever LLM-generated over org-wide entity amounts).
+- At **read time, per requesting user**, denied entities are handled by the **drop-the-whole-row rule** (mirroring the correlation path): a driver the asker cannot `can_access` is removed entirely - both its label **and** its `contribution_abs`/`contribution_pct` - and the removed magnitude is folded into an aggregated **"Other (N hidden)"** bucket so no single denied entity's amount is recoverable. Any Class-B prose the UI shows is generated per-user over only the allowed drivers.
 
 `lineage.joins` is descriptive metadata only and does **not** participate in query execution. A dimension that is neither Class A nor a registered Class B resolver is not offered for decomposition; requesting it returns a typed `DIMENSION_NOT_ALLOWED` error rather than silently degrading.
 
@@ -77,7 +85,7 @@ The `entity_links.dst_type` convention (Section 3.3) is kept separate and mapped
 
 ### 2.4 Prompt-injection and PII isolation
 
-The narrative covers **drivers only**. It receives **opaque tokens** (`DRIVER_1`, `DRIVER_2`) plus numeric contributions, never raw third-party strings; the SPA re-hydrates Class-A labels client-side (Class-B labels are re-resolved per-user and never sent to the LLM at all). It uses **only the internal platform llm-provider** (`apps/api/src/routes/internal-llm.routes.ts` / `apps/api/src/services/llm-provider.service.ts`, via `BBB_API_INTERNAL_URL` + `INTERNAL_SERVICE_SECRET`), so no PII egresses to a third-party endpoint. Output is rendered **plain text**; links are attached by the SPA from structured drivers, never from model-emitted markup.
+The shared narrative covers **Class-A drivers only**. Class-B decompositions get **no shared narrative** (`narrative=null`); any Class-B prose is generated per-user at read time over only `can_access`-allowed drivers (Section 2.2), so per-entity amounts never enter a shared string. For Class A the LLM receives **opaque tokens** (`DRIVER_1`, `DRIVER_2`) plus numeric contributions, never raw third-party strings; the SPA re-hydrates Class-A labels client-side. It uses **only the internal platform llm-provider** (`apps/api/src/routes/internal-llm.routes.ts` / `apps/api/src/services/llm-provider.service.ts`, via `BBB_API_INTERNAL_URL` + `INTERNAL_SERVICE_SECRET`), so no PII egresses to a third-party endpoint. Output is rendered **plain text**; links are attached by the SPA from structured drivers, never from model-emitted markup.
 
 ### 2.5 What an agent can do autonomously vs. HITL
 
@@ -172,17 +180,31 @@ Indexes: `UNIQUE (metric_id, version_number)`, `(organization_id, created_at DES
 | `metric_id` | uuid NOT NULL | FK ON DELETE CASCADE |
 | `organization_id` | uuid NOT NULL | |
 | `version_id` | uuid NOT NULL | FK; part of cache identity |
-| `cache_key` | varchar(64) NOT NULL | `hash(metric_id, version_id, period_a, period_b, resolved_dimension)` via `hashQueryConfig` (`apps/bench-api/src/services/cache.service.ts`) |
+| `cache_key` | varchar(64) NOT NULL | `sha256` of canonical JSON of the identity tuple `metric_id \| version_id \| period_a \| period_b \| resolved_dimension`, computed by a small **Basis-owned** helper (in `packages/shared` or a `basis-api` lib). It does **not** import bench-api's `CacheService.hashQueryConfig` (that is a private instance method of a separate service - the same false cross-app-reuse pattern round 2 purged). |
 | `period_a` / `period_b` | jsonb NOT NULL | |
 | `dimension` | varchar(80) | the **resolved** dimension (Section 2.2) |
 | `dimension_class` | varchar(1) | `A` (labels stored) or `B` (opaque uuids, labels resolved per-user) |
 | `delta_abs` / `delta_pct` | numeric | |
-| `drivers` | jsonb NOT NULL | Class A: `[{ dimension_value, label, contribution_abs, contribution_pct }]`; Class B: `[{ dimension_value (uuid, opaque), contribution_abs, contribution_pct }]` - **no labels** |
-| `narrative` | text | drivers-only; nullable when the LLM leg failed |
+| `drivers` | jsonb NOT NULL | Class A: `[{ dimension_value, label, contribution_abs, contribution_pct }]` (served as-is). Class B: `[{ dimension_value (uuid, opaque), contribution_abs, contribution_pct }]` **never served raw** - at read time denied rows are dropped whole (label + amount) and folded into an "Other (N hidden)" bucket per user (Section 2.2) |
+| `narrative` | text | **Class A**: drivers-only, nullable when the LLM leg failed. **Class B**: always `null` (no shared per-entity prose); per-user prose generated at read time |
 | `model` | varchar(60) | |
 | `computed_at` | timestamptz NOT NULL DEFAULT now() | |
 
 Indexes: `UNIQUE (cache_key)`, `(metric_id, computed_at DESC)`.
+
+**`basis_org_settings`** - per-org configuration the round-2 retention + cache-precedence fixes depend on (round-3: this had no home). Modeled on `apps/blip-api/src/db/schema/blip-retention-policies.ts` (nullable `max_age_days` = unbounded). One row per org.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `organization_id` | uuid NOT NULL | FK `organizations(id)` ON DELETE CASCADE; `UNIQUE` |
+| `snapshot_max_age_days` | integer | **null = unbounded** (feeds the retention sweep's "skip coarse tier if any org unbounded"); shorter windows enforced by ranged DELETE only (Section 6) |
+| `explanation_cache_ttl_seconds` | integer | ages out `basis_explanations` |
+| `default_dimension` | varchar(80) | the org-Settings tier of the effective-dimension precedence (Section 2.2) |
+| `updated_by` | uuid | FK `users(id)` ON DELETE SET NULL |
+| `updated_at` | timestamptz NOT NULL DEFAULT now() | |
+
+Org-scoped with RLS on `app.current_org_id`. Section 6's sweep reads `snapshot_max_age_days` across all orgs; Section 2.2's precedence reads `default_dimension`; the §5 Settings page persists here.
 
 ### 3.2 Cross-app additive change (Bench binding)
 
@@ -198,8 +220,8 @@ Indexes: `UNIQUE (cache_key)`, `(metric_id, computed_at DESC)`.
 
 Observed tip on this branch is `0225_bin_scan_override.sql`; the `permissions_seed_actions_delta` series tip is `0224_..._delta_019`. **All numbers below are provisional.** `scripts/build-permission-delta.mjs` assigns the migration number as `max(4-digit files)+1` and the delta suffix as `(existing delta count)+1`; it **MUST run only after the three hand-authored files are on disk**, its outputs are **generator-derived (do not hand-pick `0229`/`020`)**, and the whole set must be re-verified and re-run at implement/merge time because any other branch landing a migration first invalidates the numbering.
 
-1. **`0226_basis_core.sql`** - `basis_metrics` (incl. `related_apps`, `resolve_status`, `last_breach_*`) + `basis_metric_versions`, indexes, RLS. Additive only.
-2. **`0227_basis_snapshots_explanations.sql`** - partitioned `basis_metric_snapshots` parent (RANGE on `captured_at`) with `UNIQUE (metric_id, grain, captured_at, version_id)`; **pre-create current..+12 monthly partitions PLUS a `DEFAULT` catch-all partition** (mirrors blip's wide runway so a missed provision run degrades gracefully instead of erroring every INSERT); `basis_explanations` with `UNIQUE (cache_key)` + `version_id` + `dimension_class`; RLS on both. Additive only.
+1. **`0226_basis_core.sql`** - `basis_metrics` (incl. `related_apps`, `resolve_status`, `last_breach_*`) + `basis_metric_versions` + **`basis_org_settings`**, indexes, RLS. Additive only.
+2. **`0227_basis_snapshots_explanations.sql`** - partitioned `basis_metric_snapshots` parent (RANGE on `captured_at`) with `UNIQUE (metric_id, grain, captured_at, version_id)`; **pre-create current..+12 monthly partitions PLUS a `DEFAULT` catch-all partition** (mirrors blip's wide runway). **DEFAULT recovery caveat (round-3):** a bare `CREATE TABLE ... PARTITION OF ... FOR VALUES` for a month whose rows already landed in `DEFAULT` aborts with "default partition would be violated by some row" - so DEFAULT is a *degradation net, not a self-healing guarantee* (see Section 6 for the runbook). `basis_explanations` with `UNIQUE (cache_key)` + `version_id` + `dimension_class`; RLS on both. Additive only.
 3. **`0228_bench_widget_metric_binding.sql`** - `ADD COLUMN IF NOT EXISTS bench_widgets.basis_metric_id uuid` + index. Additive only.
 4. **`NNNN_permissions_seed_actions_delta_0MM.sql`** - **generated** by re-running the permission-delta generator after regenerating `docs/permissions-action-manifest.json` with the `basis.*` verb set (Section 4.4). Additive only.
 
@@ -254,7 +276,7 @@ Manifest-generated in `docs/permissions-action-manifest.json`, `app.resource.ver
 
 New `apps/mcp-server/src/tools/basis-tools.ts` via `registerTool` (`register-tool.ts:488`), HTTP client shaped like `apps/mcp-server/src/tools/bench-tools.ts:9`. Env `BASIS_API_URL=http://basis-api:4019/v1`.
 
-`basis_explain_change` and `basis_rank_drivers` **require an explicit `asker_user_id`** (per `docs/reference/agent-conventions.md`). This is a deliberate departure from `search_everything`'s fail-open default (`apps/mcp-server/src/tools/search-tools.ts:750` returns allowlisted hits unfiltered when `as_user_id` is absent). When `asker_user_id` is absent, Basis returns the **deterministic decomposition with an empty correlation list and opaque (label-less) Class-B drivers** - fail-closed - never the service account's own visibility.
+`basis_explain_change` and `basis_rank_drivers` **require an explicit `asker_user_id`** (per `docs/reference/agent-conventions.md`). This is a deliberate departure from `search_everything`'s fail-open default (`apps/mcp-server/src/tools/search-tools.ts:750` returns allowlisted hits unfiltered when `as_user_id` is absent). When `asker_user_id` is absent, Basis returns the **deterministic decomposition with an empty correlation list**, and for **Class-B dimensions it drops every per-entity driver row entirely - both label and `contribution_abs`/`contribution_pct` - returning only the `delta_abs`/`delta_pct` total plus an "Other (N hidden)" aggregate** (never opaque-but-amount-bearing rows, since the amount is the sensitive payload). Class-A drivers are returned normally. This is fail-closed and never the service account's own visibility.
 
 | Tool | Backs | Autonomy |
 | --- | --- | --- |
@@ -281,7 +303,7 @@ New `apps/mcp-server/src/tools/basis-tools.ts` via `registerTool` (`register-too
 2. **Metric Detail** - definition, lineage, current value, sparkline, version history, permission-gated certify/decertify/deprecate.
 3. **Definition Builder** - the query-form (data source -> measure/agg/filters) is **extracted from Bench's widget wizard into a shared component** used by both apps; "Preview value" **POSTs the draft to bench-api** (the authoritative drift/validation guard). Basis adds only governance fields around it.
 4. **Why-Did-It-Change Explorer** - ranks the **certified deterministic drivers first**, then a visibly-separate, lower-ranked "possibly related activity" panel (per-viewer, access-scoped). Drill-down links attached by the SPA from structured drivers, never model markup. Live-updates via `explanation.ready`; shows "summary unavailable" when `narrative` is null.
-5. **Settings** - owners/stewards, default decomposition dimension, explanation cache TTL, and the per-org snapshot retention window (copy states it enforces via bounded deletes and can never shorten another tenant's data - Section 6).
+5. **Settings** - owners/stewards, default decomposition dimension, explanation cache TTL, and the per-org snapshot retention window, all persisted to **`basis_org_settings`** (Section 3.1). Copy states the retention window enforces via bounded deletes and can never shorten another tenant's data (Section 6).
 
 Basis renders only minimal explanatory visuals (contribution bars, sparkline) with `@bigbluebam/ui` primitives - no charting library, no dashboards.
 
@@ -289,15 +311,17 @@ Basis renders only minimal explanatory visuals (contribution bars, sparkline) wi
 
 ## 6. Background work
 
-BullMQ workers in `apps/worker` (`{ pattern: '<cron>' }` convention in `apps/worker/src/worker.ts`). All fan-out uses **Mode (b)** (Section 4.1: `INTERNAL_SERVICE_SECRET` + explicit `org_id`, `app.current_org_id` set per org, like `banter-feed-fanin`). Every `(org, metric)` is wrapped in **try/catch log-and-continue**, resumable (the snapshot `ON CONFLICT` + bucket-aligned `captured_at` make re-runs no-ops), with **progress logging** via `@bigbluebam/logging` (start line with elapsed, per-N progress, completion with duration, a line before any LLM call). Jobs set `removeOnComplete`/`removeOnFail` and keep payloads to refs (shared 256MB noeviction Redis). The four repeatable jobs run on **distinct off-peak crons** so the retention sweep's `ACCESS EXCLUSIVE` partition DROP never blocks a snapshot write or movement scan.
+BullMQ workers in `apps/worker` (`{ pattern: '<cron>' }` convention in `apps/worker/src/worker.ts`). All fan-out uses **Mode (b)** (Section 4.1: `INTERNAL_SERVICE_SECRET` + explicit `org_id`, `app.current_org_id` set per org, like `banter-feed-fanin`). Every `(org, metric)` is wrapped in **try/catch log-and-continue**, resumable (the snapshot `ON CONFLICT` + bucket-aligned `captured_at` make re-runs no-ops), with **progress logging** via `@bigbluebam/logging` (start line with elapsed, per-N progress, completion with duration, a line before any LLM call). Jobs set `removeOnComplete`/`removeOnFail` and keep payloads to refs (shared 256MB noeviction Redis). Per-org windows come from **`basis_org_settings`** (Section 3.1).
+
+**Cron collision-avoidance (round-3 fix).** The hourly snapshot fires at **minute :00 of every hour**, so that minute is owned by the snapshot tick. Every daily job must therefore avoid minute :00, or the retention sweep's `ACCESS EXCLUSIVE` partition DROP could still overlap an hourly snapshot write. All daily jobs are pinned to distinct **non-zero** minutes: `basis-partition-provision` `45 2 * * *`, `basis-retention-sweep` `15 3 * * *`, `basis-movement-scan` `30 4 * * *`.
 
 | Queue / job | Schedule | Purpose |
 | --- | --- | --- |
-| `basis-partition-provision` | daily (early) | Ensure the snapshot runway stays current..+12 months (the `DEFAULT` partition is the safety net). **Alarms** (not just logs) on failure, since a missed run across a month boundary would otherwise route inserts to `DEFAULT`. |
+| `basis-partition-provision` | daily (`45 2 * * *`) | Ensure the snapshot runway stays current..+12 months (the `DEFAULT` partition is the degradation net). **Alarms** (not just logs) on failure. **DEFAULT recovery runbook (round-3):** if a month's rows already landed in `DEFAULT` (the missed-provision case), a bare `CREATE ... PARTITION OF` for that month aborts ("default partition would be violated by some row"). v1 treats this as a **manual-runbook condition, not self-healing**: an operator detaches `DEFAULT`, creates the month partition, redistributes the rows through the parent, and re-attaches `DEFAULT`. Until then, DEFAULT-resident rows are reclaimed **only** by the per-org ranged DELETE once aged past the window - the coarse tier can never drop `DEFAULT`. So `DEFAULT` prevents insert failure but is **not** a graceful-degradation guarantee for the coarse retention tier. |
 | `basis-metric-snapshot` | hourly (`0 * * * *`) + a **daily `day`-grain pass** | For each certified metric, `captured_at = date_trunc('<grain>', scheduled_tick_time)` in UTC (re-derived from the tick, never `now()`), live-query and `INSERT ON CONFLICT DO UPDATE`. The daily pass is the **sole `day`-grain producer**. On bench 5xx: skip-and-reschedule that item; on unresolvable definition: set `resolve_status='resolve_failed'` and continue. Per-org concurrency cap. |
 | `basis-explain` | on-demand | (1) run the **deterministic** decomposition, resolve the effective dimension, persist `basis_explanations` (`ON CONFLICT (cache_key) DO UPDATE`), emit `explanation.ready{narrative_ready:false}`; (2) attempt the drivers-only narrative with a bounded LLM timeout; on failure leave `narrative=null` and enqueue a **narrative-only retry** (no Bench queries) that, on success, **re-emits `explanation.ready{narrative_ready:true}`** on the same `cache_key`-keyed room so clients leave "summary unavailable." **Job id = `cache_key`** so identical requests dedupe. Correlation is **not** computed here (it is per-user, at read time). |
-| `basis-movement-scan` | daily (`30 4 * * *`) | Compare only snapshots sharing the **same `version_id`** (a `definition_changed` re-baselines). Fire `metric.threshold_breached` **once per crossing** via `last_breach_*` (cleared on recovery). Payload is **magnitude only** (Section 7). |
-| `basis-retention-sweep` | daily (distinct off-peak cron) | **Two-tier, verbatim from `apps/worker/src/jobs/blip-retention-sweep.job.ts:130-135`:** (1) coarse floor - drop a whole month partition only when its upper bound is past the **platform-wide MAX retention across all orgs**, and **skip entirely if any org is unbounded**; the `DEFAULT` partition is never droppable. (2) per-org shorter windows are enforced by **bounded ranged DELETEs within live partitions, never a partition drop**, so one org's short window cannot delete another org's rows in a shared month. Also ages out expired `basis_explanations`. **No hour-to-day rollup** (round-2): re-aggregating 24 hourly rows of a stock metric would ~24x it and would collide with the daily `day`-grain pass on the UNIQUE key; retention only deletes expired `hour`-grain rows. |
+| `basis-movement-scan` | daily (`30 4 * * *`, non-zero minute) | Compare only snapshots sharing the **same `version_id`** (a `definition_changed` re-baselines). Fire `metric.threshold_breached` **once per crossing** via `last_breach_*` (cleared on recovery). Payload is **magnitude only** (Section 7). |
+| `basis-retention-sweep` | daily (`15 3 * * *`, non-zero minute) | **Two-tier, verbatim from `apps/worker/src/jobs/blip-retention-sweep.job.ts:130-135`**, reading `basis_org_settings.snapshot_max_age_days`: (1) coarse floor - drop a whole month partition only when its upper bound is past the **platform-wide MAX retention across all orgs**, and **skip entirely if any org is unbounded** (`snapshot_max_age_days IS NULL`); the `DEFAULT` partition is never droppable (no upper bound). (2) per-org shorter windows are enforced by **bounded ranged DELETEs within live partitions, never a partition drop**, so one org's short window cannot delete another org's rows in a shared month. Also ages out expired `basis_explanations`. **No hour-to-day rollup** (round-2): re-aggregating 24 hourly rows of a stock metric would ~24x it and would collide with the daily `day`-grain pass on the UNIQUE key; retention only deletes expired `hour`-grain rows. |
 
 A lightweight **draft resolve-check** also runs on `/versions` POST and `/certify` (via the same Bench preview the Definition Builder uses) so draft/decertified definitions get drift feedback, not only certified ones.
 
@@ -373,7 +397,8 @@ Add `/basis/`, `/basis/api/`, `/basis/ws` blocks **and** the static-asset cache-
 | LLM narrative | `internal-llm.routes.ts`, `llm-provider.service.ts` | Opaque-token drivers-only prompt |
 | Fastify skeleton / health / logging | `apps/bench-api/src/server.ts`, `@bigbluebam/service-health`, `@bigbluebam/logging` | Config + routes |
 | Snapshot idempotency | `apps/worker/src/jobs/bearing-snapshot.job.ts` | Bucket-aligned `captured_at` + `ON CONFLICT` |
-| Partition runway + DEFAULT + two-tier retention | `blip-partition-provision.job.ts`, `blip-retention-sweep.job.ts:130-135` | Basis provisioning/sweep (no rollup) |
+| Partition runway + DEFAULT + two-tier retention | `blip-partition-provision.job.ts`, `blip-retention-sweep.job.ts:130-135` | Basis provisioning/sweep (no rollup; DEFAULT runbook) |
+| Per-org policy table | `apps/blip-api/src/db/schema/blip-retention-policies.ts` (nullable `max_age_days`) | `basis_org_settings` |
 | Railway config generation | `scripts/gen-railway-configs.mjs` | `railway/basis-api.json` |
 | Background jobs | `apps/worker/src/worker.ts` | 5 `basis-*` jobs |
 | SPA scaffold | `apps/bench/src/` + extracted shared query-form | 5 Basis pages |
@@ -383,7 +408,9 @@ Add `/basis/`, `/basis/api/`, `/basis/ws` blocks **and** the static-asset cache-
 - Assert the decomposition invariant `sum(contributions) == delta_abs` for additive measures, and the ratio/percentile directional fallback (labeled non-exact).
 - Assert a re-run of the same scheduled snapshot tick is a **no-op** (bucket-aligned `captured_at`).
 - Assert the `metric.threshold_breached` payload is **exactly** `{metric.id, delta_abs, delta_pct, direction}` with **no entity refs** (leak-safety as a test, not convention).
-- Assert `basis_explain_change` without `asker_user_id` returns empty correlation + opaque drivers (fail-closed).
+- Assert `basis_explain_change`/`basis_rank_drivers` without `asker_user_id` return empty correlation and, for Class-B dimensions, **drop per-entity amounts** (only the total + "Other (N hidden)") - fail-closed.
+- Assert a **Class-B decomposition never persists a shared narrative** and that a denied entity's `contribution_abs` is unrecoverable at read time (dropped whole, folded into "Other").
+- **Registration-time test:** a label column joined from a restricted entity **cannot register Class A** (must be Class B).
 - A `packages/shared` `basis.ts` schema test; a `register-tool` policy test that `basis.*` fails closed until allowlisted; confirm the 6 events pass `check-bolt-catalog.mjs`; `pnpm db:check` clean against the 4 Drizzle modules (parent-only for the partitioned table).
 
 ---
@@ -404,6 +431,17 @@ Add `/basis/`, `/basis/api/`, `/basis/ws` blocks **and** the static-asset cache-
 ---
 
 ## Changelog
+
+**Round 3 (final capped round):**
+
+- [security, BLOCKER] Class-B per-entity contribution amounts leaked via the shared cache: **accepted.** For Class-B dimensions the shared cache carries no per-driver narrative (`narrative=null`) and its per-entity amounts are never served raw; at read time a denied entity's whole row (label **and** amount) is dropped and folded into an "Other (N hidden)" bucket. Same drop-the-amount rule applied to the `basis_rank_drivers` absent-asker fallback (§2.2, §2.4, §3.1, §4.5, §9).
+- [security, major] Class-A admitted entity-derived label columns: **accepted.** Class A is now a curated allowlist of bounded org-global enum columns only; any column that is the display form of a Class-B entity MUST be Class B; added a registration-time test invariant (§2.2, §9).
+- [design, major] Per-org settings had no storage: **accepted.** Added `basis_org_settings` (modeled on `blip-retention-policies.ts`, nullable `snapshot_max_age_days`, `default_dimension`, `explanation_cache_ttl_seconds`) to §3.1 + the core migration; retention sweep and cache-precedence now point at it (§3.1, §3.4, §5, §6).
+- [stability, major] DEFAULT partition + provisioner recovery inconsistency: **accepted-with-modification.** Rather than build the detach/redistribute/re-attach flow in v1, documented the DEFAULT-provision-failure as a **manual-runbook condition (not self-healing)** and stated DEFAULT-resident rows are reclaimed only by the per-org ranged DELETE, never the coarse tier - so DEFAULT is a degradation net, not a graceful-degradation guarantee. The automated redistribute flow is noted as the operator runbook (§3.4, §6).
+- [best-practices, minor] `cache_key` cited bench-api's private `hashQueryConfig`: **accepted.** Replaced with a Basis-owned `sha256`-of-canonical-JSON helper; dropped the cross-service citation (§3.1).
+- [stability, minor] Cron collision incompletely specified (minute :00 owned by the hourly snapshot): **accepted.** Pinned `basis-partition-provision` `45 2`, `basis-retention-sweep` `15 3`, `basis-movement-scan` `30 4`, and stated the invariant that all daily jobs avoid minute :00 (§6).
+- [correction] The claim that `bill.invoice` is not in `SUPPORTED_ENTITY_TYPES` was verified **false** (it is at `visibility.service.ts:81`): **not applied.** Kept the Bill flagship example; added the true caveat that Bill (and any app absent from `v_activity_unified`) correlation depends on `bolt_recent_events` coverage (§2.1, OQ10).
+- **Rejected this round:** none (the one invalid finding was flagged by the coordinator and correctly not applied).
 
 **Round 2 (re-review of the round-1 revision):**
 
