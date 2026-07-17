@@ -58,6 +58,7 @@ export const LAUNCHPAD_APP_IDS = [
   'blip',
   'helpdesk',
   'bureau',
+  'basis',
 ] as const;
 
 export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
@@ -93,6 +94,7 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'blip', name: 'Blip', description: 'Telemetry & Logs', icon_name: 'activity', color: '#0891b2', path: '/blip/' },
   { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon_name: 'headset', color: '#be123c', path: '/helpdesk/' },
   { id: 'bureau', name: 'Bureau', description: 'Virtual Office', icon_name: 'building', color: '#475569', path: '/bureau/' },
+  { id: 'basis', name: 'Basis', description: 'Metric Layer', icon_name: 'ruler', color: '#4f46e5', path: '/basis/' },
 ];
 
 // Valid values for the root_redirect setting

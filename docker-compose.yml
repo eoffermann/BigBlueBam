@@ -269,6 +269,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      basis-api:
+        condition: service_healthy
       helpdesk-api:
         condition: service_healthy
       banter-api:
@@ -778,6 +780,54 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4012/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  basis-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/basis-api/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      # Basis reaches Bench's governed query builder server-to-server (spec 4.1)
+      # and the platform llm-provider for narratives. bench-api is a request-time
+      # dependency only - NOT in depends_on (spec 8.1 sibling-dependency pattern).
+      - BENCH_API_INTERNAL_URL=http://bench-api:4011
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - NODE_ENV=production
+      - PORT=4019
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      - QUERY_TIMEOUT_MS=${BASIS_QUERY_TIMEOUT_MS:-10000}
+      - LLM_TIMEOUT_MS=${BASIS_LLM_TIMEOUT_MS:-15000}
+      - EXPLANATION_CACHE_TTL_SECONDS=${BASIS_EXPLANATION_CACHE_TTL:-3600}
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      # Must be non-empty for the Bench internal query route + narrative path;
+      # empty correctly fails closed (spec 4.1).
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4019/health"]
       interval: 10s
       timeout: 5s
       retries: 3

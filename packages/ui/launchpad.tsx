@@ -36,6 +36,7 @@ import {
   Database,
   Clapperboard,
   Activity,
+  Ruler,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -80,6 +81,7 @@ const ICONS: Record<string, LucideIcon> = {
   database: Database,
   clapperboard: Clapperboard,
   activity: Activity,
+  ruler: Ruler,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very
@@ -214,7 +216,10 @@ export function Launchpad({ isOpen, onClose, currentApp }: LaunchpadProps) {
         <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-zinc-100">
           BigBlueBam Suite
         </h2>
-        <div className="grid grid-cols-4 gap-3">
+        {/* Scroll cap so the grid never overflows the viewport as the suite
+            grows. At the current app count this rarely scrolls; it keeps the
+            modal usable well past 20 apps without a redesign. */}
+        <div className="grid grid-cols-4 gap-3 max-h-[65vh] overflow-y-auto pr-1">
           {visibleApps.map((app) => {
             const Icon = ICONS[app.icon_name] ?? Box;
             const isCurrent = app.id === currentApp;
