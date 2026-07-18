@@ -34,10 +34,18 @@ export interface EnqueueIngestArgs {
   seeded?: boolean;
 }
 
-// Enqueue a refs-only match-on-ingest job. Idempotent jobId collapses duplicate enqueues for
-// the same (org, type, id) within the BullMQ retention window (a live dispatch racing the
-// nightly diff). Bounded attempts + exponential backoff; on final give-up the worker DLQs by
-// flagging braid_identities.needs_rescan (spec §4.6 / ST-r2-7).
+// Enqueue a refs-only match-on-ingest job.
+//
+// Dedup via BullMQ's TTL-based `deduplication` (NOT a static jobId): a static jobId plus
+// removeOnComplete retention makes add() a no-op while the prior completed job is still
+// retained, so a genuine RE-INGEST of an edited source row (a live update event, or the
+// nightly changed-since diff) would be silently dropped for days and the identity-defining
+// edit never re-clusters (security/stability #61). A short TTL window instead collapses only
+// rapid duplicates (a live dispatch racing the diff, an event burst) and lets a later real
+// edit re-enqueue. Redelivery within the window is harmless: the handler is idempotent
+// (advisory-lock + ON CONFLICT identity upsert + candidate-status CAS). Bounded attempts +
+// exponential backoff; on final give-up the worker DLQs by flagging
+// braid_identities.needs_rescan (spec §4.6 / ST-r2-7).
 export async function enqueueBraidIngest(args: EnqueueIngestArgs): Promise<boolean> {
   try {
     await getQueue().add(
@@ -49,7 +57,10 @@ export async function enqueueBraidIngest(args: EnqueueIngestArgs): Promise<boole
         seeded: args.seeded,
       },
       {
-        jobId: `braid:${args.orgId}:${args.sourceType}:${args.sourceId}`,
+        deduplication: {
+          id: `braid:${args.orgId}:${args.sourceType}:${args.sourceId}`,
+          ttl: 60_000,
+        },
         attempts: 5,
         backoff: { type: 'exponential', delay: 30_000 },
         removeOnComplete: 1000,
