@@ -1,5 +1,6 @@
 import { Ruler, ArrowRight, BadgeCheck, GitBranch, Sparkles, ShieldCheck } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
+import { FloatingFrame } from '@/components/ui/floating-frame';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +68,31 @@ export function BasisSection() {
             history of how it was defined, and let an AI core explain - in plain language - exactly
             why a certified metric moved. It is the semantic layer that used to require a data team,
             sized for a team of two to fifty.
+          </p>
+        </div>
+      </AnimatedReveal>
+
+      {/* Hero screenshot: the metric catalog with certified + draft metrics. */}
+      <AnimatedReveal delay={0.1} withScale>
+        <FloatingFrame
+          src="/screenshots/basis/light/catalog.png"
+          alt="The Basis metric catalog listing governed metrics with certification badges"
+        />
+        <p className="mt-3 text-center text-sm text-zinc-500">
+          The metric catalog: one certified definition per number, with certification badges and a
+          define-a-metric form.
+        </p>
+      </AnimatedReveal>
+
+      <AnimatedReveal delay={0.15} withScale>
+        <div className="mt-8 mx-auto max-w-3xl">
+          <FloatingFrame
+            src="/screenshots/basis/light/metric-detail.png"
+            alt="A Basis metric detail view with certification controls and immutable version history"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Metric detail: certify / decertify / deprecate, and the immutable version history of how
+            the number was defined.
           </p>
         </div>
       </AnimatedReveal>
