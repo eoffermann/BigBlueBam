@@ -10,7 +10,7 @@ import { requireAuth } from '../plugins/auth.js';
 import * as metricService from '../services/metric.service.js';
 import * as explainService from '../services/explain.service.js';
 import * as settingsService from '../services/settings.service.js';
-import { UpstreamUnavailableError } from '../lib/bench-client.js';
+import { UpstreamUnavailableError, BadDefinitionError } from '../lib/bench-client.js';
 
 function notFound(request: FastifyRequest, reply: FastifyReply, what = 'Metric not found') {
   return reply.status(404).send({
@@ -39,6 +39,27 @@ function upstreamUnavailable(request: FastifyRequest, reply: FastifyReply) {
       request_id: request.id,
     },
   });
+}
+
+// Map a Bench upstream error to the right response: a bad definition (4xx) is a
+// 400 the caller must fix; a real outage (5xx/network) is a 503 degrade.
+function benchError(request: FastifyRequest, reply: FastifyReply, err: unknown): boolean {
+  if (err instanceof BadDefinitionError) {
+    reply.status(400).send({
+      error: {
+        code: 'DEFINITION_RESOLVE_FAILED',
+        message: `This metric's definition did not resolve against its data source: ${err.message}`,
+        details: [],
+        request_id: request.id,
+      },
+    });
+    return true;
+  }
+  if (err instanceof UpstreamUnavailableError) {
+    upstreamUnavailable(request, reply);
+    return true;
+  }
+  return false;
 }
 
 // Metric catalog CRUD (spec 4.2). Definition changes go through /versions
@@ -259,7 +280,7 @@ export default async function metricRoutes(fastify: FastifyInstance) {
         if (!result) return notFound(request, reply);
         return { data: result };
       } catch (err) {
-        if (err instanceof UpstreamUnavailableError) return upstreamUnavailable(request, reply);
+        if (benchError(request, reply, err)) return;
         throw err;
       }
     },
@@ -289,7 +310,7 @@ export default async function metricRoutes(fastify: FastifyInstance) {
         }
         return { data: result.explanation };
       } catch (err) {
-        if (err instanceof UpstreamUnavailableError) return upstreamUnavailable(request, reply);
+        if (benchError(request, reply, err)) return;
         throw err;
       }
     },

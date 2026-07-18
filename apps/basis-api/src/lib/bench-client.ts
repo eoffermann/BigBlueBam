@@ -11,6 +11,15 @@ export class UpstreamUnavailableError extends Error {
   }
 }
 
+// A 4xx from Bench means the metric DEFINITION is invalid (bad data source,
+// unknown field, etc.) - a client error to surface distinctly, NOT an outage.
+export class BadDefinitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BadDefinitionError';
+  }
+}
+
 interface QueryRow {
   [k: string]: unknown;
 }
@@ -45,9 +54,19 @@ async function runQuery(
     throw new UpstreamUnavailableError();
   }
   if (!res.ok) {
-    // 5xx or the route not present -> treat as upstream unavailable so callers
-    // degrade rather than surface a raw error.
-    throw new UpstreamUnavailableError(`Bench internal query returned ${res.status}`);
+    let benchMsg = `Bench internal query returned ${res.status}`;
+    try {
+      const body = (await res.clone().json()) as { error?: { message?: string } };
+      if (body.error?.message) benchMsg = body.error.message;
+    } catch {
+      /* non-JSON body */
+    }
+    // 4xx (except 401/403 auth) = the definition is invalid; surface distinctly.
+    // 401/403/5xx/network = the route is down/misconfigured -> degrade.
+    if (res.status >= 400 && res.status < 500 && res.status !== 401 && res.status !== 403) {
+      throw new BadDefinitionError(benchMsg);
+    }
+    throw new UpstreamUnavailableError(benchMsg);
   }
   const json = (await res.json()) as { data?: { rows?: QueryRow[] } };
   return json.data?.rows ?? [];
