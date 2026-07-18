@@ -11,7 +11,7 @@ name: Lint
 on:
   pull_request:
   push:
-    branches: [main, stable]
+    branches: [main, stable, suite-brainstorm]
 
 concurrency:
   group: lint-${{ github.ref }}

@@ -774,6 +774,23 @@ function buildManifest() {
     { id: 'basis.metric.deprecate', app: 'basis', resource: 'metric', verb: 'deprecate', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
     { id: 'basis.explain.run', app: 'basis', resource: 'explain', verb: 'run', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'basis.datasource.read', app: 'basis', resource: 'datasource', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Braid (identity-resolution CDP). Like basis, braid-api is a satellite NOT in
+    // APP_PREFIXES and its braid_ MCP tools are deliberately kept out of
+    // EXPLICIT_TOOL_OVERRIDES (satellite deferral, spec 2.6/BP3-1), so neither the
+    // route nor the tool scanner emits these ids. Hand-authored with EXPLICIT is_read on
+    // every row so no flag depends on verb inference: resolve is is_read:false because
+    // POST /v1/resolve can lazily mint a singleton (must not be reachable under a
+    // read-only key scope ceiling); merge/split are the truth-flips (is_destructive +
+    // requires_confirmation). Keep in sync with the braid rows in the delta migration.
+    { id: 'braid.profile.read', app: 'braid', resource: 'profile', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'braid.profile.resolve', app: 'braid', resource: 'profile', verb: 'resolve', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'braid.profile.merge', app: 'braid', resource: 'profile', verb: 'merge', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'braid.profile.split', app: 'braid', resource: 'profile', verb: 'split', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'braid.candidate.read', app: 'braid', resource: 'candidate', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'braid.rule.read', app: 'braid', resource: 'rule', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'braid.rule.write', app: 'braid', resource: 'rule', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'braid.settings.read', app: 'braid', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'braid.settings.write', app: 'braid', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
@@ -797,6 +814,10 @@ function buildManifest() {
       if (c.id.startsWith('basis.')) {
         migrationLabel = '0229';
         sourceFile = 'metrics.routes.ts';
+      }
+      if (c.id.startsWith('braid.')) {
+        migrationLabel = '0232';
+        sourceFile = 'braid.routes.ts';
       }
       byId.set(c.id, {
         id: c.id,

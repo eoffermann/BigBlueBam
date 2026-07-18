@@ -14,7 +14,7 @@ name: Test
 on:
   pull_request:
   push:
-    branches: [main, stable]
+    branches: [main, stable, suite-brainstorm]
 
 concurrency:
   group: test-${{ github.ref }}

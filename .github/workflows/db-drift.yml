@@ -3,7 +3,7 @@ name: DB Drift Guard
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, suite-brainstorm]
 
 jobs:
   db-drift:

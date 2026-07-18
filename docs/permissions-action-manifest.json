@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1402,
-    "mcp_tools_scanned": 814,
+    "total": 1411,
+    "mcp_tools_scanned": 831,
     "rest_routes_scanned": 880,
-    "read_permissions": 542,
-    "destructive_permissions": 134
+    "read_permissions": 546,
+    "destructive_permissions": 136
   },
   "permissions": [
     {
@@ -21563,6 +21563,159 @@
       ]
     },
     {
+      "id": "braid.candidate.read",
+      "app": "braid",
+      "resource": "candidate",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.profile.merge",
+      "app": "braid",
+      "resource": "profile",
+      "verb": "merge",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.profile.read",
+      "app": "braid",
+      "resource": "profile",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.profile.resolve",
+      "app": "braid",
+      "resource": "profile",
+      "verb": "resolve",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.profile.split",
+      "app": "braid",
+      "resource": "profile",
+      "verb": "split",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.rule.read",
+      "app": "braid",
+      "resource": "rule",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.rule.write",
+      "app": "braid",
+      "resource": "rule",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.settings.read",
+      "app": "braid",
+      "resource": "settings",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "braid.settings.write",
+      "app": "braid",
+      "resource": "settings",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0232)",
+          "file": "braid.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "brief.add.collaborator",
       "app": "brief",
       "resource": "add",
@@ -24898,6 +25051,22 @@
       "file": "basis-tools.ts"
     },
     {
+      "tool": "basis_list_versions",
+      "file": "basis-tools.ts"
+    },
+    {
+      "tool": "basis_update_metric",
+      "file": "basis-tools.ts"
+    },
+    {
+      "tool": "basis_get_settings",
+      "file": "basis-tools.ts"
+    },
+    {
+      "tool": "basis_update_settings",
+      "file": "basis-tools.ts"
+    },
+    {
       "tool": "blueprint_list",
       "file": "blueprint-tools.ts"
     },
@@ -25040,6 +25209,58 @@
     {
       "tool": "blueprint_list_templates",
       "file": "blueprint-tools.ts"
+    },
+    {
+      "tool": "braid_resolve",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_get_profile",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_list_profiles",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_search_profiles",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_profile_timeline",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_list_candidates",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_propose_merge",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_reject_candidate",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_merge_profiles",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_split_profile",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_set_survivorship_rule",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_list_survivorship_rules",
+      "file": "braid-tools.ts"
+    },
+    {
+      "tool": "braid_get_settings",
+      "file": "braid-tools.ts"
     },
     {
       "tool": "bureau_list_floors",
