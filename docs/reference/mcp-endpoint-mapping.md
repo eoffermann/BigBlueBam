@@ -1910,3 +1910,29 @@ Noticed while mapping; **not fixed here** — flagging for follow-up:
 - **LLM-placeholder tools (stubbed, no model wired):** `blast_draft_email_content`, `blast_suggest_subject_lines`, `blank_generate_form`, `blank_summarize_responses`.
 - **Coverage hotspots worth a deliberate decision:** entire areas have zero MCP tools — Bam attachments/uploads/versions, custom-fields/labels/phases mutations, comment edit/delete, OAuth/guests, iCal, LLM providers, and most SuperUser admin. Decide per-area whether agent access is wanted before filling them in.
 
+## Basis (app)
+
+- **Service:** `apps/basis-api` · external `/basis/api/` · MCP module(s): `basis-tools.ts` · added on the `suite-brainstorm` branch.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /metrics` | `basis_list_metrics` | List governed metrics (certification filter) | `apps/basis/src/lib/api.ts` |
+| `GET /metrics` (name filter) | `basis_search_metrics` | Search metrics by name/slug | — _(skip: same endpoint, client-side filter)_ |
+| `POST /metrics` | `basis_define_metric` | Define a draft metric + first version | `apps/basis/src/lib/api.ts` |
+| `GET /metrics/:id` | `basis_get_metric` | Get metric + current version | `apps/basis/src/lib/api.ts` |
+| `PATCH /metrics/:id` | — _(skip: metadata patch, deferred from MCP)_ | Update metric metadata | `apps/basis/src/lib/api.ts` |
+| `POST /metrics/:id/versions` | `basis_add_metric_version` | New immutable definition version | `apps/basis/src/lib/api.ts` |
+| `GET /metrics/:id/versions` | — _(skip: folded into `basis_get_metric`)_ | Version history | `apps/basis/src/app.tsx` |
+| `POST /metrics/:id/certify` | `basis_certify_metric` | Certify (truth-flip, confirm) | `apps/basis/src/app.tsx` |
+| `POST /metrics/:id/decertify` | `basis_decertify_metric` | Return to draft (confirm) | `apps/basis/src/app.tsx` |
+| `DELETE /metrics/:id` | `basis_deprecate_metric` | Deprecate (destructive, confirm) | `apps/basis/src/app.tsx` |
+| `GET /metrics/:id/resolve` | `basis_metric_lineage` | Query config + presentation envelope | — _(skip: internal Bench binding)_ |
+| `GET /metrics/:id/value` | `basis_metric_value` | Scalar value over a period | — _(skip: agent-only read)_ |
+| `POST /metrics/:id/explain` | `basis_explain_change` / `basis_rank_drivers` | Why did it change (decomposition + per-viewer correlation) | — _(skip: agent-only read)_ |
+| `GET /settings` | — _(skip: org config UI)_ | Per-org Basis settings | `apps/basis/src/app.tsx` |
+| `PUT /settings` | — _(skip: org config UI)_ | Update per-org settings | `apps/basis/src/app.tsx` |
+| `GET /health`, `GET /health/ready` | — _(skip: probe)_ | Health / readiness | — |
+| `/basis/ws` | — _(skip: realtime/ws)_ | Redis-PubSub `explanation.ready` notifications | — |
+
+Also registered as a provider in the platform `search_everything` fan-out. All 12 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`.
+
