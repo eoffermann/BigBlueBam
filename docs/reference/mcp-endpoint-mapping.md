@@ -1929,10 +1929,12 @@ Noticed while mapping; **not fixed here** — flagging for follow-up:
 | `GET /metrics/:id/resolve` | `basis_metric_lineage` | Query config + presentation envelope | — _(skip: internal Bench binding)_ |
 | `GET /metrics/:id/value` | `basis_metric_value` | Scalar value over a period | — _(skip: agent-only read)_ |
 | `POST /metrics/:id/explain` | `basis_explain_change` / `basis_rank_drivers` | Why did it change (decomposition + per-viewer correlation) | — _(skip: agent-only read)_ |
-| `GET /settings` | — _(skip: org config UI)_ | Per-org Basis settings | `apps/basis/src/app.tsx` |
-| `PUT /settings` | — _(skip: org config UI)_ | Update per-org settings | `apps/basis/src/app.tsx` |
+| `GET /settings` | — _(skip: org config UI)_ | Per-org Basis settings | — _(skip: no Settings page shipped yet; client method exists but is uncalled)_ |
+| `PUT /settings` | — _(skip: org config UI)_ | Update per-org settings | — _(skip: no Settings page shipped yet)_ |
 | `GET /health`, `GET /health/ready` | — _(skip: probe)_ | Health / readiness | — |
 | `/basis/ws` | — _(skip: realtime/ws)_ | Redis-PubSub `explanation.ready` notifications | — |
 
-Also registered as a provider in the platform `search_everything` fan-out. All 12 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`.
+A Basis provider for the platform `search_everything` fan-out is **deferred**, not yet registered: it needs a new `metric` entity type in the Wave 2 `can_access` allowlist (`apps/api/src/services/visibility.service.ts`) plus a scored search arm, both cross-cutting. Metrics are searchable today via `basis_search_metrics`. All 12 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`.
+
+**SPA scope note (§5 drift):** the design called for 5 pages (Catalog, Detail, Definition Builder, Why-Did-It-Change Explorer, Settings); 2 shipped (Catalog + Detail, the latter covering define/certify/decertify/deprecate + version history). The Definition Builder, Why-Did-It-Change Explorer, and Settings pages are deferred, so `GET /metrics/:id/value`, `POST /metrics/:id/explain`, and `GET|PUT /settings` have no UI call site yet.
 
