@@ -432,11 +432,63 @@ Submits **Bridle**; retired Bellwether (flags conceded to Seat B's Bracket); ren
 
 ## Phase 3 - Submissions
 
-_(pending)_
+Each seat submitted its single strongest post-debate app.
+
+### SUBMISSION - Seat A: Bosun
+- **One-liner:** A manager for standing autonomous objectives - declare an ongoing goal ("keep Bond deduped," "triage every inbound Helpdesk ticket in 5 min," "chase all stale deals") and a fleet of agents pursues it continuously within a budget, rehearsing high-impact steps and escalating when unsure.
+- **The wedge / why it wins:** Bolt is deterministic (event X -> fixed steps Y); Bosun is goal-directed - a mission owns an objective, a success metric, a token/cost budget, a blast-radius allowlist, and a cadence, and the agent plans and re-plans its own steps across the 804 MCP tools, rehearses anything irreversible before committing, and opens a proposal instead of acting when confidence or impact crosses a threshold. Nothing in the suite owns the *objective* as a first-class, self-correcting, budget-bounded object, so it beats Bolt on the "I don't know all the steps" (adaptivity) axis and a raw LLM loop on the trust axis (budget, allowlist, rehearsal, escalation, audit). Force multiplier for every other seat's idea: B's segment activations, C's community triage, and D's insurance renewal cycles all become more valuable the moment Bosun can run them as safe, standing missions. Chosen over Baton/Backstop/Backlot/Bank because those are safety *components* of trustworthy autonomy, whereas Bosun is the keystone that creates the demand for them.
+- **Scope (v1):** Objects: `mission` (objective, success metric, cost/token budget, cadence, allowlisted apps/tools, escalation policy), `mission_run`, `mission_finding`. Actions: create/pause/adjust a mission; set budget + kill switch; live run timeline; approve/deny escalations; rehearse-before-commit on high-impact steps; replay a run; per-mission spend/impact ledger.
+- **Platform reuse:** `agent_policies` (kill switch + glob allowlist); `agent_proposals` + `proposal_decide` for escalations; `confirm_action` tokens for destructive steps; `can_access` on every touched entity; Bolt events as mission triggers and MCP `/tools/call` (`register-tool.ts` wrapper) as the execution plane; Bench internal query route for success-metric readouts; unified activity log for audit; the worker for the cadence scheduler.
+
+### SUBMISSION - Seat B: Braid
+- **One-liner:** An AI customer-data platform that braids Bond, Helpdesk, Blast, Bill, and Book records into one golden profile per real-world person or company, with agent-driven identity resolution.
+- **The wedge / why it wins:** It is the unification substrate under the whole suite, not analytics on it (Bench) or a metric definition (Basis). The AI-native core is autonomous identity resolution: an agent clusters identities across apps using fuzzy match + embedding similarity + graph signals, attaches a confidence score and evidence trail, and routes sub-threshold merges to a human via `confirm_action`. `entity_links` stores links today but nothing *decides* them, and every other app's numbers get more trustworthy the moment Braid exists. No SMB-priced tool does evidence-scored, human-reviewed identity resolution across a whole app suite - it beats the manual reconciliation spreadsheet on the trust axis and compounds with each new app.
+- **Scope (v1):** Objects: `braid_profile` (golden record), `braid_identity` (source-app member), `braid_merge_decision`. Actions: (1) agent auto-cluster identities into profiles with confidence scores; (2) human review queue to confirm/split/reject a merge; (3) survivorship rules pick the winning field value; (4) query a golden profile's full cross-app timeline; (5) emit `profile.merged`/`profile.split` Bolt events; (6) MCP `braid_resolve(entity)` returning the golden id for any app record.
+- **Platform reuse:** Existing `entity_links` table + fuzzy resolvers as inputs; `search_everything` for candidate discovery; `can_access` on every cited source record; `confirm_action` + `agent_proposals` for HITL merges; RLS + Bolt events; consumed downstream by Bond, Blast, Bill, and (if built) Bridge.
+
+### SUBMISSION - Seat C: Bevy
+- **One-liner:** A public customer community + feedback/ideation board where an AI triage agent clusters, dedupes, and routes every post into the rest of the suite as tracked delivery work, then closes the loop with an auto-authored "Shipped" feed.
+- **The wedge / why it wins:** Every post is a first-class entity the AI links via `entity_links` to a Bam task, Bond deal, Beacon article, or Helpdesk ticket, keeping the link live - when the linked task ships, Bevy auto-generates a "you asked, we built it" entry from the completed Bam/Bolt/Blip activity and notifies every upvoter. A triage agent semantically merges duplicates, tags sentiment/urgency, and drafts replies for human approval. This is the suite's only outward-facing, customer-facing surface and its highest-leverage AI play: it does the triage, dedup, and loop-closing labor SMBs never staff, and it's structurally defensible because standalone community tools (Canny/Discourse) sit outside the system that builds the fix and therefore cannot close the loop. Subsumes a standalone changelog product (Bulletin) as one built-in feature.
+- **Scope (v1):** Objects: `spaces`, `posts` (idea/question/bug), `votes`, `comments`, `statuses`, `shipped_entries`. Actions: submit post (human or agent), AI-cluster-merge duplicates, link post->Bam/Bond/Helpdesk entity, change status with auto-notify upvoters, agent-draft reply into approval queue, auto-generate public roadmap + "Shipped" feed from linked-task states.
+- **Platform reuse:** `can_access` (public vs internal per space); `entity_links` (cross-app loop + provenance); Bolt events (`bevy.post.created`, `bevy.status.changed`, consumes `task.completed`); Qdrant (semantic dedupe clustering); `proposal_create` (HITL reply approval); Bin + `@bigbluebam/storage` (screenshot attachments); token-gated public pages (Bay guest-link pattern); Blast (digest email); full MCP tool surface for agent-run triage.
+
+### SUBMISSION - Seat D: Binder
+- **One-liner:** An AI account manager that reads carrier policy PDFs into structured, queryable coverage and runs the renewal cycle - including client outreach and certificate issuance - end to end.
+- **The wedge / why it wins:** Every legacy agency management system (Applied Epic, AMS360, EZLynx) stores the policy as a dead PDF attachment; Binder is the only proposal here that turns it into reasoning-grade coverage data and then spends that data on the two moments a small agency feels most - renewals (retention and E&O risk) and certificate issuance (the daily grind). It's a full domain workflow an agent runs end to end, grounded on five existing apps, sold to a 2-50 person buyer whose only "modern" option today is a $200/user filing cabinet. Four excellent horizontal tools make the suite more powerful for people who already own it; Binder makes the suite *purchasable by a market that owns nothing modern* - it opens a new buyer instead of deepening an existing one.
+- **Scope (v1):** Objects: Policy, Coverage line, Renewal, Term (versioned), Certificate. Actions: ingest a dec page -> structured Policy for two common P&C lines (commercial GL + commercial auto, deliberately scoped to ship in one cycle); auto-generate the 90/60/30-day renewal timeline; fire a remarket trigger on premium spike >X% or coverage erosion; draft the plain-English client renewal summary; issue and AI-validate an ACORD 25 certificate against the bound coverage; bind and supersede the prior term with full history. Every high-stakes write (bind, cert issue) is `confirm_action`-gated.
+- **Platform reuse:** Bin (`@bigbluebam/storage` + OCR bytes for policy docs), Bond (client/carrier records via `entity_links`), Book (renewal review scheduling), Bill (premium/fee posting), Bolt events (`policy.expiring`, `premium.spiked`), Beacon (coverage-explainer KB), Blast/Banter (renewal outreach dispatch), `@bigbluebam/permissions` + RLS + `can_access`, and the platform `confirm_action` flow. Optionally consumes Seat B's Braid resolver for carrier/named-insured dedupe.
+
+### SUBMISSION - Seat E: Bridle
+- **One-liner:** The agent operations control tower - live flight-recorder, anomaly governance, and kill-switch for the org's own AI agents across all 20 apps, with replay-based eval as a downstream module.
+- **The wedge / why it wins:** Nothing today observes or governs the agents an org has turned loose inside BigBlueBam - Blip watches customer software and Bolt runs automations, but no one watches the automators. Bridle stitches agent heartbeats, the unified agent audit trail, policy decisions, proposals, and per-tool MCP calls into one replayable timeline, then an AI baselines each agent's normal behavior, flags production drift, and drafts a tightened allowlist or kill-switch for a human to approve. The same trace store powers offline eval (replay a past run against a new prompt/model/policy version and assert on outcomes), so it governs live AND regression-tests on one surface. It wins on the trust/governability axis no external tool can touch, because it only exists on our own audit + agent_policies + MCP substrate - it is the app that makes shipping agents safe enough to sell.
+- **Scope (v1):** Objects: agent-run, action-event, anomaly, guardrail-proposal, eval-suite. Actions: `bridle_trace_run` (full replay of one run), `bridle_agent_summary` (cost/tool-mix/blast profile), `bridle_flag_anomaly`, `bridle_propose_policy` (write to agent_policies via proposal), `bridle_kill` (fire the kill switch), `bridle_replay` (dry-run a past run against current policy/model - the eval hook).
+- **Platform reuse:** `agent_policies` + `apps/mcp-server/src/lib/register-tool.ts` middleware, `agent_runners`/heartbeat, `v_activity_unified` + audit log, `agent_proposals`, Bolt events (`agent.anomaly`, `policy.tightened`), outbound webhooks, `can_access` (`apps/api/src/services/visibility.service.ts`), `entity_links`, MCP register-tool.
 
 ## Phase 4 - Overlap resolution
 
-_(pending)_
+**Orchestrator pairwise analysis.** The five submissions were compared pairwise. All ten
+pairs classify as **Distinct** - no perfect overlaps to collapse, no very-similar pairs
+warranting a merge negotiation. Reasoning for the non-obvious pairs:
+
+- **Bosun (A) vs Bridle (E)** - the only pair sharing a domain (agent operations) and the
+  one flagged as a hard tension pre-debate. They are opposite ends of the autonomy
+  lifecycle, not the same app: **Bosun drives** autonomy (declares objectives and makes a
+  fleet of agents pursue them), **Bridle governs** it (observes, baselines, flags drift,
+  and can kill the agents already running). A team plausibly wants both, and Bridle would
+  naturally watch Bosun's own missions. They share substrate (`agent_policies`, the MCP
+  `register-tool` wrapper, the unified audit log) but the user-facing job is inverse -
+  produce autonomous action vs supervise/audit it. Distinct, complementary, not redundant.
+  The debate already carved the closest sub-collision (A's Backstop eval vs Bridle's
+  runtime observability) by lifecycle stage; neither seat submitted that eval app, so no
+  live overlap remains.
+- **Braid (B) vs Binder (D)** - Braid is a horizontal identity-resolution substrate;
+  Binder is a vertical insurance workflow that *optionally consumes* Braid's resolver.
+  Consumer relationship, not overlap. Distinct.
+- **Bevy (C)** is the only outward/customer-facing surface; **Binder (D)** the only vertical
+  wedge. Neither collides with anything. Distinct.
+
+**Outcome:** all five apps survive Phase 4 and proceed to the Phase 5 final vote:
+**Bosun, Braid, Bevy, Binder, Bridle.**
 
 ## Phase 5 - Voting
 
