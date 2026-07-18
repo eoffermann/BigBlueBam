@@ -80,19 +80,45 @@ export function BasisSection() {
         />
         <p className="mt-3 text-center text-sm text-zinc-500">
           The metric catalog: one certified definition per number, with certification badges and a
-          define-a-metric form.
+          guided definition builder.
         </p>
+      </AnimatedReveal>
+
+      <AnimatedReveal delay={0.13} withScale>
+        <div className="mt-8 mx-auto max-w-3xl">
+          <FloatingFrame
+            src="/screenshots/basis/light/builder.png"
+            alt="The Basis definition builder with a governed data source, measure, aggregation, and time column selected from dropdowns"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Define a metric by picking a governed data source and real fields from dropdowns - no SQL,
+            no typing raw column names. The catalog comes straight from Bench's approved sources.
+          </p>
+        </div>
       </AnimatedReveal>
 
       <AnimatedReveal delay={0.15} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
             src="/screenshots/basis/light/metric-detail.png"
-            alt="A Basis metric detail view with certification controls and immutable version history"
+            alt="A Basis metric detail view with the current value, full definition, certification controls, and immutable version history"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Metric detail: certify / decertify / deprecate, and the immutable version history of how
-            the number was defined.
+            Metric detail: the current value at a glance, the full definition it resolves from,
+            certify / decertify / deprecate, and the immutable version history.
+          </p>
+        </div>
+      </AnimatedReveal>
+
+      {/* Dark-mode builder: the whole suite is theme-aware. */}
+      <AnimatedReveal delay={0.18} withScale>
+        <div className="mt-8 mx-auto max-w-3xl">
+          <FloatingFrame
+            src="/screenshots/basis/dark/builder.png"
+            alt="The Basis definition builder in dark mode, with readable field dropdowns"
+          />
+          <p className="mt-3 text-center text-sm text-zinc-500">
+            Light or dark, on the same shared shell as every other app in the suite.
           </p>
         </div>
       </AnimatedReveal>

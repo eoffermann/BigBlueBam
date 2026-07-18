@@ -9,6 +9,10 @@ app: basis
 
 Basis is BigBlueBam's governed metric layer: define a business metric once, certify it, and every app, chart, and agent reads the same trusted definition. It answers two questions the rest of the suite cannot answer on its own - "what does this number actually mean" and "why did it move" - without owning the data or drawing the chart. Basis defines metrics over data that already lives in Bond, Bill, Bam, Blast, and the rest, resolving them through Bench's governed query builder at read time.
 
+![The Basis metric catalog](screenshots/light/01-catalog.png)
+
+![Defining a metric from Bench's governed data-source catalog](screenshots/light/02-builder.png)
+
 ## Key Features
 
 - **One definition of truth.** A metric is an owned, named object with a unit and a favorable direction. Define it once (source product and entity, a measure field plus an aggregation, a time column, optional filters and dimensions) and certify it, and it becomes the org-wide source of truth. Bench widgets can bind to it so the KPI on a dashboard resolves the same certified definition an agent reads.

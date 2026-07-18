@@ -40,6 +40,8 @@ Two pages ship: the **Metric Catalog** (the list plus a definition builder) and 
 
 The catalog is the Basis home page. It lists every metric in your organization in a table with **Name**, **Slug**, **Unit**, and **Certification** columns. The certification cell shows a colored badge: green for **certified**, grey for **draft**, red for **deprecated**.
 
+![Metric Catalog](screenshots/light/01-catalog.png)
+
 To browse and filter metrics:
 
 1. Open `/basis/`. The catalog loads with all metrics.
@@ -51,6 +53,8 @@ A metric whose definition has stopped resolving against its source is flagged wi
 ### Defining a metric
 
 New metrics are created from the **Define a metric** panel below the catalog table. It is a guided builder: the **Data source**, **Measure**, **Aggregation**, **Time column**, and **Default breakdown dimension** dropdowns are populated from Bench's governed data-source catalog, so you reference real approved columns rather than typing raw field names.
+
+![Definition builder with a data source selected](screenshots/light/02-builder.png)
 
 To define a metric:
 
@@ -67,7 +71,9 @@ The new metric is created as a **draft** and its first immutable version is writ
 
 ### The metric detail page
 
-Clicking a catalog row opens the detail page. It shows the metric name with its certification badge, a summary line (`slug - unit - favorable <direction>`), the lifecycle action buttons, and the version history. Use the **Catalog** link at the top to go back.
+Clicking a catalog row (or the **View** link) opens the detail page. It shows the metric name with its certification badge, a summary line (`slug - unit - favorable <direction>`), the current value over the last 30 days, the full definition (source, measure, time column, breakdown, filters), the lifecycle action buttons, and the version history. Use the **Catalog** link at the top to go back.
+
+![Metric detail with current value, definition, and version history](screenshots/light/03-metric-detail.png)
 
 ### The certification lifecycle
 
@@ -144,15 +150,15 @@ Two guardrails apply to agents. First, the truth-changing tools (certify, decert
 **Steps**
 
 1. Open the **Launchpad** in the top bar and choose **Basis** (or go to `/basis/`).
-2. Scroll to the **Define a metric** panel below the catalog.
-3. In **slug (snake_case)** type `daily_coconut_count`.
-4. In **name** type `Daily Coconut Count`.
-5. In **source product** type `bam` and in **source entity** type `tasks`.
-6. In **measure field** type `id`, and in **time column** type `created_at`.
-7. Set **unit** to `count` and **agg** to `count`.
+2. Scroll to the **Define a metric** builder below the catalog.
+3. In **Name** type `Daily Coconut Count`. A snake_case **Slug** (`daily_coconut_count`) is filled in for you.
+4. Open the **Data source** dropdown and choose **Tasks (bam.tasks)**.
+5. In **Measure** pick **Task Count**, and in **Aggregation** pick **count**.
+6. In **Time column** pick **Created**. Optionally set **Default breakdown dimension** to **Priority**.
+7. Set **Unit** to `count` and **Favorable direction** to `up`.
 8. Click **Create draft metric**.
 
-**Result:** The metric is created as a **draft**, its first version is recorded, and you land on the Daily Coconut Count detail page with a grey **draft** badge.
+**Result:** The metric is created as a **draft**, its first version is recorded, and you land on the Daily Coconut Count detail page - which shows the current value over the last 30 days and the definition you just built - with a grey **draft** badge.
 
 **Related:** Certify a metric so the whole org trusts it. An agent can do the same with `basis_define_metric`.
 

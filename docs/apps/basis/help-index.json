@@ -157,7 +157,7 @@
     {
       "anchor": "the-metric-detail-page",
       "title": "The metric detail page",
-      "text": "Clicking a catalog row opens the detail page. It shows the metric name with its certification badge, a summary line (slug - unit - favorable <direction), the lifecycle action buttons, and the version history. Use the Catalog link at the top to go back."
+      "text": "Clicking a catalog row (or the View link) opens the detail page. It shows the metric name with its certification badge, a summary line (slug - unit - favorable <direction), the current value over the last 30 days, the full definition (source, measure, time column, breakdown, filters), the lifecycle action buttons, and the version history. Use the Catalog link at the top to go back."
     },
     {
       "anchor": "the-certification-lifecycle",
@@ -212,7 +212,7 @@
     {
       "anchor": "story-define-your-first-metric",
       "title": "Story: Define your first metric",
-      "text": "Who: Skipper, an org owner setting up a shared number for Gilligan Travel Ltd. Goal: Create a trusted \"Daily Coconut Count\" metric the whole crew can read. Before you start: You are signed in, you have the basis.metric.define permission, and you know where the underlying data lives (here, Bam tasks). Steps 1. Open the Launchpad in the top bar and choose Basis (or go to /basis/). 2. Scroll to the Define a metric panel below the catalog. 3. In slug (snakecase) type dailycoconutcount. 4. In name type Daily Coconut Count. 5. In source product type bam and in source entity type tasks. 6. In measure field type id, and in time column type createdat. 7. Set unit to count and agg to count. 8. Click Create draft metric. Result: The metric is created as a draft, its first version is recorded, and you land on the Daily Coconut Count detail page with a grey draft badge. Related: Certify a metric so the whole org trusts it. An agent can do the same with basisdefinemetric."
+      "text": "Who: Skipper, an org owner setting up a shared number for Gilligan Travel Ltd. Goal: Create a trusted \"Daily Coconut Count\" metric the whole crew can read. Before you start: You are signed in, you have the basis.metric.define permission, and you know where the underlying data lives (here, Bam tasks). Steps 1. Open the Launchpad in the top bar and choose Basis (or go to /basis/). 2. Scroll to the Define a metric builder below the catalog. 3. In Name type Daily Coconut Count. A snakecase Slug (dailycoconutcount) is filled in for you. 4. Open the Data source dropdown and choose Tasks (bam.tasks). 5. In Measure pick Task Count, and in Aggregation pick count. 6. In Time column pick Created. Optionally set Default breakdown dimension to Priority. 7. Set Unit to count and Favorable direction to up. 8. Click Create draft metric. Result: The metric is created as a draft, its first version is recorded, and you land on the Daily Coconut Count detail page - which shows the current value over the last 30 days and the definition you just built - with a grey draft badge. Related: Certify a metric so the whole org trusts it. An agent can do the same with basisdefinemetric."
     },
     {
       "anchor": "story-certify-a-metric-so-the-whole-org-trusts-it",
@@ -260,6 +260,7 @@
     "Certify": "the-certification-lifecycle",
     "Class A vs Class B dimension": "key-concepts",
     "Create draft metric": "defining-a-metric",
+    "Created": "story-define-your-first-metric",
     "Daily Coconut Count": "story-certify-a-metric-so-the-whole-org-trusts-it",
     "Data source": "defining-a-metric",
     "Decertify": "the-certification-lifecycle",
@@ -277,19 +278,23 @@
     "Metric Catalog": "feature-reference",
     "Name": "the-metric-catalog",
     "Possibly related activity": "why-did-it-change-explanation",
+    "Priority": "story-define-your-first-metric",
     "Resolve status": "key-concepts",
     "Settings": "feature-reference",
     "Slug": "the-metric-catalog",
     "Snapshot": "key-concepts",
     "Target and threshold breach": "key-concepts",
+    "Task Count": "story-define-your-first-metric",
+    "Tasks (bam.tasks)": "story-define-your-first-metric",
     "Time column": "defining-a-metric",
     "Unit": "key-concepts",
     "Version": "key-concepts",
     "Version history": "versions-and-version-history",
+    "View": "the-metric-detail-page",
     "Why-Did-It-Change Explorer": "feature-reference",
-    "agg": "story-define-your-first-metric",
     "certification state": "overview",
     "certified": "key-concepts",
+    "count": "story-define-your-first-metric",
     "default decomposition dimension": "per-org-settings",
     "definitions": "overview",
     "deprecated": "key-concepts",
@@ -297,18 +302,11 @@
     "explanation": "overview",
     "explanation cache TTL": "per-org-settings",
     "governance": "overview",
-    "measure field": "story-define-your-first-metric",
     "metric detail": "feature-reference",
     "metrics": "overview",
-    "name": "story-define-your-first-metric",
-    "slug (snake_case)": "story-define-your-first-metric",
     "snapshot retention window": "per-org-settings",
     "snapshots": "metric-values-and-snapshots",
-    "source entity": "story-define-your-first-metric",
-    "source product": "story-define-your-first-metric",
     "target": "targets-and-movement-alerts",
-    "time column": "story-define-your-first-metric",
-    "unit": "story-define-your-first-metric",
     "versions": "overview"
   },
   "crossrefs": [
