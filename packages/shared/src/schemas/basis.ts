@@ -124,6 +124,18 @@ export const basisDriverSchema = z.object({
   hidden_count: z.number().int().nonnegative().optional(),
 });
 
+// A possibly-related-activity item (spec 2.1/2.3): a per-viewer, access-scoped
+// cross-app event that may correlate with a metric move. Ranked below drivers and
+// never a causal claim.
+export const basisCorrelationItemSchema = z.object({
+  source_app: z.string(),
+  entity_type: z.string(),
+  entity_id: z.string(),
+  action: z.string(),
+  actor_id: z.string().nullable(),
+  created_at: z.string(),
+});
+
 export const basisExplanationSchema = z.object({
   metric_id: z.string().uuid(),
   version_id: z.string().uuid(),
@@ -134,7 +146,7 @@ export const basisExplanationSchema = z.object({
   delta_pct: z.number().nullable(),
   drivers: z.array(basisDriverSchema),
   narrative: z.string().nullable(),
-  correlation: z.array(z.record(z.string(), z.unknown())).default([]),
+  correlation: z.array(basisCorrelationItemSchema).default([]),
   computed_at: z.string().datetime().optional(),
 });
 
@@ -225,6 +237,7 @@ export type CreateBasisVersionInput = z.infer<typeof createBasisVersionSchema>;
 export type BasisExplainRequest = z.infer<typeof basisExplainRequestSchema>;
 export type BasisDriver = z.infer<typeof basisDriverSchema>;
 export type BasisExplanation = z.infer<typeof basisExplanationSchema>;
+export type BasisCorrelationItem = z.infer<typeof basisCorrelationItemSchema>;
 export type UpdateBasisOrgSettingsInput = z.infer<typeof updateBasisOrgSettingsSchema>;
 export type BasisMetric = z.infer<typeof basisMetricSchema>;
 export type BasisMetricVersion = z.infer<typeof basisMetricVersionSchema>;

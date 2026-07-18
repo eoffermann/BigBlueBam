@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import type { BasisDefinition } from '@bigbluebam/shared';
+import type { BasisDefinition, BasisCorrelationItem } from '@bigbluebam/shared';
 import { canAccessEntity } from '../lib/can-access.client.js';
 
 // Possibly-related-activity plane (spec 2.1 / 2.3). Separate from and ranked below
@@ -14,14 +14,7 @@ import { canAccessEntity } from '../lib/can-access.client.js';
 // activity caused the change, only that it happened in the same window on related
 // entities the viewer can access.
 
-export interface CorrelationItem {
-  source_app: string;
-  entity_type: string;
-  entity_id: string;
-  action: string;
-  actor_id: string | null;
-  created_at: string;
-}
+export type CorrelationItem = BasisCorrelationItem;
 
 interface Row {
   source_app: string;
