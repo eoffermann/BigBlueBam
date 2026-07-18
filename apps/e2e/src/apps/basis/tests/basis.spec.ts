@@ -13,18 +13,23 @@ test.describe('Basis — governed metric layer', () => {
     await page.goto('/basis/');
     await expect(page.getByRole('heading', { name: 'Metric Catalog' })).toBeVisible();
 
-    // 2. Define a draft metric via the form.
-    await page.getByTestId('field-slug').fill(slug);
+    // 2. Define a draft metric via the definition builder. Source/measure/agg/
+    //    time column come from Bench's governed catalog (real dropdowns), so pick
+    //    bam.tasks -> count(id) over created_at (a source that resolves).
     await page.getByTestId('field-name').fill(name);
-    await page.getByTestId('field-source_product').fill('bill');
-    await page.getByTestId('field-source_entity').fill('invoices');
-    await page.getByTestId('field-field').fill('amount');
-    await page.getByTestId('field-time_column').fill('created_at');
+    await page.getByTestId('field-slug').fill(slug);
+    await page.getByTestId('field-source').selectOption('bam/tasks');
+    await page.getByTestId('field-measure').selectOption('id');
+    await page.getByTestId('field-agg').selectOption('count');
+    await page.getByTestId('field-timecol').selectOption('created_at');
+    await page.getByTestId('field-unit').selectOption('count');
     await page.getByTestId('create-metric').click();
 
-    // 3. Redirects to the detail page for the new draft.
+    // 3. Redirects to the detail page for the new draft, which shows the
+    //    definition it was built from.
     await expect(page.getByTestId('metric-name')).toHaveText(name);
     await expect(page.getByTestId('cert-badge')).toHaveText('draft');
+    await expect(page.getByTestId('definition')).toContainText('bam.tasks');
 
     // 4. Certify it -> badge flips to certified.
     await page.getByTestId('certify').click();

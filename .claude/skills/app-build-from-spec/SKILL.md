@@ -59,6 +59,20 @@ autonomously, start to finish.
    dismiss them).
 7. House rules: no `Co-Authored-By` footer; no em dashes in committed docs; small commits
    with meaningful messages; migrations numbered/idempotent and never edited after apply.
+8. **MCP parity is a hard gate, not a nice-to-have (this is an AI-first WorkOS).** The
+   defining premise of the suite is the human + agent dual interface: every capability is
+   reachable by both humans (UI + REST) and AI agents (MCP tools), on the same data, under
+   the same permissions and audit trail. Therefore, for the app you build: **every REST
+   API endpoint AND every action a human user can take in the interface has an equivalent
+   MCP tool.** An endpoint or a UI button that no agent can drive is a parity hole and the
+   app is not done. The ONLY acceptable absences are explicitly-annotated skips in the
+   surface map (see Phase 1c) for the narrow, sanctioned categories - auth, multipart/binary
+   upload/download, public-inbound webhooks, SuperUser/permission-matrix administration,
+   internal service-to-service, realtime/Yjs transport, and "resolver-done-internally".
+   A skip is a decision you write down with a reason, never a bare gap you leave behind.
+   Do not treat MCP tools as an afterthought bolted on at the end: design the tool surface
+   alongside the routes, and never ship an endpoint or a UI action in one milestone and
+   "add the tool later" in another - they land together.
 
 ## Phase 0 - Load the spec and plan
 
@@ -67,16 +81,29 @@ autonomously, start to finish.
    data model + migration plan, API/MCP surface, workers, events, infra section, and the
    **Reuse ledger** (it names the exact packages/siblings to build on).
 2. Confirm you are on `suite-brainstorm` (`git switch suite-brainstorm`); if the tree is
-   dirty, stop and report rather than guessing.
-3. Turn the spec into an ordered milestone plan with `TaskCreate`, roughly:
+   dirty, stop and report rather than guessing.   
+3. Turn the spec into an ordered milestone plan, roughly:
    M1 scaffold (`apps/<app>-api` + `apps/<app>` from the sibling the spec models on) ·
    M2 data model (Drizzle schema modules + numbered idempotent migrations; run
    `docker compose run --rm migrate`) · M3 shared Zod (`packages/shared/src/schemas/<app>.ts`) ·
-   M4 API routes + realtime · M5 MCP tools + agent_policies/allowlist + surface-map ·
-   M6 workers + Bolt events (register in `event-catalog.ts`) · M7 frontend SPA
+   M4 API routes + realtime · M5 **MCP tool surface at full parity** (one `<app>_*` tool
+   per REST endpoint and per human UI action, registered through `registerTool()`;
+   `<app>.*` `agent_policies` allowlist; `confirm_action` on every destructive tool;
+   `docs/reference/mcp-endpoint-mapping.md` rows for every endpoint - tool name or annotated
+   skip, never a bare gap - see Phase 1c) · M6 workers + Bolt events (register in
+   `event-catalog.ts`) · M7 frontend SPA
    (**must match `/b3/` shell + include the Bureau widget - see Phase 1b**) ·
-   M8 **Launchpad + infra wiring** (see Phase 2) · M9 docs · M10 screenshots ·
-   M11 marketing site. Sequence per the spec's own dependency order.
+   M8 **Launchpad + infra wiring** (see Phase 2) · M9 documentation, including Help docs
+   (**must match `/b3/` help doc format including index, user story examples, etc.,
+   M10 screenshots, M11 marketing site. Sequence per the spec's own dependency order and
+   write a checklist of milestones for asynchronous human inspection and review in
+   `docs/brainstorming/<stamp>_WORK_IN_PROGRESS_<app>.md`. For each step include a checkbox,
+   the milestone name, a detailed description of what that milestone will include, including
+   individual checkboxes for steps inside the milestone itself.
+4. Launch an adversarial agent to check over this milestone plan, comparing it to the app
+   design, and fleshing out the details of the milestone plan based on information contained
+   in that app design.
+5. Turn the spec into an ordered milestone plan with `TaskCreate`.
 
 ## Phase 1 - Implement with commit discipline
 
@@ -139,6 +166,67 @@ Required, non-negotiable, for every app's SPA:
 Acceptance: side-by-side with `/b3/`, the sidebar, top bar, Launchpad, colors, and Bureau
 box are visually the same family; only the app's content differs. If any of the above is
 missing or bespoke, the SPA milestone (M7) is not complete.
+
+## Phase 1c - MCP tool surface at full parity (mandatory - the AI-first contract)
+
+**BigBlueBam is an AI-first WorkOS. Its defining guarantee is the human + agent
+dual interface: every capability is reachable by both a person (UI + REST) and an AI agent
+(an MCP tool), on the same boards, under the same roles, RLS, and append-only audit trail -
+not a separate, weaker API bolted on the side.** For the app you are building this means a
+non-negotiable, verifiable rule:
+
+> **Every REST API endpoint you add, and every action a human user can take in the app's
+> interface, has an equivalent MCP tool.** No endpoint and no user-facing action ships
+> agent-blind. The agent can do everything the human can do.
+
+This is not an end-of-build cleanup step. Design the `<app>_*` tool surface alongside the
+routes in M4/M5 and build them in the same slices - an endpoint or a UI action and its tool
+land in the same commit, never "tool added later". If you catch yourself shipping a route
+or a button with no tool, stop and build the tool before moving on.
+
+**How to build each tool (mirror the newest sibling, e.g. `apps/mcp-server/src/tools/`):**
+
+- Add a handler module `apps/mcp-server/src/tools/<app>-tools.ts` (split into a few modules
+  if the surface is large, as Bam does). Type every tool's input/output off the shared Zod
+  schemas from M3 (`@bigbluebam/shared`) so the tool and the endpoint validate identically.
+- Register **every** tool through `registerTool()` in `apps/mcp-server/src/lib/register-tool.ts`.
+  That wrapper is what enforces the platform's agent governance: the per-session `PolicyGate`
+  fail-closes each service-account call against `agent_policies` (human callers bypass;
+  unknown callers fail closed). Do not hand-register or bypass the wrapper.
+- Add the app's glob to the `agent_policies` allowlist model (`<app>.*`), so an operator can
+  scope or kill-switch the app's tools per agent. Name tools `<app>_<verb>_<noun>` so the
+  glob actually gates them.
+- **Every destructive or high-impact tool** (delete, complete, end, archive, bulk-mutate,
+  anything not safely idempotent) routes through the `confirm_action` two-step token flow -
+  first call stages and returns a token, second call replays it. Do not invent your own
+  confirmation.
+- Any tool that surfaces cross-app results into a shared surface must run the `can_access`
+  visibility preflight for every cited entity (per `docs/reference/agent-conventions.md`),
+  using the human's `asker_user_id`, and drop anything the audience may not see.
+- Read tools count too: list/get/search endpoints and any UI view that fetches data get a
+  read tool (`<app>_list_*`, `<app>_get_*`, `<app>_search_*`), so an agent can observe the
+  same state a human sees, not just mutate.
+
+**Prove parity with the surface map (`docs/reference/mcp-endpoint-mapping.md`):**
+
+- In the SAME change that adds each endpoint/tool/UI call site, add its row to the map. The
+  MCP column is **either a real backtick-wrapped tool name or an explicit
+  ` - _(skip: <reason>)_`, never a bare ` - `.** A bare gap is a build defect.
+- The only sanctioned skip reasons are the narrow categories from gate 8: auth,
+  multipart/binary upload/download, public-inbound webhook, SuperUser/permission-matrix
+  admin, internal service-to-service, realtime/Yjs transport, resolver-done-internally.
+  If your reason is not one of these, the answer is "build the tool", not "skip it".
+- Run the self-check and make it print `0` before calling M5 done:
+  `grep -cE '^\| \`[^|]+\` \| - \|' docs/reference/mcp-endpoint-mapping.md`.
+- Also cross-walk the UI: for every button, menu action, and form-submit in the SPA (M7),
+  confirm there is a tool that performs the same action. A UI action with no tool is the
+  most common parity hole because it is not caught by a REST-row scan - check it explicitly.
+
+Acceptance: the app's every REST endpoint and every human UI action either maps to a named
+`<app>_*` MCP tool or carries an annotated, sanctioned skip; all tools register through
+`registerTool()`; destructive tools are `confirm_action`-gated; the `<app>.*` allowlist
+exists; and the surface-map self-check prints `0`. If any of these is untrue, M5 is not
+complete - regardless of how finished the REST and UI layers look.
 
 ## Phase 2 - Launchpad + infra wiring (do not skip)
 
@@ -219,6 +307,16 @@ package first, then the suite); `pnpm db:check` and `pnpm lint:migrations`;
 Distinguish flaky from real reds and fix flakiness durably (shard/raise timeouts) - do not
 paper over it. CI on the pushed branch must be green.
 
+**MCP parity gate (hard).** The surface-map self-check
+(`grep -cE '^\| \`[^|]+\` \| - \|' docs/reference/mcp-endpoint-mapping.md` prints `0`) must
+pass, AND you must actively verify parity rather than trust it: walk the app's route table
+and confirm each endpoint has a named tool or a sanctioned annotated skip, then walk the
+SPA's user-facing actions and confirm each has an equivalent `<app>_*` tool. Spot-check by
+driving a representative slice of the app end-to-end **through MCP tools alone** (agent
+service account against the local stack) and confirm the same backend rows/events appear as
+when a human drives the UI. A UI action or endpoint with no agent path is a build defect -
+file it and fix it, do not accept it as a gap.
+
 **End-to-end user-story testing (required for every deployed app).** Once the app is live
 on the local Docker dev stack, exercise it the way a user would:
 
@@ -246,10 +344,14 @@ not as an acceptable gap.
 - **Docs:** author `docs/apps/<app>/help.md` via the `help-doc-authoring` skill, build its
   `help-index.json` (`help-index-builder`), and wire the Help Center (`suite-help-system`).
   Update `docs/reference/mcp-endpoint-mapping.md` and the `CLAUDE.md` app list.
+- **MCP Tooling:** The Docs for the new app (and the Marketing site described below) should
+  include the tool count for MCP tools on this app. The total MCP tool count should be
+  updated wherever this is referenced.
 - **Screenshots:** capture via the `screenshot-capture` skill against the **gilligan**
   project only; seed gilligan data for the new app first if needed. Never generic data.
 - **Marketing site:** add the app to the `site/` marketing content (card/section, and the
-  manual/book artifacts if the pipeline covers it). Note that `site` bakes `site/public/`
+  manual/book artifacts if the pipeline covers it). MCP Tool Counts should be updated
+  in the Marketing site anywhere that it mentions them. Note that `site` bakes `site/public/`
   and its content at image build time, so rebuild the `site` service to see it locally.
 
 ## Phase 6 - Record the cycle (do NOT stop or wait)
@@ -274,4 +376,8 @@ The new app is implemented, wired into the Launchpad and the stack, deployed to 
 dev environment, passing extensive tests with green branch CI, documented, screenshotted
 (gilligan), and represented on the marketing site - all on `suite-brainstorm`, produced
 fully autonomously with no human pause - and every automated-review finding addressed.
+**Its MCP surface is at full parity: every REST endpoint and every human UI action has an
+equivalent `<app>_*` MCP tool (or a sanctioned, annotated skip), all registered through
+`registerTool()` with the `<app>.*` allowlist and `confirm_action` on destructive tools, and
+the surface-map self-check prints `0`** - the app is as operable by an agent as by a person.
 Whether any of it ever reaches `main` is a separate human choice the loop does not wait on.

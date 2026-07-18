@@ -34,7 +34,7 @@ Before Basis is useful you need an organization with some source data an app alr
 
 ## Feature reference
 
-Two pages ship today: the **Metric Catalog** (the list plus the define form) and the **metric detail** page (a single metric's actions and version history). The value, explanation, and per-org settings capabilities described below are implemented in the API and MCP layer; their dedicated UI pages (a Definition Builder, a Why-Did-It-Change Explorer, and a Settings page) are planned and not in the SPA yet. Where a capability is API or agent only today, it is called out.
+Two pages ship: the **Metric Catalog** (the list plus a definition builder) and the **metric detail** page (the current value, the full definition, the lifecycle actions, and version history). The define form is a real builder that pulls Bench's governed data-source catalog, so you pick a source and its real fields from dropdowns. The **Why-Did-It-Change Explorer** and a dedicated **Settings** page are the remaining planned UI; the explanation and settings capabilities are fully available through the API and MCP tools in the meantime, and are called out where relevant below.
 
 ### The Metric Catalog
 
@@ -50,19 +50,18 @@ A metric whose definition has stopped resolving against its source is flagged wi
 
 ### Defining a metric
 
-New metrics are created from the **Define a metric** panel below the catalog table. Every field maps directly to the metric definition.
+New metrics are created from the **Define a metric** panel below the catalog table. It is a guided builder: the **Data source**, **Measure**, **Aggregation**, **Time column**, and **Default breakdown dimension** dropdowns are populated from Bench's governed data-source catalog, so you reference real approved columns rather than typing raw field names.
 
 To define a metric:
 
 1. On `/basis/`, scroll to **Define a metric**.
-2. Fill in **slug (snake_case)** - a stable id unique within your org, for example `daily_coconut_count`. This is how apps and agents reference the metric.
-3. Fill in **name** - the human label, for example `Daily Coconut Count`.
-4. Fill in **source product** and **source entity** - where the data lives, for example `bill` and `invoices`, or `bam` and `tasks`.
-5. Fill in **measure field** - the column to aggregate, for example `amount`.
-6. Fill in **time column** - the column periods are measured against, for example `created_at`.
-7. Choose a **unit** from the dropdown: currency, count, percent, ratio, or duration_ms.
-8. Choose an **agg** (aggregation) from the dropdown: sum, count, avg, min, or max.
-9. Click **Create draft metric**.
+2. Type a **Name** (for example `Daily Coconut Count`). A snake_case **Slug** is suggested automatically; edit it if you want a different stable id.
+3. Choose a **Data source** from the dropdown (for example `Tasks (bam.tasks)` or `Invoices (bill.invoices)`).
+4. Choose a **Measure** field from that source (the list is the source's real measurable fields), then an **Aggregation** (only the aggregations valid for that field are offered).
+5. Choose a **Time column** (the source's date/time fields) - the column periods are measured against.
+6. Optionally choose a **Default breakdown dimension** (a categorical field of the source) used when explaining a change.
+7. Choose a **Unit** (currency, count, percent, ratio, or duration_ms) and a **Favorable direction** (up, down, or neutral).
+8. Click **Create draft metric**. You land on the new metric's detail page.
 
 The new metric is created as a **draft** and its first immutable version is written. You land on its detail page. If the definition cannot be created (for example an invalid source), an error appears under the form rather than creating a broken metric.
 
@@ -99,7 +98,7 @@ Every change to a definition writes a new immutable version and increments the v
 
 The current scalar value of a metric over a period is computed on demand by resolving the definition through Bench's governed query route (Basis never queries source data directly). Separately, a background job captures **snapshots** of every certified metric on a schedule (hourly and daily grains) so that movement over time and threshold breaches can be evaluated without recomputing history. A retention sweep ages snapshots out per your org's retention window.
 
-Reading a single value today is an API and agent capability (`GET /metrics/:id/value`, or the `basis_metric_value` MCP tool); the on-page value display arrives with the Definition Builder.
+The metric detail page shows the current value over a trailing 30-day window; it degrades gracefully to a note if Bench is briefly unavailable or the definition no longer resolves. Agents read the same value with the `basis_metric_value` MCP tool (`GET /metrics/:id/value`).
 
 ### Why did it change (explanation)
 
@@ -130,7 +129,7 @@ Basis wears the same chrome as every other app. The left sidebar carries the Bas
 
 ### Working with AI agents
 
-Basis exposes MCP tools so agents read and manage the same certified metrics you do. The read tools are `basis_list_metrics`, `basis_search_metrics`, `basis_get_metric`, `basis_metric_value`, and `basis_metric_lineage`. The explanation tools are `basis_explain_change` and `basis_rank_drivers`; both require the human's `asker_user_id` so the per-entity, access-scoped visibility rules are enforced for the person the agent is acting on behalf of. The write tools are `basis_define_metric`, `basis_add_metric_version`, `basis_certify_metric`, `basis_decertify_metric`, and `basis_deprecate_metric`.
+Basis exposes 16 MCP tools so agents read and manage the same certified metrics you do. The read tools are `basis_list_metrics`, `basis_search_metrics`, `basis_get_metric`, `basis_list_versions`, `basis_metric_value`, `basis_metric_lineage`, and `basis_get_settings`. The explanation tools are `basis_explain_change` and `basis_rank_drivers`; both require the human's `asker_user_id` so the per-entity, access-scoped visibility rules are enforced for the person the agent is acting on behalf of. The write tools are `basis_define_metric`, `basis_update_metric`, `basis_add_metric_version`, `basis_certify_metric`, `basis_decertify_metric`, `basis_deprecate_metric`, and `basis_update_settings`. Every REST endpoint and every action in the UI has an equivalent tool, so an agent can do everything a human can.
 
 Two guardrails apply to agents. First, the truth-changing tools (certify, decertify, deprecate, and versioning) use the platform two-step confirmation: the first call returns a preview of exactly what will change, and only a second call with `confirm_action: true` performs the change, so a reviewer can catch an unintended flip. Second, every `basis.*` tool is fail-closed under agent policies: a service account cannot call any Basis tool until an operator has allowlisted `basis.*` for it. For the full catalog and argument shapes see the Basis MCP-tools reference.
 
@@ -182,7 +181,7 @@ Two guardrails apply to agents. First, the truth-changing tools (certify, decert
 **Steps**
 
 1. Open the metric from the catalog.
-2. Add a new version with the corrected definition (today an agent does this with `basis_add_metric_version`, confirming the change; the on-page Definition Builder is planned).
+2. Add a new version with the corrected definition. The builder creates new metrics; there is no on-page version editor yet, so revising an existing metric's definition is done with the `basis_add_metric_version` MCP tool (confirming the change), or by an agent on your behalf.
 3. Return to the detail page and check **Version history**.
 
 **Result:** A new version appears at the top of the version history with its number and timestamp; the previous version is preserved unchanged. Movement history re-baselines from the new definition.

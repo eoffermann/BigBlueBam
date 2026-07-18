@@ -142,7 +142,7 @@
     {
       "anchor": "feature-reference",
       "title": "Feature reference",
-      "text": "Two pages ship today: the Metric Catalog (the list plus the define form) and the metric detail page (a single metric's actions and version history). The value, explanation, and per-org settings capabilities described below are implemented in the API and MCP layer; their dedicated UI pages (a Definition Builder, a Why-Did-It-Change Explorer, and a Settings page) are planned and not in the SPA yet. Where a capability is API or agent only today, it is called out."
+      "text": "Two pages ship: the Metric Catalog (the list plus a definition builder) and the metric detail page (the current value, the full definition, the lifecycle actions, and version history). The define form is a real builder that pulls Bench's governed data-source catalog, so you pick a source and its real fields from dropdowns. The Why-Did-It-Change Explorer and a dedicated Settings page are the remaining planned UI; the explanation and settings capabilities are fully available through the API and MCP tools in the meantime, and are called out where relevant below."
     },
     {
       "anchor": "the-metric-catalog",
@@ -152,7 +152,7 @@
     {
       "anchor": "defining-a-metric",
       "title": "Defining a metric",
-      "text": "New metrics are created from the Define a metric panel below the catalog table. Every field maps directly to the metric definition. To define a metric: 1. On /basis/, scroll to Define a metric. 2. Fill in slug (snakecase) - a stable id unique within your org, for example dailycoconutcount. This is how apps and agents reference the metric. 3. Fill in name - the human label, for example Daily Coconut Count. 4. Fill in source product and source entity - where the data lives, for example bill and invoices, or bam and tasks. 5. Fill in measure field - the column to aggregate, for example amount. 6. Fill in time column - the column periods are measured against, for example createdat. 7. Choose a unit from the dropdown: currency, count, percent, ratio, or durationms. 8. Choose an agg (aggregation) from the dropdown: sum, count, avg, min, or max. 9. Click Create draft metric. The new metric is created as a draft and its first immutable version is written. You land on its detail page. If the definition cannot be created (for example an invalid source), an error appears under the form rather than creating a broken metric."
+      "text": "New metrics are created from the Define a metric panel below the catalog table. It is a guided builder: the Data source, Measure, Aggregation, Time column, and Default breakdown dimension dropdowns are populated from Bench's governed data-source catalog, so you reference real approved columns rather than typing raw field names. To define a metric: 1. On /basis/, scroll to Define a metric. 2. Type a Name (for example Daily Coconut Count). A snakecase Slug is suggested automatically; edit it if you want a different stable id. 3. Choose a Data source from the dropdown (for example Tasks (bam.tasks) or Invoices (bill.invoices)). 4. Choose a Measure field from that source (the list is the source's real measurable fields), then an Aggregation (only the aggregations valid for that field are offered). 5. Choose a Time column (the source's date/time fields) - the column periods are measured against. 6. Optionally choose a Default breakdown dimension (a categorical field of the source) used when explaining a change. 7. Choose a Unit (currency, count, percent, ratio, or durationms) and a Favorable direction (up, down, or neutral). 8. Click Create draft metric. You land on the new metric's detail page. The new metric is created as a draft and its first immutable version is written. You land on its detail page. If the definition cannot be created (for example an invalid source), an error appears under the form rather than creating a broken metric."
     },
     {
       "anchor": "the-metric-detail-page",
@@ -172,7 +172,7 @@
     {
       "anchor": "metric-values-and-snapshots",
       "title": "Metric values and snapshots",
-      "text": "The current scalar value of a metric over a period is computed on demand by resolving the definition through Bench's governed query route (Basis never queries source data directly). Separately, a background job captures snapshots of every certified metric on a schedule (hourly and daily grains) so that movement over time and threshold breaches can be evaluated without recomputing history. A retention sweep ages snapshots out per your org's retention window. Reading a single value today is an API and agent capability (GET /metrics/:id/value, or the basismetricvalue MCP tool); the on-page value display arrives with the Definition Builder."
+      "text": "The current scalar value of a metric over a period is computed on demand by resolving the definition through Bench's governed query route (Basis never queries source data directly). Separately, a background job captures snapshots of every certified metric on a schedule (hourly and daily grains) so that movement over time and threshold breaches can be evaluated without recomputing history. A retention sweep ages snapshots out per your org's retention window. The metric detail page shows the current value over a trailing 30-day window; it degrades gracefully to a note if Bench is briefly unavailable or the definition no longer resolves. Agents read the same value with the basismetricvalue MCP tool (GET /metrics/:id/value)."
     },
     {
       "anchor": "why-did-it-change-explanation",
@@ -202,7 +202,7 @@
     {
       "anchor": "working-with-ai-agents",
       "title": "Working with AI agents",
-      "text": "Basis exposes MCP tools so agents read and manage the same certified metrics you do. The read tools are basislistmetrics, basissearchmetrics, basisgetmetric, basismetricvalue, and basismetriclineage. The explanation tools are basisexplainchange and basisrankdrivers; both require the human's askeruserid so the per-entity, access-scoped visibility rules are enforced for the person the agent is acting on behalf of. The write tools are basisdefinemetric, basisaddmetricversion, basiscertifymetric, basisdecertifymetric, and basisdeprecatemetric. Two guardrails apply to agents. First, the truth-changing tools (certify, decertify, deprecate, and versioning) use the platform two-step confirmation: the first call returns a preview of exactly what will change, and only a second call with confirmaction: true performs the change, so a reviewer can catch an unintended flip. Second, every basis. tool is fail-closed under agent policies: a service account cannot call any Basis tool until an operator has allowlisted basis. for it. For the full catalog and argument shapes see the Basis MCP-tools reference."
+      "text": "Basis exposes 16 MCP tools so agents read and manage the same certified metrics you do. The read tools are basislistmetrics, basissearchmetrics, basisgetmetric, basislistversions, basismetricvalue, basismetriclineage, and basisgetsettings. The explanation tools are basisexplainchange and basisrankdrivers; both require the human's askeruserid so the per-entity, access-scoped visibility rules are enforced for the person the agent is acting on behalf of. The write tools are basisdefinemetric, basisupdatemetric, basisaddmetricversion, basiscertifymetric, basisdecertifymetric, basisdeprecatemetric, and basisupdatesettings. Every REST endpoint and every action in the UI has an equivalent tool, so an agent can do everything a human can. Two guardrails apply to agents. First, the truth-changing tools (certify, decertify, deprecate, and versioning) use the platform two-step confirmation: the first call returns a preview of exactly what will change, and only a second call with confirmaction: true performs the change, so a reviewer can catch an unintended flip. Second, every basis. tool is fail-closed under agent policies: a service account cannot call any Basis tool until an operator has allowlisted basis. for it. For the full catalog and argument shapes see the Basis MCP-tools reference."
     },
     {
       "anchor": "user-stories",
@@ -222,7 +222,7 @@
     {
       "anchor": "story-revise-a-certified-metrics-definition",
       "title": "Story: Revise a certified metric's definition",
-      "text": "Who: The Professor, who realizes the count should exclude cancelled tasks. Goal: Change the definition without losing the history of how it was defined before. Before you start: The metric is certified and you have the basis.metric.version permission. Steps 1. Open the metric from the catalog. 2. Add a new version with the corrected definition (today an agent does this with basisaddmetricversion, confirming the change; the on-page Definition Builder is planned). 3. Return to the detail page and check Version history. Result: A new version appears at the top of the version history with its number and timestamp; the previous version is preserved unchanged. Movement history re-baselines from the new definition. Related: Ask why a certified metric moved."
+      "text": "Who: The Professor, who realizes the count should exclude cancelled tasks. Goal: Change the definition without losing the history of how it was defined before. Before you start: The metric is certified and you have the basis.metric.version permission. Steps 1. Open the metric from the catalog. 2. Add a new version with the corrected definition. The builder creates new metrics; there is no on-page version editor yet, so revising an existing metric's definition is done with the basisaddmetricversion MCP tool (confirming the change), or by an agent on your behalf. 3. Return to the detail page and check Version history. Result: A new version appears at the top of the version history with its number and timestamp; the previous version is preserved unchanged. Movement history re-baselines from the new definition. Related: Ask why a certified metric moved."
     },
     {
       "anchor": "story-deprecate-a-metric-you-no-longer-trust",
@@ -246,6 +246,7 @@
     }
   ],
   "labels": {
+    "Aggregation": "defining-a-metric",
     "All": "the-metric-catalog",
     "Basis": "where-to-find-it",
     "Basis MCP-tools reference": "related",
@@ -260,7 +261,9 @@
     "Class A vs Class B dimension": "key-concepts",
     "Create draft metric": "defining-a-metric",
     "Daily Coconut Count": "story-certify-a-metric-so-the-whole-org-trusts-it",
+    "Data source": "defining-a-metric",
     "Decertify": "the-certification-lifecycle",
+    "Default breakdown dimension": "defining-a-metric",
     "Define a metric": "defining-a-metric",
     "Definition": "key-concepts",
     "Deprecate": "the-certification-lifecycle",
@@ -269,18 +272,22 @@
     "Driver": "key-concepts",
     "Favorable direction": "key-concepts",
     "Launchpad": "where-to-find-it",
+    "Measure": "defining-a-metric",
     "Metric": "key-concepts",
     "Metric Catalog": "feature-reference",
     "Name": "the-metric-catalog",
     "Possibly related activity": "why-did-it-change-explanation",
     "Resolve status": "key-concepts",
+    "Settings": "feature-reference",
     "Slug": "the-metric-catalog",
     "Snapshot": "key-concepts",
     "Target and threshold breach": "key-concepts",
+    "Time column": "defining-a-metric",
     "Unit": "key-concepts",
     "Version": "key-concepts",
     "Version history": "versions-and-version-history",
-    "agg": "defining-a-metric",
+    "Why-Did-It-Change Explorer": "feature-reference",
+    "agg": "story-define-your-first-metric",
     "certification state": "overview",
     "certified": "key-concepts",
     "default decomposition dimension": "per-org-settings",
@@ -290,18 +297,18 @@
     "explanation": "overview",
     "explanation cache TTL": "per-org-settings",
     "governance": "overview",
-    "measure field": "defining-a-metric",
+    "measure field": "story-define-your-first-metric",
     "metric detail": "feature-reference",
     "metrics": "overview",
-    "name": "defining-a-metric",
-    "slug (snake_case)": "defining-a-metric",
+    "name": "story-define-your-first-metric",
+    "slug (snake_case)": "story-define-your-first-metric",
     "snapshot retention window": "per-org-settings",
     "snapshots": "metric-values-and-snapshots",
-    "source entity": "defining-a-metric",
-    "source product": "defining-a-metric",
+    "source entity": "story-define-your-first-metric",
+    "source product": "story-define-your-first-metric",
     "target": "targets-and-movement-alerts",
-    "time column": "defining-a-metric",
-    "unit": "defining-a-metric",
+    "time column": "story-define-your-first-metric",
+    "unit": "story-define-your-first-metric",
     "versions": "overview"
   },
   "crossrefs": [

@@ -1920,21 +1920,21 @@ Noticed while mapping; **not fixed here** — flagging for follow-up:
 | `GET /metrics` (name filter) | `basis_search_metrics` | Search metrics by name/slug | — _(skip: same endpoint, client-side filter)_ |
 | `POST /metrics` | `basis_define_metric` | Define a draft metric + first version | `apps/basis/src/lib/api.ts` |
 | `GET /metrics/:id` | `basis_get_metric` | Get metric + current version | `apps/basis/src/lib/api.ts` |
-| `PATCH /metrics/:id` | — _(skip: metadata patch, deferred from MCP)_ | Update metric metadata | `apps/basis/src/lib/api.ts` |
+| `PATCH /metrics/:id` | `basis_update_metric` | Update metric metadata (name/owner/target/...) | `apps/basis/src/lib/api.ts` |
 | `POST /metrics/:id/versions` | `basis_add_metric_version` | New immutable definition version | `apps/basis/src/lib/api.ts` |
-| `GET /metrics/:id/versions` | — _(skip: folded into `basis_get_metric`)_ | Version history | `apps/basis/src/app.tsx` |
+| `GET /metrics/:id/versions` | `basis_list_versions` | Version history | `apps/basis/src/app.tsx` |
 | `POST /metrics/:id/certify` | `basis_certify_metric` | Certify (truth-flip, confirm) | `apps/basis/src/app.tsx` |
 | `POST /metrics/:id/decertify` | `basis_decertify_metric` | Return to draft (confirm) | `apps/basis/src/app.tsx` |
 | `DELETE /metrics/:id` | `basis_deprecate_metric` | Deprecate (destructive, confirm) | `apps/basis/src/app.tsx` |
 | `GET /metrics/:id/resolve` | `basis_metric_lineage` | Query config + presentation envelope | — _(skip: internal Bench binding)_ |
 | `GET /metrics/:id/value` | `basis_metric_value` | Scalar value over a period | — _(skip: agent-only read)_ |
 | `POST /metrics/:id/explain` | `basis_explain_change` / `basis_rank_drivers` | Why did it change (decomposition + per-viewer correlation) | — _(skip: agent-only read)_ |
-| `GET /settings` | — _(skip: org config UI)_ | Per-org Basis settings | — _(skip: no Settings page shipped yet; client method exists but is uncalled)_ |
-| `PUT /settings` | — _(skip: org config UI)_ | Update per-org settings | — _(skip: no Settings page shipped yet)_ |
+| `GET /settings` | `basis_get_settings` | Per-org Basis settings | `apps/basis/src/lib/api.ts` |
+| `PUT /settings` | `basis_update_settings` | Update per-org settings | `apps/basis/src/lib/api.ts` |
 | `GET /health`, `GET /health/ready` | — _(skip: probe)_ | Health / readiness | — |
 | `/basis/ws` | — _(skip: realtime/ws)_ | Redis-PubSub `explanation.ready` notifications | — |
 
-A Basis provider IS registered in the platform `search_everything` fan-out (`searchBasisMetrics` in `apps/mcp-server/src/tools/search-tools.ts`), adding the `metric` entity type and the `basis` source. Metric hits are org-scoped by the caller's session RLS (like Banter/Board hits, metrics are not in the Wave 2 `can_access` allowlist because a metric is org-global, not per-user-restricted). Metrics are also directly searchable via `basis_search_metrics`. All 12 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`.
+A Basis provider IS registered in the platform `search_everything` fan-out (`searchBasisMetrics` in `apps/mcp-server/src/tools/search-tools.ts`), adding the `metric` entity type and the `basis` source. Metric hits are org-scoped by the caller's session RLS (like Banter/Board hits, metrics are not in the Wave 2 `can_access` allowlist because a metric is org-global, not per-user-restricted). Metrics are also directly searchable via `basis_search_metrics`. All 16 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`. The Basis SPA's Definition Builder reads Bench's governed data-source catalog (`GET /bench/api/v1/data-sources`, covered by `bench_list_data_sources`) to populate its source/measure/dimension pickers, so a human references real columns rather than typing raw field names.
 
 **SPA scope note (§5 drift):** the design called for 5 pages (Catalog, Detail, Definition Builder, Why-Did-It-Change Explorer, Settings); 2 shipped (Catalog + Detail, the latter covering define/certify/decertify/deprecate + version history). The Definition Builder, Why-Did-It-Change Explorer, and Settings pages are deferred, so `GET /metrics/:id/value`, `POST /metrics/:id/explain`, and `GET|PUT /settings` have no UI call site yet.
 

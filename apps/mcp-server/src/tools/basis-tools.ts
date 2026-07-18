@@ -258,4 +258,68 @@ export function registerBasisTools(server: McpServer, api: ApiClient, basisApiUr
       return r.ok ? ok(r.data) : err('deprecating metric', r.data);
     },
   });
+
+  // --- Read: full version history (agent parity with the detail page) --------
+  registerTool(server, {
+    name: 'basis_list_versions',
+    description: 'List a metric\'s immutable definition version history (newest first), as shown on the metric detail page.',
+    input: { id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ id }) => {
+      const r = await client.request('GET', `/metrics/${id}/versions`);
+      return r.ok ? ok(r.data) : err('listing metric versions', r.data);
+    },
+  });
+
+  // --- Metadata update (PATCH /metrics/:id) - not a definition/version change,
+  // so no confirm; the definition still only changes via basis_add_metric_version.
+  const targetInput = z
+    .object({ value: z.number(), comparison: z.enum(['gte', 'lte', 'gt', 'lt']) })
+    .nullable();
+  registerTool(server, {
+    name: 'basis_update_metric',
+    description:
+      'Update a metric\'s metadata (name, description, favorable_direction, owner, related_apps, target). Does NOT change the definition - use basis_add_metric_version for that.',
+    input: {
+      id: z.string().uuid(),
+      name: z.string().min(1).max(160).optional(),
+      description: z.string().max(4000).optional(),
+      favorable_direction: z.enum(['up', 'down', 'neutral']).optional(),
+      owner_id: z.string().uuid().nullable().optional(),
+      related_apps: z.array(z.string()).max(30).optional(),
+      target: targetInput.optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ id, ...patch }) => {
+      const r = await client.request('PATCH', `/metrics/${id}`, patch);
+      return r.ok ? ok(r.data) : err('updating metric', r.data);
+    },
+  });
+
+  // --- Per-org Basis settings (GET/PUT /settings) ----------------------------
+  registerTool(server, {
+    name: 'basis_get_settings',
+    description: 'Get this org\'s Basis settings: default decomposition dimension, explanation cache TTL, and snapshot retention window.',
+    input: {},
+    returns: z.record(z.unknown()),
+    handler: async () => {
+      const r = await client.request('GET', '/settings');
+      return r.ok ? ok(r.data) : err('getting basis settings', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_update_settings',
+    description: 'Update this org\'s Basis settings (default dimension, explanation cache TTL seconds, snapshot retention days; null retention = unbounded).',
+    input: {
+      snapshot_max_age_days: z.number().int().min(1).max(3650).nullable().optional(),
+      explanation_cache_ttl_seconds: z.number().int().min(60).max(2_592_000).optional(),
+      default_dimension: z.string().min(1).max(80).nullable().optional(),
+    },
+    returns: z.record(z.unknown()),
+    handler: async (patch) => {
+      const r = await client.request('PUT', '/settings', patch);
+      return r.ok ? ok(r.data) : err('updating basis settings', r.data);
+    },
+  });
 }

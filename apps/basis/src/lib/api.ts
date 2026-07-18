@@ -48,6 +48,44 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return json.data as T;
 }
 
+// Bench's governed data-source catalog (its widget wizard reads the same one).
+// Basis lets a human pick a source + real fields from this instead of typing raw
+// strings. Fetched cross-app over the shared session.
+export interface DsMeasure {
+  field: string;
+  label: string;
+  aggregations: string[];
+  type: string;
+}
+export interface DsDimension {
+  field: string;
+  label: string;
+  type: string;
+}
+export interface DsFilter {
+  field: string;
+  label: string;
+  operators: string[];
+  type: string;
+  enumValues?: string[];
+}
+export interface DataSource {
+  product: string;
+  entity: string;
+  label: string;
+  description?: string;
+  measures: DsMeasure[];
+  dimensions: DsDimension[];
+  filters: DsFilter[];
+}
+
+export async function getDataSources(): Promise<DataSource[]> {
+  const res = await fetch('/bench/api/v1/data-sources', { credentials: 'include' });
+  if (!res.ok) return [];
+  const json = await res.json().catch(() => ({}));
+  return (json.data ?? json ?? []) as DataSource[];
+}
+
 export const api = {
   listMetrics: (certification?: string) =>
     req<BasisMetric[]>('GET', `/metrics${certification ? `?filter[certification]=${certification}` : ''}`),
