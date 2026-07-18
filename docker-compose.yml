@@ -346,6 +346,11 @@ services:
     build:
       context: .
       dockerfile: infra/site/Dockerfile
+    # The marketing site is not fronted by the app nginx (no /site route); it
+    # serves itself. Publish its port so it is reachable locally for review
+    # (override with SITE_PORT). In production it is served on its own domain.
+    ports:
+      - "${SITE_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/ || exit 1"]
       interval: 15s
