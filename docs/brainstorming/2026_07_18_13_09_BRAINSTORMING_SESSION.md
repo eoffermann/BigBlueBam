@@ -645,6 +645,48 @@ the Launchpad icon, the four-site Dockerfile, the `publishBoltEvent` positional 
 
 Batched to `brainstorm-spec-writer` as the final (round-3-cap) fold.
 
+### Round 3 - findings and dispositions (the cap round)
+
+Round 3 re-reviewed the twice-hardened spec. Both round-2 blockers verified closed and
+**no new blocker** was found; **infrastructure came back fully clean** (blocker + major
+free). The remaining findings were **8 majors** - every one a narrow refinement to machinery
+already present, not an architectural hole, clustered on three roots:
+
+- **The proposal-inbox contract (design, 3 majors):** round 2 wired only the approve->merge
+  leg. Round 3 added the reject / request_revision branch (a proposal-inbox reject must reach
+  the identity-atom suppression path), made `braid_propose_merge` create the backing
+  `braid_match_candidates` row (so an agent-proposed merge does not silently no-op after a
+  human approves), and handled `agent_proposals.expires_at` (NOT NULL + the platform expiry
+  sweep) so the two HITL surfaces cannot silently diverge.
+- **The outbox / lock machinery (stability, 3 majors):** the reconciliation markers must
+  stamp the observed `updated_at` version, not `now()` (else a merge landing during a rescan
+  replay is silently marked synced and never emitted); the all-keys advisory lock needed a
+  single shared, org-namespaced, identically-sorted helper with a stated lock-class order
+  (the cited `org.service.ts` precedent is `FOR UPDATE`, not advisory); and the "real
+  next-day fallback" degrades to new-rows-only for any source whose mutation path does not
+  bump `updated_at` (none of the source tables carry a moddatetime trigger), so per-source
+  bump verification became a precondition.
+- **The permission manifest (best-practices, 1 major) + the decisions read surface
+  (security, 1 major):** the round-2 `EXPLICIT_TOOL_OVERRIDES` fix collided with the
+  hand-authored flags (the generator infers flags from the verb, and merge/split/reject/
+  resolve are in neither verb set, while `HAND_AUTHORED` has no flag-updating else-branch),
+  so the two truth-flip permissions would land marked non-destructive - resolved by
+  following the Basis satellite deferral (no tool overrides; hand-authored rows are the sole
+  source). And the merge-decisions read surface (`/decisions` + the `braid_get_profile`
+  embed) bypassed the per-viewer machinery that round 2 built for the timeline, re-exposing
+  `affected_identity_ids` - gated admin-only / fail-closed-filtered.
+
+Because round 3 is the adversarial-loop cap (3 rounds) and every finding is a concrete,
+reviewer-specified refinement with zero blockers, the round-3 findings were folded in as the
+closing pass and the spec proceeds to the build. Round 3 verified-and-held-up: the all-keys
+lock structure, the CAS/`FOR UPDATE` exactly-once split, the reconcile sweep, the source-diff
+rescan, the RLS reframing, the 9-row/13-tool/4-event counts, and the surface-map/Bolt-catalog
+conventions.
+
+**Outcome: spec converged after 3 adversarial rounds** (7 blockers + 21 majors round 1,
+2 blockers + 14 majors round 2, 0 blockers + 8 majors round 3, each fully folded in).
+Proceeding to Phase 7 - the autonomous build via `app-build-from-spec`.
+
 ## Winner + handoff
 
 _(pending)_
