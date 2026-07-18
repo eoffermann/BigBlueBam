@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import { env } from './env.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
@@ -12,6 +13,7 @@ import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
 import rlsPlugin from './plugins/rls.js';
 import braidRoutes from './routes/braid.routes.js';
+import websocketHandler from './ws/handler.js';
 import { sql } from 'drizzle-orm';
 
 const fastify = Fastify({
@@ -67,9 +69,20 @@ fastify.addHook('onSend', async (_req, reply) => {
 });
 
 await fastify.register(redisPlugin);
+await fastify.register(websocket, { options: { maxPayload: 1_048_576 } });
 await fastify.register(authPlugin);
 await fastify.register(rlsPlugin);
 await fastify.register(permissionsPlugin);
+
+// The /braid/ws realtime hub (refs-only, org-scoped rooms). Registered after the
+// redis plugin so it can open its own subscriber connection (spec 5.2).
+await fastify.register(websocketHandler);
+
+// proposal.decided subscription (spec 2.2 / 5.4). TRANSPORT: Bolt is an ingest hub
+// with no service fan-out, so delivery is via the internal route
+// POST /internal/proposal-decided (guarded by INTERNAL_SERVICE_SECRET) that bolt-api
+// will POST to in M6. Nothing to "start" here beyond that route (registered in
+// braidRoutes); the handler is idempotent (CAS-guarded).
 
 // Health + readiness. Per spec 5.1/9.5, /readyz checks ONLY Postgres + Redis so a
 // Qdrant/LLM outage never cascades into braid "not ready."
