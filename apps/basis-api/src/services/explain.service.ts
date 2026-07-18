@@ -2,10 +2,29 @@ import { createHash } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { basisMetrics, basisMetricVersions, basisExplanations } from '../db/schema/index.js';
-import type { BasisDefinition, BasisExplainRequest } from '@bigbluebam/shared';
+import type { BasisDefinition, BasisExplainRequest, BasisDriver } from '@bigbluebam/shared';
 import { queryScalar, queryGrouped } from '../lib/bench-client.js';
 import { getSettings } from './settings.service.js';
 import { classifyDimension, computeDrivers, shapeForRead } from './explain-math.js';
+import { resolveVisibleValues } from '../lib/can-access.client.js';
+
+// For a Class-B decomposition, resolve which dimension values the asker may see
+// (per-viewer can_access). Class A and absent-asker return empty (Class A ignores
+// it; empty keeps Class B fully suppressed = fail closed). The returned set feeds
+// shapeForRead's k>=2 secondary suppression.
+async function visibleClassBValues(
+  dimClass: 'A' | 'B',
+  dimension: string,
+  drivers: BasisDriver[],
+  askerUserId: string | undefined,
+): Promise<Set<string>> {
+  if (dimClass !== 'B') return new Set<string>();
+  return resolveVisibleValues(
+    askerUserId,
+    dimension,
+    drivers.map((d) => d.dimension_value),
+  );
+}
 
 // Pure decomposition + leak-safety helpers live in explain-math.ts (no db/env
 // imports) so the spec section 9 invariants are unit-testable. Re-export the ones
@@ -90,7 +109,13 @@ export async function explain(orgId: string, metricId: string, req: BasisExplain
   if (cached) {
     const ageMs = Date.now() - new Date(cached.computed_at).getTime();
     if (ageMs < settings.explanation_cache_ttl_seconds * 1000) {
-      return { explanation: shapeForRead(cached, dimClass) };
+      const visible = await visibleClassBValues(
+        dimClass,
+        dimension,
+        (cached.drivers as BasisDriver[]) ?? [],
+        req.asker_user_id,
+      );
+      return { explanation: shapeForRead(cached, dimClass, visible) };
     }
   }
 
@@ -134,5 +159,6 @@ export async function explain(orgId: string, metricId: string, req: BasisExplain
     .from(basisExplanations)
     .where(eq(basisExplanations.cache_key, key))
     .limit(1);
-  return { explanation: shapeForRead(stored!, dimClass) };
+  const visible = await visibleClassBValues(dimClass, dimension, drivers, req.asker_user_id);
+  return { explanation: shapeForRead(stored!, dimClass, visible) };
 }
