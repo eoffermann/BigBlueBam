@@ -1,7 +1,22 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { basisMetrics, basisMetricVersions } from '../db/schema/index.js';
-import type { CreateBasisMetricInput, UpdateBasisMetricInput } from '@bigbluebam/shared';
+import type {
+  CreateBasisMetricInput,
+  CreateBasisVersionInput,
+  UpdateBasisMetricInput,
+} from '@bigbluebam/shared';
+
+// Bolt event helper (source 'basis'). Fire-and-forget; never breaks the op.
+function emit(
+  eventType: string,
+  payload: Record<string, unknown>,
+  orgId: string,
+  actorId?: string,
+) {
+  void publishBoltEvent(eventType, 'basis', payload, orgId, actorId);
+}
 
 export interface ListMetricsOptions {
   certification?: string;
@@ -47,7 +62,7 @@ export async function createMetric(
   userId: string,
   input: CreateBasisMetricInput,
 ) {
-  return db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     const [metricRow] = await tx
       .insert(basisMetrics)
       .values({
@@ -88,7 +103,107 @@ export async function createMetric(
 
     return { metric: updated ?? metricRow, currentVersion: version };
   });
+
+  emit(
+    'metric.created',
+    { metric: { id: created.metric.id, slug: created.metric.slug, name: created.metric.name } },
+    orgId,
+    userId,
+  );
+  return created;
 }
+
+// New immutable version + set as current. Emits metric.definition_changed.
+// The route/MCP layer enforces HITL (Redis confirm token) for versioning a
+// CERTIFIED metric; this service performs the write.
+export async function addVersion(
+  orgId: string,
+  userId: string,
+  metricId: string,
+  input: CreateBasisVersionInput,
+) {
+  const result = await db.transaction(async (tx) => {
+    const [metric] = await tx
+      .select()
+      .from(basisMetrics)
+      .where(and(eq(basisMetrics.id, metricId), eq(basisMetrics.organization_id, orgId)))
+      .limit(1);
+    if (!metric) return null;
+
+    const maxRows = await tx
+      .select({ maxNum: sql<number>`coalesce(max(${basisMetricVersions.version_number}), 0)` })
+      .from(basisMetricVersions)
+      .where(eq(basisMetricVersions.metric_id, metricId));
+    const nextNumber = Number(maxRows[0]?.maxNum ?? 0) + 1;
+
+    const [version] = await tx
+      .insert(basisMetricVersions)
+      .values({
+        metric_id: metricId,
+        organization_id: orgId,
+        version_number: nextNumber,
+        definition: input.definition,
+        lineage: input.lineage ?? { apps: [] },
+        change_note: input.change_note ?? null,
+        created_by: userId,
+      })
+      .returning();
+    if (!version) throw new Error('version insert returned no row');
+
+    await tx
+      .update(basisMetrics)
+      .set({ current_version_id: version.id, updated_at: new Date() })
+      .where(eq(basisMetrics.id, metricId));
+
+    return { metric, version };
+  });
+  if (!result) return null;
+  emit(
+    'metric.definition_changed',
+    { metric: { id: metricId }, version: { number: result.version.version_number, change_note: result.version.change_note } },
+    orgId,
+    userId,
+  );
+  return result.version;
+}
+
+export async function listVersions(orgId: string, metricId: string) {
+  return db
+    .select()
+    .from(basisMetricVersions)
+    .where(
+      and(
+        eq(basisMetricVersions.metric_id, metricId),
+        eq(basisMetricVersions.organization_id, orgId),
+      ),
+    )
+    .orderBy(desc(basisMetricVersions.version_number));
+}
+
+// Certification state transitions. Each emits its Bolt event.
+async function setCertification(
+  orgId: string,
+  userId: string,
+  metricId: string,
+  next: 'draft' | 'certified' | 'deprecated',
+  eventType: string,
+) {
+  const [updated] = await db
+    .update(basisMetrics)
+    .set({ certification: next, updated_at: new Date() })
+    .where(and(eq(basisMetrics.id, metricId), eq(basisMetrics.organization_id, orgId)))
+    .returning();
+  if (!updated) return null;
+  emit(eventType, { metric: { id: metricId } }, orgId, userId);
+  return updated;
+}
+
+export const certifyMetric = (orgId: string, userId: string, id: string) =>
+  setCertification(orgId, userId, id, 'certified', 'metric.certified');
+export const decertifyMetric = (orgId: string, userId: string, id: string) =>
+  setCertification(orgId, userId, id, 'draft', 'metric.decertified');
+export const deprecateMetric = (orgId: string, userId: string, id: string) =>
+  setCertification(orgId, userId, id, 'deprecated', 'metric.deprecated');
 
 export async function updateMetricMetadata(
   orgId: string,

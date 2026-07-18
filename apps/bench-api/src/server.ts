@@ -117,6 +117,11 @@ await fastify.register(materializedViewsRoutes, { prefix: '/v1' });
 import savedQueryRoutes from './routes/saved-queries.routes.js';
 await fastify.register(savedQueryRoutes, { prefix: '/v1' });
 
+// Internal secret-gated governed-query route for server-to-server callers
+// (Basis). No /v1 prefix; guarded by INTERNAL_SERVICE_SECRET.
+import internalQueryRoutes from './routes/internal-query.routes.js';
+await fastify.register(internalQueryRoutes);
+
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {
