@@ -70,3 +70,6 @@ scripts/.gilligan-keys.env
 site/public/downloads/*
 !site/public/downloads/BigBlueBam-Manual.pdf
 !site/public/downloads/BigBlueBam-Manual.docx
+
+# Autonomous cycle run logs (Windows Task Scheduler)
+.autonomous-logs/
