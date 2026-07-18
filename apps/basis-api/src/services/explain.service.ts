@@ -7,6 +7,7 @@ import { queryScalar, queryGrouped } from '../lib/bench-client.js';
 import { getSettings } from './settings.service.js';
 import { classifyDimension, computeDrivers, shapeForRead } from './explain-math.js';
 import { resolveVisibleValues } from '../lib/can-access.client.js';
+import { buildCorrelation } from './correlation.service.js';
 
 // For a Class-B decomposition, resolve which dimension values the asker may see
 // (per-viewer can_access). Class A and absent-asker return empty (Class A ignores
@@ -115,7 +116,15 @@ export async function explain(orgId: string, metricId: string, req: BasisExplain
         (cached.drivers as BasisDriver[]) ?? [],
         req.asker_user_id,
       );
-      return { explanation: shapeForRead(cached, dimClass, visible) };
+      const shaped = shapeForRead(cached, dimClass, visible);
+      const correlation = await buildCorrelation(
+        orgId,
+        loaded.def,
+        req.period_b,
+        req.asker_user_id,
+        (loaded.metric.related_apps as string[]) ?? [],
+      );
+      return { explanation: { ...shaped, correlation } };
     }
   }
 
@@ -160,5 +169,13 @@ export async function explain(orgId: string, metricId: string, req: BasisExplain
     .where(eq(basisExplanations.cache_key, key))
     .limit(1);
   const visible = await visibleClassBValues(dimClass, dimension, drivers, req.asker_user_id);
-  return { explanation: shapeForRead(stored!, dimClass, visible) };
+  const shaped = shapeForRead(stored!, dimClass, visible);
+  const correlation = await buildCorrelation(
+    orgId,
+    loaded.def,
+    req.period_b,
+    req.asker_user_id,
+    (loaded.metric.related_apps as string[]) ?? [],
+  );
+  return { explanation: { ...shaped, correlation } };
 }

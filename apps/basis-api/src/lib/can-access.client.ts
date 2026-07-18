@@ -34,7 +34,7 @@ export function entityTypeForDimension(dimension: string): string | null {
   return DIMENSION_ENTITY_TYPE[dimension.toLowerCase()] ?? null;
 }
 
-async function canAccess(
+export async function canAccessEntity(
   askerUserId: string,
   entityType: string,
   entityId: string,
@@ -84,7 +84,7 @@ export async function resolveVisibleValues(
   for (let i = 0; i < candidates.length; i += CONCURRENCY) {
     const batch = candidates.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
-      batch.map(async (v) => ({ v, ok: await canAccess(askerUserId, entityType, v) })),
+      batch.map(async (v) => ({ v, ok: await canAccessEntity(askerUserId, entityType, v) })),
     );
     for (const r of results) if (r.ok) visible.add(r.v);
   }
