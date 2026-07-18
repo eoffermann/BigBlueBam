@@ -67,7 +67,10 @@ const PHASES = [
   { name: 'Knowledge & analytics', files: ['beacon.mjs', 'beacon-fixup.mjs', 'bench.mjs', 'bench-supplement.mjs', 'bin.mjs', 'bay.mjs'] },
   { name: 'Billing', files: ['bill.mjs', 'bill-supplement.mjs', 'bill-recurring.mjs'] },
   { name: 'Spatial & async', files: ['board.mjs', 'book.mjs', 'book-connections.mjs', 'bureau.mjs', 'bureau-presence.mjs'] },
-  { name: 'Diagrams & automation', files: ['blueprint.mjs', 'blueprint-collab.mjs', 'bolt.mjs', 'bearing.mjs'] },
+  // basis.mjs runs here because it defines governed metrics OVER data that must
+  // already exist: bam.tasks (Foundation) and bill.invoices (Billing), both of
+  // which have run by this phase. Its definitions resolve through Bench.
+  { name: 'Diagrams & automation', files: ['blueprint.mjs', 'blueprint-collab.mjs', 'bolt.mjs', 'bearing.mjs', 'basis.mjs'] },
   // blip.mjs is placed here because it runs AFTER both banter.mjs (Communication)
   // and bolt.mjs (Diagrams & automation): its seeded watches emit entry.matched,
   // and a seeded Bolt rule fans that into a real castaway Banter channel, so both
