@@ -10,6 +10,7 @@ import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
+import rlsPlugin from './plugins/rls.js';
 import metricRoutes from './routes/metrics.routes.js';
 import { sql } from 'drizzle-orm';
 
@@ -67,6 +68,7 @@ fastify.addHook('onSend', async (_req, reply) => {
 
 await fastify.register(redisPlugin);
 await fastify.register(authPlugin);
+await fastify.register(rlsPlugin);
 await fastify.register(permissionsPlugin);
 
 // Health + readiness. Per spec 8.4, /readyz checks ONLY Postgres + Redis so a
