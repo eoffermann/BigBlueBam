@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1393,
+    "total": 1402,
     "mcp_tools_scanned": 802,
-    "rest_routes_scanned": 880,
-    "read_permissions": 539,
-    "destructive_permissions": 133
+    "rest_routes_scanned": 889,
+    "read_permissions": 542,
+    "destructive_permissions": 134
   },
   "permissions": [
     {
@@ -11340,6 +11340,123 @@
           "ref": "bearing_goal_watchers",
           "file": "bearing-tools.ts"
         }
+      ]
+    },
+    {
+      "id": "basis.datasource.read",
+      "app": "basis",
+      "resource": "datasource",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "GET /data-sources", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.explain.run",
+      "app": "basis",
+      "resource": "explain",
+      "verb": "run",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "POST /metrics/:id/explain", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.metric.certify",
+      "app": "basis",
+      "resource": "metric",
+      "verb": "certify",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "POST /metrics/:id/certify", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.metric.decertify",
+      "app": "basis",
+      "resource": "metric",
+      "verb": "decertify",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "POST /metrics/:id/decertify", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.metric.define",
+      "app": "basis",
+      "resource": "metric",
+      "verb": "define",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "POST /metrics", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.metric.deprecate",
+      "app": "basis",
+      "resource": "metric",
+      "verb": "deprecate",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "DELETE /metrics/:id", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.metric.read",
+      "app": "basis",
+      "resource": "metric",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "GET /metrics", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.metric.update",
+      "app": "basis",
+      "resource": "metric",
+      "verb": "update",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "PATCH /metrics/:id", "file": "metrics.routes.ts" }
+      ]
+    },
+    {
+      "id": "basis.metric.version",
+      "app": "basis",
+      "resource": "metric",
+      "verb": "version",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        { "source": "rest", "ref": "POST /metrics/:id/versions", "file": "metrics.routes.ts" }
       ]
     },
     {
