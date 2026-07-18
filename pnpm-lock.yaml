@@ -344,6 +344,9 @@ importers:
 
   apps/basis:
     dependencies:
+      '@bigbluebam/bureau-client':
+        specifier: workspace:*
+        version: link:../../packages/bureau-client
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
