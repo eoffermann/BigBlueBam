@@ -601,6 +601,50 @@ All findings were batched to `brainstorm-spec-writer` to fold in. Round 2 (re-re
 revised spec) follows; the loop repeats until a round returns no blocker/major findings
 (cap 3 rounds).
 
+### Round 2 - findings and dispositions
+
+Round 2 re-reviewed the revised spec. All seven round-1 blockers verified closed, but the
+rewrite introduced new coherence gaps: **2 blockers + 14 majors**. The striking pattern is
+convergence - three independent reviewers (design, security, best-practices) all flagged the
+same `braid.profile.resolve` permission-tier contradiction, and the proposal-bridge and
+advisory-lock issues each showed up across multiple focuses. The findings clustered into
+four themes plus residue:
+
+- **Theme 1 - the `braid.profile.resolve` permission tier (design + security + best-practices):**
+  the spec listed resolve as admin-tier in one section, omitted it from the 8-row catalog in
+  another, and designed it for non-admin callers in a third - while the flagship wedge needs
+  non-admins to resolve. Resolved by making it a 9th permission row (non-admin-grantable,
+  guarded by input-record `preflightAccess` + `identity_count` suppression + rate limit).
+- **Theme 2 - the `proposal.decided` bridge (security blocker + design + stability):** the
+  subscription that turns a platform proposal-approval into a merge executed outside the
+  confirm-token, the `braid.*` kill-switch, and the merge permission tier (a fail-open on the
+  kill switch); plus the proposal had no defined approver and the event payload carried no
+  candidate id to act on. Resolved by re-checking the kill-switch + merge tier in the
+  subscription, inserting proposals with a null approver into the org-admin queue, modeling
+  the subject as the candidate, and adding an at-least-once reconciliation sweep.
+- **Theme 3 - the lazy-resolve minting path (design + stability):** the round-1 "resolve
+  never 404s, lazily seeds a profile" fix minted profiles in braid-api outside the worker's
+  advisory lock, reintroducing the duplicate-profile race. Resolved by routing resolve
+  through the same advisory lock, identity-first, deferring clustering to the worker.
+- **Theme 4 - advisory-lock scope (stability blocker):** the round-1 lock keyed on only the
+  strongest blocking key, so two records sharing just a phone took different locks and still
+  double-minted - the exact N-way case it was added for. Resolved by locking every present
+  blocking key (stackable `pg_advisory_xact_lock`, sorted to avoid deadlock).
+- **Residue:** read-plane scalar leaks (`email_suppressed`/`confidence` outside the
+  per-viewer re-assembly), the `helpdesk.user` branch risking the permissive triage
+  precedent, reconciliation markers the rescan needs (`qdrant_synced_at`, source-side
+  watermark), and the infra finding that per-app `BBB_RLS_ENFORCE=1` is not achievable as a
+  braid-local knob (RLS enforcement is a cluster-global `api`-owned role flip and the compose
+  connection is superuser) - reframed to the reused per-request GUC plugin plus an
+  application-level org-scoping test.
+
+Verified-and-held-up in round 2: the transactional merge, the CAS executor, split-suppression
+identity keying, the worker-reads-source-via-shared-Postgres model, Railway auto-generation,
+the Launchpad icon, the four-site Dockerfile, the `publishBoltEvent` positional signature, the
+`matchesAllowlist('braid.*')` fail-closed guarantee, and the refs-only merge/split payloads.
+
+Batched to `brainstorm-spec-writer` as the final (round-3-cap) fold.
+
 ## Winner + handoff
 
 _(pending)_
