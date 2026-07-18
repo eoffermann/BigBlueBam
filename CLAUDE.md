@@ -64,6 +64,8 @@ apps/
   bay/              Bay React SPA served by nginx at /bay/.
   blip-api/         Blip Fastify REST API + WebSocket + ingest (internal :4018, proxied at /blip/api/, realtime at /blip/ws, ingest at /blip/ingest/). 12 route files, 12 schema modules. App telemetry / log-ingest & observability: bearer-token ingest, live streaming log viewer, saved views + field indexing, watches/alerts (throttled Bolt events), transform pipelines, retention policies, timelapse, and scheduled reports. Screen-capture/export bytes live in Bin.
   blip/             Blip React SPA served by nginx at /blip/.
+  basis-api/        Basis Fastify REST API (internal :4019, proxied at /basis/api/, realtime at /basis/ws). Governed metric layer: define a business metric once (owner, immutable version lineage, certification state), read it everywhere, and an AI core that decomposes why a certified metric moved (deterministic drivers + per-viewer access-scoped correlation). Runs governed queries server-to-server via a new bench-api internal query route; does NOT render charts (Bench) or own source data. Added on the suite-brainstorm branch.
+  basis/            Basis React SPA served by nginx at /basis/.
   voice-agent/      AI voice agent (Python/FastAPI, internal :4003). LiveKit Agents SDK, STT/TTS pipeline (placeholder).
   integration-tests/  Cross-app integration harness (Wave 3). Vitest runner + mock service clients exercising cross-app event flows.
   e2e/              Playwright end-to-end suite.

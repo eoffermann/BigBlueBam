@@ -36,7 +36,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/tests-900%2B%20passing-brightgreen" alt="Tests" />
   <img src="https://img.shields.io/badge/MCP%20tools-804-blue" alt="MCP Tools" />
-  <img src="https://img.shields.io/badge/apps-19-blueviolet" alt="Apps" />
+  <img src="https://img.shields.io/badge/apps-20-blueviolet" alt="Apps" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
@@ -67,6 +67,7 @@ Nineteen apps, one workspace. If you've used the tools on the right you already 
 | **Bay** | Media review and approval — frame/timecode/region annotations, per-reviewer decisions, token-gated guest links, and 3D/FBX model review | Frame.io, Ziflow |
 | **Beacon** | AI knowledge base with semantic search (Qdrant) and a graph explorer | Notion or Confluence, with an Obsidian-style graph view |
 | **Bearing** | Goals and OKRs with key results linked to Bam tasks for automatic progress | Lattice, 15Five, Quantive |
+| **Basis** | Governed metric layer — one certified definition per number, immutable version lineage, and an AI "why did it change" decomposition | dbt Semantic Layer, Cube, Looker's LookML |
 | **Bench** | Analytics dashboards, widgets, ad-hoc queries, scheduled reports, anomaly detection | Metabase, Tableau, Looker |
 | **Bill** | Invoicing, expenses, recurring billing, PDF generation, profitability reports | FreshBooks, QuickBooks, Wave |
 | **Bin** | Digital asset management — object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing | Dropbox/Box, plus an Airtable-style data grid |
