@@ -26,6 +26,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const APPS_DIR = path.join(ROOT, 'docs', 'apps');
 
+// Read a markdown file with line endings normalized to LF. CRLF (Windows
+// autocrlf checkouts) otherwise leaves a \r before every line break, which the
+// `$`-anchored heading regexes do not match, silently producing an empty index.
+function readMd(p) {
+  return fs.readFileSync(p, 'utf8').replace(/\r\n?/g, '\n');
+}
+
 // --- args ---
 const args = process.argv.slice(2);
 let only = null;
@@ -176,7 +183,10 @@ const allApps = fs
 const appKeys = new Set(allApps);
 const appTitles = {};
 for (const a of allApps) {
-  const h1 = fs.readFileSync(path.join(APPS_DIR, a, 'help.md'), 'utf8').match(/^#\s+(.*)$/m);
+  // Normalize CRLF -> LF: on Windows checkouts (autocrlf) help.md has \r\n, and the
+  // `$` in the heading regexes will not match at a bare \r, which silently blanks
+  // the whole index. Strip \r on read so parsing is line-ending agnostic.
+  const h1 = readMd(path.join(APPS_DIR, a, 'help.md')).match(/^#\s+(.*)$/m);
   appTitles[a] = h1 ? stripMd(h1[1]).split(' - ')[0].trim() : a;
 }
 const appDirs = allApps.filter((a) => !only || only.includes(a));
@@ -186,11 +196,14 @@ let total = 0;
 const summary = [];
 
 for (const app of appDirs) {
-  const md = fs.readFileSync(path.join(APPS_DIR, app, 'help.md'), 'utf8');
+  const md = readMd(path.join(APPS_DIR, app, 'help.md'));
   const { index, collisions } = buildIndex(app, md, appKeys, appTitles);
   const json = JSON.stringify(index, null, 2) + '\n';
   const outPath = path.join(APPS_DIR, app, 'help-index.json');
-  const prev = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : null;
+  // Compare line-ending agnostically: on a Windows (autocrlf) checkout the
+  // committed index reads back as CRLF while the generator emits LF, which would
+  // otherwise report every up-to-date index as stale.
+  const prev = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8').replace(/\r\n?/g, '\n') : null;
   const changed = prev !== json;
 
   if (checkMode) {
