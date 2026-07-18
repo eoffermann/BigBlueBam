@@ -430,3 +430,76 @@ export const blipSavedViewsStub = pgTable(
   },
   (table) => [index('pas_blip_saved_views_app_idx').on(table.tracked_app_id)],
 );
+
+// ===========================================================================
+// Braid person-source + golden-profile entity-type registration
+// (docs/brainstorming/2026_07_18_13_09_APP_DESIGN_braid.md §2.5).
+// ===========================================================================
+// Braid resolves customer identities across apps into golden profiles. Its
+// read paths (timeline, evidence, resolve preflight) call can_access on the
+// golden profile, its member identities, AND the underlying person-source
+// records, so we stub those tables here. Same warning as above: minimal
+// columns, kept in lockstep with the real physical schema, invisible to the
+// drift guard.
+
+// ---------------------------------------------------------------------------
+// bill - clients
+// ---------------------------------------------------------------------------
+// Real schema: apps/bill-api/src/db/schema/bill-clients.ts. No per-client
+// visibility enum: any org member can read any client in their org, mirroring
+// bill.invoice. Org match is the entire rule.
+export const billClientsStub = pgTable(
+  'bill_clients',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_bill_clients_org_idx').on(table.organization_id)],
+);
+
+// ---------------------------------------------------------------------------
+// book - event attendees
+// ---------------------------------------------------------------------------
+// Real schema: apps/book-api/src/db/schema/book-event-attendees.ts. The
+// attendee row has NO organization_id of its own; org is derived through its
+// parent book_events (joined via event_id), mirroring preflightBookEvent's
+// org gate.
+export const bookEventAttendeesStub = pgTable(
+  'book_event_attendees',
+  {
+    id: uuid('id').primaryKey(),
+    event_id: uuid('event_id').notNull(),
+  },
+  (table) => [index('pas_book_event_attendees_event_idx').on(table.event_id)],
+);
+
+// ---------------------------------------------------------------------------
+// braid - profiles, identities
+// ---------------------------------------------------------------------------
+// Real schemas: apps/braid-api/src/db/schema/{braid-profiles,braid-identities}.ts.
+// The golden profile (braid_profiles) is org-scoped: can_access is the coarse
+// org gate, while the deep per-viewer PII filtering lives in braid-api's route
+// layer (spec §2.5), not here. An identity (braid_identities) carries its own
+// organization_id and a profile_id; either the direct org match or the parent
+// profile's org match is the gate.
+export const braidProfilesStub = pgTable(
+  'braid_profiles',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_braid_profiles_org_idx').on(table.organization_id)],
+);
+
+export const braidIdentitiesStub = pgTable(
+  'braid_identities',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    profile_id: uuid('profile_id').notNull(),
+  },
+  (table) => [
+    index('pas_braid_identities_org_idx').on(table.organization_id),
+    index('pas_braid_identities_profile_idx').on(table.profile_id),
+  ],
+);

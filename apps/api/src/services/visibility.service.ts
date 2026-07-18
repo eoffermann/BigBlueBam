@@ -32,6 +32,10 @@ import {
   bayAssetsStub,
   blipTrackedAppsStub,
   blipSavedViewsStub,
+  billClientsStub,
+  bookEventAttendeesStub,
+  braidProfilesStub,
+  braidIdentitiesStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -86,7 +90,12 @@ export type VisibilityEntityType =
   | 'bay.asset'
   // Blip telemetry entity-type registration (BigBlueBam_Blip_Design_Document.md §2)
   | 'blip.tracked_app'
-  | 'blip.saved_view';
+  | 'blip.saved_view'
+  // Braid person-source + golden-profile registration (APP_DESIGN_braid.md §2.5)
+  | 'bill.client'
+  | 'book.event_attendee'
+  | 'braid.profile'
+  | 'braid.identity';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -116,6 +125,11 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   // Blip telemetry entity-type registration (BigBlueBam_Blip_Design_Document.md §2)
   'blip.tracked_app',
   'blip.saved_view',
+  // Braid person-source + golden-profile registration (APP_DESIGN_braid.md §2.5)
+  'bill.client',
+  'book.event_attendee',
+  'braid.profile',
+  'braid.identity',
 ] as const;
 
 export type PreflightReason =
@@ -1337,6 +1351,146 @@ async function preflightBlipSavedView(
 }
 
 // ---------------------------------------------------------------------------
+// bill.client (Braid person source)
+// ---------------------------------------------------------------------------
+//
+// Mirrors bill.invoice: no per-client visibility enum, so any org member can
+// read any client in their org. Org match is the entire rule.
+
+async function preflightBillClient(
+  asker: AskerContext,
+  clientId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: billClientsStub.id,
+      organization_id: billClientsStub.organization_id,
+    })
+    .from(billClientsStub)
+    .where(eq(billClientsStub.id, clientId))
+    .limit(1);
+
+  const client = rows[0];
+  if (!client) return { allowed: false, reason: 'not_found' };
+  if (client.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return {
+    allowed: true,
+    reason: 'ok',
+    entity_org_id: client.organization_id,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// book.event_attendee (Braid person source)
+// ---------------------------------------------------------------------------
+//
+// The attendee row carries no organization_id; org is derived through its
+// parent book_events (joined via event_id), mirroring preflightBookEvent's
+// org gate. Any org member can read any event (and therefore its attendees)
+// in their org.
+
+async function preflightBookEventAttendee(
+  asker: AskerContext,
+  attendeeId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bookEventAttendeesStub.id,
+      organization_id: bookEventsStub.organization_id,
+    })
+    .from(bookEventAttendeesStub)
+    .innerJoin(
+      bookEventsStub,
+      eq(bookEventsStub.id, bookEventAttendeesStub.event_id),
+    )
+    .where(eq(bookEventAttendeesStub.id, attendeeId))
+    .limit(1);
+
+  const attendee = rows[0];
+  if (!attendee) return { allowed: false, reason: 'not_found' };
+  if (attendee.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return {
+    allowed: true,
+    reason: 'ok',
+    entity_org_id: attendee.organization_id,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// braid.profile (golden record)
+// ---------------------------------------------------------------------------
+//
+// Org-match on braid_profiles.organization_id. can_access is the coarse org
+// gate; the deep per-viewer PII re-assembly happens in braid-api's route
+// layer (spec §2.5), not here.
+
+async function preflightBraidProfile(
+  asker: AskerContext,
+  profileId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: braidProfilesStub.id,
+      organization_id: braidProfilesStub.organization_id,
+    })
+    .from(braidProfilesStub)
+    .where(eq(braidProfilesStub.id, profileId))
+    .limit(1);
+
+  const profile = rows[0];
+  if (!profile) return { allowed: false, reason: 'not_found' };
+  if (profile.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return {
+    allowed: true,
+    reason: 'ok',
+    entity_org_id: profile.organization_id,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// braid.identity (source-record membership atom)
+// ---------------------------------------------------------------------------
+//
+// braid_identities carries its own organization_id, so org match is a direct
+// column check. We still join to the parent braid_profiles so a dangling
+// identity (profile deleted out from under it) fails closed as not_found.
+
+async function preflightBraidIdentity(
+  asker: AskerContext,
+  identityId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: braidIdentitiesStub.id,
+      organization_id: braidProfilesStub.organization_id,
+    })
+    .from(braidIdentitiesStub)
+    .innerJoin(
+      braidProfilesStub,
+      eq(braidProfilesStub.id, braidIdentitiesStub.profile_id),
+    )
+    .where(eq(braidIdentitiesStub.id, identityId))
+    .limit(1);
+
+  const identity = rows[0];
+  if (!identity) return { allowed: false, reason: 'not_found' };
+  if (identity.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return {
+    allowed: true,
+    reason: 'ok',
+    entity_org_id: identity.organization_id,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -1417,6 +1571,15 @@ export async function preflightAccess(
       return preflightBlipTrackedApp(asker, entityId);
     case 'blip.saved_view':
       return preflightBlipSavedView(asker, entityId);
+    // Braid person-source + golden-profile registration (APP_DESIGN_braid.md §2.5)
+    case 'bill.client':
+      return preflightBillClient(asker, entityId);
+    case 'book.event_attendee':
+      return preflightBookEventAttendee(asker, entityId);
+    case 'braid.profile':
+      return preflightBraidProfile(asker, entityId);
+    case 'braid.identity':
+      return preflightBraidIdentity(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -1457,4 +1620,8 @@ export const __test__ = {
   preflightBinFolder,
   preflightBlipTrackedApp,
   preflightBlipSavedView,
+  preflightBillClient,
+  preflightBookEventAttendee,
+  preflightBraidProfile,
+  preflightBraidIdentity,
 };

@@ -293,6 +293,24 @@ with **R**, optional with `o`.
 | o | `LLM_TIMEOUT_MS` | unknown | `<see app docs>` |  |
 | o | `EXPLANATION_CACHE_TTL_SECONDS` | unknown | `<see app docs>` |  |
 
+### braid-api
+
+*Braid API — identity resolution + golden-record customer data platform*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| o | `DATABASE_READ_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Same as DATABASE_URL unless you set up a read replica |
+| o | `QDRANT_URL` | computed | `http://qdrant.railway.internal:6333` |  |
+| o | `QDRANT_API_KEY` | user | `` | Only needed if you point QDRANT_URL at a managed Qdrant (e.g. Qdrant Cloud). The bundled self-hosted image requires no key. |
+| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+
 ### book-api
 
 *Book API — calendar events, booking pages, meetings*
@@ -519,6 +537,7 @@ with **R**, optional with `o`.
 | o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 | o | `QDRANT_URL` | computed | `http://qdrant.railway.internal:6333` |  |
 | o | `QDRANT_API_KEY` | user | `` | Only needed if you point QDRANT_URL at a managed Qdrant (e.g. Qdrant Cloud). The bundled self-hosted image requires no key. |
+| o | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `LIVEKIT_TURN_CHECK_TARGET` | user | `<turn.your-domain:port>` | Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>. |
 
 ### voice-agent
@@ -591,8 +610,8 @@ _No environment variables required._
 These are the secrets and references that MUST be identical across
 several services. Set them once, then copy/reference everywhere.
 
-- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
+- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, braid-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
-- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, braid-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
 - `LIVEKIT_API_KEY` — banter-api, board-api, bureau-api, livekit
 - `LIVEKIT_API_SECRET` — banter-api, board-api, bureau-api, livekit

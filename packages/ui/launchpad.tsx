@@ -37,6 +37,7 @@ import {
   Clapperboard,
   Activity,
   Ruler,
+  GitMerge,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -82,6 +83,7 @@ const ICONS: Record<string, LucideIcon> = {
   clapperboard: Clapperboard,
   activity: Activity,
   ruler: Ruler,
+  'git-merge': GitMerge,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very

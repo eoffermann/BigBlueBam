@@ -185,6 +185,7 @@ services:
       BOOK_API_URL: http://book-api:4012/v1
       BENCH_API_URL: http://bench-api:4011/v1
       BASIS_API_URL: http://basis-api:4019/v1
+      BRAID_API_URL: http://braid-api:4020/v1
       BILL_API_URL: http://bill-api:4014/v1
       BLANK_API_URL: http://blank-api:4013/v1
       BIN_API_URL: http://bin-api:4016/v1
@@ -251,6 +252,11 @@ services:
       # Book task #63: the book-calendar-sync sweep calls the Book API's
       # internal sync-due route to run the external-calendar sync engine.
       BOOK_API_INTERNAL_URL: http://book-api:4012
+      # Braid engine jobs (braid-match-on-ingest / braid-rescan) embed via the
+      # platform llm-provider (BBB_API_INTERNAL_URL) and recall/re-embed into
+      # Qdrant. Both are degradable request-time deps (spec 9.2).
+      BBB_API_INTERNAL_URL: http://api:4000
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
     volumes:
       # Read-only view of what livekit-config rendered/advertised, for
       # the hourly livekit-ip-drift job: it re-detects the public IP via
@@ -271,6 +277,8 @@ services:
       api:
         condition: service_healthy
       basis-api:
+        condition: service_healthy
+      braid-api:
         condition: service_healthy
       helpdesk-api:
         condition: service_healthy
@@ -834,6 +842,52 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4019/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  braid-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/braid-api/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      # Braid publishes metric.* -> profile.* events and re-checks agent_policies
+      # via bolt-api / api; both are request-time deps only, NOT in depends_on.
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      # Qdrant is the soft embedding-recall dependency (spec 9.5); not in depends_on.
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - NODE_ENV=production
+      - PORT=4020
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      # Must be non-empty for the /internal/events ingest transport + can_access
+      # preflight; empty correctly fails closed (spec 8.1).
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4020/health"]
       interval: 10s
       timeout: 5s
       retries: 3

@@ -265,6 +265,30 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'braid-api',
+    description: 'Braid API — identity resolution + golden-record customer data platform',
+    dockerfile: 'apps/braid-api/Dockerfile',
+    port: 4020,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    // api (can_access preflight) and bolt-api (event publish) are request-time
+    // deps only; qdrant is soft. Source reads are shared-DB, not service-to-service.
+    needs: ['postgres', 'redis', 'api', 'bolt-api'],
+    public_paths: ['/braid/api/', '/braid/ws'],
+    env: {
+      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'INTERNAL_SERVICE_SECRET', 'BBB_API_INTERNAL_URL'],
+      optional: [
+        'DATABASE_READ_URL',
+        'QDRANT_URL',
+        'QDRANT_API_KEY',
+        'BOLT_API_INTERNAL_URL',
+        'CORS_ORIGIN',
+        'LOG_LEVEL',
+      ],
+    },
+  },
+  {
     name: 'book-api',
     description: 'Book API — calendar events, booking pages, meetings',
     dockerfile: 'apps/book-api/Dockerfile',
@@ -500,7 +524,9 @@ export const APP_SERVICES = [
         'TRACKING_BASE_URL', 'PUBLIC_URL',
         // worker vector-sync / brief-embed jobs read QDRANT_URL (+ optional
         // QDRANT_API_KEY for managed Qdrant). beacon-vector-sync.job.ts:49-50.
-        'QDRANT_URL', 'QDRANT_API_KEY',
+        // The Braid engine jobs also embed via the platform llm-provider
+        // (BBB_API_INTERNAL_URL) and re-embed into Qdrant (spec 9.2).
+        'QDRANT_URL', 'QDRANT_API_KEY', 'BBB_API_INTERNAL_URL',
         // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
         // TURN cert lapses; no-op until set (format turn.example.com:port).
         'LIVEKIT_TURN_CHECK_TARGET',
@@ -561,10 +587,10 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'basis-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
+      'bench-api', 'basis-api', 'braid-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];

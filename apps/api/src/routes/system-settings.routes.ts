@@ -59,6 +59,7 @@ export const LAUNCHPAD_APP_IDS = [
   'helpdesk',
   'bureau',
   'basis',
+  'braid',
 ] as const;
 
 export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
@@ -95,6 +96,7 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'helpdesk', name: 'Helpdesk', description: 'Customer Support', icon_name: 'headset', color: '#be123c', path: '/helpdesk/' },
   { id: 'bureau', name: 'Bureau', description: 'Virtual Office', icon_name: 'building', color: '#475569', path: '/bureau/' },
   { id: 'basis', name: 'Basis', description: 'Metric Layer', icon_name: 'ruler', color: '#4f46e5', path: '/basis/' },
+  { id: 'braid', name: 'Braid', description: 'Customer Identity', icon_name: 'git-merge', color: '#4338ca', path: '/braid/' },
 ];
 
 // Valid values for the root_redirect setting
