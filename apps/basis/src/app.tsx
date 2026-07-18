@@ -33,8 +33,11 @@ function slugify(s: string): string {
     .slice(0, 80);
 }
 
+// Explicit bg + text for both themes: a transparent select renders its native
+// option popup as white-on-white in dark mode. Setting the select's background
+// makes both the field and its options readable in light and dark.
 const SELECT_CLASS =
-  'rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1.5 text-sm';
+  'rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1.5 text-sm';
 
 const CERT_COLORS: Record<string, string> = {
   certified: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
@@ -142,7 +145,7 @@ function Catalog({ nav }: { nav: (p: string) => void }) {
           data-testid="cert-filter"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-2 py-1 text-sm"
+          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2 py-1 text-sm"
         >
           <option value="">All</option>
           <option value="certified">Certified</option>
