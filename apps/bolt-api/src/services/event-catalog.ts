@@ -1853,6 +1853,58 @@ const benchEvents: EventDefinition[] = [
   },
 ];
 
+const basisEvents: EventDefinition[] = [
+  {
+    source: 'basis',
+    event_type: 'metric.created',
+    description: 'Fired when a new Basis metric (draft) is defined.',
+    payload_schema: [
+      { name: 'metric.id', type: 'uuid', description: 'Metric ID' },
+      { name: 'metric.slug', type: 'string', description: 'Metric slug (unique per org)' },
+      { name: 'metric.name', type: 'string', description: 'Metric display name' },
+    ],
+  },
+  {
+    source: 'basis',
+    event_type: 'metric.definition_changed',
+    description: 'Fired when a new immutable version becomes the current definition of a metric.',
+    payload_schema: [
+      { name: 'metric.id', type: 'uuid', description: 'Metric ID' },
+      { name: 'version.number', type: 'number', description: 'New version number' },
+      { name: 'version.change_note', type: 'string?', description: 'Change note for the new version' },
+    ],
+  },
+  {
+    source: 'basis',
+    event_type: 'metric.certified',
+    description: 'Fired when a metric is certified (becomes the org-wide source of truth).',
+    payload_schema: [{ name: 'metric.id', type: 'uuid', description: 'Metric ID' }],
+  },
+  {
+    source: 'basis',
+    event_type: 'metric.decertified',
+    description: 'Fired when a certified metric is returned to draft.',
+    payload_schema: [{ name: 'metric.id', type: 'uuid', description: 'Metric ID' }],
+  },
+  {
+    source: 'basis',
+    event_type: 'metric.deprecated',
+    description: 'Fired when a metric is deprecated (soft-retired).',
+    payload_schema: [{ name: 'metric.id', type: 'uuid', description: 'Metric ID' }],
+  },
+  {
+    source: 'basis',
+    event_type: 'metric.threshold_breached',
+    description: 'Fired by apps/worker/src/jobs/basis-movement-scan.job.ts once per crossing when a certified metric breaches its target. Magnitude only - no entity refs (leak-safety).',
+    payload_schema: [
+      { name: 'metric.id', type: 'uuid', description: 'Metric ID' },
+      { name: 'delta_abs', type: 'number', description: 'Absolute change vs the prior snapshot' },
+      { name: 'delta_pct', type: 'number?', description: 'Percent change vs the prior snapshot' },
+      { name: 'direction', type: 'enum', description: 'Direction of the change', enum: ['up', 'down'] },
+    ],
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Wave 1.B additions (Cross_Product_Plan.md) - events emitted by Wave 2
 // per-app implementations. These complete the set of triggers needed for the
@@ -2826,6 +2878,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...boardEvents,
   ...bearingEvents,
   ...billEvents,
+  ...basisEvents,
   ...bookEvents,
   ...blankEvents,
   ...benchEvents,

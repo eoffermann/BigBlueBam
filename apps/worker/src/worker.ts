@@ -18,6 +18,10 @@ import { processBeaconExpirySweepJob, type BeaconExpirySweepJobData } from './jo
 import { processLivekitIpDriftJob, type LivekitIpDriftJobData } from './jobs/livekit-ip-drift.job.js';
 import { processTurnCertExpiryJob, type TurnCertExpiryJobData } from './jobs/turn-cert-expiry.job.js';
 import { processBearingSnapshotJob, type BearingSnapshotJobData } from './jobs/bearing-snapshot.job.js';
+import { processBasisPartitionProvisionJob, type BasisPartitionProvisionJobData } from './jobs/basis-partition-provision.job.js';
+import { processBasisMetricSnapshotJob, type BasisMetricSnapshotJobData } from './jobs/basis-metric-snapshot.job.js';
+import { processBasisMovementScanJob, type BasisMovementScanJobData } from './jobs/basis-movement-scan.job.js';
+import { processBasisRetentionSweepJob, type BasisRetentionSweepJobData } from './jobs/basis-retention-sweep.job.js';
 import { processBearingRecomputeJob, type BearingRecomputeJobData } from './jobs/bearing-recompute.job.js';
 import { processBearingDigestJob, type BearingDigestJobData } from './jobs/bearing-digest.job.js';
 import { processBoltExecuteJob, type BoltExecuteJobData } from './jobs/bolt-execute.job.js';
@@ -632,6 +636,52 @@ bearingSnapshotWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
+
+// ─── Basis (governed metric layer) scheduled jobs ──────────────────────────
+// Cron minutes are pinned OFF :00 (the hourly snapshot owns :00) so the
+// retention DROP (ACCESS EXCLUSIVE) never overlaps a snapshot write (spec 6).
+const basisPartitionProvisionQueue = new Queue('basis-partition-provision', { connection: redis });
+basisPartitionProvisionQueue
+  .upsertJobScheduler('basis-partition-provision-daily', { pattern: '45 2 * * *' }, { name: 'provision', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register basis-partition-provision scheduler'));
+new Worker<BasisPartitionProvisionJobData>(
+  'basis-partition-provision',
+  async (job: Job<BasisPartitionProvisionJobData>) => { await processBasisPartitionProvisionJob(job, logger); },
+  { ...connection, concurrency: 1 },
+);
+
+const basisSnapshotQueue = new Queue('basis-metric-snapshot', { connection: redis });
+basisSnapshotQueue
+  .upsertJobScheduler('basis-metric-snapshot-hourly', { pattern: '0 * * * *' }, { name: 'snapshot-hour', data: { grain: 'hour' } })
+  .catch((err) => logger.error({ err }, 'Failed to register basis-metric-snapshot hourly scheduler'));
+basisSnapshotQueue
+  .upsertJobScheduler('basis-metric-snapshot-daily', { pattern: '5 1 * * *' }, { name: 'snapshot-day', data: { grain: 'day' } })
+  .catch((err) => logger.error({ err }, 'Failed to register basis-metric-snapshot daily scheduler'));
+new Worker<BasisMetricSnapshotJobData>(
+  'basis-metric-snapshot',
+  async (job: Job<BasisMetricSnapshotJobData>) => { await processBasisMetricSnapshotJob(job, logger); },
+  { ...connection, concurrency: 1 },
+);
+
+const basisMovementScanQueue = new Queue('basis-movement-scan', { connection: redis });
+basisMovementScanQueue
+  .upsertJobScheduler('basis-movement-scan-daily', { pattern: '30 4 * * *' }, { name: 'scan', data: { grain: 'day' } })
+  .catch((err) => logger.error({ err }, 'Failed to register basis-movement-scan scheduler'));
+new Worker<BasisMovementScanJobData>(
+  'basis-movement-scan',
+  async (job: Job<BasisMovementScanJobData>) => { await processBasisMovementScanJob(job, logger); },
+  { ...connection, concurrency: 1 },
+);
+
+const basisRetentionSweepQueue = new Queue('basis-retention-sweep', { connection: redis });
+basisRetentionSweepQueue
+  .upsertJobScheduler('basis-retention-sweep-daily', { pattern: '15 3 * * *' }, { name: 'sweep', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register basis-retention-sweep scheduler'));
+new Worker<BasisRetentionSweepJobData>(
+  'basis-retention-sweep',
+  async (job: Job<BasisRetentionSweepJobData>) => { await processBasisRetentionSweepJob(job, logger); },
+  { ...connection, concurrency: 1 },
+);
 
 // Bearing recompute worker (recalculates KR progress from Bam data)
 const bearingRecomputeWorker = new Worker<BearingRecomputeJobData>(
