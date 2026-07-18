@@ -3,10 +3,12 @@ import { publishBoltEvent } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { basisMetrics, basisMetricVersions } from '../db/schema/index.js';
 import type {
+  BasisDefinition,
   CreateBasisMetricInput,
   CreateBasisVersionInput,
   UpdateBasisMetricInput,
 } from '@bigbluebam/shared';
+import { previewDefinition } from '../lib/bench-client.js';
 
 // Bolt event helper (source 'basis'). Fire-and-forget; never breaks the op.
 function emit(
@@ -16,6 +18,36 @@ function emit(
   actorId?: string,
 ) {
   void publishBoltEvent(eventType, 'basis', payload, orgId, actorId);
+}
+
+// Write-time drift guard (spec 4.2). After a create or version change, round-trip
+// the definition through Bench and persist resolve_status. Runs AFTER the write
+// transaction and is best-effort: a Bench outage returns 'unknown' and leaves the
+// stored status untouched, so a transient blip never marks a metric broken and
+// never blocks the write. A definitive 'resolve_failed' flags the metric so the
+// catalog can warn that the number is stale. Returns the resulting status.
+async function refreshResolveStatus(
+  orgId: string,
+  metricId: string,
+  def: BasisDefinition,
+): Promise<'ok' | 'resolve_failed' | 'unknown'> {
+  let verdict: 'ok' | 'resolve_failed' | 'unknown' = 'unknown';
+  try {
+    verdict = await previewDefinition(orgId, def);
+  } catch {
+    return 'unknown';
+  }
+  if (verdict === 'unknown') return 'unknown';
+  await db
+    .execute(
+      verdict === 'resolve_failed'
+        ? sql`UPDATE ${basisMetrics} SET resolve_status = 'resolve_failed', resolve_failed_at = now()
+               WHERE id = ${metricId} AND organization_id = ${orgId}`
+        : sql`UPDATE ${basisMetrics} SET resolve_status = 'ok', resolve_failed_at = NULL
+               WHERE id = ${metricId} AND organization_id = ${orgId}`,
+    )
+    .catch(() => {});
+  return verdict;
 }
 
 export interface ListMetricsOptions {
@@ -104,13 +136,15 @@ export async function createMetric(
     return { metric: updated ?? metricRow, currentVersion: version };
   });
 
+  // Validate the definition against Bench and persist resolve_status (spec 4.2).
+  const resolveStatus = await refreshResolveStatus(orgId, created.metric.id, input.definition);
   emit(
     'metric.created',
     { metric: { id: created.metric.id, slug: created.metric.slug, name: created.metric.name } },
     orgId,
     userId,
   );
-  return created;
+  return { ...created, metric: { ...created.metric, resolve_status: resolveStatus === 'unknown' ? created.metric.resolve_status : resolveStatus } };
 }
 
 // New immutable version + set as current. Emits metric.definition_changed.
@@ -159,6 +193,8 @@ export async function addVersion(
     return { metric, version };
   });
   if (!result) return null;
+  // A new definition can newly resolve or newly break; re-validate against Bench.
+  await refreshResolveStatus(orgId, metricId, input.definition);
   emit(
     'metric.definition_changed',
     { metric: { id: metricId }, version: { number: result.version.version_number, change_note: result.version.change_note } },

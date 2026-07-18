@@ -95,6 +95,31 @@ export async function queryScalar(
   return v == null ? null : Number(v);
 }
 
+// Write-time drift guard (spec 4.2 / reuse ledger): round-trip the definition
+// through Bench's governed query builder to confirm it still resolves against its
+// source. Returns a definitive verdict only:
+//   'ok'            - Bench accepted the query (source/fields/agg all resolve)
+//   'resolve_failed'- Bench rejected the definition (bad source, unknown field)
+//   'unknown'       - Bench was unreachable/misconfigured; do NOT flip status on
+//                     a transient outage (a blip must not mark a metric broken).
+// A tiny recent window is enough - Bench validates the source, fields, and agg
+// regardless of range, so this is cheap.
+export async function previewDefinition(
+  orgId: string,
+  def: BasisDefinition,
+): Promise<'ok' | 'resolve_failed' | 'unknown'> {
+  const to = new Date();
+  const from = new Date(to.getTime() - 7 * 86400_000);
+  try {
+    await queryScalar(orgId, def, { from: from.toISOString(), to: to.toISOString() });
+    return 'ok';
+  } catch (err) {
+    if (err instanceof BadDefinitionError) return 'resolve_failed';
+    // UpstreamUnavailableError or anything else = transient / cannot verify.
+    return 'unknown';
+  }
+}
+
 // Grouped-by-dimension values of a metric over a period (for decomposition).
 export async function queryGrouped(
   orgId: string,
