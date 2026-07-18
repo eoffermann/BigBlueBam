@@ -754,6 +754,26 @@ function buildManifest() {
     { id: 'banter.admin_import.create', app: 'banter', resource: 'admin_import', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'banter.admin_import.status', app: 'banter', resource: 'admin_import', verb: 'status', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'banter.admin_import.abort', app: 'banter', resource: 'admin_import', verb: 'abort', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: false },
+    // Basis (migration 0229_permissions_seed_actions_delta_020). basis-api is a
+    // satellite app deliberately NOT in APP_TO_PREFIX, and its MCP tools use a
+    // `basis_` prefix that is not in APP_PREFIXES, so neither the route scanner
+    // nor the tool scanner emits these ids. They are hand-authored for two
+    // reasons: (1) custom verbs (define/certify/decertify/deprecate/version) are
+    // not derivable from HTTP method, and (2) certify/decertify are a truth-flip
+    // that requires_confirmation WITHOUT being is_destructive - a shape the
+    // verb-driven classifier cannot produce (it ties the two flags together).
+    // `metric.update` (PATCH /metrics/:id) and `datasource.read` (GET
+    // /v1/data-sources) are no-tool endpoints per the design doc. Keep this list
+    // in sync with the basis rows in migration 0229.
+    { id: 'basis.metric.read', app: 'basis', resource: 'metric', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'basis.metric.define', app: 'basis', resource: 'metric', verb: 'define', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'basis.metric.update', app: 'basis', resource: 'metric', verb: 'update', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'basis.metric.version', app: 'basis', resource: 'metric', verb: 'version', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'basis.metric.certify', app: 'basis', resource: 'metric', verb: 'certify', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'basis.metric.decertify', app: 'basis', resource: 'metric', verb: 'decertify', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'basis.metric.deprecate', app: 'basis', resource: 'metric', verb: 'deprecate', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'basis.explain.run', app: 'basis', resource: 'explain', verb: 'run', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'basis.datasource.read', app: 'basis', resource: 'datasource', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
@@ -773,6 +793,10 @@ function buildManifest() {
       if (c.id.startsWith('banter.admin_import.')) {
         migrationLabel = '0168';
         sourceFile = 'slack-import.routes.ts';
+      }
+      if (c.id.startsWith('basis.')) {
+        migrationLabel = '0229';
+        sourceFile = 'metrics.routes.ts';
       }
       byId.set(c.id, {
         id: c.id,
