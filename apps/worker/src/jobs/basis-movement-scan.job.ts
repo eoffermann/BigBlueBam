@@ -75,21 +75,28 @@ export async function processBasisMovementScanJob(
     const isBreached = breached(latest, r.target);
 
     if (isBreached && !r.last_breach_direction) {
-      // New crossing -> fire once.
+      // New crossing. Compare-and-set the marker: only publish if THIS run won
+      // the transition (last_breach_direction was still NULL). Guards against a
+      // BullMQ stalled-job re-delivery double-firing metric.threshold_breached.
       const deltaAbs = prior == null ? 0 : latest - prior;
       const deltaPct = prior && prior !== 0 ? (deltaAbs / prior) * 100 : null;
       const direction = deltaAbs >= 0 ? 'up' : 'down';
-      await db.execute(sql`
-        UPDATE basis_metrics SET last_breach_at = now(), last_breach_direction = ${direction}
-        WHERE id = ${r.id}
-      `);
-      void publishBoltEvent(
-        'metric.threshold_breached',
-        'basis',
-        { metric: { id: r.id }, delta_abs: deltaAbs, delta_pct: deltaPct, direction },
-        r.organization_id,
+      const won = rows<{ id: string }>(
+        await db.execute(sql`
+          UPDATE basis_metrics SET last_breach_at = now(), last_breach_direction = ${direction}
+          WHERE id = ${r.id} AND last_breach_direction IS NULL
+          RETURNING id
+        `),
       );
-      fired++;
+      if (won.length > 0) {
+        void publishBoltEvent(
+          'metric.threshold_breached',
+          'basis',
+          { metric: { id: r.id }, delta_abs: deltaAbs, delta_pct: deltaPct, direction },
+          r.organization_id,
+        );
+        fired++;
+      }
     } else if (!isBreached && r.last_breach_direction) {
       // Recovered -> clear the marker so the next crossing fires again.
       await db.execute(sql`

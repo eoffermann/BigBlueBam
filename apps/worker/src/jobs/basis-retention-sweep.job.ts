@@ -39,8 +39,21 @@ export async function processBasisRetentionSweepJob(
       SELECT organization_id, snapshot_max_age_days FROM basis_org_settings
     `),
   );
-  const anyUnbounded =
-    policies.length === 0 || policies.some((p) => p.snapshot_max_age_days == null);
+  // "anyUnbounded" must consider EVERY org that has snapshots, not just those
+  // with a basis_org_settings row - an org with no row defaults to unbounded
+  // (settings.service getSettings returns null). A coarse partition DROP is
+  // global, so if ANY org with data is unbounded we must skip the coarse tier
+  // entirely, or we would destroy that org's history (stability review #47).
+  const unboundedOrg = rows<{ organization_id: string }>(
+    await db.execute(sql`
+      SELECT DISTINCT s.organization_id
+      FROM basis_metric_snapshots s
+      LEFT JOIN basis_org_settings st ON st.organization_id = s.organization_id
+      WHERE st.organization_id IS NULL OR st.snapshot_max_age_days IS NULL
+      LIMIT 1
+    `),
+  );
+  const anyUnbounded = unboundedOrg.length > 0;
 
   // Per-org bounded ranged DELETEs (safe within shared partitions).
   let deletedRows = 0;

@@ -79,8 +79,30 @@ export async function processBasisPartitionProvisionJob(
     }
   }
 
+  // Detect real spillover: rows that landed in the DEFAULT catch-all because a
+  // month partition was missing. These are NOT reclaimable by the coarse
+  // retention tier and require the manual detach/create/redistribute/re-attach
+  // runbook, so alarm (ERROR) rather than let it rot silently (stability #51).
+  let defaultRows = 0;
+  try {
+    const occ = rows<{ n: number }>(
+      await db.execute(sql`SELECT count(*)::int AS n FROM basis_metric_snapshots_default`),
+    );
+    defaultRows = occ[0]?.n ?? 0;
+  } catch {
+    /* DEFAULT partition may not exist in a hand-built env */
+  }
+  if (defaultRows > 0) {
+    logger.error(
+      { jobId: job.id, defaultRows },
+      'basis-partition-provision: DEFAULT partition holds rows (spillover) - a month partition was missing; ' +
+        'manual runbook required (detach DEFAULT, create the month partition, redistribute, re-attach). ' +
+        'The coarse retention tier cannot reclaim DEFAULT-resident rows.',
+    );
+  }
+
   logger.info(
-    { jobId: job.id, created, failed, monthsAhead },
+    { jobId: job.id, created, failed, monthsAhead, defaultRows },
     'basis-partition-provision: done',
   );
 }
