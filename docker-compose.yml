@@ -257,6 +257,10 @@ services:
       # Qdrant. Both are degradable request-time deps (spec 9.2).
       BBB_API_INTERNAL_URL: http://api:4000
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      # braid-proposal-reconcile drives approved/rejected proposals through braid-api's
+      # single merge executor (POST /internal/proposal-decided). Backstop for lost Bolt
+      # proposal.decided delivery (Braid spec §4.6).
+      BRAID_API_INTERNAL_URL: http://braid-api:4020
     volumes:
       # Read-only view of what livekit-config rendered/advertised, for
       # the hourly livekit-ip-drift job: it re-detects the public IP via
@@ -568,6 +572,9 @@ services:
       - RATE_LIMIT_MAX=100
       - RATE_LIMIT_WINDOW_MS=60000
       - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+      # Braid live-ingest transport (Braid spec §6): bolt-api forwards subscribed source
+      # events to braid-api's /internal/events, which enqueues match-on-ingest jobs.
+      - BRAID_API_INTERNAL_URL=http://braid-api:4020
       # Wave D Phase 3: per-action permission enforcement at this satellite.
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}

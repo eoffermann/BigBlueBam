@@ -4,6 +4,7 @@ import type { BraidResolveResult } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { braidProfiles, braidIdentities, entityLinks } from '../db/schema/index.js';
 import { acquireResolveLock } from '../lib/advisory-lock.js';
+import { enqueueBraidIngest } from '../lib/queue.js';
 import { preflightAccess } from '../lib/can-access.client.js';
 import { AccessDeniedError, RateLimitError } from '../lib/errors.js';
 import { env } from '../env.js';
@@ -141,9 +142,6 @@ export async function resolve(
       })
       .onConflictDoNothing();
 
-    // TODO(M6): enqueue braid-match-on-ingest for the freshly-seeded identity so it
-    // clusters normally in the worker (the queue does not exist until M6).
-
     return {
       profile_id: profileId,
       kind,
@@ -151,6 +149,18 @@ export async function resolve(
       created: true,
     };
   });
+
+  // Enqueue the freshly-seeded identity so the worker clusters it normally (spec 5.1). Done
+  // AFTER commit so the identity row is visible to the worker; best-effort, the nightly
+  // rescan source-diff is the fallback if the enqueue is dropped.
+  if (result.created) {
+    await enqueueBraidIngest({
+      orgId,
+      sourceType: input.source_type,
+      sourceId: input.source_id,
+      seeded: true,
+    });
+  }
 
   return result;
 }

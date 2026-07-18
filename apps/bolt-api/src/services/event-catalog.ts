@@ -2873,6 +2873,63 @@ const blipEvents: EventDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Braid (identity resolution) events (Braid design spec section 7.1). Payloads
+// are refs + magnitude only; org-level linkage disclosure (spec 2.5 S6). No PII
+// or raw evidence in any frame.
+// ---------------------------------------------------------------------------
+
+const braidEvents: EventDefinition[] = [
+  {
+    source: 'braid',
+    event_type: 'profile.merged',
+    description:
+      'Fired when two golden profiles are merged (auto-merge or human decision). Carries the survivor id plus the affected source-identity list (needed for consumer cache invalidation), never the absorbed cluster members.',
+    payload_schema: [
+      { name: 'profile.id', type: 'uuid', description: 'Surviving golden profile ID' },
+      { name: 'affected_identities', type: 'object[]', description: 'Source identities moved by the merge: { source_type, source_id }' },
+      { name: 'identity_count', type: 'number', description: 'Member count of the survivor after the merge' },
+      { name: 'decision_kind', type: 'enum', description: 'How the merge was decided', enum: ['auto', 'merge'] },
+      { name: 'actor.id', type: 'uuid?', description: 'Decider user id (Braid service account for auto-merges)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'braid',
+    event_type: 'profile.split',
+    description: 'Fired when a golden profile is unmerged or split. Carries the survivor id, the optional new profile id, and the affected source-identity list.',
+    payload_schema: [
+      { name: 'profile.id', type: 'uuid', description: 'Surviving golden profile ID' },
+      { name: 'new_profile_id', type: 'uuid?', description: 'The reactivated/newly-minted profile id the identities moved to' },
+      { name: 'affected_identities', type: 'object[]', description: 'Source identities moved by the split: { source_type, source_id }' },
+      { name: 'actor.id', type: 'uuid?', description: 'Decider user id' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'braid',
+    event_type: 'profile.matched',
+    description: 'Fired when a new source identity is auto-linked to an existing profile below the merge bar (a sub-threshold attach, not a two-profile merge).',
+    payload_schema: [
+      { name: 'profile.id', type: 'uuid', description: 'Golden profile the identity was attached to' },
+      { name: 'identity.source_type', type: 'string', description: 'Source app of the attached identity (e.g. bond.contact)' },
+      { name: 'identity.source_id', type: 'uuid', description: 'Source-app row id of the attached identity' },
+      { name: 'actor.id', type: 'uuid?', description: 'Decider user id (Braid service account for auto-links)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'braid',
+    event_type: 'candidate.created',
+    description: 'Fired when a review-band candidate is queued for human review. Refs + score only; no PII or evidence in the frame.',
+    payload_schema: [
+      { name: 'candidate.id', type: 'uuid', description: 'Match-candidate ID' },
+      { name: 'score', type: 'number', description: 'Resolved match score in [0,1]' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -2896,6 +2953,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...bureauEvents,
   ...wave1bEvents,
   ...blipEvents,
+  ...braidEvents,
 ];
 
 export function getAllEvents(): EventDefinition[] {

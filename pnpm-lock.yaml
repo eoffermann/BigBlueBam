@@ -3168,6 +3168,9 @@ importers:
       argon2:
         specifier: ^0.41.1
         version: 0.41.1
+      bullmq:
+        specifier: ^5.0.0
+        version: 5.73.0
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1

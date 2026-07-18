@@ -64,6 +64,26 @@ export interface TaskLinkTitleFetchJobData {
 }
 
 /**
+ * Braid identity-resolution match-on-ingest (Braid design spec §4 / §6). The
+ * braid-api /internal/events route (fed by bolt-api dispatch) and the lazy
+ * resolve path both enqueue a refs-only job; the worker reads the source row
+ * directly, normalizes, blocks, scores, and routes to an autonomy band. Shared
+ * so the producer (braid-api) and consumer (worker) can't drift on the queue
+ * name or payload shape.
+ */
+export const BRAID_MATCH_ON_INGEST_QUEUE = 'braid-match-on-ingest';
+
+export interface BraidMatchOnIngestJobData {
+  org_id: string;
+  /** Dotted source identity type, e.g. 'bond.contact' | 'book.event_attendee'. */
+  source_type: string;
+  /** Source-app row id. */
+  source_id: string;
+  /** Optional hint that this identity was just lazily seeded by resolve. */
+  seeded?: boolean;
+}
+
+/**
  * Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10). Producers
  * (banter-api message routes, later other apps) enqueue one job per platform
  * activity event; the worker classifies it, resolves concerned users, and

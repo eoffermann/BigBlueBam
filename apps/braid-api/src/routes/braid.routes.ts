@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { ZodError } from 'zod';
 import {
   braidResolveInputSchema,
+  braidProposeMergeSchema,
   braidRejectCandidateSchema,
   braidMergeProfilesSchema,
   braidSplitProfileSchema,
@@ -19,6 +20,7 @@ import * as mergeService from '../services/merge.service.js';
 import * as settingsService from '../services/settings.service.js';
 import * as survivorshipService from '../services/survivorship.service.js';
 import { resolve as resolveRecord } from '../services/resolve.service.js';
+import { enqueueBraidIngest } from '../lib/queue.js';
 import { handleProposalDecided } from '../subscriptions/proposal-decided.js';
 import type { Viewer } from '../services/types.js';
 import {
@@ -226,6 +228,28 @@ export default async function braidRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Agent/human-initiated propose (spec 2.4 / 10). Upserts a candidate + inbox proposal;
+  // the proposal is the HITL, so no confirm token here.
+  fastify.post(
+    '/candidates',
+    { preHandler: [requireAuth, can('braid.candidate.read')] },
+    async (request, reply) => {
+      const parsed = braidProposeMergeSchema.safeParse(request.body);
+      if (!parsed.success) return validationError(request, reply, parsed.error);
+      try {
+        const candidate = await candidateService.proposeMerge(
+          request.user!.org_id,
+          request.user!.id,
+          parsed.data,
+        );
+        return reply.status(201).send({ data: candidate });
+      } catch (err) {
+        if (err instanceof NotFoundError) return notFound(request, reply, err.message);
+        throw err;
+      }
+    },
+  );
+
   fastify.post(
     '/candidates/:id/merge',
     { preHandler: [requireAuth, can('braid.profile.merge')] },
@@ -429,12 +453,19 @@ export default async function braidRoutes(fastify: FastifyInstance) {
         },
       });
     }
-    // TODO(M6): enqueue { org_id, source_type, source_id } into braid-match-on-ingest.
+    // Enqueue a refs-only job into the shared braid-match-on-ingest queue (spec §6). The
+    // worker reads the source row directly and clusters it. Best-effort: an enqueue failure
+    // degrades to the nightly rescan source-diff (the documented soft-dependency fallback).
+    const enqueued = await enqueueBraidIngest({
+      orgId: body.org_id,
+      sourceType: body.source_type,
+      sourceId: body.source_id,
+    });
     request.log.info(
-      { org_id: body.org_id, source_type: body.source_type },
-      'braid /internal/events received (M4 stub; enqueue wired in M6)',
+      { org_id: body.org_id, source_type: body.source_type, enqueued },
+      'braid /internal/events enqueued match-on-ingest',
     );
-    return reply.status(202).send({ data: { accepted: true } });
+    return reply.status(202).send({ data: { accepted: true, enqueued } });
   });
 
   // proposal.decided delivery (spec 2.2 / 5.4). See subscriptions/proposal-decided.ts

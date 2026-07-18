@@ -210,6 +210,25 @@ import {
 import { processBlipFieldIndexJob } from './jobs/blip-field-index.job.js';
 import { processBlipExportJsonlJob } from './jobs/blip-export-jsonl.job.js';
 import { processBlipTimelapseJob } from './jobs/blip-timelapse.job.js';
+// Braid identity-resolution engine (Braid design spec §4 / §6). Queue contract in
+// @bigbluebam/shared; the engine + advisory lock live under lib/braid.
+import { BRAID_MATCH_ON_INGEST_QUEUE, type BraidMatchOnIngestJobData } from '@bigbluebam/shared';
+import {
+  processBraidMatchOnIngestJob,
+  braidIngestDlq,
+} from './jobs/braid-match-on-ingest.job.js';
+import {
+  processBraidRescanJob,
+  type BraidRescanJobData,
+} from './jobs/braid-rescan.job.js';
+import {
+  processBraidProposalReconcileJob,
+  type BraidProposalReconcileJobData,
+} from './jobs/braid-proposal-reconcile.job.js';
+import {
+  processBraidCandidateRetentionJob,
+  type BraidCandidateRetentionJobData,
+} from './jobs/braid-candidate-retention.job.js';
 
 const env = loadEnv();
 
@@ -2066,6 +2085,96 @@ banterFeedFaninWorker.on('failed', (job, err) => {
   });
 });
 
+// ─── Braid (identity resolution) engine ────────────────────────────────────
+// Event-driven match-on-ingest consumer + three scheduled sweeps (Braid spec §4.6).
+// The ingest queue is also produced to by braid-api's /internal/events route + resolve
+// path (the live transport) and by the nightly rescan (the source-diff fallback).
+const braidMatchQueue = new Queue<BraidMatchOnIngestJobData>(BRAID_MATCH_ON_INGEST_QUEUE, {
+  connection: redis,
+});
+
+const braidMatchWorker = new Worker<BraidMatchOnIngestJobData>(
+  BRAID_MATCH_ON_INGEST_QUEUE,
+  async (job: Job<BraidMatchOnIngestJobData>) => {
+    await processBraidMatchOnIngestJob(job, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+braidMatchWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BRAID_MATCH_ON_INGEST_QUEUE }, 'Job completed');
+});
+braidMatchWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BRAID_MATCH_ON_INGEST_QUEUE, err }, 'Job failed');
+  void recordWorkerError({
+    queueName: BRAID_MATCH_ON_INGEST_QUEUE,
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+  // DLQ on final give-up: flag needs_rescan so the nightly rescan re-processes (spec ST-r2-7).
+  const maxAttempts = job?.opts?.attempts ?? 1;
+  if (job && job.attemptsMade >= maxAttempts && job.data) {
+    void braidIngestDlq(job.data, logger);
+  }
+});
+
+const braidRescanWorker = new Worker<BraidRescanJobData>(
+  'braid-rescan',
+  async (job: Job<BraidRescanJobData>) => {
+    await processBraidRescanJob(job, braidMatchQueue, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+braidRescanWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'braid-rescan' }, 'Job completed');
+});
+braidRescanWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'braid-rescan', err }, 'Job failed');
+  void recordWorkerError({ queueName: 'braid-rescan', jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const braidRescanQueue = new Queue('braid-rescan', { connection: redis });
+braidRescanQueue
+  .upsertJobScheduler('braid-rescan-daily', { pattern: '20 3 * * *' }, { name: 'rescan', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register braid-rescan scheduler'));
+
+const braidProposalReconcileWorker = new Worker<BraidProposalReconcileJobData>(
+  'braid-proposal-reconcile',
+  async (job: Job<BraidProposalReconcileJobData>) => {
+    await processBraidProposalReconcileJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+braidProposalReconcileWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'braid-proposal-reconcile' }, 'Job completed');
+});
+braidProposalReconcileWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'braid-proposal-reconcile', err }, 'Job failed');
+  void recordWorkerError({ queueName: 'braid-proposal-reconcile', jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const braidProposalReconcileQueue = new Queue('braid-proposal-reconcile', { connection: redis });
+braidProposalReconcileQueue
+  .upsertJobScheduler('braid-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, { name: 'reconcile', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register braid-proposal-reconcile scheduler'));
+
+const braidCandidateRetentionWorker = new Worker<BraidCandidateRetentionJobData>(
+  'braid-candidate-retention',
+  async (job: Job<BraidCandidateRetentionJobData>) => {
+    await processBraidCandidateRetentionJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+braidCandidateRetentionWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'braid-candidate-retention' }, 'Job completed');
+});
+braidCandidateRetentionWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'braid-candidate-retention', err }, 'Job failed');
+  void recordWorkerError({ queueName: 'braid-candidate-retention', jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const braidCandidateRetentionQueue = new Queue('braid-candidate-retention', { connection: redis });
+braidCandidateRetentionQueue
+  .upsertJobScheduler('braid-candidate-retention-daily', { pattern: '50 3 * * *' }, { name: 'sweep', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register braid-candidate-retention scheduler'));
+
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by
 // the browser realtime bus), filters message.created events, evaluates
@@ -2178,6 +2287,11 @@ const workers = [
   blipExportJsonlWorker,
   blipTimelapseWorker,
   analyticsWorker,
+  // Braid identity resolution (§4.6)
+  braidMatchWorker,
+  braidRescanWorker,
+  braidProposalReconcileWorker,
+  braidCandidateRetentionWorker,
 ];
 
 logger.info(
@@ -2258,6 +2372,11 @@ logger.info(
       'livekit-ip-drift',
       // TURN-TLS certificate expiry watchdog (daily)
       'turn-cert-expiry',
+      // Braid identity resolution (§4.6)
+      BRAID_MATCH_ON_INGEST_QUEUE,
+      'braid-rescan',
+      'braid-proposal-reconcile',
+      'braid-candidate-retention',
     ],
   },
   'All workers started',

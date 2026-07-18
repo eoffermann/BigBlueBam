@@ -15,6 +15,8 @@ import { evaluateConditions, type ConditionDef } from '../services/condition-eng
 import { detectCatalogDrift } from '../services/catalog-drift-detector.js';
 // §20 Wave 5 webhooks
 import { dispatchToSubscribedRunners } from '../services/webhook-dispatch-hook.js';
+// Braid live-ingest transport (Braid design spec §6, IN3)
+import { dispatchToBraid } from '../services/braid-dispatch-hook.js';
 import { Queue } from 'bullmq';
 import type Redis from 'ioredis';
 
@@ -148,6 +150,21 @@ export default async function eventIngestionRoutes(fastify: FastifyInstance) {
         {
           orgId: event.org_id,
           eventId,
+          source: event.source,
+          eventType: event.event_type,
+          payload: event.payload,
+        },
+        request.log,
+      ).catch(() => {
+        // swallowed: helper has its own logging
+      });
+
+      // Braid live-ingest transport (spec §6): forward subscribed source events to
+      // braid-api's /internal/events, which enqueues a match-on-ingest job. Fire-and-forget;
+      // a dropped dispatch degrades to the nightly braid-rescan source-diff.
+      void dispatchToBraid(
+        {
+          orgId: event.org_id,
           source: event.source,
           eventType: event.event_type,
           payload: event.payload,

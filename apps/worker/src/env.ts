@@ -17,6 +17,15 @@ const envSchema = z.object({
   API_INTERNAL_URL: z.string().url().default('http://api:4000'),
   INTERNAL_SERVICE_SECRET: z.string().default(''),
 
+  // Braid engine (spec §9.2). BBB_API_INTERNAL_URL is the platform llm-provider + can_access
+  // preflight base; QDRANT_URL is the soft embedding-recall dependency (blocking degrades to
+  // key+trigram when absent); BRAID_API_INTERNAL_URL is where braid-proposal-reconcile drives
+  // approved/rejected proposals through braid-api's single merge executor.
+  BBB_API_INTERNAL_URL: z.string().url().default('http://api:4000'),
+  BRAID_API_INTERNAL_URL: z.string().url().default('http://braid-api:4020'),
+  QDRANT_URL: z.string().url().optional(),
+  UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+
   // Bin AV-scan (Bin master §9.3). 'eicar' (default) does a dependency-free
   // signature scan — it flags the standard EICAR test string as infected and
   // otherwise marks the object clean, so the serving pipeline is autonomous on
