@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LayoutGrid } from 'lucide-react';
 import { Launchpad } from '@bigbluebam/ui/launchpad';
+import type { CreateBasisMetricInput } from '@bigbluebam/shared';
 import { api, type Metric } from './lib/api';
 
 /* ----------------------------- routing (lean) ---------------------------- */
@@ -83,11 +84,17 @@ function Catalog({ nav }: { nav: (p: string) => void }) {
       api.createMetric({
         slug: form.slug,
         name: form.name,
-        unit: form.unit,
+        // The <select> options are constrained to valid enum members in the UI,
+        // so narrow the free-form form strings to the shared input enums here.
+        unit: form.unit as CreateBasisMetricInput['unit'],
+        favorable_direction: 'up',
         definition: {
           source_product: form.source_product,
           source_entity: form.source_entity,
-          measure: { field: form.field, agg: form.agg },
+          measure: {
+            field: form.field,
+            agg: form.agg as CreateBasisMetricInput['definition']['measure']['agg'],
+          },
           default_dimensions: [],
           time_column: form.time_column,
         },

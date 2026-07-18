@@ -139,8 +139,71 @@ export const basisExplanationSchema = z.object({
 });
 
 /* ------------------------------------------------------------------ */
+/*  Persisted response shapes (single source of truth for the SPA)    */
+/* ------------------------------------------------------------------ */
+
+// A persisted metric row as basis-api serializes it (JSON: timestamps are ISO
+// strings, jsonb columns are typed). This is THE shape the SPA imports instead
+// of re-declaring its own interface (spec section 4).
+export const basisMetricSchema = z.object({
+  id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  unit: BasisUnit,
+  favorable_direction: BasisFavorableDirection,
+  owner_id: z.string().uuid().nullable(),
+  certification: BasisCertification,
+  current_version_id: z.string().uuid().nullable(),
+  related_apps: z.array(z.string()),
+  target: basisTargetSchema.nullable(),
+  resolve_status: BasisResolveStatus,
+  resolve_failed_at: z.string().nullable(),
+  last_breach_at: z.string().nullable(),
+  last_breach_direction: z.string().nullable(),
+  created_by: z.string().uuid().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+// A persisted immutable definition version row.
+export const basisMetricVersionSchema = z.object({
+  id: z.string().uuid(),
+  metric_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  version_number: z.number().int(),
+  definition: basisDefinitionSchema,
+  lineage: basisLineageSchema,
+  change_note: z.string().nullable(),
+  created_by: z.string().uuid().nullable(),
+  created_at: z.string(),
+});
+
+// GET /metrics/:id and the create/version write paths return this envelope.
+export const basisMetricWithVersionSchema = z.object({
+  metric: basisMetricSchema,
+  currentVersion: basisMetricVersionSchema.nullable(),
+});
+
+// GET /metrics/:id/value response.
+export const basisValueSchema = z.object({
+  value: z.number().nullable(),
+  unit: BasisUnit,
+});
+
+/* ------------------------------------------------------------------ */
 /*  Org settings                                                      */
 /* ------------------------------------------------------------------ */
+
+// GET /settings response (resolved effective settings; never null - the service
+// returns defaults for an org with no row).
+export const basisOrgSettingsSchema = z.object({
+  snapshot_max_age_days: z.number().int().nullable(),
+  explanation_cache_ttl_seconds: z.number().int(),
+  default_dimension: z.string().nullable(),
+});
+
 
 export const updateBasisOrgSettingsSchema = z
   .object({
@@ -163,3 +226,8 @@ export type BasisExplainRequest = z.infer<typeof basisExplainRequestSchema>;
 export type BasisDriver = z.infer<typeof basisDriverSchema>;
 export type BasisExplanation = z.infer<typeof basisExplanationSchema>;
 export type UpdateBasisOrgSettingsInput = z.infer<typeof updateBasisOrgSettingsSchema>;
+export type BasisMetric = z.infer<typeof basisMetricSchema>;
+export type BasisMetricVersion = z.infer<typeof basisMetricVersionSchema>;
+export type BasisMetricWithVersion = z.infer<typeof basisMetricWithVersionSchema>;
+export type BasisValue = z.infer<typeof basisValueSchema>;
+export type BasisOrgSettings = z.infer<typeof basisOrgSettingsSchema>;

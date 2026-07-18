@@ -1,5 +1,25 @@
 // Minimal typed client for the Basis REST API. Shares the Bam session cookie.
+//
+// Response/request shapes are imported from @bigbluebam/shared (the single source
+// of truth per spec section 4) as `import type` so no zod runtime is pulled into
+// the SPA bundle. Do NOT re-declare metric/version shapes here.
+import type {
+  BasisMetric,
+  BasisMetricVersion,
+  BasisMetricWithVersion,
+  BasisValue,
+  BasisExplanation,
+  BasisOrgSettings,
+  CreateBasisMetricInput,
+  BasisExplainRequest,
+} from '@bigbluebam/shared';
+
 const BASE = '/basis/api/v1';
+
+// Re-export the shared metric shapes under the SPA's historical names so existing
+// component imports keep working without re-typing the API contract.
+export type Metric = BasisMetric;
+export type MetricVersion = BasisMetricVersion;
 
 export class ApiError extends Error {
   constructor(
@@ -28,39 +48,19 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return json.data as T;
 }
 
-export interface Metric {
-  id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  unit: string;
-  favorable_direction: string;
-  certification: string;
-  resolve_status: string;
-  updated_at: string;
-}
-
-export interface MetricVersion {
-  id: string;
-  version_number: number;
-  definition: unknown;
-  change_note: string | null;
-  created_at: string;
-}
-
 export const api = {
   listMetrics: (certification?: string) =>
-    req<Metric[]>('GET', `/metrics${certification ? `?filter[certification]=${certification}` : ''}`),
-  getMetric: (id: string) =>
-    req<{ metric: Metric; currentVersion: MetricVersion | null }>('GET', `/metrics/${id}`),
-  createMetric: (input: unknown) =>
-    req<{ metric: Metric; currentVersion: MetricVersion }>('POST', '/metrics', input),
-  listVersions: (id: string) => req<MetricVersion[]>('GET', `/metrics/${id}/versions`),
-  certify: (id: string) => req<Metric>('POST', `/metrics/${id}/certify`),
-  decertify: (id: string) => req<Metric>('POST', `/metrics/${id}/decertify`),
-  deprecate: (id: string) => req<Metric>('DELETE', `/metrics/${id}`),
+    req<BasisMetric[]>('GET', `/metrics${certification ? `?filter[certification]=${certification}` : ''}`),
+  getMetric: (id: string) => req<BasisMetricWithVersion>('GET', `/metrics/${id}`),
+  createMetric: (input: CreateBasisMetricInput) =>
+    req<BasisMetricWithVersion>('POST', '/metrics', input),
+  listVersions: (id: string) => req<BasisMetricVersion[]>('GET', `/metrics/${id}/versions`),
+  certify: (id: string) => req<BasisMetric>('POST', `/metrics/${id}/certify`),
+  decertify: (id: string) => req<BasisMetric>('POST', `/metrics/${id}/decertify`),
+  deprecate: (id: string) => req<BasisMetric>('DELETE', `/metrics/${id}`),
   getValue: (id: string, from: string, to: string) =>
-    req<{ value: number | null; unit: string }>('GET', `/metrics/${id}/value?from=${from}&to=${to}`),
-  explain: (id: string, input: unknown) => req<unknown>('POST', `/metrics/${id}/explain`, input),
-  getSettings: () => req<unknown>('GET', '/settings'),
+    req<BasisValue>('GET', `/metrics/${id}/value?from=${from}&to=${to}`),
+  explain: (id: string, input: BasisExplainRequest) =>
+    req<BasisExplanation>('POST', `/metrics/${id}/explain`, input),
+  getSettings: () => req<BasisOrgSettings>('GET', '/settings'),
 };
