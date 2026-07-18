@@ -53,6 +53,31 @@ dev stack, so value/explain compute live numbers. The governance decisions
 - Pre-existing, non-Basis items tracked as tasks: `deployment_secrets` db:check
   drift, 3 retired `bam.config_health` perms, site `manual.tsx` missing deps.
 
+## Deferred differentiated capabilities (tracked, not silently done)
+
+The adversarial post-commit review (issue #49) correctly flagged that several
+first-class pipeline legs designed in the spec are stubbed in the landed code. They
+are the differentiated capabilities of the app, so they are recorded as explicit
+tracking tasks (#16-#19) rather than left reading as done:
+
+1. **Certified-driver narrative** (#16): `basis-explain` LLM job absent; explanations
+   store `narrative: null`. Needs the internal llm-provider and an `explanation.ready`
+   re-emit. Depends on a configured LLM provider (see the HUMAN_SETUP doc).
+2. **Per-user correlation** (#17): the read-time possibly-related-activity plane is
+   hard-coded empty (`correlation: []`). Needs the `can_access` + `related_apps`
+   resolver against `v_activity_unified` / `bolt_recent_events`.
+3. **Class-B k>=2 suppression** (#18): a Class-B breakdown is collapsed to a single
+   fail-closed "Other (all N hidden)" bucket for every viewer; per-user label
+   resolution and the k-anonymous secondary (N=1 complementary-disclosure) suppression
+   are not implemented. Encoded as `it.todo` executable spec-of-record.
+4. **Bench-preview write-time drift guard** (#19): create/version paths do not
+   round-trip the definition through bench-api preview, and `resolve_status` is written
+   only by the snapshot job, never validated at write time.
+
+The deterministic core (definition -> certified metric -> additive decomposition ->
+threshold movement) is complete and verified; the above are the next enhancements. None
+block the shipped happy path.
+
 ## Operational notes learned this cycle
 
 - The WSL2/BuildKit cache silently reuses stale images; `docker compose build
