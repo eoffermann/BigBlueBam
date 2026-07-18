@@ -21,6 +21,7 @@ import { processBearingSnapshotJob, type BearingSnapshotJobData } from './jobs/b
 import { processBasisPartitionProvisionJob, type BasisPartitionProvisionJobData } from './jobs/basis-partition-provision.job.js';
 import { processBasisMetricSnapshotJob, type BasisMetricSnapshotJobData } from './jobs/basis-metric-snapshot.job.js';
 import { processBasisMovementScanJob, type BasisMovementScanJobData } from './jobs/basis-movement-scan.job.js';
+import { processBasisExplainJob, type BasisExplainJobData } from './jobs/basis-explain.job.js';
 import { processBasisRetentionSweepJob, type BasisRetentionSweepJobData } from './jobs/basis-retention-sweep.job.js';
 import { processBearingRecomputeJob, type BearingRecomputeJobData } from './jobs/bearing-recompute.job.js';
 import { processBearingDigestJob, type BearingDigestJobData } from './jobs/bearing-digest.job.js';
@@ -660,6 +661,16 @@ basisSnapshotQueue
 new Worker<BasisMetricSnapshotJobData>(
   'basis-metric-snapshot',
   async (job: Job<BasisMetricSnapshotJobData>) => { await processBasisMetricSnapshotJob(job, logger); },
+  { ...connection, concurrency: 1 },
+);
+
+const basisExplainQueue = new Queue('basis-explain', { connection: redis });
+basisExplainQueue
+  .upsertJobScheduler('basis-explain-narrative', { pattern: '*/10 * * * *' }, { name: 'narrate', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register basis-explain scheduler'));
+new Worker<BasisExplainJobData>(
+  'basis-explain',
+  async (job: Job<BasisExplainJobData>) => { await processBasisExplainJob(job, logger); },
   { ...connection, concurrency: 1 },
 );
 

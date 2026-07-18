@@ -1856,6 +1856,16 @@ const benchEvents: EventDefinition[] = [
 const basisEvents: EventDefinition[] = [
   {
     source: 'basis',
+    event_type: 'metric.explanation_ready',
+    description: 'Fired when the basis-explain worker attaches a Class-A driver narrative to a computed explanation.',
+    payload_schema: [
+      { name: 'metric.id', type: 'uuid', description: 'Metric ID' },
+      { name: 'cache_key', type: 'string', description: 'Explanation cache key' },
+      { name: 'narrative_ready', type: 'boolean', description: 'True when a narrative was attached' },
+    ],
+  },
+  {
+    source: 'basis',
     event_type: 'metric.created',
     description: 'Fired when a new Basis metric (draft) is defined.',
     payload_schema: [

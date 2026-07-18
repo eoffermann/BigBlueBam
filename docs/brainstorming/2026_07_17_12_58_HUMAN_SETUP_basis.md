@@ -1,105 +1,64 @@
 # Basis - Human Setup Requirements
 
 Companion to `2026_07_17_12_58_APP_DESIGN_basis.md` and the build on the
-`suite-brainstorm` branch. These are the items the autonomous build **cannot**
-complete on its own - they need a human decision, a cross-team change, or a secret.
-Everything not listed here is being built and tested autonomously; the paths that
-depend on these items are marked "pending human setup" until each is provided.
+`suite-brainstorm` branch.
 
-Status legend: **BLOCKER** (a core runtime path does not work until done) ·
-**DECISION** (a governance/scoping call the build should not make alone) ·
-**CONFIG** (a secret/env value only a human should set).
-
----
-
-## 1. Bench internal query route (2-mode auth) - BLOCKER
-
-- **What:** a new internal query route on **`bench-api`** that Basis calls
-  server-to-server to run governed queries, with the two auth modes in spec 4.1:
-  (a) user requests forward the caller's bearer, validated live via `requireAuth`
-  with org derived from the verified principal, `INTERNAL_SERVICE_SECRET` as an
-  additional gate; (b) workers present `INTERNAL_SERVICE_SECRET` + an explicit
-  `org_id`.
-- **Why:** the entire `/value` and `/explain` path and every snapshot/movement job
-  depend on it. Without it, Basis can define, certify, and version metrics, but
-  cannot compute a value or an explanation. This route is owned by the Bench
-  maintainers (Open Question 3), so the autonomous build treats it as a
-  prerequisite rather than silently editing Bench's auth surface.
-- **Where:** `apps/bench-api/src/routes/` (new internal route) + the query builder in
-  `apps/bench-api/src/services/query.service.ts`. Follow the existing
-  `INTERNAL_SERVICE_SECRET`-guarded internal-route precedent.
-- **Verify:** with the route live and `INTERNAL_SERVICE_SECRET` set, a Basis
-  `/v1/metrics/:id/value` call returns a number and `/explain` returns a driver
-  decomposition; org isolation holds (a token for org A cannot read org B).
-- **Interim build behavior:** Basis ships the value/explain endpoints with the Bench
-  client behind a circuit breaker returning a typed `UPSTREAM_UNAVAILABLE` when the
-  route is absent, so the app deploys and every non-query path works.
-
-## 2. `INTERNAL_SERVICE_SECRET` must be non-empty wherever Basis runs - CONFIG
-
-- **What:** set `INTERNAL_SERVICE_SECRET` to a real value for `basis-api`, the
-  `worker`, and `bench-api` (it must match).
-- **Why:** the platform default is empty, which correctly **fails closed** - both
-  bench-auth modes reject the call, so value/explain and all jobs no-op.
-- **Where:** `.env` (and the Railway/deploy env for each of those services). Already
-  a required env var per the root `CLAUDE.md` Environment section.
-- **Verify:** `docker compose exec basis-api printenv INTERNAL_SERVICE_SECRET`
-  returns a non-empty value equal to the one on `bench-api` and `worker`.
-
-## 3. Ratio / average / percentile decomposition sign-off - DECISION
-
-- **What:** confirm that for non-additive measures (`avg`, ratios, percentiles) the
-  contribution decomposition is labeled **"directional, not exact"** in v1 (exact
-  `sum(contributions) == delta_abs` holds only for `sum`/`count`).
-- **Why:** the "one trusted number" promise is exact only for additive measures;
-  ratio explanations are directional and must be presented as such so no one treats
-  them as reconciling arithmetic (Open Question 1).
-- **Where:** product decision; reflected in the Explain Explorer copy and the
-  explanation payload's `exact: boolean` flag.
-
-## 4. Certification governance - DECISION
-
-- **What:** decide who may flip a metric to **certified**. Default gate is
-  `basis.metric.certify` (org admin/owner). Open question: whether a permissioned
-  **service account / agent may ever certify without a human** (Open Question 7).
-- **Why:** certification is the act that makes a definition the org-wide source of
-  truth; the truth-flip MCP tools already require a Redis-backed confirm token, but
-  the human-vs-agent policy for certification is a governance call.
-- **Where:** the `basis.metric.certify` permission grant + `agent_policies` for any
-  service account that should (or should not) hold it.
-
-## 5. Class-B resolver coverage + `related_apps` seeding - DECISION
-
-- **What:** decide which entity-FK decomposition dimensions ship registered
-  resolvers in v1 (owner, company, project?) and which neighbor apps an admin may
-  add to a metric's `related_apps` correlation neighborhood (Open Questions 4, 5).
-- **Why:** unregistered dimensions are simply not offered for decomposition, and
-  correlation quality depends on the `related_apps` set; both are scoping calls, not
-  code the build should guess.
-- **Where:** the resolver registry in `basis-api` and the metric's `related_apps`
-  field / Settings page.
-
-## 6. `/resolve` presentation-envelope precedence in Bench - DECISION + cross-team
-
-- **What:** a coordinated **Bench** change so a widget bound to a Basis metric
-  prefers the Basis presentation envelope (`unit`, `favorable_direction`, `target`,
-  `display_name`) from `GET /basis/api/v1/metrics/:id/resolve` over its local
-  `kpi_config` (Open Question 6).
-- **Why:** without it, a KPI card bound to "MRR" can still render with a stale local
-  target/direction - two sources of truth for presentation, the thing Basis exists
-  to unify.
-- **Where:** `apps/bench-api` widget resolution + `apps/bench/` KPI renderer.
-- **Interim build behavior:** Basis exposes `/resolve` with the full envelope now;
-  the Bench-side preference is a follow-up and is marked pending here.
+**Scope of this doc (corrected):** it lists ONLY items that require a genuinely
+**external** credential or account that the autonomous build cannot self-issue - a
+third-party API key, an account on another company's service, DNS, or a paid
+provider. Internal engineering (cross-app routes, resolvers, schema, events, worker
+jobs, governance defaults) is NOT listed here: the build implements all of that
+itself, end to end, on-branch. Governance and scoping calls the earlier draft
+deferred as "decisions" are made by the build using the spec's own defaults, and can
+be changed by the maintainer later.
 
 ---
 
-## Not blocked (built and tested autonomously)
+## 1. An LLM provider (API key) for Class-A metric narratives - EXTERNAL, optional
 
-Metric catalog + CRUD, versioning + immutable lineage, certify/decertify/deprecate
-with Redis confirm tokens, the definition builder with Bench-preview round-trip
-validation, snapshots + movement detection + retention (all local), the Launchpad
-tile, docs, gilligan screenshots, and the marketing entry do **not** depend on the
-items above and are completed in the normal cycle. Only the live value/explain
-numbers (items 1-2) and the two cross-team preferences (items 4-6 decisions,
-item 6 Bench change) wait on a human.
+- **What:** an organization-level LLM provider configured in **Settings -> AI
+  Providers** (an Anthropic or OpenAI-compatible API key), the same provider record
+  the rest of the suite's AI features use.
+- **Why:** the deterministic explainer (exact per-dimension drivers) is fully
+  autonomous and needs nothing external. The optional plain-language **narrative**
+  on a Class-A explanation is generated by the `basis-explain` worker job through the
+  Bam API's internal `/internal/llm/chat` proxy, which needs a provider's key. With
+  no provider configured, the job simply skips that org and leaves `narrative` null;
+  everything else (drivers, values, movement, thresholds, search) works unchanged.
+- **Where:** the org admin adds a provider under `/b3/` Settings -> AI Providers
+  (rows in `llm_providers`). No Basis-specific config: Basis reuses whatever the org
+  already set up for suite AI.
+- **Verify:** with a provider configured, within ~10 minutes of computing a Class-A
+  explanation the metric detail / explain payload shows a one-to-two sentence
+  narrative, and a `metric.explanation_ready { narrative_ready: true }` Bolt event
+  fires on the `basis` source. With no provider, `basis-explain` logs
+  `skippedNoProvider` and no narrative appears - not an error.
+
+---
+
+## Everything else is built and tested autonomously (not human setup)
+
+The following were in an earlier draft of this doc as "blockers" or "decisions."
+They are NOT external dependencies, so the build owns them and they are done or being
+built on-branch:
+
+- **Bench internal governed-query route (2-mode auth)** - BUILT. `bench-api` exposes
+  the `INTERNAL_SERVICE_SECRET` + `org_id` internal query route; Basis's value,
+  explain, snapshot, and movement paths all use it.
+- **`INTERNAL_SERVICE_SECRET`** - standard platform env var (already required by the
+  root `CLAUDE.md`); set it for `basis-api`, `worker`, and `bench-api` as for every
+  other service. Not a Basis-specific setup step.
+- **Non-additive (avg/ratio/percentile) decomposition** - decided by the build: v1
+  labels these "directional, not exact" via an `exact` flag; exact reconciliation
+  holds for `sum`/`count`. No human sign-off gate.
+- **Certification governance** - decided by the build: certifying is gated by the
+  `basis.metric.certify` permission; agents use the two-step `confirm_action` preview
+  before any truth flip. Change the grant later if desired.
+- **Class-B resolver coverage + `related_apps`** - implemented by the build using the
+  Class-A allowlist and per-viewer `can_access` gating; unmapped dimensions fail
+  closed. Not a human scoping call.
+- **Bench `/resolve` presentation-envelope preference** - internal cross-app work the
+  build implements in `bench-api`/`bench`; not deferred to a human.
+
+Only item 1 (an external LLM API key, and only for the optional narrative) depends on
+a human, and even then the app is fully functional without it.
