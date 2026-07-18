@@ -15,11 +15,30 @@ autonomously, start to finish.
 0. **NEVER pause for human input. Ever.** This is a fully-autonomous loop; most of the
    time no human is watching. You do not ask questions, request approval, wait for
    sign-off, or "hand off and stop." When you would otherwise ask a human to decide,
-   make the most reasonable decision yourself, record it, and keep going. When something
-   genuinely needs a human-provided secret or external account, write it to the
-   HUMAN_SETUP doc, build/test everything that does not depend on it, and continue -
-   never block. The only thing you never do is merge to `main` (gate 2), and that is not
-   a pause: promotion is simply out of scope, so you keep producing on the branch.
+   make the most reasonable decision yourself, record it, and keep going. The five
+   ideator seats already brainstormed, negotiated, and voted the app and its feature
+   set - you do NOT re-litigate scope or wait for a human to pick features. Build the
+   whole spec, end to end.
+0a. **Build every internal dependency yourself; do not defer buildable work.** Your job
+   is to fully implement the app end to end. If a feature needs another app to expose
+   something (a new Bench internal query route, a new shared package export, a new event,
+   a schema column, an MCP provider registration, a worker job, an LLM call through the
+   existing internal `llm-provider` service), you BUILD that too, on-branch, and wire it.
+   "Stub it", "deferred", "forthcoming", "a follow-up", or "out of scope" are NOT
+   acceptable dispositions for work you are capable of doing - they are how an app ships
+   half-done. The only things that legitimately block a code path are genuinely external:
+   a third-party API key/secret, an OAuth app registration on someone else's service, a
+   paid provider account, DNS, or a manual credential you cannot self-issue. Those - and
+   ONLY those - go in the HUMAN_SETUP doc (gate 0b). An internal route, resolver, or
+   invariant the spec designed is a thing you implement, never a thing you note and skip.
+0b. **HUMAN_SETUP is for external secrets/accounts only.** Write
+   `docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md` ONLY for items that require a
+   human-held external credential or third-party account. Never put internal engineering
+   work (cross-app routes, resolvers, migrations, providers, tests) there to avoid doing
+   it. Build and test everything that does not depend on a genuinely external secret, mark
+   only the truly-external-dependent path as pending, and continue. The only thing you
+   never do is merge to `main` (gate 2), and that is not a pause: promotion is simply out
+   of scope, so you keep producing on the branch.
 1. **Branch-locked.** All work stays on `suite-brainstorm` or on **feature branches
    created off `suite-brainstorm`** (`git switch -c feat/<app>-<slice> suite-brainstorm`).
    Never work on, commit to, push to, or merge into `main` or `stable`.
@@ -172,16 +191,25 @@ docker compose restart frontend                              # after any *-api c
 Never `-v`. Confirm the migration applied (`docker compose exec -T postgres psql ... "\d <table>"`)
 and the service is healthy before testing.
 
-**When the app needs human configuration to fully work** (an external API key or secret,
-an OAuth app registration, a third-party account, DNS, a paid provider, a manual env var,
-or any step you cannot complete autonomously), do NOT silently stub or skip it. Write a
-setup doc alongside the session and design docs:
+**When - and ONLY when - a code path needs a genuinely EXTERNAL credential** (a
+third-party API key or secret, an OAuth app registration on someone else's service, a
+paid provider account, DNS, or a manual credential you cannot self-issue), do NOT silently
+stub or skip it. Write a setup doc alongside the session and design docs:
 `docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md`. It must state, for each item: exactly
 **what** is needed, **why** (which feature is degraded/blocked without it), **where** to
 put it (the precise env var / file / admin screen), and how to verify it once provided.
-Build and test everything that does not depend on the missing piece, mark the dependent
-paths as "pending human setup" in the doc and the Phase 6 report, and keep going -
-the cycle never blocks waiting on a human.
+Build and test everything that does not depend on that external secret, mark only the
+externally-blocked path as "pending human setup" in the doc and the Phase 6 report, and
+keep going - the cycle never blocks waiting on a human.
+
+**Internal work is NOT a HUMAN_SETUP item and is NOT deferrable** (gate 0a). If a feature
+needs another app to expose a route, a shared export, an event, a schema column, an MCP
+provider, a worker job, or an LLM call through the existing internal `llm-provider`
+service, you BUILD it, on-branch, in this cycle - you do not write it up as "pending",
+"forthcoming", or "a follow-up". The HUMAN_SETUP doc is for external credentials only;
+using it to park engineering you are capable of doing is a bug in your process. If you
+catch yourself about to defer an internal capability the spec designed, stop and implement
+it instead.
 
 ## Phase 4 - Extensive tests
 
