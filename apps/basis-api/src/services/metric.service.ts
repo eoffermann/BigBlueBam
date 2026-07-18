@@ -114,8 +114,9 @@ export async function createMetric(
 }
 
 // New immutable version + set as current. Emits metric.definition_changed.
-// The route/MCP layer enforces HITL (Redis confirm token) for versioning a
-// CERTIFIED metric; this service performs the write.
+// The MCP layer applies the platform two-step confirm_action preview leg (see
+// basis_add_metric_version in apps/mcp-server/src/tools/basis-tools.ts) before
+// re-baselining a certified metric; this service performs the write.
 export async function addVersion(
   orgId: string,
   userId: string,

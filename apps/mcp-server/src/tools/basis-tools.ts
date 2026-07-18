@@ -172,12 +172,34 @@ export function registerBasisTools(server: McpServer, api: ApiClient, basisApiUr
     },
   });
 
+  // Two-step confirm helper (mirrors blip_app_delete): the first call (no
+  // confirm_action) returns a preview of the current metric + certification so a
+  // reviewer sees exactly what will flip; only confirm_action:true mutates. This
+  // is the platform's inline two-step convention for truth-flip/destructive MCP
+  // actions (security review #50/#58).
+  async function previewMetric(id: string, willDo: string) {
+    const a = await client.request('GET', `/metrics/${id}`);
+    return ok({
+      preview: `${willDo} Call again with confirm_action:true to proceed.`,
+      metric: a.data,
+    });
+  }
+
   registerTool(server, {
     name: 'basis_add_metric_version',
-    description: 'Add a new immutable definition version to a metric (versioning a certified metric is a truth change).',
-    input: { id: z.string().uuid(), definition: definitionSchema, change_note: z.string().optional() },
+    description:
+      'Add a new immutable definition version to a metric. Versioning a certified metric changes the org-wide source of truth, so this is a two-step confirm: call with confirm_action omitted/false to preview the current metric, then again with confirm_action:true to proceed.',
+    input: {
+      id: z.string().uuid(),
+      definition: definitionSchema,
+      change_note: z.string().optional(),
+      confirm_action: z.boolean().optional().describe('Set true to actually add the version'),
+    },
     returns: z.record(z.unknown()),
-    handler: async ({ id, ...body }) => {
+    handler: async ({ id, confirm_action, ...body }) => {
+      if (!confirm_action) {
+        return previewMetric(id, `Will add a new immutable definition version to metric ${id}, re-baselining its history.`);
+      }
       const r = await client.request('POST', `/metrics/${id}/versions`, body);
       return r.ok ? ok(r.data) : err('adding metric version', r.data);
     },
@@ -185,10 +207,17 @@ export function registerBasisTools(server: McpServer, api: ApiClient, basisApiUr
 
   registerTool(server, {
     name: 'basis_certify_metric',
-    description: 'Certify a metric so it becomes the org-wide source of truth (truth-flip; requires confirmation).',
-    input: { id: z.string().uuid() },
+    description:
+      'Certify a metric so it becomes the org-wide source of truth (truth-flip). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.',
+    input: {
+      id: z.string().uuid(),
+      confirm_action: z.boolean().optional().describe('Set true to actually certify'),
+    },
     returns: z.record(z.unknown()),
-    handler: async ({ id }) => {
+    handler: async ({ id, confirm_action }) => {
+      if (!confirm_action) {
+        return previewMetric(id, `Will certify metric ${id}, making it the org-wide source of truth.`);
+      }
       const r = await client.request('POST', `/metrics/${id}/certify`);
       return r.ok ? ok(r.data) : err('certifying metric', r.data);
     },
@@ -196,10 +225,17 @@ export function registerBasisTools(server: McpServer, api: ApiClient, basisApiUr
 
   registerTool(server, {
     name: 'basis_decertify_metric',
-    description: 'Return a certified metric to draft (truth-flip; requires confirmation).',
-    input: { id: z.string().uuid() },
+    description:
+      'Return a certified metric to draft (truth-flip). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.',
+    input: {
+      id: z.string().uuid(),
+      confirm_action: z.boolean().optional().describe('Set true to actually decertify'),
+    },
     returns: z.record(z.unknown()),
-    handler: async ({ id }) => {
+    handler: async ({ id, confirm_action }) => {
+      if (!confirm_action) {
+        return previewMetric(id, `Will decertify metric ${id}, returning the org-wide source of truth to draft.`);
+      }
       const r = await client.request('POST', `/metrics/${id}/decertify`);
       return r.ok ? ok(r.data) : err('decertifying metric', r.data);
     },
@@ -207,10 +243,17 @@ export function registerBasisTools(server: McpServer, api: ApiClient, basisApiUr
 
   registerTool(server, {
     name: 'basis_deprecate_metric',
-    description: 'Deprecate (soft-retire) a metric (destructive; requires confirmation).',
-    input: { id: z.string().uuid() },
+    description:
+      'Deprecate (soft-retire) a metric (destructive). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed.',
+    input: {
+      id: z.string().uuid(),
+      confirm_action: z.boolean().optional().describe('Set true to actually deprecate'),
+    },
     returns: z.record(z.unknown()),
-    handler: async ({ id }) => {
+    handler: async ({ id, confirm_action }) => {
+      if (!confirm_action) {
+        return previewMetric(id, `Will deprecate (soft-retire) metric ${id}.`);
+      }
       const r = await client.request('DELETE', `/metrics/${id}`);
       return r.ok ? ok(r.data) : err('deprecating metric', r.data);
     },
