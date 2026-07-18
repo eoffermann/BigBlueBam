@@ -53,18 +53,35 @@ With the lock held:
 
 1. **Confirm the branch.** `git switch suite-brainstorm`; if the tree is unexpectedly
    dirty (beyond known pre-existing changes), record it and stop rather than guessing.
-2. **Brainstorm + harden the spec.** Invoke the `suite-brainstorm` skill. It runs the five
+2. **Sync from `main` FIRST (before any brainstorm or build).** Pull the latest trunk into
+   the branch so a new app is built on top of current `main`, not a stale snapshot:
+   `git fetch origin`, then `git merge --no-edit origin/main` into `suite-brainstorm`. This
+   is the ALLOWED merge direction (main -> branch); it is NOT a violation of the
+   no-merge-to-trunk rule, which only forbids the reverse (branch -> main). Then:
+   - **Clean merge:** push the branch (`git push origin suite-brainstorm`) and continue.
+   - **Conflicts:** resolve them yourself (never pause). Prefer `main`'s version for shared
+     and platform files (`packages/*`, `infra/*`, the Bam `apps/api` core, `CLAUDE.md`,
+     numbered migrations) and keep the branch's version for brainstorming artifacts
+     (`docs/brainstorming/*`) and satellite-app code that lives only on the branch. Commit
+     the resolved merge and push.
+   - **Intractable conflict:** `git merge --abort`, note it in the cycle summary, and
+     continue the cycle on the un-synced branch. A sync problem must NEVER block, pause, or
+     abort the loop - staying in sync is best-effort, shipping the cycle is not.
+   After a new migration arrives from `main`, re-run `docker compose run --rm migrate` before
+   building so the local DB matches trunk.
+3. **Brainstorm + harden the spec.** Invoke the `suite-brainstorm` skill. It runs the five
    ideators, debate, vote, and the adversarial spec-hardening loop, and on convergence it
    auto-hands off to the build. If you are running the phases directly, that handoff is
-   step 3.
-3. **Build, deploy, test.** The winning `docs/brainstorming/<stamp>_APP_DESIGN_<app>.md`
+   step 4.
+4. **Build, deploy, test.** The winning `docs/brainstorming/<stamp>_APP_DESIGN_<app>.md`
    goes to `app-build-from-spec`: implement, wire the Launchpad + infra, deploy to the
    local Docker dev stack, and run the **extensive tests including the Playwright
    user-story + backend-verification pass**. If the app needs configuration only a human
    can provide, write `docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md` and keep going.
-4. **Release the lock** and write a one-paragraph cycle summary (app shipped, tests status,
-   any human-setup doc, any automated-review issues still open) so the next fire and the
-   maintainer can see what happened.
+5. **Release the lock** and write a one-paragraph cycle summary (app shipped, tests status,
+   whether the main->branch sync was clean/conflicted/skipped, any human-setup doc, any
+   automated-review issues still open) so the next fire and the maintainer can see what
+   happened.
 
 ## Hard rules (inherited, restated)
 

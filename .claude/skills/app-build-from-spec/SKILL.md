@@ -81,7 +81,14 @@ autonomously, start to finish.
    data model + migration plan, API/MCP surface, workers, events, infra section, and the
    **Reuse ledger** (it names the exact packages/siblings to build on).
 2. Confirm you are on `suite-brainstorm` (`git switch suite-brainstorm`); if the tree is
-   dirty, stop and report rather than guessing.   
+   dirty, stop and report rather than guessing. Then **sync from `main` first**:
+   `git fetch origin && git merge --no-edit origin/main` so you build on current trunk
+   (this is the allowed merge direction; only branch->main is forbidden). Resolve any
+   conflicts favoring `main` for shared/platform files and the branch for
+   `docs/brainstorming/*` + satellite-app code; if intractable, `git merge --abort`, note
+   it, and continue - a sync problem never blocks the build. Re-run
+   `docker compose run --rm migrate` if the merge brought new migrations. (When invoked by
+   `autonomous-cycle`, that skill already did this sync; doing it again is a harmless no-op.)
 3. Turn the spec into an ordered milestone plan, roughly:
    M1 scaffold (`apps/<app>-api` + `apps/<app>` from the sibling the spec models on) ·
    M2 data model (Drizzle schema modules + numbered idempotent migrations; run
