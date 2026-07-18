@@ -54,7 +54,8 @@ autonomously, start to finish.
    M2 data model (Drizzle schema modules + numbered idempotent migrations; run
    `docker compose run --rm migrate`) · M3 shared Zod (`packages/shared/src/schemas/<app>.ts`) ·
    M4 API routes + realtime · M5 MCP tools + agent_policies/allowlist + surface-map ·
-   M6 workers + Bolt events (register in `event-catalog.ts`) · M7 frontend SPA ·
+   M6 workers + Bolt events (register in `event-catalog.ts`) · M7 frontend SPA
+   (**must match `/b3/` shell + include the Bureau widget - see Phase 1b**) ·
    M8 **Launchpad + infra wiring** (see Phase 2) · M9 docs · M10 screenshots ·
    M11 marketing site. Sequence per the spec's own dependency order.
 
@@ -75,6 +76,50 @@ For each milestone, work in small functional steps. After each meaningful step:
 
 Prefer feature branches off `suite-brainstorm` for larger slices, then merge them back
 into `suite-brainstorm` (keeping everything on-branch).
+
+## Phase 1b - Frontend shell parity (mandatory - always match `/b3/`)
+
+**Every app in the suite wears the same chrome. A new SPA is not done until it looks and
+behaves like `/b3/`.** Do NOT invent your own top bar, your own Launchpad, or your own color
+palette - that is the single most common way a new app ends up looking foreign. Before
+writing any SPA layout, open the Bam reference (`apps/frontend/src/components/layout/
+app-layout.tsx` + `sidebar.tsx`) AND the newest satellite app that already conforms
+(currently `apps/blip/` - `src/components/layout/blip-layout.tsx`, `blip-sidebar.tsx`,
+`src/main.tsx`, `src/styles/globals.css`). Copy that structure; change only the app name,
+icon, nav items, and routes.
+
+Required, non-negotiable, for every app's SPA:
+
+- **Shared sidebar** (`w-[260px] bg-sidebar`): a colored `bg-primary-600` badge + the app
+  name at the top, the app's own nav items, and the shared `SidebarPlatformFooter`
+  (`@bigbluebam/ui/sidebar-footer`) at the bottom - it provides Account Settings, People,
+  All Users, and the SuperUser console. Never re-implement that footer.
+- **Shared top bar** (`h-14`), left to right: `LaunchpadTrigger`; a page/breadcrumb
+  indicator that reflects where you are (like `/b3/` showing `Dashboard`, then
+  `Projects > <name>`); the `OrgSwitcher` (current org + selector); where applicable a
+  search field; a Banter quick-link; the `NotificationsBell` (Alerts); the `HelpTrigger`
+  for the current app; and the `UserMenu` (username/email, Account Settings, People, People
+  Manager, SuperUser Console, Sign out). ALL of these come from `@bigbluebam/ui/*` -
+  `launchpad`, `org-switcher`, `notifications-bell`, `help-center`, `user-menu`. Wire the
+  vite aliases for each (mirror the sibling's `vite.config.ts`).
+- **Shared Launchpad**: use `<Launchpad currentApp="<app>" />` from `@bigbluebam/ui/launchpad`.
+  It is a shared interface and must be launched from the same LaunchpadTrigger in the top bar
+  and look identical on every app. If it looks different, you built your own - delete it.
+- **Shared theme tokens**: copy the sibling's `src/styles/globals.css` verbatim (the blue
+  `--color-primary-*` ramp and the `--color-sidebar*` tokens). Do NOT introduce a different
+  accent (no indigo/violet/etc.); style buttons/links with `bg-primary-600`/`text-primary-600`.
+- **Bureau widget (mandatory, every app)**: mount the suite-wide Bureau docked call/presence
+  box in `src/main.tsx` exactly like the sibling - `mountBureauClient({ describeLocation,
+  initialRoute, navigate })` plus the pushState/replaceState/popstate wiring, and
+  `initSystemErrorReporter({ service: '<app>' })` - and add `@bigbluebam/bureau-client` to the
+  app's `package.json`. Every other app has it; a new app without it is incomplete.
+- **Shared providers + auth**: wrap the app in `PermissionsProvider` (fetcher hitting
+  `/b3/api/auth/me`), add the `src/stores/auth.store.ts` `fetchMe` store, the loading/auth
+  gate, the saved-theme apply, and the `?`-opens-Help shortcut - all copied from the sibling.
+
+Acceptance: side-by-side with `/b3/`, the sidebar, top bar, Launchpad, colors, and Bureau
+box are visually the same family; only the app's content differs. If any of the above is
+missing or bespoke, the SPA milestone (M7) is not complete.
 
 ## Phase 2 - Launchpad + infra wiring (do not skip)
 
