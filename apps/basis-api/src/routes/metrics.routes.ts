@@ -280,7 +280,7 @@ export default async function metricRoutes(fastify: FastifyInstance) {
         if (!result) return notFound(request, reply);
         return { data: result };
       } catch (err) {
-        if (benchError(request, reply, err)) return;
+        if (benchError(request, reply, err)) return reply;
         throw err;
       }
     },
@@ -310,7 +310,7 @@ export default async function metricRoutes(fastify: FastifyInstance) {
         }
         return { data: result.explanation };
       } catch (err) {
-        if (benchError(request, reply, err)) return;
+        if (benchError(request, reply, err)) return reply;
         throw err;
       }
     },

@@ -49,7 +49,36 @@ export default async function internalQueryRoutes(fastify: FastifyInstance) {
     }
 
     const { product, entity, org_id, config } = parsed.data;
-    const result = await executeQuery(product, entity, config as unknown as QueryConfig, org_id);
-    return { data: { rows: result.rows, duration_ms: result.duration_ms } };
+    try {
+      const result = await executeQuery(product, entity, config as unknown as QueryConfig, org_id);
+      return { data: { rows: result.rows, duration_ms: result.duration_ms } };
+    } catch (err) {
+      // A bad DEFINITION (unknown column/table/function, bad cast, or a field that
+      // does not exist on the entity) is a CLIENT error, not an outage. Postgres
+      // signals these with specific SQLSTATEs; surface them as 400 so the caller
+      // (Basis) can mark the metric resolve_failed instead of treating a permanent
+      // definition problem as a transient 5xx it will retry forever.
+      const code = (err as { code?: string } | null)?.code;
+      const DEFINITION_ERRORS = new Set([
+        '42703', // undefined_column
+        '42P01', // undefined_table
+        '42883', // undefined_function
+        '42P18', // indeterminate_datatype
+        '42804', // datatype_mismatch
+        '22P02', // invalid_text_representation
+        '42601', // syntax_error (bad identifier injected into the built query)
+      ]);
+      if (code && DEFINITION_ERRORS.has(code)) {
+        return reply.status(400).send({
+          error: {
+            code: 'DEFINITION_RESOLVE_FAILED',
+            message: (err as Error).message || 'The query definition did not resolve against its data source',
+            details: [{ path: 'config', message: `postgres ${code}` }],
+            request_id: request.id,
+          },
+        });
+      }
+      throw err;
+    }
   });
 }
