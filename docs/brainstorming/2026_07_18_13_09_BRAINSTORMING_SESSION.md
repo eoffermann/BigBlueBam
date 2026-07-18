@@ -492,7 +492,61 @@ warranting a merge negotiation. Reasoning for the non-obvious pairs:
 
 ## Phase 5 - Voting
 
-_(pending)_
+All five apps survived Phase 4, so a single vote round was held over the full slate.
+Each seat scored every app 1-5 and abstained on its own.
+
+### Vote matrix (round 1)
+
+| Voter | Bosun (A) | Braid (B) | Bevy (C) | Binder (D) | Bridle (E) |
+|---|---|---|---|---|---|
+| Seat A | ABSTAIN | 4 | 3 | 4 | 5 |
+| Seat B | 4 | ABSTAIN | 4 | 3 | 5 |
+| Seat C | 4 | 5 | ABSTAIN | 3 | 3 |
+| Seat D | 4 | 5 | 3 | ABSTAIN | 4 |
+| Seat E | 4 | 5 | 3 | 4 | ABSTAIN |
+| **Total** | **16** | **19** | **13** | **14** | **17** |
+
+**Result:** Braid wins outright with **19**; Bridle is runner-up with **17**. No tie at the
+top, so no runoff round is needed.
+
+### Rationale highlights
+
+- **Braid (19, winner):** the only app three separate seats scored a 5 (C, D, E). The
+  recurring argument: identity resolution is a universal SMB pain, it is genuinely AI-hard
+  (fuzzy + embedding + survivorship reasoning, not CRUD), it reuses the most existing apps
+  as fuel (Bond/Helpdesk/Blast/Bill/Book via `entity_links`), and it is the foundational
+  data layer every other app - including the other four finalists - silently needs. Seat D
+  explicitly called it the layer "every other app (including mine) silently needs."
+- **Bridle (17, runner-up):** scored a 5 by both agent-platform seats (A and E's neighbors)
+  as the highest-leverage platform move now that 20 apps are agent-operable; docked by C
+  and D for being infra-facing / overlapping the existing `agent_policies` kill-switch
+  rather than opening a new buyer.
+- **Bosun (16):** consistent 4s - admired as the most AI-native swing, but repeatedly
+  docked for scope-realism risk and for magnifying the agent risk that governance (Bridle)
+  must then contain.
+- **Binder (14):** sharpest concrete pain and clearest "no good SMB tool today," but capped
+  by voters as a narrow vertical that reuses the least horizontal platform.
+- **Bevy (13):** the closed feedback-to-delivery loop won partial credit, but four seats
+  independently flagged that a public feedback board is the slate's most clone-adjacent
+  category (Canny/Discourse), so its moat rides entirely on the triage agent.
+
+## Winner + handoff
+
+**Winner: Braid** - an AI customer-data platform whose agent-driven identity-resolution
+core braids Bond, Helpdesk, Blast, Bill, and Book records into one confidence-scored
+golden profile per real-world person or company, with human-in-the-loop merge review,
+survivorship rules, and a `braid_resolve(entity)` MCP tool consumed suite-wide. It is the
+unification substrate under the whole suite - distinct from Bench (analytics on the data)
+and Basis (metric definitions over the data) - and it makes every downstream count, send,
+and pipeline more trustworthy the moment it exists.
+
+**Runner-up: Bridle** (agent operations control tower, 17).
+
+- Session log: `docs/brainstorming/2026_07_18_13_09_BRAINSTORMING_SESSION.md`
+- Design spec: `docs/brainstorming/2026_07_18_13_09_APP_DESIGN_braid.md` (drafted in Phase 6)
+
+Proceeding to Phase 6 (spec draft -> adversarial hardening), then Phase 7 (autonomous
+build) - no pause for human review.
 
 ## Phase 6 - Spec hardening
 
