@@ -36,6 +36,24 @@ function viewerOf(request: FastifyRequest): Viewer {
   return { id: u.id, org_id: u.org_id, role: u.role, is_superuser: u.is_superuser };
 }
 
+// Effective viewer for the READ plane (security #60). When an agent supplies
+// `?asker_user_id=<uuid>` (the human it acts for, per docs/reference/agent-conventions.md),
+// the returned data MUST be filtered to what THAT person can see, never the bearer's
+// broader admin view. So an asker context forces a NON-admin viewer keyed on the asker id:
+// the admin fast-path is skipped and every field/identity is filtered per-asker via
+// preflightAccess. The caller must still hold braid.profile.read (admin-tier) to reach the
+// route, so passing an asker only ever narrows, never widens. A bogus asker id resolves
+// nothing and fails closed (empty result).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function readViewer(request: FastifyRequest): Viewer {
+  const u = request.user!;
+  const raw = (request.query as { asker_user_id?: string } | undefined)?.asker_user_id;
+  if (raw && UUID_RE.test(raw) && raw !== u.id) {
+    return { id: raw, org_id: u.org_id, role: 'member', is_superuser: false };
+  }
+  return { id: u.id, org_id: u.org_id, role: u.role, is_superuser: u.is_superuser };
+}
+
 function notFound(request: FastifyRequest, reply: FastifyReply, msg = 'Not found') {
   return reply.status(404).send({
     error: { code: 'NOT_FOUND', message: msg, details: [], request_id: request.id },
@@ -96,7 +114,7 @@ export default async function braidRoutes(fastify: FastifyInstance) {
       const q = request.query as { cursor?: string; limit?: string; filter?: Record<string, string> };
       const parsed = braidListQuerySchema.safeParse(q);
       const limit = parsed.success ? parsed.data.limit : 25;
-      const result = await profileService.listProfiles(request.user!.org_id, viewerOf(request), {
+      const result = await profileService.listProfiles(request.user!.org_id, readViewer(request), {
         cursor: q.cursor,
         limit,
         kind: q.filter?.kind,
@@ -114,7 +132,7 @@ export default async function braidRoutes(fastify: FastifyInstance) {
       const profile = await profileService.getProfileForViewer(
         request.user!.org_id,
         id,
-        viewerOf(request),
+        readViewer(request),
       );
       if (!profile) return notFound(request, reply, 'Profile not found');
       return { data: profile };
@@ -131,7 +149,7 @@ export default async function braidRoutes(fastify: FastifyInstance) {
       const rows = await profileService.listIdentitiesForViewer(
         request.user!.org_id,
         id,
-        viewerOf(request),
+        readViewer(request),
         limit,
       );
       return { data: rows };
@@ -146,7 +164,7 @@ export default async function braidRoutes(fastify: FastifyInstance) {
       const rows = await profileService.timelineForViewer(
         request.user!.org_id,
         id,
-        viewerOf(request),
+        readViewer(request),
       );
       return { data: rows };
     },
@@ -160,7 +178,7 @@ export default async function braidRoutes(fastify: FastifyInstance) {
       const rows = await profileService.decisionsForViewer(
         request.user!.org_id,
         id,
-        viewerOf(request),
+        readViewer(request),
       );
       return { data: rows };
     },
