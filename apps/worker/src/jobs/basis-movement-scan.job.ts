@@ -29,7 +29,7 @@ function rows<T>(raw: unknown): T[] {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] }).rows ?? [])) as T[];
 }
 
-function breached(value: number, target: { value: number; comparison: string }): boolean {
+export function breached(value: number, target: { value: number; comparison: string }): boolean {
   switch (target.comparison) {
     case 'gte':
       return value < target.value; // want >=, breach when below
