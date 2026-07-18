@@ -1,23 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LayoutGrid } from 'lucide-react';
-import { Launchpad } from '@bigbluebam/ui/launchpad';
+import { Loader2 } from 'lucide-react';
+import { HelpViewer } from '@bigbluebam/ui/help-viewer';
 import type { CreateBasisMetricInput } from '@bigbluebam/shared';
+import { useAuthStore } from '@/stores/auth.store';
+import { BasisLayout, type ActiveRoute } from '@/components/layout/basis-layout';
 import { api, type Metric } from './lib/api';
 
+const BASE_PATH = '/basis';
+
 /* ----------------------------- routing (lean) ---------------------------- */
-function usePath(): [string, (p: string) => void] {
-  const [path, setPath] = useState(window.location.pathname);
-  useEffect(() => {
-    const on = () => setPath(window.location.pathname);
-    window.addEventListener('popstate', on);
-    return () => window.removeEventListener('popstate', on);
-  }, []);
-  const nav = (p: string) => {
-    window.history.pushState(null, '', p);
-    setPath(p);
-  };
-  return [path, nav];
+type Route = { page: 'catalog' } | { page: 'metric'; id: string } | { page: 'help' };
+
+function stripBase(path: string): string {
+  if (path.startsWith(BASE_PATH)) return path.slice(BASE_PATH.length) || '/';
+  return path;
+}
+
+function parseRoute(path: string): Route {
+  const p = stripBase(path);
+  if (p === '/help') return { page: 'help' };
+  const m = p.match(/^\/metrics\/([^/]+)/);
+  if (m) return { page: 'metric', id: m[1]! };
+  return { page: 'catalog' };
 }
 
 const CERT_COLORS: Record<string, string> = {
@@ -34,29 +39,6 @@ function Badge({ cert }: { cert: string }) {
     >
       {cert}
     </span>
-  );
-}
-
-/* ------------------------------- top bar --------------------------------- */
-function TopBar() {
-  const [open, setOpen] = useState(false);
-  return (
-    <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-3">
-      <a href="/basis/" className="flex items-center gap-2 font-semibold text-indigo-600">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white">B</span>
-        Basis
-        <span className="text-xs font-normal text-zinc-400">Metric Layer</span>
-      </a>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-        title="Launchpad"
-      >
-        <LayoutGrid className="h-4 w-4" />
-        <span className="hidden sm:inline">Launchpad</span>
-      </button>
-      <Launchpad isOpen={open} onClose={() => setOpen(false)} currentApp="basis" />
-    </header>
   );
 }
 
@@ -101,7 +83,7 @@ function Catalog({ nav }: { nav: (p: string) => void }) {
       }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['metrics'] });
-      nav(`/basis/metrics/${res.metric.id}`);
+      nav(`/metrics/${res.metric.id}`);
     },
   });
 
@@ -139,7 +121,7 @@ function Catalog({ nav }: { nav: (p: string) => void }) {
               <tr
                 key={m.id}
                 data-testid="metric-row"
-                onClick={() => nav(`/basis/metrics/${m.id}`)}
+                onClick={() => nav(`/metrics/${m.id}`)}
                 className="cursor-pointer border-b border-zinc-100 dark:border-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-900"
               >
                 <td className="py-2 font-medium">{m.name}</td>
@@ -217,7 +199,7 @@ function Catalog({ nav }: { nav: (p: string) => void }) {
           data-testid="create-metric"
           disabled={!form.slug || !form.name || create.isPending}
           onClick={() => create.mutate()}
-          className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="mt-3 rounded-lg bg-primary-600 hover:bg-primary-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors"
         >
           {create.isPending ? 'Creating…' : 'Create draft metric'}
         </button>
@@ -248,7 +230,7 @@ function Detail({ id, nav }: { id: string; nav: (p: string) => void }) {
 
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <button onClick={() => nav('/basis/')} className="mb-4 text-sm text-indigo-600">
+      <button onClick={() => nav('/')} className="mb-4 text-sm text-primary-600 hover:text-primary-700">
         ← Catalog
       </button>
       <div className="flex items-center gap-3">
@@ -306,12 +288,106 @@ function Detail({ id, nav }: { id: string; nav: (p: string) => void }) {
 
 /* --------------------------------- app ----------------------------------- */
 export function App() {
-  const [path, nav] = usePath();
-  const detailMatch = path.match(/^\/basis\/metrics\/([^/]+)/);
+  const { isAuthenticated, isLoading, fetchMe } = useAuthStore();
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
+
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe]);
+
+  // Apply saved theme on mount (shared 'bbam-theme' key).
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('bbam-theme') ?? 'system';
+    const root = document.documentElement;
+    root.classList.remove('dark');
+    if (savedTheme === 'dark') {
+      root.classList.add('dark');
+    } else if (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      root.classList.add('dark');
+    }
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => setRoute(parseRoute(window.location.pathname));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const navigate = useCallback((path: string) => {
+    const full = `${BASE_PATH}${path}`;
+    window.history.pushState(null, '', full);
+    setRoute(parseRoute(full));
+  }, []);
+
+  // "?" opens Help for the current app (suite convention).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      const inInput = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
+      if (e.key === '?' && !inInput && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        navigate('/help');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navigate]);
+
+  // Breadcrumb title for the metric detail page (shares the ['metric', id]
+  // react-query cache, so no extra request).
+  const metricId = route.page === 'metric' ? route.id : undefined;
+  const { data: metricForCrumb } = useQuery({
+    queryKey: ['metric', metricId],
+    queryFn: () => api.getMetric(metricId!),
+    enabled: !!metricId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-zinc-50 dark:bg-zinc-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex items-center justify-center h-14 w-14 rounded-2xl bg-primary-600 text-white font-bold text-2xl">
+            B
+          </div>
+          <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-zinc-950 text-zinc-100">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Basis Metric Layer</h1>
+          <p className="text-zinc-400">Please log in to BigBlueBam first to access Basis.</p>
+          <a
+            href="/b3/"
+            className="inline-block px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Go to BigBlueBam Login
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (route.page === 'help') {
+    return <HelpViewer appSlug="basis" onBack={() => navigate('/')} />;
+  }
+
+  const activeRoute: ActiveRoute =
+    route.page === 'metric'
+      ? { page: 'metric', id: route.id, label: metricForCrumb?.metric.name }
+      : { page: 'catalog' };
+
   return (
-    <div className="min-h-screen">
-      <TopBar />
-      {detailMatch ? <Detail id={detailMatch[1]!} nav={nav} /> : <Catalog nav={nav} />}
-    </div>
+    <BasisLayout onNavigate={navigate} activeRoute={activeRoute}>
+      {route.page === 'metric' ? (
+        <Detail id={route.id} nav={navigate} />
+      ) : (
+        <Catalog nav={navigate} />
+      )}
+    </BasisLayout>
   );
 }
