@@ -243,6 +243,7 @@ function createMcpServer(
     beaconApiUrl: env.BEACON_API_URL,
     banterApiUrl: env.BANTER_API_URL,
     boardApiUrl: env.BOARD_API_URL,
+    basisApiUrl: env.BASIS_API_URL,
   });
   registerResolveTools(server, apiClient, {
     bondApiUrl: env.BOND_API_URL,

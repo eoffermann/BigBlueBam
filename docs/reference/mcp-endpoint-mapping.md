@@ -1934,7 +1934,7 @@ Noticed while mapping; **not fixed here** — flagging for follow-up:
 | `GET /health`, `GET /health/ready` | — _(skip: probe)_ | Health / readiness | — |
 | `/basis/ws` | — _(skip: realtime/ws)_ | Redis-PubSub `explanation.ready` notifications | — |
 
-A Basis provider for the platform `search_everything` fan-out is **deferred**, not yet registered: it needs a new `metric` entity type in the Wave 2 `can_access` allowlist (`apps/api/src/services/visibility.service.ts`) plus a scored search arm, both cross-cutting. Metrics are searchable today via `basis_search_metrics`. All 12 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`.
+A Basis provider IS registered in the platform `search_everything` fan-out (`searchBasisMetrics` in `apps/mcp-server/src/tools/search-tools.ts`), adding the `metric` entity type and the `basis` source. Metric hits are org-scoped by the caller's session RLS (like Banter/Board hits, metrics are not in the Wave 2 `can_access` allowlist because a metric is org-global, not per-user-restricted). Metrics are also directly searchable via `basis_search_metrics`. All 12 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`.
 
 **SPA scope note (§5 drift):** the design called for 5 pages (Catalog, Detail, Definition Builder, Why-Did-It-Change Explorer, Settings); 2 shipped (Catalog + Detail, the latter covering define/certify/decertify/deprecate + version history). The Definition Builder, Why-Did-It-Change Explorer, and Settings pages are deferred, so `GET /metrics/:id/value`, `POST /metrics/:id/explain`, and `GET|PUT /settings` have no UI call site yet.
 

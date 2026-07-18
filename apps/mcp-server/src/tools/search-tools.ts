@@ -41,7 +41,8 @@ type EntityType =
   | 'document'
   | 'beacon'
   | 'message'
-  | 'board';
+  | 'board'
+  | 'metric';
 
 type SourceApp =
   | 'bam'
@@ -50,7 +51,8 @@ type SourceApp =
   | 'brief'
   | 'beacon'
   | 'banter'
-  | 'board';
+  | 'board'
+  | 'basis';
 
 interface Hit {
   entity_type: EntityType;
@@ -90,6 +92,7 @@ const URL_BUILDERS: Record<EntityType, (id: string) => string> = {
   beacon: (id) => `/beacon/${id}`,
   message: (id) => `/banter/messages/${id}`,
   board: (id) => `/board/boards/${id}`,
+  metric: (id) => `/basis/metrics/${id}`,
 };
 
 /** Per-app weights applied after normalization. */
@@ -103,6 +106,7 @@ const APP_WEIGHTS: Record<EntityType, number> = {
   document: 0.9,
   board: 0.9,
   message: 0.7,
+  metric: 1.1,
 };
 
 /**
@@ -544,6 +548,57 @@ function scoreHits(arm: ArmResult): Hit[] {
 // Tool registration
 // ---------------------------------------------------------------------------
 
+// Basis governed metrics. Basis has no server-side search param, so fetch the
+// org's catalog (RLS-scoped by the caller's session) and match the query against
+// name/slug client-side. Metrics are org-global (not per-user-restricted at the
+// row level), so like banter/board hits they are included based on the source
+// app's own org RLS rather than a can_access entity type.
+async function searchBasisMetrics(
+  basisApiUrl: string,
+  api: ApiClient,
+  query: string,
+  timeoutMs: number,
+): Promise<ArmResult> {
+  const base = basisApiUrl.replace(/\/$/, '');
+  const headers = authHeaders(api);
+  const r = await fetchWithTimeout(
+    `${base}/metrics?limit=200`,
+    { method: 'GET', headers },
+    timeoutMs,
+  );
+  if (!r.ok) throw new Error(`status ${r.status}`);
+  const rows =
+    ((r.data as { data?: Array<Record<string, unknown>> } | null)?.data) ?? [];
+  const q = query.toLowerCase();
+  const matched = rows.filter((m) => {
+    const name = String(m.name ?? '').toLowerCase();
+    const slug = String(m.slug ?? '').toLowerCase();
+    return name.includes(q) || slug.includes(q);
+  });
+  return {
+    hits: matched.map((m, idx) => {
+      const cert = String(m.certification ?? 'draft');
+      const unit = String(m.unit ?? '');
+      return {
+        entity_type: 'metric' as const,
+        entity_id: String(m.id ?? ''),
+        title: String(m.name ?? m.slug ?? '(unnamed metric)'),
+        snippet: truncateSnippet(
+          [`${cert} metric`, unit && `unit ${unit}`, m.slug && `slug ${m.slug}`]
+            .filter(Boolean)
+            .join(' - '),
+        ),
+        // Certified metrics rank above drafts within the arm.
+        local_score:
+          Math.max(0, 1 - idx / Math.max(1, matched.length)) *
+          (cert === 'certified' ? 1 : cert === 'deprecated' ? 0.6 : 0.85),
+        source_app: 'basis' as const,
+        url: URL_BUILDERS.metric(String(m.id ?? '')),
+      };
+    }),
+  };
+}
+
 const ENTITY_TYPES: readonly EntityType[] = [
   'task',
   'ticket',
@@ -554,6 +609,7 @@ const ENTITY_TYPES: readonly EntityType[] = [
   'beacon',
   'message',
   'board',
+  'metric',
 ] as const;
 
 /** Bundle of URLs so the tool can fan out to every app. */
@@ -565,6 +621,7 @@ export interface SearchToolUrls {
   beaconApiUrl: string;
   banterApiUrl: string;
   boardApiUrl: string;
+  basisApiUrl: string;
 }
 
 export function registerSearchTools(
@@ -575,7 +632,7 @@ export function registerSearchTools(
   registerTool(server, {
     name: 'search_everything',
     description:
-      "Cross-app unified search. Fans out in parallel to per-app search endpoints (Bam tasks, Helpdesk tickets, Bond contacts/companies, Brief documents, Beacon entries, Banter messages, Board elements), normalizes each app's native relevance score, applies a per-app weight, and returns a ranked unified hit list. Use `types` to prune fan-out to a subset of entity kinds. Pass `as_user_id` to run a visibility preflight (can_access) on every supported hit and drop anything the asker cannot see; the count of dropped hits is reported as `filtered_count`. Note: Banter messages and Board elements are NOT in the Wave 2 can_access allowlist, so those hits are always included based on the source app's own RLS (banter channel membership, board visibility). Each arm has a 3s timeout; arm-level failures are reported in `errors[]` without failing the whole call.",
+      "Cross-app unified search. Fans out in parallel to per-app search endpoints (Bam tasks, Helpdesk tickets, Bond contacts/companies, Brief documents, Beacon entries, Banter messages, Board elements), normalizes each app's native relevance score, applies a per-app weight, and returns a ranked unified hit list. Use `types` to prune fan-out to a subset of entity kinds. Pass `as_user_id` to run a visibility preflight (can_access) on every supported hit and drop anything the asker cannot see; the count of dropped hits is reported as `filtered_count`. Note: Banter messages, Board elements, and Basis metrics are NOT in the Wave 2 can_access allowlist, so those hits are always included based on the source app's own RLS (banter channel membership, board visibility, and org-scoped metric catalog respectively). Each arm has a 3s timeout; arm-level failures are reported in `errors[]` without failing the whole call.",
     input: {
       query: z
         .string()
@@ -621,6 +678,7 @@ export function registerSearchTools(
             'beacon',
             'banter',
             'board',
+            'basis',
           ]),
           url: z.string(),
         }),
@@ -716,6 +774,13 @@ export function registerSearchTools(
           source_app: 'board',
           fetch: () =>
             searchBoardElements(urls.boardApiUrl, api, query, TIMEOUT_MS),
+        });
+      }
+      if (wantedTypes.has('metric')) {
+        arms.push({
+          source_app: 'basis',
+          fetch: () =>
+            searchBasisMetrics(urls.basisApiUrl, api, query, TIMEOUT_MS),
         });
       }
       // `deal` is declared in the schema for forward-compat but there is no
