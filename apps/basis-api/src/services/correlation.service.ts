@@ -47,13 +47,19 @@ export async function buildCorrelation(
 
   // Pull recent candidate activity in the compared window from the neighborhood,
   // newest first, capped so a busy org cannot stampede the can_access preflight.
+  // Expand the app list into a bound IN clause (drizzle + postgres.js does not
+  // bind a JS array to ANY() cleanly - it stringifies to a malformed array literal).
+  const appList = sql.join(
+    apps.map((a) => sql`${a}`),
+    sql`, `,
+  );
   const candidates = rows<Row>(
     await db.execute(sql`
       SELECT source_app, entity_type, entity_id::text AS entity_id, action,
              actor_id::text AS actor_id, created_at
       FROM v_activity_unified
       WHERE organization_id = ${orgId}
-        AND source_app = ANY(${apps})
+        AND source_app IN (${appList})
         AND created_at >= ${period.from}::timestamptz
         AND created_at <= ${period.to}::timestamptz
       ORDER BY created_at DESC
