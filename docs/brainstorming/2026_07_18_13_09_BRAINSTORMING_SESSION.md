@@ -550,7 +550,56 @@ build) - no pause for human review.
 
 ## Phase 6 - Spec hardening
 
-_(pending)_
+Spec: `docs/brainstorming/2026_07_18_13_09_APP_DESIGN_braid.md` (drafted, then hardened over
+adversarial rounds). Five adversaries per round: design, security, stability,
+best-practices, infrastructure.
+
+### Round 1 - findings and dispositions
+
+Round 1 was heavy: **7 blockers + 21 majors** across the five focuses, all grounded in real
+monorepo files. Highlights of what the reviewers caught (full detail folded into the spec's
+own "Changelog - Round 1"):
+
+- **Design (1 blocker, 6 major):** two claimed v1 source types (`blast.subscriber`,
+  `book.booker`) have NO backing row in the real schema - Blast recipients are computed
+  from segments over `bond_contacts`, and Book's person lives in `book_event_attendees`
+  (per-booking, email-keyed). Source list re-derived from real tables. Also: golden id must
+  be stable across merge/split (lazy singleton profiles, reactivate-on-unmerge); the
+  proposals inbox does not execute the merge (dual-inbox reconciliation); reject-suppression
+  must key on immutable identity pairs not ephemeral profile ids; per-membership link
+  confidence must be stored; the N-way "bridging record" merge was unmodeled.
+- **Security (2 blockers, 4 major):** the golden profile's denormalized PII columns are
+  org-readable and silently downgrade Bond's per-owner access; `braid_resolve` was a
+  deanonymization oracle (no `can_access` on the input record, leaked `identity_count`).
+  Read plane reworked to per-viewer attribute assembly + asker-gated resolve. Linkage
+  disclosure via Bolt events, search oracle, and the missing `SUPPORTED_ENTITY_TYPES`
+  branches (a security decision, not a scoping TODO) all addressed.
+- **Stability (2 blockers, 5 major):** concurrent ingest created duplicate golden profiles
+  with no serialization (advisory-lock per blocking key); the merge was non-transactional
+  and non-resumable (single Drizzle txn + post-commit best-effort side effects);
+  compare-and-swap on candidate status kills the retry / human-vs-worker double-merge;
+  split must suppress future auto-merge to stop flapping; the nightly rescan needed a
+  watermark + batching + progress logging; source-down needs bounded backoff + DLQ.
+- **Best-practices (3 major):** the `braid.*` permission rows won't be reproduced by the
+  manifest generator unless hand-authored (the exact Basis trap); the surface-map skips used
+  non-sanctioned reasons and `/candidates/:id/reject` needed a real tool (MCP-parity gate);
+  CLAUDE.md inventory + MCP count updates were missing. Plus a Testing section, the shared
+  `@bigbluebam/service-health` plugin, and the em-dash surface-map convention.
+- **Infrastructure (2 blockers, 3 major):** `nginx.railway.conf` is auto-generated (the
+  hand-edit instruction was wrong - edit `nginx-with-site.conf` and regenerate); the worker
+  service was never wired for the engine that runs in it (needs `QDRANT_URL`,
+  `BBB_API_INTERNAL_URL`, source internal URLs); the event -> queue enqueue transport was
+  unspecified; the Dockerfile "five places" is actually four (no deps-stage source COPY);
+  Qdrant posture contradiction (lazy collection creation, never fatal at boot).
+
+Verified-and-held-up (so round 2 does not re-litigate): `publishBoltEvent` positional
+signature, the four bare event names passing the Bolt catalog guard, port 4020 free,
+migration tip 0229 (so 0230/0231 is correct), confirm-token gating + `braid.*` fail-closed,
+the immutable merge-decision audit, and the LLM PII-isolation via opaque identity tokens.
+
+All findings were batched to `brainstorm-spec-writer` to fold in. Round 2 (re-review of the
+revised spec) follows; the loop repeats until a round returns no blocker/major findings
+(cap 3 rounds).
 
 ## Winner + handoff
 
