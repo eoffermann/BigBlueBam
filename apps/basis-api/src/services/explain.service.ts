@@ -6,20 +6,21 @@ import type { BasisDefinition, BasisExplainRequest, BasisDriver } from '@bigblue
 import { queryScalar, queryGrouped } from '../lib/bench-client.js';
 import { getSettings } from './settings.service.js';
 
-// Class-A: curated allowlist of bounded org-global ENUM columns whose values are
-// not per-user-restricted (spec 2.2). Everything else is Class-B (entity-derived)
-// and must never expose per-entity amounts without a per-user can_access check.
+// Class-A: a CURATED allowlist of bounded org-global ENUM columns whose values
+// are not per-user-restricted (spec 2.2). Deliberately narrow: generic names like
+// `type`/`category`/`kind` are NOT included, because a governed source could
+// expose a sensitive or high-cardinality column under such a name and it would
+// then serve full per-value labels + amounts (security review #55). Anything not
+// on this list is Class-B (entity-derived) and fails closed until the per-user
+// can_access resolver is wired. Extend this set only with columns confirmed to be
+// bounded, org-global enums.
 const CLASS_A_DIMENSIONS = new Set([
   'status',
   'stage',
   'state',
   'lifecycle_stage',
   'level',
-  'type',
-  'category',
   'priority',
-  'kind',
-  'tier',
 ]);
 
 function classifyDimension(dim: string): 'A' | 'B' {
