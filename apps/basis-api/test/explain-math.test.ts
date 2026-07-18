@@ -3,6 +3,7 @@ import {
   classifyDimension,
   computeDrivers,
   shapeForRead,
+  shapeClassBDrivers,
   CLASS_A_DIMENSIONS,
   type StoredExplanationRow,
 } from '../src/services/explain-math.js';
@@ -116,17 +117,64 @@ describe('shapeForRead read-time leak safety (absent-asker fallback)', () => {
   });
 });
 
-// Executable spec-of-record for invariants whose IMPLEMENTATION is deferred
-// (tracked). These are todos, not silent passes, so they cannot regress unnoticed
-// and they document the missing behavior (review #49 / #56).
+describe('shapeClassBDrivers per-viewer resolution + k>=2 suppression', () => {
+  const drivers: BasisDriver[] = [
+    { dimension_value: 'a', label: null, contribution_abs: 50, contribution_pct: 50 },
+    { dimension_value: 'b', label: null, contribution_abs: 30, contribution_pct: 30 },
+    { dimension_value: 'c', label: null, contribution_abs: 20, contribution_pct: 20 },
+  ];
+
+  it('absent asker (empty visible set) hides everything in one bucket', () => {
+    const out = shapeClassBDrivers(drivers, []);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.is_other).toBe(true);
+    expect(out[0]!.hidden_count).toBe(3);
+    expect(out[0]!.label).toBe('Other (all 3 hidden)');
+  });
+
+  it('serves visible rows with labels and hides the rest when >=2 remain hidden', () => {
+    const out = shapeClassBDrivers(drivers, ['a']); // b,c hidden (2)
+    const served = out.filter((d) => !d.is_other);
+    const other = out.find((d) => d.is_other)!;
+    expect(served.map((d) => d.dimension_value)).toEqual(['a']);
+    expect(served[0]!.label).toBe('a');
+    expect(other.hidden_count).toBe(2);
+    expect(other.contribution_abs).toBe(50); // 30 + 20
+  });
+
+  it('k>=2: a single hidden row alongside served rows is suppressed by demoting a served row', () => {
+    // Asker can see a and b; only c would be hidden (N=1) -> complementary
+    // disclosure. The smallest served row (b=30) is demoted so >=2 are hidden.
+    const out = shapeClassBDrivers(drivers, ['a', 'b']);
+    const other = out.find((d) => d.is_other)!;
+    expect(other.hidden_count).toBeGreaterThanOrEqual(2);
+    // c's exact amount (20) must NOT be recoverable: the Other bucket aggregates
+    // b+c (50), not c alone.
+    expect(other.contribution_abs).toBe(50);
+    const servedValues = out.filter((d) => !d.is_other).map((d) => d.dimension_value);
+    expect(servedValues).toEqual(['a']); // b was demoted into Other
+  });
+
+  it('all visible: every row served with a label, no Other bucket', () => {
+    const out = shapeClassBDrivers(drivers, ['a', 'b', 'c']);
+    expect(out.every((d) => !d.is_other)).toBe(true);
+    expect(out).toHaveLength(3);
+  });
+
+  it('single entity, none visible: the lone bucket equals the (public) delta and is safe', () => {
+    const one: BasisDriver[] = [
+      { dimension_value: 'solo', label: null, contribution_abs: 42, contribution_pct: 100 },
+    ];
+    const out = shapeClassBDrivers(one, []);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.hidden_count).toBe(1);
+    expect(out[0]!.contribution_abs).toBe(42);
+  });
+});
+
+// Executable spec-of-record for the one invariant still unimplemented.
 describe('deferred spec-of-record (not yet implemented)', () => {
-  // k>=2 secondary suppression: with N=1 hidden entity the single "Other" total
-  // equals that entity's contribution (complementary disclosure). Current code
-  // collapses regardless of N, so this protection is NOT yet in place.
-  it.todo('N=1 Class-B must suppress the bucket (k>=2 secondary suppression)');
   // Registration-time guard: a label column sourced from a restricted entity must
   // not be registerable as Class A.
   it.todo('registration rejects a restricted-entity label column as Class A');
-  // Certified-driver narrative via the basis-explain LLM job.
-  it.todo('Class-A certified metric gets a narrative from the basis-explain job');
 });

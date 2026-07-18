@@ -72,29 +72,69 @@ export interface StoredExplanationRow {
   computed_at: Date | string;
 }
 
-// Read-time shaping. For Class B, without a per-user can_access resolution we fail
-// closed: every entity is collapsed into a single "Other (all N hidden)" aggregate
-// carrying only the total contribution, with no per-entity amounts (spec 2.2 / 4.5
-// absent-asker rule). Class A is served as-is. Per-viewer correlation is added by
-// the caller at read time (empty here).
-export function shapeForRead(row: StoredExplanationRow, dimClass: 'A' | 'B') {
-  const rawDrivers = (row.drivers as BasisDriver[]) ?? [];
-  let drivers: BasisDriver[];
-  if (dimClass === 'A') {
-    drivers = rawDrivers;
-  } else {
-    const total = rawDrivers.reduce((s, d) => s + (d.contribution_abs ?? 0), 0);
-    drivers = [
-      {
-        dimension_value: '__other__',
-        label: `Other (all ${rawDrivers.length} hidden)`,
-        contribution_abs: total,
-        contribution_pct: 100,
-        is_other: true,
-        hidden_count: rawDrivers.length,
-      },
-    ];
+// Class-B read-time shaping with k-anonymous secondary suppression (spec 2.2).
+// `visibleValues` is the set of dimension values the asker is allowed to see (from
+// a per-viewer can_access resolution); empty = absent-asker / nothing resolved =
+// fail closed (everything hidden). Served (visible) rows carry their concrete
+// label + amount; the rest collapse into one "Other" aggregate. CRITICAL k>=2
+// rule: if exactly ONE row would be hidden while others are served, the asker
+// could recover that single entity's amount by subtracting the served rows from
+// the total (complementary disclosure), so we demote the smallest served row into
+// the hidden set until at least two rows are hidden (or, if only one entity exists
+// in total and none are served, the lone "all hidden" bucket equals the already
+// public delta and is safe).
+export function shapeClassBDrivers(
+  rawDrivers: BasisDriver[],
+  visibleValues: Iterable<string> = [],
+): BasisDriver[] {
+  const visibleSet = new Set(visibleValues);
+  let served = rawDrivers.filter((d) => visibleSet.has(d.dimension_value));
+  let hidden = rawDrivers.filter((d) => !visibleSet.has(d.dimension_value));
+
+  // k>=2 secondary suppression: never leave a single hidden row alongside served
+  // rows. Demote smallest-magnitude served rows until >=2 are hidden.
+  if (served.length > 0) {
+    served = [...served].sort(
+      (a, b) => Math.abs(b.contribution_abs) - Math.abs(a.contribution_abs),
+    );
+    while (hidden.length === 1 && served.length > 0) {
+      hidden = [...hidden, served.pop()!];
+    }
   }
+
+  const out: BasisDriver[] = served.map((d) => ({
+    ...d,
+    label: d.label ?? d.dimension_value,
+  }));
+  if (hidden.length > 0) {
+    const total = hidden.reduce((s, d) => s + (d.contribution_abs ?? 0), 0);
+    const pct = hidden.reduce((s, d) => s + (d.contribution_pct ?? 0), 0);
+    out.push({
+      dimension_value: '__other__',
+      label:
+        served.length === 0
+          ? `Other (all ${hidden.length} hidden)`
+          : `Other (${hidden.length} hidden)`,
+      contribution_abs: total,
+      contribution_pct: pct,
+      is_other: true,
+      hidden_count: hidden.length,
+    });
+  }
+  return out;
+}
+
+// Read-time shaping. Class A is served as-is. Class B is shaped by
+// shapeClassBDrivers with the asker's visible set (default empty = fail closed).
+// Per-viewer correlation is added by the caller at read time (empty here).
+export function shapeForRead(
+  row: StoredExplanationRow,
+  dimClass: 'A' | 'B',
+  visibleValues: Iterable<string> = [],
+) {
+  const rawDrivers = (row.drivers as BasisDriver[]) ?? [];
+  const drivers: BasisDriver[] =
+    dimClass === 'A' ? rawDrivers : shapeClassBDrivers(rawDrivers, visibleValues);
   return {
     metric_id: row.metric_id,
     version_id: row.version_id,
