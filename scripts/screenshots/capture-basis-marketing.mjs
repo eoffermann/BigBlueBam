@@ -65,11 +65,13 @@ async function main() {
   await page.screenshot({ path: resolve(OUT_DIR, 'catalog.png'), fullPage: false });
   log('wrote catalog.png');
 
-  // --- Metric detail (open the first catalog row) ---------------------------
+  // --- Metric detail: prefer a themed CERTIFIED metric with version history
+  // (Daily Coconut Count) for a richer shot; fall back to the first row.
   log('capturing metric detail ...');
-  const firstRow = page.locator('[data-testid=metric-row]').first();
-  if ((await firstRow.count()) > 0) {
-    await firstRow.click();
+  const preferred = page.locator('[data-testid=metric-row]', { hasText: 'Daily Coconut Count' });
+  const target = (await preferred.count()) > 0 ? preferred.first() : page.locator('[data-testid=metric-row]').first();
+  if ((await target.count()) > 0) {
+    await target.click();
     await page.locator('[data-testid=metric-name]').waitFor({ timeout: 20_000 });
     await page.waitForTimeout(700);
     await page.screenshot({ path: resolve(OUT_DIR, 'metric-detail.png'), fullPage: false });
