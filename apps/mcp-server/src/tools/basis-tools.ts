@@ -1,0 +1,218 @@
+import { registerTool } from '../lib/register-tool.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import type { ApiClient } from '../middleware/api-client.js';
+
+/** HTTP client for the basis-api service (mirrors createBenchClient). */
+function createBasisClient(basisApiUrl: string, api: ApiClient) {
+  const baseUrl = basisApiUrl.replace(/\/$/, '');
+  async function request(method: string, path: string, body?: unknown) {
+    const headers: Record<string, string> = {};
+    const token = (api as unknown as { token?: string }).token;
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const init: RequestInit = { method, headers };
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(body);
+    }
+    const res = await fetch(`${baseUrl}${path}`, init);
+    const text = await res.text();
+    let data: unknown = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+    }
+    return { ok: res.ok, status: res.status, data };
+  }
+  return { request };
+}
+
+function ok(data: unknown) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+}
+function err(label: string, data: unknown) {
+  return {
+    content: [{ type: 'text' as const, text: `Error ${label}: ${JSON.stringify(data)}` }],
+    isError: true as const,
+  };
+}
+
+const measureSchema = z.object({ field: z.string(), agg: z.enum(['sum', 'count', 'avg', 'min', 'max']) });
+const definitionSchema = z.object({
+  source_product: z.string(),
+  source_entity: z.string(),
+  measure: measureSchema,
+  filters: z.array(z.object({ field: z.string(), op: z.string(), value: z.unknown() })).optional(),
+  default_dimensions: z.array(z.string()).optional(),
+  time_column: z.string(),
+});
+const periodSchema = z.object({ from: z.string(), to: z.string() });
+
+export function registerBasisTools(server: McpServer, api: ApiClient, basisApiUrl: string): void {
+  const client = createBasisClient(basisApiUrl, api);
+
+  registerTool(server, {
+    name: 'basis_list_metrics',
+    description: 'List governed Basis metrics for the current organization, optionally filtered by certification state.',
+    input: { certification: z.enum(['draft', 'certified', 'deprecated']).optional() },
+    returns: z.object({ data: z.array(z.record(z.unknown())) }).passthrough(),
+    handler: async ({ certification }) => {
+      const q = certification ? `?filter[certification]=${certification}` : '';
+      const r = await client.request('GET', `/metrics${q}`);
+      return r.ok ? ok(r.data) : err('listing metrics', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_search_metrics',
+    description: 'Search Basis metrics by name/slug substring (case-insensitive) within the org.',
+    input: { query: z.string().describe('Substring to match against metric name or slug') },
+    returns: z.object({ data: z.array(z.record(z.unknown())) }).passthrough(),
+    handler: async ({ query }) => {
+      const r = await client.request('GET', '/metrics');
+      if (!r.ok) return err('searching metrics', r.data);
+      const rows = ((r.data as { data?: { name?: string; slug?: string }[] }).data ?? []).filter(
+        (m) =>
+          m.name?.toLowerCase().includes(query.toLowerCase()) ||
+          m.slug?.toLowerCase().includes(query.toLowerCase()),
+      );
+      return ok({ data: rows });
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_get_metric',
+    description: 'Get a Basis metric with its current version definition.',
+    input: { id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ id }) => {
+      const r = await client.request('GET', `/metrics/${id}`);
+      return r.ok ? ok(r.data) : err('getting metric', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_metric_value',
+    description: 'Get a certified metric value over a period. Returns UPSTREAM_UNAVAILABLE if the Bench query service is down.',
+    input: { id: z.string().uuid(), from: z.string(), to: z.string() },
+    returns: z.object({ value: z.number().nullable(), unit: z.string() }).passthrough(),
+    handler: async ({ id, from, to }) => {
+      const r = await client.request('GET', `/metrics/${id}/value?from=${from}&to=${to}`);
+      return r.ok ? ok(r.data) : err('getting metric value', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_metric_lineage',
+    description: 'Get a metric binding contract: its query definition and certified presentation envelope (unit, direction, target).',
+    input: { id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ id }) => {
+      const r = await client.request('GET', `/metrics/${id}/resolve`);
+      return r.ok ? ok(r.data) : err('getting metric lineage', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_explain_change',
+    description:
+      'Explain why a metric changed between two periods: a deterministic dimensional decomposition plus a per-viewer, access-scoped "possibly related activity" aid. REQUIRES asker_user_id; when omitted, Class-B (entity) breakdowns collapse to a single hidden aggregate (fail-closed).',
+    input: {
+      id: z.string().uuid(),
+      period_a: periodSchema,
+      period_b: periodSchema,
+      dimension: z.string().optional(),
+      asker_user_id: z.string().uuid().optional().describe('The human on whose behalf the agent is asking; gates per-entity visibility'),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ id, ...body }) => {
+      const r = await client.request('POST', `/metrics/${id}/explain`, body);
+      return r.ok ? ok(r.data) : err('explaining metric change', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_rank_drivers',
+    description:
+      'Rank the deterministic drivers of a metric delta (dimension-value contributions). Same fail-closed asker rule as basis_explain_change.',
+    input: {
+      id: z.string().uuid(),
+      period_a: periodSchema,
+      period_b: periodSchema,
+      dimension: z.string().optional(),
+      asker_user_id: z.string().uuid().optional(),
+    },
+    returns: z.object({ drivers: z.array(z.record(z.unknown())) }).passthrough(),
+    handler: async ({ id, ...body }) => {
+      const r = await client.request('POST', `/metrics/${id}/explain`, body);
+      if (!r.ok) return err('ranking drivers', r.data);
+      const drivers = (r.data as { data?: { drivers?: unknown } }).data?.drivers ?? [];
+      return ok({ drivers });
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_define_metric',
+    description: 'Define a NEW draft Basis metric (draft only; certification is a separate HITL-gated step).',
+    input: {
+      slug: z.string(),
+      name: z.string(),
+      unit: z.enum(['currency', 'count', 'percent', 'ratio', 'duration_ms']),
+      favorable_direction: z.enum(['up', 'down', 'neutral']).optional(),
+      description: z.string().optional(),
+      definition: definitionSchema,
+    },
+    returns: z.record(z.unknown()),
+    handler: async (body) => {
+      const r = await client.request('POST', '/metrics', body);
+      return r.ok ? ok(r.data) : err('defining metric', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_add_metric_version',
+    description: 'Add a new immutable definition version to a metric (versioning a certified metric is a truth change).',
+    input: { id: z.string().uuid(), definition: definitionSchema, change_note: z.string().optional() },
+    returns: z.record(z.unknown()),
+    handler: async ({ id, ...body }) => {
+      const r = await client.request('POST', `/metrics/${id}/versions`, body);
+      return r.ok ? ok(r.data) : err('adding metric version', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_certify_metric',
+    description: 'Certify a metric so it becomes the org-wide source of truth (truth-flip; requires confirmation).',
+    input: { id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ id }) => {
+      const r = await client.request('POST', `/metrics/${id}/certify`);
+      return r.ok ? ok(r.data) : err('certifying metric', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_decertify_metric',
+    description: 'Return a certified metric to draft (truth-flip; requires confirmation).',
+    input: { id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ id }) => {
+      const r = await client.request('POST', `/metrics/${id}/decertify`);
+      return r.ok ? ok(r.data) : err('decertifying metric', r.data);
+    },
+  });
+
+  registerTool(server, {
+    name: 'basis_deprecate_metric',
+    description: 'Deprecate (soft-retire) a metric (destructive; requires confirmation).',
+    input: { id: z.string().uuid() },
+    returns: z.record(z.unknown()),
+    handler: async ({ id }) => {
+      const r = await client.request('DELETE', `/metrics/${id}`);
+      return r.ok ? ok(r.data) : err('deprecating metric', r.data);
+    },
+  });
+}

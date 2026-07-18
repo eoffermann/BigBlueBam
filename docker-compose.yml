@@ -184,6 +184,7 @@ services:
       BLUEPRINT_API_URL: http://blueprint-api:4015/v1
       BOOK_API_URL: http://book-api:4012/v1
       BENCH_API_URL: http://bench-api:4011/v1
+      BASIS_API_URL: http://basis-api:4019/v1
       BILL_API_URL: http://bill-api:4014/v1
       BLANK_API_URL: http://blank-api:4013/v1
       BIN_API_URL: http://bin-api:4016/v1

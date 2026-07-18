@@ -23,6 +23,7 @@ const envSchema = z.object({
   BLAST_API_URL: z.string().url().default('http://blast-api:4010/v1'),
   BOOK_API_URL: z.string().url().default('http://book-api:4012/v1'),
   BENCH_API_URL: z.string().url().default('http://bench-api:4011/v1'),
+  BASIS_API_URL: z.string().url().default('http://basis-api:4019/v1'),
   BILL_API_URL: z.string().url().default('http://bill-api:4014/v1'),
   BLANK_API_URL: z.string().url().default('http://blank-api:4013/v1'),
   BLUEPRINT_API_URL: z.string().url().default('http://blueprint-api:4015/v1'),
