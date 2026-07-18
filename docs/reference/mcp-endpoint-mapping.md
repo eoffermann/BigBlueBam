@@ -57,8 +57,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Bureau | 42 | 37 | 5 | 0 |
 | Blip | 40 | 38 | 2 | 0 |
 | Helpdesk | 38 | 15 | 23 | 0 |
+| Braid | 21 | 12 | 9 | 1 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **1011** | **756** | **255** | **16** |
+| **Total** | **1032** | **768** | **264** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -1937,4 +1938,37 @@ Noticed while mapping; **not fixed here** — flagging for follow-up:
 A Basis provider IS registered in the platform `search_everything` fan-out (`searchBasisMetrics` in `apps/mcp-server/src/tools/search-tools.ts`), adding the `metric` entity type and the `basis` source. Metric hits are org-scoped by the caller's session RLS (like Banter/Board hits, metrics are not in the Wave 2 `can_access` allowlist because a metric is org-global, not per-user-restricted). Metrics are also directly searchable via `basis_search_metrics`. All 16 `basis_*` tools are fail-closed under `agent_policies` until an operator allowlists `basis.*`. The Basis SPA's Definition Builder reads Bench's governed data-source catalog (`GET /bench/api/v1/data-sources`, covered by `bench_list_data_sources`) to populate its source/measure/dimension pickers, so a human references real columns rather than typing raw field names.
 
 **SPA scope note (§5 drift):** the design called for 5 pages (Catalog, Detail, Definition Builder, Why-Did-It-Change Explorer, Settings); 2 shipped (Catalog + Detail, the latter covering define/certify/decertify/deprecate + version history). The Definition Builder, Why-Did-It-Change Explorer, and Settings pages are deferred, so `GET /metrics/:id/value`, `POST /metrics/:id/explain`, and `GET|PUT /settings` have no UI call site yet.
+
+## Braid (app)
+
+- **Service:** `apps/braid-api` · external `/braid/api/` · MCP module(s): `braid-tools.ts` · added on the `suite-brainstorm` branch.
+
+Identity-resolution / golden-record CDP. 13 `braid_*` tools (spec section 10 of `docs/brainstorming/2026_07_18_13_09_APP_DESIGN_braid.md`). Read tools that surface source records take an explicit `asker_user_id` and pass it through so braid-api runs `can_access` fail-closed. The two truth-flip tools (`braid_merge_profiles`, `braid_split_profile`) use the Redis-backed confirm-token two-step flow (`apps/mcp-server/src/lib/confirm-token-store.ts`). All `braid_*` tools are fail-closed under `agent_policies` until an operator allowlists `braid.*`; following the basis satellite pattern (round-3 BP3-1), `braid_*` is intentionally NOT added to `EXPLICIT_TOOL_OVERRIDES`.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /v1/profiles` | `braid_list_profiles` | List golden profiles (kind/status filter) | `apps/braid/src/lib/api.ts` |
+| `GET /v1/profiles` (name/email filter) | `braid_search_profiles` | Search profiles by display_name/primary_email | — _(skip: same endpoint, client-side filter)_ |
+| `GET /v1/profiles/:id` | `braid_get_profile` | Get a golden profile (member identities + recent decisions embedded) | `apps/braid/src/lib/api.ts` |
+| `GET /v1/profiles/:id/identities` | — _(skip: resolver-done-internally)_ | Member source identities | — |
+| `GET /v1/profiles/:id/timeline` | `braid_profile_timeline` | Cross-app timeline (fail-closed per viewer) | `apps/braid/src/lib/api.ts` |
+| `GET /v1/profiles/:id/decisions` | — _(skip: resolver-done-internally)_ | Merge/split audit history | — |
+| `POST /v1/resolve` | `braid_resolve` | Resolve a source record to its golden id (flagship) | `apps/braid/src/lib/api.ts` |
+| `GET /v1/candidates` | `braid_list_candidates` | List review-queue candidates (sort -score) | `apps/braid/src/lib/api.ts` |
+| `GET /v1/candidates/:id` | — _(skip: agent-only read; candidate detail deferred, evidence surfaces via `braid_list_candidates` + the proposal inbox route)_ | Candidate detail + evidence | `apps/braid/src/lib/api.ts` |
+| `POST /v1/candidates/:id/merge` | `braid_merge_profiles` | Confirm a queued candidate merge (truth-flip, confirm) | `apps/braid/src/lib/api.ts` |
+| `POST /v1/candidates/:id/reject` | `braid_reject_candidate` | Reject a candidate (identity-level suppression) | `apps/braid/src/lib/api.ts` |
+| `POST /v1/profiles/merge` | `braid_merge_profiles` | Merge two profiles directly (truth-flip, confirm) | `apps/braid/src/lib/api.ts` |
+| `POST /v1/profiles/:id/split` | `braid_split_profile` | Unmerge or split (destructive, confirm) | `apps/braid/src/lib/api.ts` |
+| `GET /v1/survivorship-rules` | `braid_list_survivorship_rules` | List per-field winner rules | `apps/braid/src/lib/api.ts` |
+| `PUT /v1/survivorship-rules/:kind/:field` | `braid_set_survivorship_rule` | Upsert a survivorship rule | `apps/braid/src/lib/api.ts` |
+| `GET /v1/settings` | `braid_get_settings` | Get per-org Braid settings | `apps/braid/src/lib/api.ts` |
+| `PATCH /v1/settings` | — _(skip: settings/enablement admin; source-type enablement gate is admin UI-only, no agent tool)_ | Update per-org settings | `apps/braid/src/lib/api.ts` |
+| `POST /v1/candidates` (propose) | `braid_propose_merge` | Upsert a candidate + register an `agent_proposals` HITL row | — |
+| `POST /internal/events` | — _(skip: internal service-to-service; bolt-api ingest trigger, `INTERNAL_SERVICE_SECRET`)_ | Ingest-trigger from bolt-api | — |
+| `POST /internal/proposal-decided` | — _(skip: internal service-to-service; proposal.decided delivery, `INTERNAL_SERVICE_SECRET`)_ | proposal.decided delivery | — |
+| `/braid/ws` | — _(skip: realtime/ws)_ | Redis-PubSub refs-only notifications | — |
+| `GET /health`, `GET /readyz` | — _(skip: probe)_ | Health / readiness | — |
+
+`braid_propose_merge` is MCP-only: no dedicated propose route exists on braid-api yet, so the tool POSTs to the `/v1/candidates` surface per spec 10 (braid-api upserts the candidate and inserts the `agent_proposals` row). `braid_merge_profiles` backs two endpoints (`/candidates/:id/merge` when a `candidate_id` is given, `/profiles/merge` for a direct pair). Section counts: 21 REST endpoints, 12 with a tool, 9 without (all annotated), 1 MCP-only tool (`braid_propose_merge`) — 13 `braid_*` tools total.
 
