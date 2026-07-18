@@ -1,35 +1,43 @@
 ---
 name: autonomous-cycle
-description: The scheduled entry point for the "Startup in a Box" loop. One invocation runs one full cycle - brainstorm a new app, harden its spec, then build/deploy/test it via app-build-from-spec - guarded by a concurrency lock so a new cycle never starts while the previous one is still running. Invoked by the every-6-hours cron; can also be run manually. Never merges to main.
+description: The scheduled entry point for the "Startup in a Box" loop. One invocation runs one full cycle - brainstorm a new app, harden its spec, then build/deploy/test it via app-build-from-spec - guarded by a concurrency lock so a new cycle never starts while the previous one is still running. Invoked every 6 hours by the Windows Task Scheduler job "BigBlueBam Autonomous Cycle"; can also be run manually. Never merges to main.
 ---
 
 # Autonomous cycle (scheduled Startup-in-a-Box loop)
 
 One run of this skill performs **one complete cycle**: pick a new app by brainstorm,
 harden its design spec, then build, deploy, and test it - all on `suite-brainstorm`,
-never merging to `main`. It is what the every-6-hours cron fires. Its one added job over
-running the phases by hand is **concurrency control**: only one cycle may be in flight at
-a time.
+never merging to `main`. It is what the every-6-hours **Windows Task Scheduler** job fires
+(the task "BigBlueBam Autonomous Cycle", registered by
+`scripts/autonomous/register-autonomous-task.ps1`, which launches `claude` headless via
+`scripts/autonomous/run-autonomous-cycle.ps1`). Its one added job over running the phases
+by hand is **concurrency control**: only one cycle may be in flight at a time.
 
 ## The concurrency lock (do this first, every run)
 
-Use a lock file at `<scratchpad>/autonomous-cycle.lock.json` (the session scratchpad dir,
-not the repo - it must never be committed). Shape:
+Use a lock file at `.autonomous-logs/autonomous-cycle.lock.json` (repo-relative, in the
+gitignored `.autonomous-logs/` dir - it must never be committed). **Do NOT use the session
+scratchpad dir**: each Windows Task Scheduler fire is a fresh `claude` session with a
+different scratchpad, so a scratchpad lock would not be shared across runs and every fire
+would think the coast is clear. A stable repo-relative path is shared across runs. Shape:
 `{ "status": "running", "app": "<name-or-tbd>", "phase": "<phase>", "started_at":
 "<iso>", "updated_at": "<iso>" }`. Stamp timestamps from `date -u +%FT%TZ` (Bash).
+
+Note the Task Scheduler wrapper (`scripts/autonomous/run-autonomous-cycle.ps1`) already
+holds its own coarser process-level lock (`.autonomous-logs/cycle.lock`) and is registered
+with `-MultipleInstances IgnoreNew`, so the OS will not start a second run while one is
+active. This skill-level lock is the finer-grained state (phase/app) plus the 3h-staleness
+takeover.
 
 On each run:
 
 1. **Read the lock.** If it is absent, or its `updated_at` is older than **3 hours**
    (a crashed/abandoned cycle), the coast is clear - go to step 4.
 2. **If a cycle is genuinely in flight** (lock present and `updated_at` within 3h):
-   per the schedule contract, **wait up to 3 hours in hourly steps**, then give up for
-   this window. Implement the wait by scheduling a one-shot re-check ~1 hour out
-   (`CronCreate` with `recurring: false`, a pinned minute/hour ~60 min ahead) whose prompt
-   re-invokes this skill and carries a `retry` counter. On the 1st and 2nd busy re-check,
-   reschedule again. On the **3rd** (about 3 hours in) still-busy check, **stop**: log
-   "cycle still running after 3h, skipping this window" and exit. The next 6-hour cron
-   fire will start fresh. Never run two cycles at once.
+   **skip this run** - log "cycle still running (updated <3h ago), skipping this window"
+   and exit cleanly. Do NOT try to schedule a delayed re-check: this is a headless one-shot
+   run with no persistent session, and the next Windows Task Scheduler fire (~6 hours out,
+   or the 02:00/08:00/14:00/20:00 cadence) is the retry. Never run two cycles at once.
 3. Do not delete another live cycle's lock. Only a lock older than 3h may be taken over.
 4. **Acquire the lock:** write it with `status: "running"`, `phase: "brainstorm"`,
    fresh timestamps. Refresh `updated_at` (and `phase`/`app`) at each major phase so a
@@ -78,6 +86,12 @@ With the lock held:
 
 ## Note on durability
 
-The cron that fires this is **session-only** (it lives only while this Claude session is
-running and auto-expires after 7 days). For a truly unattended multi-day loop the session
-must stay alive, or an external scheduler must re-invoke it. Say so when reporting status.
+This loop is fired by a **Windows Task Scheduler** job ("BigBlueBam Autonomous Cycle")
+that runs independently of any Claude session, needs no session to stay alive, and does
+not expire. It is registered once by `scripts/autonomous/register-autonomous-task.ps1`
+(S4U logon, so it runs whether or not the user is logged in) and launches a headless
+`claude` per fire via `scripts/autonomous/run-autonomous-cycle.ps1`, every 6 hours. This
+replaced the earlier session-only in-session cron (which only lived while a Claude session
+was open and auto-expired after 7 days, so it silently stopped). If the loop ever needs
+to change cadence or be paused, re-run the register script (or disable/enable the task in
+Task Scheduler) - do not rely on any in-session scheduling primitive for durability.
