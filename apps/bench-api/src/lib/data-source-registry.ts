@@ -117,6 +117,35 @@ const DATA_SOURCES: BenchDataSource[] = [
       { field: 'created_at', label: 'Created', operators: ['gte', 'lte', 'between'], type: 'date' },
     ],
   },
+
+  // ── Bill (Invoicing) ──────────────────────────────────────────
+  {
+    product: 'bill',
+    entity: 'invoices',
+    label: 'Invoices',
+    description: 'Bill invoices with total, amount paid, status, and dates',
+    baseTable: 'bill_invoices',
+    measures: [
+      { field: 'id', label: 'Invoice Count', aggregations: ['count'], type: 'integer' },
+      { field: 'total', label: 'Invoiced Total', aggregations: ['sum', 'avg', 'min', 'max'], type: 'integer' },
+      { field: 'amount_paid', label: 'Amount Paid', aggregations: ['sum', 'avg', 'min', 'max'], type: 'integer' },
+      { field: 'subtotal', label: 'Subtotal', aggregations: ['sum', 'avg'], type: 'integer' },
+    ],
+    dimensions: [
+      { field: 'status', label: 'Status', type: 'categorical' },
+      { field: 'currency', label: 'Currency', type: 'categorical' },
+      { field: 'client_id', label: 'Client', type: 'categorical' },
+      { field: 'created_at', label: 'Created', type: 'temporal' },
+      { field: 'invoice_date', label: 'Invoice Date', type: 'temporal' },
+      { field: 'due_date', label: 'Due Date', type: 'temporal' },
+    ],
+    filters: [
+      { field: 'status', label: 'Status', operators: ['eq', 'neq', 'in'], type: 'enum', enumValues: ['draft', 'sent', 'viewed', 'paid', 'partially_paid', 'overdue', 'void'] },
+      { field: 'currency', label: 'Currency', operators: ['eq', 'in'], type: 'string' },
+      { field: 'created_at', label: 'Created', operators: ['gte', 'lte', 'between'], type: 'date' },
+      { field: 'invoice_date', label: 'Invoice Date', operators: ['gte', 'lte', 'between'], type: 'date' },
+    ],
+  },
   {
     product: 'bond',
     entity: 'contacts',

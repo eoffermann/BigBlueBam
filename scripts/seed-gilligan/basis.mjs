@@ -92,7 +92,7 @@ const METRICS = [
       definition: {
         source_product: 'bill',
         source_entity: 'invoices',
-        measure: { field: 'amount', agg: 'sum' },
+        measure: { field: 'total', agg: 'sum' },
         default_dimensions: ['status'],
         time_column: 'created_at',
       },
@@ -159,8 +159,19 @@ async function main() {
     const who = KEYS[m.owner] ? m.owner : 'skipper';
     const prior = existing.get(m.body.slug);
     if (prior) {
-      // Self-heal: if it should be certified but is still a draft (e.g. a prior
-      // partial run), certify it now instead of just skipping.
+      // Self-heal the definition: if the current version's measure field drifted
+      // from the intended one (e.g. an earlier seed used a column that does not
+      // exist), append a corrected version so the metric resolves.
+      const full = await basis(who, 'GET', `/metrics/${prior.id}`);
+      const curField = full.ok ? full.data?.currentVersion?.definition?.measure?.field : undefined;
+      if (curField && curField !== m.body.definition.measure.field) {
+        const v = await basis(who, 'POST', `/metrics/${prior.id}/versions`, {
+          definition: m.body.definition,
+          change_note: 'Correct measure/source to resolve against Bench',
+        });
+        if (v.ok) console.log(`[basis] fixed definition on ${m.body.slug}`);
+      }
+      // If it should be certified but is still a draft, certify it now.
       if (m.certify && prior.certification === 'draft') {
         const cert = await basis(who, 'POST', `/metrics/${prior.id}/certify`);
         if (cert.ok) {
