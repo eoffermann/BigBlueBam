@@ -81,10 +81,12 @@ Post-commit-review filed 3 (all fixed + closed):
   `docs/apps/braid/screenshots/` and `site/public/screenshots/braid/`; a thematic review
   candidate (Jonas Grumby <-> Skipper, "'Skipper' is a nickname for Jonas Grumby") was seeded
   for the queue shot. Rebuild the `site` service to serve the marketing images.
-- **Help Center index** (`help-index.json` build + wiring) not yet generated; the SPA
-  `HelpTrigger app="braid"` is wired but the index is pending.
-- **Playwright user-story e2e** not yet added to `apps/e2e/`; the backend verification above
-  is the live proof for this cycle.
+- **Help Center index**: DONE. `docs/apps/braid/help-index.json` generated (75 labels, 19
+  TOC, deterministic); Help Center wiring (HelpTrigger, ?-shortcut, right-click help,
+  vite alias) verified against the suite-help-system checklist.
+- **Playwright user-story e2e**: DONE. `apps/e2e/src/apps/braid/tests/braid.spec.ts` - 5
+  stories (catalog, detail, review queue, settings, negative), UI + backend assertions,
+  18/18 passing against the live stack, no app defects.
 - **Redeploy** worker + bolt-api with the `/v1` internal-path fix (rebuild in flight at
   report time) so the live auto-dispatch works; until then the nightly `braid-rescan`
   source-diff is the (documented) fallback and the engine is fully functional via it.
