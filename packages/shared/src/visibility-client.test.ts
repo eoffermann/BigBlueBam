@@ -129,5 +129,93 @@ describe('visibility-client fail-closed contract', () => {
       const visible = await preflightMany(ASKER, 'bond.contact', ['a', 'b']);
       expect(visible.size).toBe(0);
     });
+
+    it('stops fanning out once the aggregate deadline passes', async () => {
+      // Each call sleeps past the deadline, so only the first batch may run.
+      const spy = vi.fn(async () => {
+        await new Promise((r) => setTimeout(r, 30));
+        return ok({ allowed: true });
+      });
+      globalThis.fetch = spy as unknown as typeof fetch;
+      const ids = Array.from({ length: 40 }, (_, i) => `id-${i}`);
+      const reasons: string[] = [];
+
+      const visible = await preflightMany(ASKER, 'bond.contact', ids, {
+        batchDeadlineMs: 20,
+        onDegraded: (i) => reasons.push(i.reason),
+      });
+
+      // Fail-closed: the ids never reached are simply absent, never assumed visible.
+      expect(visible.size).toBeLessThan(ids.length);
+      expect(spy.mock.calls.length).toBeLessThan(ids.length);
+      expect(reasons).toContain('timeout');
+    });
+  });
+
+  describe('degradation signal', () => {
+    // A deny that means "can_access is down" must be distinguishable from a deny that
+    // means "this asker may not see it". Both still deny; only one is an incident.
+    const capture = async (fetchImpl: unknown, secret = 'x'.repeat(64)) => {
+      process.env.INTERNAL_SERVICE_SECRET = secret;
+      globalThis.fetch = fetchImpl as typeof fetch;
+      const seen: string[] = [];
+      const allowed = await preflightAccess(ASKER, 'bin.asset', ENTITY, {
+        onDegraded: (i) => seen.push(i.reason),
+      });
+      return { allowed, seen };
+    };
+
+    it('does NOT report a real allowed:false as degraded', async () => {
+      const { allowed, seen } = await capture(vi.fn(async () => ok({ allowed: false })));
+      expect(allowed).toBe(false);
+      expect(seen).toEqual([]);
+    });
+
+    it('reports no_secret without calling the API', async () => {
+      const { allowed, seen } = await capture(
+        vi.fn(async () => ok({ allowed: true })),
+        '',
+      );
+      expect(allowed).toBe(false);
+      expect(seen).toEqual(['no_secret']);
+    });
+
+    it('reports http_error on a non-2xx', async () => {
+      const { allowed, seen } = await capture(
+        vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) }) as unknown as Response),
+      );
+      expect(allowed).toBe(false);
+      expect(seen).toEqual(['http_error']);
+    });
+
+    it('reports transport_error when the upstream is unreachable', async () => {
+      const { allowed, seen } = await capture(
+        vi.fn(async () => {
+          throw new Error('ECONNREFUSED');
+        }),
+      );
+      expect(allowed).toBe(false);
+      expect(seen).toEqual(['transport_error']);
+    });
+
+    it('reports malformed_body when allowed is absent', async () => {
+      const { allowed, seen } = await capture(vi.fn(async () => ok({})));
+      expect(allowed).toBe(false);
+      expect(seen).toEqual(['malformed_body']);
+    });
+
+    it('never lets a throwing onDegraded hook turn a deny into an exception', async () => {
+      process.env.INTERNAL_SERVICE_SECRET = 'x'.repeat(64);
+      globalThis.fetch = vi.fn(async () => {
+        throw new Error('down');
+      }) as unknown as typeof fetch;
+      await expect(
+        preflightAccess(ASKER, 'bin.asset', ENTITY, {
+          onDegraded: () => {
+            throw new Error('logger exploded');
+          },
+        }),
+      ).resolves.toBe(false);
+    });
   });
 });

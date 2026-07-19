@@ -31,6 +31,13 @@
 
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 4000;
 
+// Aggregate ceiling for a batched preflight. Without this, a slow upstream multiplies the
+// per-call timeout by the number of batches: 200 ids at PREFLIGHT_CONCURRENCY 8 is 25
+// sequential batches, so a hung upstream costs 25 x 4s = 100s on a request path. Once the
+// deadline passes, remaining ids are simply never confirmed, which is the fail-closed
+// outcome already (unconfirmed means absent from the result set).
+const DEFAULT_BATCH_DEADLINE_MS = 15000;
+
 // Matches the identical `BBB_API_INTERNAL_URL` default in every consuming app's env.ts, so
 // consolidating here is behaviour-preserving.
 const DEFAULT_API_INTERNAL_URL = 'http://api:4000';
@@ -39,6 +46,23 @@ const DEFAULT_API_INTERNAL_URL = 'http://api:4000';
 // endpoint. Shared by preflightMany and by app-side wrappers built on it.
 export const PREFLIGHT_CONCURRENCY = 8;
 
+/**
+ * Why a preflight denied. `denied` is the upstream's real answer; every other value is a
+ * DEGRADED deny, meaning the client could not obtain an answer and failed closed.
+ *
+ * The boolean contract is unchanged - degraded still denies - but callers and operators
+ * need to tell "the asker may not see this" apart from "can_access is down and every asker
+ * now sees nothing". Without a signal, a visibility outage looks exactly like a correct
+ * mass-deny and can run for days.
+ */
+export type VisibilityDenyReason =
+  | 'denied'
+  | 'no_secret'
+  | 'http_error'
+  | 'timeout'
+  | 'transport_error'
+  | 'malformed_body';
+
 export interface VisibilityClientConfig {
   /** Base URL of the Bam API, e.g. http://api:4000. Trailing slashes are trimmed. */
   apiInternalUrl?: string;
@@ -46,6 +70,27 @@ export interface VisibilityClientConfig {
   internalServiceSecret?: string;
   /** Per-request timeout in milliseconds. */
   timeoutMs?: number;
+  /** Aggregate ceiling for a batched preflight, in milliseconds. */
+  batchDeadlineMs?: number;
+  /**
+   * Called when a deny was DEGRADED rather than a real upstream answer. Never called for
+   * `denied`. Wire this to the service logger so an outage is visible; it must not throw.
+   */
+  onDegraded?: (info: { reason: VisibilityDenyReason; entityType: string; detail?: string }) => void;
+}
+
+function reportDegraded(
+  config: VisibilityClientConfig | undefined,
+  reason: VisibilityDenyReason,
+  entityType: string,
+  detail?: string,
+) {
+  if (!config?.onDegraded) return;
+  try {
+    config.onDegraded({ reason, entityType, detail });
+  } catch {
+    // An observability hook must never turn a deny into a throw.
+  }
 }
 
 /**
@@ -75,7 +120,10 @@ export async function preflightAccess(
   config?: VisibilityClientConfig,
 ): Promise<boolean> {
   const { apiInternalUrl, internalServiceSecret, timeoutMs } = resolveConfig(config);
-  if (!internalServiceSecret) return false; // no secret -> cannot verify -> fail closed
+  if (!internalServiceSecret) {
+    reportDegraded(config, 'no_secret', entityType);
+    return false; // no secret -> cannot verify -> fail closed
+  }
 
   const url = `${apiInternalUrl.replace(/\/+$/, '')}/internal/visibility/can-access`;
   const controller = new AbortController();
@@ -91,10 +139,24 @@ export async function preflightAccess(
       }),
       signal: controller.signal,
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      reportDegraded(config, 'http_error', entityType, `status ${res.status}`);
+      return false;
+    }
     const json = (await res.json()) as { allowed?: boolean };
-    return json.allowed === true;
-  } catch {
+    if (json.allowed === true) return true;
+    // A well-formed body that says no is the upstream's real answer, not a degradation.
+    if (typeof json.allowed === 'boolean') return false;
+    reportDegraded(config, 'malformed_body', entityType, 'allowed missing or not a boolean');
+    return false;
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === 'AbortError';
+    reportDegraded(
+      config,
+      aborted ? 'timeout' : 'transport_error',
+      entityType,
+      err instanceof Error ? err.message : undefined,
+    );
     return false; // unreachable / aborted / malformed body -> fail closed
   } finally {
     clearTimeout(timer);
@@ -117,7 +179,22 @@ export async function preflightMany(
 ): Promise<Set<string>> {
   const visible = new Set<string>();
   const unique = [...new Set(entityIds)];
+  const deadlineMs = config?.batchDeadlineMs ?? DEFAULT_BATCH_DEADLINE_MS;
+  const startedAt = Date.now();
+
   for (let i = 0; i < unique.length; i += PREFLIGHT_CONCURRENCY) {
+    if (Date.now() - startedAt >= deadlineMs) {
+      // Aggregate ceiling hit. Everything not yet confirmed stays out of the result set,
+      // which is the fail-closed outcome, but say so loudly: a caller silently receiving a
+      // truncated visible-set looks identical to the asker genuinely not being allowed.
+      reportDegraded(
+        config,
+        'timeout',
+        entityType,
+        `batch deadline ${deadlineMs}ms hit after ${i} of ${unique.length} ids`,
+      );
+      break;
+    }
     const batch = unique.slice(i, i + PREFLIGHT_CONCURRENCY);
     const results = await Promise.all(
       batch.map(async (id) => ({
