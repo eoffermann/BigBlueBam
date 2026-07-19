@@ -1177,7 +1177,91 @@ the vote.
 
 ## Phase 5 - Voting
 
-_pending_
+One round. Each seat scored all six rival finalists 1-5 and abstained on its own
+submission, so every app was scored by exactly six seats out of a possible 30.
+No tie occurred and no second round was needed.
+
+### Vote matrix
+
+| App (seat) | A | B | C | D | E | F | G | **Total** |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+| **Burn** (F) | 5 | 4 | 4 | 4 | 5 | — | 5 | **27** |
+| **Buttress** (C) | 4 | 5 | — | 4 | 3 | 4 | 5 | **25** |
+| **Blaze** (A) | — | 4 | 3 | 4 | 5 | 4 | 4 | **24** |
+| **Banish** (E) | 3 | 4 | 4 | 5 | — | 4 | 4 | **24** |
+| **Badge** (G) | 4 | 3 | 5 | 3 | 4 | 5 | — | **24** |
+| **Bandit** (B) | 4 | — | 4 | 3 | 4 | 3 | 4 | **22** |
+| **Bid** (D) | 3 | 3 | 3 | — | 3 | 3 | 3 | **18** |
+
+(— = abstention on own submission.)
+
+### Reading the result
+
+**Burn won on consistency rather than on passion.** It is the only finalist that
+no seat scored below 4, and it took 5s from three different seats (A, E, G) whose
+lenses have almost nothing in common: AI-native automation, operator experience,
+and creative/marketing. Every other app in the top five drew at least one 3.
+
+The apps immediately behind it were more polarizing. Badge took two 5s and two 3s.
+Buttress took two 5s and a 3. Blaze took a 5 and a 3. Banish took a 5 and a 3. The
+seats were not disagreeing about quality; they were disagreeing about which axis the
+suite should optimize for, and the three leaders each embodied a different answer:
+Burn for dollar-denominated value to the broadest buyer, Banish for a legal trigger
+the customer cannot decline, Badge for a mechanism no competitor can replicate.
+Burn was the app most seats could accept as second-best on their own axis.
+
+**Three seats named Burn as what they would build if their own were off the board**
+(A, E, G), more than any other app. Buttress, Badge, and Banish each drew one such
+nod (from B, from C and F, and from D respectively).
+
+**Bid finished last on a remarkably uniform score: 3 from all six seats.** Nobody
+disliked it and nobody was excited by it. The recurring reason, given independently
+by four seats, was adjacency rather than quality: Bid works on an uploaded document
+and does not get materially better as the customer's history accumulates in the
+suite, so it is the one finalist that "would work nearly as well as a standalone
+product" (Seat A), reuses "platform plumbing but almost none of the platform's
+accumulated data" (Seat F), and has "the weakest platform flywheel here" (Seat G).
+Seat D's disciplined scoping decision to drop the jurisdictional corpus was widely
+praised and did not translate into points.
+
+### The dominant criticism of the winner
+
+Notably, the objection most often raised against Burn was raised by seats that
+scored it 4 or 5 anyway, and it was the same objection every time: **classifier
+precision on the hard block.** Seat B: "a hard block is only tolerable if the
+classifier is right, and a firm that gets two wrong blocks in week one turns the
+gate off permanently and never turns it back on." Seat C: "a wrong hard block stops
+money, which is the most expensive kind of false positive a small firm can be handed."
+Seat D: "a misclassified charge that will not post in a 10-person firm on a Friday
+is the thing that gets the feature switched off permanently... the per-org tuning
+loop mitigates this over time and does nothing in month one."
+
+Three independent seats converging on one failure mode is the strongest signal this
+session produced about how the app must be built. It is carried into the design spec
+as a first-class constraint: the gate defaults to advisory, and hard blocking is
+earned per-org on measured classifier accuracy rather than switched on at install.
+
+Seat E, which built its own submission on the forward-gate-before-an-irreversible-act
+principle, was asked to judge whether Burn and Badge could legitimately claim it. Its
+answer on Burn: "Its forward-gate claim is the weakest of the three that make it,
+since a posted expense is reversible, but the irreversibility it actually relies on
+is relational (work done and unbilled cannot be charged for later without a fight)
+and that one holds."
+
+### Result
+
+**Winner: Burn (Seat F)** - 27 of a possible 30. A margin-protection engine that
+reads the signed statement of work into a priced deliverable ledger, continuously
+attributes every logged task, hour, ticket and expense against it, surfaces
+everything that lands in the `unscoped` bucket as work nobody sold, and gates the
+charge before it posts.
+
+**Runner-up: Buttress (Seat C)** - 25. The decision ledger that interrupts a
+re-argument in the channel while it is happening, having won its three-way collision
+outright during debate and absorbed donated mechanisms from two rival seats.
+
+Full spec: `docs/brainstorming/2026_07_19_08_01_APP_DESIGN_burn.md`.
+Session log: `docs/brainstorming/2026_07_19_08_01_BRAINSTORMING_SESSION.md` (this file).
 
 ## Phase 6 - Spec hardening
 
