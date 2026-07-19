@@ -139,31 +139,71 @@ function getRequestedOrgId(request: FastifyRequest): string | undefined {
   return value;
 }
 
-async function buildAuthUser(
+/**
+ * P2-8. True when API-key auth must pin the request's org context to the key's own org.
+ *
+ * A key minted in org A is handed to an integration, a CI job, or an agent runner on the
+ * understanding that it is confined to org A. Without this pin the holder adds
+ * `X-Org-Id: <org B>` and, because `resolveOrgContext` accepts any org the USER belongs
+ * to, reads org B's `burn_cost_rates` (per-person compensation) with an org-A key.
+ *
+ * SuperUser keys are exempt and keep honoring the header, because SuperUsers legitimately
+ * operate across orgs. A key whose `org_id` is NULL (SuperUser keys legitimately have
+ * this) is NOT pinned and falls through to the normal header-derived path, so the pin can
+ * never produce an undefined org id.
+ *
+ * Ported from apps/api/src/plugins/auth.ts:200-231.
+ */
+export function isApiKeyOrgPinned(apiKeyOrgId: string | null, isSuperuser: boolean): boolean {
+  return Boolean(apiKeyOrgId) && !isSuperuser;
+}
+
+export async function buildAuthUser(
   row: BaseUserRow,
   apiKeyScope: string | null,
   request: FastifyRequest,
+  apiKeyOrgId: string | null = null,
 ): Promise<AuthUser> {
-  const requestedOrgId = getRequestedOrgId(request);
+  const pinned = isApiKeyOrgPinned(apiKeyOrgId, row.is_superuser);
+  // When pinned, the X-Org-Id header is discarded OUTRIGHT rather than validated against
+  // the key's org: passing it through to resolveOrgContext would throw
+  // OrgMembershipError (403) for a header naming an org the user is not in, which is a
+  // membership probe. Ignoring it is both safer and what apps/api does.
+  const requestedOrgId = pinned ? undefined : getRequestedOrgId(request);
   const { memberships, activeOrgId, activeRole } = await resolveOrgContext(
     row.id,
     row.org_id,
     requestedOrgId,
   );
 
+  // Override the resolved "active" org with the key's org. Memberships are still resolved
+  // in full above so downstream code sees the complete list; only the effective org and
+  // role are pinned. `apiKeyOrgId` is non-null whenever `pinned` is true, so `effectiveOrgId`
+  // is always a string and the pin cannot yield an undefined org id.
+  let effectiveOrgId = activeOrgId;
+  let effectiveRole = activeRole;
+  if (pinned && apiKeyOrgId) {
+    effectiveOrgId = apiKeyOrgId;
+    // Use the user's role WITHIN the key's org. If the user is no longer a member of that
+    // org (membership revoked), fall back to 'viewer': the key's scope still gates writes,
+    // but losing membership must strip role-derived privileges rather than carry over the
+    // role from some other org.
+    effectiveRole = memberships.find((m) => m.org_id === apiKeyOrgId)?.role ?? 'viewer';
+  }
+
   return {
     id: row.id,
-    org_id: activeOrgId,
+    org_id: effectiveOrgId,
     email: row.email,
     display_name: row.display_name,
     avatar_url: row.avatar_url,
-    role: activeRole,
+    role: effectiveRole,
     timezone: row.timezone,
     is_active: row.is_active,
     is_superuser: row.is_superuser,
     api_key_scope: apiKeyScope,
     org_memberships: memberships,
-    active_org_id: activeOrgId,
+    active_org_id: effectiveOrgId,
   };
 }
 
@@ -242,12 +282,30 @@ async function authPlugin(fastify: FastifyInstance) {
         const verifyCandidates = candidates.length > 3 ? candidates.slice(0, 1) : candidates;
 
         for (const candidate of verifyCandidates) {
-          const valid = await argon2.verify(candidate.apiKey.key_hash, token);
+          // A malformed stored hash makes argon2.verify THROW. Uncaught, that turns one
+          // corrupt row into a 500 on every request whose token shares its 8-char prefix.
+          // Treat a throw as a verification failure. Mirrors apps/api:445-457.
+          let valid = false;
+          try {
+            valid = await argon2.verify(candidate.apiKey.key_hash, token);
+          } catch (err) {
+            request.log.warn(
+              { err, api_key_id: candidate.apiKey.id },
+              'argon2.verify threw on api key candidate; treating as invalid',
+            );
+          }
           if (candidate.apiKey.expires_at && new Date(candidate.apiKey.expires_at) < new Date()) {
             continue;
           }
           if (valid && candidate.user.is_active) {
-            request.user = await buildAuthUser(candidate.user, candidate.apiKey.scope, request);
+            // P2-8: pass the key's own org_id so a non-SuperUser key stays confined to the
+            // org it was minted in, whatever X-Org-Id says.
+            request.user = await buildAuthUser(
+              candidate.user,
+              candidate.apiKey.scope,
+              request,
+              candidate.apiKey.org_id,
+            );
             db.update(apiKeys)
               .set({ last_used_at: new Date() })
               .where(eq(apiKeys.id, candidate.apiKey.id))
