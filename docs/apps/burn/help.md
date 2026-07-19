@@ -1,0 +1,355 @@
+# Burn - Contract Scope and Margin Monitor
+
+> Burn reads a signed proposal or SOW into a priced ledger of what was sold, then watches every unit of work against that ledger in dollars, so you can see the work nobody sold before it turns into an unbilled surprise. Reach for Burn when you deliver against fixed-scope contracts and need to know, continuously, whether the work matches the money.
+
+## Overview
+
+Burn turns a signed engagement document into a living scope ledger. You register a contract (a proposal, SOW, engagement letter, MSA, retainer, or amendment) that already lives in Bin as an asset, Burn extracts the deliverables it promised with a clause cite for each, and a human confirms a priced envelope on the ones that carry a number. From then on Burn classifies every work item (a Bam time entry or task, a Bill expense, line item, or invoice) against that ledger in dollars. The bucket it cares about most is the work that maps to no priced deliverable: the unscoped bucket is the product.
+
+Burn does two jobs. First, **measurement**: it labels each engagement chain with a headline figure and says exactly what that figure means (true margin, contract consumption, or a suppressed variant when you are not cleared to see cost). Second, **prevention**: its flagship is a fail-open pre-transaction gate that vets a billable Bill expense against contract scope before it posts. The gate ships as advisory (it warns but never blocks) and is promoted to blocking only after it earns seven calibration preconditions. When it does block, it returns four ways forward rather than a wall.
+
+Burn never owns source data and never edits it. It reads contract bytes from **Bin**, work from **Bam**, money from **Bill** (which is also where the gate lives), and client identity from **Bond** resolved through **Braid**. It emits events to **Bolt**, and it routes change-order drafts into the platform approval queue (`agent_proposals`) for a human to send. Burn does not read Basis metrics and does not read Bulwark obligations.
+
+The objects you work with are **engagements** (grouped into amendment **chains**), **deliverables** (each with a priced, unpriced, or unconfirmed **envelope**), **work items** (the units of work being classified), **attributions** (the decision that maps a work item to a deliverable or a bucket), **variances** (drift that needs attention), **change orders** (drafted amendments), **prechecks** (gate verdicts), **cost rates**, and **rules**.
+
+### Key concepts
+
+- **Engagement** - one signed document (SOW, proposal, engagement letter, MSA, retainer, or amendment) registered as a Bin asset. It carries a contract value, currency, and envelope basis.
+- **Chain** - an engagement plus its amendments, grouped under one `chain_root_id`. The Portfolio Board shows one card per chain, not per document.
+- **Deliverable** - a promised unit of work read from the signed document, with a clause cite. It is the thing a work item attributes to.
+- **Envelope** - the priced ceiling on a deliverable. Three states: **Envelope priced** (a confirmed number that can drive a deny), **Envelope unpriced** (tracks hours only and can never deny), and **Envelope unconfirmed** (extracted but not yet a gate input). Only a confirmed, priced envelope gates.
+- **Envelope basis** - how the contract prices the work: **Fixed fee**, **T&M** (time and materials), **Retainer**, or **Not to exceed**.
+- **Metric basis** - what the headline figure means. **Margin** (true margin, shown only when cost rates cover the hours), **Contract consumption** (how much of the contract value has been consumed, shown when cost is not fully covered), or the suppressed variant labeled **Consumption** (you lack financial read-all, or the chain is below the contributor floor). A field name is a claim: Burn never labels a consumption number as margin.
+- **Burn-down** - the dated step-ups in contract value and envelope over the life of a chain, plus daily snapshots, shown on the engagement detail page.
+- **Work item** - one unit of work Burn is classifying: a `bam.time_entry`, `bam.task`, `bill.expense`, `bill.line_item`, or `bill.invoice`.
+- **Unscoped buckets** - three distinct problems, **never summed**: **Sold by nobody** (work inside a tracked contract that no deliverable covers), **Unclassified** (the classifier could not place it with enough confidence), and **Outside any tracked contract** (work on a project with no active engagement). They have opposite remedies, so Burn shows three figures and never one total.
+- **Variance** - detected drift: an envelope overrun, unscoped work, a silent deliverable, an ungated charge, a gate outage, rule overreach, and more. Variances are severity-ordered.
+- **Change order** - a drafted amendment. It is **never sent** from Burn: drafting it creates a pending row in the platform approval queue, and that queue is the confirmation step. On approval it raises the base deliverable's effective envelope so the next precheck allows the charge that was blocked.
+- **The gate** - the pre-transaction check on a Bill expense. Three modes: **off**, **advisory** (warns, never blocks; a complete product on its own), and **blocking** (denies an enforced out-of-scope charge). Only owner/admin can change the mode.
+- **Fail-open circuit breaker** - the gate fails open by default. If burn-api is unreachable, unconfigured, timing out, or Redis is down, the charge posts anyway and the outcome is recorded. Availability fails open; authorization fails closed.
+- **Gate verdicts vs fail-open reasons** - two distinct levels. A **verdict** is one of **Allow**, **Allow w/ note**, **Needs mapping**, or **Deny**. A **fail-open reason** (`gate_unavailable`, `gate_not_configured`, `redis_unavailable`) is why the gate produced no verdict and the charge posted regardless; these appear in the Reason column of the precheck log, they are not verdict badges.
+- **Coverage** - the share of gate-eligible writes over the trailing 7 days that actually reached a verdict. Days the gate was unavailable or not configured are tracked separately and count against promotion.
+- **Cost rate** - effective-dated cost per person and per project, in USD per hour. This is the missing primitive that turns contract consumption into true margin. Owner/admin only.
+- **Rule** - a deterministic attribution rule that runs before any retrieval or LLM call. A rule can neutralize the gate, so it is constrained: owner/admin only, glob or substring patterns (no regex), and rejected if it would match more than the configured share of the trailing window.
+
+### Where to find it
+
+Burn is served at `/burn/`. It shares your BigBlueBam session, so if you are signed in to the suite you are signed in to Burn. Press `?` from any Burn screen (or use the help control in the top bar) to open the in-app help.
+
+The left sidebar has six entries: **Portfolio Board** (`/`), **Unscoped Queue** (`/unscoped`), **Variances** (`/variances`), **Gate Console** (`/gate`), **Cost Rates** (`/settings/cost-rates`), and **Settings** (`/settings`). Two more screens are reached by drilling in rather than from the sidebar: the **engagement detail** page (`/engagements/:id`, opened from a Portfolio Board card) and the **Attribution Rules** editor (`/settings/rules`, opened from Settings).
+
+Before Burn is useful you need an organization, a signed engagement document stored as a Bin asset, and the work in Bam and Bill that Burn will classify against it. Permissions are tiered: an org **owner** or **admin** holds all 22 `burn.*` permissions; a **member** holds 14 (everything except confirming an envelope, authoring rules, marking a precheck wrong, financial read-all, reading or writing cost rates, deleting an engagement, and writing settings, though a member does keep the precheck override so a blocked person can always get past the gate); a **viewer** holds 7 read permissions (but not financial read-all or cost-rate read); a **guest** holds none. Without `burn.financials.read_all`, cost and margin are structurally absent rather than blanked, and you see contract consumption percent only.
+
+## Feature reference
+
+### Portfolio Board
+
+The Portfolio Board is the Burn home page. It shows one card per engagement chain, grouped by client, each with an envelope-basis badge, a health chip (**Healthy**, **At risk**, **Overrun**, **Silent**, or **Unlinked**), a headline money figure labeled from its metric and revenue basis, and a burn bar (green under 75 percent consumed, amber to 100, red over). At the top, a queue-health strip shows the three unscoped bucket figures side by side (**Sold by nobody**, **Unclassified**, **Outside any contract**), plus **Pending review** and **Awaiting valuation** counts. The three bucket figures are never summed.
+
+![The Portfolio Board: one card per engagement chain, grouped by client, with a queue-health strip](screenshots/light/portfolio-board.png)
+
+To review your portfolio:
+
+1. Open `/burn/`. The board loads every chain you can see, grouped by client.
+2. Read each card's health chip and burn bar to spot overruns and at-risk chains.
+3. Click the queue-health strip at the top to jump to the Unscoped Queue.
+4. If you hold `burn.financials.read_all`, tick **All accounts rollup** in the header to add a firm-wide **Account rollup** panel with per-account money blocks.
+5. Click any card to open its engagement detail page.
+
+Money figures on the board require `burn.financials.read_all`. Without it the strip figures render as a dash and the cards show the suppressed consumption variant.
+
+### Engagement detail
+
+Opened from a Portfolio Board card (`/engagements/:id`), this page is the full picture of one chain: the headline money figure and burn bar, a **Burn-down** panel (envelope step-ups and the count of daily snapshots), the **Deliverable ledger**, the chain's **Variances**, and the **Work-item ledger** for the first linked project. Each deliverable row shows its title, its clause cite (visible only with financial read-all), an envelope-state badge, a review-status badge, and a lifecycle-status badge.
+
+![Engagement detail: headline figure, burn-down, deliverable ledger, and work-item ledger](screenshots/light/engagement-detail.png)
+
+To confirm a priced envelope on a deliverable (owner/admin):
+
+1. Open the engagement from the Portfolio Board.
+2. In the **Deliverable ledger**, find a row whose envelope is not yet **Envelope priced** and click **Confirm envelope**.
+3. In the dialog, read the verified clause quote shown beside the extracted number.
+4. Either enter the **Envelope amount (minor units / cents)**, or tick **Confirm as unpriced (tracks hours only; can never deny)** to track hours without a gating number.
+5. Click **Confirm envelope**. The row flips to **Envelope priced** (or **Envelope unpriced**) and becomes a valid gate input if priced.
+
+Confirming an envelope requires `burn.envelope.confirm`, which is owner/admin only. This step is deliberately not reachable by any agent.
+
+### Registering an engagement
+
+Burn watches work against a contract only after that contract is registered. Registration reads a Bin asset, records the contract value, currency, and envelope basis, and kicks off an asynchronous extraction pass that reads the deliverables from the document. Extraction is queued (the create call returns immediately and the chain sits in **extracting** until it finishes), then each extracted deliverable lands as **Pending review** with no envelope, waiting for a human to confirm and price it.
+
+To register an engagement:
+
+1. On the **Portfolio Board**, click **Register engagement** (top-right of the header, and also below the empty state when you have no engagements yet). The button appears only if you hold `burn.engagement.write` (owner or admin).
+2. In the **Register engagement** form, enter a **Title**, choose a **Kind** (SOW, proposal, engagement letter, MSA, retainer, amendment, change order, or other), and paste the **Signed document (Bin asset ID)** of the contract (this is the document extraction reads). Choose an **Envelope basis** (Fixed fee, T&M, Retainer, or Not to exceed) and **Currency** (defaults to USD). Optionally set contract value, budget hours, start/end dates, and the client account. If you pick **Retainer**, a required **Period length (days)** field appears.
+3. Click **Register engagement**. The chain appears on the Portfolio Board in the **extracting** state and you land on its engagement detail page while extraction runs in the background.
+
+You can also register from an agent or the API: the MCP tool `burn_extract_deliverables` (supply the new-engagement fields including a title) or `POST /burn/api/v1/engagements` directly.
+
+### Unscoped Queue
+
+The Unscoped Queue is where you triage work that nobody sold. It has three bucket tabs, each with its own figure that is never added to the others: **Sold by nobody**, **Unclassified**, and **Outside any tracked contract**. Each row shows the work item's title, its attribution-state badge, its valuation-basis badge, the source type, and (with financial read-all) its billable amount and hours logged. You can act on one row at a time or select several and act in bulk.
+
+![The Unscoped Queue: three buckets that are never summed, with per-row triage actions](screenshots/light/unscoped-queue.png)
+
+To triage a row (needs `burn.attribution.write`):
+
+1. Open `/burn/unscoped` and pick a bucket tab.
+2. Use `j` and `k` to move focus between rows.
+3. Press `a` (or click **Attribute**) to open the deliverable picker, then pick a deliverable to map the work to.
+4. Press `c` to confirm the current attribution, `u` to mark it unscoped, or `n` to mark it non-billable (the reason menu offers internal, pre sales, pto, warranty, overhead, and rework).
+5. If the row belongs to an engagement, press `o` (or click the change-order button) to draft a change order for it.
+6. To handle a whole class at once, select rows with the checkboxes and use **Mark unscoped** or **Mark non-billable** in the bulk bar, or **Clear** to deselect.
+
+If you hold `burn.rule.write`, press `r` (or click the rule button) to jump to the Attribution Rules editor and turn a recurring cluster into a deterministic rule. Amounts on this screen require `burn.financials.read_all`.
+
+### Variances and Change Orders
+
+The Variances screen (`/burn/variances`, titled **Variances & Change Orders**) is a severity-ordered inbox of drift: unscoped work, envelope overruns, at-risk envelopes, silent deliverables, ungated charges, consumption erosion, gate outages, rule overreach, and more. Filter by status with the tabs (**open**, **acknowledged**, **resolved**, **dismissed**, and **All**). Each card shows a severity badge, the variance kind, a status badge, an amount (with financial read-all), and any note.
+
+To work a variance:
+
+1. Open `/burn/variances` and select a status tab.
+2. On an open variance, click **Acknowledge** to mark that you have seen it (needs `burn.variance.write`).
+3. Click **Resolve** or **Dismiss** to close it out (needs `burn.variance.write`).
+4. To turn the variance into a scope change, click **Draft change order** (needs `burn.changeorder.draft`). This creates a pending draft in the platform approval queue.
+5. Once a draft exists, the card shows **Change order drafted.** with an **Approve in proposals** link; approving it there is what actually applies the amendment.
+
+Drafting a change order never sends it. It routes into the standard proposal flow for a human to approve, and approval raises the base deliverable's effective envelope.
+
+### Gate Console
+
+The Gate Console (`/burn/gate`) is where you run the pre-transaction gate. It shows the current mode badge, the mode controls, gate coverage, the seven-precondition promotion wizard, the mandatory review of recent advisory denies, and the full precheck log. Advisory mode is a complete product: you still get the queue, the variance inbox, change-order drafts, and every financial figure. Only the block itself waits for calibration.
+
+![The Gate Console: mode controls, coverage, the seven-precondition promotion wizard, and the precheck log](screenshots/light/gate-console.png)
+
+To set the gate mode (owner/admin, needs `burn.settings.write`):
+
+1. Open `/burn/gate`.
+2. Under **Gate mode**, click **Off**, **Advisory**, or **Blocking**. **Blocking** is disabled until all seven preconditions are met.
+3. Weakening the gate (to **Off** or **Advisory** from **Blocking**) prompts a confirmation, because switching the spend control off is the consequential direction.
+4. To suspend enforcement temporarily, click **Pause 24h** and confirm; the button then reads **Paused**.
+
+To review a would-be block and feed calibration:
+
+1. In **Last advisory denies (mandatory review before promotion)**, read each row's verdict, class, and reason.
+2. Answer "Right call?": click **Yes**, **I'd have mapped it**, or (owner/admin only, `burn.precheck.mark_wrong`) **No - wrong call**. Only "No - wrong call" enters the precision numerator; the other two feed nothing.
+3. Click **Flag for review** to escalate without scoring, or **Override** (needs `burn.precheck.override`) to let the charge through with a typed reason.
+
+The **Gate coverage** panel shows **Coverage (7d)**, **Unavailable (burn-api down)** days, and **Not configured** days. The precheck log's columns are **When**, **Class**, **Verdict**, **Reason**, and **Mode**; the **Reason** column is where fail-open reasons like `gate unavailable` and `gate not configured` appear, distinct from the verdict badge.
+
+### Cost Rates
+
+Cost Rates (`/burn/settings/cost-rates`) is the one place per-person compensation lives, so it is gated twice: by `burn.costrate.read` and by an in-route owner/admin guard. It holds effective-dated cost per person and project, in USD per hour. Saving a rate enqueues a background revalue (`burn-revalue`) that reprices existing uncosted work items in place with zero re-classification: margin is then reported wherever a rate covers the hours, consumption for the rest.
+
+![Cost Rates: effective-dated USD hourly cost per person and project](screenshots/light/cost-rates.png)
+
+To add a cost rate (owner/admin, needs `burn.costrate.write`):
+
+1. Open `/burn/settings/cost-rates` and click **Add rate**.
+2. Optionally set **User ID (optional)** and **Project ID (optional)**; leave blank to apply to all users or all projects.
+3. Enter **Cost per hour (minor units / cents)**.
+4. Set **Effective from**, and optionally **Effective to (inclusive, optional)** and a **Note (optional)**.
+5. Click **Save rate**. The rate appears in the table and the revalue job runs. Currency is USD and the rate type is hourly.
+
+To remove a rate, click the delete (trash) icon on its row. If you lack `burn.costrate.read`, the page explains that cost rates are owner/admin only instead of listing them.
+
+### Settings
+
+Settings (`/burn/settings`) tunes attribution thresholds and signals. Every value is clamped to the same band the database enforces. Saving requires `burn.settings.write`; without it the page is read-only.
+
+To adjust settings:
+
+1. Open `/burn/settings`.
+2. Set **Auto-attribute threshold** (band 0.75 to 0.99): at or above this confidence, attribution is applied autonomously.
+3. Set **Review threshold** (band 0.30 up to auto-attribute minus 0.05): below auto-attribute and at or above this, the item is queued for a human.
+4. Tune **Pending review max age (days)**, **Reconcile window (days)**, **Overage bucket (minor units)**, **Min contributors for cost aggregate**, and **Rule match ceiling (%)**.
+5. Toggle the classification signals: **Embedding retrieval (Qdrant)**, **Banter signal**, and **VCS signal**.
+6. Click **Save**.
+
+The **Overage bucket** quantizes the overage shown to non-financial callers so probing cannot recover the exact envelope, and **Min contributors for cost aggregate** suppresses cost and margin below that many contributors so an individual rate cannot be reverse-solved. A card at the top links to the **Attribution rules** editor.
+
+### Attribution Rules
+
+The Attribution Rules editor (`/burn/settings/rules`, reached from Settings) holds deterministic rules that run before any retrieval or LLM call. Because a rule can neutralize the gate, authoring is owner/admin only (`burn.rule.write`) and constrained. The table lists each rule's **Priority**, **Name**, **Outcome**, and **Matched** count with its last match percentage.
+
+![The Attribution Rules editor: deterministic rules that run before any LLM call](screenshots/light/rules.png)
+
+To create a rule (owner/admin):
+
+1. Open Settings and click the **Attribution rules** card, then click **New rule**.
+2. Enter a **Name** and a **Priority (lower runs first)**.
+3. Under **Match - source types**, pick one or more of `bam.task`, `bam.time_entry`, `bill.expense`, `bill.line_item`, `bill.invoice`.
+4. Optionally add a **Title pattern (glob or substring only)** (no regex metacharacters) and **Project IDs (comma-separated, optional)**. A rule must constrain at least one discriminating key.
+5. Choose the **Outcome**: **Exclude as non-billable** (then pick a reason) or **Attribute to a deliverable** (then supply a **Deliverable ID**).
+6. Click **Create rule**. A rule that would match more than the configured share of the trailing window is rejected at write time.
+
+To remove a rule, click the delete (trash) icon on its row.
+
+### Working with AI agents
+
+Burn exposes 17 MCP tools plus one deprecated alias, all named `burn_*` and gated behind the per-agent `burn.*` allowlist (they fail closed until an operator allowlists them). The flagship is **`burn_precheck`**, which asks whether a proposed charge is allowable against its envelope before it is committed and returns a verdict, a target deliverable, a clause cite, and a quantized overage. Only `deny` blocks, and only when the org has earned blocking mode for that class; `needs_mapping` never blocks.
+
+The full set:
+
+- `burn_precheck` - pre-commit gate check (flagship).
+- `burn_attribute` - attribute one work item, or mark it unscoped or non-billable.
+- `burn_financials` - the discriminated money block for a chain, or the firm-wide roll-up. Read the `metric_basis` discriminator before reading any number.
+- `burn_margin` - deprecated alias for `burn_financials`; returns the identical response and does not synthesize a margin key when the basis is consumption.
+- `burn_list_engagements`, `burn_get_engagement` - list and fetch chains.
+- `burn_extract_deliverables` - register a document and extract deliverables, or re-run extraction. Extraction is asynchronous.
+- `burn_delete_engagement` - destructive; two-step confirm.
+- `burn_list_deliverables`, `burn_confirm_deliverable` - list the review queue and edit a deliverable's metadata. `burn_confirm_deliverable` cannot set the envelope or activate the deliverable.
+- `burn_reject_deliverable` - destructive; two-step confirm.
+- `burn_list_unscoped` - the three-bucket queue (never summed).
+- `burn_reclassify_attribution` - re-decide an existing attribution with a stale-write check.
+- `burn_override_precheck` - override a verdict with a typed code and reason; it cannot set `gate_wrong`.
+- `burn_list_variances` - the variance inbox.
+- `burn_draft_change_order` - draft a change order; it is never sent and takes no confirm token because the approval queue is the confirmation.
+- `burn_set_gate_mode` - change or pause the gate; requires a confirm token when it weakens enforcement.
+- `burn_calibration_report` - the seven promotion preconditions plus coverage.
+
+Three things a human should know when reviewing agent work. First, pass `asker_user_id` on every money-bearing call: on Burn it narrows both row visibility and financial flooring (burn-api takes the intersection of the bearer's and the asker's capabilities), so an admin service account acting for a member returns no cost figures. Second, some actions are deliberately not agent-reachable at all: confirming or pricing an envelope, authoring rules, and writing cost rates are human-only, and a service-account attempt on the confirm-envelope route produces an approval-queue proposal rather than a write. Third, weakening the gate and destructive deletes require a two-step confirm, and change-order drafts land in the platform approval queue for a human to send. See the Burn MCP-tools reference in `docs/apps/burn/` for the full catalog and schemas.
+
+## User Stories
+
+### Story: Register and price a new engagement
+
+**Who:** An org owner or admin setting Burn up for a new contract.
+**Goal:** Get a signed SOW watched, with priced envelopes on its deliverables.
+**Before you start:** The signed document is stored as a Bin asset. You hold `burn.envelope.confirm` (owner/admin). You know the contract value and envelope basis.
+
+**Steps**
+
+1. On the Portfolio Board, click **Register engagement**, fill in the Title, the Bin asset ID of the signed document, the envelope basis, and currency, then click **Register engagement**. (Agents can do the same via `burn_extract_deliverables`.)
+2. Wait for extraction to finish. On the Portfolio Board the chain moves from **extracting** to **active**.
+3. Open the chain from its card to reach the engagement detail page.
+4. In the **Deliverable ledger**, each extracted deliverable shows as **Pending review** with an unconfirmed envelope. Click **Confirm envelope** on one.
+5. Read the clause quote in the dialog, enter the **Envelope amount (minor units / cents)** (or tick **Confirm as unpriced**), and click **Confirm envelope**.
+6. Repeat for each deliverable that carries a number.
+
+**Result:** The chain is active, its priced deliverables show **Envelope priced**, and those envelopes are now valid gate inputs. The Portfolio Board card shows a health chip and burn bar.
+
+**Related:** Agents can extract with `burn_extract_deliverables` and edit metadata with `burn_confirm_deliverable`, but pricing an envelope is human-only.
+
+### Story: Triage the unscoped queue
+
+**Who:** A delivery lead or member cleaning up work nobody sold.
+**Goal:** Empty a bucket by attributing, excluding, or escalating each item.
+**Before you start:** You hold `burn.attribution.write`. There is work in the queue.
+
+**Steps**
+
+1. Open `/burn/unscoped` and select the **Sold by nobody** tab.
+2. Press `j` / `k` to move focus down the list.
+3. On a row that belongs to a deliverable, press `a`, then pick the deliverable in the picker.
+4. On a row that is genuinely non-billable, press `n` and choose a reason (for example pto or internal).
+5. For a recurring cluster, select the rows with their checkboxes and click **Mark non-billable** in the bulk bar.
+6. Switch to the **Unclassified** and **Outside any tracked contract** tabs and repeat. Do not add the three bucket figures together; they are separate problems.
+
+**Result:** The bucket empties as each item finds a deliverable, an exclusion, or an escalation. The Portfolio Board queue-health strip drops accordingly.
+
+**Related:** `burn_attribute` and `burn_list_unscoped` for agents. Press `r` on a cluster (owner/admin) to turn it into a rule.
+
+### Story: Clear a blocked expense in Bill
+
+**Who:** A staffer whose expense was denied by the gate.
+**Goal:** Get the charge posted the right way instead of being stuck.
+**Before you start:** The gate is in blocking mode for `bill.expense`, and your expense exceeds the confirmed envelope. You hold `burn.precheck.override` (members do).
+
+**Steps**
+
+1. In Bill, create or approve the expense. The **Check against contract (Burn)** control runs a precheck; on an out-of-scope charge the create or approve call returns HTTP 409 `BURN_ENVELOPE_EXCEEDED`.
+2. The notice offers four actions: **Map to deliverable**, **Record absorbed cost**, **Raise change order**, and **Override**.
+3. If the work does belong to a deliverable, click **Map to deliverable** to open the Unscoped Queue and attribute it, then retry.
+4. If the cost is genuinely absorbed, or a change order is pending, go to the Gate Console and use **Override** with a typed reason (`absorbed_cost`, `mapped_manually`, or `change_order_pending`).
+5. If the scope really grew, click **Raise change order** and draft one from the variance.
+
+**Result:** The charge posts through the correct path, and the precheck log records the verdict and any override.
+
+**Related:** `burn_override_precheck` (cannot set `gate_wrong`) and `burn_draft_change_order` for agents. Only `deny` in blocking mode returns 409; `needs_mapping` never blocks, and any gate failure fails open.
+
+### Story: Resolve a variance with a change order
+
+**Who:** An engagement owner reacting to scope drift.
+**Goal:** Turn an overrun into an approved amendment that lifts the envelope.
+**Before you start:** You hold `burn.changeorder.draft`. There is an open variance tied to an engagement.
+
+**Steps**
+
+1. Open `/burn/variances` and select the **open** tab.
+2. Find the overrun (severity-ordered, critical first) and read its note and refs.
+3. Click **Acknowledge** to record that you have it.
+4. Click **Draft change order**. Burn creates a pending draft in the platform approval queue.
+5. The card now shows **Change order drafted.** with **Approve in proposals**. Click through and approve it there.
+6. Back in Burn, the amendment raises the base deliverable's effective envelope, so the next precheck on that work allows the charge that was blocked.
+
+**Result:** The variance is on its way to resolved, an amendment engagement exists in the chain, and the envelope reflects the newly sold scope.
+
+**Related:** `burn_list_variances` and `burn_draft_change_order`. The draft is never sent from Burn; the approval queue is the send step.
+
+### Story: Turn consumption into margin with cost rates
+
+**Who:** An org owner who wants true margin, not just consumption.
+**Goal:** Add cost rates so the Portfolio Board reports margin.
+**Before you start:** You are owner/admin and hold `burn.costrate.write`.
+
+**Steps**
+
+1. Open `/burn/settings/cost-rates` and click **Add rate**.
+2. Enter **Cost per hour (minor units / cents)** and an **Effective from** date. Optionally scope it to a **User ID** and **Project ID**.
+3. Click **Save rate**. The revalue job reprices uncosted work items in place.
+4. Add more rates until they cover the hours you care about.
+5. Return to the Portfolio Board. Chains whose hours are covered now show **Margin** instead of **Contract consumption**.
+
+**Result:** Covered chains report true margin with a cost-coverage percentage; uncovered hours still report consumption. No work is re-classified.
+
+**Related:** Cost rates are not agent-reachable. Below the **Min contributors for cost aggregate** floor, cost and margin stay suppressed to protect individual rates.
+
+### Story: Promote the gate from advisory to blocking
+
+**Who:** An org owner ready to start blocking out-of-scope charges.
+**Goal:** Earn and switch on blocking mode safely.
+**Before you start:** The gate has been running in advisory long enough to build coverage. You hold `burn.settings.write` and `burn.precheck.mark_wrong`.
+
+**Steps**
+
+1. Open `/burn/gate` and read the **Gate coverage** panel. Aim for high coverage with few unavailable or not-configured days.
+2. In **Last advisory denies**, review every would-be block. For any bad call, click **No - wrong call** so precision is measured honestly.
+3. In **Promotion to blocking - standing against all seven preconditions**, work down the list until all seven show satisfied.
+4. Once eligible, the **Blocking** button enables. Click it and confirm the acknowledgement.
+5. Under **Enabled classes**, confirm which work-ref classes enforce.
+
+**Result:** The gate is in **blocking** mode. Enforced denies on enabled classes now return 409 in Bill, while every other verdict and every gate failure still fails open. If reliability slips, the gate auto-demotes to a safer mode and shows a banner.
+
+**Related:** `burn_calibration_report` reads the preconditions; `burn_set_gate_mode` changes the mode (promotion needs no token, but the acknowledgement is not agent-suppliable, so promotion stays human-driven).
+
+### Story: Let an agent monitor scope and draft change orders
+
+**Who:** An operations agent running on a schedule.
+**Goal:** Surface overruns and stage change orders for a human to approve.
+**Before you start:** The agent's policy allowlists `burn.*`. The agent knows the `asker_user_id` of the human it acts for.
+
+**Steps**
+
+1. The agent calls `burn_list_variances` (status open) to find drift, passing `asker_user_id` so amounts are floored to what that human may see.
+2. For an overrun, it calls `burn_get_engagement` and `burn_financials` (reading the `metric_basis` discriminator before quoting any number).
+3. It calls `burn_draft_change_order` for the engagement, optionally referencing the variance. No confirm token is needed because the draft lands in the approval queue.
+4. A human reviews the pending proposal and approves or rejects it.
+5. If a specific charge is in question, the agent runs `burn_precheck` to report the verdict and quantized overage without committing anything.
+
+**Result:** Overruns are triaged and change orders are staged for human approval, with money figures correctly floored and nothing sent or priced autonomously.
+
+**Related:** `burn_reclassify_attribution` for re-deciding attributions; `burn_override_precheck` for a typed override. Envelope pricing, rule authoring, and cost-rate writes remain human-only.
+
+## Related
+
+- **Bin** - stores the signed contract bytes that Burn registers and extracts deliverables from.
+- **Bam** - the source of task and time-entry work items Burn classifies.
+- **Bill** - the source of expense, line-item, and invoice work items, and the home of the pre-transaction gate (the `BurnGateNotice` on the expense create and approve flows).
+- **Bond via Braid** - resolves client identity so chains group by the right account.
+- **Bolt** - receives Burn's events.
+- **Platform approval queue (`agent_proposals`)** - where change-order drafts wait for a human to send them.
+- Burn MCP-tools reference and guide in `docs/apps/burn/`.
+</content>
+</invoke>
