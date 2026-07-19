@@ -3147,6 +3147,142 @@ const bulwarkEvents: EventDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Burn (contract-consumption monitor) events (Burn design spec section 8.2). Payloads carry
+// REFS + COARSE BANDS ONLY - no dollar amount and no percentage - because Bolt is org-level with
+// no per-rule visibility and for this app the magnitude IS the secret (spec 2.4 point 13). Each
+// entry authored on the bulwarkEvents model: source FIRST, event_type immediately after and
+// within 300 chars, so scripts/check-bolt-catalog.mjs's 300-char window parses the pair.
+// ---------------------------------------------------------------------------
+
+const burnEvents: EventDefinition[] = [
+  {
+    source: 'burn',
+    event_type: 'engagement.extracted',
+    description:
+      'Fired when a deliverable-extraction run completes for an engagement. Counts only, never clause text or a contract value.',
+    payload_schema: [
+      { name: 'engagement.id', type: 'uuid', description: 'The engagement extracted' },
+      { name: 'chain_root_id', type: 'uuid', description: 'Denormalized chain root' },
+      { name: 'deliverables_extracted', type: 'number', description: 'Count of deliverables persisted this run' },
+      { name: 'low_confidence_count', type: 'number', description: 'Count flagged low-confidence for review' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'deliverable.extracted',
+    description:
+      'Fired when a deliverable persists from extraction. Refs + kind + confidence + review status only; no envelope amount, no clause quote.',
+    payload_schema: [
+      { name: 'deliverable.id', type: 'uuid', description: 'The persisted deliverable' },
+      { name: 'engagement.id', type: 'uuid', description: 'The owning engagement' },
+      { name: 'deliverable_kind', type: 'string', description: 'work_product|milestone|recurring_service|support|expense_allowance|other' },
+      { name: 'confidence', type: 'number?', description: 'LLM self-reported confidence (display only)' },
+      { name: 'review_status', type: 'string', description: 'pending_review|confirmed|rejected|superseded' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'work.unscoped',
+    description:
+      'Fired when a work item lands unscoped above the org alert floor. Carries the bucket, reason, source type, and a COARSE amount band - never the amount.',
+    payload_schema: [
+      { name: 'work_item.id', type: 'uuid', description: 'The unscoped work item' },
+      { name: 'engagement.id', type: 'uuid?', description: 'Chain the item was tested against, if any' },
+      { name: 'bucket', type: 'string', description: 'sold_by_nobody|unclassified|outside_contract' },
+      { name: 'reason', type: 'string', description: 'Why it is unscoped (e.g. no_matching_deliverable)' },
+      { name: 'source_type', type: 'string', description: 'The source record type (e.g. bill.expense)' },
+      { name: 'band', type: 'string', description: 'Coarse amount band (e.g. 2k_10k); never a dollar figure' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'precheck.blocked',
+    description:
+      'Fired on an enforced deny in blocking mode. Carries the verdict reason and a coarse overage band, never the contract value or the overage amount.',
+    payload_schema: [
+      { name: 'precheck.id', type: 'uuid', description: 'The burn_prechecks row of record' },
+      { name: 'engagement.id', type: 'uuid?', description: 'Target chain, if resolved' },
+      { name: 'deliverable.id', type: 'uuid?', description: 'Target deliverable, if resolved' },
+      { name: 'verdict_reason', type: 'string', description: 'Why the write was denied' },
+      { name: 'band', type: 'string', description: 'Coarse overage band; never the amount' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'precheck.overridden',
+    description: 'Fired when an enforced deny is overridden by a human. Refs + reason code + coarse band only.',
+    payload_schema: [
+      { name: 'precheck.id', type: 'uuid', description: 'The overridden precheck row' },
+      { name: 'override_reason_code', type: 'string', description: 'mapped_manually|absorbed_cost|converted_to_change_order' },
+      { name: 'band', type: 'string', description: 'Coarse overage band; never the amount' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'gate.demoted',
+    description: 'Fired when the gate auto-demotes from blocking to advisory. Carries the trigger and window, no rates.',
+    payload_schema: [
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+      { name: 'from_mode', type: 'string', description: 'The prior gate mode (blocking)' },
+      { name: 'to_mode', type: 'string', description: 'The new gate mode (advisory)' },
+      { name: 'trigger', type: 'string', description: 'coverage|false_positive' },
+      { name: 'window_days', type: 'number', description: 'The evaluation window in days' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'gate.coverage_degraded',
+    description: 'Fired when gate coverage drops below the floor. Carries a coarse coverage band and the cause, never a raw percentage.',
+    payload_schema: [
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+      { name: 'coverage_pct_band', type: 'string', description: 'Coarse coverage band (e.g. 50_90); never a raw percentage' },
+      { name: 'window_days', type: 'number', description: 'The evaluation window in days' },
+      { name: 'cause', type: 'enum', description: 'Why coverage degraded', enum: ['unavailable', 'not_configured'] },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'variance.detected',
+    description: 'Fired when a variance is raised by the sweep. Refs + kind + severity only; the amount is floored and never published.',
+    payload_schema: [
+      { name: 'variance.id', type: 'uuid', description: 'The variance row' },
+      { name: 'engagement.id', type: 'uuid?', description: 'Owning engagement, if scoped' },
+      { name: 'variance_kind', type: 'string', description: 'unscoped_work|envelope_overrun|ungated_charge|silent_deliverable|...' },
+      { name: 'severity', type: 'enum', description: 'Severity band', enum: ['low', 'medium', 'high', 'critical'] },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'deliverable.silent',
+    description: 'Fired by the inverse check when an active deliverable nears its due date with zero attributions. Refs + due date + days remaining.',
+    payload_schema: [
+      { name: 'deliverable.id', type: 'uuid', description: 'The silent deliverable' },
+      { name: 'engagement.id', type: 'uuid', description: 'The owning engagement' },
+      { name: 'due_date', type: 'string', format: 'date', description: 'The deliverable due date' },
+      { name: 'days_remaining', type: 'number', description: 'Whole days until due' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'burn',
+    event_type: 'consumption.threshold_crossed',
+    description: 'Fired when a chain crosses a consumption band boundary. Carries the coarse band only, never the consumption percentage or amount.',
+    payload_schema: [
+      { name: 'engagement.id', type: 'uuid', description: 'A representative engagement of the chain' },
+      { name: 'chain_root_id', type: 'uuid', description: 'The chain root that crossed the band' },
+      { name: 'band', type: 'string', description: 'Coarse consumption band (under|nearing|at|over); never a percentage' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -3172,6 +3308,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...blipEvents,
   ...braidEvents,
   ...bulwarkEvents,
+  ...burnEvents,
 ];
 
 export function getAllEvents(): EventDefinition[] {

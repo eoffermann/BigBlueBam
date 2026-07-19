@@ -149,7 +149,9 @@ export const APP_SERVICES = [
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL', 'MCP_INTERNAL_URL'],
       // BRAID_API_INTERNAL_URL: bolt-api forwards subscribed source events to braid-api's
       // /internal/events (Braid live-ingest transport, spec §6); optional soft-dependency.
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL', 'BULWARK_API_INTERNAL_URL'],
+      // BURN_API_INTERNAL_URL: bolt-api forwards the 16 subscribed events to burn-api's
+      // /v1/internal/events (Burn live-ingest transport, spec §8.3); optional soft-dependency.
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL', 'BULWARK_API_INTERNAL_URL', 'BURN_API_INTERNAL_URL'],
     },
   },
   {

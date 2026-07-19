@@ -23,6 +23,9 @@ const envSchema = z.object({
   // Bulwark ingest target (spec §6). bolt-api forwards gate-admitted events here so Bulwark's
   // durable inbox can fire against armed obligations.
   BULWARK_API_INTERNAL_URL: z.string().default('http://bulwark-api:4021'),
+  // Burn ingest target (spec §8.3). bolt-api forwards the 16 subscribed events here so Burn's
+  // durable inbox (/v1/internal/events) materializes work items and runs attribution.
+  BURN_API_INTERNAL_URL: z.string().default('http://burn-api:4022'),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),

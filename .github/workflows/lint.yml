@@ -48,6 +48,12 @@ jobs:
       - name: Check permission catalog drift
         run: pnpm check:permission-catalog
 
+      # Bolt event-catalog drift guard: every publishBoltEvent(source, event_type) call site
+      # must be declared in apps/bolt-api/src/services/event-catalog.ts. Exists at
+      # package.json but ran in no workflow until this build wired it in (Burn spec 8.2).
+      - name: Check bolt event catalog drift
+        run: pnpm check:bolt-catalog
+
       # Guards scripts/deploy/shared/env-hints.mjs against catalog vars that have
       # no hint. An unhinted OPTIONAL var is silently dropped from the Railway
       # service (the integration is just absent in prod, with no signal); an

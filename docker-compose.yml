@@ -585,6 +585,9 @@ services:
       # Bulwark live-ingest transport (Bulwark spec §6): bolt-api forwards gate-admitted
       # events to bulwark-api's durable inbox at /v1/internal/events.
       - BULWARK_API_INTERNAL_URL=http://bulwark-api:4021
+      # Burn live-ingest transport (Burn spec §8.3): bolt-api forwards the 16 subscribed
+      # events to burn-api's durable inbox at /v1/internal/events.
+      - BURN_API_INTERNAL_URL=http://burn-api:4022
       # Wave D Phase 3: per-action permission enforcement at this satellite.
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}

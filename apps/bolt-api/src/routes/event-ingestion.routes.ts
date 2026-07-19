@@ -19,6 +19,8 @@ import { dispatchToSubscribedRunners } from '../services/webhook-dispatch-hook.j
 import { dispatchToBraid } from '../services/braid-dispatch-hook.js';
 // Bulwark live-ingest transport (Bulwark design spec §6)
 import { dispatchToBulwark } from '../services/bulwark-dispatch-hook.js';
+// Burn live-ingest transport (Burn design spec §8.3)
+import { dispatchToBurn } from '../services/burn-dispatch-hook.js';
 import { Queue } from 'bullmq';
 import type Redis from 'ioredis';
 
@@ -43,6 +45,19 @@ const ingestEventSchema = z.object({
     'bill',
     'book',
     'blank',
+    // Satellite-app sources. These were a pre-existing latent gap: apps that publish their own
+    // events with these source names were being 400-rejected by this enum (publishBoltEvent
+    // swallows the failure, so it went unnoticed). Added so burn - and the other satellites -
+    // can publish. 'burn' is required for this build.
+    'burn',
+    'bulwark',
+    'braid',
+    'basis',
+    'blip',
+    'blueprint',
+    'bureau',
+    'bin',
+    'bay',
     'platform',
   ]),
   payload: z.record(z.unknown()),
@@ -180,6 +195,23 @@ export default async function eventIngestionRoutes(fastify: FastifyInstance) {
       // then forward gate-admitted events to bulwark-api's durable inbox at /v1/internal/events.
       // Fire-and-forget; a dropped state-reflecting binding is recovered by bulwark-state-reconcile.
       void dispatchToBulwark(
+        fastify.redis,
+        {
+          orgId: event.org_id,
+          eventId,
+          source: event.source,
+          eventType: event.event_type,
+          payload: event.payload,
+        },
+        request.log,
+      ).catch(() => {
+        // swallowed: helper has its own logging
+      });
+
+      // Burn live-ingest transport (spec §8.3): forward the 16 subscribed source events to
+      // burn-api's durable inbox at /v1/internal/events, gate-checked per org. Fire-and-forget;
+      // a dropped dispatch is recovered by Burn's three reconcile passes.
+      void dispatchToBurn(
         fastify.redis,
         {
           orgId: event.org_id,
