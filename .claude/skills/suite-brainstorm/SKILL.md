@@ -158,7 +158,7 @@ cut.) Then compare the surviving submissions pairwise. Classify each overlapping
 - **Distinct**: both continue unchanged.
 
 Record the full merge transcript (every relayed turn) and each outcome under
-"Phase 4 - Overlap resolution." After this phase you have **1–7 surviving apps**.
+"Phase 4 - Overlap resolution." After this phase you have **1-7 surviving apps**.
 
 **Short-circuit:** if exactly **one** app survives Phase 4, it **wins** outright -
 skip Phase 5, note the walkover in the doc, and go to Phase 6.
@@ -168,7 +168,7 @@ skip Phase 5, note the walkover in the doc, and go to Phase 6.
 SendMessage all seven seats the final slate of surviving apps (with current
 descriptions), **each tagged with the census category it lands in and whether that
 category is currently whitespace / covered / dense**. Each seat scores **every**
-finalist **1–5** and **must abstain on any app it owns or co-owns** (no self-votes).
+finalist **1-5** and **must abstain on any app it owns or co-owns** (no self-votes).
 Instruct seats that **coverage contribution is an explicit scoring dimension**: an app
 that opens a whitespace category should score higher, all else equal, than an equally
 good app that thickens an already-dense category. Collect the scorecards.
@@ -199,7 +199,7 @@ then declare the **winner** with its final description.
    via SendMessage) to accept/adapt/reject each and rewrite the spec in place,
    with a Changelog.
 4. **Repeat** the adversarial → fold-in loop until a round returns **no new
-   blocker or major findings** (typically 2–3 rounds; cap at 3 unless the user
+   blocker or major findings** (typically 2-3 rounds; cap at 3 unless the user
    asks for more). Append a summary of each round's findings and dispositions to
    the session doc under "Phase 6 - Spec hardening."
 
