@@ -20,6 +20,7 @@ import { NotFoundError, ProjectScopeError, ValidationFailure } from '../lib/erro
 import { loadScopedContract } from './contracts.service.js';
 import { computeDueAt, anchorDateInZone } from './deadline-math.service.js';
 import { armDeadline } from './arming.service.js';
+import { addBinding } from './gate.service.js';
 
 type ObligationRow = typeof bulwarkObligations.$inferSelect;
 
@@ -192,6 +193,19 @@ export async function patchObligation(
       and(eq(bulwarkObligations.organization_id, viewer.org_id), eq(bulwarkObligations.id, id)),
     )
     .returning();
+
+  // #65: when this confirm ARMS an event-bound obligation, add its (source, event_type) to the
+  // per-org Redis dispatch gate IMMEDIATELY so bolt-api admits its events without waiting for the
+  // ~20-min gate-reconcile backstop. On a warm gate a freshly-armed binding would otherwise
+  // SISMEMBER-miss and be dropped at the sending end (before the durable inbox), losing purely
+  // transient bindings until the next rebuild. addBinding is a SADD (idempotent); an empty
+  // source/event_type (calendar/unbound) no-ops. The periodic rebuildGate stays the backstop and
+  // heals any stale member on the next cadence.
+  if (patch.is_armed === true && effectiveBinding?.source && effectiveBinding?.event_type) {
+    await addBinding(viewer.org_id, effectiveBinding.source, effectiveBinding.event_type).catch(
+      () => {},
+    );
+  }
 
   // Supersession (spec 4.1 amendment/DI3): retire the base and re-point/void its clocks.
   if (input.supersedes_obligation_id && input.supersession_outcome) {

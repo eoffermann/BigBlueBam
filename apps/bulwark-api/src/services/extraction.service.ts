@@ -12,6 +12,7 @@ import {
 } from '../db/schema/index.js';
 import { internalLlmChat } from '../lib/internal-llm.client.js';
 import { getSettings } from './settings.service.js';
+import { addBinding } from './gate.service.js';
 import { publishBoltEvent } from '@bigbluebam/shared';
 
 // Obligation-extraction engine (spec §4.1). PURE-ish deterministic post-processing plus the
@@ -341,6 +342,18 @@ export async function runExtraction(args: RunExtractionArgs): Promise<RunExtract
       extracted++;
       // Emit obligation.extracted only for a genuinely NEW row (refs + type + confidence, §7).
       if (insertedRow) {
+        // #65: if this NEW obligation auto-armed as event-bound, register its binding in the
+        // per-org dispatch gate immediately (same reason as the confirm path) so bolt-api admits
+        // its events before the next gate-reconcile rebuild. SADD is idempotent; the periodic
+        // rebuildGate stays the backstop. (deterministic auto-arm is dormant in v1 but this keeps
+        // the gate correct the instant extraction begins emitting the signal.)
+        if (
+          armDecision.is_armed &&
+          typeof binding.source === 'string' &&
+          typeof binding.event_type === 'string'
+        ) {
+          await addBinding(orgId, binding.source, binding.event_type).catch(() => {});
+        }
         await publishBoltEvent(
           'obligation.extracted',
           'bulwark',
