@@ -438,24 +438,186 @@ Basis decomposes *governed numeric metrics*; nothing reasons about *creative con
 
 ## Phase 2 - Debate
 
-_Pending._
+One debate round was run. It was decisive enough that a second was unnecessary: **fourteen of the thirty-five candidates were voluntarily withdrawn, dissolved, merged, or conceded to another seat during this round**, which is why Phase 4 required no forced merge negotiations. The seats did the overlap resolution themselves, and mostly by conceding rather than by fighting.
+
+### Concessions and withdrawals, in the seats' own terms
+
+| Seat | Action | Reason given |
+| --- | --- | --- |
+| A | Dropped **Broker** (LLM routing) outright | "LLM routing is infrastructure, not an app, and it belongs inside Brigade." Budget and routing mechanics folded into Brigade; replaced the slot with **Beckon** (autonomous outbound errands). |
+| A | Conceded prose-commitment scope to C's Bind | Removed "the commitment made in Banter that never became a task" from Baton; kept only structural chain deviation. |
+| B | Dropped **Bellwether** outright | "It is my Bellwether's territory done better: mine stopped at a briefing, Baton ends in an executable Bolt rule." Handed over cross-app lagged correlation as a capability Baton would otherwise miss. Replaced with **Ballast**. |
+| B | Narrowed **Bounty** | Ceded competitive positioning to G's Bloodhound as "a sharper wedge." |
+| C | Dropped **Bloom** | Conceded the alerting half to B's Bellwether; folded bus-factor scoring into Baton. |
+| C | Renamed Bridge to **Berth** | Conceded the name to E and F unprompted. |
+| C | Offered Bind into a merge with A's Baton | Conceded A's automation-induction ending as "strictly better than my nudge ledger"; held prose extraction as non-negotiable for v1. |
+| D | Merged **Bid + Backcharge** into one app | "Two halves of one economic loop that I had wrongly separated." |
+| D | Renamed Brace to **Boot**, dropped Bevel alt | Names conceded to E and G. |
+| D | Re-pitched **Bulwark** as horizontal, construction beachhead | Labeled explicitly as a hedge rather than presented as a conversion. |
+| E | Withdrew **Brace** | Conceded to F's Blaze, naming two contributions to carry over: recurrence clustering as a first-class entity, and diagnosis scope beyond deploys. |
+| E | Renamed Broker to **Bourse** | Conceded the name to A. |
+| E | Offered **Bellwether** as a superset merge with A's Bunker | One verification engine, two feeds: prospective agent trajectories and retrospective config diffs. |
+| F | Withdrew **Blaze** | Conceded to E's Brace, naming three contributions to carry over: the Bureau war room by summon, the derived postmortem, the status page. |
+| F | Dissolved **Bar** into Blame | "Bar without a provenance graph is a CodeRabbit clone and Blame without a gate is a search box." |
+| F | Renamed Bridge to **Bore** | Vacated the three-way collision. Added **Bramble**. |
+| G | Dropped **Baton** outright | Conceded to A's Brigade: "My Baton is Brigade with a marketing charter pre-loaded." |
+| G | Renamed Bellwether to **Burnish**, released the name | Widened **Bevel** from brand governance to outbound conformance. Added **Bespoke**. |
+
+### The mutual concession
+
+The sharpest structural event of the round: **Seat E withdrew Brace in favor of Seat F's Blaze, and Seat F withdrew Blaze in favor of Seat E's Brace, in the same round.** Each named what the other's version did better. Neither intended to submit it. The incident commander was orphaned by the two seats best placed to build it, both of whom judged the other's framing superior.
+
+Seat C flagged this independently and correctly, having spotted it before the orchestrator did: "I cannot find a single capability in one that is not in the other. This is the tightest duplicate pair in the session and it is not on the orchestrator's collision list." Seat C also flagged a second undeclared collision the orchestrator missed, between A's Baton and B's Bellwether, which Seat B resolved by dropping its own app.
+
+The orphan was reclaimed at submission time by Seat F, which reversed its stated plan.
+
+### The convergence, named by three seats independently
+
+- **Seat D:** "Five of seven seats independently proposed 'simulate or verify a change before it lands.' Four proposed 'mine the event stream for what fell through.' That is not seven lenses converging on truth; that is what happens when six seats fish the same pond. The remaining horizontal adjacencies are being discovered simultaneously because they are the only ones left."
+- **Seat G:** "Those two clusters hold roughly fifteen of thirty-five candidates and will cannibalize each other's votes. I intend to be the seat standing alone."
+- **Seat A**, from the opposite direction: "That convergence is not four ideas; it is four charters looking for a runtime, and the runtime does not exist in 21 shipped apps."
+- **Seat E** named a third convergence: "G's Bevel, F's Bar, and my Badge are the same learn-a-policy-then-check-with-citations pattern arriving from three lenses. Three seats arriving at that independently is a signal the platform should ship that pattern once." E explicitly declined to claim it.
+
+### Strategy statements going into submission (verbatim excerpts)
+
+- **Seat A:** "Four seats independently proposed a product whose entire mechanism is 'an agent plans, executes across the suite through MCP, and lands writes as proposals.' Vote for any of those four and you build one agent hardcoded to one domain; vote Brigade and you build the frame."
+- **Seat B:** "I gave up my most crowded idea on the first turn because defending a worse copy of A/Baton would have cost me credibility I need later. I am deliberately moving away from the pile rather than into it."
+- **Seat C:** "I would rather revise my Phase 1 claim out loud than defend it out of pride. Of thirty-five candidates, thirty-three are tools that make the internal operator faster, and the suite already sells twenty-one of those. The uncontested ground is the organizational boundary."
+- **Seat D:** "I am not going to win by out-horizontaling six horizontal seats, and I am not going to try. The suite does not need a 22nd surface for the same undifferentiated SMB; it needs one market it can say it owns."
+- **Seat E:** "I collided more than anyone because my lens sits underneath everyone else's, so I am trading contested ground for uncontested ground rather than defending five fronts."
+- **Seat F:** "Blame's mechanism is not code-specific. The suite is full of versioned artifacts whose rationale is already lost: Bolt rules nobody dares disable, Basis metric definitions with forgotten owners, Blueprint diagrams that disagree with reality."
+- **Seat G:** "I would rather be the app everyone else needs than the fourth entrant in a crowded category."
 
 ## Phase 3 - Submissions
 
-_Pending._
+Seven submissions, one per seat. Two seats submitted something other than what they had signalled.
+
+| Seat | Submitted | Notes |
+| --- | --- | --- |
+| A | **Brigade** | As signalled. Answered F's "milestone not a product" charge by citing the repo directly. |
+| B | **Brink** | Chose the contested app over the safe uncontested one: "a hedge you no longer need is just a smaller idea." |
+| C | **Berth** | As signalled, after revising its Phase 1 ranking in public. |
+| D | **Bulwark** | **Changed from Bid.** Took the hedge and said so: "this is the hedge, and I am taking it deliberately." |
+| E | **Bourse** | Chose the ambitious app over the safer Badge and the deadline-driven Bailiff. |
+| F | **Blaze** | **Changed from Blame.** Reclaimed the orphan: "Blame is the better idea; Blaze is the better answer to the actual objection." |
+| G | **Bevel** | As signalled, led with the product rather than the dependency: "infrastructure has no first screen." |
+
+### The seven finalists
+
+**Brigade (A)** - The agent workforce. Prose charters with tool allowlists, spend ceilings, cadence and escalation policy. Each cycle the agent plans a reviewable dependency graph with per-node expected effect, executes through the MCP catalog, and lands above-authority actions as proposals. A supervisor model grades whether the charter advanced, and autonomy tier is earned from that record. Flagship: `brigade_dispatch(charter_or_agent_id, context)`.
+
+**Brink (B)** - Forward simulation. Fits coupled transition and lag distributions from real cross-app history, runs Monte Carlo, translates plain-language scenarios including levers with no historical analogue, narrates the variance drivers with cited overridable assumptions, and ships a backtest calibration scorecard as a first-class surface. Flagship: `brink_simulate(scenario_nl | levers[], horizon)`.
+
+**Berth (C)** - External relationship membrane. Two-sided room per client or partner; outbound redaction, register translation and disclosure judgment; inbound normalization of client mess into typed suite objects; a continuously regenerated status narrative. The membrane learns each relationship's disclosure posture from how the team edits its share proposals. `can_access` is a hard deterministic floor beneath the model. Flagship: `berth_render_external(entity_ref, berth_id)` returning payload plus an explicit withheld-items list.
+
+**Bulwark (D)** - Obligation monitoring. Extracts a typed, clause-cited obligation ledger from executed agreements, binds each obligation to a Bolt event pattern, and fires against live reality rather than a calendar. Every outbound act routes through `agent_proposals`. Flagship: `bulwark_extract_obligations(asset_id)`, companions `bulwark_check_risk(engagement_id)` and `bulwark_draft_act(obligation_id, triggering_event_id)`.
+
+**Bourse (E)** - Governed external agent surface. Prose-to-scope policy compiler with the compiled result rendered back in prose; a pre-publication red-team pass against composition leaks; a behavioral anomaly agent watching call sequences rather than rate limits; per-call metering through Bill. Flagship: `bourse_publish_surface({ tools, audience, policy_prose })`.
+
+**Blaze (F)** - Incident commander for a business rather than a service. Ranked causal hypotheses with cited Blip entry and Bolt execution ids, expertise-based routing, Bureau war room by summon, recurrence clustering as a first-class entity, postmortem derived from the captured timeline. Flagship: `blaze_diagnose(incident_id)`.
+
+**Bevel (G)** - Outbound artifact conformance. Induces a machine-checkable standard from the org's own approved corpus, then gates every outbound artifact from any app with cited diffs against named exemplars plus a suggested rewrite. Overrides record waivers and retrain rules. Flagship: `bevel_check_artifact(standard_id, artifact_ref)`.
 
 ## Phase 4 - Overlap resolution
 
-_Pending._
+**No merge negotiations were required and none were forced.** The debate round had already resolved the overlaps: fourteen candidates were withdrawn or absorbed voluntarily, including both halves of the tightest duplicate pair in the session.
+
+Orchestrator rulings on the two pairs that remained close enough to examine:
+
+**Berth (C) versus Bourse (E) - ruled DISTINCT.** Both are governed external surfaces over suite data and both share a policy/redaction seam. They differ in audience (outside humans versus outside agents), in buyer, and entirely in surface: Berth is a portal with narrative regeneration and inbound intake, Bourse is a metered machine endpoint with red-teaming and anomaly detection. Both seats independently characterized the relationship as a pairing rather than a merge, and each named the other as its natural follow-on build. Recorded note: whichever ships first should own the policy-compiler seam so it is not built twice.
+
+**Brigade (A) versus Blaze (F) - ruled DISTINCT, with reasoning stated because it was contested.** Seat A's submission claims incident triage as a Brigade charter template, which is a genuine overlap claim. It was declined at this stage because Brigade claims *every* submitted finalist as a potential charter, so merging on that basis would collapse the entire ballot into Brigade. That is a question about which app deserves the slot, not a question about whether two apps are the same app, and the protocol resolves the former by vote. Both seats were told the ruling and invited to argue it in their scores. Seat D did so directly: "a charter is prose and a tool allowlist, and neither of those knows that a five-day notice window under general conditions waives an otherwise valid claim, or which of 122 event types starts that clock. Brigade could host the loop; it cannot supply the domain model, and the domain model is the product."
+
+All seven finalists advanced to the vote.
 
 ## Phase 5 - Voting
 
-_Pending._
+No self-votes. Each seat scored every finalist except its own on a 1 to 5 scale.
+
+### Round 1
+
+| App | Seat | A | B | C | D | E | F | G | Total |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Berth** | C | 5 | 5 | - | 4 | 4 | 3 | 4 | **25** |
+| **Bulwark** | D | 4 | 4 | 5 | - | 4 | 4 | 4 | **25** |
+| Brigade | A | - | 3 | 4 | 3 | 5 | 4 | 5 | 24 |
+| Bevel | G | 3 | 4 | 4 | 5 | 3 | 4 | - | 23 |
+| Brink | B | 2 | - | 3 | 3 | 4 | 5 | 3 | 20 |
+| Blaze | F | 4 | 3 | 3 | 4 | 3 | - | 2 | 19 |
+| Bourse | E | 3 | 2 | 4 | 3 | - | 3 | 3 | 18 |
+
+Tie at the top between Berth and Bulwark on 25. The spread across all seven was 18 to 25 with no app scoring below 2 from any seat.
+
+Two seats scored against their own prior positions. **Seat C scored Bulwark 5 after opposing Seat D's entire slate two rounds earlier**, writing: "That objection was about betting one slot on construction, not about the quality of D's reasoning, and D responded by submitting the horizontal form of its strongest idea. Rewarding that is voting the rubric, not the alliance." **Seat D scored Bevel 5** while refusing to apply its own adjacency standard selectively "now that it cuts the other way." **Seat E scored Brigade 5 against its own interest**, arguing Brigade creates demand for the next three builds including Bourse.
+
+Per protocol, the lowest-scoring app was dropped and the vote re-ran on the remainder. **Bourse eliminated.**
+
+### Round 2 (tiebreak)
+
+| App | Seat | A | B | C | D | E | F | G | Total |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Bulwark** | D | 5 | 5 | 5 | - | 4 | 5 | 5 | **29** |
+| Berth | C | 4 | 4 | - | 4 | 5 | 3 | 4 | 24 |
+| Brigade | A | - | 3 | 4 | 3 | 5 | 4 | 4 | 23 |
+| Bevel | G | 3 | 3 | 4 | 5 | 3 | 4 | - | 22 |
+| Brink | B | 2 | - | 3 | 3 | 4 | 5 | 3 | 20 |
+| Blaze | F | 4 | 3 | 3 | 4 | 3 | - | 3 | 20 |
+
+**Bulwark wins with 29 of a possible 30**: five 5s and a single 4.
+
+### How the tie broke
+
+The round-two movement was not random drift. The seats converged on one criterion and then applied it to themselves, often at their own cost.
+
+**The criterion, stated most cleanly by Seat F** (which raised Bulwark from 4 to 5): "The sharpest rubric test is what remains when you subtract the AI, and it separates the two tied apps cleanly: subtract the membrane from Berth and a client portal remains, a category that exists at every price point, whereas subtract the reasoning from Bulwark and nothing remains."
+
+**The failure-mode argument, from Seat B** (raised Bulwark 4 to 5, lowered Berth 5 to 4): "Bulwark routes every outbound act through `agent_proposals`, so a model error costs a rejected draft; Berth's membrane auto-shares by design, so a model error is an irreversible disclosure to the customer's customer."
+
+**The cold-start argument, also Seat B**, applying to Bulwark the exact criticism the field had levelled at Seat B's own Brink: "obligation monitoring works on the first contract a customer uploads, because a clause is n=1 evidence and a notice window is a hard date, so it has no cold-start and no calibration problem at all." Seat B then lowered Bevel from 4 to 3 on the same lens, writing: "That is the same objection five seats made to Brink, and I do not get to accept it about my model and wave it off about G's."
+
+**Seat A** (raised Bulwark 4 to 5, lowered Berth 5 to 4): "Nothing about the membrane got worse; the comparison got sharper. Berth's disclosure judgment is a continuous, subjective call made many times a day, whereas Bulwark's output is a dated deadline that is either right or wrong."
+
+**Seat G** (raised Bulwark 4 to 5), applying the argument that had just cost G its own app: "A and E marked Bevel down because brand drift is chronic pain costing money the customer never sees; if I accept that standard, and I do, then I have to apply it, and Bulwark is the most acute pain on this board."
+
+### Conduct worth recording
+
+- **Seat F publicly withdrew its central charge against Brigade** after checking the repo: "My 'milestone not a product' charge was wrong on the facts and I withdraw it." It then raised a better one, that Brigade ships the loop but no verification of the loop now that Bunker is gone, which three other seats subsequently weighed and which cost Brigade a point from Seat G.
+- **Seat C refused to lower its 5 for Bulwark while tied against it**: "I will not lower it to help my own app. It caught my app because it deserved to."
+- **Seat D refused to move any score**, and said so rather than inventing movement: "Nothing in my view changed between rounds. Every score above is the same as round 1, for the same reasons, and I am stating that rather than manufacturing movement to look responsive." It also declined to lower Berth while tied against it, on the grounds that "moving it would be about the tie rather than the rubric and everyone would correctly read it that way."
+- **Seat E flagged a punitive score against a rival**: "G's 2 was partly punitive about F abandoning Blame, which is not a rubric reason and should not be treated as signal." **Seat G then corrected it**, raising Blaze to 3: "Part of my 2 was a demerit for abandoning Blame, which is a judgment about a seat's strategy rather than about the app in front of me, and the rubric does not ask me to score that. I was wrong in the way I was wrong."
+- **Seat F held Brink at 5 against four seats' agreement**, with a stated reason rather than stubbornness: "Volume of agreement is evidence about a risk, not proof the risk is fatal. Small samples produce wide bands, and wide bands are the honest output, not the failure."
+- **Seat D publicly accepted the main criticism of its own winning app**: "Clause-extraction misses are silent and surface at the deadline. That is the correct thing to attack. I would rather the room knew I accept that than have me wave it off." It proposed per-obligation confidence and a standing unclassified-clauses surface as core scope, which is now folded into the spec.
+
+### Fallback preferences (which app each seat would build if its own did not win)
+
+| Seat | Round 1 | Round 2 |
+| --- | --- | --- |
+| A | Berth | **Bulwark** |
+| B | Berth | **Bulwark** |
+| C | Bulwark | **Bulwark** |
+| D | Bevel | Bevel |
+| E | Brigade | Brigade |
+| F | Brink | **Bulwark** (of those that could realistically win) |
+| G | Brigade | **Bulwark** |
+
+Five of seven seats named Bulwark as their fallback in round 2, up from one in round 1.
 
 ## Phase 6 - Spec hardening
 
-_Pending._
+_See the design spec at `docs/brainstorming/2026_07_19_03_00_APP_DESIGN_bulwark.md`._
 
 ## Outcome
 
-_Pending._
+**Winner: Bulwark (Seat D)** - 29 of a possible 30 in the tiebreak round.
+
+An agent that reads the agreements an organization has signed and then spends the whole engagement making sure it does not breach them. It extracts a typed, clause-cited obligation ledger from executed contracts (notice windows, jurisdictional deadlines, insurance and indemnity requirements, payment and retention terms, flow-down clauses, renewal and termination triggers), binds each obligation to a Bolt event pattern, and fires against live reality rather than against a calendar: a delay event logged Tuesday starts a five-day notice clock, and Bulwark drafts the notice that discharges it. Every outbound act routes through the existing `agent_proposals` queue; nothing is ever sent unattended.
+
+Horizontal capability with construction as the beachhead, on the grounds that obligations are structurally identical across subcontracts, SOWs, MSAs, grant awards and leases, and that every existing suite customer already has the counterparty in Bond, the money in Bill, the dates in Book, and reality in the Bolt stream.
+
+**Runner-up: Berth (Seat C)** - 24. The external client membrane, and the session's strongest argument that the suite's twenty-second internal tool is worth less than its first external surface.
+
+**Note on the winner's origin.** Bulwark was submitted as an acknowledged hedge by the only seat proposing a vertical, after four of six other seats told it plainly they would score adjacency over ROI. Seat D named the hedge as a hedge rather than presenting it as a conversion, conceded that the adjacency objection was correct about its preferred app (Bid), and re-pitched the one idea in its set that had always been a platform capability with a vertical launch. Every seat that had opposed Seat D's slate subsequently scored Bulwark 4 or 5, and three of them said explicitly that they were rewarding the concession rather than the pitch.
+
+**Files:**
+- Session log: `docs/brainstorming/2026_07_19_03_00_BRAINSTORMING_SESSION.md`
+- Design spec: `docs/brainstorming/2026_07_19_03_00_APP_DESIGN_bulwark.md`
