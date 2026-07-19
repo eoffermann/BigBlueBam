@@ -39,6 +39,7 @@ import {
   Ruler,
   GitMerge,
   ShieldCheck,
+  Flame,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -86,6 +87,7 @@ const ICONS: Record<string, LucideIcon> = {
   ruler: Ruler,
   'git-merge': GitMerge,
   'shield-check': ShieldCheck,
+  flame: Flame,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very

@@ -317,6 +317,35 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'burn-api',
+    description: 'Burn API — AI contract-scope & margin monitor + the bill-api spend gate',
+    dockerfile: 'apps/burn-api/Dockerfile',
+    port: 4022,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    // api (can_access preflight + permission resolver), bolt-api (event publish). bill-api is
+    // NOT in needs though burn requires BILL_API_INTERNAL_URL at boot: burn and bill are
+    // mutually request-time dependent, so listing either in the other's needs risks a cycle
+    // (spec 9.6 R2-I8b). The acyclic invariant is held by keeping compose depends_on at
+    // migrate/postgres/redis only. BBB_PERMISSIONS_ENFORCE is deliberately absent: Burn's
+    // enforcement is a hardcoded boot invariant, not an env-driven setting (issue #83).
+    needs: ['postgres', 'redis', 'api', 'bolt-api'],
+    public_paths: ['/burn/api/', '/burn/ws'],
+    env: {
+      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'INTERNAL_SERVICE_SECRET', 'BBB_API_INTERNAL_URL', 'BOLT_API_INTERNAL_URL', 'BILL_API_INTERNAL_URL'],
+      optional: [
+        'DATABASE_READ_URL',
+        'BRAID_API_INTERNAL_URL',
+        'QDRANT_URL',
+        'CORS_ORIGIN',
+        'LOG_LEVEL',
+        'MAX_DOC_BYTES',
+        'MAX_DOC_PAGES',
+      ],
+    },
+  },
+  {
     name: 'book-api',
     description: 'Book API — calendar events, booking pages, meetings',
     dockerfile: 'apps/book-api/Dockerfile',
@@ -635,10 +664,10 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
+      'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'burn-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/burn/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];

@@ -83,6 +83,7 @@ export const APP_TOOL_MODULES = {
   basis: ['basis-tools'],
   braid: ['braid-tools'],
   bulwark: ['bulwark-tools'],
+  burn: ['burn-tools'],
 };
 
 // Friendly category labels for tool modules. Used to group a multi-module

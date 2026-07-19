@@ -266,6 +266,10 @@ services:
       # The 7 bulwark-* jobs are thin HTTP callers that invoke the engine over bulwark-api's
       # internal routes (Bulwark spec §4 / §9.2).
       BULWARK_API_INTERNAL_URL: http://bulwark-api:4021
+      # The burn-* jobs (attribute-batch, extract-deliverables, and the sweeps) are thin HTTP
+      # callers into burn-api's /v1/internal/engines routes, and the bill-recurring-generate
+      # gate calls burn-api's precheck (Burn spec §8.1 / §9.3).
+      BURN_API_INTERNAL_URL: http://burn-api:4022
     volumes:
       # Read-only view of what livekit-config rendered/advertised, for
       # the hourly livekit-ip-drift job: it re-detects the public IP via
@@ -290,6 +294,8 @@ services:
       braid-api:
         condition: service_healthy
       bulwark-api:
+        condition: service_healthy
+      burn-api:
         condition: service_healthy
       helpdesk-api:
         condition: service_healthy
@@ -954,6 +960,57 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4021/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  burn-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/burn-api/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      # BILL_API_INTERNAL_URL is REQUIRED: Burn has no cost/bill rate resolver of its own and
+      # delegates to bill-api's POST /internal/rates/resolve (spec 2.3.1.2). bolt-api for
+      # publishBoltEvent; braid-api for synchronous counterparty golden-id resolution.
+      # All request-time deps only, NOT in depends_on (spec 9.6 acyclic invariant).
+      - BILL_API_INTERNAL_URL=http://bill-api:4014
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - BRAID_API_INTERNAL_URL=http://braid-api:4020
+      - NODE_ENV=production
+      - PORT=4022
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      # NOTE: BBB_PERMISSIONS_ENFORCE is deliberately NOT set here (issue #83). Burn's
+      # per-action enforcement is a hardcoded invariant ('on', fail-closed) asserted at boot
+      # in src/boot/assert-permissions-enforce.ts, never an env-driven setting.
+      - MAX_DOC_BYTES=${MAX_DOC_BYTES:-26214400}
+      - MAX_DOC_PAGES=${MAX_DOC_PAGES:-300}
+      # Must be non-empty for the /internal/events ingest transport + can_access preflight and
+      # the outbound /internal/permissions/dual-read call; empty refuses to boot (spec 2.4.16).
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4022/health"]
       interval: 10s
       timeout: 5s
       retries: 3

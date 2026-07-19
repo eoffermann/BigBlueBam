@@ -188,8 +188,9 @@ with **R**, optional with `o`.
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
-| o | `BRAID_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BRAID_API_INTERNAL_URL` | computed | `http://braid-api.railway.internal:8080` |  |
 | o | `BULWARK_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BURN_API_INTERNAL_URL` | computed | `http://burn-api.railway.internal:8080` |  |
 
 ### bearing-api
 
@@ -289,7 +290,7 @@ with **R**, optional with `o`.
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `BENCH_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
-| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `QUERY_TIMEOUT_MS` | literal | `10000` |  |
 | o | `LLM_TIMEOUT_MS` | unknown | `<see app docs>` |  |
@@ -309,7 +310,7 @@ with **R**, optional with `o`.
 | o | `DATABASE_READ_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Same as DATABASE_URL unless you set up a read replica |
 | o | `QDRANT_URL` | computed | `http://qdrant.railway.internal:6333` |  |
 | o | `QDRANT_API_KEY` | user | `` | Only needed if you point QDRANT_URL at a managed Qdrant (e.g. Qdrant Cloud). The bundled self-hosted image requires no key. |
-| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 
@@ -324,12 +325,33 @@ with **R**, optional with `o`.
 | **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
 | **R** | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
-| **R** | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| **R** | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `DATABASE_READ_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Same as DATABASE_URL unless you set up a read replica |
-| o | `BRAID_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BRAID_API_INTERNAL_URL` | computed | `http://braid-api.railway.internal:8080` |  |
 | o | `BLAST_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
+
+### burn-api
+
+*Burn API — AI contract-scope & margin monitor + the bill-api spend gate*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| **R** | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
+| **R** | `BILL_API_INTERNAL_URL` | computed | `http://bill-api.railway.internal:8080` |  |
+| o | `DATABASE_READ_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Same as DATABASE_URL unless you set up a read replica |
+| o | `BRAID_API_INTERNAL_URL` | computed | `http://braid-api.railway.internal:8080` |  |
+| o | `QDRANT_URL` | computed | `http://qdrant.railway.internal:6333` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `MAX_DOC_BYTES` | literal | `26214400` |  |
+| o | `MAX_DOC_PAGES` | literal | `300` |  |
 
 ### book-api
 
@@ -381,6 +403,10 @@ with **R**, optional with `o`.
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| o | `BURN_API_INTERNAL_URL` | computed | `http://burn-api.railway.internal:8080` |  |
+| o | `BURN_PRECHECK_TIMEOUT_MS` | literal | `800` |  |
+| o | `BURN_PRECHECK_BREAKER_THRESHOLD` | literal | `5` |  |
+| o | `BURN_PRECHECK_BREAKER_PROBE_MS` | literal | `30000` |  |
 
 ### blueprint-api
 
@@ -395,7 +421,7 @@ with **R**, optional with `o`.
 | o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
-| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 | o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
@@ -417,7 +443,7 @@ with **R**, optional with `o`.
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `LIVEKIT_URL` | public | `<frontend-public-url-ws>/livekit-ws` |  |
-| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `BOOK_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BOARD_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BRIEF_INTERNAL_URL` | unknown | `<see app docs>` |  |
@@ -446,7 +472,7 @@ with **R**, optional with `o`.
 | o | `UPLOAD_MAX_FILE_SIZE` | unknown | `<see app docs>` |  |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
-| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `BIN_SECRETS_KEY` | unknown | `<see app docs>` |  |
 | o | `BIN_SECRETS_KEY_ID` | unknown | `<see app docs>` |  |
 
@@ -470,7 +496,7 @@ with **R**, optional with `o`.
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 | o | `BIN_API_INTERNAL_URL` | computed | `http://bin-api.railway.internal:8080` |  |
-| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
@@ -495,7 +521,7 @@ with **R**, optional with `o`.
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
 | o | `PUBLIC_URL` | public | `<frontend-public-url>` | Bare site root, e.g. https://your-frontend-service.up.railway.app or your custom domain. Used by every app to build deep-links. |
 | o | `BIN_API_INTERNAL_URL` | computed | `http://bin-api.railway.internal:8080` |  |
-| o | `BOLT_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
 | o | `RATE_LIMIT_MAX` | literal | `100` |  |
 | o | `RATE_LIMIT_WINDOW_MS` | literal | `60000` |  |
 
@@ -529,6 +555,7 @@ with **R**, optional with `o`.
 | o | `BASIS_API_URL` | unknown | `<see app docs>` |  |
 | o | `BRAID_API_URL` | unknown | `<see app docs>` |  |
 | o | `BULWARK_API_URL` | unknown | `<see app docs>` |  |
+| o | `BURN_API_URL` | computed | `http://burn-api.railway.internal:8080/v1` |  |
 | o | `MCP_AUTH_REQUIRED` | literal | `true` | Recommended for production deployments |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
@@ -561,7 +588,7 @@ with **R**, optional with `o`.
 | o | `QDRANT_URL` | computed | `http://qdrant.railway.internal:6333` |  |
 | o | `QDRANT_API_KEY` | user | `` | Only needed if you point QDRANT_URL at a managed Qdrant (e.g. Qdrant Cloud). The bundled self-hosted image requires no key. |
 | o | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
-| o | `BRAID_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BRAID_API_INTERNAL_URL` | computed | `http://braid-api.railway.internal:8080` |  |
 | o | `BULWARK_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `LIVEKIT_TURN_CHECK_TARGET` | user | `<turn.your-domain:port>` | Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>. |
 
@@ -635,8 +662,8 @@ _No environment variables required._
 These are the secrets and references that MUST be identical across
 several services. Set them once, then copy/reference everywhere.
 
-- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, braid-api, bulwark-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
+- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, braid-api, bulwark-api, burn-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
-- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, braid-api, bulwark-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, braid-api, bulwark-api, burn-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
 - `LIVEKIT_API_KEY` — banter-api, board-api, bureau-api, livekit
 - `LIVEKIT_API_SECRET` — banter-api, board-api, bureau-api, livekit

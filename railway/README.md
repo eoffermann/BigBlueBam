@@ -42,6 +42,7 @@ and optional env-var list.
 | `basis-api` | app | railway/basis-api.json |
 | `braid-api` | app | railway/braid-api.json |
 | `bulwark-api` | app | railway/bulwark-api.json |
+| `burn-api` | app | railway/burn-api.json |
 | `book-api` | app | railway/book-api.json |
 | `blank-api` | app | railway/blank-api.json |
 | `bill-api` | app | railway/bill-api.json |
