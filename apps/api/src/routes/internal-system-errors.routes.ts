@@ -59,7 +59,23 @@ async function requireInternalSecret(
   reply: FastifyReply,
 ) {
   const configured = env.INTERNAL_SERVICE_SECRET;
-  if (!configured) return; // dev mode without secret — match other internal routes' behavior
+  if (!configured) {
+    // Fail CLOSED. This previously returned (admitting the request) to "match other
+    // internal routes", but that shared behavior was itself the defect: an unset
+    // secret turned every internal route into an unauthenticated surface. The secret
+    // is a documented-required env var, so refusing is correct in every environment.
+    request.log.error(
+      'INTERNAL_SERVICE_SECRET is not configured - refusing internal system-error requests.',
+    );
+    return reply.status(401).send({
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Internal service authentication is not configured',
+        details: [],
+        request_id: request.id,
+      },
+    });
+  }
   const header =
     request.headers['x-internal-service-secret'] ??
     request.headers['x-internal-secret'];

@@ -40,10 +40,24 @@ async function requireInternalSecret(
 ) {
   const configured = env.INTERNAL_SERVICE_SECRET;
   if (!configured) {
-    request.log.warn(
-      'INTERNAL_SERVICE_SECRET is not configured — internal routes are unprotected.',
+    // Fail CLOSED, never open. These routes answer "may this asker see this entity"
+    // for a caller-supplied asker_user_id that is verified against no principal, so
+    // admitting an unauthenticated request here turns them into an oracle over the
+    // whole per-user visibility matrix for anything with internal-network reach.
+    // Every client of this route (packages/shared/src/visibility-client.ts) already
+    // treats a missing secret as a deny; the server must not be more permissive than
+    // its own callers. Matches requireInternalAuth in internal-permissions.routes.ts.
+    request.log.error(
+      'INTERNAL_SERVICE_SECRET is not configured - refusing internal visibility requests.',
     );
-    return;
+    return reply.status(401).send({
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Internal service authentication is not configured',
+        details: [],
+        request_id: request.id,
+      },
+    });
   }
   const header =
     request.headers['x-internal-service-secret'] ??
