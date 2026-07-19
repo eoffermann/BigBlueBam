@@ -23,6 +23,9 @@ import { getSettings } from './settings.service.js';
 import { rebuildGate } from './gate.service.js';
 import { computeDueAt, zonedWallClockToUtc } from './deadline-math.service.js';
 import { publishBulwarkFrame } from '../lib/realtime.js';
+import { createLogger } from '@bigbluebam/logging';
+
+const log = createLogger({ service: 'bulwark-sweeps' });
 
 // The scheduled Bulwark engines (spec §4.3 radar sweep, §4.5 state-reconcile + gate + retention).
 // Every entry point is per-org and wrapped by the callers in try/catch log-and-continue; the
@@ -576,19 +579,62 @@ export async function retentionSweep(orgId: string): Promise<RetentionResult> {
   const dischargedDays = Math.min(settings.discharged_deadline_retention_days, inboxDays);
 
   // Only discharged deadlines are purged; missed/waived/voided + ALL waiver_risks kept forever.
+  // Low-volume (discharged deadlines only), so a single ranged DELETE is fine here.
   const dischargedRes = await db.execute(sql`
     DELETE FROM bulwark_notice_deadlines
      WHERE organization_id = ${orgId}
        AND status = 'discharged'
        AND coalesce(discharged_at, updated_at) < now() - (${dischargedDays} || ' days')::interval
   `);
-  const inboxRes = await db.execute(sql`
-    DELETE FROM bulwark_ingest_events
-     WHERE organization_id = ${orgId}
-       AND received_at < now() - (${inboxDays} || ' days')::interval
-  `);
+
+  // bulwark_ingest_events is the self-flagged HIGHEST-CHURN table (migration 0234). At scale an
+  // unbatched ~400-day ranged DELETE risks a long lock + autovacuum pressure, so purge it in
+  // bounded chunks (ctid batches) until the window is drained, with flushed per-batch progress
+  // logging (#69). Partitioning is the durable fix (spec Open Question 10 / ST9) and is a
+  // documented fast-follow; this keeps the sweep safe until then.
+  const inboxPurged = await batchedInboxPurge(orgId, inboxDays);
+
   return {
     discharged_purged: (dischargedRes as { count?: number }).count ?? 0,
-    inbox_purged: (inboxRes as { count?: number }).count ?? 0,
+    inbox_purged: inboxPurged,
   };
+}
+
+const INBOX_PURGE_BATCH = 5000;
+const INBOX_PURGE_MAX_BATCHES = 10_000; // hard stop so a clock skew can never loop unbounded
+
+// Delete aged inbox rows for one org in bounded ctid batches. Returns the total purged. Each
+// batch is its own statement/transaction so locks are short and autovacuum can keep up; progress
+// is logged flushed per batch (pino) so a large purge is never a silent stall (#69).
+async function batchedInboxPurge(orgId: string, inboxDays: number): Promise<number> {
+  const started = Date.now();
+  let total = 0;
+  let batch = 0;
+  for (; batch < INBOX_PURGE_MAX_BATCHES; batch++) {
+    const res = await db.execute(sql`
+      DELETE FROM bulwark_ingest_events
+       WHERE ctid IN (
+         SELECT ctid FROM bulwark_ingest_events
+          WHERE organization_id = ${orgId}
+            AND received_at < now() - (${inboxDays} || ' days')::interval
+          LIMIT ${INBOX_PURGE_BATCH}
+       )
+    `);
+    const n = (res as { count?: number }).count ?? 0;
+    total += n;
+    if (n > 0) {
+      log.info(
+        { orgId, batch: batch + 1, purgedThisBatch: n, purgedTotal: total, elapsedMs: Date.now() - started },
+        'bulwark-retention: inbox purge batch',
+      );
+    }
+    if (n < INBOX_PURGE_BATCH) break; // final (short) batch drained the window
+  }
+  if (total > 0) {
+    log.info(
+      { orgId, batches: batch + 1, purgedTotal: total, elapsedMs: Date.now() - started },
+      'bulwark-retention: inbox purge complete',
+    );
+  }
+  return total;
 }
