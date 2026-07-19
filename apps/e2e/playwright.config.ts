@@ -60,6 +60,7 @@ export default defineConfig({
     appProject('bolt'),
     appProject('bond'),
     appProject('book'),
+    appProject('braid'),
     appProject('brief'),
     appProject('helpdesk'),
   ],

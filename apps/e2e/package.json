@@ -19,6 +19,7 @@
     "test:bolt": "playwright test --project=bolt",
     "test:bond": "playwright test --project=bond",
     "test:book": "playwright test --project=book",
+    "test:braid": "playwright test --project=braid",
     "test:brief": "playwright test --project=brief",
     "test:helpdesk": "playwright test --project=helpdesk",
     "test:ui": "playwright test --ui",
