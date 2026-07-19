@@ -812,6 +812,51 @@ function buildManifest() {
     { id: 'bulwark.compliance.chase', app: 'bulwark', resource: 'compliance', verb: 'chase', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bulwark.settings.read', app: 'bulwark', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'bulwark.settings.write', app: 'bulwark', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Burn (spec section 11.2). Same satellite deferral as basis/braid/bulwark: burn-api is
+    // not in APP_TO_PREFIX and its burn_ MCP tools are deliberately kept out of
+    // EXPLICIT_TOOL_OVERRIDES, so neither the route nor the tool scanner emits these ids.
+    // Hand-authored with EXPLICIT is_read on every row; the copy loop below takes the flags
+    // verbatim.
+    //
+    // Only burn.engagement.delete is manifest-destructive. The reject and gate-weakening
+    // confirm boundaries live at the MCP tool layer (burn_reject_deliverable,
+    // burn_set_gate_mode when the target weakens enforcement), NOT on the manifest rows.
+    //
+    // Two rows exist specifically because a mutation must never be authorized by an
+    // is_read:true permission: burn.variance.write is separate from burn.variance.read, and
+    // burn.rule.write is separate from burn.attribution.write (rules are one of the three
+    // gate-neutralization vectors, so they are owner/admin).
+    //
+    // burn.precheck.override is deliberately MEMBER tier: the escape hatch on a blocking
+    // gate has to stay reachable by the person the gate blocked, or the gate becomes an
+    // outage. burn.precheck.mark_wrong is owner/admin because it is the ONLY writer of the
+    // demotion numerator.
+    //
+    // Built-in tiering (asserted by the group-defaults probe in spec 3.4.1):
+    //   owner 22, admin 22, member 14, viewer 7, guest 0.
+    // Keep in sync with the burn rows in the delta migration and the group-defaults file.
+    { id: 'burn.engagement.read', app: 'burn', resource: 'engagement', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.engagement.write', app: 'burn', resource: 'engagement', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.engagement.delete', app: 'burn', resource: 'engagement', verb: 'delete', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'burn.deliverable.read', app: 'burn', resource: 'deliverable', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.deliverable.write', app: 'burn', resource: 'deliverable', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.envelope.confirm', app: 'burn', resource: 'envelope', verb: 'confirm', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.attribution.read', app: 'burn', resource: 'attribution', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.attribution.write', app: 'burn', resource: 'attribution', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.rule.write', app: 'burn', resource: 'rule', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.precheck.run', app: 'burn', resource: 'precheck', verb: 'run', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.precheck.read', app: 'burn', resource: 'precheck', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.precheck.override', app: 'burn', resource: 'precheck', verb: 'override', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.precheck.mark_wrong', app: 'burn', resource: 'precheck', verb: 'mark_wrong', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.variance.read', app: 'burn', resource: 'variance', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.variance.write', app: 'burn', resource: 'variance', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.changeorder.draft', app: 'burn', resource: 'changeorder', verb: 'draft', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.financials.read', app: 'burn', resource: 'financials', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.financials.read_all', app: 'burn', resource: 'financials', verb: 'read_all', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.costrate.read', app: 'burn', resource: 'costrate', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.costrate.write', app: 'burn', resource: 'costrate', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.settings.read', app: 'burn', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'burn.settings.write', app: 'burn', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
@@ -843,6 +888,10 @@ function buildManifest() {
       if (c.id.startsWith('bulwark.')) {
         migrationLabel = '0237';
         sourceFile = 'bulwark.routes.ts';
+      }
+      if (c.id.startsWith('burn.')) {
+        migrationLabel = '0242';
+        sourceFile = 'burn.routes.ts';
       }
       byId.set(c.id, {
         id: c.id,

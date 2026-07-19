@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1423,
+    "total": 1445,
     "mcp_tools_scanned": 847,
     "rest_routes_scanned": 880,
-    "read_permissions": 551,
-    "destructive_permissions": 137
+    "read_permissions": 560,
+    "destructive_permissions": 138
   },
   "permissions": [
     {
@@ -23604,6 +23604,380 @@
           "source": "rest",
           "ref": "hand_authored (migration 0237)",
           "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.attribution.read",
+      "app": "burn",
+      "resource": "attribution",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.attribution.write",
+      "app": "burn",
+      "resource": "attribution",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.changeorder.draft",
+      "app": "burn",
+      "resource": "changeorder",
+      "verb": "draft",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.costrate.read",
+      "app": "burn",
+      "resource": "costrate",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.costrate.write",
+      "app": "burn",
+      "resource": "costrate",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.deliverable.read",
+      "app": "burn",
+      "resource": "deliverable",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.deliverable.write",
+      "app": "burn",
+      "resource": "deliverable",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.engagement.delete",
+      "app": "burn",
+      "resource": "engagement",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.engagement.read",
+      "app": "burn",
+      "resource": "engagement",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.engagement.write",
+      "app": "burn",
+      "resource": "engagement",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.envelope.confirm",
+      "app": "burn",
+      "resource": "envelope",
+      "verb": "confirm",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.financials.read",
+      "app": "burn",
+      "resource": "financials",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.financials.read_all",
+      "app": "burn",
+      "resource": "financials",
+      "verb": "read_all",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.precheck.mark_wrong",
+      "app": "burn",
+      "resource": "precheck",
+      "verb": "mark_wrong",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.precheck.override",
+      "app": "burn",
+      "resource": "precheck",
+      "verb": "override",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.precheck.read",
+      "app": "burn",
+      "resource": "precheck",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.precheck.run",
+      "app": "burn",
+      "resource": "precheck",
+      "verb": "run",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.rule.write",
+      "app": "burn",
+      "resource": "rule",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.settings.read",
+      "app": "burn",
+      "resource": "settings",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.settings.write",
+      "app": "burn",
+      "resource": "settings",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.variance.read",
+      "app": "burn",
+      "resource": "variance",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "burn.variance.write",
+      "app": "burn",
+      "resource": "variance",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0242)",
+          "file": "burn.routes.ts"
         }
       ]
     },
