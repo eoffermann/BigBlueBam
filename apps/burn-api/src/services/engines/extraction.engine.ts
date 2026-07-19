@@ -1,10 +1,13 @@
-import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { runInOrgScope } from '../../plugins/rls.js';
 import { llmChat, LlmThrottledError, LlmError } from '../../lib/llm-client.js';
 import { publishBoltEvent } from '@bigbluebam/shared';
 import { env } from '../../env.js';
+import { chunkText, computeDedupKey, verifyCite, parseChunkExtraction } from './extraction-logic.js';
+
+// Re-export the pure helpers so tests can import them without pulling in db/env.
+export { chunkText, computeDedupKey, verifyCite, parseChunkExtraction };
 
 /**
  * Deliverable-extraction engine (spec 4.1). The worker reads the Bin bytes and POSTs the parsed
@@ -19,84 +22,6 @@ import { env } from '../../env.js';
 
 function rows<T>(raw: unknown): T[] {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] }).rows ?? [])) as T[];
-}
-
-// ── Pure helpers (unit-tested against §12.1) ──────────────────────────────────
-
-/** Split source text into bounded chunks. Deterministic so a retry re-chunks identically. */
-export function chunkText(text: string, chunkChars = 6000): string[] {
-  if (!text) return [];
-  const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += chunkChars) chunks.push(text.slice(i, i + chunkChars));
-  return chunks;
-}
-
-/**
- * The identity hash. LLM prose is NEVER in the identity hash (spec 3.1): a sectioned clause hashes
- * `(normalized_clause_ref, kind, ordinal)`; a null-section item hashes `(verified_quote, kind)`
- * tied to the doc hash, so overlapping-chunk re-extraction collapses onto one row.
- */
-export function computeDedupKey(input: {
-  clause_ref: string | null;
-  deliverable_kind: string;
-  ordinal: number;
-  verified_quote: string | null;
-  source_doc_hash: string | null;
-}): string {
-  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
-  const basis = input.clause_ref
-    ? `${norm(input.clause_ref)}|${input.deliverable_kind}|${input.ordinal}`
-    : `${norm(input.verified_quote ?? '')}|${input.deliverable_kind}|${input.source_doc_hash ?? ''}`;
-  return createHash('sha256').update(basis).digest('hex').slice(0, 64);
-}
-
-/**
- * Cite verification (spec 4.1 step 5). A failed offset/substring match sets verified=false and
- * forces pending_review regardless of confidence: the quote must exist in the bytes.
- */
-export function verifyCite(chunk: string, quote: string | null | undefined): boolean {
-  if (!quote) return false;
-  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
-  return norm(chunk).includes(norm(quote));
-}
-
-interface ExtractedDeliverable {
-  title: string;
-  clause_ref: string | null;
-  deliverable_kind: string;
-  quote: string | null;
-  stated_price_minor: number | null;
-  confidence: number;
-}
-
-/** Parse and validate the strict-JSON model output for one chunk; malformed rows are dropped. */
-export function parseChunkExtraction(modelText: string): ExtractedDeliverable[] {
-  let arr: unknown;
-  try {
-    const s = modelText.indexOf('[');
-    const e = modelText.lastIndexOf(']');
-    if (s < 0 || e <= s) return [];
-    arr = JSON.parse(modelText.slice(s, e + 1));
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(arr)) return [];
-  const out: ExtractedDeliverable[] = [];
-  for (const raw of arr) {
-    if (!raw || typeof raw !== 'object') continue;
-    const r = raw as Record<string, unknown>;
-    if (typeof r.title !== 'string' || !r.title.trim()) continue;
-    const kind = typeof r.deliverable_kind === 'string' ? r.deliverable_kind : 'work_product';
-    out.push({
-      title: r.title.slice(0, 512),
-      clause_ref: typeof r.clause_ref === 'string' ? r.clause_ref.slice(0, 64) : null,
-      deliverable_kind: kind,
-      quote: typeof r.quote === 'string' ? r.quote : null,
-      stated_price_minor: typeof r.stated_price_minor === 'number' ? Math.round(r.stated_price_minor) : null,
-      confidence: typeof r.confidence === 'number' && r.confidence >= 0 && r.confidence <= 1 ? r.confidence : 0,
-    });
-  }
-  return out;
 }
 
 // ── The engine ────────────────────────────────────────────────────────────────

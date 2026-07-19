@@ -5,9 +5,21 @@ import { llmChat, LlmThrottledError, LlmError } from '../../lib/llm-client.js';
 import { resolveBillRates } from '../../lib/bill-rates.client.js';
 import { resolveCostRate } from '../cost-rates.service.js';
 import { computeEpochs, valueWorkItem, type SourceType } from './valuation.js';
+import {
+  interpretAdjudication,
+  classifyLlmFailure,
+  bandFor,
+  type AttributionOutcome,
+  type AdjudicationResult,
+} from './attribution-logic.js';
 import { publishBurnFrame } from '../../lib/realtime.js';
 import { publishBoltEvent } from '@bigbluebam/shared';
 import { env } from '../../env.js';
+
+// Re-export the pure decision helpers so existing importers keep working (tests import them from
+// the pure module directly to avoid pulling in db/env).
+export { interpretAdjudication, classifyLlmFailure, bandFor };
+export type { AttributionOutcome, AdjudicationResult };
 
 /**
  * Continuous-attribution engine (spec 4.2). The correctness mechanism is ROW CLAIMS plus the
@@ -23,74 +35,6 @@ import { env } from '../../env.js';
 
 function rows<T>(raw: unknown): T[] {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] }).rows ?? [])) as T[];
-}
-
-// ── Pure decision helpers (unit-tested against §12.1) ─────────────────────────
-
-export type AttributionOutcome =
-  | 'attributed'
-  | 'pending_review'
-  | 'pending_attribution'
-  | 'unscoped'
-  | 'excluded_non_billable';
-
-/**
- * Map an LLM failure to the correct deferral (spec 9.7.1 / §12.1). A 429 (concurrency cap or
- * daily cap) defers to `pending_attribution` so throttling can NEVER manufacture a scope-creep
- * `unscoped` finding; any other failure (timeout, transport, non-2xx) yields `pending_review`.
- */
-export function classifyLlmFailure(err: unknown): 'pending_attribution' | 'pending_review' {
-  if (err instanceof LlmThrottledError) return 'pending_attribution';
-  return 'pending_review';
-}
-
-export interface AdjudicationResult {
-  deliverable_id: string | null;
-  confidence: number;
-  outcome: AttributionOutcome;
-  unscoped_reason: string | null;
-}
-
-/**
- * Interpret a stage-two model response against the BOUNDED candidate set (spec 2.3.5 / §12.1).
- * A model naming an id OUTSIDE the candidate set drops to `pending_review` (the model cannot
- * invent a target); an injection string in the payload cannot change the target because only an
- * id that is a member of `candidateIds` is ever accepted. A confidence at/above `autoThreshold`
- * auto-attributes; between `reviewThreshold` and auto it is `pending_review`; below review it is
- * `unscoped/low_confidence`.
- */
-export function interpretAdjudication(
-  modelText: string,
-  candidateIds: string[],
-  autoThreshold: number,
-  reviewThreshold: number,
-): AdjudicationResult {
-  let parsed: { deliverable_id?: unknown; confidence?: unknown } = {};
-  try {
-    const jsonStart = modelText.indexOf('{');
-    const jsonEnd = modelText.lastIndexOf('}');
-    if (jsonStart >= 0 && jsonEnd > jsonStart) {
-      parsed = JSON.parse(modelText.slice(jsonStart, jsonEnd + 1));
-    }
-  } catch {
-    return { deliverable_id: null, confidence: 0, outcome: 'pending_review', unscoped_reason: null };
-  }
-  const named = typeof parsed.deliverable_id === 'string' ? parsed.deliverable_id : null;
-  const conf = typeof parsed.confidence === 'number' && parsed.confidence >= 0 && parsed.confidence <= 1
-    ? parsed.confidence
-    : 0;
-
-  // The named id MUST be a member of the bounded candidate set, else pending_review.
-  if (!named || !candidateIds.includes(named)) {
-    return { deliverable_id: null, confidence: conf, outcome: 'pending_review', unscoped_reason: null };
-  }
-  if (conf >= autoThreshold) {
-    return { deliverable_id: named, confidence: conf, outcome: 'attributed', unscoped_reason: null };
-  }
-  if (conf >= reviewThreshold) {
-    return { deliverable_id: named, confidence: conf, outcome: 'pending_review', unscoped_reason: null };
-  }
-  return { deliverable_id: null, confidence: conf, outcome: 'unscoped', unscoped_reason: 'low_confidence' };
 }
 
 // ── The drain ─────────────────────────────────────────────────────────────────
@@ -457,16 +401,6 @@ async function markProcessed(orgId: string, eventId: string, status: 'processed'
        WHERE id = ${eventId} AND organization_id = ${orgId}
     `);
   });
-}
-
-/** Coarse band for an amount (spec 2.4 point 13 - events carry a band, never the amount). */
-export function bandFor(amountMinor: number): string {
-  const dollars = amountMinor / 100;
-  if (dollars < 500) return 'under_500';
-  if (dollars < 2000) return '500_2k';
-  if (dollars < 10000) return '2k_10k';
-  if (dollars < 50000) return '10k_50k';
-  return 'over_50k';
 }
 
 void env;

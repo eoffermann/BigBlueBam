@@ -245,9 +245,18 @@ describe('internal routes fail CLOSED on an empty secret (2.4 point 16)', () => 
   it('every /internal route calls the guard', () => {
     const source = routeSource('internal.routes.ts');
     const internalRoutes = source.match(/fastify\.post\('\/internal[^']*'/g) ?? [];
-    expect(internalRoutes.length).toBe(3);
-    const guardCalls = source.match(/requireInternalSecret\(request, reply\)/g) ?? [];
-    expect(guardCalls.length).toBe(internalRoutes.length);
+    // M6 added the engine-invocation routes (extraction, attribute-batch, the SQL sweeps,
+    // proposal-decided, ...) alongside the original precheck / outcome / events trio.
+    expect(internalRoutes.length).toBe(15);
+    // Every internal route guards, either INLINE via requireInternalSecret(request, reply) or by
+    // delegating to the shared engineRoute helper (which calls requireInternalSecret first). The
+    // helper contributes one requireInternalSecret occurrence that is NOT a per-route guard, so it
+    // is subtracted before comparing against the route count.
+    const inlineGuards = source.match(/requireInternalSecret\(request, reply\)/g) ?? [];
+    const engineDelegations = source.match(/engineRoute\(request, reply/g) ?? [];
+    expect(inlineGuards.length - 1 + engineDelegations.length).toBe(internalRoutes.length);
+    // The shared helper must itself guard, or the delegating routes would be unauthenticated.
+    expect(source).toMatch(/async function engineRoute[\s\S]{0,400}requireInternalSecret\(request, reply\)/);
   });
 });
 

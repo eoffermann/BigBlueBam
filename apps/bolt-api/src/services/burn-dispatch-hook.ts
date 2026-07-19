@@ -1,6 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Redis } from 'ioredis';
 import { env } from '../env.js';
+import { BURN_SUBSCRIPTIONS, isBurnSubscribed, BURN_SUBSCRIPTION_COUNT } from './burn-subscriptions.js';
+
+// Re-export the pure subscription helpers (tests import them from the pure module to avoid env).
+export { isBurnSubscribed, BURN_SUBSCRIPTION_COUNT };
 
 /**
  * Burn live-ingest dispatch (Burn spec 8.3). bolt-api is the event hub; every ingested event that
@@ -19,30 +23,6 @@ import { env } from '../env.js';
  * The durable inbox dedups on (org, source_idempotency_key), so a spurious forward is cheap. It
  * must NOT be hardened into a two-phase commit (same warning the bulwark gate carries).
  */
-
-// The 16 subscribed (source, event_type) pairs (spec 8.3). banter:message.posted is a 17th,
-// conditional on the per-org banter signal being enabled, gated by the per-org binding set.
-const SUBSCRIPTIONS = new Set<string>([
-  'bam:task.created',
-  'bam:task.updated',
-  'bam:task.moved',
-  'bam:task.assigned',
-  'bam:task.completed',
-  'bam:sprint.completed',
-  'helpdesk:ticket.created',
-  'helpdesk:ticket.replied',
-  'bill:invoice.created',
-  'bill:invoice.finalized',
-  'bill:recurring.invoice_generated',
-  'bill:expense.created',
-  'bill:expense.approved',
-  'bill:rate.created',
-  'bill:rate.updated',
-  'bond:deal.won',
-  // Conditional (spec 8.3): forwarded only when the org has the banter signal enabled, which the
-  // per-org binding set expresses. Kept in the allowlist so a bound org receives it.
-  'banter:message.posted',
-]);
 
 const SCOPE_PATHS = [
   'task.project_id',
@@ -111,7 +91,7 @@ export async function dispatchToBurn(
   logger: FastifyBaseLogger,
 ): Promise<void> {
   // Only the subscribed types (spec 8.3). A chatty type an org does not bind is dropped here.
-  if (!SUBSCRIPTIONS.has(`${event.source}:${event.eventType}`)) return;
+  if (!BURN_SUBSCRIPTIONS.has(`${event.source}:${event.eventType}`)) return;
 
   const secret = env.INTERNAL_SERVICE_SECRET;
   if (!secret) return; // fail-closed: burn /internal/events requires the shared secret
