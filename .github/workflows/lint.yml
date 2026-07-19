@@ -48,6 +48,16 @@ jobs:
       - name: Check permission catalog drift
         run: pnpm check:permission-catalog
 
+      # Guards scripts/deploy/shared/env-hints.mjs against catalog vars that have
+      # no hint. An unhinted OPTIONAL var is silently dropped from the Railway
+      # service (the integration is just absent in prod, with no signal); an
+      # unhinted REQUIRED var throws and aborts provisioning for that service.
+      # Note that scripts/ is outside the pnpm workspace, so the deploy/shared
+      # vitest suite runs nowhere -- this is a plain node script for that reason,
+      # matching how db-drift.yml invokes scripts/db-check.coverage.test.mjs.
+      - name: Check env-hints coverage
+        run: pnpm check:env-hints
+
       - name: Check help index drift
         run: pnpm help:check
 

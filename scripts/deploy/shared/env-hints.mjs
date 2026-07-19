@@ -41,6 +41,24 @@ function internal(name) {
   return `http://${name}.railway.internal:${svc.port}`;
 }
 
+// Internal DNS for a Bam app service that may not have landed in the catalog yet.
+//
+// `internal()` deliberately THROWS on an unknown name; that guard catches typos and must
+// stay. But a hint sometimes has to exist BEFORE its service does: an app's env-hints entry
+// and its APP_SERVICES block can land in different commits, and a bare `internal()` call for
+// the not-yet-added service would throw at module load and break env-hints for EVERY
+// consumer, not just that app.
+//
+// Every Bam app service resolves to the same shape regardless of its catalog port, because
+// Railway injects PORT=8080 (see the note above), so the fallback value here is identical to
+// what `internal()` will return once the catalog block lands. This is self-healing: no edit
+// is needed at that point, and the typo guard still applies to every other call site.
+function plannedApp(name) {
+  return APP_SERVICE_NAMES.has(name)
+    ? internal(name)
+    : `http://${name}.railway.internal:${RAILWAY_DYNAMIC_PORT}`;
+}
+
 export const ENV_HINTS = {
   // ── Database / cache (managed Railway plugins) ────────────────────
   DATABASE_URL: {
@@ -176,6 +194,18 @@ export const ENV_HINTS = {
   API_INTERNAL_URL: { kind: 'computed', value: internal('api') },
   MCP_INTERNAL_URL: { kind: 'computed', value: internal('mcp-server') },
   BOND_API_INTERNAL_URL: { kind: 'computed', value: internal('bond-api') },
+  // Server-to-server base (NO /v1) for satellite services publishing Bolt events via
+  // publishBoltEvent. Distinct from BOLT_API_URL, which the mcp-server uses and which DOES
+  // carry /v1 because the mcp bolt client requests bare resource paths. The bare shape here
+  // matches the `http://bolt-api:4006` default in every consuming app's env.ts.
+  //
+  // This was MISSING, which was a live deploy bug rather than a cosmetic gap: the var is
+  // declared `required` on bulwark-api in services.mjs, and buildServiceVariables THROWS on
+  // a required var that resolves to an `unknown` hint. Railway provisioning for bulwark-api
+  // aborted outright. On the seven services where it is optional it silently resolved to
+  // SKIP, so those services shipped to production with Bolt event publishing simply absent
+  // and no signal at all. scripts/check-env-hints.mjs now guards this class of gap.
+  BOLT_API_INTERNAL_URL: { kind: 'computed', value: internal('bolt-api') },
   HELPDESK_API_URL: { kind: 'computed', value: internal('helpdesk-api') },
   // beacon-api mounts EVERY route under prefix '/v1' (apps/beacon-api/src/
   // server.ts) and the mcp beacon client requests bare paths like `/beacons`
@@ -216,6 +246,29 @@ export const ENV_HINTS = {
   BAY_API_URL: { kind: 'computed', value: `${internal('bay-api')}/v1` },
   // Server-to-server base (no /v1) for bay-api -> bin-api internal calls.
   BIN_API_INTERNAL_URL: { kind: 'computed', value: internal('bin-api') },
+  // Server-to-server base (no /v1) for burn-api -> bill-api cost-rate resolution. Burn
+  // declares this REQUIRED, and a required var with no hint hard-aborts provisioning in
+  // buildServiceVariables, so the hint has to exist before burn-api's catalog block lands.
+  // It is not referenced by any currently-deployed service, so unlike BOLT_API_INTERNAL_URL
+  // this was a LATENT bug rather than a live one.
+  BILL_API_INTERNAL_URL: { kind: 'computed', value: internal('bill-api') },
+  // Server-to-server base (no /v1) for counterparty golden-id resolution via Braid. Optional
+  // on bolt-api, bulwark-api, and worker today, which is exactly why it was invisible: with
+  // no hint it silently resolved to SKIP and Braid resolution was simply absent in
+  // production on all three.
+  BRAID_API_INTERNAL_URL: { kind: 'computed', value: internal('braid-api') },
+  // Burn. Both entries use plannedApp() because the burn-api APP_SERVICES block lands in a
+  // later commit than these hints; the value is identical either way.
+  //
+  // BURN_API_INTERNAL_URL is the spend-gate precheck base, consumed by bill-api, bolt-api,
+  // and worker. It is OPTIONAL on bill-api by design (unset means the gate is absent and
+  // expenses post normally), which is precisely the dangerous case: with no hint it would
+  // never be set on Railway, the preHandler would no-op, and Burn's flagship gate would not
+  // exist in production with nothing anywhere reporting its absence.
+  BURN_API_INTERNAL_URL: { kind: 'computed', value: plannedApp('burn-api') },
+  // Carries /v1 because the mcp-server's burn client requests bare resource paths, matching
+  // every other satellite client (beacon, brief, bond, board, ...).
+  BURN_API_URL: { kind: 'computed', value: `${plannedApp('burn-api')}/v1` },
   VOICE_AGENT_URL: { kind: 'computed', value: internal('voice-agent') },
 
   // ── MCP server ────────────────────────────────────────────────────
@@ -266,6 +319,19 @@ export const ENV_HINTS = {
   PUBLIC_FORM_RATE_WINDOW_MS: { kind: 'literal', value: '3600000' },
   QUERY_TIMEOUT_MS: { kind: 'literal', value: '10000' },
   CACHE_TTL_SECONDS: { kind: 'literal', value: '60' },
+  // Platform-wide default, matching `${BBB_PERMISSIONS_ENFORCE:-warn}` in docker-compose.yml
+  // (:125 and ~19 other sites). 'warn' records resolver divergence without blocking.
+  //
+  // A service that needs real enforcement does NOT get it from this hint: burn-api sets
+  // `on` explicitly in its own compose entry and asserts the resolved value at boot,
+  // refusing to start otherwise. That is a deliberately different mechanism, because a
+  // security posture that depends on a shared default being right is one bad merge away
+  // from being wrong. Do not raise this literal to 'on' to try to fix a single service.
+  BBB_PERMISSIONS_ENFORCE: { kind: 'literal', value: 'warn' },
+  // Document-parsing bounds (Burn 4.15). 25 MB and 300 pages; a breach records
+  // `rejected_limits` and extracts nothing partial.
+  MAX_DOC_BYTES: { kind: 'literal', value: '26214400' },
+  MAX_DOC_PAGES: { kind: 'literal', value: '300' },
 
   // ── OAuth (you provide) ───────────────────────────────────────────
   OAUTH_GITHUB_CLIENT_ID: {
