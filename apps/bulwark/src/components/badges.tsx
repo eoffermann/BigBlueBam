@@ -68,7 +68,9 @@ export function NoticeStatusBadge({ status }: { status: BulwarkNoticeStatus }) {
     none: NEUTRAL,
     drafted: AMBER,
     approved: BLUE,
+    sending: BLUE,
     sent: GREEN,
+    send_failed: RED,
     discarded: NEUTRAL,
   };
   return <span className={cn(pill, styles[status])}>notice {status}</span>;

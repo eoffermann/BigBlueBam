@@ -10,6 +10,7 @@ import type {
   BulwarkOrgSettings,
   BulwarkPatchObligationInput,
   BulwarkUpdateContractInput,
+  BulwarkCreateContractInput,
   BulwarkCreateVendorTierInput,
 } from '@bigbluebam/shared';
 
@@ -82,6 +83,17 @@ export function useContractObligations(id: string | undefined) {
     queryKey: ['bulwark', 'contracts', id, 'obligations'],
     queryFn: () => api.get<{ data: BulwarkObligation[] }>(`/contracts/${id}/obligations`),
     enabled: !!id,
+  });
+}
+
+// Register a new contract from an executed Bin asset. Extraction is enqueued
+// server-side; the obligation ledger populates once it completes.
+export function useRegisterContract() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulwarkCreateContractInput) =>
+      api.post<{ data: BulwarkContract }>('/contracts', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bulwark', 'contracts'] }),
   });
 }
 

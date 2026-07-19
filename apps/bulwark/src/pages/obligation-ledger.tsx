@@ -10,13 +10,21 @@ import {
   ChevronRight,
   Quote,
   AlarmClockPlus,
+  Plus,
 } from 'lucide-react';
-import type { BulwarkContract, BulwarkObligation, BulwarkObligationType } from '@bigbluebam/shared';
+import type {
+  BulwarkContract,
+  BulwarkContractKind,
+  BulwarkObligation,
+  BulwarkObligationType,
+} from '@bigbluebam/shared';
 import { useCan } from '@bigbluebam/ui/use-can';
 import {
   useContracts,
   useContractObligations,
   usePatchObligation,
+  useRegisterContract,
+  useSettings,
   useTriggerObligation,
 } from '@/hooks/use-bulwark';
 import { cn } from '@/lib/utils';
@@ -26,6 +34,16 @@ import {
   ArmedBadge,
   ContractStatusBadge,
 } from '@/components/badges';
+
+const CONTRACT_KINDS: BulwarkContractKind[] = [
+  'subcontract',
+  'sow',
+  'msa',
+  'grant_award',
+  'lease',
+  'amendment',
+  'other',
+];
 
 const OBLIGATION_TYPES: BulwarkObligationType[] = [
   'notice',
@@ -47,7 +65,9 @@ interface Props {
 export function ObligationLedgerPage({ onNavigate }: Props) {
   const contractsQuery = useContracts({ limit: 100 });
   const contracts = contractsQuery.data?.data ?? [];
+  const canWrite = useCan('bulwark.contract.write');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showRegister, setShowRegister] = useState(false);
 
   const activeId = selectedId ?? contracts[0]?.id ?? null;
   const selected = contracts.find((c) => c.id === activeId) ?? null;
@@ -56,10 +76,19 @@ export function ObligationLedgerPage({ onNavigate }: Props) {
     <div className="flex h-full">
       {/* Contract picker */}
       <div className="w-72 shrink-0 border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto custom-scrollbar bg-zinc-50/60 dark:bg-zinc-950/30">
-        <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Contracts
           </h2>
+          {canWrite && (
+            <button
+              onClick={() => setShowRegister(true)}
+              className="inline-flex items-center gap-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white px-2 py-1 text-xs font-medium shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Register
+            </button>
+          )}
         </div>
         {contractsQuery.isLoading ? (
           <div className="p-3 space-y-2">
@@ -68,8 +97,17 @@ export function ObligationLedgerPage({ onNavigate }: Props) {
             ))}
           </div>
         ) : contracts.length === 0 ? (
-          <div className="p-4 text-sm text-zinc-500">
-            No contracts tracked yet. Register one from a Bin asset to build its obligation ledger.
+          <div className="p-4 text-sm text-zinc-500 space-y-3">
+            <p>No contracts tracked yet. Register one from a Bin asset to build its obligation ledger.</p>
+            {canWrite && (
+              <button
+                onClick={() => setShowRegister(true)}
+                className="inline-flex items-center gap-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 text-xs font-medium"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Register contract
+              </button>
+            )}
           </div>
         ) : (
           <ul className="p-2 space-y-1">
@@ -110,6 +148,205 @@ export function ObligationLedgerPage({ onNavigate }: Props) {
             Select a contract to view its clause-cited obligation ledger.
           </div>
         )}
+      </div>
+
+      {showRegister && canWrite && (
+        <RegisterContractModal
+          onClose={() => setShowRegister(false)}
+          onRegistered={(id) => {
+            setShowRegister(false);
+            setSelectedId(id);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function RegisterContractModal({
+  onClose,
+  onRegistered,
+}: {
+  onClose: () => void;
+  onRegistered: (contractId: string) => void;
+}) {
+  const settingsQuery = useSettings();
+  const register = useRegisterContract();
+  const [title, setTitle] = useState('');
+  const [kind, setKind] = useState<BulwarkContractKind>('subcontract');
+  const [binAssetId, setBinAssetId] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [counterpartyId, setCounterpartyId] = useState('');
+  const [timezone, setTimezone] = useState('');
+  const [effectiveDate, setEffectiveDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+
+  const defaultTz = settingsQuery.data?.data.default_timezone ?? '';
+
+  function submit() {
+    register.mutate(
+      {
+        title: title.trim(),
+        contract_kind: kind,
+        bin_asset_id: binAssetId.trim(),
+        project_id: projectId.trim() || null,
+        counterparty_type: counterpartyId.trim() ? 'bond.company' : null,
+        counterparty_id: counterpartyId.trim() || null,
+        timezone: timezone.trim() || defaultTz || undefined,
+        effective_date: effectiveDate || null,
+        expiry_date: expiryDate || null,
+      },
+      { onSuccess: (res) => onRegistered(res.data.id) },
+    );
+  }
+
+  const inputCls =
+    'rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 px-2.5 py-1.5 text-sm';
+  const labelCls = 'text-[11px] text-zinc-500';
+  const canSubmit = title.trim().length > 0 && binAssetId.trim().length > 0 && !register.isPending;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-zinc-900/40 dark:bg-black/50 p-4 sm:p-8"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-5 py-3.5">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary-500" />
+            Register contract
+          </h2>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3.5">
+          <p className="text-xs text-zinc-500">
+            Point Bulwark at the executed document in Bin. Its obligation ledger populates after
+            extraction runs.
+          </p>
+
+          <div className="flex flex-col gap-1">
+            <label className={labelCls}>Title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Acme subcontract - Phase 2"
+              className={inputCls}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>Contract kind</label>
+              <select value={kind} onChange={(e) => setKind(e.target.value as BulwarkContractKind)} className={inputCls}>
+                {CONTRACT_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>Timezone</label>
+              <input
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                placeholder={defaultTz || 'America/New_York'}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className={labelCls}>Bin asset id</label>
+            <input
+              value={binAssetId}
+              onChange={(e) => setBinAssetId(e.target.value)}
+              placeholder="uuid"
+              className={cn(inputCls, 'font-mono text-xs')}
+            />
+            <span className="text-[10px] text-zinc-400">Bin asset id of the executed document.</span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className={labelCls}>Project (job)</label>
+            <input
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              placeholder="uuid (optional)"
+              className={cn(inputCls, 'font-mono text-xs')}
+            />
+            <span className="text-[10px] text-zinc-400">Leave blank for an org-scoped contract.</span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className={labelCls}>Counterparty (bond.company id)</label>
+            <input
+              value={counterpartyId}
+              onChange={(e) => setCounterpartyId(e.target.value)}
+              placeholder="uuid (optional)"
+              className={cn(inputCls, 'font-mono text-xs')}
+            />
+            <span className="text-[10px] text-zinc-400">
+              Leave blank to set later; notice send fails closed until set.
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>Effective date</label>
+              <input
+                type="date"
+                value={effectiveDate}
+                onChange={(e) => setEffectiveDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>Expiry date</label>
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          {register.isError && (
+            <p className="text-[11px] text-red-600 dark:text-red-400">
+              {register.error instanceof Error ? register.error.message : 'Could not register the contract.'}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-zinc-200 dark:border-zinc-800 px-5 py-3.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={submit}
+            className="inline-flex items-center gap-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+          >
+            {register.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Register contract
+          </button>
+        </div>
       </div>
     </div>
   );
