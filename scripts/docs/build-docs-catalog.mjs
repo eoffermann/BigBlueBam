@@ -33,6 +33,8 @@ import {
   ROOT,
   readLaunchpadCatalog,
   parseAppModules,
+  parseModules,
+  listPlatformModules,
 } from './lib/tool-source.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
@@ -95,6 +97,31 @@ function main() {
       `  ${app.name} (${app.id}): ${toolCount} tools across ${categories.length} categor${
         categories.length === 1 ? 'y' : 'ies'
       }`,
+    );
+  }
+
+  // Platform product: every tool module NOT claimed by an app. This makes the
+  // /docs total equal the true count of registered tools (matching CLAUDE.md +
+  // the marketing site), tracking the cross-cutting agent/platform tools as one
+  // "Platform" product rather than silently dropping them.
+  const platformGroups = parseModules(listPlatformModules(), warnings, 'platform')
+    .filter((g) => g.tools.length > 0)
+    .map((g) => ({
+      name: g.label,
+      tools: stripParams([...g.tools].sort((a, b) => a.name.localeCompare(b.name))),
+    }));
+  if (platformGroups.length > 0) {
+    const platformToolCount = platformGroups.reduce((s, c) => s + c.tools.length, 0);
+    products.push({
+      id: 'platform',
+      name: 'Platform',
+      description:
+        'Cross-cutting agent and platform tools available across every app: identity, audit, heartbeat, agent policies, proposals, visibility preflight, unified activity, cross-app search, resolvers, composite views, entity links, attachments, dedupe, expertise, webhooks, and more.',
+      toolCount: platformToolCount,
+      categories: platformGroups,
+    });
+    console.log(
+      `  Platform (platform): ${platformToolCount} tools across ${platformGroups.length} categories`,
     );
   }
 

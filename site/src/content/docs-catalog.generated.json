@@ -3603,5 +3603,232 @@
         ]
       }
     ]
+  },
+  {
+    "id": "platform",
+    "name": "Platform",
+    "description": "Cross-cutting agent and platform tools available across every app: identity, audit, heartbeat, agent policies, proposals, visibility preflight, unified activity, cross-app search, resolvers, composite views, entity links, attachments, dedupe, expertise, webhooks, and more.",
+    "toolCount": 36,
+    "categories": [
+      {
+        "name": "Activity",
+        "tools": [
+          {
+            "name": "activity_by_actor",
+            "description": "Query the unified activity log for everything a specific actor (user) has done across Bam, Bond, and Helpdesk. The target actor must share the caller's active org (404 otherwise). Visibility for individual rows is gated server-side."
+          },
+          {
+            "name": "activity_query",
+            "description": "Query the unified activity log for a given entity. Returns rows from Bam activity_log, Bond bond_activities, and Helpdesk ticket_activity_log under a normalized shape. Visibility is gated server-side: you will only see rows your current user/org can access. Paginated by a `<iso-ts>|<uuid>` cursor."
+          }
+        ]
+      },
+      {
+        "name": "Agent Policy",
+        "tools": [
+          {
+            "name": "agent_policy_get",
+            "description": "Fetch the policy row for a specific agent/service user in the caller's active org. Returns enabled flag, allowed_tools glob list, channel_subscriptions, rate_limit_override, notes, and an updated_by_user join so the caller can see who last touched it. 404 if the user is not in the caller's org or has no policy row yet."
+          },
+          {
+            "name": "agent_policy_list",
+            "description": "List agent/service policy rows in the caller's active org (SuperUsers may pass org_id to list a different org). Each row carries agent_user_id, agent_name (from users.display_name), enabled flag, allowed_tool_count, last_heartbeat_at from agent_runners (null if the agent has never heartbeat), and updated_at. Use enabled_only=true to restrict to currently-enabled rows."
+          },
+          {
+            "name": "agent_policy_set",
+            "description": "Upsert the policy row for an agent/service user. Patch any subset of enabled, allowed_tools, channel_subscriptions, rate_limit_override, notes. allowed_tools uses glob-prefix matching: a single entry '*' allows every tool; entries like 'banter.*' or 'banter_*' allow any tool starting with the prefix; bare entries are exact match. Returns confirmation_required:true when the call flips enabled from true to false on a live agent — the caller is expected to route through confirm_action before committing the kill. 400 if the target is not an agent/service user; 403 if the target is in a different org."
+          }
+        ]
+      },
+      {
+        "name": "Agent",
+        "tools": [
+          {
+            "name": "agent_audit",
+            "description": "Fetch the activity_log stream for a specific agent (service-account user) in the caller's active org. Paginated by created_at cursor. Wave 1 covers activity_log only; bond/helpdesk/banter audit merges are Wave 2."
+          },
+          {
+            "name": "agent_heartbeat",
+            "description": "Service-account only. Register or refresh the calling runner in agent_runners. Upserts by the service-account user id; bumps last_heartbeat_at and merges name/version/capabilities. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT."
+          },
+          {
+            "name": "agent_list",
+            "description": "List the agent runners registered in the caller's active org. Returns one row per service-account user that has ever heartbeat'd, sorted by last_heartbeat_at descending (rows that have never heartbeat'd sort last). Use this to discover which agents exist, their advertised capabilities, version strings, and liveness (a NULL last_heartbeat_at means registered-but-never-seen; a stale timestamp means the runner has gone quiet). Any authenticated user may call this; no service-account gate."
+          },
+          {
+            "name": "agent_self_report",
+            "description": "Service-account only. Append a self-report entry (action='agent.self_report') to activity_log under the given project. project_id is REQUIRED — the platform does not create sentinel projects in Wave 1. Callers that are not service accounts get 403 NOT_A_SERVICE_ACCOUNT."
+          }
+        ]
+      },
+      {
+        "name": "Agent Webhook",
+        "tools": [
+          {
+            "name": "agent_webhook_configure",
+            "description": "Configure or reconfigure an agent runner's outbound webhook. Accepts the target URL, an event_filter list (entries shaped like 'source:event_type' or 'source:*' or a single '*'), and an optional enabled flag (default true). Generates a fresh HMAC signing secret, hashes it with argon2id for server-side storage, and returns the plaintext secret exactly once; subsequent calls require rotation. Rejects URLs that would hit private/loopback/link-local IPs, cloud metadata endpoints, or *.internal hosts, and requires https in production. Resets webhook_consecutive_failures so a reconfigure lifts any circuit-breaker auto-disable."
+          },
+          {
+            "name": "agent_webhook_deliveries_list",
+            "description": "List recent webhook deliveries for the caller's active org. Filter by runner_id (limit to one runner), by status (pending | delivered | failed | dead_lettered), and paginate by passing the created_at of the last row as 'before'. Returns attempt_count, last_error, response_status_code, and timestamps so operators can triage failures and redeliver dead-lettered rows. Capped at 200 per call; default limit 50."
+          },
+          {
+            "name": "agent_webhook_redeliver",
+            "description": "Re-enqueue a specific webhook delivery. Resets attempt_count to 0 and status to pending, then queues a fresh dispatcher job. Useful for reviving dead-lettered rows after the operator has fixed the receiver, or for forcing a retry on a pending row without waiting for the backoff to elapse. Fails with RUNNER_WEBHOOK_DISABLED if the runner's webhook has been auto-disabled by the circuit breaker; reconfigure or re-enable the runner first."
+          },
+          {
+            "name": "agent_webhook_rotate_secret",
+            "description": "Rotate the HMAC signing secret for an agent runner's outbound webhook. Returns a fresh plaintext secret exactly once; the predecessor is invalidated atomically. Fails with WEBHOOK_NOT_CONFIGURED if the runner has no webhook_url yet (use agent_webhook_configure first). Unlike api-key rotation, there is no grace window: the next dispatch will be signed with the new secret, and receivers that cache the old secret will see signature mismatches until they swap."
+          }
+        ]
+      },
+      {
+        "name": "Attachment",
+        "tools": [
+          {
+            "name": "attachment_get",
+            "description": "Fetch metadata for a single attachment by id, federated across Bam tasks, Helpdesk tickets, and Beacon entries. Runs a visibility preflight on the parent entity BEFORE reading the attachment table, so callers who cannot see the parent get NOT_FOUND (cross-org) or FORBIDDEN (within-org denial) without leaking existence. Returns `deep_link` as a presigned download URL ONLY when scan_status='clean'; infected / pending / error rows return deep_link=null. Brief documents are NOT supported parents (Brief has no attachment table as of Wave 4). AGENTIC_TODO §17 Wave 4."
+          },
+          {
+            "name": "attachment_list",
+            "description": "List attachments attached to a given parent entity, filtered optionally by scan_status. Supported entity_type values: 'bam.task', 'helpdesk.ticket', 'beacon.entry'. Any other entity_type returns UNSUPPORTED_PARENT_TYPE. Visibility preflight runs on the parent BEFORE the attachment table is queried; unauthorized callers get 403 FORBIDDEN with the can_access reason. `limit` defaults to 50 and is capped at 50. Rows are sorted by uploaded_at desc. Deep links are issued only for scan_status='clean' rows. AGENTIC_TODO §17 Wave 4."
+          },
+          {
+            "name": "attachment_meta",
+            "description": "Discovery endpoint for the federated attachment surface. Returns the static set of supported parent entity_type values, the valid scan_status filter values, and the default/max list limits — so an agent can self-describe attachment_list/attachment_get capabilities without consulting docs or guessing. Read-only; no parameters. AGENTIC_TODO §17 Wave 4."
+          }
+        ]
+      },
+      {
+        "name": "Composite",
+        "tools": [
+          {
+            "name": "account_view",
+            "description": "Composite account-page view. Resolves one of { company_id, contact_id, domain } to a company, then fans out in parallel to bond (deals, owners), helpdesk (tickets), bill (invoices), bam (tasks), and the Bam activity log (recent_activity). Each arm has a 5s timeout; per-arm failures set the corresponding field to empty and append the arm name to `missing`. Returns only entities visible to the caller; asker-mode (as_user_id) is not supported in Wave 3. Returns 502 COMPOSITE_FAILED only if every arm fails."
+          },
+          {
+            "name": "project_view",
+            "description": "Composite project-overview view. Fans out in parallel to Bam (project, task count, active sprint, activity for top contributors), Bearing (linked goals), Brief (recent documents), and Beacon (recent entries). Each arm has a 5s timeout; per-arm failures set the corresponding field to empty/null and append the arm name to `missing`. top_contributors is a 30-day client-side GROUP BY over /projects/:id/activity today; when the §5 unified activity_query tool lands, it will be preferred automatically. Returns only entities visible to the caller; asker-mode is not supported in Wave 3. Returns 502 COMPOSITE_FAILED only if every arm fails."
+          },
+          {
+            "name": "user_view",
+            "description": "Composite person-profile view. Fans out in parallel to Bam (user via /users/:id, recent activity stub), Bond (owned deals), Helpdesk (open tickets via /tickets/search), and Bearing (owned goals). Each arm has a 5s timeout; per-arm failures set the corresponding field to empty and append the arm name to `missing`. user.kind is the users.kind column added in Wave 1 (human/agent/service). Returns only entities visible to the caller; asker-mode is not supported in Wave 3. Returns 502 COMPOSITE_FAILED only if every arm fails."
+          }
+        ]
+      },
+      {
+        "name": "Dedupe",
+        "tools": [
+          {
+            "name": "bond_find_duplicates",
+            "description": "Return likely duplicate contacts for a single Bond contact ranked by confidence. Signals combine pg_trgm full-name similarity, exact case-insensitive email match, and exact normalized-phone match. Each candidate row carries the contributing signals and, when a dedupe_decisions row exists for the pair, a prior_decision block so the caller can suppress pairs a human has already resolved. Member and viewer callers only see contacts they own; admins see everything in the org."
+          },
+          {
+            "name": "dedupe_list_pending",
+            "description": "List dedupe-decision pairs that still need human attention. A row is considered pending if its decision is 'needs_review' OR if a resurface_after timestamp was set and has now elapsed. Filter by entity_type to focus on one app's pairs; filter by since to restrict to rows decided after an ISO-8601 timestamp. Rows are returned ordered by decided_at DESC."
+          },
+          {
+            "name": "dedupe_record_decision",
+            "description": "Record a dedupe decision for an entity pair. The tool canonicalizes the pair order before writing, so passing (A, B) and (B, A) collide on the same row. decision is one of 'duplicate' | 'not_duplicate' | 'needs_review'. When an agent tries to overwrite a decision that a human previously recorded, the tool returns isError with code HUMAN_DECISION_EXISTS and includes the prior_decision so the caller can surface the human verdict. Humans and service accounts may always write. resurface_after is optional; when set, dedupe_list_pending will resurface the pair once the timestamp has passed."
+          },
+          {
+            "name": "helpdesk_find_similar_tickets",
+            "description": "Return similar helpdesk tickets for a single ticket ranked by confidence. Signals combine pg_trgm subject similarity, same-requester boost, same-category boost, and an existing tickets.duplicate_of link. Status filter defaults to 'not_closed' (open + in_progress + waiting + resolved). Pass 'open' for open-only or 'any' to include closed tickets. window_days restricts candidates to tickets created within the window. Each candidate carries a prior_decision block when a dedupe_decisions row exists for the pair."
+          }
+        ]
+      },
+      {
+        "name": "Entity Links",
+        "tools": [
+          {
+            "name": "entity_link_create",
+            "description": "Create a directional cross-app link. Both endpoints are preflighted via can_access and writes are rejected with 403 if either side is not accessible. Only the Wave 2 supported entity types are writable (bam.task/project/sprint, helpdesk.ticket, bond.deal/contact/company, brief.document, beacon.entry); any other type returns 400 UNSUPPORTED_ENTITY_TYPE. link_kind is one of related_to, duplicates, blocks, references, parent_of, derived_from. parent_of and derived_from reject writes that would close a cycle with 400 CYCLE_DETECTED. Re-creating an identical link returns the existing row with created: false (idempotent). There is NO blocked_by; use blocks and query by direction='dst'."
+          },
+          {
+            "name": "entity_link_remove",
+            "description": "Remove an entity link by id. Returns { ok: true } on success. Caller must have can_access on at least one side of the link (403 otherwise). Returns 404 if the link is not in the caller's org."
+          },
+          {
+            "name": "entity_links_list",
+            "description": "List cross-app entity links touching (type, id). Default direction 'both' returns both outbound and inbound rows; each row carries a 'direction' of 'outbound' or 'inbound' relative to the query. Rows whose far side is not accessible to the caller are silently filtered out and counted in filtered_count. Optional kind narrows to a single link_kind: related_to | duplicates | blocks | references | parent_of | derived_from. Reverse directions (e.g. blocked_by) are implicit via direction='dst'."
+          }
+        ]
+      },
+      {
+        "name": "Expertise",
+        "tools": [
+          {
+            "name": "expertise_for_topic",
+            "description": "Rank the top subject-matter experts for a natural-language topic. Aggregates signals across Beacon ownership (default weight 3.0), Brief authorship (2.0), Bond coverage on deals and contacts (2.0), and Bam task activity (1.0). Each evidence event is dampened by an exponential time decay with a configurable half-life (default 90 days) so recent work dominates. Evidence is preflighted through can_access for the supplied asker_user_id and stripped when the asker cannot see it; scores are preserved. Returns { topic, experts: [{ user_id, name, email, score, signals: [{ source, weight, evidence[] }] }] }."
+          }
+        ]
+      },
+      {
+        "name": "Ingest Fingerprint",
+        "tools": [
+          {
+            "name": "ingest_fingerprint_check",
+            "description": "Atomic dedup check for intake flows (forms, tickets, leads). Hashes the incoming payload into a fingerprint; the tool records it under (org_id, source, fingerprint) with the given TTL and reports whether this is the first sighting. Backed by Redis SET NX EX, one round-trip. Use before creating downstream entities to avoid duplicate ticket / lead / agent responses when a sender retries. window_seconds is capped at 3600 (1 hour). Callers should canonicalize the payload (lowercase, collapse whitespace, strip quoted reply text) before hashing."
+          }
+        ]
+      },
+      {
+        "name": "Phrase Count",
+        "tools": [
+          {
+            "name": "bam_task_count_by_phrase",
+            "description": "Count Bam tasks whose (title, description_plain) matches a phrase, bucketed by hour/day/week over a rolling window. Live tsvector query scoped to the caller's active org; optional label_filter and project_filter narrow further. window.since is REQUIRED; window.until defaults to now(). 5s server-side statement_timeout. Results are exact, not approximate."
+          },
+          {
+            "name": "helpdesk_ticket_count_by_phrase",
+            "description": "Count helpdesk tickets whose (subject, description) matches a phrase, bucketed by hour/day/week over a rolling window. Live tsvector query over tickets.search_vector with a 5s server-side statement_timeout. window.since is REQUIRED; window.until defaults to now(). Optional status_filter narrows to a single ticket status. Results are exact, not approximate."
+          }
+        ]
+      },
+      {
+        "name": "Proposal",
+        "tools": [
+          {
+            "name": "proposal_create",
+            "description": "Create a durable proposal in the agent_proposals queue. The proposal shows up in the approver's inbox and remains actionable until decided or expired. Use this for destructive or human-gated actions where you need an explicit approval on record (not just a DM notification)."
+          },
+          {
+            "name": "proposal_decide",
+            "description": "Decide a pending or revising proposal. Only the designated approver (or an org admin) may decide. Returns 409 if the proposal was already decided, 410 if it expired, 403 if the caller is not authorized."
+          },
+          {
+            "name": "proposal_list",
+            "description": "List proposals visible to the caller. By default returns pending proposals where the caller is either the approver or the actor; org admins see the whole org queue. Pass filter[status]=all to see decided rows too."
+          }
+        ]
+      },
+      {
+        "name": "Resolve",
+        "tools": [
+          {
+            "name": "resolve_references",
+            "description": "Resolve free text (natural language with optional pinned mention syntax like [[ABC-42]], [[deal:Acme]], @jane, #project) into a ranked list of candidate entities. No LLM. Phase 1 deterministically resolves pinned mentions via lookup endpoints; Phase 2 extracts 2-6 word n-grams (cap 5 phrases) and fans out to every app search endpoint in parallel. Returns ranked candidates with confidence, an optional disambiguation hint when siblings are close, and any fragments that did not resolve."
+          }
+        ]
+      },
+      {
+        "name": "Search",
+        "tools": [
+          {
+            "name": "search_everything",
+            "description": "Cross-app unified search. Fans out in parallel to per-app search endpoints (Bam tasks, Helpdesk tickets, Bond contacts/companies, Brief documents, Beacon entries, Banter messages, Board elements), normalizes each app's native relevance score, applies a per-app weight, and returns a ranked unified hit list. Use `types` to prune fan-out to a subset of entity kinds. Pass `as_user_id` to run a visibility preflight (can_access) on every supported hit and drop anything the asker cannot see; the count of dropped hits is reported as `filtered_count`. Note: Banter messages, Board elements, and Basis metrics are NOT in the Wave 2 can_access allowlist, so those hits are always included based on the source app's own RLS (banter channel membership, board visibility, and org-scoped metric catalog respectively). Each arm has a 3s timeout; arm-level failures are reported in `errors[]` without failing the whole call."
+          }
+        ]
+      },
+      {
+        "name": "Visibility",
+        "tools": [
+          {
+            "name": "can_access",
+            "description": "Preflight a visibility check. Returns { allowed, reason } for whether asker_user_id can see (entity_type, entity_id). Agents that surface cross-app results into shared channels MUST call this for every cited entity and filter out anything that is not allowed. Supported entity_type values: bam.task, bam.project, bam.sprint, helpdesk.ticket, bond.deal, bond.contact, bond.company, brief.document, beacon.entry, blueprint.diagram, blueprint.node, banter.message, banter.channel, bearing.goal, bearing.kr, board.board, book.event, bill.invoice, blank.form, bolt.rule, blip.tracked_app, blip.saved_view. Unsupported types return reason='unsupported_entity_type' (with a supported_entity_types hint) and MUST NOT be surfaced."
+          }
+        ]
+      }
+    ]
   }
 ]

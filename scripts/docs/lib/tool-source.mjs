@@ -42,7 +42,9 @@ const SYS_SETTINGS = path.join(
 // cross-cutting modules are folded into the app they clearly belong to
 // (banter-subscription -> banter, bolt-observability -> bolt); the remaining
 // platform-level modules (agent/search/resolve/activity/...) are NOT app
-// products and are intentionally excluded from the per-app catalog.
+// products - they are collected into a synthetic "Platform" product by the
+// catalog generator (see listPlatformModules) so the /docs total equals the
+// true count of registered tools, matching CLAUDE.md + the marketing site.
 export const APP_TOOL_MODULES = {
   b3: [
     'project-tools',
@@ -257,15 +259,44 @@ export function parseAppModules(appId, warnings = []) {
     warnings.push(`No tool-module mapping for app id "${appId}"`);
     return [];
   }
+  return parseModules(modules, warnings, appId);
+}
+
+/**
+ * Parse an explicit ordered list of tool modules into groups. Shared by the
+ * per-app path and the Platform product. Missing files are skipped with a note.
+ */
+export function parseModules(moduleNames, warnings = [], contextId = null) {
   const groups = [];
-  for (const moduleName of modules) {
+  for (const moduleName of moduleNames) {
     const fp = path.join(TOOLS_DIR, `${moduleName}.ts`);
     if (!fs.existsSync(fp)) {
-      warnings.push(`Missing tool module file: ${moduleName}.ts (app ${appId})`);
+      warnings.push(
+        `Missing tool module file: ${moduleName}.ts${contextId ? ` (${contextId})` : ''}`,
+      );
       continue;
     }
     const tools = parseToolsFromFile(fp);
     groups.push({ module: moduleName, label: moduleLabel(moduleName), tools });
   }
   return groups;
+}
+
+/** Every tool-module basename present on disk (without .ts), sorted. */
+export function listAllToolModules() {
+  return fs
+    .readdirSync(TOOLS_DIR)
+    .filter((f) => f.endsWith('-tools.ts'))
+    .map((f) => f.replace(/\.ts$/, ''))
+    .sort();
+}
+
+/**
+ * The platform (cross-cutting) tool modules: every module on disk that no app
+ * in APP_TOOL_MODULES claims. Derived, so a newly-added platform module is
+ * picked up automatically with no edit here.
+ */
+export function listPlatformModules() {
+  const mapped = new Set(Object.values(APP_TOOL_MODULES).flat());
+  return listAllToolModules().filter((m) => !mapped.has(m));
 }
