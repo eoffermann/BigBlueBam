@@ -5,13 +5,22 @@ adversarial hardening rounds, build-ready).
 
 Branch: `suite-brainstorm`. Never merged to `main`/`stable`.
 
-**Scale:** 14 tables, 5 migrations (0239-0243, two passes), 22 permissions,
-17 MCP tools, 10 Bolt events plus 4 backfilled `bill` events, 9 job families plus
-a claim reaper, 7 SPA screens, port 4022.
+**Scale:** 14 tables; **3 hand-authored migrations `0239`-`0241`, then two files at
+generator-assigned numbers** (see M2 - do NOT pre-assign them); 22 permissions;
+17 MCP tools plus one deprecated alias; 10 Bolt events plus 4 backfilled `bill`
+events and 16 subscriptions; **11 queues (10 job families + the claim reaper)**;
+7 SPA screens; port 4022.
 
-**Blast radius: nine services.** Burn touches `bill-api`, `bolt-api`, `worker`,
-`mcp-server`, `api`, and the `bill` SPA, and the shared-package consolidation
-touches `basis-api`, `braid-api`, `bulwark-api`.
+**Blast radius: ten compose services plus one extra SPA.** `burn-api`, `bill-api`,
+`bolt-api`, `worker`, `mcp-server`, `api`, `basis-api`, `braid-api`, `bulwark-api`,
+`frontend` - plus the `bill` SPA, which ships inside the `frontend` image.
+
+> **Plan hardened by an adversarial review before implementation.** It found 7
+> blockers: the header pre-assigned the generator-assigned migration numbers; pass 2
+> omitted the manifest registration without which the permission delta is empty; and
+> the bill-api gate integration, the LLM concurrency cap, the `SUPPORTED_ENTITY_TYPES`
+> edit, the second subpath contract, and the bolt-api dispatch hook had no milestone
+> at all. All folded in below.
 
 ---
 
@@ -22,9 +31,10 @@ touches `basis-api`, `braid-api`, `bulwark-api`.
 - [ ] **`'src/visibility-client.ts'` appended to the `entry` array in `packages/shared/tsup.config.ts`** (three-file contract; without it the dist artifact is never emitted and four services fail image build)
 - [ ] `basis-api`, `braid-api`, `bulwark-api` migrated onto it, per-app copies deleted
 - [ ] Basis-only `DIMENSION_ENTITY_TYPE` / `entityTypeForDimension` / `resolveVisibleValues` kept in `apps/basis-api/src/lib/` as a thin wrapper (Class-B decomposition, not a visibility client)
+- [ ] Fail-closed semantics preserved at the strictest of the three
 - [ ] `can_access` fail-closed probe passes in each of the three migrated apps
-- [ ] `BOLT_API_INTERNAL_URL` computed hint added (closes a live bug: required on bulwark-api, orchestrator throws on unknown-required)
-- [ ] env-hints coverage test with a dated, append-forbidden allowlist of the 16 pre-existing names
+- [ ] env-hints entries for **all eight names from §9.6.2**, not just one: `BOLT_API_INTERNAL_URL` (live bug - required on bulwark-api, orchestrator throws), `BILL_API_INTERNAL_URL` (required on burn-api, same class), `BURN_API_INTERNAL_URL`, `BURN_API_URL`, `BBB_PERMISSIONS_ENFORCE`, `BRAID_API_INTERNAL_URL`, `MAX_DOC_BYTES`, `MAX_DOC_PAGES`
+- [ ] env-hints coverage test with a dated, append-forbidden allowlist of the remaining pre-existing names
 - [ ] Root `check:env-hints` script + a step in `.github/workflows/lint.yml`
 
 ## M1 - Scaffold
@@ -34,77 +44,116 @@ touches `basis-api`, `braid-api`, `bulwark-api`.
 - [ ] `@bigbluebam/logging`, `@bigbluebam/service-health` (`/health`, `/health/ready` - there is no `/readyz`)
 - [ ] `BBB_PERMISSIONS_ENFORCE=on` unconditional plus a boot assertion that exits non-zero otherwise
 
-## M2 - Data model
+## M2 - Data model and permissions
+
+**Do NOT pre-assign or pre-create the last two migration filenames.** Author
+`0239`-`0241` by hand; observe the number `build-permission-delta.mjs` prints and
+author the group-defaults file at that number **+1**. Authoring it first makes it
+sort first, match zero rows, get swallowed by `ON CONFLICT DO NOTHING`, and
+checksum as applied so it can never re-run - and then no built-in group grants any
+`burn.*` and every non-SuperUser including Owners hits `implicit_deny`.
 
 - [ ] 14 Drizzle schema modules plus `agent-proposals.ts`, `entity-links.ts`, `bbb-refs.ts`
-- [ ] `search_tsv` declared via `customType<{data:string}>({dataType:()=>'tsvector'})`
+- [ ] `search_tsv` via `customType<{data:string}>({dataType:()=>'tsvector'})` per `braid-profiles.ts:15-18` (`db-check.mjs:454` treats an undeclared DB column as fatal; `text()` would only warn)
 - [ ] **Pass 1:** author and apply `0239`-`0241`
-- [ ] **Pass 2:** run `build-permission-delta.mjs` against the applied schema, then author `NNNN+1_burn_builtin_group_defaults.sql`
+- [ ] Append the 22 `burn.*` rows to the literal `HAND_AUTHORED` array at `scripts/generate-permission-manifest.mjs:719` with explicit `is_read` / `is_destructive` / `requires_confirmation` flags (the copy loop is at `:816`); add the `burn.` provenance branch beside the `bulwark.` one at `:843`; confirm `burn_*` is absent from `EXPLICIT_TOOL_OVERRIDES`
+- [ ] **Pass 2, four scripts in order:** `generate-permission-manifest.mjs` → `build-permission-codegen.mjs` → `check-permission-catalog.mjs` → `build-permission-delta.mjs`
+- [ ] Commit `packages/permissions/src/generated/permissions.ts` (M7's `useCan('burn.*')` will not typecheck without it)
+- [ ] Author the group-defaults file at the generator's number **+1**
 - [ ] Group-defaults probe: owner 22, admin 22, member 14, viewer 7, guest 0
+- [ ] §12.1 assertions for §3
 - [ ] `pnpm db:check` and `pnpm lint:migrations` green
 
 ## M3 - Shared Zod
 
-- [ ] `packages/shared/src/schemas/burn.ts`
-- [ ] `export * from './burn.js'` in `schemas/index.ts`
+- [ ] `packages/shared/src/schemas/burn.ts` + `export * from './burn.js'` in `schemas/index.ts`
 - [ ] Money block is a discriminated union on `metric_basis` including a `suppressed` member
-- [ ] Idempotency HMAC in its own file behind a subpath export (no `node:crypto` in the frontend bundle)
+- [ ] **Three-file contract again, same as M0:** `packages/shared/src/burn-precheck-key.ts` + a `"./burn-precheck-key"` exports block + **`'src/burn-precheck-key.ts'` appended to the tsup `entry` array**
 
-## M4 + M5 - Routes and tools together
+## M4 - Serializer and viewerCaps (lands and goes green BEFORE M5)
+
+Split out deliberately: every money figure in the app projects through this, and its
+two failure modes are the sharpest in the spec.
+
+- [ ] `viewerCaps` from a fail-closed `POST /internal/permissions/dual-read`, resolved once per request. **Never `fastify.canResolve`** - it is a hardcoded `return true` at `packages/permissions/src/index.ts:307-319`, which is why `bulwark-api/src/routes/deadlines.routes.ts:21-23` floors nothing today
+- [ ] `redactFinancialFields` applied across all eight surfaces
+- [ ] Bearer-intersect-asker rule on MCP surfaces; unresolvable asker fails floored fields closed
+- [ ] §12.1 serializer-identity tests, including an assertion that `fastify.canResolve` appears in no flooring path
+
+## M5 - REST routes and 17 MCP tools, together
 
 - [ ] REST endpoints per §6.1
-- [ ] Shared `redactFinancialFields` serializer across all eight surfaces
-- [ ] `viewerCaps` from fail-closed `dual-read`, never `fastify.canResolve`
-- [ ] Bearer-intersect-asker rule on MCP surfaces
-- [ ] 17 tools via `registerTool()`
+- [ ] `burn.engagement` / `burn.deliverable` added at **three sites** in `apps/api/src/services/visibility.service.ts`: the `VisibilityEntityType` union (`:104`), the `SUPPORTED_ENTITY_TYPES` array (`:142`), and a resolver `case` beside `:1716`
+- [ ] `/burn/ws` Redis PubSub fan-out per §6.2: rooms keyed `(org, project)`, membership from the cached `PermissionContext` not a per-frame DB round trip, five frame types, refs and coarse bands only, advisory-only with client refetch on reconnect
+- [ ] 17 tools in `apps/mcp-server/src/tools/burn-tools.ts`, all via `registerTool()`
+- [ ] `registerBurnTools` imported and called in `apps/mcp-server/src/server.ts` (per-app bootstrap edit, see `:39`)
+- [ ] `BURN_API_URL: http://burn-api:4022/v1` in the compose `mcp-server` block **and** `mcp-server.env.optional` in `services.mjs`; `burn` NOT added to `mcp-server.needs`
 - [ ] `burn.*` `agent_policies` allowlist
-- [ ] `confirm_action` on destructive tools **and on gate disable**
+- [ ] `confirm_action` on destructive tools **and on gate disable** (`off`/`advisory`/`gate_paused_until`)
+- [ ] `entity_links` upserts per §8.4; ported `braid-resolve.client.ts` with its soft-degradation contract per §8.5
 - [ ] Surface-map rows for every endpoint; self-check prints `0`
+- [ ] §12.1 assertions for §5, §6, §11
 
 ## M6 - Engines, workers, events
 
 - [ ] Extraction, attribution, variance, inverse check, revaluation, change-order drafting
-- [ ] 9 job families plus the claim reaper
-- [ ] `pg_advisory_xact_lock` in burn-api's sweep service; **no lock-holding transaction contains an outbound HTTP call**
-- [ ] 10 `burn` events plus 4 backfilled `bill` events in `event-catalog.ts`
-- [ ] Payloads carry refs and coarse bands only
-- [ ] `check:bolt-catalog` added to `lint.yml`
+- [ ] **11 queues:** `burn-extract-deliverables`, `burn-attribute-batch`, `burn-claim-reaper`, `burn-variance-sweep`, `burn-revalue`, `burn-silent-deliverable-sweep`, `burn-rollup-refresh`, `burn-calibration-recompute`, `burn-proposal-reconcile`, `burn-retention`, `burn-embed-sync`
+- [ ] `pg_advisory_xact_lock` in burn-api's sweep service. **HARD RULE: no lock-holding transaction contains an outbound HTTP call** - which is why extraction and attribute-batch use row claims, with each chunk checkpoint committed in its own transaction
+- [ ] 10 `burn` events plus 4 backfilled `bill` events in `event-catalog.ts`; `source:` precedes `event_type:` within 300 chars or the drift-guard regex misses it
+- [ ] Payloads carry refs and coarse bands only - no amounts, no `margin_pct`
+- [ ] **`burn-dispatch-hook.ts` in bolt-api**, wired into `event-ingestion.routes.ts` beside `dispatchToBraid`, forwarding to `${BURN_API_INTERNAL_URL}/v1/internal/events`, gated by a per-org Redis binding set on the `gate.service.ts` shape; plus `BURN_API_INTERNAL_URL` in bolt-api compose and catalog; plus the 16 subscriptions from §8.3
+- [ ] **LLM concurrency cap (§9.7.1):** Redis token bucket keyed `llm:bucket:<service>` in front of `POST /internal/llm/chat`; `LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE=4`, `LLM_INTERNAL_RATE_PER_MINUTE=120`, both in `env-hints.mjs` and `.env.example`; 429 + `Retry-After`; `burn-attribute-batch` defers a 429 to `pending_attribution`, never `unscoped`; extraction retries from checkpoint; done criterion is the two-service saturation test
+- [ ] `check:bolt-catalog` added to `lint.yml` (it exists in `package.json:35` and runs in no workflow today)
+- [ ] §12.1 assertions for §4, §8
+
+## M6b - bill-api gate integration (the flagship feature)
+
+- [ ] `apps/bill-api/src/lib/burn-precheck.client.ts`: the suite's **first** circuit breaker. `burn:breaker:fails:<org>` INCR, `burn:breaker:state:<org>`, `NX` probe election, threshold 5, probe 30000ms. Every Redis touch wrapped and non-throwing with an in-process fallback. `allow` on every error path
+- [ ] Coverage counter `burn:gate_calls:<org>:<yyyymmdd>` incremented **on every gated write attempt including the unconfigured no-op** (so a missing env var reads as 0 percent coverage rather than a clean console)
+- [ ] `burnPrecheck` preHandler on four hook points: `expenses.routes.ts:46`, `:57`, the approve route, and `bill-recurring-generate.job.ts:367` with one breaker check per job, not per schedule
+- [ ] `POST /internal/rates/resolve` delegating to `rate.service.ts:117`, plus its batch form
+- [ ] Internal line-item write accepting `acting_user_id` in the body
+- [ ] Four new `billEvents`: `expense.created`, `expense.approved`, `rate.created`, `rate.updated`
+- [ ] Breaker unit test file
+- [ ] §12.1's five fail-open assertions: unreachable, breaker open, timeout, `BURN_API_INTERNAL_URL` unset (`gate_not_configured`), Redis unreachable (`redis_unavailable`). In every case the expense posts
 
 ## M7 - SPA
 
 - [ ] 7 screens
-- [ ] Shell parity: sidebar, top bar, Launchpad, `globals.css` verbatim, Bureau widget, providers
-- [ ] The one Bill SPA change (inline advisory-feedback control)
+- [ ] Shell parity: sidebar (`w-[260px] bg-sidebar`, `bg-primary-600` badge, `SidebarPlatformFooter`), top bar (`LaunchpadTrigger`, breadcrumb, `OrgSwitcher`, search, Banter link, `NotificationsBell`, `HelpTrigger`, `UserMenu`), `<Launchpad currentApp="burn" />`, `globals.css` copied verbatim, `mountBureauClient` + `initSystemErrorReporter({service:'burn'})` + `@bigbluebam/bureau-client`, `PermissionsProvider`, auth store, loading gate, saved-theme, `?`-opens-Help
+- [ ] The one Bill SPA change (§7.8): the inline advisory-feedback control in `apps/bill/`
 
 ## M8 - Launchpad and infra
 
-- [ ] `LAUNCHPAD_APP_IDS` + `LAUNCHPAD_CATALOG`
-- [ ] Launchpad grid overflow checked and condensed if needed, or explicitly stated as fitting
-- [ ] `docker-compose.yml` burn-api service
-- [ ] All three nginx configs, plus the pre-existing `bill`/`bay`/`blip` alternation drift reconciled
-- [ ] `apps/frontend/Dockerfile` SPA lines
-- [ ] `services.mjs`, ENV_HINTS, `gen-railway-configs.mjs`
-- [ ] `CLAUDE.md` inventory and routes, `.env.example`
+- [ ] `LAUNCHPAD_APP_IDS` + `LAUNCHPAD_CATALOG` row
+- [ ] `import { Flame } from 'lucide-react'` + a `'flame': Flame` entry in `ICONS` at `packages/ui/launchpad.tsx:65` (absent today; falls back to `Box` at `:226`)
+- [ ] Launchpad grid overflow checked; condense in this change or state explicitly it still fits and file a `best-practices` issue
+- [ ] `docker-compose.yml` burn-api service (4022, `migrate` `service_completed_successfully`, postgres/redis `service_healthy`); `frontend.depends_on: burn-api`; `/burn/` added to the `frontend` entry's `public_paths`
+- [ ] Edit **the two source nginx configs only**, then regenerate `nginx.railway.conf` via `node scripts/gen-railway-configs.mjs`. Do not hand-edit `:8080` or the `$rw_upstream_NN` index. Reconcile the pre-existing `bill`/`bay`/`blip` alternation drift in the same change
+- [ ] `apps/frontend/Dockerfile` SPA lines; `services.mjs` catalog entry with `healthcheck: '/health'`; `gen-railway-configs.mjs`; `CLAUDE.md` inventory and routes; `.env.example`
 
 ## M9 - Deploy and test
 
-- [ ] Two migrate passes, all nine changed services rebuilt
-- [ ] All eleven convention gates green
-- [ ] `appProject('burn')` registered in `apps/e2e/playwright.config.ts`
+- [ ] Two migrate passes per §9.8
+- [ ] **Rebuild and force-recreate all ten:** `burn-api bill-api bolt-api worker mcp-server api basis-api braid-api bulwark-api frontend`. `frontend` is rebuilt **twice** - here for the SPA, and again in M10 after `help:index` for `docs/apps/` at `apps/frontend/Dockerfile:232`. Without the M9 rebuild, `/burn/` 404s and every Playwright story fails as a routing bug
+- [ ] Eleven convention gates (§12.4's ten plus M0's new `check:env-hints`)
+- [ ] §12.1 fully implemented; **no assertion deferred**
+- [ ] `appProject('burn')` in `apps/e2e/playwright.config.ts` projects array, specs at `apps/e2e/src/apps/burn/tests/` (`appProject` hardcodes `testDir: ./src/apps/${name}/tests`). Note `bin`, `bay`, `blip`, `bureau`, `blueprint` are all absent from that array today, so this failure is live in the repo and easy to repeat
 - [ ] Playwright user stories against gilligan, each verifying backend state via curl AND psql
-- [ ] A representative slice driven through MCP tools alone
+- [ ] `apps/integration-tests` case for the full expense → precheck → event → dispatch hook → work item → attribution → rollup chain, plus five negatives: `BURN_API_INTERNAL_URL` unset, burn-api stopped, breaker open, bill-api 404 on `/internal/rates/resolve`, Redis unreachable
+- [ ] A representative slice driven through MCP tools alone, producing the same rows and events
 
 ## M10 - Docs, screenshots, marketing
 
 - [ ] `docs/apps/burn/help.md` + `help-index.json` + Help Center
-- [ ] `burn` in the hardcoded `APP_REGISTRY` at `scripts/docs/extract.mjs:63`
-- [ ] `APP_TOOL_MODULES` entry
+- [ ] `burn` row in the hardcoded `APP_REGISTRY` at `scripts/docs/extract.mjs:63` (without it `docs/apps/burn/` is never emitted at all)
+- [ ] `APP_TOOL_MODULES` entry in `scripts/docs/lib/tool-source.mjs`
 - [ ] `docs:extract`, `docs:compose`, `docs:catalog`, `docs:manual` regenerated and committed
-- [ ] `marketing.md` + `docs:publish` + `APP_ICON`/`APP_COLOR`
-- [ ] MCP tool counts updated everywhere (847 to 864)
-- [ ] `scripts/seed-gilligan/burn.mjs` in a new trailing group + `seed-all.mjs` PHASE_B
+- [ ] `marketing.md` + `docs:publish` + `APP_ICON`/`APP_COLOR` in `site/src/pages/docs.tsx` (the one sanctioned hand-edit)
+- [ ] MCP tool counts updated everywhere. Confirm whether the deprecated `burn_margin` alias counts before committing a number `pnpm docs:catalog` will contradict
+- [ ] **Two separate seeders:** author `scripts/seed-burn.mjs` and add `'seed-burn.mjs'` to the flat `PHASE_B` array in `scripts/seed-all.mjs` after `'seed-bill.mjs'`; separately author `scripts/seed-gilligan/burn.mjs` and add a trailing `{ name: 'Margin', files: ['burn.mjs'] }` group to `PHASES` in `run-all.mjs`, which must follow both the Billing and Knowledge groups
 - [ ] Gilligan screenshots
-- [ ] `frontend` rebuilt after `help:index`
+- [ ] `frontend` rebuilt again after `help:index`
 
 ## M11 - Close-out
 
