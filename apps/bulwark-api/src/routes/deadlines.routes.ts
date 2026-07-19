@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { bulwarkDischargeSchema, bulwarkListQuerySchema } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
 import { askerViewer, mapServiceError, readViewer, validationError, viewerOf } from '../lib/http.js';
@@ -11,8 +11,16 @@ export default async function deadlineRoutes(fastify: FastifyInstance) {
   // The notice_draft body is surfaced ONLY to bulwark.notice.draft holders (SK2). canResolve
   // is the pure decision probe (never touches the reply), so a member-tier deadline.read
   // caller gets radar fields WITHOUT the body.
-  const holdsNoticeDraft = (request: Parameters<typeof fastify.canResolve>[0]) =>
-    fastify.canResolve(request, 'bulwark.notice.draft');
+  //
+  // canResolve keys off the BEARER's session (request.user), but readViewer narrows the row set
+  // to the asker when an agent passes ?asker_user_id. If we gated the body on the bearer while
+  // returning the asker's rows, an admin/agent bearer acting for a member asker (excluded from
+  // notice.draft by 0238) would leak the floored body (#63, the Braid #60 class at field level).
+  // So the body is included ONLY when there is no distinct asker AND the bearer holds the floor;
+  // any asker context fails closed on the body.
+  const includeNoticeBody = async (request: Parameters<typeof fastify.canResolve>[0]) =>
+    askerViewer(request as FastifyRequest) === null &&
+    (await fastify.canResolve(request, 'bulwark.notice.draft'));
 
   fastify.get(
     '/deadlines',
@@ -21,7 +29,7 @@ export default async function deadlineRoutes(fastify: FastifyInstance) {
       const q = request.query as { cursor?: string; limit?: string; filter?: Record<string, string> };
       const parsed = bulwarkListQuerySchema.safeParse(q);
       const limit = parsed.success ? parsed.data.limit : 25;
-      const includeBody = await holdsNoticeDraft(request);
+      const includeBody = await includeNoticeBody(request);
       return deadlines.listDeadlines(
         readViewer(request),
         {
@@ -43,7 +51,7 @@ export default async function deadlineRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       try {
-        const includeBody = await holdsNoticeDraft(request);
+        const includeBody = await includeNoticeBody(request);
         const data = await deadlines.getDeadline(readViewer(request), id, includeBody);
         return { data };
       } catch (err) {
