@@ -13,6 +13,11 @@
       "import": "./dist/bulwark-arm-key.js",
       "require": "./dist/bulwark-arm-key.cjs"
     },
+    "./burn-precheck-key": {
+      "types": "./dist/burn-precheck-key.d.ts",
+      "import": "./dist/burn-precheck-key.js",
+      "require": "./dist/burn-precheck-key.cjs"
+    },
     "./visibility-client": {
       "types": "./dist/visibility-client.d.ts",
       "import": "./dist/visibility-client.js",
