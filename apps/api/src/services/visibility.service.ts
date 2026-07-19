@@ -36,6 +36,9 @@ import {
   bookEventAttendeesStub,
   braidProfilesStub,
   braidIdentitiesStub,
+  bulwarkContractsStub,
+  bulwarkObligationsStub,
+  bulwarkNoticeDeadlinesStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -95,7 +98,11 @@ export type VisibilityEntityType =
   | 'bill.client'
   | 'book.event_attendee'
   | 'braid.profile'
-  | 'braid.identity';
+  | 'braid.identity'
+  // Bulwark contract-obligation-monitor registration (APP_DESIGN_bulwark.md §2.5)
+  | 'bulwark.contract'
+  | 'bulwark.obligation'
+  | 'bulwark.deadline';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -130,6 +137,10 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'book.event_attendee',
   'braid.profile',
   'braid.identity',
+  // Bulwark contract-obligation-monitor registration (APP_DESIGN_bulwark.md §2.5)
+  'bulwark.contract',
+  'bulwark.obligation',
+  'bulwark.deadline',
 ] as const;
 
 export type PreflightReason =
@@ -1491,6 +1502,125 @@ async function preflightBraidIdentity(
 }
 
 // ---------------------------------------------------------------------------
+// bulwark.contract / bulwark.obligation / bulwark.deadline
+// ---------------------------------------------------------------------------
+//
+// Bulwark's ledger is project-scoped through the owning contract's project_id
+// (spec §2.5): org-admins see any contract in their org; other members must be
+// a member of the contract's project. A null-project contract has no project
+// to join, so it falls back to an org-membership check (still org-scoped,
+// never owner/admin-only, spec SK3) - which for a same-org asker is simply
+// "allowed". Obligations and deadlines carry a contract_id and inherit the
+// contract's project scope via an inner join; a dangling child (contract gone)
+// fails closed as not_found.
+
+async function gateByContractScope(
+  asker: AskerContext,
+  contractOrgId: string,
+  contractProjectId: string | null,
+): Promise<PreflightResult> {
+  if (contractOrgId !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' }; // cross-org - do not disclose
+  }
+  // Org admins/owners see any contract in their own org.
+  if (isOrgAdmin(asker.role)) {
+    return { allowed: true, reason: 'ok', entity_org_id: contractOrgId };
+  }
+  // No-project contract (SK3): org-membership is the gate. A same-org asker is
+  // by definition an org member, so allow.
+  if (!contractProjectId) {
+    return { allowed: true, reason: 'ok', entity_org_id: contractOrgId };
+  }
+  // project_id is set: normal project-membership gate.
+  const member = await isProjectMember(contractProjectId, asker.id);
+  if (!member) {
+    return {
+      allowed: false,
+      reason: 'not_project_member',
+      entity_org_id: contractOrgId,
+    };
+  }
+  return { allowed: true, reason: 'ok', entity_org_id: contractOrgId };
+}
+
+async function preflightBulwarkContract(
+  asker: AskerContext,
+  contractId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bulwarkContractsStub.id,
+      organization_id: bulwarkContractsStub.organization_id,
+      project_id: bulwarkContractsStub.project_id,
+    })
+    .from(bulwarkContractsStub)
+    .where(eq(bulwarkContractsStub.id, contractId))
+    .limit(1);
+
+  const contract = rows[0];
+  if (!contract) return { allowed: false, reason: 'not_found' };
+  return gateByContractScope(
+    asker,
+    contract.organization_id,
+    contract.project_id,
+  );
+}
+
+async function preflightBulwarkObligation(
+  asker: AskerContext,
+  obligationId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bulwarkObligationsStub.id,
+      organization_id: bulwarkContractsStub.organization_id,
+      project_id: bulwarkContractsStub.project_id,
+    })
+    .from(bulwarkObligationsStub)
+    .innerJoin(
+      bulwarkContractsStub,
+      eq(bulwarkContractsStub.id, bulwarkObligationsStub.contract_id),
+    )
+    .where(eq(bulwarkObligationsStub.id, obligationId))
+    .limit(1);
+
+  const obligation = rows[0];
+  if (!obligation) return { allowed: false, reason: 'not_found' };
+  return gateByContractScope(
+    asker,
+    obligation.organization_id,
+    obligation.project_id,
+  );
+}
+
+async function preflightBulwarkDeadline(
+  asker: AskerContext,
+  deadlineId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: bulwarkNoticeDeadlinesStub.id,
+      organization_id: bulwarkContractsStub.organization_id,
+      project_id: bulwarkContractsStub.project_id,
+    })
+    .from(bulwarkNoticeDeadlinesStub)
+    .innerJoin(
+      bulwarkContractsStub,
+      eq(bulwarkContractsStub.id, bulwarkNoticeDeadlinesStub.contract_id),
+    )
+    .where(eq(bulwarkNoticeDeadlinesStub.id, deadlineId))
+    .limit(1);
+
+  const deadline = rows[0];
+  if (!deadline) return { allowed: false, reason: 'not_found' };
+  return gateByContractScope(
+    asker,
+    deadline.organization_id,
+    deadline.project_id,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -1580,6 +1710,13 @@ export async function preflightAccess(
       return preflightBraidProfile(asker, entityId);
     case 'braid.identity':
       return preflightBraidIdentity(asker, entityId);
+    // Bulwark contract-obligation-monitor registration (APP_DESIGN_bulwark.md §2.5)
+    case 'bulwark.contract':
+      return preflightBulwarkContract(asker, entityId);
+    case 'bulwark.obligation':
+      return preflightBulwarkObligation(asker, entityId);
+    case 'bulwark.deadline':
+      return preflightBulwarkDeadline(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }

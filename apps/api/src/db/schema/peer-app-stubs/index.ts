@@ -503,3 +503,67 @@ export const braidIdentitiesStub = pgTable(
     index('pas_braid_identities_profile_idx').on(table.profile_id),
   ],
 );
+
+// ===========================================================================
+// Bulwark contract-obligation-monitor entity-type registration
+// (docs/brainstorming/2026_07_19_03_00_APP_DESIGN_bulwark.md §2.5 / §9.5).
+// ===========================================================================
+// Bulwark's ledger reads and writes are project-scoped through the owning
+// contract's project_id (org-admin override; null-project contracts fall
+// back to org-membership, spec SK3). We stub the contract plus the two child
+// entities whose ids are discoverable org-wide (obligation, deadline) and
+// are therefore can_access-gated. Same warning as above: minimal columns,
+// kept in lockstep with the real physical schema, invisible to the drift
+// guard. Real schemas: apps/bulwark-api/src/db/schema/{bulwark-contracts,
+// bulwark-obligations,bulwark-notice-deadlines}.ts.
+
+// ---------------------------------------------------------------------------
+// bulwark - contracts
+// ---------------------------------------------------------------------------
+// project_id is nullable: a null-job contract holds only manual-trigger or
+// calendar obligations and gates on org-membership (spec SK3), not project.
+export const bulwarkContractsStub = pgTable(
+  'bulwark_contracts',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    project_id: uuid('project_id'),
+  },
+  (table) => [index('pas_bulwark_contracts_org_idx').on(table.organization_id)],
+);
+
+// ---------------------------------------------------------------------------
+// bulwark - obligations
+// ---------------------------------------------------------------------------
+// Org + project scoping is derived through the parent bulwark_contracts
+// (joined via contract_id), so a dangling obligation fails closed as
+// not_found. The obligation row also carries organization_id of its own.
+export const bulwarkObligationsStub = pgTable(
+  'bulwark_obligations',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    contract_id: uuid('contract_id').notNull(),
+  },
+  (table) => [
+    index('pas_bulwark_obligations_org_idx').on(table.organization_id),
+    index('pas_bulwark_obligations_contract_idx').on(table.contract_id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// bulwark - notice deadlines
+// ---------------------------------------------------------------------------
+// Same contract-derived scoping as obligations (joined via contract_id).
+export const bulwarkNoticeDeadlinesStub = pgTable(
+  'bulwark_notice_deadlines',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    contract_id: uuid('contract_id').notNull(),
+  },
+  (table) => [
+    index('pas_bulwark_deadlines_org_idx').on(table.organization_id),
+    index('pas_bulwark_deadlines_contract_idx').on(table.contract_id),
+  ],
+);
