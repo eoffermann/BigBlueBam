@@ -15,6 +15,7 @@ import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
+import viewerCapsPlugin from './plugins/viewer-caps.js';
 import rlsPlugin from './plugins/rls.js';
 import { sql } from 'drizzle-orm';
 
@@ -92,6 +93,9 @@ await fastify.register(websocket, { options: { maxPayload: 1_048_576 } });
 await fastify.register(authPlugin);
 await fastify.register(rlsPlugin);
 await fastify.register(permissionsPlugin);
+// Financial flooring (spec 2.4 point 2). Resolved once per request from a fail-closed
+// dual-read; NEVER from fastify.canResolve, which is a hardcoded `return true` stub.
+await fastify.register(viewerCapsPlugin);
 
 // Health + readiness. The routes are /health and /health/ready (there is no /readyz
 // anywhere in this platform). Per spec 9.1 the readiness checks cover ONLY Postgres and
