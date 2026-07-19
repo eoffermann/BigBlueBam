@@ -337,13 +337,13 @@ Day-to-day development: work on feature branches off `main`, merge to `main` via
 
 **It must be COMPLETE, not just accurate.** Every REST row's MCP-tool column is either a backtick-wrapped tool name **or** `— _(skip: <short reason>)_` explaining why there is no tool (auth/credentials, multipart/binary, public-inbound, SuperUser/permission admin, internal service-to-service route, realtime/ws/Yjs, resolver-done-internally, deprecated, deferred, …). Never leave a bare `—` in the MCP column. A section that is entirely or nearly tool-less gets a `> **⚠ No MCP tools in this section — intentional.**` callout under its heading saying why. Keep the coverage summary counts in sync. Self-check (must print `0`): `grep -cE '^\| \`[^|]+\` \| — \|' docs/reference/mcp-endpoint-mapping.md`.
 
-## Marketing `/docs` MCP tool catalog is AUTO-GENERATED — do not hand-edit
+## Marketing `/docs` MCP tool catalog is AUTO-GENERATED - do not hand-edit
 
 The marketing site's `/docs` page (`site/src/pages/docs.tsx`) renders its per-app MCP tool catalog from a committed, generated file: `site/src/content/docs-catalog.generated.json`. **Do not hand-code app/tool lists in `docs.tsx`.** The catalog is derived directly from the mcp-server tool source, so it can never drift from the real tools again.
 
 - Source of truth: the app roster + order + name/description come from `LAUNCHPAD_CATALOG` in `apps/api/src/routes/system-settings.routes.ts` (read at generation time); each app's tools come from `apps/mcp-server/src/tools/<module>.ts`, mapped by `APP_TOOL_MODULES` in `scripts/docs/lib/tool-source.mjs`.
-- Regenerate with `pnpm docs:catalog` (or the full `pnpm docs:generate`, which now runs it as Stage 3b). Output is deterministic — re-running produces no diff.
-- **Adding a new app no longer requires touching `docs.tsx`.** Add it to `LAUNCHPAD_CATALOG` and give it a module entry in `APP_TOOL_MODULES`, run `pnpm docs:catalog`, and commit the regenerated JSON. The only optional `docs.tsx` touch is adding an icon/color for the new id in `APP_ICON`/`APP_COLOR` (otherwise it falls back to a neutral Server icon). The site Docker build context is only `site/`, so it imports the committed JSON — generation happens in the monorepo, exactly like `manual.generated.json`.
+- Regenerate with `pnpm docs:catalog` (or the full `pnpm docs:generate`, which now runs it as Stage 3b). Output is deterministic - re-running produces no diff.
+- **Adding a new app no longer requires touching `docs.tsx`.** Add it to `LAUNCHPAD_CATALOG` and give it a module entry in `APP_TOOL_MODULES`, run `pnpm docs:catalog`, and commit the regenerated JSON. The only optional `docs.tsx` touch is adding an icon/color for the new id in `APP_ICON`/`APP_COLOR` (otherwise it falls back to a neutral Server icon). The site Docker build context is only `site/`, so it imports the committed JSON - generation happens in the monorepo, exactly like `manual.generated.json`.
 
 ## CRITICAL: Screenshots / screencaps use the GILLIGAN project ONLY
 
