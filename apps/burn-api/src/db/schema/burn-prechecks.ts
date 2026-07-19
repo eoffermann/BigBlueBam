@@ -104,7 +104,7 @@ export const burnPrechecks = pgTable(
     outcome: varchar('outcome', { length: 24 }).notNull().default('pending'),
     // right_call | would_have_mapped (member-writable, feed nothing) |
     // wrong_call (burn.precheck.mark_wrong only, in the numerator)
-    advisory_feedback: varchar('advisory_feedback', { length: 16 }),
+    advisory_feedback: varchar('advisory_feedback', { length: 24 }),
     // absorbed_cost | mapped_manually | change_order_pending | gate_wrong (mark_wrong only)
     override_reason_code: varchar('override_reason_code', { length: 24 }),
     override_reason_text: text('override_reason_text'),

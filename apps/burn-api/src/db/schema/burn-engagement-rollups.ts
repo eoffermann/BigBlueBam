@@ -86,7 +86,7 @@ export const burnEngagementRollups = pgTable(
     metric_basis: varchar('metric_basis', { length: 24 }).notNull(),
     // contract_value | billable_recognized_capped | contract_value_per_period |
     // billable_recognized
-    revenue_basis: varchar('revenue_basis', { length: 24 }).notNull(),
+    revenue_basis: varchar('revenue_basis', { length: 32 }).notNull(),
     period_start: date('period_start'),
     period_end: date('period_end'),
     period_index: integer('period_index'),

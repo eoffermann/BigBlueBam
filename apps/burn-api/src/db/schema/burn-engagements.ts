@@ -50,7 +50,7 @@ export const burnEngagements = pgTable(
     contract_value_delta: bigint('contract_value_delta', { mode: 'number' }),
     currency: varchar('currency', { length: 3 }).notNull().default('USD'),
     // fixed | time_and_materials | retainer | not_to_exceed. Drives revenue_basis (spec 1.2.1).
-    envelope_basis: varchar('envelope_basis', { length: 16 }).notNull().default('fixed'),
+    envelope_basis: varchar('envelope_basis', { length: 24 }).notNull().default('fixed'),
     // Required when envelope_basis='retainer' (CHECK in 0239).
     period_length_days: integer('period_length_days'),
     budget_hours: numeric('budget_hours', { precision: 10, scale: 2 }),
