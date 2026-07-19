@@ -256,6 +256,36 @@ import { processBulwarkProposalReconcileJob } from './jobs/bulwark-proposal-reco
 import { processBulwarkGateReconcileJob } from './jobs/bulwark-gate-reconcile.job.js';
 import { processBulwarkRetentionJob } from './jobs/bulwark-retention.job.js';
 
+// Burn (contract-consumption monitor) engine (Burn design spec §4 / §8.1). 11 queues: 2 LLM
+// families (extract, attribute) use row claims + checkpoints, the rest are thin callers to
+// burn-api internal engine routes. Queue contracts live in @bigbluebam/shared.
+import {
+  BURN_EXTRACT_DELIVERABLES_QUEUE,
+  BURN_ATTRIBUTE_BATCH_QUEUE,
+  BURN_CLAIM_REAPER_QUEUE,
+  BURN_VARIANCE_SWEEP_QUEUE,
+  BURN_REVALUE_QUEUE,
+  BURN_SILENT_DELIVERABLE_SWEEP_QUEUE,
+  BURN_ROLLUP_REFRESH_QUEUE,
+  BURN_CALIBRATION_RECOMPUTE_QUEUE,
+  BURN_PROPOSAL_RECONCILE_QUEUE,
+  BURN_RETENTION_QUEUE,
+  BURN_EMBED_SYNC_QUEUE,
+  type BurnExtractDeliverablesJobData,
+  type BurnSweepJobData,
+} from '@bigbluebam/shared';
+import { processBurnExtractDeliverablesJob } from './jobs/burn-extract-deliverables.job.js';
+import { processBurnAttributeBatchJob } from './jobs/burn-attribute-batch.job.js';
+import { processBurnClaimReaperJob } from './jobs/burn-claim-reaper.job.js';
+import { processBurnVarianceSweepJob } from './jobs/burn-variance-sweep.job.js';
+import { processBurnRevalueJob } from './jobs/burn-revalue.job.js';
+import { processBurnSilentDeliverableSweepJob } from './jobs/burn-silent-deliverable-sweep.job.js';
+import { processBurnRollupRefreshJob } from './jobs/burn-rollup-refresh.job.js';
+import { processBurnCalibrationRecomputeJob } from './jobs/burn-calibration-recompute.job.js';
+import { processBurnProposalReconcileJob } from './jobs/burn-proposal-reconcile.job.js';
+import { processBurnRetentionJob } from './jobs/burn-retention.job.js';
+import { processBurnEmbedSyncJob } from './jobs/burn-embed-sync.job.js';
+
 const env = loadEnv();
 
 const logger = pino({
@@ -2339,6 +2369,74 @@ const bulwarkRetentionQueue = new Queue<BulwarkSweepJobData>(BULWARK_RETENTION_Q
 bulwarkRetentionQueue
   .upsertJobScheduler('bulwark-retention-daily', { pattern: '50 4 * * *' }, { name: 'sweep', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-retention scheduler'));
+
+// ─── Burn (contract-consumption monitor) engine ────────────────────────────
+// 10 job families + the claim reaper = 11 queues (Burn spec §8.1). Each job is a thin HTTP caller
+// to burn-api's internal engine routes. Locks live inside burn-api (per-org pg_advisory_xact_lock
+// for the SQL sweeps); the two LLM families use row claims because no lock-holding transaction may
+// contain an outbound HTTP call (spec 4.0 point 4).
+const BURN_ATTRIBUTE_CONCURRENCY = Number(process.env.BURN_ATTRIBUTE_CONCURRENCY ?? 2);
+
+function registerBurnSweep(
+  queue: string,
+  handler: (job: Job<BurnSweepJobData>, l: typeof logger) => Promise<void>,
+  schedule: { id: string; pattern: string } | null,
+  concurrency = 1,
+) {
+  const w = new Worker<BurnSweepJobData>(queue, async (job) => { await handler(job, logger); }, { ...connection, concurrency });
+  w.on('completed', (job) => { logger.info({ jobId: job.id, queue }, 'Job completed'); });
+  w.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, queue, err }, 'Job failed');
+    void recordWorkerError({ queueName: queue, jobId: job?.id, jobName: job?.name, err: err as Error });
+  });
+  if (schedule) {
+    const q = new Queue<BurnSweepJobData>(queue, { connection: redis });
+    q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, { name: 'run', data: {} })
+      .catch((err) => logger.error({ err }, `Failed to register ${queue} scheduler`));
+  }
+}
+
+// Extraction: Bin bytes -> engine (checkpointed LLM extraction). Event-driven; no scheduler.
+const burnExtractWorker = new Worker<BurnExtractDeliverablesJobData>(
+  BURN_EXTRACT_DELIVERABLES_QUEUE,
+  async (job) => { await processBurnExtractDeliverablesJob(job, logger); },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+burnExtractWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BURN_EXTRACT_DELIVERABLES_QUEUE }, 'Job completed'); });
+burnExtractWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BURN_EXTRACT_DELIVERABLES_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BURN_EXTRACT_DELIVERABLES_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+// Attribution drain: event-driven + every 2 min. Row claims + lease renewal are the correctness
+// mechanism, so concurrency > 1 is SAFE (spec 4.2); the limiter bounds LLM burst.
+const burnAttributeWorker = new Worker<BurnSweepJobData>(
+  BURN_ATTRIBUTE_BATCH_QUEUE,
+  async (job) => { await processBurnAttributeBatchJob(job, logger); },
+  { ...connection, concurrency: BURN_ATTRIBUTE_CONCURRENCY, limiter: { max: 30, duration: 60000 } },
+);
+burnAttributeWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BURN_ATTRIBUTE_BATCH_QUEUE }, 'Job completed'); });
+burnAttributeWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BURN_ATTRIBUTE_BATCH_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BURN_ATTRIBUTE_BATCH_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const burnAttributeQueue = new Queue<BurnSweepJobData>(BURN_ATTRIBUTE_BATCH_QUEUE, { connection: redis });
+burnAttributeQueue
+  .upsertJobScheduler('burn-attribute-batch-2min', { pattern: '*/2 * * * *' }, { name: 'drain', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register burn-attribute-batch scheduler'));
+
+// The SQL-only sweeps + reconcile + reaper (thin callers; locks live in burn-api).
+registerBurnSweep(BURN_CLAIM_REAPER_QUEUE, processBurnClaimReaperJob, { id: 'burn-claim-reaper-5min', pattern: '*/5 * * * *' });
+registerBurnSweep(BURN_VARIANCE_SWEEP_QUEUE, processBurnVarianceSweepJob, { id: 'burn-variance-sweep-30min', pattern: '*/30 * * * *' });
+registerBurnSweep(BURN_REVALUE_QUEUE, processBurnRevalueJob, { id: 'burn-revalue-nightly', pattern: '15 2 * * *' });
+registerBurnSweep(BURN_SILENT_DELIVERABLE_SWEEP_QUEUE, processBurnSilentDeliverableSweepJob, { id: 'burn-silent-deliverable-sweep-daily', pattern: '0 3 * * *' });
+registerBurnSweep(BURN_ROLLUP_REFRESH_QUEUE, processBurnRollupRefreshJob, { id: 'burn-rollup-refresh-hourly', pattern: '10 * * * *' });
+registerBurnSweep(BURN_CALIBRATION_RECOMPUTE_QUEUE, processBurnCalibrationRecomputeJob, { id: 'burn-calibration-recompute-daily', pattern: '0 4 * * *' });
+registerBurnSweep(BURN_PROPOSAL_RECONCILE_QUEUE, processBurnProposalReconcileJob, { id: 'burn-proposal-reconcile-15min', pattern: '*/15 * * * *' });
+registerBurnSweep(BURN_RETENTION_QUEUE, processBurnRetentionJob, { id: 'burn-retention-daily', pattern: '0 5 * * *' });
+// Embed-sync: registered but scheduled OFF (behind embedding_enabled). Consumer exists so the
+// queue is a stable contract; no upsertJobScheduler.
+registerBurnSweep(BURN_EMBED_SYNC_QUEUE, processBurnEmbedSyncJob, null);
 
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by

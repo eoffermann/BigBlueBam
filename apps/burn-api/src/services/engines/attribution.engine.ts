@@ -193,6 +193,36 @@ export async function attributeBatch(
   return result;
 }
 
+/**
+ * Drain pending ingest events for a set of orgs. When `orgId` is null (the scheduled every-2-min
+ * run) it finds every org that currently has a pending row and drains each; a targeted run drains
+ * just that org. Org discovery is a bounded read, not a full scan.
+ */
+export async function attributeAllPending(
+  orgId: string | null,
+  claimedBy: string,
+  log: { info: (o: unknown, m?: string) => void; debug?: (o: unknown, m?: string) => void },
+): Promise<{ orgs: number; result: AttributeBatchResult }> {
+  const total: AttributeBatchResult = { claimed: 0, attributed: 0, pending_review: 0, pending_attribution: 0, unscoped: 0 };
+  let orgIds: string[];
+  if (orgId) {
+    orgIds = [orgId];
+  } else {
+    orgIds = rows<{ organization_id: string }>(
+      await db.execute(sql`SELECT DISTINCT organization_id FROM burn_ingest_events WHERE status = 'pending' LIMIT 200`),
+    ).map((r) => r.organization_id);
+  }
+  for (const oid of orgIds) {
+    const r = await attributeBatch(oid, claimedBy, log);
+    total.claimed += r.claimed;
+    total.attributed += r.attributed;
+    total.pending_review += r.pending_review;
+    total.pending_attribution += r.pending_attribution;
+    total.unscoped += r.unscoped;
+  }
+  return { orgs: orgIds.length, result: total };
+}
+
 const EVENT_TO_SOURCE: Record<string, SourceType> = {
   'task.created': 'bam.task',
   'task.updated': 'bam.task',

@@ -14,7 +14,7 @@ import { env } from '../env.js';
 import * as precheck from '../services/precheck.service.js';
 import * as ledger from '../services/ledger.service.js';
 import { runExtraction } from '../services/engines/extraction.engine.js';
-import { attributeBatch } from '../services/engines/attribution.engine.js';
+import { attributeAllPending } from '../services/engines/attribution.engine.js';
 import { runVarianceSweep } from '../services/engines/variance.engine.js';
 import { runRevalue } from '../services/engines/revaluation.engine.js';
 import { refreshRollups } from '../services/engines/rollup.engine.js';
@@ -209,15 +209,15 @@ export default async function internalRoutes(fastify: FastifyInstance) {
   });
 
   const attributeSchema = z.object({
-    organization_id: z.string().uuid(),
+    organization_id: z.string().uuid().optional(),
     claimed_by: z.string().min(1).max(64).default('worker'),
   });
   fastify.post('/internal/engines/attribute-batch', async (request, reply) => {
     if (!requireInternalSecret(request, reply)) return reply;
-    const parsed = attributeSchema.safeParse(request.body);
+    const parsed = attributeSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
     try {
-      const result = await attributeBatch(parsed.data.organization_id, parsed.data.claimed_by, request.log);
+      const result = await attributeAllPending(parsed.data.organization_id ?? null, parsed.data.claimed_by, request.log);
       return { data: result };
     } catch (err) {
       if (mapServiceError(request, reply, err)) return reply;
