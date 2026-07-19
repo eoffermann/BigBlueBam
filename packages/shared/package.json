@@ -12,6 +12,11 @@
       "types": "./dist/bulwark-arm-key.d.ts",
       "import": "./dist/bulwark-arm-key.js",
       "require": "./dist/bulwark-arm-key.cjs"
+    },
+    "./visibility-client": {
+      "types": "./dist/visibility-client.d.ts",
+      "import": "./dist/visibility-client.js",
+      "require": "./dist/visibility-client.cjs"
     }
   },
   "main": "./dist/index.cjs",

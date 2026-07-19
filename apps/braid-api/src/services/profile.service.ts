@@ -2,7 +2,7 @@ import { and, desc, eq, lt, or, inArray } from 'drizzle-orm';
 import type { BraidProfile, BraidIdentity } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { braidProfiles, braidIdentities, braidMergeDecisions } from '../db/schema/index.js';
-import { preflightMany } from '../lib/can-access.client.js';
+import { preflightMany } from '@bigbluebam/shared/visibility-client';
 import { isAdminViewer, type Viewer } from './types.js';
 
 // Per-viewer read assembly (spec 2.1 plane 2 / 2.5). The cached PII columns on

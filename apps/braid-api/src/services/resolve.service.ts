@@ -5,7 +5,7 @@ import { db } from '../db/index.js';
 import { braidProfiles, braidIdentities, entityLinks } from '../db/schema/index.js';
 import { acquireResolveLock } from '../lib/advisory-lock.js';
 import { enqueueBraidIngest } from '../lib/queue.js';
-import { preflightAccess } from '../lib/can-access.client.js';
+import { preflightAccess } from '@bigbluebam/shared/visibility-client';
 import { AccessDeniedError, RateLimitError } from '../lib/errors.js';
 import { env } from '../env.js';
 import { isAdminViewer, type BraidResolveInput, type Viewer } from './types.js';

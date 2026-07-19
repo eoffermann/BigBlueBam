@@ -1,18 +1,26 @@
-import { env } from '../env.js';
+import { preflightMany } from '@bigbluebam/shared/visibility-client';
 
-// Per-viewer visibility resolution for Class-B decomposition (spec 2.2 / 4.5).
-// A Class-B dimension's values are entity references; to serve a per-value label
-// to an asker we must confirm the asker can see that entity. We call the Bam API's
-// internal can_access preflight (service-secret auth) - the SAME rules the
-// agent-facing can_access tool uses (apps/api/src/services/visibility.service.ts).
+// Class-B dimension visibility resolution (spec 2.2 / 4.5).
+//
+// This is a THIN WRAPPER over the shared visibility primitive, not a visibility client.
+// The transport, auth, and fail-closed semantics live in ONE place for the whole suite:
+// packages/shared/src/visibility-client.ts. Do not re-implement the fetch here.
+//
+// What stays basis-local is the Class-B decomposition layer: mapping a decomposition
+// DIMENSION NAME to a can_access entity_type. That mapping is basis domain knowledge about
+// its own analytics dimensions, so it does not belong in the shared package.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Map a Class-B decomposition dimension name to a can_access entity_type. Only
-// id-valued dimensions (the value IS an entity id) are resolvable; a dimension
-// whose values are names/labels cannot be preflighted, so it is not listed here
-// and stays fully suppressed. Extend this as more id-valued dimensions are
-// exposed. Keys are matched case-insensitively against the dimension name.
+// Cap on how many values a single decomposition may preflight, so a huge result set cannot
+// stampede the preflight endpoint. Values beyond the cap stay suppressed (fail closed).
+const MAX_PREFLIGHT_VALUES = 200;
+
+// Map a Class-B decomposition dimension name to a can_access entity_type. Only id-valued
+// dimensions (the value IS an entity id) are resolvable; a dimension whose values are
+// names/labels cannot be preflighted, so it is not listed here and stays fully suppressed.
+// Extend this as more id-valued dimensions are exposed. Keys are matched case-insensitively
+// against the dimension name.
 const DIMENSION_ENTITY_TYPE: Record<string, string> = {
   company_id: 'bond.company',
   company: 'bond.company',
@@ -34,59 +42,25 @@ export function entityTypeForDimension(dimension: string): string | null {
   return DIMENSION_ENTITY_TYPE[dimension.toLowerCase()] ?? null;
 }
 
-export async function canAccessEntity(
-  askerUserId: string,
-  entityType: string,
-  entityId: string,
-): Promise<boolean> {
-  const url = `${env.BBB_API_INTERNAL_URL.replace(/\/+$/, '')}/internal/visibility/can-access`;
-  const secret = env.INTERNAL_SERVICE_SECRET;
-  if (!secret) return false; // no secret -> cannot verify -> fail closed
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
-      body: JSON.stringify({ asker_user_id: askerUserId, entity_type: entityType, entity_id: entityId }),
-      signal: controller.signal,
-    });
-    if (!res.ok) return false;
-    const json = (await res.json()) as { allowed?: boolean };
-    return json.allowed === true;
-  } catch {
-    return false; // unreachable -> fail closed
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// Re-exported under the basis-local name so existing call sites keep reading naturally.
+// This IS the shared primitive, with its fail-closed contract intact.
+export { preflightAccess as canAccessEntity } from '@bigbluebam/shared/visibility-client';
 
 /**
- * Given the asker and a Class-B dimension plus its candidate values, return the
- * subset of values the asker is allowed to see. Fails closed (empty set) when:
- * there is no asker, the dimension is not an id-valued mappable dimension, or the
- * internal preflight is unavailable. Non-UUID values are skipped (cannot be
- * preflighted). Bounded fan-out so a huge decomposition cannot stampede the
- * preflight endpoint.
+ * Given the asker and a Class-B dimension plus its candidate values, return the subset of
+ * values the asker is allowed to see. Fails closed (empty set) when: there is no asker, the
+ * dimension is not an id-valued mappable dimension, or the internal preflight is
+ * unavailable. Non-UUID values are skipped (they cannot be preflighted).
  */
 export async function resolveVisibleValues(
   askerUserId: string | undefined,
   dimension: string,
   values: string[],
 ): Promise<Set<string>> {
-  const visible = new Set<string>();
-  if (!askerUserId) return visible;
+  if (!askerUserId) return new Set<string>();
   const entityType = entityTypeForDimension(dimension);
-  if (!entityType) return visible;
+  if (!entityType) return new Set<string>();
 
-  const candidates = values.filter((v) => UUID_RE.test(v)).slice(0, 200);
-  const CONCURRENCY = 8;
-  for (let i = 0; i < candidates.length; i += CONCURRENCY) {
-    const batch = candidates.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(
-      batch.map(async (v) => ({ v, ok: await canAccessEntity(askerUserId, entityType, v) })),
-    );
-    for (const r of results) if (r.ok) visible.add(r.v);
-  }
-  return visible;
+  const candidates = values.filter((v) => UUID_RE.test(v)).slice(0, MAX_PREFLIGHT_VALUES);
+  return preflightMany(askerUserId, entityType, candidates);
 }

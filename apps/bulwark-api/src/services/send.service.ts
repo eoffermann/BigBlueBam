@@ -8,7 +8,7 @@ import {
   bulwarkNoticeDeadlines,
   bulwarkVendorTiers,
 } from '../db/schema/index.js';
-import { preflightAccess } from '../lib/can-access.client.js';
+import { preflightAccess } from '@bigbluebam/shared/visibility-client';
 import { sendTransactional, type TransactionalRecipient } from '../lib/blast-send.client.js';
 import { publishBulwarkFrame } from '../lib/realtime.js';
 import { getSettings } from './settings.service.js';

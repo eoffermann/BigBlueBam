@@ -5,7 +5,7 @@ import {
   bulwarkListQuerySchema,
 } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
-import { preflightAccess } from '../lib/can-access.client.js';
+import { preflightAccess } from '@bigbluebam/shared/visibility-client';
 import { mapServiceError, notFound, readViewer, validationError, viewerOf } from '../lib/http.js';
 import * as contracts from '../services/contracts.service.js';
 
