@@ -77,7 +77,7 @@ packages/
   shared/           Shared Zod schemas, types, constants, and the canonical publishBoltEvent helper (@bigbluebam/shared).
   ui/               Shared React component library (@bigbluebam/ui).
   logging/          Structured pino logger factory shared across every Node service (@bigbluebam/logging, added Wave 1.A).
-  service-health/   Shared /healthz + /readyz plugin used by every Fastify service (@bigbluebam/service-health, added Wave 1.A).
+  service-health/   Shared health plugin used by every Fastify service. Registers exactly `/health` (liveness), `/health/ready` (readiness), and `/metrics`. There is NO `/healthz` and NO `/readyz` anywhere in the platform, and every deploy catalog entry sets `healthcheck: '/health'` - a service configured against `/readyz` never reports healthy, blocks anything with `depends_on: condition: service_healthy`, and on Railway reproduces the recorded healthcheck-loop failure (@bigbluebam/service-health, added Wave 1.A).
   db-stubs/         Shared Drizzle stubs and helpers for tests and isolated DB bootstraps (@bigbluebam/db-stubs, added Wave 1.A).
   livekit-tokens/   LiveKit access-token minting shared by board-api and voice-agent callers (@bigbluebam/livekit-tokens, added Wave 1.A).
   storage/          Pluggable storage-driver substrate (S3/MinIO) shared by api, bin-api, bay-api, worker; consolidates the previously-triplicated MinIO clients. Exposes put/getStream/getRange/stat/delete/list/copyTo + presignGet/presignPut. The per-org provider "binding" is designed but not yet implemented (single bootstrap driver, binding_id null). (@bigbluebam/storage).
