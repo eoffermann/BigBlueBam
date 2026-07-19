@@ -1,8 +1,22 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, ArrowLeft, BookOpen, Zap, MessageSquare, Compass, FileText, Bot, Server, Users, Rocket, HelpCircle } from 'lucide-react';
+import {
+  ChevronDown, ChevronRight, ArrowLeft, BookOpen, Zap, MessageSquare, Compass,
+  FileText, Bot, Server, Users, Rocket, HelpCircle,
+  LayoutDashboard, MessageCircle, Handshake, Mail, DollarSign, ClipboardList,
+  Calendar, BarChart3, Target, PenTool, Sparkles, Database, Clapperboard,
+  Activity, Headset, Building2, Ruler, GitMerge, ShieldCheck,
+} from 'lucide-react';
+import docsCatalog from '../content/docs-catalog.generated.json';
 
 /* ------------------------------------------------------------------ */
 /*  MCP Tool Data                                                      */
+/*                                                                     */
+/*  The per-app tool catalog below is AUTO-GENERATED from the          */
+/*  mcp-server tool source and committed as JSON. Do NOT hand-edit the */
+/*  tool lists here. To refresh after adding an app or tool, run       */
+/*  `pnpm docs:catalog` (or `pnpm docs:generate`); it rewrites         */
+/*  site/src/content/docs-catalog.generated.json which this file       */
+/*  imports. See scripts/docs/build-docs-catalog.mjs.                  */
 /* ------------------------------------------------------------------ */
 
 interface Tool {
@@ -22,535 +36,83 @@ interface ToolProduct {
   categories: ToolCategory[];
 }
 
-const bamTools: ToolProduct = {
-  name: 'Bam',
-  icon: <Zap className="h-4 w-4" />,
-  color: 'bg-primary-100 text-primary-700',
-  categories: [
-    {
-      name: 'Tasks',
-      tools: [
-        { name: 'search_tasks', description: 'Search and filter tasks in a project' },
-        { name: 'get_task', description: 'Get detailed information about a specific task' },
-        { name: 'create_task', description: 'Create a new task in a project' },
-        { name: 'update_task', description: 'Update an existing task' },
-        { name: 'move_task', description: 'Move a task to a different phase and/or position on the board' },
-        { name: 'delete_task', description: 'Delete a task (destructive action - will ask for confirmation)' },
-        { name: 'bulk_update_tasks', description: 'Perform a bulk operation on multiple tasks at once' },
-        { name: 'log_time', description: 'Log time spent on a task' },
-        { name: 'duplicate_task', description: 'Duplicate an existing task, optionally including its subtasks' },
-        { name: 'import_csv', description: 'Import tasks from CSV data into a project' },
-      ],
-    },
-    {
-      name: 'Sprints',
-      tools: [
-        { name: 'list_sprints', description: 'List all sprints for a project' },
-        { name: 'create_sprint', description: 'Create a new sprint for a project' },
-        { name: 'start_sprint', description: 'Start a planned sprint' },
-        { name: 'complete_sprint', description: 'Complete an active sprint' },
-        { name: 'get_sprint_report', description: 'Get a sprint report with velocity, completion stats, and burndown data' },
-      ],
-    },
-    {
-      name: 'Comments',
-      tools: [
-        { name: 'list_comments', description: 'List all comments on a task' },
-        { name: 'add_comment', description: 'Add a comment to a task' },
-      ],
-    },
-    {
-      name: 'Board',
-      tools: [
-        { name: 'get_board', description: 'Get the full board state for a project, including all phases and their tasks' },
-        { name: 'list_phases', description: 'List all phases (columns) for a project' },
-        { name: 'create_phase', description: 'Create a new phase (column) in a project board' },
-        { name: 'reorder_phases', description: 'Reorder the phases (columns) on a project board' },
-      ],
-    },
-    {
-      name: 'Projects',
-      tools: [
-        { name: 'list_projects', description: 'List all projects the current user has access to' },
-        { name: 'get_project', description: 'Get detailed information about a specific project' },
-        { name: 'create_project', description: 'Create a new project' },
-        { name: 'test_slack_webhook', description: 'Send a test message to the Slack webhook configured for a project' },
-        { name: 'disconnect_github_integration', description: 'Remove the GitHub integration from a project' },
-      ],
-    },
-    {
-      name: 'Reports',
-      tools: [
-        { name: 'get_velocity_report', description: 'Get velocity report showing story points completed across recent sprints' },
-        { name: 'get_burndown', description: 'Get burndown chart data for a specific sprint' },
-        { name: 'get_cumulative_flow', description: 'Get cumulative flow diagram data for a project over a date range' },
-        { name: 'get_overdue_tasks', description: 'Get a report of all overdue tasks in a project' },
-        { name: 'get_workload', description: 'Get workload distribution report showing task counts and story points per member' },
-        { name: 'get_status_distribution', description: 'Get status distribution report showing task counts per phase/status' },
-        { name: 'get_cycle_time_report', description: 'Get cycle time metrics for completed tasks in a project' },
-        { name: 'get_time_tracking_report', description: 'Get aggregated time entries per user for a project' },
-      ],
-    },
-    {
-      name: 'Members',
-      tools: [
-        { name: 'list_members', description: 'List members of a project or the entire organization' },
-        { name: 'get_my_tasks', description: 'Get tasks assigned to the current authenticated user' },
-      ],
-    },
-    {
-      name: 'Templates',
-      tools: [
-        { name: 'list_templates', description: 'List available task templates for a project' },
-        { name: 'create_from_template', description: 'Create a task from a template, optionally overriding specific fields' },
-      ],
-    },
-    {
-      name: 'Import',
-      tools: [
-        { name: 'import_github_issues', description: 'Import GitHub issues into a project as tasks' },
-        { name: 'suggest_branch_name', description: 'Generate a git branch name suggestion based on a task' },
-      ],
-    },
-    {
-      name: 'Me',
-      tools: [
-        { name: 'get_me', description: 'Get the authenticated user profile' },
-        { name: 'update_me', description: "Update the authenticated user's own profile fields" },
-        { name: 'list_my_orgs', description: 'List organizations the authenticated user is a member of' },
-        { name: 'switch_active_org', description: 'Switch the active organization for the current session' },
-        { name: 'change_my_password', description: "Change the authenticated user's password" },
-        { name: 'logout', description: 'Invalidate the current session cookie' },
-        { name: 'list_my_notifications', description: "Fetch the caller's notification feed (paginated)" },
-        { name: 'mark_notification_read', description: 'Mark a single notification as read' },
-        { name: 'mark_notifications_read', description: 'Mark several notifications as read in one call' },
-        { name: 'mark_all_notifications_read', description: "Mark every notification in the caller's feed as read" },
-      ],
-    },
-    {
-      name: 'Platform',
-      tools: [
-        { name: 'get_platform_settings', description: 'SuperUser only. Fetch platform-wide settings' },
-        { name: 'set_public_signup_disabled', description: 'SuperUser only. Toggle the platform-wide public signup kill switch' },
-        { name: 'list_beta_signups', description: 'SuperUser only. List notify-me submissions from the public beta-gate form' },
-        { name: 'get_public_config', description: 'Read the unauthenticated /public/config' },
-        { name: 'submit_beta_signup', description: 'Create a notify-me submission via the public beta-signup endpoint' },
-      ],
-    },
-    {
-      name: 'Helpdesk',
-      tools: [
-        { name: 'list_tickets', description: 'List helpdesk tickets with optional filters' },
-        { name: 'get_ticket', description: 'Get detailed information about a helpdesk ticket including messages' },
-        { name: 'reply_to_ticket', description: 'Send a message on a helpdesk ticket (public reply or internal note)' },
-        { name: 'update_ticket_status', description: 'Update the status of a helpdesk ticket' },
-        { name: 'helpdesk_get_public_settings', description: 'Get public helpdesk settings (no auth required)' },
-        { name: 'helpdesk_get_settings', description: 'Get full helpdesk configuration (admin only)' },
-        { name: 'helpdesk_update_settings', description: 'Update helpdesk settings (admin only)' },
-      ],
-    },
-    {
-      name: 'Utility',
-      tools: [
-        { name: 'get_server_info', description: 'Get MCP server info including version, available tools, and rate limit status' },
-        { name: 'confirm_action', description: 'Confirm a destructive action using a two-step confirmation token' },
-      ],
-    },
-  ],
+/** One app entry in the generated catalog JSON. */
+interface GeneratedProduct {
+  id: string;
+  name: string;
+  description: string;
+  toolCount: number;
+  categories: ToolCategory[];
+}
+
+// Per-app presentation, keyed by LAUNCHPAD_CATALOG id (Bam is `b3`). Icons and
+// colors mirror the Launchpad's own choices. Anything not mapped falls back to
+// a neutral Server icon / zinc chip, so a newly-added app still renders.
+const APP_ICON: Record<string, React.ReactNode> = {
+  b3: <LayoutDashboard className="h-4 w-4" />,
+  banter: <MessageCircle className="h-4 w-4" />,
+  beacon: <BookOpen className="h-4 w-4" />,
+  bond: <Handshake className="h-4 w-4" />,
+  blast: <Mail className="h-4 w-4" />,
+  bill: <DollarSign className="h-4 w-4" />,
+  blank: <ClipboardList className="h-4 w-4" />,
+  book: <Calendar className="h-4 w-4" />,
+  bench: <BarChart3 className="h-4 w-4" />,
+  brief: <FileText className="h-4 w-4" />,
+  bolt: <Zap className="h-4 w-4" />,
+  bearing: <Target className="h-4 w-4" />,
+  board: <PenTool className="h-4 w-4" />,
+  blueprint: <Sparkles className="h-4 w-4" />,
+  bin: <Database className="h-4 w-4" />,
+  bay: <Clapperboard className="h-4 w-4" />,
+  blip: <Activity className="h-4 w-4" />,
+  helpdesk: <Headset className="h-4 w-4" />,
+  bureau: <Building2 className="h-4 w-4" />,
+  basis: <Ruler className="h-4 w-4" />,
+  braid: <GitMerge className="h-4 w-4" />,
+  bulwark: <ShieldCheck className="h-4 w-4" />,
 };
 
-const banterTools: ToolProduct = {
-  name: 'Banter',
-  icon: <MessageSquare className="h-4 w-4" />,
-  color: 'bg-violet-100 text-violet-700',
-  categories: [
-    {
-      name: 'Channels',
-      tools: [
-        { name: 'banter_list_channels', description: 'List all Banter channels the current user has access to' },
-        { name: 'banter_get_channel', description: 'Get detailed information about a Banter channel' },
-        { name: 'banter_create_channel', description: 'Create a new Banter channel' },
-        { name: 'banter_update_channel', description: 'Update a Banter channel name, description, or topic' },
-        { name: 'banter_archive_channel', description: 'Archive a Banter channel (reversible)' },
-        { name: 'banter_delete_channel', description: 'Delete a Banter channel (destructive - requires confirmation)' },
-        { name: 'banter_join_channel', description: 'Join a Banter channel' },
-        { name: 'banter_leave_channel', description: 'Leave a Banter channel' },
-        { name: 'banter_add_channel_members', description: 'Add one or more members to a Banter channel' },
-        { name: 'banter_remove_channel_member', description: 'Remove a member from a Banter channel' },
-        { name: 'banter_browse_channels', description: 'Browse available Banter channels (including unjoined public channels)' },
-      ],
-    },
-    {
-      name: 'Messages',
-      tools: [
-        { name: 'banter_list_messages', description: 'List messages in a Banter channel with pagination' },
-        { name: 'banter_get_message', description: 'Get a specific Banter message by ID' },
-        { name: 'banter_post_message', description: 'Post a new message to a Banter channel' },
-        { name: 'banter_edit_message', description: 'Edit an existing Banter message' },
-        { name: 'banter_delete_message', description: 'Delete a Banter message (destructive - requires confirmation)' },
-        { name: 'banter_react', description: 'Add or remove an emoji reaction on a Banter message' },
-        { name: 'banter_pin_message', description: 'Pin a message in a Banter channel' },
-        { name: 'banter_unpin_message', description: 'Unpin a message from a Banter channel' },
-        { name: 'banter_search_messages', description: 'Search messages across Banter channels' },
-      ],
-    },
-    {
-      name: 'Threads',
-      tools: [
-        { name: 'banter_list_thread_replies', description: 'List replies in a Banter message thread' },
-        { name: 'banter_reply_to_thread', description: 'Post a reply in a Banter message thread' },
-      ],
-    },
-    {
-      name: 'Direct Messages',
-      tools: [
-        { name: 'banter_send_dm', description: 'Send a direct message to another user' },
-        { name: 'banter_send_group_dm', description: 'Send a group direct message' },
-      ],
-    },
-    {
-      name: 'User Groups',
-      tools: [
-        { name: 'banter_list_user_groups', description: 'List all user groups in the organization' },
-        { name: 'banter_create_user_group', description: 'Create a new user group (e.g. @backend-team)' },
-        { name: 'banter_update_user_group', description: 'Update a user group name, handle, or description' },
-        { name: 'banter_add_group_members', description: 'Add members to a user group' },
-        { name: 'banter_remove_group_member', description: 'Remove a member from a user group' },
-      ],
-    },
-    {
-      name: 'Calls',
-      tools: [
-        { name: 'banter_start_call', description: 'Start a new voice/video call in a Banter channel' },
-        { name: 'banter_join_call', description: 'Join an active call' },
-        { name: 'banter_leave_call', description: 'Leave an active call' },
-        { name: 'banter_end_call', description: 'End an active call (destructive - requires confirmation)' },
-        { name: 'banter_get_call', description: 'Get details about a specific call' },
-        { name: 'banter_list_calls', description: 'List calls in a Banter channel (active and recent)' },
-        { name: 'banter_get_transcript', description: 'Get the transcript for a call' },
-        { name: 'banter_invite_agent_to_call', description: 'Invite an AI agent to join an active call as a participant' },
-        { name: 'banter_post_call_text', description: 'Post a text message in a call channel (for text-mode AI participation)' },
-        { name: 'banter_get_active_huddle', description: 'Check if a channel has an active huddle' },
-        { name: 'banter_search_transcripts', description: 'Search call transcripts across Banter' },
-      ],
-    },
-    {
-      name: 'Cross-Product Sharing',
-      tools: [
-        { name: 'banter_share_task', description: 'Share a BigBlueBam task as a rich embed in a Banter channel' },
-        { name: 'banter_share_sprint', description: 'Share a sprint summary as a rich embed in a Banter channel' },
-        { name: 'banter_share_ticket', description: 'Share a Helpdesk ticket as a rich embed in a Banter channel' },
-      ],
-    },
-    {
-      name: 'Preferences',
-      tools: [
-        { name: 'banter_get_unread', description: "Get the current user's unread message summary across all channels" },
-        { name: 'banter_get_preferences', description: "Get the user's Banter notification and theme preferences" },
-        { name: 'banter_update_preferences', description: "Update the user's Banter notification and theme preferences" },
-        { name: 'banter_set_presence', description: "Set the user's presence status in Banter" },
-      ],
-    },
-  ],
+const APP_COLOR: Record<string, string> = {
+  b3: 'bg-primary-100 text-primary-700',
+  banter: 'bg-violet-100 text-violet-700',
+  beacon: 'bg-emerald-100 text-emerald-700',
+  bond: 'bg-cyan-100 text-cyan-700',
+  blast: 'bg-red-100 text-red-700',
+  bill: 'bg-green-100 text-green-700',
+  blank: 'bg-purple-100 text-purple-700',
+  book: 'bg-blue-100 text-blue-700',
+  bench: 'bg-indigo-100 text-indigo-700',
+  brief: 'bg-amber-100 text-amber-700',
+  bolt: 'bg-orange-100 text-orange-700',
+  bearing: 'bg-teal-100 text-teal-700',
+  board: 'bg-indigo-100 text-indigo-700',
+  blueprint: 'bg-sky-100 text-sky-700',
+  bin: 'bg-sky-100 text-sky-700',
+  bay: 'bg-pink-100 text-pink-700',
+  blip: 'bg-cyan-100 text-cyan-700',
+  helpdesk: 'bg-rose-100 text-rose-700',
+  bureau: 'bg-slate-100 text-slate-700',
+  basis: 'bg-indigo-100 text-indigo-700',
+  braid: 'bg-indigo-100 text-indigo-700',
+  bulwark: 'bg-blue-100 text-blue-700',
 };
 
-const beaconTools: ToolProduct = {
-  name: 'Beacon',
-  icon: <Compass className="h-4 w-4" />,
-  color: 'bg-amber-100 text-amber-700',
-  categories: [
-    {
-      name: 'Articles',
-      tools: [
-        { name: 'beacon_create', description: 'Create a new Beacon (Draft)' },
-        { name: 'beacon_list', description: 'List Beacons with optional filters and pagination' },
-        { name: 'beacon_get', description: 'Retrieve a single Beacon by ID or slug' },
-        { name: 'beacon_update', description: 'Update a Beacon (creates a new version)' },
-        { name: 'beacon_retire', description: 'Retire (soft-delete) a Beacon' },
-        { name: 'beacon_publish', description: 'Transition a Beacon from Draft to Active' },
-        { name: 'beacon_verify', description: 'Record a verification event on a Beacon' },
-        { name: 'beacon_challenge', description: 'Flag a Beacon for review (challenge its accuracy)' },
-        { name: 'beacon_restore', description: 'Restore an Archived Beacon back to Active status' },
-      ],
-    },
-    {
-      name: 'Versions',
-      tools: [
-        { name: 'beacon_versions', description: 'List the version history of a Beacon' },
-        { name: 'beacon_version_get', description: 'Get a specific version of a Beacon' },
-      ],
-    },
-    {
-      name: 'Search',
-      tools: [
-        { name: 'beacon_search', description: 'Hybrid semantic + keyword + graph search across Beacons' },
-        { name: 'beacon_suggest', description: 'Typeahead suggestions from the Beacon title/tag index' },
-        { name: 'beacon_search_context', description: 'Structured retrieval optimized for agent consumption' },
-      ],
-    },
-    {
-      name: 'Governance',
-      tools: [
-        { name: 'beacon_policy_get', description: 'Get the effective Beacon governance policy for the current scope' },
-        { name: 'beacon_policy_set', description: 'Set or update the Beacon governance policy at a given scope level' },
-        { name: 'beacon_policy_resolve', description: 'Preview the resolved effective policy (merging org + project levels)' },
-      ],
-    },
-    {
-      name: 'Tags & Links',
-      tools: [
-        { name: 'beacon_tags_list', description: 'List all tags in scope with usage counts' },
-        { name: 'beacon_tag_add', description: 'Add one or more tags to a Beacon' },
-        { name: 'beacon_tag_remove', description: 'Remove a tag from a Beacon' },
-        { name: 'beacon_link_create', description: 'Create a typed link between two Beacons' },
-        { name: 'beacon_link_remove', description: 'Remove a link from a Beacon' },
-      ],
-    },
-    {
-      name: 'Saved Queries',
-      tools: [
-        { name: 'beacon_query_save', description: 'Save a named search query configuration for reuse' },
-        { name: 'beacon_query_list', description: 'List saved queries (own + shared in scope)' },
-        { name: 'beacon_query_get', description: 'Retrieve a saved query by ID' },
-        { name: 'beacon_query_delete', description: 'Delete a saved query (owner only)' },
-      ],
-    },
-    {
-      name: 'Knowledge Graph',
-      tools: [
-        { name: 'beacon_graph_neighbors', description: 'Get nodes and edges within N hops of a focal Beacon' },
-        { name: 'beacon_graph_hubs', description: 'Get the most-connected Beacons in scope (hub nodes)' },
-        { name: 'beacon_graph_recent', description: 'Get recently modified or verified Beacons' },
-      ],
-    },
-  ],
-};
+// Build the render model from the committed, auto-generated catalog. Each
+// generated product carries its id/name/description/categories; we attach the
+// presentational icon + color here. Adding an app requires no change to this
+// file: re-run `pnpm docs:catalog` and the new app flows through.
+const allProducts: ToolProduct[] = (docsCatalog as GeneratedProduct[]).map((p) => ({
+  name: p.name,
+  icon: APP_ICON[p.id] ?? <Server className="h-4 w-4" />,
+  color: APP_COLOR[p.id] ?? "bg-zinc-100 text-zinc-700",
+  categories: p.categories,
+}));
 
-const briefTools: ToolProduct = {
-  name: 'Brief',
-  icon: <FileText className="h-4 w-4" />,
-  color: 'bg-emerald-100 text-emerald-700',
-  categories: [
-    {
-      name: 'Documents',
-      tools: [
-        { name: 'brief_list', description: 'List Brief documents with optional filters and pagination' },
-        { name: 'brief_get', description: 'Retrieve a single Brief document by ID or slug' },
-        { name: 'brief_create', description: 'Create a new Brief document' },
-        { name: 'brief_update', description: 'Update Brief document metadata' },
-        { name: 'brief_update_content', description: 'Replace the entire content of a Brief document with new Markdown' },
-        { name: 'brief_append_content', description: 'Append Markdown content to the end of a Brief document' },
-        { name: 'brief_archive', description: 'Archive a Brief document (soft-delete)' },
-        { name: 'brief_restore', description: 'Restore an archived Brief document' },
-        { name: 'brief_duplicate', description: 'Duplicate a Brief document, optionally into a different project' },
-        { name: 'brief_search', description: 'Search Brief documents by keyword or semantic similarity' },
-      ],
-    },
-    {
-      name: 'Comments',
-      tools: [
-        { name: 'brief_comment_list', description: 'List comments on a Brief document' },
-        { name: 'brief_comment_add', description: 'Add a comment to a Brief document' },
-        { name: 'brief_comment_resolve', description: 'Toggle the resolved state of a comment' },
-      ],
-    },
-    {
-      name: 'Versions',
-      tools: [
-        { name: 'brief_versions', description: 'List the version history of a Brief document' },
-        { name: 'brief_version_get', description: 'Get a specific version of a Brief document' },
-        { name: 'brief_version_restore', description: 'Restore a Brief document to a specific previous version' },
-      ],
-    },
-    {
-      name: 'Integration',
-      tools: [
-        { name: 'brief_promote_to_beacon', description: 'Graduate a Brief document to a Beacon knowledge article' },
-        { name: 'brief_link_task', description: 'Link a Brief document to a Bam task' },
-      ],
-    },
-  ],
-};
-
-const boltTools: ToolProduct = {
-  name: 'Bolt',
-  icon: <Bot className="h-4 w-4" />,
-  color: 'bg-rose-100 text-rose-700',
-  categories: [
-    {
-      name: 'Automations',
-      tools: [
-        { name: 'bolt_list', description: 'List workflow automations with optional filters and pagination' },
-        { name: 'bolt_get', description: 'Get a single automation with its conditions and actions' },
-        { name: 'bolt_create', description: 'Create a new workflow automation with trigger, conditions, and actions' },
-        { name: 'bolt_update', description: 'Update an existing automation' },
-        { name: 'bolt_enable', description: 'Enable a workflow automation' },
-        { name: 'bolt_disable', description: 'Disable a workflow automation' },
-        { name: 'bolt_delete', description: 'Delete a workflow automation' },
-      ],
-    },
-    {
-      name: 'Testing & Execution',
-      tools: [
-        { name: 'bolt_test', description: 'Test-fire an automation with a simulated event payload' },
-        { name: 'bolt_executions', description: 'List execution history for an automation' },
-        { name: 'bolt_execution_detail', description: 'Get detailed information about a single execution' },
-      ],
-    },
-    {
-      name: 'Discovery',
-      tools: [
-        { name: 'bolt_events', description: 'List available trigger events, optionally filtered by source' },
-        { name: 'bolt_actions', description: 'List available MCP tools that can be used as automation actions' },
-      ],
-    },
-  ],
-};
-
-const bearingTools: ToolProduct = {
-  name: 'Bearing',
-  icon: <Compass className="h-4 w-4" />,
-  color: 'bg-indigo-100 text-indigo-700',
-  categories: [
-    {
-      name: 'Periods',
-      tools: [
-        { name: 'bearing_periods', description: 'List OKR periods with optional filters by status and year' },
-        { name: 'bearing_period_get', description: 'Get a single OKR period with aggregated stats' },
-      ],
-    },
-    {
-      name: 'Goals',
-      tools: [
-        { name: 'bearing_goals', description: 'List OKR goals with optional filters by period, scope, owner, and status' },
-        { name: 'bearing_goal_get', description: 'Get a single goal with its key results and progress details' },
-        { name: 'bearing_goal_create', description: 'Create a new OKR goal within a period' },
-        { name: 'bearing_goal_update', description: 'Update an existing goal (provide only the fields to change)' },
-      ],
-    },
-    {
-      name: 'Key Results',
-      tools: [
-        { name: 'bearing_kr_create', description: 'Create a key result under a goal' },
-        { name: 'bearing_kr_update', description: 'Update a key result value or metadata (current_value posts a check-in)' },
-        { name: 'bearing_kr_link', description: 'Link a key result to a Bam entity for automatic progress tracking' },
-      ],
-    },
-    {
-      name: 'Updates',
-      tools: [
-        { name: 'bearing_update_post', description: 'Post a status update on a goal' },
-      ],
-    },
-    {
-      name: 'Reports',
-      tools: [
-        { name: 'bearing_report', description: 'Generate a period summary, at-risk, or owner report' },
-        { name: 'bearing_at_risk', description: 'Quick check: list all at-risk or behind goals across the organization' },
-      ],
-    },
-  ],
-};
-
-const boardTools: ToolProduct = {
-  name: 'Board',
-  icon: <Zap className="h-4 w-4" />,
-  color: 'bg-cyan-100 text-cyan-700',
-  categories: [
-    {
-      name: 'Rooms',
-      tools: [
-        { name: 'board_list', description: 'List whiteboard rooms with optional filters and pagination' },
-        { name: 'board_get', description: 'Get a single whiteboard room by ID with participant info' },
-        { name: 'board_create', description: 'Create a new whiteboard room in a project' },
-        { name: 'board_update', description: 'Update room name, description, or settings' },
-        { name: 'board_delete', description: 'Delete a whiteboard room (destructive - requires confirmation)' },
-      ],
-    },
-    {
-      name: 'Shapes',
-      tools: [
-        { name: 'board_shapes', description: 'List all shapes on a whiteboard canvas' },
-        { name: 'board_shape_add', description: 'Add a shape (sticky, rectangle, text, arrow, etc.) to the canvas' },
-        { name: 'board_shape_update', description: 'Update shape properties (position, size, color, text)' },
-        { name: 'board_shape_remove', description: 'Remove a shape from the canvas' },
-      ],
-    },
-    {
-      name: 'Canvas',
-      tools: [
-        { name: 'board_canvas_read', description: 'Get the full canvas state in an AI-readable structured format' },
-        { name: 'board_canvas_snapshot', description: 'Generate a visual snapshot of the current canvas' },
-      ],
-    },
-    {
-      name: 'Assets & Pipeline',
-      tools: [
-        { name: 'board_asset_upload', description: 'Upload an image or file to the whiteboard canvas' },
-        { name: 'board_sticky_to_task', description: 'Convert a sticky note into a Bam task with metadata carry-over' },
-        { name: 'board_embed', description: 'Embed a cross-product item (task, beacon, brief, goal) on the canvas' },
-      ],
-    },
-  ],
-};
-
-const bondTools: ToolProduct = {
-  name: 'Bond',
-  icon: <Zap className="h-4 w-4" />,
-  color: 'bg-pink-100 text-pink-700',
-  categories: [
-    {
-      name: 'Contacts',
-      tools: [
-        { name: 'bond_contact_list', description: 'List contacts with optional filters (company, tag, search) and pagination' },
-        { name: 'bond_contact_get', description: 'Get detailed information about a single contact' },
-        { name: 'bond_contact_create', description: 'Create a new contact with name, email, phone, company, and custom fields' },
-        { name: 'bond_contact_update', description: 'Update an existing contact record' },
-      ],
-    },
-    {
-      name: 'Companies',
-      tools: [
-        { name: 'bond_company_list', description: 'List companies with optional filters and pagination' },
-        { name: 'bond_company_get', description: 'Get detailed information about a company including linked contacts' },
-        { name: 'bond_company_create', description: 'Create a new company record' },
-        { name: 'bond_company_update', description: 'Update an existing company record' },
-      ],
-    },
-    {
-      name: 'Deals',
-      tools: [
-        { name: 'bond_deal_list', description: 'List deals with optional pipeline, stage, owner, and value filters' },
-        { name: 'bond_deal_get', description: 'Get detailed information about a deal including linked contacts and activities' },
-        { name: 'bond_deal_create', description: 'Create a new deal with value, stage, expected close date, and linked contacts' },
-        { name: 'bond_deal_update', description: 'Update deal fields (value, stage, probability, owner, etc.)' },
-        { name: 'bond_deal_move', description: 'Move a deal to a different pipeline stage' },
-      ],
-    },
-    {
-      name: 'Activities',
-      tools: [
-        { name: 'bond_activity_log', description: 'Log an activity (call, email, meeting, note, task) against a contact, company, or deal' },
-        { name: 'bond_activity_list', description: 'List activities for a contact, company, or deal with date and type filters' },
-      ],
-    },
-    {
-      name: 'Pipeline & Reports',
-      tools: [
-        { name: 'bond_pipeline_get', description: 'Get pipeline configuration with stages, colors, and ordering' },
-        { name: 'bond_pipeline_report', description: 'Generate pipeline report (conversion rates, avg deal size, stage duration, forecast)' },
-      ],
-    },
-    {
-      name: 'Search',
-      tools: [
-        { name: 'bond_search', description: 'Cross-entity search across contacts, companies, deals, and activities' },
-      ],
-    },
-  ],
-};
-
-const allProducts: ToolProduct[] = [bamTools, banterTools, beaconTools, briefTools, boltTools, bearingTools, boardTools, bondTools];
+const totalMcpTools = allProducts.reduce(
+  (sum, prod) => sum + prod.categories.reduce((s, c) => s + c.tools.length, 0),
+  0,
+);
 
 function getTotalTools(product: ToolProduct): number {
   return product.categories.reduce((sum, cat) => sum + cat.tools.length, 0);
@@ -1717,7 +1279,7 @@ function McpToolsContent() {
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">MCP Tools Reference</h1>
         <p className="mt-3 max-w-2xl text-base text-zinc-600">
-          BigBlueBam exposes <strong>849 MCP tools</strong> across 22 products, enabling AI agents
+          BigBlueBam exposes <strong>{totalMcpTools} MCP tools</strong> across {allProducts.length} products, enabling AI agents
           to manage tasks, communicate in channels, search knowledge bases, author documents, orchestrate
           automations, track goals, collaborate on visual whiteboards, and manage CRM pipelines -- all through the{' '}
           <a

@@ -148,6 +148,12 @@ function main() {
     // Stage 3: Extract
     runCommand('Stage 3: Extract', `node scripts/docs/extract.mjs${fwdStr}`);
 
+    // Stage 3b: Build the marketing-site MCP tool catalog (site/src/content/
+    // docs-catalog.generated.json) that the /docs page imports. Always runs the
+    // full app roster (it derives everything from LAUNCHPAD_CATALOG + tool
+    // source), so it ignores --apps; that keeps the committed catalog complete.
+    runCommand('Stage 3b: Docs catalog', 'node scripts/docs/build-docs-catalog.mjs');
+
     // Stage 4: Compose
     runCommand('Stage 4: Compose', `node scripts/docs/compose.mjs${fwdStr}`);
 

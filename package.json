@@ -40,8 +40,10 @@
     "db:push": "pnpm --filter @bigbluebam/api db:push",
     "docs:screenshots": "node scripts/docs/capture.mjs",
     "docs:extract": "node scripts/docs/extract.mjs",
+    "docs:catalog": "node scripts/docs/build-docs-catalog.mjs",
     "docs:compose": "node scripts/docs/compose.mjs",
     "docs:publish": "node scripts/docs/publish.mjs",
+    "docs:manual": "node scripts/docs/build-manual.mjs",
     "docs:generate": "node scripts/docs/generate.mjs"
   },
   "devDependencies": {
