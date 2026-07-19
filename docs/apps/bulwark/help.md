@@ -55,6 +55,8 @@ To register a contract:
 
 The ledger shows every obligation extracted from the selected contract, each cited to its clause, so you can confirm what will drive a clock before anything arms.
 
+![The obligation ledger with clause-cited obligation cards for the selected contract](screenshots/light/ledger.png)
+
 To review and act on obligations:
 
 1. On **Obligation Ledger**, pick a contract in the **Contracts** rail. The ledger opens on the right; a prompt reads "Select a contract to view its clause-cited obligation ledger" until you do.
@@ -96,6 +98,8 @@ To start the clock manually:
 
 The radar is the live view of armed clocks fired against logged events, with countdowns, so you can act before a window closes.
 
+![The Deadline Radar listing open deadlines with live countdowns and per-row actions](screenshots/light/radar.png)
+
 To work the radar:
 
 1. Go to **Deadline Radar** (`/radar`). The page is titled "Deadline radar".
@@ -113,6 +117,8 @@ Missed and voided statuses are applied by background sweeps, not from this page.
 
 The Notice Queue is the human-in-the-loop boundary for outbound notices. Every drafted notice waits here for a person; nothing is sent unattended.
 
+![The Notice Queue with an AI-drafted notice awaiting human approval before it sends](screenshots/light/notice-queue.png)
+
 To review and send notices:
 
 1. Go to **Notice Queue** (`/notices`). The page is titled "Notice review queue".
@@ -126,6 +132,8 @@ To review and send notices:
 ### Vendor compliance matrix
 
 The Compliance page tracks lower-tier vendors and the documents each owes, so you can chase a missing or expiring certificate before it becomes a problem.
+
+![The vendor compliance matrix with a document status cell per vendor tier](screenshots/light/compliance.png)
 
 To manage vendor compliance:
 
@@ -147,6 +155,8 @@ Compliance is not its own obligation type. It derives from `flow_down` obligatio
 
 The contract detail page is the drill-down for one tracked contract: its status, metadata, obligation rollup, and the destructive actions.
 
+![The contract detail page with its status, obligation rollup, metadata, and extracted obligations](screenshots/light/contract-detail.png)
+
 To use contract detail:
 
 1. Open it by clicking **Contract detail** from a ledger, a contract link on the radar, or a contract link in the compliance table. The URL is `/contracts/:id`.
@@ -162,6 +172,8 @@ To use contract detail:
 ### Settings
 
 Settings holds the org-wide tunables for extraction, the radar, drafting caps, and retention. All fields are read-only unless you have `bulwark.settings.write` (owner or admin); a lock note tells you when they are read-only.
+
+![The Bulwark settings page with extraction, radar lead time, drafting, and retention controls](screenshots/light/settings.png)
 
 To adjust settings:
 

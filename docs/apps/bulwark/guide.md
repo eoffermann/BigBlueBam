@@ -9,6 +9,10 @@ app: bulwark
 
 Bulwark is BigBlueBam's contract-obligation monitor: it turns a dense executed contract into a clause-cited ledger of what each party owes and by when, arms a live clock on the obligations that matter, and drafts (never auto-sends) the notices and vendor-compliance chases a human then approves. A signed subcontract buries a five-day claim-notice window and a thirty-day retention release on page nine, and nothing in the suite reads them or starts a countdown. Bulwark is the reader and the clock. Its flagship operation, extract, reads an executed document out of Bin and returns an obligation ledger cited back to the exact clause it came from, so every deadline you watch traces to a verifiable span of the contract. Bulwark owns none of the source data: the document lives in Bin, the counterparty is a Bond or Braid record, the source events come from Bill, Book, and Bam, and outbound mail goes through Blast. It maintains a separate obligation layer that points back at the contract it reads. Reach for it when a missed notice window or a lapsed insurance certificate would cost you a claim.
 
+![The Bulwark obligation ledger of clause-cited contract obligations](screenshots/light/ledger.png)
+
+![The Deadline Radar with live countdowns on armed obligation clocks](screenshots/light/radar.png)
+
 ## Key Features
 
 - **Clause-cited obligation ledger from AI extraction.** Bulwark pulls an executed document out of Bin, uses the internal AI provider to extract every duty each party owes, and cites each obligation back to its clause with a quoted span marked "span verified against source" or "span not verified". A human reviews, edits, confirms, or rejects each one before it can drive anything.
