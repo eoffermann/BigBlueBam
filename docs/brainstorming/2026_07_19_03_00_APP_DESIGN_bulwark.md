@@ -2,214 +2,246 @@
 
 > An agent that reads the agreements an organization has signed and then spends the whole engagement making sure it does not breach them.
 >
-> Status: design draft (round 0), authored against the real monorepo at branch `suite-brainstorm`. New app. Winner of the 2026-07-19 03:00 suite-brainstorm session.
+> Status: design draft, hardened through adversarial review round 1. New app. Winner of the 2026-07-19 03:00 suite-brainstorm session.
 > Chosen internal port: **4021** (next free port after Braid's 4020; 4019 is basis, 4020 is braid).
 > Routes: SPA at `/bulwark/`, REST at `/bulwark/api/`, realtime at `/bulwark/ws`.
 > Chosen final name: **Bulwark** (single word). App id `bulwark`.
 
-Freshest build precedent cited throughout: `docs/brainstorming/2026_07_18_13_09_APP_DESIGN_braid.md` (the Braid spec, hardened through three review rounds and now partly built on this branch). Bulwark reuses Braid's HITL-via-`agent_proposals`, Bolt-dispatch-transport, hand-authored-permissions, and built-in-group-defaults patterns verbatim where they apply.
+Freshest build precedent cited throughout: `docs/brainstorming/2026_07_18_13_09_APP_DESIGN_braid.md` (the Braid spec) and the **just-shipped Braid app** (`apps/braid-api/`, `apps/worker/src/jobs/braid-*.job.ts`, `apps/bolt-api/src/services/braid-dispatch-hook.ts`, `0233_braid_builtin_group_defaults.sql`). Bulwark reuses Braid's HITL-via-`agent_proposals`, Bolt-dispatch-transport, hand-authored-permissions, built-in-group-defaults, and proposal-reconcile patterns.
 
-House style: no em dashes in this document; no Co-Authored-By footer.
+House style: no em dashes or en dashes in this document; no Co-Authored-By footer.
 
 ---
 
 ## 1. Overview & positioning
 
-**One-liner.** Bulwark extracts a typed, clause-cited **obligation ledger** from an organization's executed contracts, **binds each obligation to a Bolt event pattern**, and then fires against live reality instead of against a calendar. A delay event logged on Tuesday starts the five-day notice clock that the subcontract actually requires, Bulwark drafts the notice that discharges it, and every outbound act lands in the existing `agent_proposals` queue for a human to approve. Nothing is ever sent unattended.
+**One-liner.** Bulwark extracts a typed, clause-cited **obligation ledger** from an organization's executed contracts, **binds each obligation to a Bolt event pattern (plus a manual-trigger affordance)**, and fires against reality as it is logged rather than against a static calendar. A delay recorded on a job starts the five-day notice clock that the subcontract actually requires, Bulwark drafts the notice that discharges it, and every outbound act lands in the existing `agent_proposals` queue for a human to approve. Nothing is ever sent unattended.
 
-**The wedge (why it won).** Small contractors waive real claims constantly by missing a 5-day notice clause nobody re-reads after signing. Contract review today is a lawyer at $400/hr, once, at signing, and then never again. Bulwark moves the axis from "one-time review" to **continuous obligation monitoring tied to real-time job events**, which no static document repository can do. The suite already holds every input Bulwark needs: the executed document is a **Bin** asset, the counterparty is in **Bond**, the money terms live in **Bill**, the deadlines surface in **Book**, and reality streams through **Bolt**. Bulwark is the layer that turns the signed PDF into a live, event-bound ledger and acts to keep you compliant.
+**The wedge (why it won).** Small contractors waive real claims constantly by missing a 5-day notice clause nobody re-reads after signing. Contract review today is a lawyer at $400/hr, once, at signing, and then never again. Bulwark moves the axis from "one-time review" to **continuous obligation monitoring tied to logged job events, backstopped by a manual trigger** for the obligations whose real-world trigger is not (yet) digitized. Bulwark is explicit that it fires only on events that reach it: an obligation whose trigger is never logged and never manually fired does not arm, so the human-review queue and the manual-trigger tool (Section 4.2 / 5.1 / D8) are the safety net, not a silent gap. The suite already holds every input: the executed document is a **Bin** asset, the counterparty is in **Bond**, the money terms live in **Bill**, the deadlines surface in **Book**, and reality streams through **Bolt**.
 
-**Who it is for.** The owner/PM/contract-admin persona at a 2-50 seat contractor, and structurally identical buyers in any obligation-bearing engagement (SOWs, MSAs, grant awards, commercial leases). Construction is the beachhead because its obligations are the most punishing and the most standardized (notice windows, lien/bond deadlines, COI/W-9/lien-waiver/certified-payroll flow-down), but the object model is horizontal.
+**Who it is for.** The owner/PM/contract-admin persona at a 2-50 seat contractor, and structurally identical buyers in any obligation-bearing engagement (SOWs, MSAs, grant awards, commercial leases). Construction is the beachhead; the object model is horizontal.
 
 **How it differs from the three apps it is most often confused with:**
-- **Bin** (`apps/bin-api/`, `@bigbluebam/storage`) *stores the document bytes*. Bulwark does not store files; it references a `bin.asset` (Section 3.1), reads its bytes once for extraction, and never becomes a second DAM. A Bin folder full of executed contracts is inert until Bulwark reads it.
-- **Bolt** (`apps/bolt-api/`) *routes events and runs rule automations*. Bulwark does not replace Bolt's rule engine; it is a *consumer* of the Bolt stream whose bindings are data (`bulwark_obligations.event_binding`, per contract) rather than hand-built Bolt rules, and whose reactions are legally-typed (notice clocks, waiver risk, compliance chase) rather than generic actions. A Bolt rule fires an action; a Bulwark obligation discharges a legal duty.
-- **Bill** (`apps/bill-api/`) *invoices and tracks money*. Bulwark reads payment/retention terms as obligations and can watch Bill events (a pay-app submitted, retention released), but it never issues an invoice. It watches whether the money terms the contract imposes are being honored.
+- **Bin** (`apps/bin-api/`, `@bigbluebam/storage`) *stores the document bytes*. Bulwark references a `bin.asset`, reads its bytes once for extraction (after a `can_access` preflight, Section 4.1 / S3), and never becomes a second DAM.
+- **Bolt** (`apps/bolt-api/`) *routes events and runs rule automations*. Bulwark is a *consumer* of the Bolt stream whose bindings are data per contract, whose reactions are legally-typed, and which durably persists every event it receives into its own inbox (Section 3.1, THEME D) because bolt-api itself persists only matching-automation executions.
+- **Bill** (`apps/bill-api/`) *invoices and tracks money*. Bulwark reads payment/retention terms as obligations and watches Bill events; it never issues an invoice.
 
-**v1 scope.** Objects: `contract`, `obligation`, `notice_deadline`, `waiver_risk`, `compliance_doc` (COI / W-9 / lien waiver / certified payroll), `vendor_tier`, plus `bulwark_org_settings` and an `bulwark_extraction_runs` audit table. Surfaces: the obligation ledger per job/engagement, the deadline radar, the drafted-notice review queue, and the vendor compliance matrix. Flagship MCP tools: `bulwark_extract_obligations(contract_asset_id)` and `bulwark_check_notice_risk(job_id)`.
+**v1 scope.** Objects: `contract` (including `amendment`), `obligation`, `notice_deadline`, `waiver_risk`, `compliance_doc`, `vendor_tier`, `ingest_event` (the durable event inbox), plus `bulwark_org_settings` and `bulwark_extraction_runs`. Surfaces: the obligation ledger per job, the deadline radar, the drafted-notice review queue, and the vendor compliance matrix. Flagship MCP tools: `bulwark_extract_obligations(contract_asset_id)` and `bulwark_check_notice_risk(job_id)`.
 
-**Out of v1 scope:** authoring new contracts, e-signature, redline/negotiation, and any autonomous send (every send is proposal-gated). Legal advice is explicitly disclaimed: obligation extraction is best-effort and always human-reviewable (Section 3). These are Open Questions (Section 12).
+**The live event path is load-bearing, not optional (THEME D).** An earlier draft called the dispatch transport a "soft dependency" backed by a source-diff of persisted Bolt events. That backing data does not exist: bolt-api persists only `bolt_executions` (one row per matching automation), so an obligation bound to `bam:task.overdue` produces no persisted row unless the org also runs a Bolt automation on that event. Bulwark therefore makes the transport durable at the receiving end: `POST /v1/internal/events` persists every received event into `bulwark_ingest_events` and the firing job drains that inbox. Dispatch is the only firing path; it is durable once received; a lost enqueue is recovered by re-draining pending inbox rows.
+
+**Out of v1 scope:** authoring/e-signature/redline, OCR of scanned contracts (image-only PDFs extract to zero obligations and are flagged for manual entry, Section 12), a `search_everything` provider (fast-follow), and any autonomous send. Legal-advice disclaimer: extraction is best-effort and always human-reviewable.
 
 ---
 
 ## 2. AI-native design
 
-Bulwark's AI core is **best-effort clause extraction plus deterministic event-bound firing, with human-in-the-loop review at two boundaries**: (a) every extracted obligation is reviewable before it can arm a clock, and (b) every outbound act (a drafted notice, a compliance-chase email) is an `agent_proposals` row that a human approves. The LLM understands contract language; it never sends anything and never computes a due date. Due dates are deterministic arithmetic over a typed `deadline_rule` and a real triggering event.
+Bulwark's AI core is **best-effort clause extraction plus deterministic, timezone-anchored, event-bound firing, with human-in-the-loop review at two boundaries**: every obligation whose firing produces an outbound act is human-reviewed before it can arm a clock, and every outbound act is an `agent_proposals` row a human approves. The LLM understands contract language; it never sends anything, never chooses a recipient or an attachment, and never computes a due date.
 
-### 2.1 The two-plane split (borrowed from the Basis / Braid pattern)
+### 2.1 The two-plane split (borrowed from Basis / Braid)
 
-As Basis separates certified drivers from per-viewer correlation (`docs/brainstorming/2026_07_17_12_58_APP_DESIGN_basis.md` Section 2.1) and Braid separates the deterministic score from per-viewer PII rendering (Braid Section 2.1), Bulwark keeps two computations in different trust planes:
+1. **LLM extraction (best-effort, always reviewable).** The internal llm-provider reads chunked contract text and proposes typed obligations with a cited span (whose offsets are then **verified against the source bytes**, Section 4.1 / D7) and a self-reported confidence. This output is never live truth.
+2. **Deterministic firing (reproducible, auditable, timezone-anchored).** Once an obligation is `confirmed` and bound, firing is pure arithmetic over a typed `deadline_rule` that carries an IANA timezone, an optional jurisdiction/holiday calendar, and a roll-forward flag (Section 3.3, THEME B). The recipient and attachments of any drafted notice are **deterministic** (Section 2.4, THEME E), never model output.
 
-1. **LLM extraction (best-effort, always reviewable).** The internal llm-provider reads chunked contract text and proposes typed obligations with a cited span and a confidence. This output is never live truth: it lands as `bulwark_obligations` rows with `review_status='pending_review'` (or `'auto_confirmed'` only above a high per-org confidence floor, still reversible). It cannot arm a clock until it is `confirmed`.
-2. **Deterministic firing (reproducible, auditable).** Once an obligation is `confirmed` and bound to a `(source, event_type)` Bolt pattern, the firing engine is pure arithmetic: `due_at = trigger_event_time + deadline_rule.offset`, recomputed identically every time from the stored rule and the captured event. Two operators looking at the same fired deadline see the same due date and the same clause citation.
+**Invariant.** A `bulwark_notice_deadline` is a pure function of `(obligation.deadline_rule, the legal anchor time, the resolved timezone)`. It is created at-most-once per `(obligation_id, triggering_event_id)`, and the durable inbox (`bulwark_ingest_events`) deduplicates a redelivered Bolt event by `(org, bolt_event_id)` independently of deadline retention, so a purge of an old discharged deadline can never resurrect a clock (Section 3.1, ST4).
 
-**Invariant (record and rely on).** A `bulwark_notice_deadline` is a pure function of `(obligation.deadline_rule, triggering_event)`. It is created at-most-once per `(obligation_id, triggering_event_id)` (unique constraint, Section 3.1) so a redelivered Bolt event or a retried worker never double-arms a clock. The `waiver_risk` and the drafted-notice proposal derive deterministically from the deadline plus the per-org lead-time thresholds.
+### 2.2 Autonomy bands
 
-### 2.2 Autonomy bands (what the agent does alone vs. with a human)
-
-| Action | Autonomy | Mechanism / gate |
+| Action | Autonomy | Gate |
 | --- | --- | --- |
-| Extract obligations from a contract asset | Autonomous (worker), best-effort | `bulwark-extract-obligations` job; low-confidence rows land in the review queue |
+| Extract obligations from a contract asset | Autonomous (worker), best-effort | `bulwark-extract-obligations`; Bin `can_access` preflight first (S3) |
 | Confirm / edit / reject an extracted obligation | HITL, permission-gated | `bulwark.obligation.write`; reject is destructive (confirm token) |
-| Bind an obligation to a `(source, event_type)` pattern | Autonomous suggestion, human-confirmable | proposed by extraction, editable via `bulwark.obligation.write` |
-| Arm a notice clock when a bound event fires | Autonomous (deterministic) | firing engine creates a `notice_deadline`; no human needed to start a clock |
-| Flag a waiver risk as a clock runs down | Autonomous | deadline-radar sweep; emits `waiver.risk_detected` |
-| **Draft a notice** that discharges an obligation | Autonomous draft, **HITL to send** | inserted into `agent_proposals` (`proposed_action='bulwark.send_notice'`); nothing sends until approved |
-| **Chase** an expiring COI / W-9 / lien waiver / certified payroll | Autonomous draft, **HITL to send** | inserted into `agent_proposals` (`proposed_action='bulwark.chase_compliance_doc'`); the send is a Blast/Blank action executed only on approve |
-| Mark a deadline discharged / waived | HITL, permission-gated | `bulwark.deadline.*` write; waive is destructive (confirm token) |
+| Arm a clock when a bound event fires | Autonomous (deterministic) but only for obligations cleared to arm (see D5 below) | firing job; at-most-once |
+| **Manually trigger** an obligation ("this happened, start the clock") | HITL, permission-gated | `bulwark.deadline.write`; the safety net for non-digitized triggers (D8) |
+| Flag a waiver risk | Autonomous | radar sweep |
+| **Draft** a notice / a compliance chase | Autonomous draft, **HITL to send** | inserted into `agent_proposals`; recipient + attachments deterministic (THEME E) |
+| Mark a deadline discharged / waived | HITL, permission-gated | `bulwark.deadline.write`; waive is destructive (confirm token) |
 | Delete a tracked contract | HITL, destructive | `bulwark.contract.delete` (Redis confirm token) |
-| Edit org settings / thresholds | Permission-gated | `bulwark.settings.write` |
+| Edit org settings | Permission-gated | `bulwark.settings.write` |
 
-**The HITL boundary is the `agent_proposals` queue, exactly as Braid used it (Braid Section 2.2).** Bulwark never calls Blast or Blank to send anything directly from the drafting path. It **inserts an `agent_proposals` row** describing the send, and a `proposal.decided` subscription (Section 2.4) executes the send only on `approve`. This is the single choke point that satisfies the winning brief's "nothing is ever sent unattended."
+**Auto-arm is gated on a deterministic signal, not on model confidence (D5).** A high self-reported confidence is uncalibrated and forgeable, so it may only mark an obligation `auto_confirmed` for **display in the ledger**. It may NOT flip `is_armed` for any obligation whose firing produces an outbound proposal (types `notice`, `indemnity`, `payment`, `compliance`). Those types always require an explicit human confirmation before `is_armed` becomes true. For the remaining, non-outbound-producing types, auto-arm is permitted only when a **deterministic** signal holds: the `deadline_rule` parser agreed with the model AND a real `(source, event_type)` mapped AND the cited-span offsets verified. `auto_draft_notices` defaults to **false**.
 
-**Proposal registration (mirrors Braid Section 2.2, D-r2-1/D-r2-2).** Bulwark inserts directly into `agent_proposals` rather than through the public `POST /v1/proposals` route, because that route makes `approver_id` mandatory (`apps/api/src/routes/proposals.routes.ts:40`) and a drafted notice belongs in the **org contract-admin queue** (admins see the whole org queue, `proposals.routes.ts:25` default-scope note). The direct insert uses `approver_id=NULL` (the column is nullable, `0128_agent_proposals.sql:37`), an explicit `expires_at = now() + 7 days` (the column is `NOT NULL`, `:41`, and the platform sweep flips `pending -> expired`), `proposer_kind` = the Bulwark service account's `actor_type`, and the subject modeled as the **draft**: `subject_type='bulwark.notice_draft'` (or `'bulwark.compliance_chase'`), `subject_id=<the bulwark row id>`. After the insert Bulwark emits `publishBoltEvent('proposal.created', 'platform', ...)` mirroring the route (`proposals.routes.ts:114-134`) so platform approval-notification fan-out still fires for items that bypassed the route (Braid round-3 D3-5). `bulwark.notice_draft` and `bulwark.compliance_chase` are intentionally NOT registered as `can_access`-resolvable entity types (Braid round-3 D3-4 precedent); the inbox renders them by fetching through the permission-gated Bulwark read routes, and a preflight of those types returns `unsupported_entity_type` with a documented fallback.
+**The HITL boundary is the `agent_proposals` queue (Braid Section 2.2).** Bulwark never calls Blast/Blank to send directly from the drafting path. It inserts an `agent_proposals` row and the `proposal.decided` subscription executes the send only on `approve`. Direct insert (not the public `POST /v1/proposals`, which mandates `approver_id`, `proposals.routes.ts:40`): `approver_id=NULL` (nullable, `0128_agent_proposals.sql:37`), explicit `expires_at = now() + 7 days` (`:41`), `subject_type='bulwark.notice_draft'` / `'bulwark.compliance_chase'`, `subject_id` = the bulwark row id. After insert Bulwark emits `publishBoltEvent('proposal.created', 'platform', ...)` mirroring the route (`proposals.routes.ts:114-134`). Those subject types are intentionally not `can_access`-resolvable (Braid D3-4); the inbox renders them through the permission-gated Bulwark read routes.
 
 ### 2.3 What it retrieves / reasons over
 
-- **For extraction:** the contract document text (from the Bin asset bytes, Section 3.5), chunked, plus the org's obligation taxonomy. It never sees another org's data (org-scoped worker context, Section 4).
-- **For firing:** the confirmed obligations for a job and the live Bolt event that arrived, matched by `(source, event_type)` and (optionally) by an entity filter in the binding (e.g. only events whose `payload.project_id` equals the contract's job).
-- **For compliance:** the vendor tier's required doc types, the collected `compliance_doc` rows and their `expires_at`, and the chase cadence in settings.
+- **Extraction:** the contract text from the Bin asset bytes (org-scoped worker context), chunked, plus the org's obligation taxonomy.
+- **Firing:** the armed obligations for a job and the durably-inboxed event, matched by `(source, event_type)` and by the binding's `entity_filter` evaluated over the scoping fields carried in the inbox row (Section 3.1 / S5).
+- **Compliance:** the vendor tier's `required_doc_types` (seeded from confirmed `flow_down` obligations, Section 4.4 / D4), the collected docs, and the chase cadence.
 
-### 2.4 The single canonical send path, kill-switch-safe
+### 2.4 The single canonical send path, deterministic and kill-switch-safe
 
-Bulwark has exactly one send executor per outbound type, reached two ways, identical to Braid's single-`mergeCandidate` discipline (Braid Section 5.4):
-- The **REST** endpoints (the UI "approve and send" surface) call the executor directly, gated by `bulwark.notice.draft` / `bulwark.compliance.chase` plus the register-tool policy layer.
-- A **Bolt subscription on `proposal.decided`** (fired by `proposal_decide`, `proposals.routes.ts:275/328`, on the `platform` source) branches on `decision` (the platform contract is `approve|reject|request_revision`, `:52-63`). For `approve` it reverse-looks-up the Bulwark draft via `proposed_payload.bulwark_draft_id` (the `proposal.decided` payload carries no subject), **re-SELECTs `agent_proposals.status` to confirm `approved`** rather than trusting the fire-and-forget frame, resolves the **decider** actor from the proposal row, and before sending fail-closes that actor through the reusable primitive `POST /v1/agent-policies/<decider_id>/check?tool=<send_tool>` (`apps/mcp-server/src/lib/register-tool.ts`, which fail-closes on non-2xx) AND asserts the decider holds the send permission. Only then does it execute the Blast send or the Blank form dispatch. `reject` marks the draft discarded; `request_revision` leaves it pending.
+One send executor per outbound type, reached two ways (Braid Section 5.4): the REST "approve and send" route calls it directly; a **`proposal.decided` subscription** branches on `decision` (platform contract `approve|reject|request_revision`, `proposals.routes.ts:52-63`), reverse-looks-up the draft via `proposed_payload.bulwark_draft_id`, **re-SELECTs `agent_proposals.status`** to confirm `approved`, resolves the decider, fail-closes that decider through `POST /v1/agent-policies/<decider_id>/check?tool=<send_tool>` (`register-tool.ts`, non-2xx fails closed) AND asserts the decider holds the send permission.
 
-Exactly-once on the send is guaranteed by a **compare-and-swap** on the draft row: `UPDATE bulwark_notice_deadlines SET notice_status='sent' WHERE id=$1 AND notice_status='approved' RETURNING id` (and the analogous CAS on `compliance_doc.chase_status`); only the row that flips proceeds, so a REST approve racing the subscription echo no-ops harmlessly. This is the Braid ST-r2-8 "intentional decided echo" pattern.
+**Deterministic recipient and attachments (THEME E, BLOCKER).** The drafting LLM produces ONLY `subject` and `body_markdown`. Every control field is deterministic and computed by Bulwark, never by the model:
+- `recipient_id` is always `contract.counterparty_id` (or its Braid-resolved golden id, Section 7.4). A recipient named in clause text is ignored.
+- `attachments` is a deterministic allowlist: the source contract asset only, or none. The model cannot add an attachment.
+- On send, before attaching, Bulwark calls `preflightAccess(decider, 'bin.asset', attachment_id)` (`visibility.service.ts:1151`) so a decider who cannot see the asset does not exfiltrate it. Any attachment failing the preflight is dropped and the send is annotated.
+
+This closes the prompt-injection exfiltration channel: a malicious clause cannot steer the recipient or attach arbitrary Bin bytes.
+
+Exactly-once on the send is a CAS on the draft row: `UPDATE bulwark_notice_deadlines SET notice_status='sent' WHERE id=$1 AND notice_status='approved' RETURNING id` (and the analogous `chase_status` CAS on compliance docs); the REST-vs-subscription echo no-ops harmlessly (Braid ST-r2-8).
 
 ### 2.5 Security model
 
-A contract obligation ledger is sensitive: it encodes what an org has promised, to whom, and where it is exposed. Bulwark must not become a channel that downgrades any source app's access rules.
-
-1. **Reads are permission-gated and `can_access`-preflighted.** Every read tool that surfaces a source record (the linked Bond counterparty, the Bin asset, the Bill term) takes an explicit `asker_user_id` and drops anything the asker cannot see, via `preflightAccess` (`apps/api/src/services/visibility.service.ts`). The obligation ledger itself is gated by `bulwark.obligation.read` / `bulwark.contract.read`, defaulting to the org contract-admin tier because it is consolidated commitment data.
-2. **Extraction input isolation.** The extraction LLM call uses ONLY the internal platform llm-provider (`apps/api/src/routes/internal-llm.routes.ts` via `BBB_API_INTERNAL_URL` + `INTERNAL_SERVICE_SECRET`), never a third-party endpoint. The document text is sent as-is (it is first-party contract text the org owns), but the call is server-to-server inside the stack and the response is treated as untrusted proposed data (validated against the Zod obligation schema; anything that fails validation is dropped, not stored).
-3. **No autonomous send.** The `agent_proposals` choke point (Section 2.2/2.4) means a compromised or hallucinating agent can at worst fill the approval inbox; it cannot email a counterparty or a sub without a human approve, and the approve re-checks the `agent_policies` kill switch for agent/service deciders.
-4. **Events are org-level refs only.** Bulwark's Bolt events (Section 7) carry ids and magnitudes, never clause text or counterparty PII. `bulwark.*` outbound-webhook subscriptions require org-admin authorship.
-5. **Org scoping (RLS posture, Braid IN-r2-1 framing).** RLS enforcement is a platform-global posture: `ALTER ROLE ... NOBYPASSRLS` is run only by `apps/api/src/boot/rls-boot.ts` gated by `BBB_RLS_ENFORCE`; satellite services get only the per-request GUC hook that sets `app.current_org_id` (`apps/basis-api/src/plugins/rls.ts`, which `bulwark-api` inherits by modeling on basis-api) and never flip the role. So Bulwark's headline org-isolation guarantee is enforced by **application-level org-scoping** (every query carries `organization_id`, and the pipeline sets the `app.current_org_id` GUC). RLS policies are authored on every `bulwark_*` table as defense in depth that binds when the platform flips `BBB_RLS_ENFORCE=1`. The Section 8 test is an application-level org-scoping test, plus an optional RLS-binding test that runs only when the enforced non-superuser role is provisioned.
+1. **Reads are permission-tiered AND project-scoped (THEME A, BLOCKER).** `cited_span.quote` is verbatim clause text, `deadline_rule` encodes money/notice terms, `counterparty_id` names the sub. Unlike Braid, Bulwark does not re-derive fields per-viewer, so it defends the ledger two ways: (a) `bulwark.contract.read` and `bulwark.obligation.read` are tiered to **owner/admin only** in the built-in defaults (`0237`, Section 3.4 / S1) as the floor; (b) every ledger read route additionally scopes results to contracts whose `project_id` the caller is a member of (reusing the project-membership predicate behind `preflightBinAsset`, `visibility.service.ts:1151`) with an org-admin override. A member granted read through a custom operator group sees only their projects' contracts; the prose and the migration now agree (no "member gets everything" gap).
+2. **Registration preflights the Bin asset (S3).** `POST /v1/contracts` and `/extract` call `preflightAccess(asker, 'bin.asset', bin_asset_id)` and reject `not_found` if denied, before enqueuing; the worker re-checks at byte-read time against `created_by` so a later ACL change is honored. A member who cannot open the contract in Bin cannot launder its clause text through the Bulwark ledger.
+3. **`/internal/events` fails CLOSED on an empty secret (S4).** The receiving handler rejects 401 when `INTERNAL_SERVICE_SECRET` is empty/undefined BEFORE any timing-safe compare (mirroring `internal-llm.routes.ts:64`'s non-empty gate), because an empty-vs-empty compare authorizes an unauthenticated caller. The compose non-empty assertion is defense in depth, not the only guard.
+4. **Extraction input isolation.** The extraction and drafting LLM calls use ONLY the internal llm-provider (`apps/api/src/routes/internal-llm.routes.ts` via `BBB_API_INTERNAL_URL` + `INTERNAL_SERVICE_SECRET`), never a third-party endpoint. Clause/event text is fenced as untrusted DATA in a delimited block (S8); the model is forbidden to emit control fields, and any it emits are dropped (THEME E). Responses are Zod-validated; malformed rows are dropped.
+5. **No autonomous send.** The `agent_proposals` choke point plus the kill-switch re-check on the decider (Section 2.4) means a compromised agent can at worst fill the inbox.
+6. **Legally-required mail bypasses marketing suppression (D6).** A COI/W-9/lien-waiver/certified-payroll chase and a contract notice are transactional, not marketing. They do NOT route through the Blast suppression path (`blast-send.job.ts:330-401` filters `blast_unsubscribes`); they send via the platform's direct transactional path with a `transactional=true` flag on the send executor that skips `blast_unsubscribes`. The spec states plainly: compliance and notice sends do not honor marketing unsubscribes.
+7. **Events are org-level refs only.** Bulwark's Bolt events (Section 7) carry ids and magnitudes, never clause text or PII. `bulwark.*` outbound-webhook subscriptions require org-admin authorship.
+8. **Send permission is admin-tiered and the freeze is permission revocation (S7).** `bulwark.notice.draft` and `bulwark.compliance.chase` are tiered to owner/admin in `0237`. The `agent_policies` kill switch only freezes agent/service deciders (`register-tool.ts:205` bypasses humans, Braid S3-3); the human freeze control is revoking the send permission.
+9. **Org scoping (RLS posture, Braid IN-r2-1).** Application-level org-scoping is the enforcing layer (every query carries `organization_id`, the pipeline sets `app.current_org_id` via the basis-style `plugins/rls.ts` Bulwark inherits); RLS policies on every `bulwark_*` table bind when the platform flips `BBB_RLS_ENFORCE=1`. Section 8 test is application-level, with an optional role-bound RLS test.
 
 ### 2.6 Guardrails summary
 
-- **agent_policies** (`0139_agent_policies.sql`, `register-tool.ts`): every `bulwark.*` service-account call passes the kill-switch + glob allowlist (`matchesAllowlist('bulwark.*')`). `bulwark.*` is NOT in the always-permitted core, so tools fail closed until an operator allowlists `bulwark.*`. Covered by a `register-tool` policy test. The same check is re-run by the `proposal.decided` send subscription (Section 2.4).
-- **Per-action MCP resolver (basis/braid satellite deferral):** Bulwark does NOT add `bulwark_*` to `EXPLICIT_TOOL_OVERRIDES`; the Wave D per-action resolver is deferred exactly as for basis and braid (`scripts/generate-permission-manifest.mjs` basis branch), so the hand-authored `HAND_AUTHORED` loop is the sole creator of all `bulwark.*` rows and its explicit flags land. Enforcing layers are REST `requireCan`, the kill-switch/allowlist, and the confirm token on destructive tools.
-- **confirm_action** (Redis-backed dynamic-TTL store, `apps/mcp-server/src/lib/confirm-token-store.ts`, 60s agent / 5min human): the destructive tools `bulwark_delete_contract`, `bulwark_reject_obligation`, and `bulwark_waive_deadline` require a confirm token, the pattern `CLAUDE.md` requires for delete-task / complete-sprint / remove-member.
-- **can_access preflight** per requesting user at read time on every cited source record.
-- **Extraction prompt discipline:** the model is instructed to return only structured obligations with cited spans and to emit `confidence` per row; anything not matching the schema is dropped. Extraction never triggers a send.
+- **agent_policies**: every `bulwark.*` service-account call passes the kill-switch + `matchesAllowlist('bulwark.*')`; not in the always-permitted core, so fails closed until allowlisted. Re-run by the send subscription (Section 2.4).
+- **Per-action MCP resolver:** deferred (basis/braid satellite pattern); `bulwark_*` not in `EXPLICIT_TOOL_OVERRIDES`; the `HAND_AUTHORED` loop is the sole creator of the rows.
+- **confirm_action** (Redis dynamic-TTL, `confirm-token-store.ts`): `bulwark_delete_contract`, `bulwark_reject_obligation`, `bulwark_waive_deadline`.
+- **Rate caps (S6):** auto-drafts are capped per org per sweep and by a per-org daily ceiling on notice-draft LLM calls; beyond the cap the risk is flagged and drafting deferred; work per tick is bounded by the sweep marker; `auto_draft_notices` is off by default.
+- **can_access preflight** per requesting user on every read that surfaces a source record, on registration (S3), and on attachment at send (THEME E).
 
 ---
 
 ## 3. Data model
 
-All Bulwark tables are org-scoped, carry `organization_id`, and have RLS policies gated on `app.current_org_id`, matching `infra/postgres/migrations/0132_entity_links.sql:52-56` and `0116_rls_foundation.sql`. Those policies bind when the platform flips `BBB_RLS_ENFORCE=1` (Section 2.5 point 5); until then application-level org-scoping is the enforcing layer. Each table gets a 1:1 Drizzle module under `apps/bulwark-api/src/db/schema/` (`bulwark-contracts.ts`, `bulwark-obligations.ts`, `bulwark-notice-deadlines.ts`, `bulwark-waiver-risks.ts`, `bulwark-compliance-docs.ts`, `bulwark-vendor-tiers.ts`, `bulwark-extraction-runs.ts`, `bulwark-org-settings.ts`, `bbb-refs.ts`, `index.ts`), mirroring `apps/bin-api/src/db/schema/` (which uses a `bbb-refs.ts` for cross-schema references) and `apps/basis-api/src/db/schema/`.
+All Bulwark tables are org-scoped, carry `organization_id`, and have RLS policies gated on `app.current_org_id`, matching `0132_entity_links.sql:52-56` and `0116_rls_foundation.sql`. Each table gets a 1:1 Drizzle module under `apps/bulwark-api/src/db/schema/` (`bulwark-contracts.ts`, `bulwark-obligations.ts`, `bulwark-notice-deadlines.ts`, `bulwark-waiver-risks.ts`, `bulwark-compliance-docs.ts`, `bulwark-vendor-tiers.ts`, `bulwark-ingest-events.ts`, `bulwark-extraction-runs.ts`, `bulwark-org-settings.ts`, `bbb-refs.ts`, `index.ts`), mirroring `apps/bin-api/src/db/schema/`.
 
-**Column-name join boundary (Braid D8).** Bulwark uses `organization_id` on its own tables (matching basis/bin/bond). The platform tables it joins to use `org_id` (`entity_links`, `agent_proposals`). Any query crossing that boundary aliases explicitly. There are **no cross-schema FKs** to source-app tables (Bin assets, Bond companies, Bill terms): those are referenced as a dotted `source_type` + uuid, the `entity_links.dst_type`/`dst_id` convention, so Bulwark never hard-couples to another app's schema.
+**Join boundary (Braid D8).** Bulwark uses `organization_id`; platform tables use `org_id`. No cross-schema FKs to source-app tables (Bin/Bond/Bill): those are dotted `source_type` + uuid, the `entity_links` convention.
 
 ### 3.1 Tables
 
-**`bulwark_contracts`** - a contract Bulwark tracks. Points at the Bin asset holding the executed document; never stores bytes.
+**`bulwark_contracts`** - a contract (or amendment) Bulwark tracks.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `organization_id` | uuid NOT NULL | FK `organizations(id)` ON DELETE CASCADE |
-| `project_id` | uuid | optional FK `projects(id)` ON DELETE SET NULL; the "job/engagement" this contract governs |
-| `title` | varchar(512) NOT NULL | human label |
-| `contract_kind` | varchar(32) NOT NULL DEFAULT `'subcontract'` | `subcontract` \| `sow` \| `msa` \| `grant_award` \| `lease` \| `other` |
-| `bin_asset_id` | uuid NOT NULL | the executed document, a `bin.asset` row id (no cross-schema FK; resolved via bin-api / entity_links) |
-| `counterparty_type` | varchar(32) | dotted source type, typically `bond.company` |
-| `counterparty_id` | uuid | source-app row id of the counterparty (GC/sub/vendor); linked via `entity_links` |
+| `project_id` | uuid | FK `projects(id)` ON DELETE SET NULL; the "job". Required for event-bound obligations to be armable (D8); a null-job contract may hold only manual-trigger or calendar obligations |
+| `title` | varchar(512) NOT NULL | |
+| `contract_kind` | varchar(32) NOT NULL DEFAULT `'subcontract'` | `subcontract` \| `sow` \| `msa` \| `grant_award` \| `lease` \| `amendment` \| `other` |
+| `supersedes_contract_id` | uuid | self-FK (guarded `DO $$`, like `0226_basis_core.sql`); set when `contract_kind='amendment'`; the base it amends |
+| `timezone` | varchar(64) NOT NULL DEFAULT `'UTC'` | IANA zone for this contract's deadline arithmetic (THEME B); defaulted from `bulwark_org_settings.default_timezone` at create |
+| `jurisdiction` | varchar(32) | optional legal jurisdiction, drives holiday calendar selection |
+| `bin_asset_id` | uuid NOT NULL | the executed document, a `bin.asset` id (no cross-schema FK) |
+| `counterparty_type` | varchar(32) | typically `bond.company` |
+| `counterparty_id` | uuid | the counterparty; the deterministic notice recipient (THEME E) |
 | `effective_date` | date | |
-| `expiry_date` | date | drives renewal/termination obligations |
-| `status` | varchar(16) NOT NULL DEFAULT `'active'` | `draft` \| `extracting` \| `active` \| `expired` \| `terminated` |
+| `expiry_date` | date | |
+| `status` | varchar(16) NOT NULL DEFAULT `'active'` | `draft` \| `extracting` \| `active` \| `amended` \| `expired` \| `terminated` |
 | `extraction_status` | varchar(16) NOT NULL DEFAULT `'pending'` | `pending` \| `running` \| `extracted` \| `partial` \| `failed` |
-| `extracted_at` | timestamptz | last successful extraction completion |
-| `source_doc_hash` | varchar(64) | sha-256 of the extracted document bytes; re-extraction is skipped if unchanged (idempotency) |
+| `extracted_at` | timestamptz | |
+| `source_doc_hash` | varchar(64) | sha-256 of extracted bytes; skip re-extraction only when unchanged AND the last run succeeded (ST6) |
 | `created_by` | uuid NOT NULL | FK `users(id)` |
-| `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | `updated_at` bumped by service layer (no auto trigger, so outbox-style markers do not re-bump; Braid ST3-6 discipline) |
+| `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | service-bumped, no auto trigger |
 
-Indexes: `(organization_id, status)`, `(organization_id, project_id)`, `(organization_id, bin_asset_id)`, `(organization_id, expiry_date)`, `(extraction_status)`.
+Indexes: `(organization_id, status)`, `(organization_id, project_id)`, `(organization_id, bin_asset_id)`, `(organization_id, expiry_date)`, `(supersedes_contract_id)`.
 
-**`bulwark_obligations`** - one typed, clause-cited obligation extracted from a contract.
+**`bulwark_obligations`** - one typed, clause-cited obligation.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE |
 | `contract_id` | uuid NOT NULL | FK `bulwark_contracts(id)` ON DELETE CASCADE |
+| `clause_ref` | varchar(64) | the stable upsert key component, from `cited_span.section` (e.g. `"12.3"`); the re-extraction / amendment idempotency anchor (THEME C / ST6) |
 | `obligation_type` | varchar(32) NOT NULL | `notice` \| `insurance` \| `indemnity` \| `payment` \| `retention` \| `flow_down` \| `renewal` \| `termination` \| `lien` \| `other` |
-| `title` | varchar(512) NOT NULL | short label, e.g. "5-day delay notice" |
-| `trigger_description` | text | natural-language trigger the clause names, e.g. "any owner-caused delay" |
-| `event_binding` | jsonb NOT NULL DEFAULT `'{}'` | the `(source, event_type)` + optional entity filter (Section 3.3) |
-| `deadline_rule` | jsonb NOT NULL DEFAULT `'{}'` | typed rule, e.g. `{ offset_days: 5, business_days: false, from: 'trigger_event' }` (Section 3.3) |
-| `cited_span` | jsonb NOT NULL DEFAULT `'{}'` | extraction evidence: `{ page, section, quote, char_start, char_end }` (Section 3.3) |
-| `confidence` | numeric(5,2) | LLM-reported extraction confidence in [0,1] |
-| `review_status` | varchar(16) NOT NULL DEFAULT `'pending_review'` | `pending_review` \| `confirmed` \| `auto_confirmed` \| `rejected` |
-| `is_armed` | boolean NOT NULL DEFAULT false | true only when `review_status IN ('confirmed','auto_confirmed')` AND `event_binding` is complete; the firing engine only matches armed obligations |
+| `title` | varchar(512) NOT NULL | |
+| `trigger_description` | text | |
+| `event_binding` | jsonb NOT NULL DEFAULT `'{}'` | `(source, event_type)` + entity_filter (Section 3.3) |
+| `deadline_rule` | jsonb NOT NULL DEFAULT `'{}'` | timezone-anchored rule (Section 3.3, THEME B) |
+| `mandated_doc_types` | jsonb NOT NULL DEFAULT `'[]'` | for `flow_down`: the compliance doc types this clause requires of lower tiers (D4); empty for other types |
+| `cited_span` | jsonb NOT NULL DEFAULT `'{}'` | verified evidence `{ page, section, quote, char_start, char_end, chunk_index, verified }` (Section 3.3, D7) |
+| `confidence` | numeric(5,2) | LLM self-reported; drives display auto-confirm only, never auto-arm for outbound types (D5) |
+| `review_status` | varchar(16) NOT NULL DEFAULT `'pending_review'` | `pending_review` \| `confirmed` \| `auto_confirmed` \| `rejected` \| `superseded` (terminal, set on re-extraction/amendment, never deleted, THEME C) |
+| `is_armed` | boolean NOT NULL DEFAULT false | true only when confirmed/cleared per D5 AND binding complete AND (for event-bound) the contract has a `project_id` |
 | `reviewed_by` | uuid | FK `users(id)` ON DELETE SET NULL |
 | `reviewed_at` | timestamptz | |
-| `extraction_run_id` | uuid | FK `bulwark_extraction_runs(id)` ON DELETE SET NULL; provenance |
+| `extraction_run_id` | uuid | FK `bulwark_extraction_runs(id)` ON DELETE SET NULL |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
-Indexes: `(organization_id, contract_id)`, `(organization_id, review_status)`, `(organization_id, obligation_type)`, `(organization_id, is_armed) WHERE is_armed`, GIN on `event_binding`. A partial expression index on the binding source/type accelerates firing lookups (Section 4.3).
+Indexes: `UNIQUE (organization_id, contract_id, clause_ref) WHERE clause_ref IS NOT NULL` (the stable upsert key), `(organization_id, contract_id)`, `(organization_id, review_status)`, `(organization_id, obligation_type)`, `(organization_id, is_armed) WHERE is_armed`, GIN on `event_binding`.
 
-**`bulwark_notice_deadlines`** - a live deadline instance created when a bound event fires (or, for calendar obligations like renewal, when the radar sweep computes a date from `expiry_date`).
+**`bulwark_ingest_events`** - the durable event inbox (THEME D, BLOCKER). Every event bolt-api dispatches is persisted here before firing, so the transport is durable once received and the firing job is an inbox drain.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE |
-| `obligation_id` | uuid NOT NULL | FK `bulwark_obligations(id)` ON DELETE CASCADE |
-| `contract_id` | uuid NOT NULL | denormalized for the ledger view; FK ON DELETE CASCADE |
-| `triggering_event_type` | varchar(96) | `<source>:<event_type>` that armed this clock; null for calendar-derived deadlines |
-| `triggering_event_id` | uuid | the Bolt event id that fired this (dedupe key); null for calendar-derived |
-| `triggered_at` | timestamptz NOT NULL | the event time (or the computed calendar anchor) |
-| `due_at` | timestamptz NOT NULL | deterministic: `triggered_at + deadline_rule.offset` |
+| `bolt_event_id` | uuid NOT NULL | the source Bolt event id; the redelivery dedup atom |
+| `source` | varchar(48) NOT NULL | |
+| `event_type` | varchar(96) NOT NULL | |
+| `logged_at` | timestamptz NOT NULL | transport/log time (when Bolt saw it) |
+| `trigger_at` | timestamptz | the legal trigger time extracted from the payload if present, else null (THEME B) |
+| `scope_fields` | jsonb NOT NULL DEFAULT `'{}'` | the entity_filter-referenced non-PII scoping ids extracted at dispatch (e.g. `{ "task.project_id": "..." }`), so firing can evaluate the filter without raw payload (S5) |
+| `status` | varchar(12) NOT NULL DEFAULT `'pending'` | `pending` \| `processed` \| `skipped` |
+| `received_at` | timestamptz NOT NULL DEFAULT now() | |
+| `processed_at` | timestamptz | |
+
+Indexes: `UNIQUE (organization_id, bolt_event_id)` (redelivery dedup independent of deadline retention, ST4), `(organization_id, status, received_at)` (the drain scan), `(source, event_type)`. Retention keeps rows past the drain watermark horizon (Section 4.5).
+
+**`bulwark_notice_deadlines`** - a live deadline instance.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid PK | |
+| `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE |
+| `obligation_id` | uuid NOT NULL | FK `bulwark_obligations(id)` **ON DELETE RESTRICT** (THEME C: re-extraction can never drop an obligation with a live clock; it supersedes instead) |
+| `contract_id` | uuid NOT NULL | FK `bulwark_contracts(id)` ON DELETE CASCADE (a deliberate whole-contract delete, confirm-token-gated, does remove its deadlines) |
+| `ingest_event_id` | uuid | FK `bulwark_ingest_events(id)` ON DELETE SET NULL; the inbox row that armed this |
+| `triggering_event_id` | uuid NOT NULL | the dedup key: the `bolt_event_id` for event-armed; for calendar-armed, a deterministic `uuid5(obligation_id || anchor_date)` so recurrence works and the single unique index dedups (ST7) |
+| `anchor_source` | varchar(12) NOT NULL | `trigger_at` \| `logged_at` \| `manual` \| `calendar`; which time seeded the clock (THEME B, surfaced for reviewer correction) |
+| `triggered_at` | timestamptz NOT NULL | the legal anchor time actually used |
+| `logged_at` | timestamptz | the transport time, kept alongside so a reviewer sees the gap between real and logged |
+| `resolved_timezone` | varchar(64) NOT NULL | the IANA zone the due date was computed in (from `deadline_rule`/contract) |
+| `due_at` | timestamptz NOT NULL | deterministic, computed in `resolved_timezone` with roll-forward (Section 4.2) |
 | `status` | varchar(16) NOT NULL DEFAULT `'open'` | `open` \| `discharged` \| `missed` \| `waived` |
-| `notice_status` | varchar(16) NOT NULL DEFAULT `'none'` | drafted-notice lifecycle: `none` \| `drafted` \| `approved` \| `sent` \| `discarded` |
-| `notice_proposal_id` | uuid | FK `agent_proposals(id)` ON DELETE SET NULL; the HITL pointer |
-| `notice_draft` | jsonb NOT NULL DEFAULT `'{}'` | the drafted notice body + recipients (refs), rendered by the drafting worker |
-| `discharged_at` | timestamptz | when the notice was sent or the obligation otherwise satisfied |
-| `radar_marker` | timestamptz | outbox-style marker: last radar sweep that processed this row (Section 4.4) |
+| `notice_status` | varchar(16) NOT NULL DEFAULT `'none'` | `none` \| `drafted` \| `approved` \| `sent` \| `discarded` |
+| `notice_proposal_id` | uuid | FK `agent_proposals(id)` ON DELETE SET NULL |
+| `notice_draft` | jsonb NOT NULL DEFAULT `'{}'` | ONLY `subject` + `body_markdown` from the LLM; `recipient_id`/`attachments` are deterministic and stamped by Bulwark at send (THEME E) |
+| `discharged_at` | timestamptz | |
+| `radar_marker` | timestamptz | outbox marker: observed sweep time (never `now()` mid-compute, Braid ST3-1) |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
-Indexes: `UNIQUE (organization_id, obligation_id, triggering_event_id)` (the at-most-once arm guard; `triggering_event_id` uses a sentinel for calendar-derived rows so those dedupe on `(obligation_id, triggered_at::date)` via a second partial unique index), `(organization_id, status, due_at)` (the radar scan), `(organization_id, contract_id)`, `(notice_proposal_id)`, `(organization_id, notice_status)`.
+Indexes: `UNIQUE (organization_id, obligation_id, triggering_event_id)` (the single at-most-once arm guard, covering both event and calendar cases; the contradictory second partial index of the prior draft is dropped, ST7), `(organization_id, status, due_at)` (radar scan), `(organization_id, contract_id)`, `(notice_proposal_id)`, `(organization_id, notice_status)`.
 
-**`bulwark_waiver_risks`** - a risk flagged when a clock is running out or an obligation is otherwise unmet.
+**`bulwark_waiver_risks`** - a flagged risk.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE |
-| `obligation_id` | uuid NOT NULL | FK `bulwark_obligations(id)` ON DELETE CASCADE |
-| `deadline_id` | uuid | FK `bulwark_notice_deadlines(id)` ON DELETE CASCADE; null for structural risks (e.g. an unbound high-value obligation) |
-| `contract_id` | uuid NOT NULL | denormalized; FK ON DELETE CASCADE |
-| `severity` | varchar(8) NOT NULL | `low` \| `medium` \| `high` \| `critical` (from hours-to-due against per-org thresholds) |
+| `obligation_id` | uuid NOT NULL | FK ON DELETE RESTRICT (audit protection, D3) |
+| `deadline_id` | uuid | FK `bulwark_notice_deadlines(id)` ON DELETE SET NULL (never cascade-delete a risk when a deadline is archived; the risk is the dispute record, D3) |
+| `contract_id` | uuid NOT NULL | FK ON DELETE CASCADE |
+| `severity` | varchar(8) NOT NULL | `low` \| `medium` \| `high` \| `critical` |
 | `reason` | varchar(32) NOT NULL | `clock_running_out` \| `overdue` \| `unbound_obligation` \| `missing_compliance_doc` |
-| `detail` | jsonb NOT NULL DEFAULT `'{}'` | hours remaining, dollar exposure ref if known |
+| `detail` | jsonb NOT NULL DEFAULT `'{}'` | hours remaining, exposure ref |
 | `status` | varchar(12) NOT NULL DEFAULT `'open'` | `open` \| `resolved` \| `dismissed` |
-| `detected_at` | timestamptz NOT NULL DEFAULT now() | |
-| `resolved_at` | timestamptz | |
+| `detected_at` / `resolved_at` | timestamptz | |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
-Indexes: `UNIQUE (organization_id, obligation_id, deadline_id, reason)` (idempotent re-detection: one open risk per cause), `(organization_id, status, severity)`, `(organization_id, contract_id)`.
+Indexes: `UNIQUE (organization_id, obligation_id, deadline_id, reason)` (idempotent re-detection), `(organization_id, status, severity)`, `(organization_id, contract_id)`.
 
-**`bulwark_vendor_tiers`** - a lower-tier vendor/sub in the compliance chain under a contract.
+**`bulwark_vendor_tiers`** - a lower-tier vendor in the compliance chain.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE |
-| `contract_id` | uuid | the parent contract whose flow-down clauses impose the requirements; FK ON DELETE SET NULL |
-| `vendor_type` | varchar(32) | dotted source type, typically `bond.company` |
-| `vendor_id` | uuid | the vendor's Bond company row id; linked via `entity_links` |
-| `tier_level` | smallint NOT NULL DEFAULT 1 | 1 = direct sub, 2 = sub-sub, etc. |
-| `required_doc_types` | jsonb NOT NULL DEFAULT `'[]'` | e.g. `["coi","w9","lien_waiver","certified_payroll"]` |
-| `chase_status` | varchar(16) NOT NULL DEFAULT `'idle'` | `idle` \| `chasing` \| `compliant` \| `blocked` |
+| `contract_id` | uuid | parent contract; FK ON DELETE SET NULL |
+| `parent_tier_id` | uuid | self-FK (guarded `DO $$`) ON DELETE SET NULL; the tier this one flows down from (D4 cascade) |
+| `vendor_type` | varchar(32) | typically `bond.company` |
+| `vendor_id` | uuid | |
+| `tier_level` | smallint NOT NULL DEFAULT 1 | 1 = direct sub, 2+ = sub-sub |
+| `required_doc_types` | jsonb NOT NULL DEFAULT `'[]'` | seeded/updated from confirmed `flow_down` obligations of `contract_id` UNION `parent_tier_id.required_doc_types` (D4) |
+| `chase_status` | varchar(16) NOT NULL DEFAULT `'idle'` | `idle` \| `chasing` \| `compliant` \| `blocked` (rolled up from docs) |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
-Indexes: `(organization_id, contract_id)`, `(organization_id, chase_status)`, `UNIQUE (organization_id, contract_id, vendor_type, vendor_id)`.
+Indexes: `(organization_id, contract_id)`, `(organization_id, chase_status)`, `(parent_tier_id)`, `UNIQUE (organization_id, contract_id, vendor_type, vendor_id)`.
 
-**`bulwark_compliance_docs`** - one required/collected compliance document for a vendor tier.
+**`bulwark_compliance_docs`** - one required/collected doc. Validity and collection lifecycle are separated (D9).
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -217,35 +249,37 @@ Indexes: `(organization_id, contract_id)`, `(organization_id, chase_status)`, `U
 | `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE |
 | `vendor_tier_id` | uuid NOT NULL | FK `bulwark_vendor_tiers(id)` ON DELETE CASCADE |
 | `doc_type` | varchar(24) NOT NULL | `coi` \| `w9` \| `lien_waiver` \| `certified_payroll` \| `other` |
-| `status` | varchar(16) NOT NULL DEFAULT `'missing'` | `missing` \| `requested` \| `collected` \| `valid` \| `expiring` \| `expired` |
-| `bin_asset_id` | uuid | the collected doc, a `bin.asset` row id (no cross-schema FK); null until collected |
-| `effective_date` | date | |
-| `expires_at` | date | drives the expiry sweep + chase |
-| `chase_status` | varchar(16) NOT NULL DEFAULT `'none'` | `none` \| `drafted` \| `approved` \| `sent` \| `escalated`; mirrors the notice-send CAS lifecycle |
-| `chase_proposal_id` | uuid | FK `agent_proposals(id)` ON DELETE SET NULL; the HITL pointer |
-| `blank_form_id` | uuid | optional Blank form used to collect the doc (no cross-schema FK) |
-| `last_chased_at` | timestamptz | chase-cadence throttle |
+| `collection_status` | varchar(16) NOT NULL DEFAULT `'missing'` | collection lifecycle: `missing` \| `requested` \| `collected` (D9) |
+| `validity_status` | varchar(12) NOT NULL DEFAULT `'unknown'` | validity: `unknown` \| `valid` \| `expiring` \| `expired` (D9) |
+| `chase_status` | varchar(16) NOT NULL DEFAULT `'none'` | send lifecycle: `none` \| `drafted` \| `approved` \| `sent` \| `escalated` |
+| `bin_asset_id` | uuid | the collected doc (no cross-schema FK) |
+| `effective_date` / `expires_at` | date | drives the expiry sweep |
+| `chase_proposal_id` | uuid | FK `agent_proposals(id)` ON DELETE SET NULL |
+| `blank_form_id` | uuid | optional Blank form |
+| `last_chased_at` | timestamptz | cadence throttle |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
-Indexes: `(organization_id, vendor_tier_id)`, `(organization_id, status)`, `(organization_id, expires_at)` (the expiry sweep), `(organization_id, doc_type)`, `(chase_proposal_id)`.
+Indexes: `(organization_id, vendor_tier_id)`, `(organization_id, validity_status)`, `(organization_id, collection_status)`, `(organization_id, expires_at)`, `(organization_id, doc_type)`, `(chase_proposal_id)`.
 
-**`bulwark_extraction_runs`** - an audit row per extraction attempt.
+**`bulwark_extraction_runs`** - audit + chunk checkpoint (ST6).
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE |
-| `contract_id` | uuid NOT NULL | FK `bulwark_contracts(id)` ON DELETE CASCADE |
+| `contract_id` | uuid NOT NULL | FK ON DELETE CASCADE |
 | `status` | varchar(16) NOT NULL DEFAULT `'running'` | `running` \| `succeeded` \| `partial` \| `failed` |
-| `chunk_count` | integer | number of document chunks sent to the llm-provider |
+| `chunk_count` | integer | |
+| `last_processed_chunk` | integer NOT NULL DEFAULT -1 | the checkpoint: a retry resumes at `last_processed_chunk + 1` (ST6) |
+| `source_doc_hash` | varchar(64) | the hash this run processed |
 | `obligations_extracted` | integer NOT NULL DEFAULT 0 | |
-| `low_confidence_count` | integer NOT NULL DEFAULT 0 | rows routed to review |
-| `provider_id` | uuid | the llm_providers row used (no cross-schema FK) |
-| `error` | text | on failure |
+| `low_confidence_count` | integer NOT NULL DEFAULT 0 | |
+| `provider_id` | uuid | |
+| `error` | text | |
 | `started_at` | timestamptz NOT NULL DEFAULT now() | |
 | `finished_at` | timestamptz | |
 
-Indexes: `(organization_id, contract_id, started_at DESC)`, `(status)`.
+Indexes: `(organization_id, contract_id, started_at DESC)`, `(status)`. Never purged (audit).
 
 **`bulwark_org_settings`** - per-org tunables (modeled on `basis_org_settings`, `0226_basis_core.sql`). One row per org.
 
@@ -253,213 +287,228 @@ Indexes: `(organization_id, contract_id, started_at DESC)`, `(status)`.
 | --- | --- | --- |
 | `id` | uuid PK | |
 | `organization_id` | uuid NOT NULL | FK ON DELETE CASCADE; `UNIQUE` |
-| `auto_confirm_threshold` | numeric(5,2) NOT NULL DEFAULT 0.95 | extraction rows at/above this land `auto_confirmed` (still reversible); below go to `pending_review` |
-| `radar_lead_times` | jsonb NOT NULL DEFAULT `'{"critical_hours":24,"high_hours":72,"medium_hours":168}'` | maps hours-remaining to `waiver_risk.severity` |
-| `auto_draft_notices` | boolean NOT NULL DEFAULT true | when true, the radar drafts a notice proposal automatically at the `high` band; when false, it only flags the risk |
-| `chase_cadence_days` | integer NOT NULL DEFAULT 7 | minimum days between compliance chase drafts for a doc |
-| `coi_expiry_lead_days` | integer NOT NULL DEFAULT 30 | how far ahead of `expires_at` a compliance doc is marked `expiring` and a chase is drafted |
-| `llm_provider_id` | uuid | the `llm_providers` row used for extraction; null falls back to the org default |
-| `last_radar_sweep_at` | timestamptz | advanced only after a fully successful sweep (Braid ST-r2-7 discipline) |
+| `default_timezone` | varchar(64) NOT NULL DEFAULT `'UTC'` | IANA; contracts default their `timezone` from this (THEME B) |
+| `auto_confirm_threshold` | numeric(5,2) NOT NULL DEFAULT 0.95 | display-only auto-confirm floor; never gates auto-arm for outbound types (D5) |
+| `radar_lead_times` | jsonb NOT NULL DEFAULT `'{"critical_hours":24,"high_hours":72,"medium_hours":168}'` | |
+| `auto_draft_notices` | boolean NOT NULL DEFAULT **false** | off by default (D5); when on, still capped per S6 |
+| `auto_draft_max_per_sweep` | integer NOT NULL DEFAULT 20 | S6 cap per org per sweep |
+| `notice_llm_daily_cap` | integer NOT NULL DEFAULT 100 | S6 per-org daily ceiling on drafting LLM calls |
+| `chase_cadence_days` | integer NOT NULL DEFAULT 7 | |
+| `coi_expiry_lead_days` | integer NOT NULL DEFAULT 30 | |
+| `llm_provider_id` | uuid | extraction/drafting model; null falls back to org default |
+| `last_radar_sweep_at` | timestamptz | advanced only after a fully successful sweep (Braid ST-r2-7) |
 | `updated_by` | uuid | FK `users(id)` ON DELETE SET NULL |
 | `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
+**Partitioning posture (ST9).** `bulwark_notice_deadlines` and `bulwark_waiver_risks` are unpartitioned in v1. At the 2-50 seat SMB target their churn is low and retention is discharged-only (Section 4.5 / D3), so DELETE retention does not create meaningful bloat. Monthly partitioning (the `basis_metric_snapshots` / blip pattern) is a documented scale fast-follow, revisited if a large org's deadline volume warrants it.
+
 ### 3.2 Reused platform tables
 
-- `entity_links` (`0132_entity_links.sql`): Bulwark writes durable `bulwark.contract -> bond.company` (counterparty), `bulwark.contract -> bin.asset` (document), and `bulwark.vendor_tier -> bond.company` links (`link_kind='related_to'`, `ON CONFLICT DO NOTHING`). Note `org_id` here vs `organization_id` on Bulwark tables.
-- `agent_proposals` (`0128_agent_proposals.sql`): every drafted notice and compliance chase is inserted directly with `approver_id=NULL`, `expires_at` set (Section 2.2).
-- `organizations`, `users`, `projects`, and the platform `actor_type` enum.
-- `bin_assets` (`apps/bin-api`, `0205_bin_dam.sql`): the executed document and collected compliance docs; read-only, via bin-api's internal read + `@bigbluebam/storage` byte access (Section 3.5).
-- `llm_providers` (`apps/api`): the extraction model, reached only through `POST /internal/llm/chat`.
+- `entity_links` (`0132_entity_links.sql`): `bulwark.contract -> bond.company`, `bulwark.contract -> bin.asset`, `bulwark.vendor_tier -> bond.company` (`ON CONFLICT DO NOTHING`).
+- `agent_proposals` (`0128_agent_proposals.sql`): notice/chase drafts, `approver_id=NULL`, `expires_at` set.
+- `organizations`, `users`, `projects`, `actor_type` enum.
+- `bin_assets` (`0205_bin_dam.sql`): read-only, `can_access`-preflighted.
+- `llm_providers`: extraction/drafting model, only via `POST /internal/llm/chat`.
 
 ### 3.3 JSONB shapes (authoritative)
 
 ```jsonc
-// bulwark_obligations.event_binding - the (source, event_type) Bolt pattern + optional entity filter.
-// The firing engine matches an incoming Bolt event iff source+event_type match AND every
-// entity_filter path in the event payload equals the resolved value.
+// bulwark_obligations.event_binding
 {
-  "source": "bam",                       // the publishing app (bolt-api EventDefinition.source)
-  "event_type": "task.overdue",          // bare event name, matches event-catalog.ts
-  "entity_filter": {                     // optional; scopes the binding to this contract's job
+  "source": "bam",
+  "event_type": "task.overdue",
+  "entity_filter": {                      // when present, firing FAILS CLOSED if the field is absent (S5)
     "payload_path": "task.project_id",
     "equals_contract_field": "project_id"
   },
-  "unbound": false                       // true = extraction could not map a trigger; needs human binding
+  "unbound": false
 }
 
-// bulwark_obligations.deadline_rule - deterministic due-date arithmetic.
+// bulwark_obligations.deadline_rule (THEME B: timezone-anchored, roll-forward aware)
 {
   "offset_days": 5,
-  "business_days": false,                // if true, skip weekends (and, later, org holidays)
-  "from": "trigger_event",               // trigger_event | contract_effective_date | contract_expiry_date
+  "unit": "calendar_days",                // calendar_days | business_days
+  "from": "trigger_event",                // trigger_event | contract_effective_date | contract_expiry_date
+  "timezone": "America/Los_Angeles",      // IANA; default from contract.timezone / org default
+  "jurisdiction": "US-CA",                // optional
+  "holiday_calendar": "us-federal",       // optional; used when unit=business_days or roll_forward
+  "roll_forward": true,                   // due lands on a weekend/holiday -> next business day
   "grace_hours": 0
 }
 
-// bulwark_obligations.cited_span - extraction evidence with source citation.
+// bulwark_obligations.cited_span (D7: offsets VERIFIED against source bytes; verified=false forces review)
 {
   "page": 7,
-  "section": "12.3",
-  "quote": "Subcontractor shall give written notice within five (5) days of any event giving rise to a claim for additional time.",
+  "section": "12.3",                      // becomes clause_ref, the stable upsert key
+  "quote": "Subcontractor shall give written notice within five (5) days ...",
   "char_start": 18442,
   "char_end": 18571,
-  "chunk_index": 3
+  "chunk_index": 3,
+  "verified": true                        // source_text.slice(start,end) fuzzy-matched quote (tied to source_doc_hash)
 }
 
-// bulwark_notice_deadlines.notice_draft - the drafted notice (refs + rendered body).
+// bulwark_notice_deadlines.notice_draft (THEME E: ONLY subject + body from the LLM)
 {
-  "recipient_type": "bond.company",
-  "recipient_id": "…",
   "subject": "Notice of Delay - [contract.title]",
-  "body_markdown": "…generated by the drafting worker…",
-  "attachments": [{ "bin_asset_id": "…" }],
-  "channel": "blast"                     // blast (email campaign of one) | blank (form)
+  "body_markdown": "…generated by the drafting worker, untrusted text only…"
+  // recipient_id and attachments are NOT here; they are deterministic and stamped by Bulwark at send
 }
 ```
 
 ### 3.4 Numbered, idempotent migration plan (numbers PROVISIONAL)
 
-Observed migration tip on this branch is `0233_braid_builtin_group_defaults.sql`, and the latest permissions delta is `0232_permissions_seed_actions_delta_021.sql`. **All numbers below are provisional.** Every file carries the header block (`-- Why:` / `-- Client impact:`) and uses idempotent DDL, matching `CLAUDE.md` conventions.
+Observed tip is `0233_braid_builtin_group_defaults.sql`; latest permissions delta is `0232_permissions_seed_actions_delta_021.sql`. Numbers provisional. Every file carries the header block and idempotent DDL.
 
-1. **`0234_bulwark_core.sql`** - `bulwark_contracts`, `bulwark_obligations`, `bulwark_notice_deadlines`, `bulwark_waiver_risks`, `bulwark_extraction_runs`, `bulwark_org_settings`, all indexes (incl. the two partial unique indexes on `bulwark_notice_deadlines`), and RLS policies. Self/forward FKs added via guarded `DO $$` blocks after the tables exist (mirrors `0226_basis_core.sql`). Additive only.
-2. **`0235_bulwark_compliance.sql`** - `bulwark_vendor_tiers`, `bulwark_compliance_docs`, their indexes, RLS. Additive only. (Split from core so the compliance side can be reviewed/shipped independently.)
-3. **`NNNN_permissions_seed_actions_delta_022.sql`** - **generated** (basis/braid hand-authored pattern). The `bulwark.*` rows are hand-authored because `bulwark_` is not in `APP_PREFIXES` (`scripts/generate-permission-manifest.mjs`), exactly as `basis_`/`braid_` are. Strict sequence:
+1. **`0234_bulwark_core.sql`** - `bulwark_contracts` (incl. `supersedes_contract_id` self-FK via guarded `DO $$`, `timezone`, `jurisdiction`), `bulwark_obligations` (incl. `clause_ref` unique, `mandated_doc_types`, `superseded` status), `bulwark_ingest_events`, `bulwark_notice_deadlines` (obligation FK **ON DELETE RESTRICT**, contract FK CASCADE, single unique arm index), `bulwark_waiver_risks`, `bulwark_extraction_runs` (incl. `last_processed_chunk`), `bulwark_org_settings`, all indexes, RLS. Additive only.
+2. **`0235_bulwark_compliance.sql`** - `bulwark_vendor_tiers` (incl. `parent_tier_id` self-FK), `bulwark_compliance_docs` (split `collection_status`/`validity_status`/`chase_status`), indexes, RLS. Additive only.
+3. **`NNNN_permissions_seed_actions_delta_022.sql`** - **generated**. The `bulwark.*` rows are hand-authored (`bulwark_` not in `APP_PREFIXES`, like `basis_`/`braid_`). Strict sequence (THEME F, BLOCKER: the codegen step is the exact Braid gap and is now explicit):
    - (a) land `0234`/`0235` on disk;
-   - (b) register the **11** `bulwark.*` rows in the `HAND_AUTHORED` array of `generate-permission-manifest.mjs`, each with an explicit `app:'bulwark'` (rows without `app` default to `'bam'`, false provenance otherwise) AND an **explicit `is_read` value on every row** so no flag depends on verb inference (Braid BP3-2): see Section 10 for the 11 rows and flags;
-   - (c) add an `if (c.id.startsWith('bulwark.')) { migrationLabel = '<this delta>'; sourceFile = 'bulwark route/tools'; }` provenance branch mirroring the basis/braid branch;
-   - (d) do NOT add `bulwark_*` to `EXPLICIT_TOOL_OVERRIDES` (basis/braid satellite deferral): leaving `bulwark_*` unmapped in `TOOL_TO_PERMISSION` defers the Wave D resolver, so the `HAND_AUTHORED` loop is the sole creator of all 11 rows and its explicit flags land;
-   - (e) regenerate the manifest and verify with `check-permission-catalog.mjs`;
-   - (f) run `scripts/build-permission-delta.mjs` to emit this migration with a generator-assigned number and delta suffix (do not hand-pick). Additive only.
-4. **`0237_bulwark_builtin_group_defaults.sql`** - backfills `bulwark.*` into the built-in role default matrix, copied verbatim from `0233_braid_builtin_group_defaults.sql` with `p.app = 'bulwark'`. Without it, every non-SuperUser (including org Owners) hits `implicit_deny` on `/bulwark` routes and the SPA 403s for everyone, the exact gap the Braid build hit. Tiering: owner/admin/member = full (`NOT p.requires_superuser`), viewer = read-only (`p.is_read AND NOT p.requires_superuser`), guest = none. `INSERT ... ON CONFLICT DO NOTHING`. Additive only.
+   - (b) register the **12** `bulwark.*` rows (Section 10) in the `HAND_AUTHORED` array of `generate-permission-manifest.mjs`, each with explicit `app:'bulwark'` and an explicit `is_read`;
+   - (c) add an `if (c.id.startsWith('bulwark.')) { migrationLabel = '<this delta>'; sourceFile = 'bulwark route/tools'; }` provenance branch;
+   - (d) do NOT add `bulwark_*` to `EXPLICIT_TOOL_OVERRIDES`;
+   - (e) run `node scripts/generate-permission-manifest.mjs` (writes `docs/permissions-action-manifest.json`) **then `node scripts/build-permission-codegen.mjs`** (the only writer of `packages/permissions/src/generated/permissions.ts`, which the resolver + `useCan` consume) and **COMMIT the regenerated `permissions.ts`**;
+   - (f) run `check-permission-catalog.mjs`, which re-runs codegen in a temp dir and diffs against the committed `permissions.ts`; it passes only because (e) committed it;
+   - (g) run `scripts/build-permission-delta.mjs` to emit this migration with a generator-assigned number/suffix. The emitted delta MUST contain only additive `bulwark.*` rows; strip any proposed removal/deactivation of unrelated rows before landing (BP4). Additive only.
+4. **`0237_bulwark_builtin_group_defaults.sql`** - backfills `bulwark.*` into the built-in role matrix, modeled on `0233_braid_builtin_group_defaults.sql` but with a **custom tiering** (THEME A / S7): owner/admin get all `bulwark.*` (`NOT requires_superuser`); **member gets all EXCEPT `bulwark.contract.read`, `bulwark.obligation.read`, `bulwark.notice.draft`, `bulwark.compliance.chase`** (the sensitive reads and the send perms); viewer gets `is_read AND NOT requires_superuser` EXCEPT `bulwark.contract.read`/`bulwark.obligation.read`; guest none. `INSERT ... ON CONFLICT DO NOTHING`. Without it every non-SuperUser (including Owners) hits `implicit_deny` and the SPA 403s (the Braid gap). Additive only.
 
-Bolt event registration (Section 7), the `bolt-api` dispatch-hook edit (Section 6), and any `SUPPORTED_ENTITY_TYPES` additions are TypeScript edits, not migrations.
+Bolt event registration (Section 7), the bolt-api dispatch-hook edit (Section 6), and any `SUPPORTED_ENTITY_TYPES` additions are TypeScript edits.
 
 ---
 
 ## 4. The engines
 
-Both engines run as **BullMQ workers** in `apps/worker`, not in the request path, matching the placement of every satellite app's background work (`bond-stale-deals`, `basis-metric-snapshot`, the braid jobs).
+Both engines run as BullMQ workers in `apps/worker`, matching `braid-*.job.ts` / `basis-metric-snapshot.job.ts`.
 
 ### 4.1 Obligation-extraction engine
 
-**Trigger.** A contract is registered (or its Bin asset changes) via `POST /bulwark/api/v1/contracts` or `POST /contracts/:id/extract`, which enqueues `bulwark-extract-obligations { org_id, contract_id }`. Re-extraction is skipped if `source_doc_hash` is unchanged (idempotency).
+**Trigger.** `POST /v1/contracts` or `POST /contracts/:id/extract` enqueues `bulwark-extract-obligations { org_id, contract_id }`, AFTER the route has `can_access`-preflighted the Bin asset for the caller (S3).
 
-**Pipeline (in the worker):**
-1. **Fetch bytes.** Read the executed document from Bin. The worker resolves the `bin_asset_id` to bytes via `@bigbluebam/storage` `getStream` (the storage package the worker already links, `packages/storage/`), or via bin-api's internal read route if the byte access needs bin-api's serving gate. Extract text (PDF text layer; OCR is an Open Question for scanned docs, Section 12). Compute `source_doc_hash`.
-2. **Chunk.** Split into overlapping ~2-4k-token chunks with page/section anchors preserved so a `cited_span` can carry `{ page, section, char_start, char_end, chunk_index }`. Progress logged per chunk via `@bigbluebam/logging` (the user's flushed-progress rule; a multi-minute extraction must not sit silent).
-3. **Extract per chunk.** For each chunk, call the internal llm-provider `POST /internal/llm/chat` (`apps/api/src/routes/internal-llm.routes.ts`) with `X-Internal-Secret: INTERNAL_SERVICE_SECRET`, a system prompt that fixes the obligation taxonomy and demands strict JSON, and the chunk text. The response is parsed and **validated against the Zod obligation schema** (`packages/shared/src/schemas/bulwark.ts`); anything malformed is dropped (Section 2.5 point 2). Each obligation carries `{ obligation_type, title, trigger_description, proposed_event_binding, deadline_rule, cited_span, confidence }`.
-4. **Deterministic post-processing.** Parse `deadline_rule` from the model's natural-language deadline into the typed shape (e.g. "within five (5) days" -> `{offset_days:5}`) with a deterministic parser; if the parser and the model disagree, mark `unbound`/low-confidence and route to review. Map the proposed trigger to a real `(source, event_type)` from `event-catalog.ts` via a curated alias table (e.g. "delay/schedule slip" -> `bam:task.overdue`, "payment received" -> a `bill` event); an unmapped trigger sets `event_binding.unbound=true`.
-5. **Persist.** Upsert `bulwark_obligations` rows. Rows at/above `auto_confirm_threshold` land `auto_confirmed` and `is_armed=true` if the binding is complete; the rest land `pending_review` (`is_armed=false`). Write a `bulwark_extraction_runs` audit row and set `contract.extraction_status`. Emit `obligation.extracted` (per obligation or per run, Section 7) and, on completion, `contract.extracted`.
+**Pipeline:**
+1. **Preflight + fetch.** The worker re-checks `preflightAccess(created_by, 'bin.asset', bin_asset_id)` (S3), then reads bytes via `@bigbluebam/storage` `getStream` (Section 9.2 commits the byte path). Extract text (PDF text layer; scanned docs yield zero obligations and are flagged, Section 12). Compute `source_doc_hash`.
+2. **Hash-skip is conditional (ST6).** Skip only when `source_doc_hash` is unchanged AND the last `bulwark_extraction_runs.status='succeeded'`. A `partial`/`failed` prior run never skips; it resumes.
+3. **Chunk + checkpoint.** Split into overlapping page/section-anchored chunks. A run persists `last_processed_chunk`; a retry resumes at the next chunk (ST6), so a chunk-3-of-10 failure does not permanently under-extract nor re-insert chunks 1-2. Per-chunk progress logged via `@bigbluebam/logging` (flushed; a multi-minute extraction must not sit silent).
+4. **Extract per chunk.** Call `POST /internal/llm/chat` with the untrusted chunk fenced in a delimited DATA block (S8) and a system prompt fixing the taxonomy and demanding strict JSON. Parse and Zod-validate; drop malformed rows. Each obligation: `{ obligation_type, title, trigger_description, proposed_event_binding, deadline_rule, mandated_doc_types?, cited_span }`.
+5. **Deterministic post-processing.**
+   - **Verify the citation (D7):** check `source_text.slice(char_start, char_end)` fuzzy-matches `quote`. On mismatch, snap the offsets to the real location if findable and set `verified=true`; else mark `verified=false`, force `pending_review`. Verified offsets are stored and tied to `source_doc_hash` so the SPA highlights real bytes.
+   - **Parse the deadline (THEME B):** parse the natural-language deadline into the typed `deadline_rule`, stamping `timezone` from the contract. If the parser and the model disagree, do not clear the deterministic-arm gate (D5).
+   - **Map the trigger:** map to a real `(source, event_type)` from `event-catalog.ts` via a curated alias table; an unmapped trigger sets `event_binding.unbound=true`.
+6. **Persist by stable key (THEME C / ST6).** Upsert `bulwark_obligations` on `(contract_id, clause_ref)`. Obligations present in a prior run but absent from this one transition to `review_status='superseded'` (never deleted). Rows clearing the D5 deterministic-arm gate for non-outbound types may `auto_confirmed`+`is_armed`; outbound types (`notice`/`indemnity`/`payment`/`compliance`) stay `pending_review` until a human confirms. Write the run audit; set `contract.extraction_status`. Emit `obligation.extracted` and, on completion, `contract.extracted`.
 
-**Human-review queue.** Anything `pending_review` (low confidence, parser disagreement, or unbound trigger) surfaces in the SPA review queue (Section 5). A human confirms/edits/rejects via `bulwark.obligation.write`. Only `confirmed`/`auto_confirmed` obligations with a complete binding are `is_armed` and thus visible to the firing engine.
+**Amendment / supersession (THEME C).** An amendment is a NEW Bin asset registered with `contract_kind='amendment'` and `supersedes_contract_id` set to the base. On its extraction, in ONE transaction: the base contract flips to `status='amended'`; base obligations whose `clause_ref` reappears in the amendment transition to `superseded` and their **open deadlines are re-pointed** to the superseding obligation (same `clause_ref`); base obligations with no successor keep their obligations and open deadlines intact. No open deadline is ever dropped, which is why the deadline-to-obligation FK is `ON DELETE RESTRICT`.
 
-**Where it runs.** Queue `bulwark-extract-obligations` in `apps/worker/src/worker.ts`, with BullMQ `attempts` + exponential backoff and a DLQ (the `agent-webhook-dispatch.job.ts` / `-dlq.job.ts` model). LLM calls use a bounded `AbortController` timeout; a provider outage fails the run with a retry, never blocks the API.
+**Where it runs.** Queue `bulwark-extract-obligations`, BullMQ `attempts` + exponential backoff + DLQ (`agent-webhook-dispatch.job.ts` / `-dlq.job.ts` model). Bounded `AbortController` on LLM calls.
 
-### 4.2 Event-binding + firing engine
+### 4.2 Event-binding + firing engine (inbox drain)
 
-An armed obligation's `event_binding` + `deadline_rule` turns a live Bolt event into a `bulwark_notice_deadline`.
+**Transport in (Section 6).** bolt-api forwards subscribed events to `POST ${BULWARK_API_INTERNAL_URL}/v1/internal/events` (THEME G: the internal container target, not the public `/bulwark/api/` prefix; matches `braid-dispatch-hook.ts:73-75`). The route (a) fails closed if `INTERNAL_SERVICE_SECRET` is empty (S4), (b) durably INSERTs a `bulwark_ingest_events` row `ON CONFLICT (organization_id, bolt_event_id) DO NOTHING` (THEME D), extracting `trigger_at` (a payload field naming when the real event occurred, else null) and `scope_fields` (the entity_filter-referenced ids, S5), then (c) enqueues `bulwark-fire-on-event { org_id, ingest_event_id }`.
 
-**Transport in (Section 6 details).** `bolt-api` forwards subscribed events to Bulwark's internal route `POST /bulwark/api/v1/internal/events` (guarded by `INTERNAL_SERVICE_SECRET`), which enqueues a refs-only job `{ org_id, source, event_type, event_id, occurred_at, payload_refs }` into the shared Redis queue `bulwark-fire-on-event`.
+**Firing job (`bulwark-fire-on-event`), an inbox drain:**
+1. Load the `bulwark_ingest_events` row (or scan `status='pending'` on a periodic drain, so a lost enqueue is still processed). Skip if already `processed`.
+2. Select armed obligations for the org whose binding `(source, event_type)` matches.
+3. **Evaluate `entity_filter`, FAIL CLOSED (S5).** If a binding declares `entity_filter`, resolve the required path from `scope_fields`; if the field is absent or does not equal the contract field, do NOT arm (never over-fire to the wrong counterparty). An event with no matching scope arms zero deadlines.
+4. **Choose the legal anchor (THEME B).** `anchor = trigger_at` if present, else `logged_at`, recording `anchor_source`; keep both times on the deadline so a reviewer can correct a late-logged event.
+5. **Compute `due_at` in the resolved timezone (THEME B).** Interpret the anchor in `deadline_rule.timezone`, add the offset in calendar or business days, apply `roll_forward` against the holiday calendar, convert to timestamptz. Store `resolved_timezone`.
+6. Insert a `bulwark_notice_deadline` `ON CONFLICT (organization_id, obligation_id, triggering_event_id) DO NOTHING` (at-most-once). Mark the inbox row `processed`. Publish the refs-only `deadline.armed` ws frame (Section 5.2 / BP6) on a conflict-free insert.
 
-**Firing job (`bulwark-fire-on-event`):**
-1. Select armed obligations for the org whose `event_binding.source`/`event_type` match the incoming event (indexed lookup, Section 3.1). For each, evaluate the optional `entity_filter` against the event payload (e.g. `payload.task.project_id == contract.project_id`); skip non-matching.
-2. Compute `due_at = occurred_at + deadline_rule.offset` (business-day aware if set).
-3. Insert a `bulwark_notice_deadline` with `ON CONFLICT (organization_id, obligation_id, triggering_event_id) DO NOTHING` (the at-most-once arm guard, Section 2.1). A redelivered event or retried job no-ops.
-4. Emit `deadline.approaching` only when appropriate (the radar owns approaching/risk transitions; the firing job just arms the clock). Emit nothing else on a pure arm.
+**Manual trigger (D8).** `POST /v1/obligations/:id/trigger { occurred_at }` arms a deadline exactly as an event would, with `anchor_source='manual'` and `triggering_event_id = uuid5(obligation_id || occurred_at)`. This is the safety net for obligations whose real-world trigger is never digitized. An event-bound obligation whose contract has a null `project_id` (so `entity_filter` cannot scope to a job) is not armable by events and is manual-only; the SPA marks it and `is_armed` stays false for the event path.
 
-Idempotency, retry, backoff, and DLQ mirror the extraction job. The "capture the version" outbox discipline (Braid ST3-1, `bond-stale-deals.job.ts:127-138`): the firing job records `triggering_event_id` so re-processing is a no-op, and the radar's `radar_marker` is stamped to the observed sweep time, never `now()` mid-computation, so a crash between compute and side effect is reprocessed next sweep.
+Idempotency/retry/backoff/DLQ mirror extraction. Capture-the-version discipline: `triggering_event_id` makes re-processing a no-op; `radar_marker` stamps the observed sweep time, never `now()` mid-compute.
 
 ### 4.3 The deadline-radar sweep
 
-Queue `bulwark-radar-sweep`, scheduled every 15 minutes (`*/15 * * * *`; a short cadence because notice windows are measured in days and a missed few hours can waive a claim). Per org:
-1. **Approaching / risk detection.** Scan `bulwark_notice_deadlines WHERE status='open'` ordered by `due_at`. For each, compute hours-remaining and map to `waiver_risk.severity` via `settings.radar_lead_times`. Upsert a `bulwark_waiver_risk` (`ON CONFLICT (organization_id, obligation_id, deadline_id, reason) DO NOTHING`) so re-detection does not duplicate. Emit `deadline.approaching` and, on a new risk, `waiver.risk_detected`.
-2. **Auto-draft.** When `settings.auto_draft_notices` and the risk reaches the `high` band and the obligation type is `notice`, render the notice draft (a second, bounded llm-provider call over the clause + event context, best-effort) into `notice_deadlines.notice_draft`, set `notice_status='drafted'`, insert an `agent_proposals` row (Section 2.2), set `notice_proposal_id`, and emit `notice.drafted`. This never sends; it fills the approval inbox.
-3. **Missed.** Deadlines past `due_at` with `status='open'` flip to `missed` and raise a `critical`/`overdue` `waiver_risk`.
-4. **Calendar obligations.** For `renewal`/`termination` obligations bound to `contract_effective_date`/`contract_expiry_date` (not a live event), compute the deadline from the contract dates and arm on the second partial-unique index.
+Queue `bulwark-radar-sweep`, every 15 minutes. Per org, under a **per-org advisory lock** so two overlapping sweeps cannot double-draft (ST5):
+1. **Approaching / risk.** Scan `open` deadlines by `due_at`; map hours-remaining to `severity` via `radar_lead_times`; upsert `waiver_risk` `ON CONFLICT (...) DO NOTHING`. Emit `deadline.approaching` / `waiver.risk_detected`.
+2. **Auto-draft, CAS-guarded and capped (ST5 / S6 / D5).** Only when `auto_draft_notices` (off by default), the obligation type is `notice`, the risk reached `high`, and the per-sweep / daily caps (`auto_draft_max_per_sweep`, `notice_llm_daily_cap`) are not exhausted. Guard the transition with a CAS: `UPDATE bulwark_notice_deadlines SET notice_status='drafted' WHERE id=$1 AND notice_status='none' RETURNING id`; only the winner drafts. Render ONLY `subject`+`body_markdown` (a bounded, best-effort drafting LLM call), insert an `agent_proposals` row (Section 2.2), set `notice_proposal_id`, emit `notice.drafted`. Recipient + attachments are stamped deterministically at send (THEME E). Beyond the caps, flag the risk and defer.
+3. **Missed.** `open` deadlines past `due_at` flip to `missed` and raise a `critical`/`overdue` `waiver_risk`. These rows are retained indefinitely (D3).
+4. **Calendar obligations (ST7).** For `renewal`/`termination` obligations bound to `contract_effective_date`/`contract_expiry_date`, compute the anchor date and arm with `triggering_event_id = uuid5(obligation_id || anchor_date)`, so year N and year N+1 both arm through the single unique index.
 
-`last_radar_sweep_at` advances only after a fully successful per-org tick (resumable from per-row markers). Per-N progress logging via `@bigbluebam/logging`, modeled on `basis-metric-snapshot.job.ts`.
+`last_radar_sweep_at` advances only after a fully successful tick.
 
-**Durable fallback for the live transport (Braid soft-dependency framing).** Because a dropped `bolt-api` dispatch would otherwise silently fail to arm a clock, the radar sweep ALSO source-diffs the persisted Bolt event log: it selects Bolt events matching any armed obligation's bound `(source, event_type)` since a per-org watermark and runs the firing logic for any not already armed (the `triggering_event_id` unique guard makes this safe to re-run). So a lost dispatch degrades to at-most-15-minutes-late arming, never a permanently missed clock. The exact persisted-event table/name is an Open Question (Section 12); the braid precedent reads `bolt_recent_events`.
+### 4.4 The compliance-chase sweep + flow-down linkage
 
-### 4.4 The compliance-chase sweep
+Queue `bulwark-coi-chase`, daily 04:30. Per org:
+1. **Flow-down seeding (D4).** When a `flow_down` obligation is confirmed, or a `vendor_tier` is added under its contract, the tier's `required_doc_types` is set to `union(mandated_doc_types of the contract's confirmed flow_down obligations, parent_tier.required_doc_types)`. Tier-level 2+ inherits its `parent_tier_id`'s set, so flow-down cascades down the chain. This is the single link that joins the ledger half and the compliance half into one product.
+2. **Validity sweep (D9).** Mark `validity_status='expiring'` where `expires_at <= now() + coi_expiry_lead_days`, `expired` where past. Emit `compliance.expiring` on transition.
+3. **Chase draft.** For docs `missing`/`expiring`/`expired` whose `last_chased_at` is older than `chase_cadence_days`, CAS `chase_status none->drafted`, render a chase draft, insert an `agent_proposals` row (`proposed_action='bulwark.chase_compliance_doc'`), bump `last_chased_at`. The Blast/Blank send executes only on approve and is **transactional (bypasses `blast_unsubscribes`)** (D6).
+4. Roll `vendor_tier.chase_status` up (`compliant` when all required docs `valid`).
 
-Queue `bulwark-coi-chase`, scheduled daily (`30 4 * * *`). Per org:
-1. Scan `bulwark_compliance_docs` and mark `expiring` where `expires_at <= now() + settings.coi_expiry_lead_days`, `expired` where past. Emit `compliance.expiring` on transition to `expiring`.
-2. For `missing`/`expiring`/`expired` docs whose `last_chased_at` is older than `settings.chase_cadence_days`, render a chase draft (email via Blast, or a Blank collection form link), set `chase_status='drafted'`, insert an `agent_proposals` row (`proposed_action='bulwark.chase_compliance_doc'`), set `chase_proposal_id`, bump `last_chased_at`, and emit nothing until approved. The actual Blast send / Blank form dispatch executes only on `proposal.decided` approve (Section 2.4).
-3. Roll `vendor_tier.chase_status` up from its docs (`compliant` when all required docs are `valid`, else `chasing`/`blocked`).
+### 4.5 Proposal-reconcile, retention, and jobs summary
 
-### 4.5 Worker jobs summary
+**`bulwark-proposal-reconcile` (ST5, modeled on `apps/worker/src/jobs/braid-proposal-reconcile.job.ts`).** A dedicated 10-minute sweep for the at-least-once proposal bridge. For each `agent_proposals` row `proposed_action IN ('bulwark.send_notice','bulwark.chase_compliance_doc')` whose linked draft is still `drafted`/`none`: on `approved` re-derive the original decider, re-check the kill-switch, and drive the send CAS; on `rejected` mark the draft `discarded`; on **`expired`** clear `notice_proposal_id`/`chase_proposal_id` and reset `notice_status`/`chase_status` to `none` so the radar re-drafts on the still-open clock. An unmet notice re-surfaces; it never silently orphans.
+
+**Retention (D3 / ST4).** `bulwark-retention` (daily 04:50) purges ONLY `status='discharged'` deadlines, and only those older than `max(N days, the inbox drain watermark horizon)` so a late redelivery cannot resurrect a clock (the inbox `UNIQUE(org, bolt_event_id)` is the durable dedup atom regardless). `missed`/`waived` deadlines and ALL `waiver_risks` are kept indefinitely (or archived, never deleted): they are the dispute record. `bulwark_ingest_events` is pruned only past the drain horizon. `bulwark_extraction_runs`, `bulwark_contracts`, and `bulwark_obligations` are never purged.
 
 | Queue / job | Schedule | Purpose |
 | --- | --- | --- |
-| `bulwark-extract-obligations` | event-driven (contract register / re-extract) | Bin bytes -> chunk -> internal llm-provider -> typed obligations + cited spans; low-confidence to review. Idempotent on `source_doc_hash`. Retry/backoff/DLQ. |
-| `bulwark-fire-on-event` | event-driven (bolt-api dispatch, Section 6) | Match armed obligations to a live event, compute `due_at`, arm a `notice_deadline` (at-most-once). Idempotent on `triggering_event_id`. |
-| `bulwark-radar-sweep` | every 15 min | Risk detection, auto-draft notices into proposals, missed-clock detection, calendar obligations, and the source-diff fallback for lost dispatches. |
-| `bulwark-coi-chase` | daily 04:30 | Compliance expiry sweep + chase-draft proposals (Blast/Blank), throttled by cadence. |
-| `bulwark-retention` | daily 04:50 | Purge terminal-status deadlines/risks older than N days (`basis-retention-sweep.job.ts` model). Never touches `bulwark_extraction_runs` audit or `bulwark_contracts`. |
+| `bulwark-extract-obligations` | event-driven | Bin bytes -> chunk (checkpointed) -> llm-provider -> verified-cited obligations by stable key; supersession-aware. |
+| `bulwark-fire-on-event` | event-driven (inbox drain) | Drain `bulwark_ingest_events`, entity_filter fail-closed, timezone-anchored `due_at`, at-most-once arm. |
+| `bulwark-radar-sweep` | every 15 min | Risk detection, CAS-guarded capped auto-draft, missed detection, calendar obligations; per-org advisory lock. |
+| `bulwark-coi-chase` | daily 04:30 | Flow-down seeding, validity sweep, transactional chase drafts. |
+| `bulwark-proposal-reconcile` | every 10 min | At-least-once send bridge + expired-proposal re-draft. |
+| `bulwark-retention` | daily 04:50 | Purge only discharged deadlines past the watermark horizon; keep missed/waived/risks forever. |
 
-All fan-out sets `app.current_org_id` per org and wraps each `(org, row)` in try/catch log-and-continue (the `banter-feed-fanin` pattern).
+All fan-out sets `app.current_org_id` per org and wraps each `(org, row)` in try/catch log-and-continue.
 
 ---
 
 ## 5. API surface
 
-Base path `/bulwark/api/`, routes under `/v1` (mirroring `apps/basis-api/src/server.ts:88`). Success `{ data: ... }`; errors the canonical `{ error: { code, message, details, request_id } }` from `@bigbluebam/logging` `createErrorHandler` (`apps/basis-api/src/server.ts:28`). Cursor pagination, `?filter[field]=value`, `?sort=-field`. Shapes live in `packages/shared/src/schemas/bulwark.ts`.
+Base path `/bulwark/api/`, routes under `/v1` (mirroring `apps/basis-api/src/server.ts:88`). Success `{ data }`; errors the canonical envelope from `@bigbluebam/logging` `createErrorHandler` (`basis-api/src/server.ts:28`). Cursor pagination, `?filter[field]=value`, `?sort=-field`. Shapes in `packages/shared/src/schemas/bulwark.ts`.
 
 ### 5.1 REST endpoints
 
 | Method | Path | Purpose | Auth / notes |
 | --- | --- | --- | --- |
-| GET | `/v1/contracts` | List tracked contracts | `bulwark.contract.read`; filterable by `project_id`, `status` |
-| POST | `/v1/contracts` | Register a contract from a Bin asset; enqueues extraction | `bulwark.contract.write`; body `{ bin_asset_id, title, contract_kind, project_id?, counterparty_type?, counterparty_id?, effective_date?, expiry_date? }` |
-| GET | `/v1/contracts/:id` | Contract detail (with obligation + deadline rollup) | `bulwark.contract.read`; cited source records `can_access`-filtered per asker |
-| PATCH | `/v1/contracts/:id` | Update metadata | `bulwark.contract.write` |
-| DELETE | `/v1/contracts/:id` | Delete a tracked contract (not the Bin asset) | `bulwark.contract.delete`; confirm token via MCP; cascades obligations/deadlines |
-| POST | `/v1/contracts/:id/extract` | Re-run extraction | `bulwark.contract.write`; skipped if `source_doc_hash` unchanged unless `force=true` |
-| GET | `/v1/contracts/:id/obligations` | Obligation ledger for a contract | `bulwark.obligation.read` |
-| GET | `/v1/obligations` | List obligations (review queue via `filter[review_status]=pending_review`) | `bulwark.obligation.read`; sort `-confidence` |
-| GET | `/v1/obligations/:id` | Obligation detail + `cited_span` | `bulwark.obligation.read` |
-| PATCH | `/v1/obligations/:id` | Confirm / edit / bind / reject an obligation | `bulwark.obligation.write`; setting `review_status='rejected'` requires the confirm token via MCP |
-| GET | `/v1/deadlines` | Deadline radar (filter by `status`, `contract_id`, `due_before`) | `bulwark.deadline.read`; sort `due_at` |
-| GET | `/v1/deadlines/:id` | Deadline detail + drafted notice | `bulwark.deadline.read` |
-| POST | `/v1/deadlines/:id/draft-notice` | Draft (or re-draft) a notice and register the proposal | `bulwark.notice.draft`; inserts `agent_proposals` (Section 2.2) |
-| POST | `/v1/deadlines/:id/approve-send` | Approve+send a drafted notice directly (UI surface) | `bulwark.notice.draft`; the single send executor + CAS (Section 2.4) |
-| POST | `/v1/deadlines/:id/discharge` | Mark discharged/waived | `bulwark.deadline.read`+write; waive requires confirm token |
-| GET | `/v1/waiver-risks` | List open waiver risks | `bulwark.deadline.read`; sort `-severity` |
+| GET | `/v1/contracts` | List tracked contracts | `bulwark.contract.read` (owner/admin floor); project-scoped for granted non-admins (S1) |
+| POST | `/v1/contracts` | Register from a Bin asset; enqueues extraction | `bulwark.contract.write`; **`can_access('bin.asset')` preflight, reject `not_found` if denied (S3)** |
+| GET | `/v1/contracts/:id` | Contract detail + rollup | `bulwark.contract.read`; project-scoped; cited source records `can_access`-filtered |
+| PATCH | `/v1/contracts/:id` | Update metadata (incl. `timezone`) | `bulwark.contract.write` |
+| DELETE | `/v1/contracts/:id` | Delete a tracked contract (not the Bin asset) | `bulwark.contract.delete`; confirm token via MCP; cascades deadlines via `contract_id` FK |
+| POST | `/v1/contracts/:id/extract` | Re-run extraction | `bulwark.contract.write`; hash-skip conditional on last-run success (ST6); Bin preflight (S3) |
+| GET | `/v1/contracts/:id/obligations` | Ledger for a contract | `bulwark.obligation.read`; project-scoped |
+| GET | `/v1/obligations` | List (review queue via `filter[review_status]=pending_review`) | `bulwark.obligation.read`; sort `-confidence` |
+| GET | `/v1/obligations/:id` | Detail + verified `cited_span` | `bulwark.obligation.read`, `asker_user_id` |
+| PATCH | `/v1/obligations/:id` | Confirm / edit / bind / reject | `bulwark.obligation.write`; `rejected` requires confirm token via MCP; confirming a `flow_down` seeds vendor `required_doc_types` (D4) |
+| POST | `/v1/obligations/:id/trigger` | **Manual trigger** ("this happened") | `bulwark.deadline.write`; arms a deadline `anchor_source='manual'` (D8) |
+| GET | `/v1/deadlines` | Deadline radar | `bulwark.deadline.read`; project-scoped; filters `status`, `contract_id`, `due_before`, `project_id` |
+| GET | `/v1/deadlines/:id` | Detail + drafted notice | `bulwark.deadline.read` |
+| POST | `/v1/deadlines/:id/draft-notice` | Draft/re-draft + register proposal | `bulwark.notice.draft` (owner/admin floor, S7) |
+| POST | `/v1/deadlines/:id/approve-send` | Approve+send directly (UI) | `bulwark.notice.draft`; single send executor + CAS + deterministic recipient/attachment preflight (THEME E) |
+| POST | `/v1/deadlines/:id/discharge` | Mark discharged/waived | `bulwark.deadline.write` (D9: an action perm, not read+write); waive requires confirm token |
+| GET | `/v1/waiver-risks` | Open waiver risks | `bulwark.deadline.read`; project-scoped; sort `-severity` |
 | GET | `/v1/vendor-tiers` | List vendor tiers | `bulwark.compliance.read` |
-| POST | `/v1/vendor-tiers` | Add a vendor tier | `bulwark.compliance.chase`+write |
-| GET | `/v1/compliance-docs` | Vendor compliance matrix (filter by `status`, `doc_type`, `vendor_tier_id`) | `bulwark.compliance.read` |
-| POST | `/v1/compliance-docs/:id/chase` | Draft a compliance chase and register the proposal | `bulwark.compliance.chase`; inserts `agent_proposals` |
-| POST | `/v1/compliance-docs/:id/approve-send` | Approve+send a chase directly (UI) | `bulwark.compliance.chase`; single send executor + CAS |
+| POST | `/v1/vendor-tiers` | Add a tier (seeds `required_doc_types`, D4) | `bulwark.compliance.chase` |
+| GET | `/v1/compliance-docs` | Vendor compliance matrix | `bulwark.compliance.read`; filters `validity_status`, `collection_status`, `doc_type` |
+| POST | `/v1/compliance-docs/:id/chase` | Draft a chase + register proposal | `bulwark.compliance.chase` (owner/admin floor, S7) |
+| POST | `/v1/compliance-docs/:id/approve-send` | Approve+send directly (UI) | `bulwark.compliance.chase`; transactional send (D6) + CAS |
 | GET | `/v1/settings` | Get org settings | `bulwark.settings.read` |
 | PATCH | `/v1/settings` | Update org settings | `bulwark.settings.write` |
-| POST | `/v1/internal/events` | Ingest-trigger from bolt-api (Section 6) | `INTERNAL_SERVICE_SECRET`; enqueues `bulwark-fire-on-event`; no public route, no MCP tool |
-| GET | `/health` / `/readyz` | Probes | from `@bigbluebam/service-health` `healthCheckPlugin`; `/readyz` checks ONLY Postgres + Redis (`apps/basis-api/src/server.ts:76`) |
+| POST | `/v1/internal/events` | Ingest-trigger from bolt-api | `INTERNAL_SERVICE_SECRET`, **fail-closed on empty secret (S4)**; persists to `bulwark_ingest_events`, enqueues drain; no public route, no MCP tool |
+| GET | `/health` / `/readyz` | Probes | `@bigbluebam/service-health`; `/readyz` checks ONLY Postgres + Redis |
 
-**flagship `bulwark_check_notice_risk(job_id)`** is backed by `GET /v1/deadlines?filter[project_id]=<job>&status=open` composed with `GET /v1/waiver-risks?filter[contract...]`; the MCP tool assembles both into one risk report (Section 10). **flagship `bulwark_extract_obligations(contract_asset_id)`** is backed by `POST /v1/contracts` (register-if-new) + `POST /v1/contracts/:id/extract`.
+**flagship `bulwark_check_notice_risk(job_id)`** composes `GET /v1/deadlines?filter[project_id]=<job>&status=open` + `GET /v1/waiver-risks` into one risk report (Section 10). **flagship `bulwark_extract_obligations(contract_asset_id)`** is `POST /v1/contracts` (register-if-new, with the Bin preflight) + `POST /contracts/:id/extract`.
 
 ### 5.2 Realtime (`/bulwark/ws`)
 
-Redis-PubSub, org-scoped rooms. Payloads are **refs-only**: `deadline.armed { deadline_id, obligation_id, due_at }`, `waiver.risk_detected { risk_id, severity, contract_id }`, `notice.drafted { deadline_id, proposal_id }`, `compliance.expiring { compliance_doc_id, vendor_tier_id }`. No clause text or PII in the frame; the SPA fetches through the permission-gated read path. Notification channel only. WebSocket plumbing modeled on `apps/basis-api` / `apps/bin-api` ws routes and the Redis PubSub cross-instance broadcast pattern (`CLAUDE.md` "WebSocket realtime").
+Redis-PubSub, org-scoped rooms, refs-only. Frames: `deadline.armed { deadline_id, obligation_id, due_at }` (published by the firing job on a conflict-free insert, BP6, separate from the Bolt event set), `waiver.risk_detected { risk_id, severity, contract_id }`, `notice.drafted { deadline_id, proposal_id }`, `compliance.expiring { compliance_doc_id, vendor_tier_id }`. No clause text or PII. Modeled on `apps/basis-api` / `apps/bin-api` ws routes + Redis PubSub cross-instance broadcast.
 
-### 5.3 Permissions (11 rows)
+### 5.3 Permissions (12 rows)
 
-Manifest-generated `app.resource.verb`, resolved by an `apps/basis-api/src/plugins/permissions.ts`-style plugin. Enumerated with flags in Section 10. Read rows default to org-admin-equivalent (consolidated commitment data); `bulwark.contract.delete`, `bulwark.obligation.write` (reject path), and the waive path carry the confirm boundary. The hand-authored registration sequence is Section 3.4 step 3.
+Manifest-generated `app.resource.verb`, resolved by a `basis-api/src/plugins/permissions.ts`-style plugin. Enumerated in Section 10. Read rows `bulwark.contract.read`/`bulwark.obligation.read` and send rows `bulwark.notice.draft`/`bulwark.compliance.chase` are owner/admin floor in `0237` (S1/S7). Registration sequence is Section 3.4 step 3 (including the codegen step, THEME F).
 
 ---
 
 ## 6. Background work and the ingest transport
 
-BullMQ workers in `apps/worker` (Section 4.5). The live firing transport (the Braid IN3 problem, resolved the way the Braid spec resolved it):
+BullMQ workers in `apps/worker` (Section 4.5). The live firing transport (the Braid IN3 problem, resolved durably):
 
-**Bolt event to BullMQ enqueue.** `bolt-api` is an ingest hub with no generic service fan-out; the Braid build added a per-event dispatch hook (`apps/bolt-api/src/services/braid-dispatch-hook.ts`, called from `apps/bolt-api/src/routes/event-ingestion.routes.ts:165`). Bulwark adds a **parallel `bulwark-dispatch-hook.ts`** in bolt-api, called alongside `dispatchToBraid` in the same ingestion route, that POSTs matching events to Bulwark's `POST /bulwark/api/v1/internal/events` (guarded by `INTERNAL_SERVICE_SECRET`), fire-and-forget, with the radar source-diff as the durable fallback (Section 4.3).
+**bolt-api dispatch hook.** Bulwark adds a `bulwark-dispatch-hook.ts` in bolt-api, called alongside `dispatchToBraid` in `apps/bolt-api/src/routes/event-ingestion.routes.ts`, that POSTs matching events to `${BULWARK_API_INTERNAL_URL}/v1/internal/events` (THEME G: the container-internal target `http://bulwark-api:4021`, NOT the public `/bulwark/api/` nginx prefix, matching `braid-dispatch-hook.ts:73-75` "verified live"). Fire-and-forget.
 
-**Bulwark's subscriptions are dynamic, unlike Braid's fixed source-type map.** Braid hard-codes a small `SUBSCRIPTIONS` table (`braid-dispatch-hook.ts:32`) because its source types are fixed. Bulwark's bound `(source, event_type)` pairs are DATA (one per confirmed obligation binding), so the dispatch hook cannot hard-code them. Resolution: Bulwark maintains a **cached set of distinct active bound pairs per org** and the dispatch hook consults it before forwarding. Two concrete options (decide at build, Open Question):
-- (a) **Redis set maintained by Bulwark:** on every obligation arm/disarm Bulwark writes `SADD bulwark:bindings <source>:<event_type>` (org-agnostic union is enough to gate the firehose; the worker re-checks org + entity_filter). The dispatch hook does one `SISMEMBER` before forwarding. Cheapest and matches the fire-and-forget latency budget.
-- (b) **A `GET /v1/internal/bindings` endpoint** on bulwark-api the hook caches with a short TTL.
+**Per-org, per-binding dispatch gate (ST8).** Braid hard-codes a fixed source-type map; Bulwark's bound `(source, event_type)` pairs are data. To avoid a cross-tenant firehose, the gate is keyed **per org**: on every obligation arm/disarm Bulwark writes `SADD bulwark:bindings:<org_id> <source>:<event_type>` (and `SREM` on the last disarm of that pair for the org). The dispatch hook does a `SISMEMBER bulwark:bindings:<event.org_id>` for the event's OWN org before forwarding, so an event is forwarded only when THAT org has a matching binding; an event no org bound is never forwarded. Project/entity scoping is pushed toward the gate where the payload carries it; the worker's `entity_filter` evaluation is defense in depth.
 
-Either way, an event that is not bound is never forwarded, so the hook is not a firehose. `INTERNAL_SERVICE_SECRET` fail-closes (empty secret means no forward, radar catches it). Whether to prefer (a) or (b), and the exact persisted-Bolt-event table the radar source-diffs, are Open Questions (Section 12), both soft dependencies because the radar fallback makes the live path optional for correctness (only for latency).
+**Durability (THEME D).** The receiving `/v1/internal/events` persists every accepted event into `bulwark_ingest_events` before firing, and the firing job drains that inbox, so a dropped enqueue is recovered by re-draining `status='pending'` rows. The transport is load-bearing (the earlier "soft dependency backed by a bolt-event source-diff" is removed: bolt-api persists only `bolt_executions`, one per matching automation, so no such backing data exists). A live-2xx smoke test asserts the dispatch target resolves and returns 2xx (THEME G).
 
-**Worker env.** The worker needs `BBB_API_INTERNAL_URL` (the internal llm-provider for extraction and notice drafting) added to its compose env and `worker.optional` catalog entry, exactly as the Braid build added it (`docker-compose.yml` worker service, `scripts/deploy/shared/services.mjs`). No source-app internal URLs are added; the worker reads Bin bytes through `@bigbluebam/storage` (already linked) and reads its own schemas directly via `DATABASE_URL`.
+**Worker env.** Add `BBB_API_INTERNAL_URL: http://api:4000` (extraction + drafting llm-provider) to the worker compose env and `worker.optional` (as the Braid build did). Byte reads: Section 9.2 / IN3 commits the path. No source-app internal URLs beyond that.
 
 ---
 
@@ -467,7 +516,7 @@ Either way, an event that is not bound is never forwarded, so the hook is not a 
 
 ### 7.1 Bolt events published (source `bulwark`)
 
-Via `publishBoltEvent(eventType, 'bulwark', payload, orgId, actorId?, actorType?)` (positional signature, `packages/shared/src/bolt-events.ts:35`), bare names, each registered with a `payload_schema` in a new `bulwarkEvents` block in `apps/bolt-api/src/services/event-catalog.ts` (appended to `ALL_EVENTS`), or `scripts/check-bolt-catalog.mjs` fails CI. Payloads are refs + magnitude only.
+Via `publishBoltEvent(eventType, 'bulwark', payload, orgId, actorId?, actorType?)` (positional, `packages/shared/src/bolt-events.ts:35`), bare names, each registered in a new `bulwarkEvents` block in `apps/bolt-api/src/services/event-catalog.ts` (appended to `ALL_EVENTS`) or `scripts/check-bolt-catalog.mjs` fails CI. Refs + magnitude only.
 
 | `event_type` | When | Payload (refs only) |
 | --- | --- | --- |
@@ -476,47 +525,48 @@ Via `publishBoltEvent(eventType, 'bulwark', payload, orgId, actorId?, actorType?
 | `deadline.approaching` | radar detects a clock nearing due | `deadline.id`, `obligation.id`, `contract.id`, `due_at`, `hours_remaining`, `org.id` |
 | `waiver.risk_detected` | a new waiver risk is raised | `risk.id`, `obligation.id`, `contract.id`, `severity`, `reason`, `org.id` |
 | `notice.drafted` | a notice draft + proposal is created | `deadline.id`, `proposal.id`, `contract.id`, `org.id` |
-| `compliance.expiring` | a compliance doc crosses into expiring/expired | `compliance_doc.id`, `vendor_tier.id`, `doc_type`, `expires_at`, `org.id` |
+| `compliance.expiring` | a doc crosses into expiring/expired | `compliance_doc.id`, `vendor_tier.id`, `doc_type`, `expires_at`, `org.id` |
 
-These are consumable by Bolt rules (e.g. "on `waiver.risk_detected severity=critical`, notify the PM in Banter"), by outbound webhooks, and by other apps. `notice.drafted`/`waiver.risk_detected` are the ones customers will most want to route.
+`deadline.armed` is a ws-only frame (Section 5.2 / BP6), not a Bolt event, so a pure arm does not spam the Bolt catalog.
 
 ### 7.2 Events Bulwark SUBSCRIBES to (the binding targets)
 
-Bulwark does not own a fixed subscription list; it reacts to whatever `(source, event_type)` its confirmed obligations bind to. Common beachhead bindings, mapped from `event-catalog.ts`:
-- `bam:task.overdue`, `bam:task.updated` (schedule slips / delay events on a job's tasks)
-- `bill` pay-app / retention / overdue events (payment and retention obligations)
-- `book` deadline/event changes (date-driven obligations)
-- `bam:sprint.completed`, `epic.*` (milestone-driven notice triggers)
-
-The transport is Section 6. New binding targets require no Bulwark code change (they are data); they require only that the `(source, event_type)` exists in `event-catalog.ts` and, for the live path, that the dispatch-hook gate (Section 6) admits it.
+Bulwark reacts to whatever `(source, event_type)` its confirmed obligations bind to (data, not a fixed list). Beachhead bindings from `event-catalog.ts`: `bam:task.overdue`, `bam:task.updated`, Bill pay-app/retention/overdue events, Book deadline events, `bam:sprint.completed`. New binding targets require no code change; they require the `(source, event_type)` to exist in `event-catalog.ts` and the per-org gate to admit it (Section 6). Where a needed trigger event does not exist, that obligation is `unbound` and manual-trigger-only until the source app publishes it (Section 12 / D8).
 
 ### 7.3 entity_links, unified activity, search
 
-- **entity_links:** on contract register and vendor-tier create, upsert `entity_links` rows (`src_type='bulwark.contract'`/`'bulwark.vendor_tier'`, `dst_type` = the source type, `link_kind='related_to'`, `ON CONFLICT DO NOTHING`). This is how Bulwark appears in cross-app "what is linked to this counterparty" views without a `v_activity_unified` change.
-- **unified activity:** Bulwark's catalog changes flow as the Bolt events above, not into the fixed `v_activity_unified` UNION in v1 (which is bam/bond/helpdesk only, `0129_*`), matching the Braid decision.
-- **search:** a Bulwark provider in `search_everything` (`apps/mcp-server/src/tools/search-tools.ts`) restricted to permission-gated askers with per-viewer post-filtering is a fast-follow, not v1 (Braid shipped its provider in v1; Bulwark defers to keep v1 tight). Flagged in Section 12.
+- **entity_links:** on contract register and vendor-tier create, upsert `bulwark.contract`/`bulwark.vendor_tier -> source` rows (`link_kind='related_to'`, `ON CONFLICT DO NOTHING`).
+- **unified activity:** Bulwark flows as the Bolt events above, not into the fixed `v_activity_unified` UNION (bam/bond/helpdesk only), matching Braid.
+- **search:** a Bulwark `search_everything` provider (permission-gated, per-viewer post-filtered) is a fast-follow, not v1 (Section 12).
 
 ### 7.4 Braid integration (unify the counterparty)
 
-Where **Braid** (`apps/braid-api`) is available, Bulwark resolves the counterparty/vendor person-or-company to a Braid golden id via `braid_resolve` before writing the `entity_links` row, so the GC in Bond, the client in Bill, and the vendor in a compliance form all resolve to one real-world counterparty. This is a soft dependency: absent Braid, Bulwark links directly to the `bond.company` id. Cited: Braid Section 2.4 (`braid_resolve` is a non-admin-grantable, `preflightAccess`-guarded resolve).
+Where Braid is available, Bulwark resolves the counterparty/vendor to a golden id via `braid_resolve` before writing the `entity_links` row, so the deterministic notice recipient (THEME E) is the canonical counterparty. Soft dependency: absent Braid, Bulwark uses the `bond.company` id directly.
 
 ---
 
 ## 8. Testing
 
-- **Unit (Vitest, schema-isolated via `@bigbluebam/db-stubs`, basis safety-suite precedent commit `7587872c`):**
-  - deterministic `deadline_rule` arithmetic: fixed rule + fixed event -> fixed `due_at`; business-day offsets; grace hours.
-  - extraction validation: a malformed / out-of-schema LLM response is dropped, never persisted (Section 2.5 point 2); low-confidence rows land `pending_review` with `is_armed=false`.
-  - arm idempotency: the same `(obligation_id, triggering_event_id)` fired twice arms exactly one `notice_deadline` (the unique-constraint guard).
-  - firing filter: an event whose `entity_filter` path does not equal the contract's job does NOT arm the clock.
-  - radar bands: hours-remaining maps to the correct `waiver_risk.severity`; a missed clock flips to `missed` and raises `critical`; risk re-detection does not duplicate (the `ON CONFLICT` guard).
-  - send exactly-once (Section 2.4): a REST approve-send racing the `proposal.decided` echo sends once (the `notice_status` CAS); the loser no-ops.
-  - proposal registration: the direct `agent_proposals` insert carries `approver_id=NULL`, an explicit `expires_at`, and `subject_type='bulwark.notice_draft'`; `proposal.created` is emitted after insert.
-  - kill-switch on send: a `proposal.decided` approve whose decider fails the `agent_policies` check leaves the draft `approved` and does NOT send (Braid S-r2-1 discipline).
-  - source-diff fallback: a lost dispatch is recovered by the radar's Bolt-event source-diff, arming the clock at most one sweep late, with no double-arm.
-- **register-tool policy test:** `bulwark.*` fails closed until allowlisted; Bulwark does not populate `TOOL_TO_PERMISSION` (basis/braid Wave D deferral), so the test asserts the allowlist gate, not per-action mapping. A manifest test asserts the three destructive rows land `is_destructive:true, requires_confirmation:true` and every hand-authored row carries an explicit `is_read`.
-- **Org-scoping test:** a service-layer query for org A returns zero org-B rows on every `bulwark_*` table (application-level), plus an optional RLS-binding test that runs only when the enforced non-superuser role is provisioned.
-- **e2e (Playwright, GILLIGAN dataset per `CLAUDE.md`):** a gilligan "Castaway Rescue Subcontract" is registered from a Bin asset; extraction produces a 5-day notice obligation bound to `bam:task.overdue`; a reviewer confirms it; an overdue task on the job arms the clock; the radar drafts a notice into the approval queue; the Skipper approves and the send executes once; an expiring "Howell COI" triggers a chase draft.
+- **Unit (Vitest, `@bigbluebam/db-stubs`, basis safety-suite precedent commit `7587872c`):**
+  - **timezone / roll-forward (THEME B):** a Pacific contract's anchor near midnight computes the correct calendar day; `business_days` skips weekends; `roll_forward` moves a weekend due date to the next business day; DST boundary crossings hold.
+  - **anchor selection (THEME B):** `trigger_at` present is preferred over `logged_at`; a Friday event logged Tuesday computes the due date from Friday, not Tuesday, and records `anchor_source`.
+  - **supersession (THEME C):** re-extraction transitions absent obligations to `superseded` (not deleted) and re-points their open deadlines to the successor in one transaction; the deadline-to-obligation `ON DELETE RESTRICT` blocks an accidental obligation delete with a live clock.
+  - **inbox drain (THEME D):** a persisted `bulwark_ingest_events` row with a lost enqueue is still fired by the pending-drain; a redelivered `bolt_event_id` dedups at the inbox even after the discharged deadline was purged (ST4).
+  - **deterministic recipient/attachment (THEME E):** a clause naming `legal@attacker.example` and a foreign file does not change `recipient_id` (stays `counterparty_id`) or add an attachment; an attachment failing the decider's `can_access` preflight is dropped at send.
+  - **/internal/events fail-closed (S4):** an empty `INTERNAL_SERVICE_SECRET` returns 401 before any compare.
+  - **entity_filter fail-closed (S5):** a filtered binding with a missing/mismatched `scope_fields` path arms zero deadlines; `task.overdue` on Project X does not arm a Project-Y contract's clock.
+  - **auto-arm gate (D5):** an outbound-type obligation with confidence 0.99 stays `pending_review`/`is_armed=false` until human confirm; a non-outbound type arms only on the deterministic signal.
+  - **calendar recurrence (ST7):** year N and year N+1 both arm through the single unique index; no second index.
+  - **extraction resume (ST6):** a chunk-3 failure resumes at chunk 3 on retry with no duplicate chunk-1/2 rows; an unchanged-hash re-run after a `partial` run does NOT skip.
+  - **citation verification (D7):** a fabricated quote whose offsets do not match the source bytes is marked `verified=false` and forced to review.
+  - **flow-down seeding (D4):** confirming a `flow_down` obligation seeds the vendor tier's `required_doc_types`; a tier-2 inherits its parent's set.
+  - **send CAS / reconcile (ST5):** two overlapping radar sweeps draft once (the `none->drafted` CAS); an expired proposal is re-drafted by `bulwark-proposal-reconcile`; a REST approve racing the subscription echo sends once.
+  - **transactional send (D6):** a chase/notice send is NOT filtered by `blast_unsubscribes`.
+  - **per-org gate (ST8):** an event whose org has no matching binding is not forwarded / not enqueued.
+- **register-tool policy test:** `bulwark.*` fails closed until allowlisted; a manifest test asserts the three destructive rows land `is_destructive:true, requires_confirmation:true` and every row carries an explicit `is_read`.
+- **permission tiering (BP5):** after `0237`, a non-SuperUser org **Owner** GETs 200 on `GET /v1/contracts` (guards the Braid Owner-403 gap); a **Viewer** is read-only on non-tiered reads and 403 on writes and on `bulwark.contract.read`/`obligation.read`; a **Member** is 403 on `bulwark.notice.draft`.
+- **Org-scoping test:** a service-layer query for org A returns zero org-B rows on every `bulwark_*` table; optional role-bound RLS test when the enforced role is provisioned.
+- **e2e (Playwright, GILLIGAN dataset per `CLAUDE.md`):** a "Castaway Rescue Subcontract" is registered from a Bin asset (Bin ACL honored); extraction yields a 5-day notice obligation bound to `bam:task.overdue`; a reviewer confirms it; an overdue task arms the clock in the contract's Pacific timezone; the radar drafts a notice into the approval queue; the Skipper approves and it sends once to the deterministic counterparty; an expiring "Howell COI" triggers a transactional chase.
 
 ---
 
@@ -524,86 +574,82 @@ Where **Braid** (`apps/braid-api`) is available, Bulwark resolves the counterpar
 
 ### 9.1 New api compose service
 
-`bulwark-api` in `docker-compose.yml`, modeled on `braid-api` (`docker-compose.yml:861`) and `basis-api`: `PORT: 4021`, stateless, horizontally scalable. It inherits the basis-style per-request RLS GUC plugin (`apps/basis-api/src/plugins/rls.ts`) by modeling on basis-api; it does NOT flip the DB role (Section 2.5 point 5). `depends_on`: `migrate` (`service_completed_successfully`), `postgres` + `redis` (`service_healthy`) only. Source apps, Bin, and the llm-provider are NOT in `depends_on` (request-time deps). Env: `DATABASE_URL`, `DATABASE_READ_URL=${DATABASE_READ_URL:-}` (read offload for the ledger/radar reads, mirroring braid-api `:868`), `REDIS_URL`/`REDIS_PASSWORD`, `SESSION_SECRET`, `INTERNAL_SERVICE_SECRET` (non-empty; the `/internal/events` transport + can_access preflight fail closed when empty), `BBB_API_INTERNAL_URL=http://api:4000` (llm-provider + can_access), `BOLT_API_INTERNAL_URL=http://bolt-api:4006` (publish events), `BIN_API_INTERNAL_URL` if byte reads route through bin-api's serving gate, `CORS_ORIGIN`, `NODE_ENV`, `HOST`, `LOG_LEVEL`, rate-limit knobs, `BBB_PERMISSIONS_ENFORCE`. Healthcheck: `curl -sf http://localhost:4021/health`.
+`bulwark-api` in `docker-compose.yml`, modeled on `braid-api` (`docker-compose.yml:861`): `PORT: 4021`, stateless, horizontally scalable. Inherits the basis-style per-request RLS GUC plugin; does NOT flip the DB role. `depends_on`: `migrate` (`service_completed_successfully`), `postgres` + `redis` (`service_healthy`) only. Env: `DATABASE_URL`, `DATABASE_READ_URL=${DATABASE_READ_URL:-}` (mirrors braid-api `:868`), `REDIS_URL`/`REDIS_PASSWORD`, `SESSION_SECRET`, `INTERNAL_SERVICE_SECRET` (non-empty; `/internal/events` fails closed when empty, S4), `BBB_API_INTERNAL_URL=http://api:4000`, `BOLT_API_INTERNAL_URL=http://bolt-api:4006`, `CORS_ORIGIN`, `NODE_ENV`, `HOST`, `LOG_LEVEL`, rate-limit knobs, `BBB_PERMISSIONS_ENFORCE`. Healthcheck: `curl -sf http://localhost:4021/health`.
 
-### 9.2 Worker service wiring
+### 9.2 Worker service wiring (IN3 resolved)
 
-The engines run in `apps/worker`. Edits (mirroring the Braid worker wiring):
-- **Compose (`docker-compose.yml` worker service):** add `BBB_API_INTERNAL_URL: http://api:4000` (extraction + drafting via the internal llm-provider) and `BULWARK_API_INTERNAL_URL: http://bulwark-api:4021` if the worker needs to call back into bulwark-api (it does not for reads; it uses `DATABASE_URL`, but keep the option). `@bigbluebam/storage` is already linked for Bin byte reads.
-- **Catalog (`scripts/deploy/shared/services.mjs`):** add `BBB_API_INTERNAL_URL` to `worker.optional` (Braid already added it; if present, no-op).
-- **`worker.needs` unchanged:** every new bulwark worker upstream (api for the llm-provider, bolt-api for event publish, Bin for bytes) is a degradable, retried, DLQ'd request-time dependency, consistent with the existing worker posture.
-- Register the five queues (`bulwark-extract-obligations`, `bulwark-fire-on-event`, `bulwark-radar-sweep`, `bulwark-coi-chase`, `bulwark-retention`) in `apps/worker/src/worker.ts` (three repeatable/scheduled, two event-driven).
+The engines run in `apps/worker`. **Byte-read path committed (IN3):** extraction runs in the worker, so the worker reads Bin bytes via `@bigbluebam/storage` resolving the object key from the shared DB (`bin_assets` via `DATABASE_URL`), exactly as `bin-transcode`/`bin-av-scan` workers already do. Therefore `BIN_API_INTERNAL_URL` is NOT added to bulwark-api (dropped from the prior draft) and NOT needed in the worker; `@bigbluebam/storage` (already linked) is the sole byte path. Edits:
+- **Compose (`docker-compose.yml` worker service):** add `BBB_API_INTERNAL_URL: http://api:4000` (llm-provider for extraction + drafting).
+- **Catalog (`scripts/deploy/shared/services.mjs`):** add `BBB_API_INTERNAL_URL` to `worker.optional` (Braid may already have added it; no-op if present).
+- **`worker.needs` unchanged:** every new bulwark worker upstream (api for llm, bolt-api for publish) is a degradable, retried, DLQ'd request-time dependency.
+- Register the six queues in `apps/worker/src/worker.ts` (`bulwark-extract-obligations`, `bulwark-fire-on-event`, `bulwark-radar-sweep`, `bulwark-coi-chase`, `bulwark-proposal-reconcile`, `bulwark-retention`).
 
 ### 9.3 SPA build (four Dockerfile edit sites, no separate compose service)
 
-Every SPA is built in the single `apps/frontend/Dockerfile` and `COPY`'d into `/usr/share/nginx/html/<app>`. Bulwark edits it in four sites, mirroring the exact braid lines (Braid Section 9.3):
-1. deps-stage `COPY apps/bulwark/package.json ./apps/bulwark/`.
-2. build-stage 4-line source COPY block (`src`, `public`, `index.html`, the three tsconfig/vite files).
-3. add `&& pnpm --filter @bigbluebam/bulwark build` to the build `RUN`.
-4. production-stage `COPY --from=build /app/apps/bulwark/dist /usr/share/nginx/html/bulwark`.
-
-There is no deps-stage source COPY and no separate `bulwark` compose service.
+Edit `apps/frontend/Dockerfile` in four sites, mirroring the braid lines: (1) deps-stage `COPY apps/bulwark/package.json ./apps/bulwark/`; (2) build-stage 4-line source COPY block; (3) `&& pnpm --filter @bigbluebam/bulwark build` in the build `RUN`; (4) production `COPY --from=build /app/apps/bulwark/dist /usr/share/nginx/html/bulwark`.
 
 ### 9.4 nginx routing (two source configs, generated railway)
 
-`infra/nginx/nginx.railway.conf` is auto-generated from `infra/nginx/nginx-with-site.conf` by `scripts/gen-railway-configs.mjs` (`do not edit by hand` header). Edit only the two source configs, then regenerate:
-- `infra/nginx/nginx.conf` (after the braid blocks at 327-...): add `/bulwark/` alias + SPA fallback, `/bulwark/api/ -> http://bulwark-api:4021/`, `/bulwark/ws -> http://bulwark-api:4021/ws` with upgrade headers. Add `bulwark` to the static-asset regex.
-- `infra/nginx/nginx-with-site.conf`: the same three blocks + static-asset regex.
-- Then run `node scripts/gen-railway-configs.mjs`. Because `bulwark-api` is in `APP_SERVICES` (Section 9.6), the generator rewrites the upstream to `bulwark-api.railway.internal:8080`, synthesizes the `$rw_upstream_NN` index and the `rewrite ... break;` lines, and adds the static-asset entry. Do not hand-edit `:8080` or `$rw_upstream` indices.
+`infra/nginx/nginx.railway.conf` is auto-generated from `infra/nginx/nginx-with-site.conf` by `scripts/gen-railway-configs.mjs`. Edit only the two source configs:
+- `infra/nginx/nginx.conf` (after the braid blocks): `/bulwark/` alias + SPA fallback, `/bulwark/api/ -> http://bulwark-api:4021/`, `/bulwark/ws -> http://bulwark-api:4021/ws` with upgrade headers.
+- `infra/nginx/nginx-with-site.conf`: the same three blocks.
+- **Static-asset regex (IN5):** the two source alternations already diverge in more than one token (`nginx.conf` includes `bill`; the two files are also missing `bay`/`blip` in the generated form). Insert ONLY the `bulwark` token into each source file's existing alternation; touch nothing else; do not copy one alternation over the other or reconcile the pre-existing bay/blip/bill divergence in this pass.
+- Then `node scripts/gen-railway-configs.mjs`; the generator rewrites the upstream to `bulwark-api.railway.internal:8080`, synthesizes the `$rw_upstream_NN` index and `rewrite ... break;` lines. Do not hand-edit `:8080` or the index.
+- **Ingress crash-safety:** add `bulwark-api` (`condition: service_healthy`) to the `frontend` service `depends_on` in `docker-compose.yml`.
 
-**Static-asset regex divergence:** the two source alternations already differ (`nginx.conf` includes `bill`; `nginx-with-site.conf` does not). Edit each source in place to add `bulwark`; do not copy one alternation over the other.
+### 9.5 Deploy catalog, Railway, MCP wiring, Launchpad, marketing site, CLAUDE.md
 
-**Ingress crash-safety:** add `bulwark-api` (`condition: service_healthy`) to the `frontend` service `depends_on` in `docker-compose.yml` (braid-api is already there). This compose edit, not the services.mjs metadata, is the real load-time guarantee.
-
-### 9.5 Deploy catalog, Railway manifests, MCP wiring, Launchpad, CLAUDE.md
-
-- `scripts/deploy/shared/services.mjs`: add a `bulwark-api` `APP_SERVICES` block (port `4021`, `public_paths: ['/bulwark/api/','/bulwark/ws']`, `required` env incl. `DATABASE_URL`/`REDIS_URL`/`SESSION_SECRET`/`INTERNAL_SERVICE_SECRET`/`BBB_API_INTERNAL_URL`/`BOLT_API_INTERNAL_URL`, `optional` incl. `DATABASE_READ_URL`/`BIN_API_INTERNAL_URL`/`CORS_ORIGIN`/`LOG_LEVEL`), mirroring `braid-api` (`:270`). Trim `bulwark-api.needs` to `['postgres','redis','api','bolt-api']`; source reads are shared-DB, Bin/llm are soft. Add `/bulwark/` to the `frontend` entry's `public_paths` and `bulwark-api` to its `needs`. Add `bulwark-api` to `mcp-server`'s `needs` metadata and set `BULWARK_API_URL: http://bulwark-api:4021/v1`, but do NOT add it to compose `depends_on` (request-time only, matching bond-api/braid-api). Register `bulwark-tools.ts` in the MCP bootstrap.
-- Add the `bulwark-dispatch-hook` wiring to bolt-api (Section 6): `BULWARK_API_INTERNAL_URL=http://bulwark-api:4021` in bolt-api's compose env and catalog, alongside the existing `BRAID_API_INTERNAL_URL`.
-- **Run `node scripts/gen-railway-configs.mjs`**: regenerates `nginx.railway.conf` and emits `railway/bulwark-api.json`.
-- **Launchpad catalog** in `apps/api/src/routes/system-settings.routes.ts`: add `'bulwark'` to `LAUNCHPAD_APP_IDS` and a `LAUNCHPAD_CATALOG` entry: `{ id: 'bulwark', name: 'Bulwark', description: 'Contract Obligations', icon_name: 'shield-check', color: '#1d4ed8', path: '/bulwark/' }`. Do NOT add `bulwark` to `ROOT_REDIRECT_VALUES` (matches basis/braid precedent; avoids the `REDIRECT_MAP` typecheck break).
-- **Launchpad icon:** `shield-check` is absent from the `ICONS` map in `packages/ui/launchpad.tsx:65` (it has `git-merge`/`ruler` but no shield); an unknown `icon_name` falls back to `Box` (`launchpad.tsx:226`). Two edits: `import { ShieldCheck } from 'lucide-react'` and add `'shield-check': ShieldCheck` to the `ICONS` table. No grid redesign.
-- **CLAUDE.md (Phase 5 mandate):** append the `bulwark-api` (internal :4021, `/bulwark/api/`) and `bulwark` SPA (`/bulwark/`) inventory lines, add the `/bulwark/`, `/bulwark/api/`, `/bulwark/ws` route rows, and bump the MCP tool count by the new `bulwark-tools.ts` module (14 tools, Section 10).
-- **Runtime-dependency posture:** `/readyz` checks only Postgres + Redis. Bin byte reads, the llm-provider, bolt-api publish, and the dispatch transport use bounded timeouts + typed `UPSTREAM_UNAVAILABLE`; the workers retry with backoff and DLQ; the radar source-diff is the durable firing fallback.
+- `scripts/deploy/shared/services.mjs`: add a `bulwark-api` `APP_SERVICES` block (port `4021`, `public_paths: ['/bulwark/api/','/bulwark/ws']`, `required` env incl. `DATABASE_URL`/`REDIS_URL`/`SESSION_SECRET`/`INTERNAL_SERVICE_SECRET`/`BBB_API_INTERNAL_URL`/`BOLT_API_INTERNAL_URL`, `optional` incl. `DATABASE_READ_URL`/`CORS_ORIGIN`/`LOG_LEVEL`), mirroring `braid-api` (`:270`). `bulwark-api.needs = ['postgres','redis','api','bolt-api']`. Add `/bulwark/` to the `frontend` entry's `public_paths` and `bulwark-api` to its `needs`.
+- **MCP wiring (IN1):** add `BULWARK_API_URL` to `mcp-server.env.optional` in `services.mjs` AND to the docker-compose `mcp-server` environment block (mirroring the `BRAID_API_URL: http://braid-api:4020/v1` line at `docker-compose.yml:188`), value `http://bulwark-api:4021/v1`, plus an env-hints hint. **Backfill the pre-existing bug in the same pass:** `BASIS_API_URL` and `BRAID_API_URL` are present in `docker-compose.yml` but MISSING from `mcp-server.env.optional` in `services.mjs` (so `gen-railway-configs` omits them from `env-vars.md`); add all three. **`mcp-server.needs` decision (IN4):** do NOT add `bulwark-api` to `mcp-server.needs`, matching the deliberate braid/basis omission (mcp-server reaches app APIs only at request time; `needs` only affects deploy ordering). Register `bulwark-tools.ts` in the MCP bootstrap.
+- **bolt-api wiring (Section 6):** add `BULWARK_API_INTERNAL_URL=http://bulwark-api:4021` to bolt-api compose env + catalog, alongside `BRAID_API_INTERNAL_URL`.
+- **Run `node scripts/gen-railway-configs.mjs`:** regenerates `nginx.railway.conf` and emits `railway/bulwark-api.json`.
+- **Launchpad catalog** in `apps/api/src/routes/system-settings.routes.ts`: add `'bulwark'` to `LAUNCHPAD_APP_IDS` and a `LAUNCHPAD_CATALOG` entry `{ id: 'bulwark', name: 'Bulwark', description: 'Contract Obligations', icon_name: 'shield-check', color: '#1d4ed8', path: '/bulwark/' }`. Do NOT add to `ROOT_REDIRECT_VALUES` (matches basis/braid; avoids the `REDIRECT_MAP` typecheck break).
+- **Launchpad icon:** `shield-check` is absent from `ICONS` in `packages/ui/launchpad.tsx:65` (unknown icons fall back to `Box`, `:226`). Two edits: `import { ShieldCheck } from 'lucide-react'` and add `'shield-check': ShieldCheck`.
+- **Marketing site (BP3):** add a Bulwark section to the `site/` Vite app registered on a page, with GILLIGAN-only screenshots where the site references them (per the hard screenshots rule in `CLAUDE.md`), then rebuild the site image (`docker compose build site && docker compose up -d --force-recreate site`; on Railway it ships on push to `stable`). Update the MCP tool count AND the "N apps" narrative wherever referenced in BOTH `CLAUDE.md` AND `site/`, not just `CLAUDE.md`.
+- **CLAUDE.md (Phase 5 mandate):** append the `bulwark-api` (internal :4021, `/bulwark/api/`) and `bulwark` SPA (`/bulwark/`) inventory lines, the `/bulwark/`, `/bulwark/api/`, `/bulwark/ws` route rows, and bump the MCP tool count by the new `bulwark-tools.ts` module (15 tools, Section 10).
+- **Runtime-dependency posture:** `/readyz` checks only Postgres + Redis. Bin byte reads, the llm-provider, and bolt-api publish use bounded timeouts + typed `UPSTREAM_UNAVAILABLE`; workers retry/backoff/DLQ; the durable inbox is the firing guarantee.
 
 ---
 
 ## 10. MCP surface
 
-New `apps/mcp-server/src/tools/bulwark-tools.ts` via `registerTool` (`apps/mcp-server/src/lib/register-tool.ts`), HTTP client shaped like `apps/mcp-server/src/tools/dedupe-tools.ts:38`. Env `BULWARK_API_URL=http://bulwark-api:4021/v1`. Read tools that surface source records require an explicit `asker_user_id` (per `docs/reference/agent-conventions.md`), fail-closed via `can_access`; destructive tools use the Redis confirm-token store. Following the basis/braid satellite pattern, `bulwark_*` tools are intentionally NOT added to `EXPLICIT_TOOL_OVERRIDES`; per-action resolver mapping is deferred and REST `requireCan` + the kill-switch + the confirm token are the enforcing layers.
+New `apps/mcp-server/src/tools/bulwark-tools.ts` via `registerTool`, HTTP client shaped like `dedupe-tools.ts:38`. Env `BULWARK_API_URL=http://bulwark-api:4021/v1`. Reads that surface source records require `asker_user_id` (`docs/reference/agent-conventions.md`), fail-closed via `can_access`; destructive tools use the Redis confirm-token store. `bulwark_*` not in `EXPLICIT_TOOL_OVERRIDES` (basis/braid deferral).
 
 | Tool | Backs | Permission | confirm_action |
 | --- | --- | --- | --- |
-| `bulwark_extract_obligations` (flagship) | POST `/v1/contracts` (register-if-new) + POST `/v1/contracts/:id/extract` | `bulwark.contract.write` | no |
-| `bulwark_check_notice_risk` (flagship) | GET `/v1/deadlines` + `/v1/waiver-risks` for a job | `bulwark.deadline.read`, `asker_user_id` | no |
+| `bulwark_extract_obligations` (flagship) | POST `/v1/contracts` + POST `/contracts/:id/extract` | `bulwark.contract.write` | no |
+| `bulwark_check_notice_risk` (flagship) | GET `/v1/deadlines` + `/waiver-risks` for a job | `bulwark.deadline.read`, `asker_user_id` | no |
 | `bulwark_list_contracts` | GET `/v1/contracts` | `bulwark.contract.read` | no |
-| `bulwark_get_contract` | GET `/v1/contracts/:id` (embeds obligations + deadline rollup) | `bulwark.contract.read`, `asker_user_id` | no |
-| `bulwark_delete_contract` | DELETE `/v1/contracts/:id` | `bulwark.contract.delete` | **yes** (Redis token) |
+| `bulwark_get_contract` | GET `/v1/contracts/:id` (embeds obligations + rollup) | `bulwark.contract.read`, `asker_user_id` | no |
+| `bulwark_delete_contract` | DELETE `/v1/contracts/:id` | `bulwark.contract.delete` | **yes** |
 | `bulwark_list_obligations` | GET `/v1/obligations` | `bulwark.obligation.read` | no |
 | `bulwark_get_obligation` | GET `/v1/obligations/:id` | `bulwark.obligation.read`, `asker_user_id` | no |
 | `bulwark_confirm_obligation` | PATCH `/v1/obligations/:id` (confirm/edit/bind) | `bulwark.obligation.write` | no |
-| `bulwark_reject_obligation` | PATCH `/v1/obligations/:id` (`review_status='rejected'`) | `bulwark.obligation.write` | **yes** (Redis token) |
+| `bulwark_reject_obligation` | PATCH `/v1/obligations/:id` (`rejected`) | `bulwark.obligation.write` | **yes** |
+| `bulwark_trigger_obligation` | POST `/v1/obligations/:id/trigger` (manual trigger, D8) | `bulwark.deadline.write` | no |
 | `bulwark_list_deadlines` | GET `/v1/deadlines` | `bulwark.deadline.read` | no |
-| `bulwark_draft_notice` | POST `/v1/deadlines/:id/draft-notice` (inserts a proposal) | `bulwark.notice.draft` | no (the proposal is the HITL) |
-| `bulwark_waive_deadline` | POST `/v1/deadlines/:id/discharge` (waive) | `bulwark.deadline.read`+write | **yes** (Redis token) |
+| `bulwark_draft_notice` | POST `/v1/deadlines/:id/draft-notice` (inserts a proposal) | `bulwark.notice.draft` | no (proposal is the HITL) |
+| `bulwark_waive_deadline` | POST `/v1/deadlines/:id/discharge` (waive) | `bulwark.deadline.write` | **yes** |
 | `bulwark_list_compliance` | GET `/v1/compliance-docs` | `bulwark.compliance.read` | no |
-| `bulwark_chase_compliance` | POST `/v1/compliance-docs/:id/chase` (inserts a proposal) | `bulwark.compliance.chase` | no (the proposal is the HITL) |
+| `bulwark_chase_compliance` | POST `/v1/compliance-docs/:id/chase` (inserts a proposal) | `bulwark.compliance.chase` | no (proposal is the HITL) |
 
-14 tools. `bulwark_get_contract` embeds obligations and the deadline rollup, so `/v1/contracts/:id/obligations` is annotated `resolver-done-internally` in the surface map. The genuine no-tool endpoints are `PATCH /settings` and `GET /settings` (surfaced via the SPA; a `bulwark_get_settings`/`bulwark_set_settings` pair MAY be added if agents need to tune thresholds, keeping 11 permission rows either way), `POST /v1/internal/events`, `/bulwark/ws`, `/health`, `/readyz`, and the two `approve-send` routes (intentionally UI-only send surfaces; the MCP send path is the proposal approve, not a direct tool). **agent_policies:** every `bulwark_*` service-account call fails closed until an operator allowlists `bulwark.*`.
+15 tools. `bulwark_get_contract` embeds obligations + rollup, so `/v1/contracts/:id/obligations` is `resolver-done-internally` in the surface map. No-tool endpoints: `GET`/`PATCH /settings` (SPA-surfaced), `POST /v1/internal/events`, `/bulwark/ws`, `/health`, `/readyz`, and the two `approve-send` routes (UI-only send surfaces; the MCP send path is the proposal approve). **agent_policies:** every `bulwark_*` service-account call fails closed until `bulwark.*` is allowlisted.
 
-**The 11 hand-authored permission rows** (Section 3.4 step 3b), each with explicit `app:'bulwark'` and `is_read`:
-- `bulwark.contract.read` (`is_read:true`)
+**The 12 hand-authored permission rows** (Section 3.4 step 3b), each with explicit `app:'bulwark'` and `is_read`:
+- `bulwark.contract.read` (`is_read:true`; owner/admin floor)
 - `bulwark.contract.write` (`is_read:false`)
 - `bulwark.contract.delete` (`is_read:false, is_destructive:true, requires_confirmation:true`)
-- `bulwark.obligation.read` (`is_read:true`)
-- `bulwark.obligation.write` (`is_read:false`; the reject path carries the confirm at the tool layer, not a separate permission, keeping the row count at 11 as Braid kept reject under merge)
+- `bulwark.obligation.read` (`is_read:true`; owner/admin floor)
+- `bulwark.obligation.write` (`is_read:false`; the reject path carries confirm at the tool layer)
 - `bulwark.deadline.read` (`is_read:true`)
-- `bulwark.notice.draft` (`is_read:false`)
+- `bulwark.deadline.write` (`is_read:false`; discharge/manual-trigger; waive confirm at the tool layer, D9)
+- `bulwark.notice.draft` (`is_read:false`; owner/admin floor, S7)
 - `bulwark.compliance.read` (`is_read:true`)
-- `bulwark.compliance.chase` (`is_read:false`)
+- `bulwark.compliance.chase` (`is_read:false`; owner/admin floor, S7)
 - `bulwark.settings.read` (`is_read:true`)
 - `bulwark.settings.write` (`is_read:false`)
 
-**Surface-map update:** `docs/reference/mcp-endpoint-mapping.md` MUST be updated in the same change. Every REST row's MCP column is a backtick tool name or the sanctioned em-dash skip-cell form the other apps use; that table is the one place em dashes are correct (the CLAUDE.md self-check grep depends on it), so this spec keeps its prose em-dash-free while the surface-map cells follow the existing convention. Keep the coverage counts and the zero-bare-dash grep green.
+**Surface-map update:** `docs/reference/mcp-endpoint-mapping.md` MUST be updated in the same change; every REST row's MCP column is a backtick tool name or the sanctioned em-dash skip-cell (that table is the one place em dashes are correct). Keep the coverage counts and the zero-bare-dash grep green.
 
 ---
 
@@ -611,41 +657,85 @@ New `apps/mcp-server/src/tools/bulwark-tools.ts` via `registerTool` (`apps/mcp-s
 
 | Capability | Reuses (real file/package) | New in Bulwark |
 | --- | --- | --- |
-| App scaffolding (Fastify server, plugins, health, RLS GUC) | `apps/basis-api/src/server.ts` (`@bigbluebam/service-health:8`), `apps/basis-api/src/plugins/rls.ts`, `apps/braid-api/` layout, `apps/bin-api/src/db/schema/bbb-refs.ts` | `bulwark-api` at port 4021 |
-| Executed document + collected compliance-doc bytes | `apps/bin-api` `bin_assets` (`0205_bin_dam.sql`), `@bigbluebam/storage` `getStream` | `bulwark.contract -> bin.asset` reference, extraction over the bytes |
-| Clause understanding (best-effort, internal only) | internal llm-provider `POST /internal/llm/chat` (`apps/api/src/routes/internal-llm.routes.ts`), `llm_providers` | chunk + typed-obligation extraction with cited spans + confidence |
-| Event bus + the ingest-dispatch transport | `publishBoltEvent` (`packages/shared/src/bolt-events.ts:35`), `apps/bolt-api/src/services/braid-dispatch-hook.ts` + `event-ingestion.routes.ts:165` | data-driven `event_binding`, a parallel `bulwark-dispatch-hook.ts`, dynamic binding gate (Section 6) |
-| HITL approval inbox + fire-and-forget decided event | `agent_proposals` (`0128_agent_proposals.sql`), `apps/api/src/routes/proposals.routes.ts:275,328` | direct null-approver insert for notice/chase drafts + a single kill-switch-safe send executor |
-| Confirm-action gating on destructive tools | `apps/mcp-server/src/lib/confirm-token-store.ts` | delete-contract / reject-obligation / waive-deadline tokens |
-| Counterparty / vendor identity | `apps/bond-api` companies, `entity_links` (`0132_entity_links.sql`), `braid_resolve` (`apps/braid-api`, Braid Section 2.4) | `bulwark.contract -> bond.company` links, optional Braid golden-id resolution |
-| Money terms (payment / retention) | `apps/bill-api` events | payment/retention obligations bound to Bill events |
-| Date surface | `apps/book-api` | calendar-derived renewal/termination deadlines |
-| Autonomous compliance-chase email | `apps/blast-api` (send executed on approve) | COI/W-9/lien-waiver/certified-payroll chase drafts |
-| Vendor document collection forms | `apps/blank-api` | Blank form link in the chase draft |
-| Visibility guardrail | `apps/api/src/services/visibility.service.ts`, `can_access` | `asker_user_id` preflight on every read that surfaces a source record |
-| Bolt events (positional signature) + drift guard | `publishBoltEvent`, `apps/bolt-api/src/services/event-catalog.ts`, `scripts/check-bolt-catalog.mjs` | 6 `bulwark` event definitions |
-| Org scoping + RLS posture | `app.current_org_id` GUC (`0116_*`), `apps/api/src/boot/rls-boot.ts`, `apps/basis-api/src/plugins/rls.ts`, `BBB_RLS_ENFORCE` | Bulwark table policies + app-level org-scoping tests |
-| Permissions (hand-authored satellite pattern) | `scripts/generate-permission-manifest.mjs` (basis/braid branches), `check-permission-catalog.mjs`, `build-permission-delta.mjs`, `0233_braid_builtin_group_defaults.sql` | 11 `bulwark.*` rows + built-in-group defaults migration |
-| MCP registration + policy gate | `apps/mcp-server/src/lib/register-tool.ts` (incl. `/v1/agent-policies/:id/check`), `dedupe-tools.ts` client | 14 `bulwark_*` handlers |
-| Worker fan-out + retry/backoff + DLQ + capture-the-version outbox | `banter-feed-fanin`, `basis-metric-snapshot.job.ts`, `bond-stale-deals.job.ts:127-138`, `agent-webhook-dispatch.job.ts`/`-dlq.job.ts`, `basis-retention-sweep.job.ts` | extraction / fire-on-event / radar / chase / retention jobs |
-| Launchpad + nginx (2 sources, generated railway) + frontend Dockerfile + services.mjs | braid/basis wiring (cited), `scripts/gen-railway-configs.mjs`, `packages/ui/launchpad.tsx` | one new app id `bulwark`, `shield-check` icon |
-| Suite-wide UI shell + Bureau widget + test stubs | `@bigbluebam/ui`, `@bigbluebam/bureau-client`, `@bigbluebam/db-stubs` | Bulwark SPA pages only |
+| App scaffolding (Fastify, plugins, health, RLS GUC) | `apps/basis-api/src/server.ts` (`@bigbluebam/service-health:8`), `apps/basis-api/src/plugins/rls.ts`, `apps/braid-api/` layout, `apps/bin-api/src/db/schema/bbb-refs.ts` | `bulwark-api` at 4021 |
+| Document + collected-doc bytes | `apps/bin-api` `bin_assets` (`0205_bin_dam.sql`), `@bigbluebam/storage` `getStream` (shared-DB object-key resolution) | contract/compliance `bin.asset` references, `can_access`-preflighted |
+| Clause + notice-draft understanding (internal only) | internal llm-provider `POST /internal/llm/chat` (`apps/api/src/routes/internal-llm.routes.ts`), `llm_providers` | fenced-DATA extraction with verified cited spans; drafting emits only subject/body |
+| Event bus + durable dispatch transport | `publishBoltEvent` (`bolt-events.ts:35`), `apps/bolt-api/src/services/braid-dispatch-hook.ts` + `event-ingestion.routes.ts` | data-driven `event_binding`, a `bulwark-dispatch-hook.ts`, a per-org gate, and the `bulwark_ingest_events` durable inbox |
+| HITL inbox + reconcile | `agent_proposals` (`0128_agent_proposals.sql`), `proposals.routes.ts:275,328`, `apps/worker/src/jobs/braid-proposal-reconcile.job.ts` | null-approver drafts, single kill-switch-safe send executor, `bulwark-proposal-reconcile` |
+| Confirm-action on destructive tools | `apps/mcp-server/src/lib/confirm-token-store.ts` | delete-contract / reject-obligation / waive-deadline tokens |
+| Counterparty identity | `apps/bond-api`, `entity_links` (`0132_entity_links.sql`), `braid_resolve` (`apps/braid-api`) | deterministic notice recipient resolution |
+| Money / dates / chase / forms | `apps/bill-api`, `apps/book-api`, `apps/blast-api` (transactional flag), `apps/blank-api` | payment/retention obligations, calendar deadlines, transactional chases, collection forms |
+| Visibility guardrail | `apps/api/src/services/visibility.service.ts:1151` (`preflightBinAsset`), `can_access` | Bin preflight on register + attachment preflight at send + project-scoped ledger reads |
+| Bolt events + drift guard | `event-catalog.ts`, `scripts/check-bolt-catalog.mjs` | 6 `bulwark` event definitions |
+| Org scoping + RLS posture | `app.current_org_id` GUC (`0116_*`), `rls-boot.ts`, `basis-api/src/plugins/rls.ts`, `BBB_RLS_ENFORCE` | Bulwark table policies + app-level org-scoping tests |
+| Permissions (hand-authored satellite pattern) | `scripts/generate-permission-manifest.mjs`, **`scripts/build-permission-codegen.mjs`** (writes `packages/permissions/src/generated/permissions.ts`), `check-permission-catalog.mjs`, `build-permission-delta.mjs`, `0233_braid_builtin_group_defaults.sql` | 12 `bulwark.*` rows + custom-tiered built-in defaults |
+| MCP registration + policy gate | `register-tool.ts` (incl. `/v1/agent-policies/:id/check`), `dedupe-tools.ts` client | 15 `bulwark_*` handlers |
+| Worker retry/backoff/DLQ + capture-the-version + advisory lock + retention | `braid-*.job.ts`, `basis-metric-snapshot.job.ts`, `bond-stale-deals.job.ts:127-138`, `agent-webhook-dispatch.job.ts`/`-dlq.job.ts`, `basis-retention-sweep.job.ts` | extraction (checkpointed) / inbox-drain firing / radar (locked, capped) / chase / reconcile / retention |
+| Launchpad + nginx + frontend Dockerfile + services.mjs + marketing site | braid/basis wiring, `gen-railway-configs.mjs`, `packages/ui/launchpad.tsx`, `site/` | one new app id `bulwark`, `shield-check` icon, a marketing section |
+| Suite UI shell + Bureau widget + test stubs | `@bigbluebam/ui`, `@bigbluebam/bureau-client`, `@bigbluebam/db-stubs` | Bulwark SPA pages only |
 
 ---
 
 ## 12. Open questions & risks (human decision needed)
 
-1. **`bolt-api` dispatch gate for dynamic bindings (Section 6).** Bulwark's bound `(source, event_type)` pairs are data, not a fixed map, so the new `bulwark-dispatch-hook.ts` needs a gate: a Redis binding set Bulwark maintains (option a) or a cached `GET /v1/internal/bindings` (option b). Decide at build. Soft dependency: the radar source-diff (Section 4.3) is the durable fallback, so a lost dispatch degrades to at-most-15-minutes-late arming. Owner: Bolt maintainers + Bulwark.
-2. **Persisted Bolt-event table for the radar source-diff (Section 4.3).** The fallback reads the persisted Bolt event log filtered to bound `(source, event_type)` since a per-org watermark. Confirm the table name (the Braid precedent references `bolt_recent_events`) and that it carries `occurred_at` + payload at the fidelity the firing filter needs. If it does not persist enough, the live dispatch becomes a hard dependency for those bindings.
-3. **Source-app event coverage (Section 7.2).** The beachhead bindings assume Bill pay-app/retention events and Book deadline events exist in `event-catalog.ts` at the needed granularity. Some may not yet be published (the braid-dispatch-hook TODO shows bond.company/bill.client/book.event_attendee upsert events are not all wired). Where a needed trigger event does not exist, that obligation is `unbound` and surfaces in review until the source app publishes it, or is driven off a coarser event. Gates the breadth of what Bulwark can watch autonomously.
-4. **Scanned / image-only contracts (Section 4.1).** Extraction assumes a PDF text layer. Scanned executed contracts need OCR, which is out of v1 scope; such contracts extract to zero obligations and must be flagged for manual entry. Decide whether to add an OCR step (a worker dependency) or defer.
-5. **Extraction accuracy is best-effort and legally consequential.** A missed or mis-typed obligation could waive a real claim, the exact harm Bulwark exists to prevent. Mitigations: the human-review queue (nothing arms unreviewed below the auto-confirm floor), the cited-span evidence (every obligation shows its clause quote + page/section for verification), and a disclaimer that Bulwark assists but does not replace counsel. The `auto_confirm_threshold` default (0.95) is deliberately conservative. Human decision: the acceptable auto-confirm floor and whether any obligation type must always be human-reviewed.
-6. **Notice-draft quality.** The drafted notice is a second best-effort llm-provider call; a bad draft that a human approves without reading could itself create exposure. The HITL approve is the control, but consider requiring an explicit "I have read this" confirmation on high-severity notice sends.
-7. **`search_everything` provider (Section 7.3).** Deferred from v1 to keep scope tight; a fast-follow. Braid shipped its provider in v1, so this is a scope choice, not a platform gap.
-8. **No human-provided secret required.** All dependencies are internal and already in the stack (Bin, Bolt, the internal llm-provider, agent_proposals, Blast, Blank, Bond, optionally Braid). No third-party API key, no external endpoint. The only new env are internal service URLs and the reused `INTERNAL_SERVICE_SECRET`.
+1. **Per-org dispatch gate mechanism (Section 6).** The `SADD bulwark:bindings:<org_id>` Redis set + `SISMEMBER` gate keyed on the event's own org is the chosen shape (ST8). Confirm the arm/disarm write points keep the set consistent (the last disarm of a `(source,event_type)` for an org must `SREM`), and decide the eventual-consistency window on a fresh arm (the inbox drain + radar backstop covers a brief miss). Owner: Bolt maintainers + Bulwark.
+2. **`trigger_at` payload extraction (THEME B).** Which payload field names the real legal event time per source event is not standardized across the catalog. Where a source event carries no such field, `trigger_at` is null and the clock anchors on `logged_at` with `anchor_source='logged_at'` surfaced for reviewer correction. Confirm per beachhead binding which field to prefer.
+3. **Holiday-calendar source (THEME B).** `business_days` / `roll_forward` need a jurisdiction holiday calendar. v1 ships weekend-only roll-forward plus an optional named calendar (`us-federal`); state-specific and international calendars are a fast-follow. A wrong holiday still yields a due date within a day of correct and is human-reviewable.
+4. **Source-app event coverage (Section 7.2).** Some beachhead triggers (Bill pay-app/retention, Book deadline changes) may not be published at the needed granularity yet (the braid-dispatch-hook TODO shows several upsert events are not wired). Unbound obligations are manual-trigger-only (D8) until the source app publishes. Gates autonomous breadth.
+5. **Scanned / image-only contracts (Section 4.1).** No OCR in v1; such contracts extract to zero obligations and are flagged for manual entry. Decide whether to add an OCR worker step or defer.
+6. **Extraction + draft accuracy is best-effort and legally consequential.** Mitigations: the human-review queue (outbound types never auto-arm, D5), verified cited spans (D7), the deterministic recipient/attachment (THEME E), the transactional-send path (D6), and a disclaimer that Bulwark assists but does not replace counsel. Human decision: the acceptable auto-confirm floor for display and whether any type must always be reviewed (default: all outbound types are).
+7. **`search_everything` provider (Section 7.3).** Deferred from v1 to keep scope tight; a fast-follow.
+8. **Partitioning trigger (ST9).** DELETE retention on unpartitioned deadline/risk tables is acceptable at the SMB target; revisit monthly partitioning if a large org's volume warrants it.
+9. **No human-provided secret required.** All dependencies are internal (Bin, Bolt, the internal llm-provider, agent_proposals, Blast transactional path, Blank, Bond, optionally Braid). No third-party API key. The only new env are internal service URLs and the reused `INTERNAL_SERVICE_SECRET`.
 
 ---
 
-## Changelog
+## Changelog - Round 1
 
-_Round 0 (initial draft). No adversarial findings folded yet. Subsequent rounds will record each finding's disposition (accept / accept-with-modification / reject-with-reason) here, per the revision protocol._
+Final hardening round 1. Every finding accepted or accepted-with-adaptation; none rejected. Dispositions:
+
+**Convergent themes (blockers)**
+- [security] THEME A ACCEPT (BLOCKER, option b): ledger reads tiered to owner/admin floor in `0237` AND project-scoped per-route with org-admin override; prose-vs-migration contradiction resolved (custom `0237` tiering, no member-gets-everything). Sections 2.5, 3.1, 3.4, 5.1, 5.3, 10.
+- [design] THEME B ACCEPT (BLOCKER): `deadline_rule` gains IANA `timezone` + `jurisdiction`/`holiday_calendar` + `roll_forward`; `contract.timezone` stored; firing separates legal `trigger_at` from transport `logged_at` (prefers `trigger_at`, records `anchor_source`); DST/roll-forward tests. Sections 2.1, 3.1, 3.3, 4.1, 4.2, 8.
+- [stability] THEME C ACCEPT (BLOCKER): `contract_kind='amendment'` + `supersedes_contract_id`; base status `'amended'`; obligation stable key `(contract_id, clause_ref)`; superseded terminal status (never delete); open deadlines re-pointed in one transaction; deadline-to-obligation FK `ON DELETE RESTRICT`. Sections 3.1, 3.4, 4.1, 8.
+- [stability] THEME D ACCEPT (BLOCKER): added the `bulwark_ingest_events` durable inbox; firing is an inbox drain; the false "bolt-event source-diff fallback" removed; live path documented as load-bearing. Sections 1, 3.1, 4.2, 6, 8.
+- [security] THEME E ACCEPT (BLOCKER): notice recipient is always `contract.counterparty_id`, attachments a deterministic allowlist, drafting LLM emits only subject/body; `can_access` preflight on the attachment for the decider at send. Sections 2.1, 2.4, 3.3, 8.
+- [best-practices] THEME F ACCEPT (BLOCKER): inserted the explicit `build-permission-codegen.mjs` step (regenerate + commit `packages/permissions/src/generated/permissions.ts`) before `check-permission-catalog`, then `build-permission-delta`; added to the reuse ledger. Sections 3.4, 11.
+- [best-practices/infra] THEME G ACCEPT (MAJOR x3): the internal dispatch target is `${BULWARK_API_INTERNAL_URL}/v1/internal/events` in Sections 4.2 and 6, matching 5.1 and the braid hook; added a live-2xx smoke test. Sections 4.2, 6, 8.
+
+**Design**
+- [design] D3 ACCEPT: retention scoped to `discharged` only; missed/waived deadlines + all waiver_risks kept indefinitely (FK `RESTRICT`/`SET NULL`, never cascade-delete a risk). Sections 3.1, 4.5.
+- [design] D4 ACCEPT: `flow_down` obligations carry `mandated_doc_types`; confirming one (or adding a tier) seeds `vendor_tier.required_doc_types`; `parent_tier_id` cascades tier 2+. Sections 3.1, 4.4, 5.1, 8.
+- [design] D5 ACCEPT: split display-auto-confirm from auto-arm; outbound types (notice/indemnity/payment/compliance) always require human confirm before `is_armed`; non-outbound auto-arm gated on a deterministic signal; `auto_draft_notices` default false. Sections 2.2, 3.1, 4.1, 4.3.
+- [design] D6 ACCEPT: compliance/notice sends are transactional and bypass `blast_unsubscribes` via a `transactional=true` send flag; stated plainly they do not honor marketing unsubscribes. Sections 2.5, 4.4.
+- [design] D7 ACCEPT: deterministic post-processing verifies `quote` against `source_text.slice(start,end)`, snaps or forces review on mismatch, stores verified offsets tied to `source_doc_hash`. Sections 3.3, 4.1, 8.
+- [design] D8 ACCEPT: added `POST /v1/obligations/:id/trigger` + `bulwark_trigger_obligation`; wedge softened to "event-bound plus manual trigger"; event-bound obligations require a resolvable job scope (null-project contracts are manual-only). Sections 1, 2.2, 4.2, 5.1, 10.
+- [design] D9 ACCEPT: `compliance_docs` split into `collection_status` + `validity_status` (+ `chase_status`); discharge/waive moved to `bulwark.deadline.write` (an action perm, not read+write). Sections 3.1, 5.1, 10.
+
+**Security**
+- [security] S3 ACCEPT: `can_access('bin.asset')` preflight at register/extract and a worker re-check against `created_by`. Sections 2.5, 4.1, 5.1.
+- [security] S4 ACCEPT: `/internal/events` returns 401 when `INTERNAL_SERVICE_SECRET` is empty, before any compare. Sections 2.5, 4.2, 5.1, 8.
+- [security] S5 ACCEPT: the inbox carries the entity_filter-referenced `scope_fields`; firing FAILS CLOSED when a declared filter path is absent. Sections 3.1, 4.2, 8.
+- [security] S6 ACCEPT: per-org per-sweep auto-draft cap + per-org daily notice-draft LLM ceiling; beyond cap flag and defer. Sections 2.6, 3.1, 4.3.
+- [security] S7 ACCEPT: `bulwark.notice.draft` + `bulwark.compliance.chase` tiered owner/admin in `0237`; human freeze is permission revocation (kill-switch bypasses humans). Sections 2.5, 3.4.
+- [security] S8 ACCEPT: extraction/drafting prompts fence clause + event text as untrusted DATA and forbid control-field emission. Sections 2.5, 4.1.
+
+**Stability**
+- [stability] ST4 ACCEPT: the dedup atom lives in `bulwark_ingest_events` (`UNIQUE(org, bolt_event_id)`), independent of deadline retention; retention never precedes the drain horizon. Sections 2.1, 3.1, 4.5.
+- [stability] ST5 ACCEPT: draft guarded by a `none->drafted` CAS + per-org advisory lock; added `bulwark-proposal-reconcile` (expired proposals reset to re-draft). Sections 4.3, 4.5, 8.
+- [stability] ST6 ACCEPT: hash-skip conditional on prior-run success; `last_processed_chunk` checkpoint resume; stable-key upsert (no dupes). Sections 3.1, 4.1, 8.
+- [stability] ST7 ACCEPT: calendar dedup uses `triggering_event_id = uuid5(obligation_id || anchor_date)`; the contradictory second unique index dropped; year N / N+1 test. Sections 3.1, 4.3, 8.
+- [stability] ST8 ACCEPT: per-org dispatch gate keyed on the event's own org; worker filter is defense in depth. Sections 4.2, 6, 8.
+- [stability] ST9 ACCEPT (documented): unpartitioned in v1 acceptable at SMB volume with discharged-only retention; monthly partitioning is a documented fast-follow. Sections 3.1, 12.
+
+**Best-practices**
+- [best-practices] BP3 ACCEPT: added a marketing `site/` section subtask (GILLIGAN screenshots, image rebuild) and the MCP-count + app-count narrative update in BOTH CLAUDE.md and site/. Section 9.5.
+- [best-practices] BP4 ACCEPT: the emitted delta must be additive-only; strip any unrelated row removals before landing. Section 3.4.
+- [best-practices] BP5 ACCEPT: added the Owner-200 / Viewer-read-only / Member-403 tiering tests. Section 8.
+- [best-practices] BP6 ACCEPT: `deadline.armed` is a ws-only frame published by the firing job on a conflict-free insert, distinct from the Bolt event set. Sections 4.2, 5.2, 7.1.
+
+**Infrastructure**
+- [infrastructure] IN1 ACCEPT: `BULWARK_API_URL` added to `mcp-server.env.optional` in services.mjs + compose + env-hint; backfilled the pre-existing missing `BASIS_API_URL`/`BRAID_API_URL`. Section 9.5.
+- [infrastructure] IN3 ACCEPT: committed the byte path to `@bigbluebam/storage` shared-DB object-key resolution in the worker; dropped `BIN_API_INTERNAL_URL` from bulwark-api. Section 9.2.
+- [infrastructure] IN4 ACCEPT: `bulwark-api` deliberately omitted from `mcp-server.needs`, matching braid/basis. Section 9.5.
+- [infrastructure] IN5 ACCEPT: insert only the `bulwark` token into each source alternation; the pre-existing bay/blip/bill divergence is left untouched this pass. Section 9.4.
