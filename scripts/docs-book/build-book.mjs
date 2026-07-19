@@ -642,13 +642,56 @@ async function main() {
     const pdfPath = docxPath.replace(/\.docx$/, '.pdf');
     try { fs.rmSync(pdfPath, { force: true }); } catch {}
     const sleep = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch {} };
-    const killStale = () => {
+
+    // Hard cap so a hung/stale soffice.bin can never hang the build unboundedly.
+    const CONV_TIMEOUT_MS = Number(process.env.BOOK_CONVERT_TIMEOUT_MS) || 120_000;
+
+    // Reap ONLY the process tree WE spawned, addressed by its PID. A global
+    // name-based kill (taskkill /IM soffice.bin, pkill soffice) would stomp a
+    // user's own concurrent LibreOffice session, so it is never done by default.
+    // On timeout spawnSync SIGTERMs the direct child, but LibreOffice detaches
+    // soffice.bin, so we also tree-kill the child's PID to clean up the strays.
+    const reapChild = (pid) => {
+      if (!pid) return;
+      if (process.platform === 'win32') {
+        spawnSync('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore' });
+      } else {
+        try { process.kill(-pid, 'SIGKILL'); } catch {}
+        try { process.kill(pid, 'SIGKILL'); } catch {}
+      }
+    };
+
+    // Opt-in ONLY (BOOK_REAP_STALE_SOFFICE=1): clear stray soffice processes
+    // globally before converting. Off by default precisely because a global kill
+    // is destructive to unrelated LibreOffice work; the PID-scoped reap above is
+    // the safe path we rely on normally.
+    const reapStaleGlobally = process.env.BOOK_REAP_STALE_SOFFICE === '1';
+    const killStaleGlobal = () => {
+      if (!reapStaleGlobally) return;
       if (process.platform === 'win32') {
         spawnSync('taskkill', ['/F', '/IM', 'soffice.exe', '/T'], { stdio: 'ignore' });
         spawnSync('taskkill', ['/F', '/IM', 'soffice.bin', '/T'], { stdio: 'ignore' });
       } else { spawnSync('pkill', ['-f', 'soffice'], { stdio: 'ignore' }); }
+      sleep(2000);
     };
-    killStale(); sleep(2000); // officehelper bootstraps its own LibreOffice; clear any stray instance first
+
+    // Run one conversion with the timeout, returning true only on real success.
+    // A timeout kills the spawned tree and surfaces a clear error.
+    const runConvert = (cmd, cmdArgs) => {
+      const r = spawnSync(cmd, cmdArgs, { stdio: 'inherit', timeout: CONV_TIMEOUT_MS });
+      if (r.error && r.error.code === 'ETIMEDOUT') {
+        reapChild(r.pid);
+        console.error(`LibreOffice conversion timed out after ${CONV_TIMEOUT_MS / 1000}s and was killed (pid ${r.pid ?? 'unknown'}). Is soffice.bin hung?`);
+        return false;
+      }
+      if (r.error) {
+        console.error(`LibreOffice conversion failed to spawn: ${r.error.message}`);
+        return false;
+      }
+      return r.status === 0 && fs.existsSync(pdfPath);
+    };
+
+    killStaleGlobal(); // no-op unless BOOK_REAP_STALE_SOFFICE=1
     // Convert via UNO so the TOC and Index FIELDS get updated (plain
     // `soffice --convert-to pdf` leaves them blank). Fall back to plain convert
     // only if the LibreOffice python is missing.
@@ -656,15 +699,13 @@ async function main() {
     const conv = path.join(__dirname, 'lo-convert.py');
     let ok = false;
     if (process.platform !== 'win32' || fs.existsSync(loPy)) {
-      const r = spawnSync(loPy, [conv, docxPath, pdfPath, termsPath], { stdio: 'inherit' });
-      ok = r.status === 0 && fs.existsSync(pdfPath);
+      ok = runConvert(loPy, [conv, docxPath, pdfPath, termsPath]);
     }
     if (!ok) {
       console.error('UNO convert unavailable; falling back to plain convert (TOC/Index will be blank until opened).');
-      killStale(); sleep(3000);
+      killStaleGlobal();
       const soffice = process.platform === 'win32' ? 'C:\\Program Files\\LibreOffice\\program\\soffice.exe' : 'soffice';
-      const r2 = spawnSync(soffice, ['--headless', '--convert-to', 'pdf', '--outdir', OUT_DIR, docxPath], { stdio: 'inherit' });
-      ok = r2.status === 0 && fs.existsSync(pdfPath);
+      ok = runConvert(soffice, ['--headless', '--convert-to', 'pdf', '--outdir', OUT_DIR, docxPath]);
     }
     if (ok) console.log(`PDF  -> ${path.relative(ROOT, pdfPath)}`);
     else console.error('PDF conversion failed. Close LibreOffice and re-run.');
