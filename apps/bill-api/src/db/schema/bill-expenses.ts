@@ -43,6 +43,17 @@ export const billExpenses = pgTable(
     submitted_by: uuid('submitted_by')
       .notNull()
       .references(() => users.id),
+    // Added by migration 0245_bill_burn_gate_acting_user.sql (Burn spec 6.1, "Deferred
+    // fail-open outcome"). On the fail-open path bill-api has no precheck_id to call back
+    // with, so it stamps the row instead: 'unavailable' when burn-api could not be reached
+    // (or the breaker was open, or the call timed out, or Redis was down) and
+    // 'not_configured' when BURN_API_INTERNAL_URL is unset. burn-variance-sweep reads this
+    // on recovery to raise ungated_charge against real rows. NULL means the gate ran.
+    burn_gate: varchar('burn_gate', { length: 32 }),
+    // The burn_prechecks row this expense was gated by, when the gate DID run. Lets
+    // burn-api's POST /v1/internal/prechecks/:id/outcome callback and the gate log join
+    // a verdict to the charge that actually posted.
+    burn_precheck_id: uuid('burn_precheck_id'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

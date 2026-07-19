@@ -26,6 +26,15 @@ export const billLineItems = pgTable(
     amount: bigint('amount', { mode: 'number' }).notNull(),
     time_entry_ids: uuid('time_entry_ids').array(),
     task_id: uuid('task_id'),
+    // Added by migration 0245_bill_burn_gate_acting_user.sql (Burn spec 9.2, 2.4 point 11).
+    // The human authority a service-to-service write acted under. Populated only by
+    // POST /internal/invoices/:id/line-items, where the caller is a service holding the
+    // internal secret and the deciding human must be recorded explicitly. NULL on the
+    // session-authenticated SPA path, where request.user is already the recorded actor.
+    // There is deliberately NO trusted X-Acting-User header: the acting user arrives in
+    // the body and the caller is expected to have CHECKED that user's permission through
+    // POST /internal/permissions/dual-read first.
+    acting_user_id: uuid('acting_user_id'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

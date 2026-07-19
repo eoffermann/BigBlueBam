@@ -82,10 +82,30 @@ export async function getExpense(id: string, orgId: string) {
 // Create
 // ---------------------------------------------------------------------------
 
-export async function createExpense(input: CreateExpenseInput, orgId: string, userId: string) {
+/**
+ * The Burn gate's residue on a row (Burn spec 6.1, "Deferred fail-open outcome").
+ *
+ * On the fail-open path bill-api has no precheck_id to call back with, so it stamps the
+ * created row instead. burn-variance-sweep reads these markers on recovery to raise
+ * `ungated_charge` against REAL ROWS rather than a bare counter, which is the difference
+ * between "the gate was down on Tuesday" and "these eleven charges posted unchecked".
+ */
+export interface BurnGateStamp {
+  burn_gate?: 'unavailable' | 'not_configured' | null;
+  burn_precheck_id?: string | null;
+}
+
+export async function createExpense(
+  input: CreateExpenseInput,
+  orgId: string,
+  userId: string,
+  gate?: BurnGateStamp,
+) {
   const [expense] = await db
     .insert(billExpenses)
     .values({
+      burn_gate: gate?.burn_gate ?? null,
+      burn_precheck_id: gate?.burn_precheck_id ?? null,
       organization_id: orgId,
       project_id: input.project_id,
       description: input.description,

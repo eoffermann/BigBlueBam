@@ -665,6 +665,32 @@ export const burnRuleCreateSchema = z
   });
 export type BurnRuleCreate = z.infer<typeof burnRuleCreateSchema>;
 
+// PATCH /v1/rules/:id. Declared separately rather than as `burnRuleCreateSchema.partial()`,
+// which does not exist: the create schema carries two `.refine()` calls and is therefore a
+// ZodEffects, not a ZodObject. The two cross-field invariants are re-expressed here as a
+// single refinement over the PATCHED shape, since a patch may legitimately omit
+// `outcome_kind` while changing only the priority.
+export const burnRuleUpdateSchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    priority: z.number().int().min(0).max(10000).optional(),
+    match: BurnRuleMatch.optional(),
+    outcome_kind: BurnRuleOutcomeKind.optional(),
+    outcome_deliverable_id: z.string().uuid().nullable().optional(),
+    outcome_reason: BurnNonBillableReason.nullable().optional(),
+    is_enabled: z.boolean().optional(),
+  })
+  .strict()
+  .refine((v) => v.outcome_kind !== 'attribute' || v.outcome_deliverable_id !== null, {
+    message: 'outcome_deliverable_id cannot be cleared while outcome_kind is attribute',
+    path: ['outcome_deliverable_id'],
+  })
+  .refine((v) => v.outcome_kind !== 'non_billable' || v.outcome_reason !== null, {
+    message: 'outcome_reason cannot be cleared while outcome_kind is non_billable',
+    path: ['outcome_reason'],
+  });
+export type BurnRuleUpdate = z.infer<typeof burnRuleUpdateSchema>;
+
 /* ------------------------------------------------------------------ */
 /*  The gate                                                          */
 /* ------------------------------------------------------------------ */

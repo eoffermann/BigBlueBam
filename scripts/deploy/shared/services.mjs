@@ -361,7 +361,17 @@ export const APP_SERVICES = [
     public_paths: ['/bill/api/', '/invoice/'],
     env: {
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL', 'PUBLIC_URL'],
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET'],
+      optional: [
+        'CORS_ORIGIN', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
+        // Burn pre-transaction spend gate (Burn spec 9.2). All four are OPTIONAL: with
+        // BURN_API_INTERNAL_URL unset the gate is absent and every expense posts, which is
+        // the documented no-op. They still need ENV_HINTS entries -- hintFor() returns
+        // { kind: 'unknown' } for anything unlisted and railway-orchestrator.mjs silently
+        // OMITS an unknown optional var, which would leave the flagship gate switched off
+        // in production with no signal anywhere.
+        'BURN_API_INTERNAL_URL', 'BURN_PRECHECK_TIMEOUT_MS',
+        'BURN_PRECHECK_BREAKER_THRESHOLD', 'BURN_PRECHECK_BREAKER_PROBE_MS',
+      ],
     },
   },
   {

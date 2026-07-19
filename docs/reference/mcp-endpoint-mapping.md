@@ -1628,6 +1628,9 @@ or `/helpdesk/agents`) segment in-code.
 | `PUT /bill/api/v1/settings` | `bill_update_settings` | Update org billing settings | `apps/bill/src/pages/settings.tsx` |
 | `GET /bill/api/invoice/:token` | — _(skip: public token-auth invoice view)_ | Public token-auth invoice view | — (public link) |
 | `GET /bill/api/invoice/:token/pdf` | — _(skip: public binary PDF)_ | Public token-auth invoice PDF | — (public link) |
+| `POST /bill/api/v1/internal/rates/resolve` | — _(skip: internal service-to-service route, `INTERNAL_SERVICE_SECRET`)_ | Resolve the effective rate for Burn's valuation. Delegates to `resolveRate` so Burn and Bill can never disagree about the same hour | — (burn-api) |
+| `POST /bill/api/v1/internal/rates/resolve-batch` | — _(skip: internal service-to-service route, `INTERNAL_SERVICE_SECRET`)_ | Batch rate resolve (max 500 tuples), so Burn's nightly revaluation is one round trip rather than one per work item | — (burn-api, worker) |
+| `POST /bill/api/v1/internal/invoices/:id/line-items` | — _(skip: internal service-to-service route, `INTERNAL_SERVICE_SECRET`; the acting user is CHECKED by the caller via `/internal/permissions/dual-read` and passed in the body, never a header)_ | Line-item write carrying `acting_user_id`, for Burn change-order approvals that run in a `proposal.decided` subscription with no session | — (burn-api) |
 
 
 ## Bureau (app)

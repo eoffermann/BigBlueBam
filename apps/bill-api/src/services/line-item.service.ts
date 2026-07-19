@@ -16,6 +16,14 @@ export interface CreateLineItemInput {
   sort_order?: number;
   time_entry_ids?: string[];
   task_id?: string;
+  /**
+   * The human authority a SERVICE-TO-SERVICE write acted under (Burn spec 2.4 point 11).
+   * Set only by POST /internal/invoices/:id/line-items. NULL on the session path, where
+   * request.user is already the recorded actor. Arrives in the request body, never in a
+   * header: a trusted acting-user header would turn one leaked internal secret into
+   * impersonation of every user in the org.
+   */
+  acting_user_id?: string;
 }
 
 export interface UpdateLineItemInput {
@@ -69,6 +77,7 @@ export async function addLineItem(
       amount,
       time_entry_ids: input.time_entry_ids,
       task_id: input.task_id,
+      acting_user_id: input.acting_user_id ?? null,
     })
     .returning();
 

@@ -2,6 +2,52 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import * as rateService from '../services/rate.service.js';
+import { publishBoltEvent } from '../lib/bolt-events.js';
+import { loadActor, loadOrg } from '../lib/bolt-event-enrich.js';
+
+/**
+ * Bill rates are the ONE input Burn's valuation shares with Bill's own invoices, so a rate
+ * write has to be observable: `burn-revalue` reprices existing work items on it. Publishing
+ * the event here (rather than having Burn poll) is what makes revaluation event-driven.
+ * Payload carries the rate row's own figures, which are already Bill-tier data.
+ */
+async function publishRateEvent(
+  eventType: 'rate.created' | 'rate.updated',
+  rate: {
+    id: string;
+    project_id: string | null;
+    user_id: string | null;
+    rate_amount: number;
+    rate_type: string | null;
+    currency: string | null;
+    effective_from: string;
+    effective_to: string | null;
+  },
+  orgId: string,
+  actorId: string,
+): Promise<void> {
+  const [actor, org] = await Promise.all([loadActor(actorId), loadOrg(orgId)]);
+  publishBoltEvent(
+    eventType,
+    'bill',
+    {
+      rate: {
+        id: rate.id,
+        project_id: rate.project_id,
+        user_id: rate.user_id,
+        rate_amount: rate.rate_amount,
+        rate_type: rate.rate_type,
+        currency: rate.currency,
+        effective_from: rate.effective_from,
+        effective_to: rate.effective_to,
+      },
+      actor: { id: actor.id, name: actor.name, email: actor.email },
+      org: { id: org.id, name: org.name, slug: org.slug },
+    },
+    orgId,
+    actorId,
+  );
+}
 
 const createRateSchema = z.object({
   project_id: z.string().uuid().optional(),
@@ -53,6 +99,7 @@ export default async function rateRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = createRateSchema.parse(request.body);
       const rate = await rateService.createRate(body, request.user!.org_id);
+      await publishRateEvent('rate.created', rate, request.user!.org_id, request.user!.id);
       return reply.status(201).send({ data: rate });
     },
   );
@@ -64,6 +111,7 @@ export default async function rateRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const body = updateRateSchema.parse(request.body);
       const rate = await rateService.updateRate(request.params.id, request.user!.org_id, body);
+      await publishRateEvent('rate.updated', rate, request.user!.org_id, request.user!.id);
       return reply.send({ data: rate });
     },
   );

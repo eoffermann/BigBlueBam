@@ -173,6 +173,28 @@ async function dualRead(
   }
 }
 
+/**
+ * A fail-closed dual-read for ONE arbitrary permission.
+ *
+ * Used by the `burn.precheck.mark_wrong` check on POST /v1/prechecks/:id/label, which is a
+ * two-authority route: the route gate is the weaker `burn.precheck.run`, and the stronger
+ * authority is resolved inside the handler so the member-writable values stay reachable.
+ *
+ * This is NOT a flooring decision, but it uses the same fail-closed primitive on purpose:
+ * `fastify.canResolve` is a hardcoded `return true` and would silently grant every member
+ * the ability to write `wrong_call`, which is the only value in the demotion numerator.
+ */
+export async function resolveSinglePermission(
+  deps: ViewerCapsDeps,
+  userId: string | null | undefined,
+  orgId: string | null | undefined,
+  permissionId: string,
+): Promise<boolean> {
+  if (!userId || !orgId) return false;
+  const leg = await dualRead(deps, userId, orgId, permissionId);
+  return leg.allowed;
+}
+
 /** Both caps for one identity. Fails closed as a unit if the identity is unusable. */
 export async function resolveViewerCapsFor(
   deps: ViewerCapsDeps,

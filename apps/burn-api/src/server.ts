@@ -19,6 +19,16 @@ import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
 import viewerCapsPlugin from './plugins/viewer-caps.js';
 import rlsPlugin from './plugins/rls.js';
+import engagementRoutes from './routes/engagements.routes.js';
+import deliverableRoutes from './routes/deliverables.routes.js';
+import ledgerRoutes from './routes/ledger.routes.js';
+import ruleRoutes from './routes/rules.routes.js';
+import precheckRoutes from './routes/precheck.routes.js';
+import varianceRoutes from './routes/variances.routes.js';
+import financialRoutes from './routes/financials.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
+import internalRoutes from './routes/internal.routes.js';
+import registerBurnWs from './ws/burn-ws.js';
 import { sql } from 'drizzle-orm';
 
 // ── Boot assertion, FIRST, before anything binds a port or opens a pool.
@@ -120,7 +130,27 @@ await fastify.register(healthCheckPlugin, {
   },
 });
 
-// Burn REST surface (spec 6.1) lands in M5, mounted under /v1.
+// Burn REST surface (spec 6.1), mounted under /v1, plus the /burn/ws hub (spec 6.2).
+//
+// Every route file registers its own permission gates; there is no blanket requireAuth on the
+// prefix, because /v1/internal/* authenticates with INTERNAL_SERVICE_SECRET rather than a
+// session and must NOT be behind the session gate.
+await fastify.register(
+  async (v1) => {
+    await v1.register(engagementRoutes);
+    await v1.register(deliverableRoutes);
+    await v1.register(ledgerRoutes);
+    await v1.register(ruleRoutes);
+    await v1.register(precheckRoutes);
+    await v1.register(varianceRoutes);
+    await v1.register(financialRoutes);
+    await v1.register(settingsRoutes);
+    await v1.register(internalRoutes);
+  },
+  { prefix: '/v1' },
+);
+
+await fastify.register(registerBurnWs);
 
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {

@@ -287,6 +287,15 @@ export const ENV_HINTS = {
   // Carries /v1 because the mcp-server's burn client requests bare resource paths, matching
   // every other satellite client (beacon, brief, bond, board, ...).
   BURN_API_URL: { kind: 'computed', value: `${plannedApp('burn-api')}/v1` },
+  // The three bill-api-side spend-gate tunables (Burn spec 5.5.1). BURN_PRECHECK_TIMEOUT_MS
+  // is the AUTHORITATIVE client deadline and must stay strictly ABOVE burn-api's own
+  // precheck_budget_ms (CHECK-clamped to [100, 750]): a timeout budget stored in the
+  // service it is meant to bound cannot be read when that service is down. The breaker
+  // values are shared across every bill-api replica through Redis, so they describe the
+  // FLEET's tolerance, not one process's.
+  BURN_PRECHECK_TIMEOUT_MS: { kind: 'literal', value: '800' },
+  BURN_PRECHECK_BREAKER_THRESHOLD: { kind: 'literal', value: '5' },
+  BURN_PRECHECK_BREAKER_PROBE_MS: { kind: 'literal', value: '30000' },
   VOICE_AGENT_URL: { kind: 'computed', value: internal('voice-agent') },
 
   // ── MCP server ────────────────────────────────────────────────────

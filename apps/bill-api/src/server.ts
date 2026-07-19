@@ -105,6 +105,7 @@ import rateRoutes from './routes/rates.routes.js';
 import reportRoutes from './routes/reports.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import publicRoutes from './routes/public.routes.js';
+import internalRoutes from './routes/internal.routes.js';
 
 await fastify.register(clientRoutes, { prefix: '/v1' });
 await fastify.register(invoiceRoutes, { prefix: '/v1' });
@@ -114,6 +115,9 @@ await fastify.register(expenseRoutes, { prefix: '/v1' });
 await fastify.register(rateRoutes, { prefix: '/v1' });
 await fastify.register(reportRoutes, { prefix: '/v1' });
 await fastify.register(settingsRoutes, { prefix: '/v1' });
+// Service-to-service surface. Guarded by INTERNAL_SERVICE_SECRET, failing CLOSED on an
+// empty secret. Under /v1, so the live paths are /v1/internal/rates/resolve etc.
+await fastify.register(internalRoutes, { prefix: '/v1' });
 await fastify.register(publicRoutes); // No prefix — /invoice/:token
 
 // Graceful shutdown

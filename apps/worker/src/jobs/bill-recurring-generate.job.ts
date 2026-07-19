@@ -31,6 +31,7 @@ import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
 import { getDb } from '../utils/db.js';
 import { publishBoltEvent } from '../utils/bolt-events.js';
+import { createJobGate, type JobGate } from '../lib/burn-precheck.js';
 
 export interface BillRecurringGenerateJobData {
   /** Optional: constrain the sweep to a single org. */
@@ -110,10 +111,54 @@ function ymd(d: Date): string {
 async function processSchedule(
   schedule: ScheduleRow,
   logger: Logger,
-): Promise<{ generated: boolean }> {
+  gate: JobGate,
+): Promise<{ generated: boolean; denied?: boolean }> {
   const db = getDb();
   const observedNextRun = schedule.next_run_at;
   const advanced = advanceByCadence(new Date(observedNextRun), schedule.cadence);
+
+  // 0. Burn spend gate (Burn spec 5.2, class `bill.recurring`).
+  //
+  // Runs BEFORE the claim, deliberately. The claim advances next_run_at, so gating after it
+  // would mean an enforced deny silently BURNS A BILLING PERIOD -- the schedule would skip
+  // forward with no invoice, which is a far worse outcome than the overspend the gate was
+  // trying to prevent. Gating first means a deny leaves next_run_at untouched and the
+  // schedule is simply retried on the next sweep, after a human has mapped it, absorbed it,
+  // or raised a change order.
+  //
+  // The proposed amount is the template subtotal (tax and discount are applied later and
+  // do not change which envelope this consumes). A cheap indexed aggregate; the gate itself
+  // is skipped entirely for the rest of the job once the breaker is known open.
+  const templateTotal = asRows<{ subtotal: string | number | null }>(
+    await db.execute(sql`
+      SELECT COALESCE(SUM(ROUND(quantity * unit_price)), 0)::bigint AS subtotal
+      FROM bill_recurring_line_items
+      WHERE recurring_invoice_id = ${schedule.id}
+    `),
+  )[0];
+  const proposedAmount = Number(templateTotal?.subtotal ?? 0);
+
+  const allowed = await gate.check({
+    organization_id: schedule.organization_id,
+    work_ref_id: schedule.id,
+    project_id: schedule.project_id,
+    proposed_amount: proposedAmount,
+    currency: schedule.currency,
+    title: schedule.name,
+  });
+
+  if (!allowed) {
+    logger.warn(
+      {
+        scheduleId: schedule.id,
+        orgId: schedule.organization_id,
+        proposedAmount,
+        currency: schedule.currency,
+      },
+      'bill-recurring-generate: Burn gate denied this schedule; next_run_at left untouched so it retries after a human resolves it',
+    );
+    return { generated: false, denied: true };
+  }
 
   // 1. Claim by compare-and-set on next_run_at. Only the first worker wins.
   const claimRaw = await db.execute(sql`
@@ -361,13 +406,20 @@ export async function processBillRecurringGenerateJob(
     return;
   }
 
+  // ONE gate object for the whole sweep. Its breaker decision is memoized per org, so a
+  // burn-api outage costs at most one timeout for this job rather than one per schedule
+  // (200 x 800ms = 160s of pure waiting on a known-dead service).
+  const gate = createJobGate(logger);
+
   let generated = 0;
   let skipped = 0;
   let failed = 0;
+  let denied = 0;
   for (const schedule of schedules) {
     try {
-      const result = await processSchedule(schedule, logger);
+      const result = await processSchedule(schedule, logger, gate);
       if (result.generated) generated += 1;
+      else if (result.denied) denied += 1;
       else skipped += 1;
     } catch (err) {
       failed += 1;
@@ -383,7 +435,7 @@ export async function processBillRecurringGenerateJob(
   }
 
   logger.info(
-    { jobId: job.id, found: schedules.length, generated, skipped, failed },
+    { jobId: job.id, found: schedules.length, generated, skipped, denied, failed },
     'bill-recurring-generate: sweep complete',
   );
 }

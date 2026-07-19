@@ -1023,6 +1023,18 @@ services:
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
       - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+      # Burn pre-transaction spend gate (Burn spec 5.5.1 / 9.2).
+      # BURN_API_INTERNAL_URL is OPTIONAL BY DESIGN: unset means the gate is absent and
+      # every expense posts normally. It is deliberately NOT defaulted to http://burn-api
+      # here, because the counters still increment on the unconfigured no-op and an org
+      # sees 0 percent coverage rather than a clean 0/0 console. BURN_PRECHECK_TIMEOUT_MS
+      # is the AUTHORITATIVE client deadline; burn-api's own precheck_budget_ms is a
+      # server-side compute budget clamped strictly below it, because a timeout stored in
+      # the service it bounds cannot be read when that service is down.
+      - BURN_API_INTERNAL_URL=${BURN_API_INTERNAL_URL:-}
+      - BURN_PRECHECK_TIMEOUT_MS=${BURN_PRECHECK_TIMEOUT_MS:-800}
+      - BURN_PRECHECK_BREAKER_THRESHOLD=${BURN_PRECHECK_BREAKER_THRESHOLD:-5}
+      - BURN_PRECHECK_BREAKER_PROBE_MS=${BURN_PRECHECK_BREAKER_PROBE_MS:-30000}
     depends_on:
       migrate:
         condition: service_completed_successfully
