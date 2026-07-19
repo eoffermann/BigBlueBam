@@ -119,6 +119,41 @@ export interface BulwarkSweepJobData {
 }
 
 /**
+ * Burn (contract-consumption / scope-gate monitor) queues (Burn design spec §4 / §8.1).
+ * burn-api is the engine host; every worker job is a THIN HTTP caller that POSTs to a
+ * burn-api internal engine route so all business logic and every LLM call live in one
+ * container (spec 4.0). Shared so the producer (burn-api) and the consumer (apps/worker)
+ * cannot drift on the queue name or the payload shape.
+ *
+ * 10 job families plus the claim reaper = 11 queues. The two LLM-calling families
+ * (extract, attribute) use row claims + per-chunk checkpoints as their correctness
+ * mechanism because no advisory-lock-holding transaction may contain an outbound HTTP call
+ * (spec 4.0 point 4, R3-T1); the SQL-only sweeps hold a per-org pg_advisory_xact_lock
+ * inside burn-api.
+ */
+export const BURN_EXTRACT_DELIVERABLES_QUEUE = 'burn-extract-deliverables';
+export interface BurnExtractDeliverablesJobData {
+  organization_id: string;
+  engagement_id: string;
+}
+
+export const BURN_ATTRIBUTE_BATCH_QUEUE = 'burn-attribute-batch';
+export const BURN_CLAIM_REAPER_QUEUE = 'burn-claim-reaper';
+export const BURN_VARIANCE_SWEEP_QUEUE = 'burn-variance-sweep';
+export const BURN_REVALUE_QUEUE = 'burn-revalue';
+export const BURN_SILENT_DELIVERABLE_SWEEP_QUEUE = 'burn-silent-deliverable-sweep';
+export const BURN_ROLLUP_REFRESH_QUEUE = 'burn-rollup-refresh';
+export const BURN_CALIBRATION_RECOMPUTE_QUEUE = 'burn-calibration-recompute';
+export const BURN_PROPOSAL_RECONCILE_QUEUE = 'burn-proposal-reconcile';
+export const BURN_RETENTION_QUEUE = 'burn-retention';
+export const BURN_EMBED_SYNC_QUEUE = 'burn-embed-sync';
+
+/** Optional org scope for a targeted engine run; absent means iterate every org. */
+export interface BurnSweepJobData {
+  organization_id?: string;
+}
+
+/**
  * Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10). Producers
  * (banter-api message routes, later other apps) enqueue one job per platform
  * activity event; the worker classifies it, resolves concerned users, and
