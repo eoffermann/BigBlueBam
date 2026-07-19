@@ -748,6 +748,16 @@ Indexes: `(organization_id)`, `(organization_id, project_id, user_id, effective_
 | **`revenue_basis`** | varchar(32) NOT NULL | `contract_value` \| `billable_recognized_capped` \| `contract_value_per_period` \| `billable_recognized` (1.2.1) |
 | **`period_start` / `period_end` / `period_index`** | date / date / integer | **descriptive columns for a `retainer` chain (R3-D3). The rollup row is always the CURRENT period; prior periods are exposed through the burn-down series, not through additional rollup rows.** NULL for every non-retainer basis |
 | `margin_state` | varchar(16) | `in_progress` \| `final` (1.2.1) |
+
+> **Wire-name note (build M3).** On the API surface `margin_state` appears ONLY on the
+> `true_margin` money variant. The `contract_consumption` variant carries the same lifecycle
+> value under the name `completion_state`. The DB column keeps the single name; the
+> discriminated union renames it per variant so no `contract_consumption` response ever
+> carries the string "margin", which section 12.1 asserts.
+>
+> Likewise, section 1.2.2's variant table (`contract_consumption_pct`) is authoritative for
+> the WIRE name; section 2.4 point 17 and the `burn_engagement_rollups.consumption_pct`
+> COLUMN use the shorter name. Same figure, two layers.
 | `work_item_count` | integer NOT NULL DEFAULT 0 | |
 | **`frozen_at`** | timestamptz | **set by `burn-retention` on purge; a frozen row is never recomputed (R2-T5)** |
 | `computed_at` | timestamptz NOT NULL DEFAULT now() | served as `as_of` |
@@ -1206,7 +1216,7 @@ Base path `/burn/api/`, routes under `/v1`, mirroring `apps/basis-api/src/server
 | POST | `/v1/prechecks/:id/label` | Set `advisory_feedback` / `override_reason_code='gate_wrong'` | **`right_call` and `would_have_mapped`: `burn.precheck.run`, own non-enforced row only. `wrong_call` and `gate_wrong`: `burn.precheck.mark_wrong` (owner/admin) (2.4 point 9)** |
 | GET | `/v1/variances` | Variance inbox | `burn.variance.read`; project-scoped; `amount` floored; `detail` serializer-redacted |
 | PATCH | `/v1/variances/:id` | Acknowledge / resolve / dismiss | **`burn.variance.write`** |
-| GET | `/v1/financials` | Per-chain figures | `burn.financials.read`; project-scoped; banded; carries `metric_basis`, `revenue_basis`, `margin_state`, `as_of`, `final`; **suppressed per 2.4 point 17 below the contributor floor** |
+| GET | `/v1/financials` | Per-chain figures | `burn.financials.read`; project-scoped; carries `metric_basis`, `revenue_basis`, `as_of`, `final`, and **`margin_state` ONLY on the `true_margin` variant** (the `contract_consumption` variant carries `completion_state` instead, since a key named `margin_state` on a response whose whole point is that the number is not margin is the same mislabeling that renamed `burn_margin` to `burn_financials` - see 1.2.2); **suppressed per 2.4 point 17 below the contributor floor** |
 | GET | `/v1/financials/accounts` | Firm-wide roll-up | **`burn.financials.read_all` (owner/admin) + the second in-route role guard (2.4 point 1)**; account basis is the **weakest member** |
 | GET | `/v1/financials/export` | CSV export | **`burn.financials.read_all` + in-route guard**; header row carries the discriminator |
 | GET | `/v1/cost-rates` | List cost rates | **`burn.costrate.read` (owner/admin) + in-route guard** |
