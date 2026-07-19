@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/bulwark-api/Dockerfile",
+    "watchPatterns": [
+      "apps/bulwark-api/**",
+      "packages/shared/**",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "package.json",
+      "tsconfig.base.json",
+      "apps/bulwark-api/Dockerfile"
+    ]
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "startCommand": "node dist/server.js",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100
+  }
+}

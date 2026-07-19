@@ -291,6 +291,30 @@ export const APP_SERVICES = [
     },
   },
   {
+    name: 'bulwark-api',
+    description: 'Bulwark API — AI contract-obligation monitor (obligation ledger, deadline radar, notice drafts)',
+    dockerfile: 'apps/bulwark-api/Dockerfile',
+    port: 4021,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    // api (can_access preflight), bolt-api (event publish), and braid-api (sync
+    // counterparty golden-id resolution, spec 7.4/IN7) are request-time deps only;
+    // source byte/DB reads are shared-DB, not service-to-service.
+    needs: ['postgres', 'redis', 'api', 'bolt-api'],
+    public_paths: ['/bulwark/api/', '/bulwark/ws'],
+    env: {
+      required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'INTERNAL_SERVICE_SECRET', 'BBB_API_INTERNAL_URL', 'BOLT_API_INTERNAL_URL'],
+      optional: [
+        'DATABASE_READ_URL',
+        'BRAID_API_INTERNAL_URL',
+        'BLAST_API_INTERNAL_URL',
+        'CORS_ORIGIN',
+        'LOG_LEVEL',
+      ],
+    },
+  },
+  {
     name: 'book-api',
     description: 'Book API — calendar events, booking pages, meetings',
     dockerfile: 'apps/book-api/Dockerfile',
@@ -486,6 +510,9 @@ export const APP_SERVICES = [
         'BEARING_API_URL', 'BOARD_API_URL', 'BOND_API_URL', 'BLAST_API_URL',
         'BOOK_API_URL', 'BENCH_API_URL', 'BILL_API_URL', 'BLANK_API_URL',
         'BLUEPRINT_API_URL', 'BUREAU_API_URL', 'BIN_API_URL', 'BAY_API_URL', 'BLIP_API_URL',
+        // BASIS_API_URL + BRAID_API_URL are present in docker-compose.yml but were
+        // missing here (pre-existing gap, spec 9.5/IK2); BULWARK_API_URL is the new one.
+        'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',
       ],
@@ -596,10 +623,10 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'basis-api', 'braid-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
+      'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];

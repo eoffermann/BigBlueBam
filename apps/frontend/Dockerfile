@@ -21,6 +21,7 @@ COPY apps/book/package.json ./apps/book/
 COPY apps/bench/package.json ./apps/bench/
 COPY apps/basis/package.json ./apps/basis/
 COPY apps/braid/package.json ./apps/braid/
+COPY apps/bulwark/package.json ./apps/bulwark/
 COPY apps/bill/package.json ./apps/bill/
 COPY apps/blank/package.json ./apps/blank/
 COPY apps/blueprint/package.json ./apps/blueprint/
@@ -123,6 +124,10 @@ COPY apps/braid/src ./apps/braid/src
 COPY apps/braid/public ./apps/braid/public
 COPY apps/braid/index.html ./apps/braid/
 COPY apps/braid/tsconfig.json apps/braid/tsconfig.node.json apps/braid/vite.config.ts ./apps/braid/
+COPY apps/bulwark/src ./apps/bulwark/src
+COPY apps/bulwark/public ./apps/bulwark/public
+COPY apps/bulwark/index.html ./apps/bulwark/
+COPY apps/bulwark/tsconfig.json apps/bulwark/tsconfig.node.json apps/bulwark/vite.config.ts ./apps/bulwark/
 
 # Bill frontend
 COPY apps/bill/src ./apps/bill/src
@@ -185,6 +190,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/bench build \
  && pnpm --filter @bigbluebam/basis build \
  && pnpm --filter @bigbluebam/braid build \
+ && pnpm --filter @bigbluebam/bulwark build \
  && pnpm --filter @bigbluebam/bill build \
  && pnpm --filter @bigbluebam/blank build \
  && pnpm --filter @bigbluebam/blueprint build \
@@ -210,6 +216,7 @@ COPY --from=build /app/apps/book/dist /usr/share/nginx/html/book
 COPY --from=build /app/apps/bench/dist /usr/share/nginx/html/bench
 COPY --from=build /app/apps/basis/dist /usr/share/nginx/html/basis
 COPY --from=build /app/apps/braid/dist /usr/share/nginx/html/braid
+COPY --from=build /app/apps/bulwark/dist /usr/share/nginx/html/bulwark
 COPY --from=build /app/apps/bill/dist /usr/share/nginx/html/bill
 COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
 COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint
