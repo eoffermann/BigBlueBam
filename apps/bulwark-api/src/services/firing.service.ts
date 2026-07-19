@@ -136,6 +136,8 @@ export async function drainIngestEvent(
       contractId: c.id,
       projectId: c.project_id,
       triggeringEventId: eventArmKey(o.id, entityId, stateEpoch),
+      armScopeEntityId: entityId,
+      armStateEpoch: stateEpoch,
       anchorSource,
       triggeredAt: anchor,
       loggedAt: new Date(event.logged_at),

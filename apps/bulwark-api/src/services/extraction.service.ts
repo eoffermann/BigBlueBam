@@ -307,7 +307,12 @@ export async function runExtraction(args: RunExtractionArgs): Promise<RunExtract
         chunk_index: v.chunk_index,
         verified: v.verified,
       });
-      // Unverified spans force pending_review regardless of confidence (D7).
+      // D5 confidence-vs-arm split: claim-waiving types stay pending_review; eligible types
+      // auto-arm only on the deterministic signal. Unverified spans keep pending_review (D7).
+      const binding = buildBinding(v.trigger_description);
+      const armDecision = v.verified
+        ? decideAutoArm(v.obligation_type, v.verified, binding)
+        : { review_status: 'pending_review' as const, is_armed: false };
       const [insertedRow] = await db
         .insert(bulwarkObligations)
         .values({
@@ -318,11 +323,11 @@ export async function runExtraction(args: RunExtractionArgs): Promise<RunExtract
           obligation_type: v.obligation_type,
           title: v.title.slice(0, 512),
           trigger_description: v.trigger_description ?? null,
-          event_binding: buildBinding(v.trigger_description),
+          event_binding: binding,
           cited_span: citedSpan,
           confidence: confidence !== null ? String(confidence) : null,
-          review_status: 'pending_review',
-          is_armed: false,
+          review_status: armDecision.review_status,
+          is_armed: armDecision.is_armed,
           extraction_run_id: runId,
         })
         .onConflictDoNothing({
@@ -344,7 +349,7 @@ export async function runExtraction(args: RunExtractionArgs): Promise<RunExtract
             contract: { id: contractId },
             obligation_type: v.obligation_type,
             confidence,
-            review_status: 'pending_review',
+            review_status: armDecision.review_status,
             org: { id: orgId },
           },
           orgId,
@@ -413,4 +418,58 @@ function buildBinding(triggerDescription: string | null | undefined): Record<str
   // entity_filter is left for the reviewer to complete at confirm; without it the obligation
   // cannot arm as event-bound (STJ5).
   return { source: mapped.source, event_type: mapped.event_type, unbound: false };
+}
+
+// The D5 confidence-vs-arm split (spec §2.2 / D5). The claim-or-money-waiving set NEVER
+// auto-arms on model confidence: a human must confirm before is_armed can become true. The
+// auto-arm-eligible set may arm at extraction ONLY when a DETERMINISTIC signal holds. Because
+// M4 extraction does not yet emit a non-empty entity_filter or a parsed calendar deadline_rule
+// (both are completed at reviewer confirm), the deterministic signal is not satisfiable here in
+// v1, so extraction stays conservative: every obligation lands `pending_review`, is_armed=false,
+// and the human-confirm gate (computeIsArmed in obligations.service) is the operative arm path.
+// The eligibility helper is wired so auto-arm activates automatically once extraction produces
+// the deterministic signal, without touching the claim-waiving carve-out.
+const CLAIM_WAIVING_TYPES: ReadonlySet<BulwarkObligationType> = new Set([
+  'notice',
+  'lien',
+  'retention',
+  'indemnity',
+  'payment',
+]);
+const AUTO_ARM_ELIGIBLE_TYPES: ReadonlySet<BulwarkObligationType> = new Set([
+  'insurance',
+  'flow_down',
+  'renewal',
+  'termination',
+  'other',
+]);
+
+interface AutoArmDecision {
+  review_status: 'pending_review' | 'auto_confirmed';
+  is_armed: boolean;
+}
+
+// Decide the extraction-time review_status + is_armed for an obligation. Claim-waiving types
+// are always human-confirm-first (never armed here). Eligible types arm only on the
+// deterministic signal: the cited span verified AND a real (source,event_type) mapped AND a
+// non-empty entity_filter present (STJ5). deadline_rule agreement is added once extraction
+// parses rules; until then a missing filter already keeps this false.
+function decideAutoArm(
+  obligationType: BulwarkObligationType,
+  verified: boolean,
+  binding: Record<string, unknown>,
+): AutoArmDecision {
+  if (CLAIM_WAIVING_TYPES.has(obligationType)) {
+    return { review_status: 'pending_review', is_armed: false };
+  }
+  if (!AUTO_ARM_ELIGIBLE_TYPES.has(obligationType)) {
+    return { review_status: 'pending_review', is_armed: false };
+  }
+  const filter = (binding.entity_filter ?? null) as { payload_path?: string; equals_contract_field?: string } | null;
+  const hasFilter = !!filter?.payload_path && !!filter?.equals_contract_field;
+  const mapped = !binding.unbound && !!binding.source && !!binding.event_type;
+  const deterministic = verified && mapped && hasFilter;
+  return deterministic
+    ? { review_status: 'auto_confirmed', is_armed: true }
+    : { review_status: 'pending_review', is_armed: false };
 }

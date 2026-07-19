@@ -6,7 +6,7 @@ import {
   type BulwarkDeadlineRule,
   type BulwarkEventBinding,
 } from '@bigbluebam/shared';
-import { calendarArmKey, manualArmKey } from '@bigbluebam/shared/bulwark-arm-key';
+import { calendarArmKey, eventArmKey, manualArmKey } from '@bigbluebam/shared/bulwark-arm-key';
 import { db } from '../db/index.js';
 import {
   bulwarkContracts,
@@ -253,14 +253,18 @@ async function applySupersession(
         continue;
       }
       // restate: re-point to the successor obligation AND contract in one transaction (DK4).
-      // Calendar-armed deadlines recompute their deterministic key to the successor (STJ4) so
-      // the next radar tick does not mint a duplicate. Event/manual-armed deadlines re-point
-      // and keep their existing key (full event-key recompute needs the arm-key components;
-      // bulwark-state-reconcile re-derives the correct successor key from source state).
+      // The deterministic key is recomputed to the SUCCESSOR in place (STJ4) so the next
+      // radar / state-reconcile tick does not mint a duplicate:
+      //  - calendar-armed: uuid5(successor || anchor_date);
+      //  - event-armed: uuid5(successor || arm_scope_entity_id || arm_state_epoch) using the
+      //    persisted arm-key components (migration 0236); if those are absent (a pre-0236 row)
+      //    we keep the existing key and let state-reconcile converge from source state.
       let newKey = dl.triggering_event_id;
       if (dl.anchor_source === 'calendar') {
         const anchorDate = anchorDateInZone(new Date(dl.triggered_at), dl.resolved_timezone);
         newKey = calendarArmKey(successor.id, anchorDate);
+      } else if (dl.arm_scope_entity_id && dl.arm_state_epoch) {
+        newKey = eventArmKey(successor.id, dl.arm_scope_entity_id, dl.arm_state_epoch);
       }
       // Guard against an already-armed successor deadline on the same key: drop the loser.
       const [conflict] = await tx

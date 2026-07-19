@@ -149,7 +149,7 @@ export const APP_SERVICES = [
       required: ['DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'BBB_API_INTERNAL_URL', 'MCP_INTERNAL_URL'],
       // BRAID_API_INTERNAL_URL: bolt-api forwards subscribed source events to braid-api's
       // /internal/events (Braid live-ingest transport, spec §6); optional soft-dependency.
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL'],
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL', 'BULWARK_API_INTERNAL_URL'],
     },
   },
   {
@@ -533,6 +533,9 @@ export const APP_SERVICES = [
         // braid-api's single merge executor (spec §4.6); braid-match-on-ingest /
         // braid-rescan need no braid-api URL (they read source schemas directly).
         'BRAID_API_INTERNAL_URL',
+        // The 7 bulwark-* jobs invoke the engine over bulwark-api's internal
+        // routes (Bulwark spec §4 / §9.2).
+        'BULWARK_API_INTERNAL_URL',
         // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
         // TURN cert lapses; no-op until set (format turn.example.com:port).
         'LIVEKIT_TURN_CHECK_TARGET',

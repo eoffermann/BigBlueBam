@@ -21,6 +21,10 @@ export interface ArmDeadlineParams {
   // ws fan-out (SK1).
   projectId: string | null;
   triggeringEventId: string;
+  // The two components of the deterministic EVENT arm key, persisted so amendment supersession
+  // can recompute the successor key in place (STJ4). Null for calendar/manual arms.
+  armScopeEntityId?: string | null;
+  armStateEpoch?: string | null;
   anchorSource: BulwarkAnchorSource;
   triggeredAt: Date;
   loggedAt?: Date | null;
@@ -43,6 +47,8 @@ export async function armDeadline(params: ArmDeadlineParams): Promise<ArmResult>
       contract_id: params.contractId,
       ingest_event_id: params.ingestEventId ?? null,
       triggering_event_id: params.triggeringEventId,
+      arm_scope_entity_id: params.armScopeEntityId ?? null,
+      arm_state_epoch: params.armStateEpoch ?? null,
       anchor_source: params.anchorSource,
       triggered_at: params.triggeredAt,
       logged_at: params.loggedAt ?? null,

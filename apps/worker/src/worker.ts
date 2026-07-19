@@ -230,6 +230,32 @@ import {
   type BraidCandidateRetentionJobData,
 } from './jobs/braid-candidate-retention.job.js';
 
+// Bulwark (contract-obligation monitor) engine (Bulwark design spec §4 / §9.2). The 7 bulwark-*
+// jobs are thin HTTP callers that invoke the engine over bulwark-api's internal routes. Queue
+// contracts live in @bigbluebam/shared.
+import {
+  BULWARK_EXTRACT_OBLIGATIONS_QUEUE,
+  BULWARK_FIRE_ON_EVENT_QUEUE,
+  BULWARK_RADAR_SWEEP_QUEUE,
+  BULWARK_STATE_RECONCILE_QUEUE,
+  BULWARK_PROPOSAL_RECONCILE_QUEUE,
+  BULWARK_GATE_RECONCILE_QUEUE,
+  BULWARK_RETENTION_QUEUE,
+  type BulwarkExtractObligationsJobData,
+  type BulwarkFireOnEventJobData,
+  type BulwarkSweepJobData,
+} from '@bigbluebam/shared';
+import { processBulwarkExtractJob } from './jobs/bulwark-extract.job.js';
+import {
+  processBulwarkFireOnEventJob,
+  bulwarkFireOnEventDlq,
+} from './jobs/bulwark-fire-on-event.job.js';
+import { processBulwarkRadarSweepJob } from './jobs/bulwark-radar-sweep.job.js';
+import { processBulwarkStateReconcileJob } from './jobs/bulwark-state-reconcile.job.js';
+import { processBulwarkProposalReconcileJob } from './jobs/bulwark-proposal-reconcile.job.js';
+import { processBulwarkGateReconcileJob } from './jobs/bulwark-gate-reconcile.job.js';
+import { processBulwarkRetentionJob } from './jobs/bulwark-retention.job.js';
+
 const env = loadEnv();
 
 const logger = pino({
@@ -2174,6 +2200,145 @@ const braidCandidateRetentionQueue = new Queue('braid-candidate-retention', { co
 braidCandidateRetentionQueue
   .upsertJobScheduler('braid-candidate-retention-daily', { pattern: '50 3 * * *' }, { name: 'sweep', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register braid-candidate-retention scheduler'));
+
+// ─── Bulwark (contract-obligation monitor) engine ──────────────────────────
+// 2 event-driven consumers (extract, fire-on-event) + 5 scheduled sweeps (radar, state-
+// reconcile, gate-reconcile, proposal-reconcile, retention). Each job is a thin HTTP caller
+// that invokes the engine over bulwark-api's internal routes (Bulwark spec §4 / §9.2).
+
+// Extraction: Bin bytes -> engine (checkpointed LLM extraction). Event-driven; DLQ logs.
+const bulwarkExtractWorker = new Worker<BulwarkExtractObligationsJobData>(
+  BULWARK_EXTRACT_OBLIGATIONS_QUEUE,
+  async (job: Job<BulwarkExtractObligationsJobData>) => {
+    await processBulwarkExtractJob(job, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bulwarkExtractWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BULWARK_EXTRACT_OBLIGATIONS_QUEUE }, 'Job completed');
+});
+bulwarkExtractWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BULWARK_EXTRACT_OBLIGATIONS_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BULWARK_EXTRACT_OBLIGATIONS_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+// Fire-on-event inbox drain. Event-driven; DLQ give-up logs (the radar pending-drain recovers).
+const bulwarkFireWorker = new Worker<BulwarkFireOnEventJobData>(
+  BULWARK_FIRE_ON_EVENT_QUEUE,
+  async (job: Job<BulwarkFireOnEventJobData>) => {
+    await processBulwarkFireOnEventJob(job, logger);
+  },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bulwarkFireWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BULWARK_FIRE_ON_EVENT_QUEUE }, 'Job completed');
+});
+bulwarkFireWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BULWARK_FIRE_ON_EVENT_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BULWARK_FIRE_ON_EVENT_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+  const maxAttempts = job?.opts?.attempts ?? 1;
+  if (job && job.attemptsMade >= maxAttempts && job.data) bulwarkFireOnEventDlq(job.data, logger);
+});
+
+// Radar sweep: every 15 min.
+const bulwarkRadarWorker = new Worker<BulwarkSweepJobData>(
+  BULWARK_RADAR_SWEEP_QUEUE,
+  async (job: Job<BulwarkSweepJobData>) => {
+    await processBulwarkRadarSweepJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bulwarkRadarWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BULWARK_RADAR_SWEEP_QUEUE }, 'Job completed');
+});
+bulwarkRadarWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BULWARK_RADAR_SWEEP_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BULWARK_RADAR_SWEEP_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const bulwarkRadarQueue = new Queue<BulwarkSweepJobData>(BULWARK_RADAR_SWEEP_QUEUE, { connection: redis });
+bulwarkRadarQueue
+  .upsertJobScheduler('bulwark-radar-sweep-15min', { pattern: '*/15 * * * *' }, { name: 'sweep', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register bulwark-radar-sweep scheduler'));
+
+// State-reconcile: every 30 min.
+const bulwarkStateReconcileWorker = new Worker<BulwarkSweepJobData>(
+  BULWARK_STATE_RECONCILE_QUEUE,
+  async (job: Job<BulwarkSweepJobData>) => {
+    await processBulwarkStateReconcileJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bulwarkStateReconcileWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BULWARK_STATE_RECONCILE_QUEUE }, 'Job completed');
+});
+bulwarkStateReconcileWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BULWARK_STATE_RECONCILE_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BULWARK_STATE_RECONCILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const bulwarkStateReconcileQueue = new Queue<BulwarkSweepJobData>(BULWARK_STATE_RECONCILE_QUEUE, { connection: redis });
+bulwarkStateReconcileQueue
+  .upsertJobScheduler('bulwark-state-reconcile-30min', { pattern: '*/30 * * * *' }, { name: 'reconcile', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register bulwark-state-reconcile scheduler'));
+
+// Gate-reconcile: every 20 min (bulwark-api also rebuilds at boot).
+const bulwarkGateReconcileWorker = new Worker<BulwarkSweepJobData>(
+  BULWARK_GATE_RECONCILE_QUEUE,
+  async (job: Job<BulwarkSweepJobData>) => {
+    await processBulwarkGateReconcileJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bulwarkGateReconcileWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BULWARK_GATE_RECONCILE_QUEUE }, 'Job completed');
+});
+bulwarkGateReconcileWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BULWARK_GATE_RECONCILE_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BULWARK_GATE_RECONCILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const bulwarkGateReconcileQueue = new Queue<BulwarkSweepJobData>(BULWARK_GATE_RECONCILE_QUEUE, { connection: redis });
+bulwarkGateReconcileQueue
+  .upsertJobScheduler('bulwark-gate-reconcile-20min', { pattern: '*/20 * * * *' }, { name: 'reconcile', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register bulwark-gate-reconcile scheduler'));
+
+// Proposal-reconcile: every 10 min.
+const bulwarkProposalReconcileWorker = new Worker<BulwarkSweepJobData>(
+  BULWARK_PROPOSAL_RECONCILE_QUEUE,
+  async (job: Job<BulwarkSweepJobData>) => {
+    await processBulwarkProposalReconcileJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bulwarkProposalReconcileWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BULWARK_PROPOSAL_RECONCILE_QUEUE }, 'Job completed');
+});
+bulwarkProposalReconcileWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BULWARK_PROPOSAL_RECONCILE_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BULWARK_PROPOSAL_RECONCILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const bulwarkProposalReconcileQueue = new Queue<BulwarkSweepJobData>(BULWARK_PROPOSAL_RECONCILE_QUEUE, { connection: redis });
+bulwarkProposalReconcileQueue
+  .upsertJobScheduler('bulwark-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, { name: 'reconcile', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register bulwark-proposal-reconcile scheduler'));
+
+// Retention: daily 04:50 (offset from braid-candidate-retention @ 03:50).
+const bulwarkRetentionWorker = new Worker<BulwarkSweepJobData>(
+  BULWARK_RETENTION_QUEUE,
+  async (job: Job<BulwarkSweepJobData>) => {
+    await processBulwarkRetentionJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+bulwarkRetentionWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: BULWARK_RETENTION_QUEUE }, 'Job completed');
+});
+bulwarkRetentionWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BULWARK_RETENTION_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BULWARK_RETENTION_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+const bulwarkRetentionQueue = new Queue<BulwarkSweepJobData>(BULWARK_RETENTION_QUEUE, { connection: redis });
+bulwarkRetentionQueue
+  .upsertJobScheduler('bulwark-retention-daily', { pattern: '50 4 * * *' }, { name: 'sweep', data: {} })
+  .catch((err) => logger.error({ err }, 'Failed to register bulwark-retention scheduler'));
 
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by

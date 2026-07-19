@@ -23,6 +23,9 @@ const envSchema = z.object({
   // approved/rejected proposals through braid-api's single merge executor.
   BBB_API_INTERNAL_URL: z.string().url().default('http://api:4000'),
   BRAID_API_INTERNAL_URL: z.string().url().default('http://braid-api:4020'),
+  // Bulwark engine (spec §9.2). The 7 bulwark-* jobs are thin HTTP callers that invoke the
+  // engine over bulwark-api's internal routes, so all engine logic stays in one place.
+  BULWARK_API_INTERNAL_URL: z.string().url().default('http://bulwark-api:4021'),
   QDRANT_URL: z.string().url().optional(),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
 

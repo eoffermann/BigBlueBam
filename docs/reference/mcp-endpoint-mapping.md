@@ -1970,6 +1970,7 @@ Identity-resolution / golden-record CDP. 13 `braid_*` tools (spec section 10 of 
 | `POST /v1/candidates` (propose) | `braid_propose_merge` | Upsert a candidate + register an `agent_proposals` HITL row | — |
 | `POST /internal/events` | — _(skip: internal service-to-service; bolt-api ingest trigger, `INTERNAL_SERVICE_SECRET`)_ | Ingest-trigger from bolt-api | — |
 | `POST /internal/proposal-decided` | — _(skip: internal service-to-service; proposal.decided delivery, `INTERNAL_SERVICE_SECRET`)_ | proposal.decided delivery | — |
+| `POST /v1/internal/resolve` | — _(skip: internal service-to-service; Bulwark counterparty resolution, `INTERNAL_SERVICE_SECRET`, fails closed on empty)_ | Internal golden-id resolution for Bulwark (spec 7.4) | — |
 | `/braid/ws` | — _(skip: realtime/ws)_ | Redis-PubSub refs-only notifications | — |
 | `GET /health`, `GET /readyz` | — _(skip: probe)_ | Health / readiness | — |
 

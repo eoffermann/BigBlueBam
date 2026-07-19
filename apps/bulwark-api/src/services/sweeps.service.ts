@@ -533,6 +533,8 @@ export async function stateReconcile(orgId: string): Promise<StateReconcileResul
         contractId: c.id,
         projectId: c.project_id,
         triggeringEventId: eventArmKey(o.id, m.entityId, m.stateEpoch),
+        armScopeEntityId: m.entityId,
+        armStateEpoch: m.stateEpoch,
         anchorSource: 'trigger_at',
         triggeredAt: anchor,
         resolvedTimezone: resolved_timezone,

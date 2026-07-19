@@ -261,6 +261,9 @@ services:
       # single merge executor (POST /internal/proposal-decided). Backstop for lost Bolt
       # proposal.decided delivery (Braid spec §4.6).
       BRAID_API_INTERNAL_URL: http://braid-api:4020
+      # The 7 bulwark-* jobs are thin HTTP callers that invoke the engine over bulwark-api's
+      # internal routes (Bulwark spec §4 / §9.2).
+      BULWARK_API_INTERNAL_URL: http://bulwark-api:4021
     volumes:
       # Read-only view of what livekit-config rendered/advertised, for
       # the hourly livekit-ip-drift job: it re-detects the public IP via
@@ -575,6 +578,9 @@ services:
       # Braid live-ingest transport (Braid spec §6): bolt-api forwards subscribed source
       # events to braid-api's /internal/events, which enqueues match-on-ingest jobs.
       - BRAID_API_INTERNAL_URL=http://braid-api:4020
+      # Bulwark live-ingest transport (Bulwark spec §6): bolt-api forwards gate-admitted
+      # events to bulwark-api's durable inbox at /v1/internal/events.
+      - BULWARK_API_INTERNAL_URL=http://bulwark-api:4021
       # Wave D Phase 3: per-action permission enforcement at this satellite.
       # Calls the resolver via HTTP at $BBB_API_INTERNAL_URL.
       - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
@@ -895,6 +901,52 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4020/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  bulwark-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/bulwark-api/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      # bolt-api for publishBoltEvent; braid-api for synchronous counterparty golden-id
+      # resolution (spec 7.4, soft dep); blast-api is the transactional-mail transport for
+      # legally-required notices/chases (spec D6). All request-time deps only, NOT in depends_on.
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - BRAID_API_INTERNAL_URL=http://braid-api:4020
+      - BLAST_API_INTERNAL_URL=http://blast-api:4010
+      - NODE_ENV=production
+      - PORT=4021
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      - BBB_PERMISSIONS_ENFORCE=${BBB_PERMISSIONS_ENFORCE:-warn}
+      # Must be non-empty for the /internal/events ingest transport + can_access preflight;
+      # empty correctly fails CLOSED unconditionally (spec S4/SN2).
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4021/health"]
       interval: 10s
       timeout: 5s
       retries: 3

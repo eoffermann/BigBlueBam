@@ -27,6 +27,11 @@ export const bulwarkNoticeDeadlines = pgTable(
       onDelete: 'set null',
     }),
     triggering_event_id: uuid('triggering_event_id').notNull(),
+    // The two components of the deterministic EVENT arm key (STJ4), persisted so amendment
+    // supersession can recompute uuid5(successor_id || arm_scope_entity_id || arm_state_epoch)
+    // in place rather than leaving the stale predecessor key. Null for calendar/manual arms.
+    arm_scope_entity_id: uuid('arm_scope_entity_id'),
+    arm_state_epoch: varchar('arm_state_epoch', { length: 64 }),
     anchor_source: varchar('anchor_source', { length: 12 }).notNull(),
     triggered_at: timestamp('triggered_at', { withTimezone: true }).notNull(),
     logged_at: timestamp('logged_at', { withTimezone: true }),
