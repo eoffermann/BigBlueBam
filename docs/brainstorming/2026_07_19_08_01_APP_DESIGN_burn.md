@@ -1372,6 +1372,40 @@ A ported `braid-resolve.client.ts` (`apps/bulwark-api/src/lib/braid-resolve.clie
 
 ---
 
+## 8.6 Corrections found during the M6b build
+
+Three gaps in sections 9.2 and 6.1 that only surfaced when the bill-api side was
+actually written. Recorded here so they are not re-derived from the original text.
+
+**The bill event count is five, not four.** Section 9.2 requires the internal
+line-item write to publish `acting_user_id` "in the Bolt event", but no existing
+bill event covers a line-item write: there is no `invoice.updated`, and the seven
+declared `invoice.*` events are all lifecycle transitions. Publishing an undeclared
+event fails `scripts/check-bolt-catalog.mjs`. The build declared a fifth,
+`bill:invoice.line_item_added`, alongside `expense.created`, `expense.approved`,
+`rate.created`, and `rate.updated`.
+
+**Three columns the spec assumes exist do not.** Section 9.2 says bill-api "records
+`acting_user_id` on the row" and section 6.1's deferred fail-open outcome says it
+"stamps the created expense with a `burn_gate` marker in its own row metadata".
+`bill_line_items` has no `acting_user_id`, and `bill_expenses` has no metadata column
+and no `burn_gate`. Migration `0245` adds `bill_expenses.burn_gate`,
+`bill_expenses.burn_precheck_id`, and `bill_line_items.acting_user_id`.
+
+**The recurring-invoice gate must run BEFORE the schedule claim, and the spec never
+says so.** `apps/worker/src/jobs/bill-recurring-generate.job.ts` claims a schedule row
+by advancing `next_run_at` before doing any work. Gating after that claim would mean an
+enforced deny **silently burns a billing period**: the schedule steps forward, no
+invoice is produced, and nothing retries. That is a worse outcome than the overspend
+the gate exists to prevent, and it would be invisible until a client asked why they
+were not billed. The gate therefore runs before the claim, so a deny leaves
+`next_run_at` untouched and the schedule is retried on the next sweep.
+
+Related: the worker is a separate pnpm package with no `@bigbluebam/bill-api`
+dependency, so it cannot import the bill-api precheck client. `apps/worker/src/lib/burn-precheck.ts`
+duplicates the Redis key names deliberately, with a header stating that the two must
+stay in sync. Consolidating them into a shared package is the obvious follow-up.
+
 ## 9. Infrastructure
 
 ### 9.1 New api compose service
