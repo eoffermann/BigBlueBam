@@ -83,11 +83,11 @@ describe('visibility-client fail-closed contract', () => {
   });
 
   it('sends the secret header and the snake_case body the API expects', async () => {
-    const spy = vi.fn(async () => ok({ allowed: true }));
+    const spy = vi.fn(async (_url: string, _init: RequestInit) => ok({ allowed: true }));
     globalThis.fetch = spy as unknown as typeof fetch;
     await preflightAccess(ASKER, 'bin.asset', ENTITY);
 
-    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = spy.mock.calls[0]!;
     expect(url).toBe('http://api:4000/internal/visibility/can-access');
     expect((init.headers as Record<string, string>)['X-Internal-Secret']).toBe('x'.repeat(64));
     expect(JSON.parse(init.body as string)).toEqual({
@@ -98,10 +98,10 @@ describe('visibility-client fail-closed contract', () => {
   });
 
   it('trims a trailing slash on the base URL so the path is never doubled', async () => {
-    const spy = vi.fn(async () => ok({ allowed: true }));
+    const spy = vi.fn(async (_url: string, _init: RequestInit) => ok({ allowed: true }));
     globalThis.fetch = spy as unknown as typeof fetch;
     await preflightAccess(ASKER, 'bin.asset', ENTITY, { apiInternalUrl: 'http://api:4000///' });
-    expect(spy.mock.calls[0][0]).toBe('http://api:4000/internal/visibility/can-access');
+    expect(spy.mock.calls[0]![0]).toBe('http://api:4000/internal/visibility/can-access');
   });
 
   describe('preflightMany', () => {
