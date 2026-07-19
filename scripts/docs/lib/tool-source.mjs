@@ -218,16 +218,84 @@ function extractInputParams(chunk) {
 }
 
 /**
- * Parse a single *-tools.ts file into an array of { name, description, params }.
- * Splits on `registerTool(server, {` boundaries and reads name/description from
- * the head of each block (before the input schema, so param keys named `name`
- * or `description` cannot shadow the tool's own).
+ * Strip `//` line comments and block comments from JS/TS source WITHOUT
+ * touching the contents of string or template literals. A small character
+ * scanner tracks whether we are inside a '..', "..", or `..` literal (honoring
+ * backslash escapes) and removes comment spans found only in ordinary code.
+ * Newlines inside stripped comments are preserved so downstream line-anchored
+ * regexes (e.g. the input-param extractor) keep their line structure.
+ *
+ * This matters for correctness on two fronts:
+ *   - a COMMENTED-OUT `registerTool(server, { ... })` block must not be counted
+ *     as a phantom tool (overcount);
+ *   - a JSDoc mention like `registerTool(...)` must not trip the non-standard
+ *     shape detector below (false warning).
  */
-export function parseToolsFromFile(filePath) {
-  const src = fs.readFileSync(filePath, 'utf-8');
+export function stripComments(src) {
+  let out = '';
+  const n = src.length;
+  let state = 'code'; // code | line | block | squote | dquote | template
+  let i = 0;
+  while (i < n) {
+    const c = src[i];
+    const c2 = i + 1 < n ? src[i + 1] : '';
+    if (state === 'code') {
+      if (c === '/' && c2 === '/') { state = 'line'; i += 2; continue; }
+      if (c === '/' && c2 === '*') { state = 'block'; i += 2; continue; }
+      if (c === "'") { state = 'squote'; }
+      else if (c === '"') { state = 'dquote'; }
+      else if (c === '`') { state = 'template'; }
+      out += c;
+      i++;
+      continue;
+    }
+    if (state === 'line') {
+      if (c === '\n') { state = 'code'; out += c; }
+      i++;
+      continue;
+    }
+    if (state === 'block') {
+      if (c === '*' && c2 === '/') { state = 'code'; i += 2; continue; }
+      if (c === '\n') out += c; // keep line structure
+      i++;
+      continue;
+    }
+    // string / template states: copy verbatim, honoring backslash escapes.
+    out += c;
+    if (c === '\\' && i + 1 < n) { out += src[i + 1]; i += 2; continue; }
+    if (
+      (state === 'squote' && c === "'") ||
+      (state === 'dquote' && c === '"') ||
+      (state === 'template' && c === '`')
+    ) {
+      state = 'code';
+    }
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Parse a single *-tools.ts file into an array of { name, description, params }.
+ * Comments are stripped first (so a commented-out block is never miscounted),
+ * then the source is split on `registerTool(server, {` boundaries and
+ * name/description are read from the head of each block (before the input
+ * schema, so param keys named `name` or `description` cannot shadow the tool's
+ * own).
+ *
+ * Any `registerTool(` call that does NOT match the expected
+ * `registerTool(server, { ... })` shape, or a matched block with no parseable
+ * `name`, is pushed to `warnings` (tagged with `label`) so an unparsed
+ * registration is visible instead of being silently dropped.
+ */
+export function parseToolsFromFile(filePath, warnings = [], label = null) {
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const src = stripComments(raw);
   const tools = [];
+  const tag = label ? ` in ${label}` : '';
 
   const chunks = src.split(/registerTool\s*\(\s*server\s*,\s*\{/);
+  let noNameBlocks = 0;
   for (let i = 1; i < chunks.length; i++) {
     const chunk = chunks[i];
 
@@ -237,11 +305,31 @@ export function parseToolsFromFile(filePath) {
     const head = headEnd > 0 ? chunk.slice(0, headEnd) : chunk;
 
     const name = extractStringProp(head, 'name');
-    if (!name) continue;
+    if (!name) {
+      noNameBlocks++;
+      continue;
+    }
     const description = extractStringProp(head, 'description') || '';
     const params = extractInputParams(chunk);
 
     tools.push({ name, description, params });
+  }
+
+  // Non-standard shapes: every `registerTool(` occurrence that the standard
+  // split did not consume. `parsedShapes` is the number of standard-shape
+  // boundaries (chunks.length - 1). If more `registerTool(` calls exist than
+  // that, some registration uses an unrecognized shape and was skipped.
+  const totalCalls = (src.match(/registerTool\s*\(/g) || []).length;
+  const parsedShapes = chunks.length - 1;
+  if (totalCalls > parsedShapes) {
+    warnings.push(
+      `${totalCalls - parsedShapes} registerTool(...) call(s)${tag} do not match the expected registerTool(server, { ... }) shape and were not parsed`,
+    );
+  }
+  if (noNameBlocks > 0) {
+    warnings.push(
+      `${noNameBlocks} registerTool(server, { ... }) block(s)${tag} had no parseable name and were skipped`,
+    );
   }
 
   return tools;
@@ -276,7 +364,7 @@ export function parseModules(moduleNames, warnings = [], contextId = null) {
       );
       continue;
     }
-    const tools = parseToolsFromFile(fp);
+    const tools = parseToolsFromFile(fp, warnings, moduleName);
     groups.push({ module: moduleName, label: moduleLabel(moduleName), tools });
   }
   return groups;
