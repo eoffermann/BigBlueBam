@@ -32,7 +32,7 @@
  */
 
 import { APP_SERVICES } from './deploy/shared/services.mjs';
-import { hintFor } from './deploy/shared/env-hints.mjs';
+import { hintFor, PLANNED_APP_SERVICES} from './deploy/shared/env-hints.mjs';
 
 /**
  * ── FROZEN ALLOWLIST - APPEND FORBIDDEN ──────────────────────────────────────
@@ -157,3 +157,20 @@ function main() {
 }
 
 process.exit(main());
+
+// A planned service that has since landed in APP_SERVICES must be removed from
+// PLANNED_APP_SERVICES, otherwise plannedApp() keeps hand-rolling a URL that internal()
+// should now own. Shrink-only, same discipline as the grandfathered allowlist.
+const stalePlanned = [...PLANNED_APP_SERVICES].filter((n) => APP_SERVICES.some((s) => s.name === n));
+if (stalePlanned.length) {
+  console.error(
+    `
+PLANNED_APP_SERVICES is stale: ${stalePlanned.join(', ')} now exist(s) in APP_SERVICES.
+` +
+      `Remove them from PLANNED_APP_SERVICES in scripts/deploy/shared/env-hints.mjs so
+` +
+      `internal() resolves them and the typo guard stays meaningful.
+`,
+  );
+  process.exitCode = 1;
+}

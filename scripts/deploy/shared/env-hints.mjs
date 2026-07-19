@@ -53,10 +53,28 @@ function internal(name) {
 // Railway injects PORT=8080 (see the note above), so the fallback value here is identical to
 // what `internal()` will return once the catalog block lands. This is self-healing: no edit
 // is needed at that point, and the typo guard still applies to every other call site.
+// Services that are being built right now and whose APP_SERVICES block has not landed yet.
+// plannedApp() refuses any name that is neither already in the catalog nor listed here, so
+// a typo ('brun-api') throws at module load instead of silently resolving to a valid-looking
+// URL that nothing ever checks. Entries are removed as each service lands in APP_SERVICES;
+// check-env-hints.mjs fails on a stale entry, so this set can only shrink.
+export const PLANNED_APP_SERVICES = new Set([
+  'burn-api', // Burn, in build on suite-brainstorm as of 2026-07-19
+]);
+
 function plannedApp(name) {
-  return APP_SERVICE_NAMES.has(name)
-    ? internal(name)
-    : `http://${name}.railway.internal:${RAILWAY_DYNAMIC_PORT}`;
+  if (APP_SERVICE_NAMES.has(name)) return internal(name);
+  if (!PLANNED_APP_SERVICES.has(name)) {
+    throw new Error(
+      `plannedApp('${name}'): unknown service. Add it to APP_SERVICES, or to ` +
+        `PLANNED_APP_SERVICES if it is genuinely still being built. This guard exists ` +
+        `because a typo would otherwise produce a plausible .railway.internal URL that ` +
+        `no check validates, and the service would be silently unreachable in production.`,
+    );
+  }
+  // Byte-identical to what internal(name) will return once the catalog block lands, so the
+  // resolved value does not change at that moment.
+  return `http://${name}.railway.internal:${RAILWAY_DYNAMIC_PORT}`;
 }
 
 export const ENV_HINTS = {
