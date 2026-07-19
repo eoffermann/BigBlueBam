@@ -143,14 +143,14 @@ two failure modes are the sharpest in the spec.
 
 ## M6b - bill-api gate integration (the flagship feature)
 
-- [ ] `apps/bill-api/src/lib/burn-precheck.client.ts`: the suite's **first** circuit breaker. `burn:breaker:fails:<org>` INCR, `burn:breaker:state:<org>`, `NX` probe election, threshold 5, probe 30000ms. Every Redis touch wrapped and non-throwing with an in-process fallback. `allow` on every error path
-- [ ] Coverage counter `burn:gate_calls:<org>:<yyyymmdd>` incremented **on every gated write attempt including the unconfigured no-op** (so a missing env var reads as 0 percent coverage rather than a clean console)
-- [ ] `burnPrecheck` preHandler on four hook points: `expenses.routes.ts:46`, `:57`, the approve route, and `bill-recurring-generate.job.ts:367` with one breaker check per job, not per schedule
-- [ ] `POST /internal/rates/resolve` delegating to `rate.service.ts:117`, plus its batch form
-- [ ] Internal line-item write accepting `acting_user_id` in the body
-- [ ] Four new `billEvents`: `expense.created`, `expense.approved`, `rate.created`, `rate.updated`
-- [ ] Breaker unit test file
-- [ ] §12.1's five fail-open assertions: unreachable, breaker open, timeout, `BURN_API_INTERNAL_URL` unset (`gate_not_configured`), Redis unreachable (`redis_unavailable`). In every case the expense posts
+- [x] `apps/bill-api/src/lib/burn-precheck.client.ts`: the suite's **first** circuit breaker. `burn:breaker:fails:<org>` INCR, `burn:breaker:state:<org>`, `NX` probe election on `burn:breaker:probe:<org>`, threshold 5, probe 30000ms. Every Redis touch goes through `withRedis()` (never throws) with a per-process `fallbackBreakers` in-process fallback. `allowed: true` on every error path; the ONLY `allowed: false` is an ENFORCED `deny` from burn-api
+- [x] Coverage counter `burn:gate_calls:<org>:<yyyymmdd>` incremented in `recordGateAttempt` **on every gated write attempt including the unconfigured no-op** (ordering is load-bearing: count first, decide second) so a missing `BURN_API_INTERNAL_URL` reads as 0 percent coverage; the unconfigured/unavailable failure counters are kept as separate keys so the Gate Console can tell "nobody configured this" from "the service is down"
+- [x] `burnPrecheck` preHandler on four hook points: `expenses.routes.ts` POST `/expenses` (`expenseCreateCharge`), PATCH `/expenses/:id` (`expenseUpdateCharge`, gated only on an amount/project change), POST `/expenses/:id/approve` (`expenseApproveCharge`), and `bill-recurring-generate.job.ts` via `createJobGate` — ONE breaker check per (job, org), memoized, not per schedule
+- [x] `POST /internal/rates/resolve` + `POST /internal/rates/resolve-batch` (cap 500) in `apps/bill-api/src/routes/internal.routes.ts`, delegating to `rate.service.ts` `resolveRate()` so Bill stays the single definition of rate precedence (built in bill-api per the spec — Bill owns the rate algorithm; Burn must not restate it)
+- [x] Internal line-item write `POST /internal/invoices/:id/line-items` accepting `acting_user_id` in the body (column from migration 0245); no trusted `X-Acting-User` header, per the platform pattern
+- [x] Four `billEvents` present in `event-catalog.ts`: `expense.created`, `expense.approved`, `rate.created`, `rate.updated` (VERIFIED already registered from M6; publishers in `expenses.routes.ts` + rate routes emit them; not duplicated)
+- [x] Breaker unit test file `apps/bill-api/test/burn-precheck-breaker.test.ts` (18 tests: closed/open/half-open transitions, single-flight NX probe election across 10 replicas, multi-replica tripping, per-org scoping, success-clears, Redis-failure fallback, coverage counters)
+- [x] §12.1's five fail-open assertions `apps/bill-api/test/burn-precheck-failopen.test.ts` (23 tests): (a) burn unreachable, (b) breaker open (zero network cost), (c) timeout, (d) `BURN_API_INTERNAL_URL` unset -> `gate_not_configured`, (e) Redis unreachable -> `redis_unavailable`. In every case `allowed === true` (the expense posts). All 41 M6b tests green; typecheck clean for bill-api/burn-api/worker/shared; `check-bolt-catalog` reports 0 violations
 
 ## M7 - SPA
 
