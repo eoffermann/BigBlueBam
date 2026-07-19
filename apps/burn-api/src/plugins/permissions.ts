@@ -2,9 +2,12 @@
 //
 // Registers the shared @bigbluebam/permissions HTTP plugin so route gates
 // (fastify.requireCan) can reach the resolver in the api. Mirrors
-// apps/bulwark-api/src/plugins/permissions.ts with one hard difference: the mode is a
-// HARDCODED LITERAL, never read from process.env, and is asserted both before and after
-// registration. See ../boot/assert-permissions-enforce.ts for the full rationale --
+// apps/bulwark-api/src/plugins/permissions.ts with two hard differences. First, the mode
+// is a HARDCODED LITERAL, never read from process.env, and is asserted both before and
+// after registration. Second, `onUnknown` is 'deny' rather than the shared plugin's
+// default 'allow', so an unresolvable decision (resolver non-2xx, malformed body, thrown
+// fetch) is a 403 instead of a pass-through (issue #89). Both are covered by the same
+// assertion. See ../boot/assert-permissions-enforce.ts for the full rationale --
 // short version, Burn is the first app with no legacy requireAuth+role gate behind
 // requireCan, and packages/permissions/src/index.ts:291 returns early in 'warn' mode
 // without ever denying, so a warn-mode burn-api leaves per-person cost rates and
@@ -22,6 +25,7 @@ import { httpPermissionsPlugin } from '@bigbluebam/permissions';
 import { env } from '../env.js';
 import {
   BURN_PERMISSIONS_MODE,
+  BURN_PERMISSIONS_ON_UNKNOWN,
   assertPermissionsEnforcement,
 } from '../boot/assert-permissions-enforce.js';
 
@@ -41,19 +45,24 @@ const burnPermissionsPlugin = fp(
     const options = {
       mode: BURN_PERMISSIONS_MODE,
       apiInternalUrl: env.BBB_API_INTERNAL_URL,
-      internalSecret: env.INTERNAL_SERVICE_SECRET ?? '',
+      // No `?? ''` fallback: INTERNAL_SERVICE_SECRET is REQUIRED in env.ts (issue #89).
+      // An empty secret makes apps/api answer non-2xx, which the shared plugin reads as
+      // an unresolvable decision.
+      internalSecret: env.INTERNAL_SERVICE_SECRET,
+      // Mode 'on' is not by itself fail-closed. See BURN_PERMISSIONS_ON_UNKNOWN.
+      onUnknown: BURN_PERMISSIONS_ON_UNKNOWN,
       getCaller,
     };
 
-    assertPermissionsEnforcement(options.mode);
+    assertPermissionsEnforcement(options.mode, options.onUnknown);
     await fastify.register(httpPermissionsPlugin, options);
-    // Repointed at the RESOLVED mode: if a future refactor makes this env-driven or
-    // otherwise mutates the options, boot fails loudly instead of opening the floors.
-    assertPermissionsEnforcement(options.mode);
+    // Repointed at the RESOLVED options: if a future refactor makes these env-driven or
+    // otherwise mutates them, boot fails loudly instead of opening the floors.
+    assertPermissionsEnforcement(options.mode, options.onUnknown);
 
     fastify.log.info(
-      { mode: options.mode, source: 'hardcoded_invariant' },
-      'burn-api permissions plugin registered (enforcement asserted on, not env-configurable)',
+      { mode: options.mode, on_unknown: options.onUnknown, source: 'hardcoded_invariant' },
+      'burn-api permissions plugin registered (enforcement asserted on and fail-closed, not env-configurable)',
     );
   },
   { name: 'burn-permissions', dependencies: ['auth'] },

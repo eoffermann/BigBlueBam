@@ -219,6 +219,22 @@ export interface HttpPermissionsPluginOptions {
   getCaller: (request: FastifyRequest) => { user_id: string | null; org_id?: string | null };
   /** Optional: extract project_id for project-scoped checks. */
   getProjectId?: (request: FastifyRequest) => string | null;
+  /**
+   * What to do when the resolver returns no usable decision: a non-2xx response, a
+   * malformed body, or a thrown fetch (connection refused, DNS failure, timeout).
+   *
+   * `'allow'` (the DEFAULT, and the historical behavior of this plugin) passes the
+   * request through to the route handler. Every satellite that sits behind a legacy
+   * `requireAuth` plus org-role gate relies on that gate as the real boundary, so a
+   * resolver outage degrades to the pre-permissions posture rather than to a
+   * suite-wide outage.
+   *
+   * `'deny'` returns 403 instead. Set this on any app where `requireCan` is the ONLY
+   * gate in front of the data, because there `'allow'` turns a resolver outage into a
+   * grant. burn-api is the first such app: it fronts per-person compensation and
+   * per-client margin with no legacy role gate behind it (issue #89).
+   */
+  onUnknown?: 'allow' | 'deny';
 }
 
 export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
@@ -232,6 +248,10 @@ export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
       fastify.decorate('canResolve', async () => true);
       return;
     }
+
+    // Default 'allow' preserves the historical pass-through-on-error behavior for the
+    // 21 satellites that do not pass this option.
+    const onUnknown: 'allow' | 'deny' = opts.onUnknown ?? 'allow';
 
     async function callResolver(
       userId: string,
@@ -262,7 +282,12 @@ export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
         if (d === 'allow' || d === 'deny') return d;
         return 'unknown';
       } catch (err) {
-        logger.warn({ err, permissionId }, 'httpPermissionsPlugin: resolver POST failed; pass-through');
+        logger.warn(
+          { err, permissionId, on_unknown: onUnknown },
+          onUnknown === 'deny'
+            ? 'httpPermissionsPlugin: resolver POST failed; failing closed'
+            : 'httpPermissionsPlugin: resolver POST failed; pass-through',
+        );
         return 'unknown';
       }
     }
@@ -289,7 +314,9 @@ export const httpPermissionsPlugin = fp<HttpPermissionsPluginOptions>(
           };
           const decision = await callResolver(caller.user_id, permissionId, scope, request.log as { warn: (obj: object, msg: string) => void });
           if (opts.mode === 'warn') return; // resolver call already recorded divergence
-          if (decision === 'deny') {
+          // 'unknown' means the resolver gave us no usable answer. Under
+          // onUnknown: 'deny' that is a 403, not a pass: see the option docs.
+          if (decision === 'deny' || (decision === 'unknown' && onUnknown === 'deny')) {
             // Return the reply so Fastify knows the response is done; otherwise
             // a stray FST_ERR_REP_ALREADY_SENT warning fires when the route's
             // own handler runs after this preHandler.

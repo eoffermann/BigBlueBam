@@ -7,6 +7,7 @@ import websocket from '@fastify/websocket';
 import { env } from './env.js';
 import {
   BURN_PERMISSIONS_MODE,
+  BURN_PERMISSIONS_ON_UNKNOWN,
   assertPermissionsEnforcement,
 } from './boot/assert-permissions-enforce.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
@@ -27,8 +28,13 @@ import { sql } from 'drizzle-orm';
 // (issue #83: ENV_HINTS is a flat global map with no per-service override, so on Railway
 // burn-api cannot be given a different value than the other 21 services). This asserts the
 // invariant is still intact; the plugin asserts it again around registration.
+//
+// The second half (issue #89) is onUnknown: mode 'on' is not by itself fail-closed, since
+// the shared plugin returns 'unknown' whenever the resolver is not answering and the
+// default posture passes that through. Both constants are asserted here and again at the
+// registration site with the options object the plugin actually received.
 try {
-  assertPermissionsEnforcement(BURN_PERMISSIONS_MODE);
+  assertPermissionsEnforcement(BURN_PERMISSIONS_MODE, BURN_PERMISSIONS_ON_UNKNOWN);
 } catch (err) {
   console.error(
     `[burn-api] FATAL ${(err as Error).name}: ${(err as Error).message}`,

@@ -32,9 +32,17 @@ const envSchema = z.object({
   BRAID_API_INTERNAL_URL: z.string().default('http://braid-api:4020'),
   QDRANT_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   QDRANT_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
-  // Must be non-empty for the internal routes: /v1/internal/* fails CLOSED on an empty
-  // secret (spec 2.4 point 16), rejecting 401 before any timing-safe compare.
-  INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
+  // REQUIRED, not optional (issue #89). Two things depend on it and both fail unsafely
+  // when it is absent:
+  //   1. /v1/internal/* fails CLOSED on an empty secret (spec 2.4 point 16), rejecting
+  //      401 before any timing-safe compare.
+  //   2. Every outbound POST to apps/api's /internal/permissions/dual-read carries it.
+  //      Since cede5e2e apps/api rejects an empty secret with a non-2xx, which the
+  //      permissions plugin reads as an unresolvable decision. Burn runs that plugin
+  //      with onUnknown: 'deny', so a missing secret would 403 every gated route.
+  // Burn cannot function correctly without it either way, so it refuses to boot rather
+  // than start in a degraded posture, exactly like BILL_API_INTERNAL_URL above.
+  INTERNAL_SERVICE_SECRET: z.string().min(32),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),

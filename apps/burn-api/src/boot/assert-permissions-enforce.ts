@@ -46,6 +46,24 @@
  */
 export const BURN_PERMISSIONS_MODE = 'on' as const;
 
+/**
+ * The one and only unresolvable-decision posture burn-api may run in (issue #89).
+ *
+ * `'on'` mode is NOT by itself fail-closed. `packages/permissions/src/index.ts` returns
+ * `'unknown'` when the resolver answers non-2xx, returns a malformed body, or the fetch
+ * throws, and the default `onUnknown: 'allow'` passes `'unknown'` straight through to the
+ * route handler. So the decision table under the default is: deny -> 403, allow -> pass,
+ * unknown -> PASS.
+ *
+ * That default is right for the other 21 satellites, which keep a legacy requireAuth plus
+ * org-role gate behind requireCan and degrade to the pre-permissions posture on a resolver
+ * outage. It is wrong for Burn, which has no such gate: an apps/api rolling deploy, a crash
+ * loop, or a network partition of BBB_API_INTERNAL_URL would serve per-person compensation
+ * and firm-wide profitability to every org member, with no 403 and no error, at a 100
+ * percent rate. Burn takes a resolver outage as a 403, never as a grant.
+ */
+export const BURN_PERMISSIONS_ON_UNKNOWN = 'deny' as const;
+
 export class PermissionsEnforcementMisconfiguredError extends Error {
   readonly resolved: string;
 
@@ -64,12 +82,39 @@ export class PermissionsEnforcementMisconfiguredError extends Error {
   }
 }
 
+export class PermissionsFailOpenError extends Error {
+  readonly resolved: string;
+
+  constructor(resolved: string) {
+    super(
+      `burn-api resolved onUnknown '${resolved}', expected 'deny'. ` +
+        "Enforcement mode 'on' is not by itself fail-closed: the shared permissions " +
+        "plugin returns 'unknown' on a non-2xx resolver response, a malformed body, or a " +
+        "thrown fetch, and onUnknown: 'allow' passes that through to the route handler. " +
+        'Burn has no legacy requireAuth+role gate behind requireCan, so an apps/api ' +
+        'outage or an unpropagated INTERNAL_SERVICE_SECRET would serve cost rates and ' +
+        'firm-wide financials to every org member. See spec 2.4 point 1 and issue #89.',
+    );
+    this.name = 'PermissionsFailOpenError';
+    this.resolved = resolved;
+  }
+}
+
 /**
- * Throws PermissionsEnforcementMisconfiguredError unless the resolved mode is exactly
- * 'on'. Pure and synchronous so the unit suite can assert it without booting a server.
+ * Throws unless the resolved mode is exactly 'on' AND the resolved unresolvable-decision
+ * posture is exactly 'deny'. Both halves are required: 'on' alone still passes every
+ * request through whenever the resolver is not answering.
+ *
+ * Pure and synchronous so the unit suite can assert it without booting a server.
  */
-export function assertPermissionsEnforcement(resolved: string | undefined): void {
+export function assertPermissionsEnforcement(
+  resolved: string | undefined,
+  resolvedOnUnknown: string | undefined,
+): void {
   if (resolved !== 'on') {
     throw new PermissionsEnforcementMisconfiguredError(resolved ?? '<unset>');
+  }
+  if (resolvedOnUnknown !== 'deny') {
+    throw new PermissionsFailOpenError(resolvedOnUnknown ?? '<unset>');
   }
 }
