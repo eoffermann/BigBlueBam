@@ -361,9 +361,22 @@ not as an acceptable gap.
   in the Marketing site anywhere that it mentions them. Note that `site` bakes `site/public/`
   and its content at image build time, so rebuild the `site` service to see it locally.
 
-## Phase 6 - Record the cycle (do NOT stop or wait)
+## Phase 6 - Close-out audit, THEN record the cycle (do NOT stop or wait)
 
-Write a cycle record to `docs/brainstorming/<stamp>_BUILD_REPORT_<app>.md` (and release
+**Before writing the report or declaring done, invoke the `close-out` skill** (via the
+Skill tool) with the app id + `<stamp>`. It re-checks every requirement of this whole
+process - static/drift gates, CI actually-ran-and-green, MCP parity, the permission
+catalog + built-in-group grants, frontend shell + Bureau, Launchpad + all-three-nginx +
+services.mjs + CLAUDE.md, live-correct internal wiring, deploy + Playwright user-story e2e,
+help.md + help-index + Help Center, gilligan screenshots, marketing, closed automated-review
+issues, and every pre-existing / local-DB drift item surfaced - against the REAL repo and
+running stack, and picks up anything skipped. This step exists because required work has
+been silently downgraded to an "optional follow-up" before; close-out refuses that. Do not
+proceed until it passes (every line PASS or a defensible recorded WAIVER - and a WAIVER is
+only ever a merge-to-trunk, an external secret, or a harness-blocked destructive keystroke,
+each with the exact remaining command).
+
+Then write a cycle record to `docs/brainstorming/<stamp>_BUILD_REPORT_<app>.md` (and release
 the autonomous-cycle lock so the next cycle can run). Do not pause for review, approval,
 or a merge decision - just record and let the loop continue:
 - What shipped, on which branch, with the key commits.

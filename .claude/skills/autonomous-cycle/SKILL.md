@@ -78,7 +78,15 @@ With the lock held:
    local Docker dev stack, and run the **extensive tests including the Playwright
    user-story + backend-verification pass**. If the app needs configuration only a human
    can provide, write `docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md` and keep going.
-5. **Release the lock** and write a one-paragraph cycle summary (app shipped, tests status,
+5. **Run the `close-out` skill BEFORE releasing the lock.** Invoke `close-out` (via the
+   Skill tool) with the app id + stamp. It is the completion audit: it re-checks every
+   requirement of this whole process against the real repo + running stack and picks up
+   anything that was skipped or quietly relabeled an "optional follow-up." Do not release
+   the lock or declare the cycle done until close-out passes. This exists because required
+   work (Playwright e2e, help-index/Help Center, the permission delta + built-in-group
+   grants, surface-map completeness, pre-existing + local-DB drift) has been dropped by
+   calling it a "follow-up" - close-out is the backstop that refuses that.
+6. **Release the lock** and write a one-paragraph cycle summary (app shipped, tests status,
    whether the main->branch sync was clean/conflicted/skipped, any human-setup doc, any
    automated-review issues still open) so the next fire and the maintainer can see what
    happened.
