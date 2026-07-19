@@ -36,6 +36,7 @@ import { registerBookTools } from './tools/book-tools.js';
 import { registerBenchTools } from './tools/bench-tools.js';
 import { registerBasisTools } from './tools/basis-tools.js';
 import { registerBraidTools } from './tools/braid-tools.js';
+import { registerBulwarkTools } from './tools/bulwark-tools.js';
 import { registerBillTools } from './tools/bill-tools.js';
 import { registerBlankTools } from './tools/blank-tools.js';
 import { registerBlueprintTools } from './tools/blueprint-tools.js';
@@ -225,6 +226,7 @@ function createMcpServer(
   registerBenchTools(server, apiClient, env.BENCH_API_URL);
   registerBasisTools(server, apiClient, env.BASIS_API_URL);
   registerBraidTools(server, apiClient, env.BRAID_API_URL, confirmTokenStore);
+  registerBulwarkTools(server, apiClient, env.BULWARK_API_URL, confirmTokenStore);
   registerBillTools(server, apiClient, env.BILL_API_URL);
   registerBlankTools(server, apiClient, env.BLANK_API_URL);
   registerBlueprintTools(server, apiClient, env.BLUEPRINT_API_URL);

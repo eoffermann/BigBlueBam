@@ -1977,9 +1977,9 @@ Identity-resolution / golden-record CDP. 13 `braid_*` tools (spec section 10 of 
 
 ## Bulwark (app)
 
-- **Service:** `apps/bulwark-api` · external `/bulwark/api/` · MCP module(s): `bulwark-tools.ts` (lands in M5) · added on the `suite-brainstorm` branch.
+- **Service:** `apps/bulwark-api` · external `/bulwark/api/` · MCP module(s): `apps/mcp-server/src/tools/bulwark-tools.ts` (M5, shipped) · added on the `suite-brainstorm` branch.
 
-AI contract-obligation monitor. 15 `bulwark_*` tools (spec section 10 of `docs/brainstorming/2026_07_19_03_00_APP_DESIGN_bulwark.md`). The MCP module lands in M5; the intended tool names are recorded here NOW so the map stays complete. Every ledger read/write route is project-membership-scoped (SH1/SH3, org-admin override, no-project org fallback SK3). Reads that surface source records take an explicit `asker_user_id` and pass it through so bulwark-api runs `can_access` fail-closed. Destructive tools (`bulwark_delete_contract`, `bulwark_reject_obligation`, `bulwark_waive_deadline`) use the Redis-backed confirm-token two-step flow. All `bulwark_*` tools are fail-closed under `agent_policies` until an operator allowlists `bulwark.*`; following the basis/braid satellite pattern, `bulwark_*` is intentionally NOT added to `EXPLICIT_TOOL_OVERRIDES`.
+AI contract-obligation monitor. 15 `bulwark_*` tools (spec section 10 of `docs/brainstorming/2026_07_19_03_00_APP_DESIGN_bulwark.md`), registered via `registerBulwarkTools` in `apps/mcp-server/src/server.ts` (env `BULWARK_API_URL`). Every ledger read/write route is project-membership-scoped (SH1/SH3, org-admin override, no-project org fallback SK3). Reads that surface source records take an explicit `asker_user_id` and pass it through so bulwark-api runs `can_access` fail-closed. Destructive tools (`bulwark_delete_contract`, `bulwark_reject_obligation`, `bulwark_waive_deadline`) use the Redis-backed confirm-token two-step flow. All `bulwark_*` tools are fail-closed under `agent_policies` until an operator allowlists `bulwark.*`; following the basis/braid satellite pattern, `bulwark_*` is intentionally NOT added to `EXPLICIT_TOOL_OVERRIDES`.
 
 | REST endpoint | MCP tool | Description | UI call site |
 | --- | --- | --- | --- |
