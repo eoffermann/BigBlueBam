@@ -17,6 +17,28 @@ and **customer fit**. A clone of an existing product, or a CRUD app with a chatb
 bolted on, is a losing idea by construction - push the seats toward AI-native,
 adjacent, genuinely-new capabilities that move the suite forward.
 
+**Breadth before depth - this is a hard steer, not a preference.** The suite wins
+by covering the whole surface of how a small-to-medium services firm runs, NOT by
+stacking a third and fourth app onto a subject area two apps already serve. Two
+failure modes to actively design against every session:
+
+- **Near-duplication of an existing app.** An idea whose core job substantially
+  overlaps an app already in the suite (a second CRM, a second knowledge base, a
+  second contract/scope/margin monitor, a second analytics layer) is a losing idea
+  by construction, no matter how well-argued. "Adjacent + reuses the platform" must
+  not collapse into "a narrow variant of something we already shipped." When in
+  doubt, name the closest existing app and force the seat to articulate what makes
+  its idea a *different category*, not a better version of that app.
+- **Piling onto an already-dense category.** Even a non-duplicate that lands in a
+  subject area the suite already covers well (contracts/finance/billing, project/
+  task, chat/knowledge/docs) is disfavored versus an idea that opens a category the
+  suite barely touches. Prefer the app that adds a new leg to the stool over the app
+  that thickens a leg we already have. Fleshing out coverage beats going all-in on
+  one narrow subject area.
+
+The coverage census (Setup step 4) is where you turn this into a concrete, per-session
+steer; the vote (Phase 5) scores coverage contribution explicitly.
+
 ## Subagents this skill drives
 
 - **brainstorm-ideator** - spawn **exactly seven**, one per innovation lens. Each
@@ -40,8 +62,34 @@ adjacent, genuinely-new capabilities that move the suite forward.
    empty section per phase below. You append to this file at the end of **every**
    phase - verbatim seat replies, negotiation transcripts, strategies, vote
    tables. It must be readable by someone who watched none of the tool calls.
-4. **Assign seven distinct lenses**, one per seat. Use these unless the user asks
-   for others:
+4. **Coverage census & whitespace steer (do this BEFORE spawning seats).** Take a
+   census of what the suite already covers so the session pushes into whitespace
+   instead of re-serving a dense area. Read the authoritative current roster from
+   `LAUNCHPAD_CATALOG` in `apps/api/src/routes/system-settings.routes.ts` (plus the
+   app inventory in `CLAUDE.md`), and any in-flight app from the newest
+   `docs/brainstorming/<stamp>_APP_DESIGN_*.md` and the `.autonomous-logs/autonomous-cycle.lock.json`
+   (the just-picked app is not on the Launchpad yet but still counts as covered).
+   Then, in the session doc under a "Coverage census" heading, write:
+   - **A category map:** bucket every existing app (and the in-flight one) into the
+     functional category it serves (e.g. project/task, chat/community, knowledge,
+     docs, workflow-automation, CRM, email/marketing, analytics/metrics, scheduling,
+     forms, billing/finance, contracts/compliance, diagrams, DAM/storage, media
+     review, observability, identity/CDP, virtual-office, helpdesk, ...). Mark each
+     category **dense** (2+ apps), **covered** (1 app), or **whitespace** (0 apps).
+   - **The whitespace list:** the categories a small-to-medium services firm needs
+     that the suite has little or nothing for yet. Think broadly - HR/people-ops,
+     recruiting/ATS, learning/enablement, procurement/vendor-spend, inventory/assets,
+     field-service/dispatch, IT/asset management, GRC/security-compliance, customer
+     feedback/surveys, community/forum, product/roadmap, expense/travel, e-signature,
+     payroll, and so on. This list is derived fresh each session, not hardcoded.
+   - **The per-session steer** you will hand every seat: "prefer the whitespace
+     categories; a near-duplicate of an existing app or a third app in a dense
+     category is disfavored." Name the currently-dense categories explicitly so the
+     seats know what NOT to pile onto.
+5. **Assign seven distinct lenses**, one per seat. Use these unless the user asks
+   for others. Bias each lens toward the whitespace from step 4 (e.g. Seat D's
+   vertical, and any lens, should reach into an under-served category rather than a
+   dense one):
    - Seat A - **AI-native automation & autonomous agent workflows**
    - Seat B - **Data, intelligence & analytics**
    - Seat C - **Communication, collaboration & community**
@@ -54,9 +102,15 @@ adjacent, genuinely-new capabilities that move the suite forward.
 
 Spawn all seven `brainstorm-ideator` agents **in one message** (parallel). Give
 each its seat id, its lens, the rubric reminder (not a clone; AI-native; real
-wedge; adjacent + reuses the platform), the naming convention (single word,
+wedge; adjacent + reuses the platform), **the coverage census from Setup step 4 -
+the category map, the whitespace list, and the explicit "prefer whitespace; a
+near-duplicate of an existing app or a third app in a dense category is disfavored"
+steer, with the dense categories named** - the naming convention (single word,
 "B-" alliterative family preferred), and the required output shape (see the agent
-def). Collect each seat's five-app block.
+def). Tell each seat that at least the majority of its five proposals must land in
+a whitespace or covered (not dense) category, and each proposal must name the
+closest existing app and say why it is a different category, not a better version
+of it. Collect each seat's five-app block.
 
 Append all five blocks **verbatim** to the session doc under "Phase 1 - Initial
 proposals," labeled by seat and lens.
@@ -82,7 +136,16 @@ Append them verbatim under "Phase 3 - Submissions."
 
 ## Phase 4 - Overlap resolution (orchestrator judgement)
 
-Compare the seven submitted apps pairwise. Classify each overlapping pair:
+**First, screen every submission against the EXISTING suite (not just against each
+other).** Using the coverage census, for each submitted app name the closest existing
+app (or in-flight app) and judge overlap: if its core job substantially duplicates an
+app already in the suite (a second CRM / knowledge base / contract-scope-margin
+monitor / analytics layer / etc.), it is **disqualified here** - record it in the doc
+as "cut for near-duplication of `<existing app>`" with a one-line reason. A polished
+argument does not save a near-duplicate; the whole point of the session is to add a
+category, not thicken one. (If the seat believes it is genuinely a different category,
+that argument had to be made in its proposal; re-litigating it here does not reopen the
+cut.) Then compare the surviving submissions pairwise. Classify each overlapping pair:
 
 - **Perfect overlap** (same app, different words): **collapse** into one entry.
   Note in the doc which two submissions collapsed and keep the stronger framing.
@@ -103,8 +166,12 @@ skip Phase 5, note the walkover in the doc, and go to Phase 6.
 ## Phase 5 - Final vote
 
 SendMessage all seven seats the final slate of surviving apps (with current
-descriptions). Each seat scores **every** finalist **1–5** and **must abstain on
-any app it owns or co-owns** (no self-votes). Collect the scorecards.
+descriptions), **each tagged with the census category it lands in and whether that
+category is currently whitespace / covered / dense**. Each seat scores **every**
+finalist **1–5** and **must abstain on any app it owns or co-owns** (no self-votes).
+Instruct seats that **coverage contribution is an explicit scoring dimension**: an app
+that opens a whitespace category should score higher, all else equal, than an equally
+good app that thickens an already-dense category. Collect the scorecards.
 
 Tally points per app. Rules:
 
@@ -112,8 +179,9 @@ Tally points per app. Rules:
 - **Tie at the top:** delete the **lowest-scoring** app from the slate and run
   **another vote round** on the remainder (same rules). Repeat until the top is
   untied. If a tie cannot break because only tied apps remain, run one more round;
-  if still tied, break it by the rubric (most innovative + best fit) and record
-  your reasoning explicitly.
+  if still tied, break it by the rubric (most innovative + best fit) **with coverage
+  contribution as the decisive tiebreak - the app that opens a whitespace category
+  beats the one that thickens a dense category** - and record your reasoning explicitly.
 
 Append every vote round's matrix and the running tally under "Phase 5 - Voting,"
 then declare the **winner** with its final description.
