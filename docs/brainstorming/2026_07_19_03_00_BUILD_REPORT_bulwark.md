@@ -56,7 +56,11 @@ Milestones (all committed on `suite-brainstorm`):
 - **Static gates green locally:** typecheck (shared, bulwark-api, bulwark, worker, bolt-api,
   braid-api, blast-api, mcp-server, api, ui), `check-bolt-catalog` (0), `lint:migrations`
   (0, 200 files), surface-map self-check (0), `check-permission-catalog` (in sync, 1423
-  rows), the 11 visibility branch tests. `db:check` shows no bulwark drift.
+  rows), the 11 visibility branch tests. `db:check` shows no bulwark drift (245 Drizzle =
+  245 DB tables, exit 0). The 6 remaining `db:check` WARNINGS are pre-existing and
+  non-bulwark (`guest_invitations.token`, `login_history.ip_address`,
+  `brief_documents.visibility`, `beacon_entries.visibility`, `blip_saved_views.scope`,
+  `sessions.ip_address`), tracked as task #40; warnings only, absent from CI's fresh-DB check.
 - **CI:** the push triggered the branch workflows (suite-brainstorm was already wired into
   the push filters during the Braid cycle). The initial Test-shard red (bulwark-api /
   braid-api declared `vitest run` with no colocated tests) was fixed with `--passWithNoTests`
