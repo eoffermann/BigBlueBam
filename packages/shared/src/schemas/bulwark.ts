@@ -398,3 +398,98 @@ export const bulwarkListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   sort: z.string().optional(),
 });
+
+/* ------------------------------------------------------------------ */
+/*  Mutation input shapes (routes + MCP tools)                         */
+/* ------------------------------------------------------------------ */
+
+// POST /v1/contracts. bin_asset_id is the executed document; the route can_access-preflights
+// it (S3) before enqueuing extraction.
+export const bulwarkCreateContractSchema = z.object({
+  title: z.string().min(1).max(512),
+  bin_asset_id: z.string().uuid(),
+  contract_kind: BulwarkContractKind.default('subcontract'),
+  project_id: z.string().uuid().nullable().optional(),
+  supersedes_contract_id: z.string().uuid().nullable().optional(),
+  timezone: z.string().min(1).max(64).optional(),
+  jurisdiction: z.string().max(32).nullable().optional(),
+  counterparty_type: z.string().max(32).nullable().optional(),
+  counterparty_id: z.string().uuid().nullable().optional(),
+  effective_date: z.string().nullable().optional(),
+  expiry_date: z.string().nullable().optional(),
+});
+export type BulwarkCreateContractInput = z.infer<typeof bulwarkCreateContractSchema>;
+
+// PATCH /v1/contracts/:id. Metadata edit only (not the ledger).
+export const bulwarkUpdateContractSchema = z
+  .object({
+    title: z.string().min(1).max(512).optional(),
+    timezone: z.string().min(1).max(64).optional(),
+    jurisdiction: z.string().max(32).nullable().optional(),
+    project_id: z.string().uuid().nullable().optional(),
+    counterparty_type: z.string().max(32).nullable().optional(),
+    counterparty_id: z.string().uuid().nullable().optional(),
+    effective_date: z.string().nullable().optional(),
+    expiry_date: z.string().nullable().optional(),
+    status: BulwarkContractStatus.optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'At least one field required' });
+export type BulwarkUpdateContractInput = z.infer<typeof bulwarkUpdateContractSchema>;
+
+// PATCH /v1/obligations/:id. Confirm / edit / bind-to-base / reject. rejected requires a
+// confirm token at the MCP tool layer.
+export const bulwarkPatchObligationSchema = z
+  .object({
+    review_status: z.enum(['confirmed', 'rejected']).optional(),
+    obligation_type: BulwarkObligationType.optional(),
+    title: z.string().min(1).max(512).optional(),
+    event_binding: bulwarkEventBindingSchema.optional(),
+    deadline_rule: bulwarkDeadlineRuleSchema.optional(),
+    mandated_doc_types: z.array(BulwarkComplianceDocType).optional(),
+    // For an amendment obligation, the base obligation it supersedes and the outcome.
+    supersedes_obligation_id: z.string().uuid().nullable().optional(),
+    supersession_outcome: z.enum(['restate', 'terminate']).optional(),
+    // Confirmation for the destructive reject.
+    confirm: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'At least one field required' });
+export type BulwarkPatchObligationInput = z.infer<typeof bulwarkPatchObligationSchema>;
+
+// POST /v1/obligations/:id/trigger. Manual trigger (unbound / no-project only, DI7).
+export const bulwarkTriggerObligationSchema = z.object({
+  occurred_at: z.string(),
+});
+export type BulwarkTriggerObligationInput = z.infer<typeof bulwarkTriggerObligationSchema>;
+
+// POST /v1/deadlines/:id/discharge. waive requires a confirm token at the MCP tool layer.
+export const bulwarkDischargeSchema = z.object({
+  outcome: z.enum(['discharged', 'waived']),
+  confirm: z.boolean().optional(),
+  reason: z.string().max(2000).optional(),
+});
+export type BulwarkDischargeInput = z.infer<typeof bulwarkDischargeSchema>;
+
+// POST /v1/vendor-tiers.
+export const bulwarkCreateVendorTierSchema = z.object({
+  contract_id: z.string().uuid().nullable().optional(),
+  parent_tier_id: z.string().uuid().nullable().optional(),
+  vendor_type: z.string().max(32).nullable().optional(),
+  vendor_id: z.string().uuid().nullable().optional(),
+  tier_level: z.number().int().min(1).default(1),
+});
+export type BulwarkCreateVendorTierInput = z.infer<typeof bulwarkCreateVendorTierSchema>;
+
+// POST /v1/internal/events. The refs-only envelope bolt-api dispatches (spec §6).
+export const bulwarkIngestEventSchema = z.object({
+  org_id: z.string().uuid(),
+  source: z.string().min(1).max(48),
+  event_type: z.string().min(1).max(96),
+  bolt_event_id: z.string().uuid().nullable().optional(),
+  source_idempotency_key: z.string().min(1).max(128).optional(),
+  logged_at: z.string().optional(),
+  trigger_at: z.string().nullable().optional(),
+  // The entity_filter-referenced id-typed scoping fields (SM1: each validated uuid-shaped by
+  // the ingest service; non-conforming values dropped).
+  scope_fields: z.record(z.unknown()).optional(),
+});
+export type BulwarkIngestEventInput = z.infer<typeof bulwarkIngestEventSchema>;

@@ -10,6 +10,7 @@ export * from './bolt-graph-shape.js';
 export * from './bolt-automation-versions/index.js';
 export * from './mention-syntax.js';
 export * from './queues.js';
+export * from './bulwark-arm-key.js';
 // Banter Feed shared domain (docs/plans/banter-feed-design-document.md)
 export * from './banter-feed.js';
 // "Every place is a room": URL-derived Bureau surface ids, shared by

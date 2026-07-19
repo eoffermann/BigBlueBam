@@ -84,6 +84,26 @@ export interface BraidMatchOnIngestJobData {
 }
 
 /**
+ * Bulwark (AI contract-obligation monitor) queues (Bulwark design spec §4 / §9.2).
+ * bulwark-api is the PRODUCER (the POST /contracts + /extract routes enqueue extraction;
+ * the /internal/events inbox-write enqueues the firing drain); the worker (apps/worker,
+ * landed in a later milestone) is the consumer. Shared so producer and consumer cannot
+ * drift on the queue name or payload shape.
+ */
+export const BULWARK_EXTRACT_OBLIGATIONS_QUEUE = 'bulwark-extract-obligations';
+export interface BulwarkExtractObligationsJobData {
+  org_id: string;
+  contract_id: string;
+}
+
+/** Inbox drain: match one durably-inboxed Bolt event against armed obligations (§4.2). */
+export const BULWARK_FIRE_ON_EVENT_QUEUE = 'bulwark-fire-on-event';
+export interface BulwarkFireOnEventJobData {
+  org_id: string;
+  ingest_event_id: string;
+}
+
+/**
  * Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10). Producers
  * (banter-api message routes, later other apps) enqueue one job per platform
  * activity event; the worker classifies it, resolves concerned users, and

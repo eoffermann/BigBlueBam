@@ -6,6 +6,7 @@ export {
   sessions,
   apiKeys,
   organizationMemberships,
+  projectMemberships,
   permissionGroups,
   accountGroupMemberships,
   impersonationSessions,

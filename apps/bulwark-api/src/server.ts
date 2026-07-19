@@ -12,7 +12,14 @@ import redisPlugin from './plugins/redis.js';
 import authPlugin from './plugins/auth.js';
 import permissionsPlugin from './plugins/permissions.js';
 import rlsPlugin from './plugins/rls.js';
-import bulwarkRoutes from './routes/bulwark.routes.js';
+import contractRoutes from './routes/contracts.routes.js';
+import obligationRoutes from './routes/obligations.routes.js';
+import deadlineRoutes from './routes/deadlines.routes.js';
+import waiverRoutes from './routes/waivers.routes.js';
+import vendorTierRoutes from './routes/vendor-tiers.routes.js';
+import complianceRoutes from './routes/compliance.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
+import internalRoutes from './routes/internal.routes.js';
 import websocketHandler from './ws/handler.js';
 import { sql } from 'drizzle-orm';
 
@@ -98,7 +105,19 @@ await fastify.register(healthCheckPlugin, {
   },
 });
 
-await fastify.register(bulwarkRoutes, { prefix: '/v1' });
+// Bulwark REST surface (spec 5.1), split by resource group, all under /v1.
+for (const routeGroup of [
+  contractRoutes,
+  obligationRoutes,
+  deadlineRoutes,
+  waiverRoutes,
+  vendorTierRoutes,
+  complianceRoutes,
+  settingsRoutes,
+  internalRoutes,
+]) {
+  await fastify.register(routeGroup, { prefix: '/v1' });
+}
 
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {

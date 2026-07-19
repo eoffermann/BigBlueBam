@@ -1975,3 +1975,43 @@ Identity-resolution / golden-record CDP. 13 `braid_*` tools (spec section 10 of 
 
 `braid_propose_merge` is MCP-only: no dedicated propose route exists on braid-api yet, so the tool POSTs to the `/v1/candidates` surface per spec 10 (braid-api upserts the candidate and inserts the `agent_proposals` row). `braid_merge_profiles` backs two endpoints (`/candidates/:id/merge` when a `candidate_id` is given, `/profiles/merge` for a direct pair). Section counts: 21 REST endpoints, 12 with a tool, 9 without (all annotated), 1 MCP-only tool (`braid_propose_merge`) — 13 `braid_*` tools total.
 
+## Bulwark (app)
+
+- **Service:** `apps/bulwark-api` · external `/bulwark/api/` · MCP module(s): `bulwark-tools.ts` (lands in M5) · added on the `suite-brainstorm` branch.
+
+AI contract-obligation monitor. 15 `bulwark_*` tools (spec section 10 of `docs/brainstorming/2026_07_19_03_00_APP_DESIGN_bulwark.md`). The MCP module lands in M5; the intended tool names are recorded here NOW so the map stays complete. Every ledger read/write route is project-membership-scoped (SH1/SH3, org-admin override, no-project org fallback SK3). Reads that surface source records take an explicit `asker_user_id` and pass it through so bulwark-api runs `can_access` fail-closed. Destructive tools (`bulwark_delete_contract`, `bulwark_reject_obligation`, `bulwark_waive_deadline`) use the Redis-backed confirm-token two-step flow. All `bulwark_*` tools are fail-closed under `agent_policies` until an operator allowlists `bulwark.*`; following the basis/braid satellite pattern, `bulwark_*` is intentionally NOT added to `EXPLICIT_TOOL_OVERRIDES`.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /v1/contracts` | `bulwark_list_contracts` | List tracked contracts (project-scoped) | — _(SPA pending)_ |
+| `POST /v1/contracts` | `bulwark_extract_obligations` | Register from a Bin asset; enqueues extraction (Bin `can_access` preflight) | — _(SPA pending)_ |
+| `GET /v1/contracts/:id` | `bulwark_get_contract` | Contract detail + rollup (embeds obligations) | — _(SPA pending)_ |
+| `PATCH /v1/contracts/:id` | — _(skip: metadata edit, SPA-surfaced)_ | Update contract metadata | — _(SPA pending)_ |
+| `DELETE /v1/contracts/:id` | `bulwark_delete_contract` | Delete a tracked contract (owner/admin floor, confirm) | — _(SPA pending)_ |
+| `POST /v1/contracts/:id/extract` | `bulwark_extract_obligations` | Re-run extraction (hash-skip conditional; Bin preflight) | — _(SPA pending)_ |
+| `GET /v1/contracts/:id/obligations` | — _(skip: resolver-done-internally; `bulwark_get_contract` embeds obligations)_ | Ledger for a contract | — _(SPA pending)_ |
+| `GET /v1/obligations` | `bulwark_list_obligations` | List obligations / review queue (sort -confidence) | — _(SPA pending)_ |
+| `GET /v1/obligations/:id` | `bulwark_get_obligation` | Obligation detail + verified cited_span | — _(SPA pending)_ |
+| `PATCH /v1/obligations/:id` | `bulwark_confirm_obligation` | Confirm / edit / bind an obligation | — _(SPA pending)_ |
+| `PATCH /v1/obligations/:id` (reject) | `bulwark_reject_obligation` | Reject an obligation (destructive, confirm) | — _(SPA pending)_ |
+| `POST /v1/obligations/:id/trigger` | `bulwark_trigger_obligation` | Manual trigger (unbound / no-project only) | — _(SPA pending)_ |
+| `GET /v1/deadlines` | `bulwark_list_deadlines` | Deadline radar (project-scoped) | — _(SPA pending)_ |
+| `GET /v1/deadlines/:id` | — _(skip: resolver-done-internally; `bulwark_check_notice_risk` + `bulwark_list_deadlines` surface deadline data; the notice body is a UI-only read gated behind `bulwark.notice.draft`)_ | Deadline detail | — _(SPA pending)_ |
+| `POST /v1/deadlines/:id/draft-notice` | `bulwark_draft_notice` | Draft/re-draft a notice + register proposal | — _(SPA pending)_ |
+| `POST /v1/deadlines/:id/approve-send` | — _(skip: UI-only send surface; the MCP send path is the proposal approve)_ | Approve+send a notice directly | — _(SPA pending)_ |
+| `POST /v1/deadlines/:id/discharge` | `bulwark_waive_deadline` | Mark discharged/waived (waive confirm) | — _(SPA pending)_ |
+| `GET /v1/waiver-risks` | `bulwark_check_notice_risk` | Open waiver risks (flagship, with `GET /v1/deadlines` for a job) | — _(SPA pending)_ |
+| `GET /v1/vendor-tiers` | — _(skip: compliance-matrix management, SPA-only)_ | List vendor tiers | — _(SPA pending)_ |
+| `POST /v1/vendor-tiers` | — _(skip: compliance-matrix management, SPA-only)_ | Add a vendor tier | — _(SPA pending)_ |
+| `GET /v1/compliance-docs` | `bulwark_list_compliance` | Vendor compliance matrix (project-scoped) | — _(SPA pending)_ |
+| `POST /v1/compliance-docs/:id/chase` | `bulwark_chase_compliance` | Draft a chase + register proposal | — _(SPA pending)_ |
+| `POST /v1/compliance-docs/:id/approve-send` | — _(skip: UI-only send surface; the MCP send path is the proposal approve)_ | Approve+send a chase directly | — _(SPA pending)_ |
+| `GET /v1/settings` | — _(skip: settings SPA-surfaced)_ | Get org settings | — _(SPA pending)_ |
+| `PATCH /v1/settings` | — _(skip: settings SPA-surfaced)_ | Update org settings (owner/admin floor) | — _(SPA pending)_ |
+| `POST /v1/internal/events` | — _(skip: internal service-to-service; bolt-api ingest trigger, `INTERNAL_SERVICE_SECRET`, fails closed on empty)_ | Ingest-trigger from bolt-api | — |
+| `POST /v1/internal/proposal-decided` | — _(skip: internal service-to-service; proposal.decided delivery, `INTERNAL_SERVICE_SECRET`)_ | proposal.decided delivery | — |
+| `/bulwark/ws` | — _(skip: realtime/ws; project-scoped refs-only frames)_ | Redis-PubSub project-scoped notifications | — |
+| `GET /health`, `GET /readyz` | — _(skip: probe)_ | Health / readiness | — |
+
+`bulwark_extract_obligations` (flagship) backs two endpoints (`POST /v1/contracts` and `POST /v1/contracts/:id/extract`). `bulwark_check_notice_risk` (flagship) surfaces `GET /v1/deadlines` + `GET /v1/waiver-risks` for a job. `PATCH /v1/obligations/:id` backs two tools by intent (`bulwark_confirm_obligation` for confirm/edit/bind, `bulwark_reject_obligation` for reject). Section counts: 28 REST endpoints (26 distinct paths; PATCH obligations and the two flagship multi-endpoint tools counted per row), 15 with a `bulwark_*` tool, the remainder skip-annotated — 15 `bulwark_*` tools total.
+
