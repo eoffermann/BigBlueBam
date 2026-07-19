@@ -255,10 +255,31 @@ backticks are the objective checks - run them, do not eyeball.
 - [ ] `docs/apps/<app>/guide.md` written.
 - [ ] Screenshots captured via `screenshot-capture` against the **gilligan** project ONLY
       (never generic data), saved where the docs AND the marketing site reference them.
+- [ ] **Screencaps are EMBEDDED in the docs, not merely present as files.** The suite
+      convention (see `docs/apps/basis/help.md` + `guide.md`) is inline
+      `![caption](screenshots/light/<file>.png)` in BOTH help.md and guide.md - a screencap
+      per major surface/feature. Verify with `grep -c '!\[' docs/apps/<app>/help.md` (must be
+      > 0) and that every referenced path exists. Files-on-disk-but-unreferenced is the exact
+      gap that reads as "done" but ships docs with no images.
+- [ ] **The BUILT marketing site actually SERVES the screencaps, not an SPA HTML fallback.**
+      `site/public/` is baked at image-build time, so a stale image serves `index.html` (200,
+      `text/html`) for a missing PNG - which looks fine to a naive 200 check. After
+      `docker compose build site && up -d --force-recreate site`, verify the real bytes:
+      `curl -s -o /dev/null -w '%{content_type}' http://localhost:3000/screenshots/<app>/light/<file>.png`
+      must print `image/png`, and every `FloatingFrame src=` in the app's marketing section
+      must resolve to a file that exists (no dark-dup-of-hero padding a 4-slot layout).
 - [ ] Marketing site section added under `site/`, registered on a page, MCP counts updated;
       the app-count narrative reconciled if it drifted (do not leave "N apps" copy stale just
       because it predates this app - that is exactly the kind of pre-existing item that is
       still yours to fix or, if genuinely large, to record with the specific edit needed).
+- [ ] **The `/docs` MCP tool catalog includes the app.** `/docs` is AUTO-GENERATED from the
+      per-app tool sources (`pnpm docs:catalog` -> committed `site/src/content/docs-catalog.generated.json`,
+      consumed by `site/src/pages/docs.tsx`) - it is NOT hand-maintained. Verify the app's
+      tool module is in `APP_TOOL_MODULES` (scripts/docs/lib/tool-source.mjs) and its
+      LAUNCHPAD_CATALOG row exists, re-run `node scripts/docs/build-docs-catalog.mjs` (must be
+      deterministic - no git diff), and confirm the app + its tools appear in the generated
+      JSON. The manual (`manual.generated.json`) and the DOCX/PDF (`scripts/docs-book/build-book.mjs`)
+      likewise pick the app up from the same sources - regenerate them if this app is new.
 
 ### K. Review pipeline fully closed (Phase 1 + post-commit-review)
 
