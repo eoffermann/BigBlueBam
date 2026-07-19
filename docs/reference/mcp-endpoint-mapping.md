@@ -55,11 +55,14 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Blank | 24 | 18 | 6 | 1 |
 | Bill | 52 | 47 | 5 | 0 |
 | Bureau | 42 | 37 | 5 | 0 |
+| Bin | 32 | 19 | 13 | 0 |
+| Bay | 20 | 14 | 6 | 0 |
 | Blip | 40 | 38 | 2 | 0 |
 | Helpdesk | 38 | 15 | 23 | 0 |
+| Basis | 17 | 15 | 2 | 0 |
 | Braid | 21 | 12 | 9 | 1 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **1032** | **768** | **264** | **17** |
+| **Total** | **1103** | **816** | **287** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 

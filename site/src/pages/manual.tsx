@@ -520,7 +520,7 @@ export function ManualPage() {
             </div>
           </aside>
 
-          {/* Content: all 19 apps stacked */}
+          {/* Content: all 21 apps stacked */}
           <div ref={contentRef} className="min-w-0">
             {entries.map((entry) => (
               <section

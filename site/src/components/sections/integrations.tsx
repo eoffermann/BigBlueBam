@@ -65,7 +65,7 @@ export function Integrations() {
               </div>
             </div>
             <p className="mb-4 text-sm text-zinc-600">
-              A full Model Context Protocol server exposes every action across all nineteen apps
+              A full Model Context Protocol server exposes every action across all twenty-one apps
               (Bam, Banter, Beacon, Bearing, Bench, Bill, Blank, Blast, Blueprint, Board, Bolt,
               Bond, Book, Brief, Bureau, Helpdesk) plus cross-cutting platform capabilities (cross-app search,
               composite views, entity linking, scheduled posts, upserts, agent policies, outbound

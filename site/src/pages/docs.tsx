@@ -1440,7 +1440,7 @@ const faqs: Faq[] = [
   },
   {
     question: 'How many apps are included?',
-    answer: 'BigBlueBam ships with nineteen integrated applications: Bam (Kanban project management with sprints), Banter (real-time messaging with channels, DMs, threads, voice/video calls, and scheduled posts), Beacon (knowledge base with semantic search and a knowledge graph), Brief (collaborative WYSIWYG documents), Bolt (WHEN/IF/THEN workflow automations with runtime observability), Bearing (goals and OKR tracking), Board (infinite-canvas visual collaboration whiteboards with real-time editing and audio conferencing), Bond (CRM with visual deal pipeline, contact and company management, activity tracking, and dedupe primitives), Blast (email campaigns with templates, segments, and analytics), Bill (invoicing, expenses, PDF generation, and recurring billing), Blank (forms with conditional logic routing), Blueprint (structured-diagram editor with typed graph nodes and auto-layout), Book (scheduling and public booking pages), Bench (analytics dashboards and scheduled reports), Bureau (virtual office with rooms, presence, and knock-to-enter), Bin (digital asset manager and structured-data editor backed by object storage), Bay (media review and approval with annotations and public guest links), Blip (telemetry and event tracking), and Helpdesk (customer support ticket portal with similar-ticket lookup). All nineteen apps share a single authentication system, cross-link to each other seamlessly, and surface into a single cross-app search, composite subject views, and a durable entity-links table.',
+    answer: 'BigBlueBam ships with twenty-one integrated applications: Bam (Kanban project management with sprints), Banter (real-time messaging with channels, DMs, threads, voice/video calls, and scheduled posts), Beacon (knowledge base with semantic search and a knowledge graph), Brief (collaborative WYSIWYG documents), Bolt (WHEN/IF/THEN workflow automations with runtime observability), Bearing (goals and OKR tracking), Board (infinite-canvas visual collaboration whiteboards with real-time editing and audio conferencing), Bond (CRM with visual deal pipeline, contact and company management, activity tracking, and dedupe primitives), Blast (email campaigns with templates, segments, and analytics), Bill (invoicing, expenses, PDF generation, and recurring billing), Blank (forms with conditional logic routing), Blueprint (structured-diagram editor with typed graph nodes and auto-layout), Book (scheduling and public booking pages), Bench (analytics dashboards and scheduled reports), Bureau (virtual office with rooms, presence, and knock-to-enter), Bin (digital asset manager and structured-data editor backed by object storage), Bay (media review and approval with annotations and public guest links), Blip (telemetry and event tracking), Helpdesk (customer support ticket portal with similar-ticket lookup), Basis (a governed metric layer where you define a business metric once, read it everywhere, and an AI core explains why a certified metric moved), and Braid (customer identity resolution that merges source records into golden profiles with survivorship rules and a review queue). All twenty-one apps share a single authentication system, cross-link to each other seamlessly, and surface into a single cross-app search, composite subject views, and a durable entity-links table.',
   },
   {
     question: 'What is the difference between Beacon and Brief?',
@@ -1460,11 +1460,11 @@ const faqs: Faq[] = [
   },
   {
     question: 'Is BigBlueBam open source?',
-    answer: 'BigBlueBam is source-available on GitHub. The full codebase -- frontends, nineteen app APIs, Docker Compose stack, Helm chart, and migrations -- is in a single monorepo. You can self-host it on your own infrastructure with no external dependencies beyond the Docker images. Check the repository for the specific license terms.',
+    answer: 'BigBlueBam is source-available on GitHub. The full codebase -- frontends, twenty-one app APIs, Docker Compose stack, Helm chart, and migrations -- is in a single monorepo. You can self-host it on your own infrastructure with no external dependencies beyond the Docker images. Check the repository for the specific license terms.',
   },
   {
     question: 'How do I deploy BigBlueBam?',
-    answer: 'The quickest way is to clone the repository, copy .env.example to .env, fill in your secrets, and run docker compose up -d. This starts a full stack including PostgreSQL, Redis, MinIO, Qdrant, all nineteen app APIs, their frontends, the MCP server, and a background worker. Everything is accessible through a single nginx reverse proxy on port 80. For production, a Helm chart is provided at infra/helm/ for Kubernetes deployment. Operators can also skip the CLI admin prompt entirely and have the first visitor create the SuperUser account from the site via the new /b3/bootstrap page.',
+    answer: 'The quickest way is to clone the repository, copy .env.example to .env, fill in your secrets, and run docker compose up -d. This starts a full stack including PostgreSQL, Redis, MinIO, Qdrant, all twenty-one app APIs, their frontends, the MCP server, and a background worker. Everything is accessible through a single nginx reverse proxy on port 80. For production, a Helm chart is provided at infra/helm/ for Kubernetes deployment. Operators can also skip the CLI admin prompt entirely and have the first visitor create the SuperUser account from the site via the new /b3/bootstrap page.',
   },
   {
     question: 'What database does it use?',
@@ -1717,7 +1717,7 @@ function McpToolsContent() {
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">MCP Tools Reference</h1>
         <p className="mt-3 max-w-2xl text-base text-zinc-600">
-          BigBlueBam exposes <strong>833 MCP tools</strong> across 19 products, enabling AI agents
+          BigBlueBam exposes <strong>833 MCP tools</strong> across 21 products, enabling AI agents
           to manage tasks, communicate in channels, search knowledge bases, author documents, orchestrate
           automations, track goals, collaborate on visual whiteboards, and manage CRM pipelines -- all through the{' '}
           <a
@@ -1803,7 +1803,7 @@ function UserGuideContent() {
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">User Guide</h1>
         <p className="mt-3 max-w-2xl text-base text-zinc-600">
-          A practical guide to using BigBlueBam's nineteen integrated applications. Whether you are managing sprints,
+          A practical guide to using BigBlueBam's twenty-one integrated applications. Whether you are managing sprints,
           messaging your team, building a knowledge base, writing documents, automating workflows, collaborating on whiteboards, managing your CRM pipeline, or handling
           customer support tickets, this guide covers the essentials.
         </p>
@@ -1833,8 +1833,8 @@ function UserGuideContent() {
             <h3 className="mb-3 text-lg font-semibold text-zinc-900">Navigation Overview</h3>
             <p className="mb-3 text-sm text-zinc-600">
               BigBlueBam uses a cross-app navigation system with colored pills at the top of the screen. Each pill
-              represents one of the nineteen apps: Bam, Banter, Beacon, Brief, Bolt, Bearing, Board, Bond,
-              Blast, Bill, Blank, Blueprint, Book, Bench, Bureau, Bin, Bay, Blip, and Helpdesk. Click any pill to switch apps without losing your place. Within each app, a collapsible
+              represents one of the twenty-one apps: Bam, Banter, Beacon, Brief, Bolt, Bearing, Board, Bond,
+              Blast, Bill, Blank, Blueprint, Book, Bench, Bureau, Bin, Bay, Blip, Helpdesk, Basis, and Braid. Click any pill to switch apps without losing your place. Within each app, a collapsible
               sidebar provides contextual navigation -- projects in Bam, channels in Banter, folders in Brief, and so on.
             </p>
             <p className="text-sm text-zinc-600">
@@ -2607,7 +2607,7 @@ function DeploymentContent() {
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Deployment Guide</h1>
         <p className="mt-3 max-w-2xl text-base text-zinc-600">
           Everything you need to deploy, configure, and maintain a BigBlueBam instance. The platform runs
-          as a multi-service Docker Compose stack (nineteen app APIs plus MCP server, worker, voice agent, frontends, and data services) behind a single nginx reverse proxy.
+          as a multi-service Docker Compose stack (twenty-one app APIs plus MCP server, worker, voice agent, frontends, and data services) behind a single nginx reverse proxy.
         </p>
       </div>
 
