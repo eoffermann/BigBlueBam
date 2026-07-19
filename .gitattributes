@@ -23,4 +23,18 @@ railway/** text eol=lf
 # only removes the enabling condition; the generator also strips CR defensively.
 infra/nginx/** text eol=lf
 
-# SQL migrations and docs are fine as default (LF on Unix, whatever on Win)
+# Markdown under docs/ is INPUT to the docs generators (scripts/docs/build-manual.mjs
+# reads docs/apps/<app>/help.md and embeds its bytes verbatim into
+# site/src/content/manual.generated.json). Without an eol rule a Windows checkout
+# gives those help.md files CRLF, the generator bakes \r\n into the JSON strings,
+# and the committed artifact then differs from what a Linux CI run produces -
+# so `pnpm docs:manual:check` fails on every push forever and re-running
+# `pnpm docs:manual` on Windows only re-bakes the CRLF. Pin to LF so generation
+# is platform-independent and the drift guard can actually pass.
+*.md text eol=lf
+
+# The generated site content artifacts are compared byte-for-byte by the drift
+# guards, so they must be LF for the same reason.
+site/src/content/*.generated.json text eol=lf
+
+# SQL migrations and the remaining docs are fine as default (LF on Unix, whatever on Win)
