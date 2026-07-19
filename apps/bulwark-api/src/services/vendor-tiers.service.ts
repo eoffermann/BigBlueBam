@@ -62,6 +62,7 @@ export async function createVendorTier(
 
   if (input.vendor_type && input.vendor_id) {
     await resolveCounterpartyGoldenId({
+      orgId: viewer.org_id,
       sourceType: input.vendor_type,
       sourceId: input.vendor_id,
       askerUserId: viewer.id,

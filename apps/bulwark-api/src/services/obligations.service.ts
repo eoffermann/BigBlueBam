@@ -2,12 +2,11 @@ import { and, eq, sql, type SQL } from 'drizzle-orm';
 import {
   bulwarkDeadlineRuleSchema,
   bulwarkEventBindingSchema,
-  calendarArmKey,
-  manualArmKey,
   type BulwarkPatchObligationInput,
   type BulwarkDeadlineRule,
   type BulwarkEventBinding,
 } from '@bigbluebam/shared';
+import { calendarArmKey, manualArmKey } from '@bigbluebam/shared/bulwark-arm-key';
 import { db } from '../db/index.js';
 import {
   bulwarkContracts,

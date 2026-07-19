@@ -104,6 +104,21 @@ export interface BulwarkFireOnEventJobData {
 }
 
 /**
+ * Scheduled Bulwark sweeps (Bulwark spec §4.3-§4.5). Each of these is a repeatable job whose
+ * worker handler is a THIN caller: it POSTs to a bulwark-api internal route that runs the
+ * engine over every org, so all engine logic stays in one place (bulwark-api). The optional
+ * organization_id scopes a targeted run.
+ */
+export const BULWARK_RADAR_SWEEP_QUEUE = 'bulwark-radar-sweep';
+export const BULWARK_STATE_RECONCILE_QUEUE = 'bulwark-state-reconcile';
+export const BULWARK_PROPOSAL_RECONCILE_QUEUE = 'bulwark-proposal-reconcile';
+export const BULWARK_GATE_RECONCILE_QUEUE = 'bulwark-gate-reconcile';
+export const BULWARK_RETENTION_QUEUE = 'bulwark-retention';
+export interface BulwarkSweepJobData {
+  organization_id?: string;
+}
+
+/**
  * Banter Feed fan-in (docs/plans/banter-feed-design-document.md §10). Producers
  * (banter-api message routes, later other apps) enqueue one job per platform
  * activity event; the worker classifies it, resolves concerned users, and

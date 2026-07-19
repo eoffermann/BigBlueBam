@@ -308,7 +308,7 @@ export async function runExtraction(args: RunExtractionArgs): Promise<RunExtract
         verified: v.verified,
       });
       // Unverified spans force pending_review regardless of confidence (D7).
-      await db
+      const [insertedRow] = await db
         .insert(bulwarkObligations)
         .values({
           organization_id: orgId,
@@ -331,8 +331,27 @@ export async function runExtraction(args: RunExtractionArgs): Promise<RunExtract
             bulwarkObligations.contract_id,
             bulwarkObligations.dedup_key,
           ],
-        });
+        })
+        .returning({ id: bulwarkObligations.id });
       extracted++;
+      // Emit obligation.extracted only for a genuinely NEW row (refs + type + confidence, §7).
+      if (insertedRow) {
+        await publishBoltEvent(
+          'obligation.extracted',
+          'bulwark',
+          {
+            obligation: { id: insertedRow.id },
+            contract: { id: contractId },
+            obligation_type: v.obligation_type,
+            confidence,
+            review_status: 'pending_review',
+            org: { id: orgId },
+          },
+          orgId,
+          undefined,
+          'system',
+        ).catch(() => {});
+      }
     }
   }
 

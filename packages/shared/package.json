@@ -7,6 +7,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./bulwark-arm-key": {
+      "types": "./dist/bulwark-arm-key.d.ts",
+      "import": "./dist/bulwark-arm-key.js",
+      "require": "./dist/bulwark-arm-key.cjs"
     }
   },
   "main": "./dist/index.cjs",

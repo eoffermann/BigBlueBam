@@ -17,6 +17,8 @@ import { detectCatalogDrift } from '../services/catalog-drift-detector.js';
 import { dispatchToSubscribedRunners } from '../services/webhook-dispatch-hook.js';
 // Braid live-ingest transport (Braid design spec §6, IN3)
 import { dispatchToBraid } from '../services/braid-dispatch-hook.js';
+// Bulwark live-ingest transport (Bulwark design spec §6)
+import { dispatchToBulwark } from '../services/bulwark-dispatch-hook.js';
 import { Queue } from 'bullmq';
 import type Redis from 'ioredis';
 
@@ -165,6 +167,23 @@ export default async function eventIngestionRoutes(fastify: FastifyInstance) {
       void dispatchToBraid(
         {
           orgId: event.org_id,
+          source: event.source,
+          eventType: event.event_type,
+          payload: event.payload,
+        },
+        request.log,
+      ).catch(() => {
+        // swallowed: helper has its own logging
+      });
+
+      // Bulwark live-ingest transport (spec §6): gate-check the receiving org's dispatch set,
+      // then forward gate-admitted events to bulwark-api's durable inbox at /v1/internal/events.
+      // Fire-and-forget; a dropped state-reflecting binding is recovered by bulwark-state-reconcile.
+      void dispatchToBulwark(
+        fastify.redis,
+        {
+          orgId: event.org_id,
+          eventId,
           source: event.source,
           eventType: event.event_type,
           payload: event.payload,

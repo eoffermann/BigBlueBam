@@ -6,8 +6,10 @@ import {
   bulwarkComplianceDocs,
   bulwarkContracts,
   bulwarkNoticeDeadlines,
+  bulwarkVendorTiers,
 } from '../db/schema/index.js';
 import { preflightAccess } from '../lib/can-access.client.js';
+import { sendTransactional, type TransactionalRecipient } from '../lib/blast-send.client.js';
 import { publishBulwarkFrame } from '../lib/realtime.js';
 import { getSettings } from './settings.service.js';
 import { internalLlmChat } from '../lib/internal-llm.client.js';
@@ -229,10 +231,36 @@ export async function executeSendNotice(
     .returning({ id: bulwarkNoticeDeadlines.id });
   if (!won) return { sent: false, annotation: 'not_approved_or_already_sent' };
 
-  // NOTE: the actual transactional mail dispatch (bypassing blast_unsubscribes, D6) is the
-  // platform transactional path, wired in a later milestone. Here the send is recorded as
-  // executed with the deterministic recipient + (preflighted) attachment resolved.
+  // Real transactional dispatch (D6): POST the rendered notice to Blast's transactional path,
+  // which bypasses blast_unsubscribes. Recipient is the DETERMINISTIC counterparty (THEME E),
+  // never a clause-named address. A failure annotates the proposal but leaves the CAS won (the
+  // send is terminal; the annotation records the delivery issue for the reviewer).
+  const draft = bulwarkNoticeDraftSchema.safeParse(deadline.notice_draft);
+  const subject = draft.success ? draft.data.subject : `Notice regarding ${contract.title}`;
+  const bodyMarkdown = draft.success ? draft.data.body_markdown : `Notice regarding ${contract.title}.`;
+  const recipient = counterpartyRecipient(contract.counterparty_type, contract.counterparty_id);
+  const dispatch = await sendTransactional({
+    orgId,
+    recipient,
+    subject,
+    bodyMarkdown,
+    sourceApp: 'bulwark.notice',
+  });
+  if (!dispatch.sent) {
+    annotation = annotation ? `${annotation};${dispatch.annotation}` : dispatch.annotation;
+    await annotateProposal(deadline.notice_proposal_id, dispatch.annotation ?? 'send_failed');
+  }
   return { sent: true, annotation };
+}
+
+// Map a bond counterparty ref to the deterministic transactional recipient. Defaults an
+// unknown/absent type to bond.company (the usual counterparty kind).
+function counterpartyRecipient(
+  counterpartyType: string | null,
+  counterpartyId: string,
+): TransactionalRecipient {
+  const type = counterpartyType === 'bond.contact' ? 'bond.contact' : 'bond.company';
+  return { type, id: counterpartyId };
 }
 
 // Move a drafted notice to approved (the REST approve-and-send precursor), then send.
@@ -334,13 +362,25 @@ export async function draftChase(
   return { drafted: true, proposal_id: proposal?.id ?? null };
 }
 
-// Exactly-once chase send executor (transactional; bypasses blast_unsubscribes, D6). The
-// actual transactional mail dispatch is the platform path wired in a later milestone.
+// Exactly-once chase send executor (transactional; bypasses blast_unsubscribes, D6). Dispatches
+// the chase to the vendor tier's DETERMINISTIC vendor via Blast's transactional path.
 export async function executeSendChase(
   orgId: string,
   complianceDocId: string,
   _deciderId: string,
-): Promise<{ sent: boolean }> {
+): Promise<{ sent: boolean; annotation?: string }> {
+  const [doc] = await db
+    .select()
+    .from(bulwarkComplianceDocs)
+    .where(
+      and(
+        eq(bulwarkComplianceDocs.organization_id, orgId),
+        eq(bulwarkComplianceDocs.id, complianceDocId),
+      ),
+    )
+    .limit(1);
+  if (!doc) throw new NotFoundError('Compliance doc not found');
+
   const [won] = await db
     .update(bulwarkComplianceDocs)
     .set({ chase_status: 'sent', updated_at: new Date() })
@@ -352,7 +392,32 @@ export async function executeSendChase(
       ),
     )
     .returning({ id: bulwarkComplianceDocs.id });
-  return { sent: !!won };
+  if (!won) return { sent: false, annotation: 'not_approved_or_already_sent' };
+
+  const [tier] = await db
+    .select()
+    .from(bulwarkVendorTiers)
+    .where(eq(bulwarkVendorTiers.id, doc.vendor_tier_id))
+    .limit(1);
+  if (!tier?.vendor_id) {
+    await annotateProposal(doc.chase_proposal_id, 'recipient_unresolved');
+    return { sent: true, annotation: 'recipient_unresolved' };
+  }
+  const recipient: TransactionalRecipient = {
+    type: tier.vendor_type === 'bond.contact' ? 'bond.contact' : 'bond.company',
+    id: tier.vendor_id,
+  };
+  const dispatch = await sendTransactional({
+    orgId,
+    recipient,
+    subject: `Compliance document required: ${doc.doc_type}`,
+    bodyMarkdown:
+      `A required compliance document (${doc.doc_type}) is missing or expiring. ` +
+      `Please provide a current copy at your earliest convenience.`,
+    sourceApp: 'bulwark.chase',
+  });
+  if (!dispatch.sent) await annotateProposal(doc.chase_proposal_id, dispatch.annotation ?? 'send_failed');
+  return { sent: true, annotation: dispatch.sent ? undefined : dispatch.annotation };
 }
 
 export async function approveAndSendChase(

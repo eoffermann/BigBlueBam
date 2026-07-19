@@ -2930,6 +2930,95 @@ const braidEvents: EventDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Bulwark (contract-obligation monitor) events (Bulwark design spec §7.1).
+// Refs + magnitude only: ids and counts, never clause text, notice prose, or PII
+// (spec §2.5 point 10). `deadline.armed` is deliberately a ws-only frame (§5.2 / BP6),
+// NOT a Bolt event, so it is absent here.
+// ---------------------------------------------------------------------------
+
+const bulwarkEvents: EventDefinition[] = [
+  {
+    source: 'bulwark',
+    event_type: 'contract.extracted',
+    description:
+      'Fired when an obligation-extraction run completes for a tracked contract. Carries counts only, never obligation text.',
+    payload_schema: [
+      { name: 'contract.id', type: 'uuid', description: 'The tracked contract' },
+      { name: 'obligations_extracted', type: 'number', description: 'Count of obligations persisted this run' },
+      { name: 'low_confidence_count', type: 'number', description: 'Count flagged low-confidence for review' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bulwark',
+    event_type: 'obligation.extracted',
+    description:
+      'Fired when a new typed obligation is persisted from extraction. Refs + type + confidence only; no clause quote.',
+    payload_schema: [
+      { name: 'obligation.id', type: 'uuid', description: 'The persisted obligation' },
+      { name: 'contract.id', type: 'uuid', description: 'The owning contract' },
+      { name: 'obligation_type', type: 'string', description: 'notice|insurance|indemnity|payment|retention|flow_down|renewal|termination|lien|other' },
+      { name: 'confidence', type: 'number?', description: 'LLM self-reported confidence (display only)' },
+      { name: 'review_status', type: 'string', description: 'pending_review|confirmed|auto_confirmed|rejected|superseded' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bulwark',
+    event_type: 'deadline.approaching',
+    description:
+      'Fired by the radar sweep when an open deadline nears its due time. Carries the due time and hours-remaining magnitude.',
+    payload_schema: [
+      { name: 'deadline.id', type: 'uuid', description: 'The live deadline instance' },
+      { name: 'obligation.id', type: 'uuid', description: 'The bound obligation' },
+      { name: 'contract.id', type: 'uuid', description: 'The owning contract' },
+      { name: 'due_at', type: 'string', format: 'date-time', description: 'The computed due instant' },
+      { name: 'hours_remaining', type: 'number', description: 'Whole hours until due' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bulwark',
+    event_type: 'waiver.risk_detected',
+    description:
+      'Fired when a new waiver risk is raised (clock running out, overdue, unbound, or missing compliance doc). Refs + severity + reason only.',
+    payload_schema: [
+      { name: 'risk.id', type: 'uuid', description: 'The waiver-risk row' },
+      { name: 'obligation.id', type: 'uuid', description: 'The at-risk obligation' },
+      { name: 'contract.id', type: 'uuid', description: 'The owning contract' },
+      { name: 'severity', type: 'enum', description: 'Risk severity', enum: ['low', 'medium', 'high', 'critical'] },
+      { name: 'reason', type: 'string', description: 'clock_running_out|overdue|unbound_obligation|missing_compliance_doc' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bulwark',
+    event_type: 'notice.drafted',
+    description:
+      'Fired when a notice draft + its HITL agent_proposals row are created. Carries the proposal ref, never the drafted body.',
+    payload_schema: [
+      { name: 'deadline.id', type: 'uuid', description: 'The deadline the notice discharges' },
+      { name: 'proposal.id', type: 'uuid', description: 'The agent_proposals row awaiting human approval' },
+      { name: 'contract.id', type: 'uuid', description: 'The owning contract' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bulwark',
+    event_type: 'compliance.expiring',
+    description:
+      'Fired when a collected compliance doc crosses into expiring/expired. Refs + doc type + expiry only.',
+    payload_schema: [
+      { name: 'compliance_doc.id', type: 'uuid', description: 'The compliance-doc row' },
+      { name: 'vendor_tier.id', type: 'uuid', description: 'The owning vendor tier' },
+      { name: 'doc_type', type: 'string', description: 'coi|w9|lien_waiver|certified_payroll|other' },
+      { name: 'expires_at', type: 'string', format: 'date-time', description: 'The doc expiry instant' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -2954,6 +3043,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...wave1bEvents,
   ...blipEvents,
   ...braidEvents,
+  ...bulwarkEvents,
 ];
 
 export function getAllEvents(): EventDefinition[] {

@@ -154,6 +154,7 @@ export async function createContract(
   // Braid soft dependency: attempt to unify the counterparty, but never fail the create.
   if (input.counterparty_type && input.counterparty_id) {
     await resolveCounterpartyGoldenId({
+      orgId: viewer.org_id,
       sourceType: input.counterparty_type,
       sourceId: input.counterparty_id,
       askerUserId: viewer.id,

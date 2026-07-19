@@ -1,0 +1,24 @@
+{
+  "status": 404,
+  "headers": {
+    "apple-timing-app": "600 ms",
+    "b3": "dcad742eaf464b2ebbe2b2d1ec05de51-79d8a41bcb0985ce",
+    "connection": "keep-alive",
+    "content-type": "application/json",
+    "date": "Thu, 23 Apr 2026 21:03:26 GMT",
+    "server": "daiquiri/5",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "transfer-encoding": "chunked",
+    "x-apple-jingle-correlation-key": "3SWXILVPIZFS5O7CWLI6YBO6KE",
+    "x-b3-parentspanid": "0b48a68cf2ae832c",
+    "x-b3-spanid": "79d8a41bcb0985ce",
+    "x-b3-traceid": "a0a1192a2107d356",
+    "x-daiquiri-debug-worker-pid": "25225, 64293",
+    "x-daiquiri-instance": "daiquiri:18493001:mr85p00it-hyhk03154801:7987:26HOTFIX15:daiquiri-amp-all-shared-ext-001-mr",
+    "x-rate-limit": "user-hour-lim:3600;user-hour-rem:3588;",
+    "x-request-id": "3SWXILVPIZFS5O7CWLI6YBO6KE",
+    "x-responding-instance": "ac-gateway-api:ac-gateway-api-main-55579c8984-gv7ss:ac-gateway-api-main-55579c8984-gv7ss:-1::::",
+    "x-unicorn-originated": "true"
+  },
+  "elapsedMs": 649
+}

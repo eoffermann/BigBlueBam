@@ -20,6 +20,9 @@ const envSchema = z.object({
   // Internal service URLs
   MCP_INTERNAL_URL: z.string().default('http://mcp-server:3001'),
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
+  // Bulwark ingest target (spec §6). bolt-api forwards gate-admitted events here so Bulwark's
+  // durable inbox can fire against armed obligations.
+  BULWARK_API_INTERNAL_URL: z.string().default('http://bulwark-api:4021'),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),

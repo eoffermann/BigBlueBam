@@ -98,6 +98,7 @@ import trackingRoutes from './routes/tracking.routes.js';
 import webhookRoutes from './routes/webhooks.routes.js';
 import senderDomainRoutes from './routes/sender-domains.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
+import internalRoutes from './routes/internal.routes.js';
 
 await fastify.register(templateRoutes, { prefix: '/v1' });
 await fastify.register(segmentRoutes, { prefix: '/v1' });
@@ -106,6 +107,7 @@ await fastify.register(trackingRoutes);  // No prefix — short tracking URLs
 await fastify.register(webhookRoutes, { prefix: '/v1' });
 await fastify.register(senderDomainRoutes, { prefix: '/v1' });
 await fastify.register(analyticsRoutes, { prefix: '/v1' });
+await fastify.register(internalRoutes, { prefix: '/v1' });  // service-to-service; transactional-send (Bulwark D6)
 
 // Graceful shutdown
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

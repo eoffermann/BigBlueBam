@@ -1,0 +1,78 @@
+{
+  "data": {
+    "type": "betaFeedbackScreenshotSubmissions",
+    "id": "AHGWU2dsr0EJyIGC8h4iu_Y",
+    "attributes": {
+      "createdDate": "2026-04-23T18:43:07.454Z",
+      "comment": "Not able to test. App is still resolving after having hit the button to test after not gotten through to the app via the direct link because that was asking for a code.",
+      "email": null,
+      "deviceModel": "iPhone17_2",
+      "osVersion": "26.3.1",
+      "locale": "en-US",
+      "timeZone": "America/New_York",
+      "architecture": "arm64e",
+      "connectionType": "WIFI",
+      "pairedAppleWatch": null,
+      "appUptimeInMilliseconds": 500000,
+      "diskBytesAvailable": 141163696128,
+      "diskBytesTotal": 511417995264,
+      "batteryPercentage": 85,
+      "screenWidthInPoints": 440,
+      "screenHeightInPoints": 956,
+      "appPlatform": "IOS",
+      "devicePlatform": "IOS",
+      "deviceFamily": "IPHONE",
+      "buildBundleId": "com.bigblueceiling.aiviseme",
+      "screenshots": [
+        {
+          "url": "https://tf-feedback.itunes.apple.com/eimg/JdI/Jeg/CDY/DMw/IDA/eqTnJFiBWl8/original.jpg?i_for=6749811142&AWSAccessKeyId=MKIA9C0TVRX1ZL0VZ1YK&Expires=1777334400&Signature=US2At0Rhk%2FOiWEYOa1FCAyxcnVE%3D&p_sig=k43BNHSklJw1FSB2w9_WY39-k1c",
+          "width": 1320,
+          "height": 2868,
+          "expirationDate": "2026-04-28T00:00:00Z"
+        },
+        {
+          "url": "https://tf-feedback.itunes.apple.com/eimg/FJA/IaE/Fgk/Cqk/GXE/wuXyXIjodrY/original.jpg?i_for=6749811142&AWSAccessKeyId=MKIA9C0TVRX1ZL0VZ1YK&Expires=1777334400&Signature=yYJCUcB3%2BVnmnlmIfUZTBbo8CtQ%3D&p_sig=A8Svz3BIM6nDe4hPu9YfLKZMhQU",
+          "width": 1320,
+          "height": 2868,
+          "expirationDate": "2026-04-28T00:00:00Z"
+        },
+        {
+          "url": "https://tf-feedback.itunes.apple.com/eimg/Ebg/ITY/JdE/I1s/GqY/Booh6a_4zTQ/original.jpg?i_for=6749811142&AWSAccessKeyId=MKIA9C0TVRX1ZL0VZ1YK&Expires=1777334400&Signature=9%2FPJ%2FIbX1Aj01q96LEbo4Bc4Z0Q%3D&p_sig=ol-ZhMHIrm-wGtkTu184GzjpY3k",
+          "width": 1320,
+          "height": 2868,
+          "expirationDate": "2026-04-28T00:00:00Z"
+        },
+        {
+          "url": "https://tf-feedback.itunes.apple.com/eimg/Dcs/DaI/DCk/AcM/IzA/KprpvePuqs8/original.jpg?i_for=6749811142&AWSAccessKeyId=MKIA9C0TVRX1ZL0VZ1YK&Expires=1777334400&Signature=DnZZEtjvdTzYvVmT84Zv0%2FTmreU%3D&p_sig=ZwDbwNhMJqfy2RSwXdg9miV14Lw",
+          "width": 1320,
+          "height": 2868,
+          "expirationDate": "2026-04-28T00:00:00Z"
+        },
+        {
+          "url": "https://tf-feedback.itunes.apple.com/eimg/HoA/AgQ/D7U/Gso/FBU/0LJyi5sa1-k/original.jpg?i_for=6749811142&AWSAccessKeyId=MKIA9C0TVRX1ZL0VZ1YK&Expires=1777334400&Signature=fgp65AnMYPw55JOroHTEtAkmeAc%3D&p_sig=sXYqZWdfgEZ7FcnzK9ovoGzH9zM",
+          "width": 1320,
+          "height": 2868,
+          "expirationDate": "2026-04-28T00:00:00Z"
+        },
+        {
+          "url": "https://tf-feedback.itunes.apple.com/eimg/HvU/Cx8/CWw/HyQ/Hlk/iuIGB0-iwW4/original.jpg?i_for=6749811142&AWSAccessKeyId=MKIA9C0TVRX1ZL0VZ1YK&Expires=1777334400&Signature=muc8IcXbSk4nPgR0SaxWf7vqarw%3D&p_sig=4PNvxyqm6rU110lpjcataFcAtOs",
+          "width": 1320,
+          "height": 2868,
+          "expirationDate": "2026-04-28T00:00:00Z"
+        },
+        {
+          "url": "https://tf-feedback.itunes.apple.com/eimg/IM8/Cbc/ISg/EAc/HcY/qLApiLSpxrs/original.jpg?i_for=6749811142&AWSAccessKeyId=MKIA9C0TVRX1ZL0VZ1YK&Expires=1777334400&Signature=3n257xw2Eln6wVIxxcC1kLmutcA%3D&p_sig=sHNvnTtXnSiPepAs68JcwKrSEGA",
+          "width": 1320,
+          "height": 2868,
+          "expirationDate": "2026-04-28T00:00:00Z"
+        }
+      ]
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackScreenshotSubmissions/AHGWU2dsr0EJyIGC8h4iu_Y"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackScreenshotSubmissions/AHGWU2dsr0EJyIGC8h4iu_Y"
+  }
+}

@@ -486,6 +486,62 @@ export default async function braidRoutes(fastify: FastifyInstance) {
     return reply.status(202).send({ data: { accepted: true, enqueued } });
   });
 
+  // Internal counterparty resolution (Bulwark spec 7.4 / IN7). braid-api's public
+  // POST /v1/resolve is session/permission gated; this internal sibling is guarded ONLY by
+  // INTERNAL_SERVICE_SECRET (fail-closed on empty) so a trusted service (Bulwark) can resolve a
+  // source record to its golden id server-to-server. It runs the SAME resolve service; the
+  // provided asker_user_id is the human the caller acts for, so the input-record can_access
+  // preflight still fires (a denied record returns not_found, never a golden id).
+  fastify.post('/internal/resolve', async (request, reply) => {
+    if (!requireInternalSecret(request, reply)) return reply;
+    const body = (request.body ?? {}) as {
+      org_id?: string;
+      source_type?: string;
+      source_id?: string;
+      asker_user_id?: string;
+    };
+    if (!body.org_id || !body.source_type || !body.source_id || !body.asker_user_id) {
+      return reply.status(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'org_id, source_type, source_id, asker_user_id are required',
+          details: [],
+          request_id: request.id,
+        },
+      });
+    }
+    const parsed = braidResolveInputSchema.safeParse({
+      source_type: body.source_type,
+      source_id: body.source_id,
+      asker_user_id: body.asker_user_id,
+    });
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    // The viewer IS the asker for an internal call; role member (identity_count is admin-only
+    // metadata Bulwark does not need).
+    const viewer: Viewer = {
+      id: body.asker_user_id,
+      org_id: body.org_id,
+      role: 'member',
+      is_superuser: false,
+    };
+    try {
+      const result = await resolveRecord(fastify.redis, body.org_id, parsed.data, viewer);
+      return reply.send({ data: result });
+    } catch (err) {
+      // A denied/absent input record returns not_found so the caller degrades to the raw id.
+      if (err instanceof AccessDeniedError) return notFound(request, reply, 'Source record not found');
+      if (err instanceof RateLimitError) {
+        return reply.status(429).send({
+          error: { code: 'RATE_LIMITED', message: 'Resolve rate limit exceeded', details: [], request_id: request.id },
+        });
+      }
+      request.log.error({ err }, 'braid /internal/resolve failed');
+      return reply.status(500).send({
+        error: { code: 'INTERNAL_ERROR', message: 'resolve failed', details: [], request_id: request.id },
+      });
+    }
+  });
+
   // proposal.decided delivery (spec 2.2 / 5.4). See subscriptions/proposal-decided.ts
   // for the transport rationale (Bolt has no service fan-out; bolt-api will POST here
   // in M6). Idempotent: mergeCandidate/rejectCandidate are CAS-guarded.

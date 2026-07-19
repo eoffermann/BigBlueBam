@@ -132,6 +132,13 @@ for (const signal of signals) {
 try {
   await fastify.listen({ port: env.PORT, host: env.HOST });
   fastify.log.info(`Bulwark API listening on ${env.HOST}:${env.PORT}`);
+  // Rebuild the per-org dispatch gate cache at boot (spec §6 / STJ3) so a Redis flush before
+  // this instance came up cannot leave triggers dropped. Best-effort; the scheduled
+  // gate-reconcile job is the ongoing backstop.
+  void import('./services/gate.service.js')
+    .then(({ rebuildAllGates }) => rebuildAllGates())
+    .then((r) => fastify.log.info({ ...r }, 'bulwark gate rebuilt at boot'))
+    .catch((err) => fastify.log.warn({ err }, 'bulwark boot gate rebuild failed (job will retry)'));
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

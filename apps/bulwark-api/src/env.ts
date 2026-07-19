@@ -30,6 +30,10 @@ const envSchema = z.object({
   BBB_API_INTERNAL_URL: z.string().default('http://api:4000'),
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
   BRAID_API_INTERNAL_URL: z.string().default('http://braid-api:4020'),
+  // Blast is the transactional-mail transport for legally-required notices/chases (spec D6 /
+  // reuse ledger line 710): the send executor POSTs the rendered notice to blast-api's internal
+  // transactional-send route, which bypasses blast_unsubscribes.
+  BLAST_API_INTERNAL_URL: z.string().default('http://blast-api:4010'),
   // Must be non-empty for the internal event route (/internal/events fails CLOSED
   // when empty, S4/SN2) + the can_access preflight to work.
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
