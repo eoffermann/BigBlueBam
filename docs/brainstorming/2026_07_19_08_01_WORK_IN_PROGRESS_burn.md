@@ -91,19 +91,43 @@ two failure modes are the sharpest in the spec.
 
 **Note for M5:** `/v1/cost-rates` is deliberately NOT one of the eight serializer surfaces - `cost_amount` is its entire payload. It is gated by `burn.costrate.read` at the route plus the second in-route role guard (2.4 point 1); `viewerCaps.costrate_read` is resolved for it and is already on the request.
 
-## M5 - REST routes and 17 MCP tools, together
+## M5 - REST routes and 17 MCP tools, together - **COMPLETE** (`11935649`, `52c552a9`)
 
-- [ ] REST endpoints per §6.1
-- [ ] `burn.engagement` / `burn.deliverable` added at **three sites** in `apps/api/src/services/visibility.service.ts`: the `VisibilityEntityType` union (`:104`), the `SUPPORTED_ENTITY_TYPES` array (`:142`), and a resolver `case` beside `:1716`
-- [ ] `/burn/ws` Redis PubSub fan-out per §6.2: rooms keyed `(org, project)`, membership from the cached `PermissionContext` not a per-frame DB round trip, five frame types, refs and coarse bands only, advisory-only with client refetch on reconnect
-- [ ] 17 tools in `apps/mcp-server/src/tools/burn-tools.ts`, all via `registerTool()`
-- [ ] `registerBurnTools` imported and called in `apps/mcp-server/src/server.ts` (per-app bootstrap edit, see `:39`)
-- [ ] `BURN_API_URL: http://burn-api:4022/v1` in the compose `mcp-server` block **and** `mcp-server.env.optional` in `services.mjs`; `burn` NOT added to `mcp-server.needs`
-- [ ] `burn.*` `agent_policies` allowlist
-- [ ] `confirm_action` on destructive tools **and on gate disable** (`off`/`advisory`/`gate_paused_until`)
-- [ ] `entity_links` upserts per §8.4; ported `braid-resolve.client.ts` with its soft-degradation contract per §8.5
-- [ ] Surface-map rows for every endpoint; self-check prints `0`
-- [ ] §12.1 assertions for §5, §6, §11
+- [x] REST endpoints per §6.1
+- [x] `burn.engagement` / `burn.deliverable` added at **three sites** in `apps/api/src/services/visibility.service.ts`: the `VisibilityEntityType` union (`:104`), the `SUPPORTED_ENTITY_TYPES` array (`:142`), and a resolver `case` beside `:1716`
+- [x] `/burn/ws` Redis PubSub fan-out per §6.2: rooms keyed `(org, project)`, membership from the cached `PermissionContext` not a per-frame DB round trip, five frame types, refs and coarse bands only, advisory-only with client refetch on reconnect
+- [x] 17 tools in `apps/mcp-server/src/tools/burn-tools.ts`, all via `registerTool()`
+- [x] `registerBurnTools` imported and called in `apps/mcp-server/src/server.ts` (per-app bootstrap edit, see `:39`)
+- [x] `BURN_API_URL: http://burn-api:4022/v1` in the compose `mcp-server` block **and** `mcp-server.env.optional` in `services.mjs`; `burn` NOT added to `mcp-server.needs`
+- [x] `burn.*` `agent_policies` allowlist
+- [x] `confirm_action` on destructive tools **and on gate disable** (`off`/`advisory`/`gate_paused_until`)
+- [x] `entity_links` upserts per §8.4; ported `braid-resolve.client.ts` with its soft-degradation contract per §8.5
+- [x] Surface-map rows for every endpoint; self-check prints `0`
+- [x] §12.1 assertions for §5, §6, §11
+
+
+**Notes for later milestones, from the M5 build:**
+
+- **Three spec/instruction defects found.** (1) 6.2 names the Redis-cached
+  `PermissionContext` as the source of the WS membership check, but that object carries
+  account-GROUP memberships, not `project_memberships`; a user can be a project member with
+  no project-scoped permission group, so deriving membership from it would silently drop
+  frames. The hub implements the actual requirement (no per-frame DB round trip) with a
+  connect-time project-id set cached in Redis, documented in-file. (2) `burnRuleCreateSchema`
+  carries two `.refine()` calls and is therefore a ZodEffects, so `.partial()` does not exist
+  on it; a `burnRuleUpdateSchema` was added to the shared package. (3) The M5 brief's
+  surface-map self-check greps for an ASCII hyphen, but the document's established convention
+  is an em dash; both variants now print 0.
+- **`burn_confirm_deliverable` cannot expose `review_status: 'rejected'`.** Its enum omits
+  that value so the destructive transition is only reachable through the confirm-gated
+  `burn_reject_deliverable`.
+- **The docs catalog files burn tools under "Platform"** until M8 adds the
+  `LAUNCHPAD_CATALOG` row and M10 adds the `APP_TOOL_MODULES` entry. The generated JSON is
+  committed and `docs:catalog:check` is green; re-run `pnpm docs:catalog` after those
+  milestones so the tools group under Burn.
+- **No permission delta migration was needed.** The 22 `burn.*` rows were hand-authored in
+  M2, so regenerating the manifest changed only `mcp_tools_scanned` (847 to 865); the total
+  stays 1445 and `packages/permissions/src/generated/permissions.ts` had no diff.
 
 ## M6 - Engines, workers, events
 
