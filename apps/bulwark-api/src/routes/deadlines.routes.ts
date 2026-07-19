@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { bulwarkDischargeSchema, bulwarkListQuerySchema } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
-import { mapServiceError, readViewer, validationError, viewerOf } from '../lib/http.js';
+import { askerViewer, mapServiceError, readViewer, validationError, viewerOf } from '../lib/http.js';
 import * as deadlines from '../services/deadlines.service.js';
 import { draftNotice, approveAndSendNotice } from '../services/send.service.js';
 
@@ -96,6 +96,10 @@ export default async function deadlineRoutes(fastify: FastifyInstance) {
       const parsed = bulwarkDischargeSchema.safeParse(request.body);
       if (!parsed.success) return validationError(request, reply, parsed.error);
       try {
+        // Asker preflight layered on top of the bearer guard (SH1, Braid #60): fail closed
+        // against the acting human, not just the admin-bearer.
+        const asker = askerViewer(request);
+        if (asker) await deadlines.loadScopedDeadline(asker, id);
         const data = await deadlines.dischargeDeadline(viewerOf(request), id, parsed.data);
         return { data };
       } catch (err) {

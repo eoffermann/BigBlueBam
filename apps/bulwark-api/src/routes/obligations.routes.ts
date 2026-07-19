@@ -5,7 +5,7 @@ import {
   bulwarkListQuerySchema,
 } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
-import { mapServiceError, readViewer, validationError, viewerOf } from '../lib/http.js';
+import { askerViewer, mapServiceError, readViewer, validationError, viewerOf } from '../lib/http.js';
 import * as obligations from '../services/obligations.service.js';
 
 export default async function obligationRoutes(fastify: FastifyInstance) {
@@ -57,6 +57,12 @@ export default async function obligationRoutes(fastify: FastifyInstance) {
       const parsed = bulwarkPatchObligationSchema.safeParse(request.body);
       if (!parsed.success) return validationError(request, reply, parsed.error);
       try {
+        // Layer the asker preflight on top of the bearer's project-scope guard (SH1, Braid #60):
+        // when an agent acts for a human, the source-scoped project-membership narrowing must
+        // run against the ASKER too, not just the admin-bearer. A denied asker fails closed
+        // (NotFound -> 404), exactly as the read plane resolves nothing.
+        const asker = askerViewer(request);
+        if (asker) await obligations.loadScopedObligation(asker, id);
         const data = await obligations.patchObligation(viewerOf(request), id, parsed.data);
         return { data };
       } catch (err) {
@@ -74,6 +80,10 @@ export default async function obligationRoutes(fastify: FastifyInstance) {
       const parsed = bulwarkTriggerObligationSchema.safeParse(request.body);
       if (!parsed.success) return validationError(request, reply, parsed.error);
       try {
+        // Asker preflight layered on top of the bearer guard (SH1, Braid #60): fail closed
+        // against the acting human, not just the admin-bearer.
+        const asker = askerViewer(request);
+        if (asker) await obligations.loadScopedObligation(asker, id);
         const data = await obligations.triggerObligation(
           viewerOf(request),
           id,

@@ -15,16 +15,26 @@ export function viewerOf(request: FastifyRequest): Viewer {
   return { id: u.id, org_id: u.org_id, role: u.role, is_superuser: u.is_superuser };
 }
 
-// The READ-plane viewer. When an agent supplies ?asker_user_id=<uuid> (the human it acts
-// for), reads are filtered to THAT person: a non-admin viewer keyed on the asker id, so an
-// asker context only ever narrows. A bogus asker resolves nothing (fail closed).
-export function readViewer(request: FastifyRequest): Viewer {
+// The asker viewer, or null when no distinct asker is supplied. When an agent passes
+// ?asker_user_id=<uuid> (the human it acts for), this returns a NON-admin viewer keyed on the
+// asker id: the admin fast-path is skipped and every project-scope check runs against the
+// asker, so an asker context only ever narrows. A bogus/self asker returns null (the caller
+// then uses only the bearer). Shared by readViewer (read plane) and the write routes, which
+// layer an asker preflight on top of the bearer guard (SH1, matching Braid #60).
+export function askerViewer(request: FastifyRequest): Viewer | null {
   const u = request.user!;
   const raw = (request.query as { asker_user_id?: string } | undefined)?.asker_user_id;
   if (raw && UUID_RE.test(raw) && raw !== u.id) {
     return { id: raw, org_id: u.org_id, role: 'member', is_superuser: false };
   }
-  return { id: u.id, org_id: u.org_id, role: u.role, is_superuser: u.is_superuser };
+  return null;
+}
+
+// The READ-plane viewer. When an agent supplies ?asker_user_id=<uuid> (the human it acts
+// for), reads are filtered to THAT person: a non-admin viewer keyed on the asker id, so an
+// asker context only ever narrows. A bogus asker resolves nothing (fail closed).
+export function readViewer(request: FastifyRequest): Viewer {
+  return askerViewer(request) ?? viewerOf(request);
 }
 
 export function notFound(request: FastifyRequest, reply: FastifyReply, msg = 'Not found') {
