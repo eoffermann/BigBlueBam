@@ -25,7 +25,7 @@ Three ideas run through the whole suite:
 - **Agents are first-class, not a sidebar.** Nearly every action a person can take
   in BigBlueBam is also available as an MCP tool, so an AI agent can do real work
   on the same boards, with the same permissions and the same audit trail as a
-  person. The suite ships more than 730 of these tools. This is the architecture,
+  person. The suite ships 847 of these tools. This is the architecture,
   not an add-on.
 - **Presence is pervasive.** Every place you work is a live, shared surface. You
   can see which teammates are on the same task, deal, document, diagram, or board,
@@ -197,7 +197,7 @@ BigBlueBam treats an AI agent as a teammate that uses the product, not as a
 chatbot pasted onto it.
 
 - **Parity, not a sidebar.** Nearly every action a person can take is also an MCP
-  tool. The suite exposes more than 730 of them across the sixteen apps and a
+  tool. The suite exposes 847 of them across the sixteen apps and a
   shared platform layer (identity, search, activity, approvals, and more). An
   agent can plan a sprint, move a deal, triage a ticket, draft a campaign, or run
   a report.

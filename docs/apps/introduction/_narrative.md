@@ -26,7 +26,7 @@ designed so AI agents can do real work on the same surfaces as the people.
   office carries your presence across every app, so voice and video feel like a
   hallway run-in rather than a scheduled meeting
 - **Agent parity, not a sidebar** - nearly every action a person can take is also
-  an MCP tool (more than 730 across the suite), so an AI agent works the same
+  an MCP tool (847 across the suite), so an AI agent works the same
   boards with the same permissions and the same audit trail as a teammate
 - **Event-driven automation** - Bolt listens for events from any app and runs the
   next step, so the integrations extend without glue code

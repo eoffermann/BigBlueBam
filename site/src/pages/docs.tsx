@@ -1010,11 +1010,11 @@ const faqs: Faq[] = [
   },
   {
     question: 'How do AI agents work with BigBlueBam?',
-    answer: 'BigBlueBam exposes 849 MCP (Model Context Protocol) tools on a dedicated server endpoint at /mcp/. Any MCP-compatible AI agent -- Claude, GPT, or custom agents -- can connect and manage tasks, post messages, search the knowledge base, write documents, create automations, track goals, collaborate on visual whiteboards, manage the CRM pipeline, invoice clients, run email campaigns, build dashboards, and schedule meetings. Destructive actions require a two-step confirmation flow with Redis-backed tokens to prevent accidental data loss. Service-account agents run behind a fail-closed policy gate (kill switches plus per-agent tool allowlists) and a first-class approval queue routes human-gated actions through a durable inbox. The MCP server supports Streamable HTTP, SSE, and stdio transports.',
+    answer: `BigBlueBam exposes ${totalMcpTools} MCP (Model Context Protocol) tools on a dedicated server endpoint at /mcp/. Any MCP-compatible AI agent -- Claude, GPT, or custom agents -- can connect and manage tasks, post messages, search the knowledge base, write documents, create automations, track goals, collaborate on visual whiteboards, manage the CRM pipeline, invoice clients, run email campaigns, build dashboards, and schedule meetings. Destructive actions require a two-step confirmation flow with Redis-backed tokens to prevent accidental data loss. Service-account agents run behind a fail-closed policy gate (kill switches plus per-agent tool allowlists) and a first-class approval queue routes human-gated actions through a durable inbox. The MCP server supports Streamable HTTP, SSE, and stdio transports.`,
   },
   {
     question: 'What is MCP?',
-    answer: 'MCP stands for Model Context Protocol, an open standard for connecting AI models to external tools and data sources. Instead of building custom integrations for each AI provider, BigBlueBam implements MCP once and any compliant agent can use all 849 tools. You can learn more at modelcontextprotocol.io.',
+    answer: `MCP stands for Model Context Protocol, an open standard for connecting AI models to external tools and data sources. Instead of building custom integrations for each AI provider, BigBlueBam implements MCP once and any compliant agent can use all ${totalMcpTools} tools. You can learn more at modelcontextprotocol.io.`,
   },
   {
     question: 'Can I use my own LLM?',
@@ -1727,7 +1727,7 @@ function UserGuideContent() {
               <strong> IF</strong> adds optional conditions that filter when the automation fires -- for example, "if the
               task has the label 'bug'" or "if the message contains '@urgent'." <strong>THEN</strong> defines one or more
               actions to execute -- for example, "post a message in the #releases channel" or "create a Beacon article."
-              Actions are MCP tools, which means automations have access to the full 849-tool catalog.
+              Actions are MCP tools, which means automations have access to the full {totalMcpTools}-tool catalog.
             </p>
           </div>
 
@@ -2351,7 +2351,7 @@ function DeploymentContent() {
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">board-api</td><td className="py-2 pr-4">4008</td><td className="py-2">Board visual collaboration whiteboard API + WebSocket</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">bond-api</td><td className="py-2 pr-4">4009</td><td className="py-2">Bond CRM pipeline and contact management API</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">helpdesk-api</td><td className="py-2 pr-4">4001</td><td className="py-2">Helpdesk support ticket API</td></tr>
-                <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">mcp-server</td><td className="py-2 pr-4">3001</td><td className="py-2">MCP protocol server (849 tools)</td></tr>
+                <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">mcp-server</td><td className="py-2 pr-4">3001</td><td className="py-2">MCP protocol server ({totalMcpTools} tools)</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">worker</td><td className="py-2 pr-4">--</td><td className="py-2">BullMQ background jobs (email, notifications, export, sprint-close)</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">migrate</td><td className="py-2 pr-4">--</td><td className="py-2">Runs SQL migrations on startup, then exits</td></tr>
                 <tr className="border-b border-zinc-100"><td className="py-2 pr-4 font-medium">postgres</td><td className="py-2 pr-4">5432</td><td className="py-2">PostgreSQL 16 primary database</td></tr>
@@ -2613,7 +2613,7 @@ interface SidebarSection {
 }
 
 const sidebarSections: SidebarSection[] = [
-  { id: 'mcp-tools', label: 'MCP Tools', sublabel: '849 tools', icon: <Zap className="h-4 w-4" /> },
+  { id: 'mcp-tools', label: 'MCP Tools', sublabel: `${totalMcpTools} tools`, icon: <Zap className="h-4 w-4" /> },
   { id: 'api-endpoints', label: 'API Endpoints', icon: <Server className="h-4 w-4" /> },
   { id: 'user-guide', label: 'User Guide', icon: <Users className="h-4 w-4" /> },
   { id: 'deployment', label: 'Deployment', icon: <Rocket className="h-4 w-4" /> },

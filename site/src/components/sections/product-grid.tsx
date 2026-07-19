@@ -25,6 +25,7 @@ import type { LucideIcon } from 'lucide-react';
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
+import { TOTAL_MCP_TOOLS } from '@/content/catalog-stats';
 
 interface Product {
   name: string;
@@ -268,7 +269,7 @@ const categories: Category[] = [
 
 const mcpServer: Product = {
   name: 'MCP Server',
-  subtitle: '849 AI Tools',
+  subtitle: `${TOTAL_MCP_TOOLS} AI Tools`,
   description: 'One Model Context Protocol server that hands AI agents every app plus cross-cutting platform powers (search, composite views, proposals, policies, webhooks). It is the front door the whole suite shares.',
   icon: Bot,
   color: 'bg-slate-100 text-slate-600',
@@ -312,8 +313,8 @@ export function ProductGrid() {
             "All-in-one" usually means a pile of shallow features that don't quite replace the
             specialist tools you're already paying for. This isn't that. Twenty-two genuinely capable
             apps (work, communication, sales, operations, media review, telemetry), built as one
-            system, self-hosted, and wired together through a single MCP server with 849 tools
-            across 52 modules. No tab-switching, no integration spreadsheet, no app that didn't get
+            system, self-hosted, and wired together through a single MCP server with {TOTAL_MCP_TOOLS} tools.
+            No tab-switching, no integration spreadsheet, no app that didn't get
             the memo.
           </p>
         </div>

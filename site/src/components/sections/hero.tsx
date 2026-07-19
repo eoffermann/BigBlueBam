@@ -3,6 +3,7 @@ import { ArrowRight, Github } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FloatingFrame } from '@/components/ui/floating-frame';
 import { HeroBlobs } from '@/components/ui/hero-blobs';
+import { TOTAL_MCP_TOOLS } from '@/content/catalog-stats';
 
 export function Hero() {
   const reduced = useReducedMotion();
@@ -56,7 +57,7 @@ export function Hero() {
             switching between them. BigBlueBam is the other bet: twenty-two apps (boards, chat, CRM,
             docs, helpdesk, and a dozen more) that behave like a single product. Self-hosted, open
             source, and built for AI from day one, so agents can work the same boards, sprints, and
-            tickets your team does, through one MCP server with 849 tools. The ones you bring on
+            tickets your team does, through one MCP server with {TOTAL_MCP_TOOLS} tools. The ones you bring on
             never ask where anything lives. Neither will you.
           </motion.p>
 

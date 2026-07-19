@@ -3,6 +3,7 @@ import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { TOTAL_MCP_TOOLS } from '@/content/catalog-stats';
 
 const benefits = [
   {
@@ -63,7 +64,7 @@ export function Architecture() {
       <AnimatedReveal delay={0.4}>
         <div className="mt-10 rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center">
           <div className="mb-4 flex flex-wrap justify-center gap-2">
-            <Badge variant="blue">849 MCP Tools</Badge>
+            <Badge variant="blue">{TOTAL_MCP_TOOLS} MCP Tools</Badge>
             <Badge variant="blue">22 Apps</Badge>
             <Badge variant="blue">900+ Tests</Badge>
             <Badge variant="blue">MIT License</Badge>
