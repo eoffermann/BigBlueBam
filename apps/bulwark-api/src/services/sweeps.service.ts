@@ -5,7 +5,7 @@ import {
   bulwarkEventBindingSchema,
   type BulwarkDeadlineRule,
 } from '@bigbluebam/shared';
-import { calendarArmKey, eventArmKey } from '@bigbluebam/shared/bulwark-arm-key';
+import { calendarArmKey, eventArmKeyForBinding } from '@bigbluebam/shared/bulwark-arm-key';
 import { db } from '../db/index.js';
 import {
   bulwarkContracts,
@@ -451,8 +451,10 @@ const STATE_BINDINGS: StateBinding[] = [
     source: 'bam',
     event_type: 'task.overdue',
     // A task past its due_date and not yet completed, scoped to the contract's project. The
-    // state epoch is the task due_date; convergence with the live drain (STK1) depends on the
-    // upstream task.overdue event carrying trigger_at = the same due date.
+    // state epoch is the task due_date. Convergence with the live drain (#67) is now ENFORCED,
+    // not assumed: eventArmKeyForBinding normalizes this binding's epoch to a UTC day, so a live
+    // task.overdue event whose trigger_at falls on the same day arms the SAME key regardless of
+    // its time-of-day component.
     query: async (orgId, projectId) => {
       if (!projectId) return [];
       const res = await db.execute(sql`
@@ -526,15 +528,25 @@ export async function stateReconcile(orgId: string): Promise<StateReconcileResul
     for (const m of matches) {
       const anchor = new Date(m.stateEpoch);
       const { due_at, resolved_timezone } = computeDueAt({ anchor, rule: effectiveRule });
-      // The SAME deterministic key the live drain computes (STK1): obligation + entity + epoch.
+      // The SAME deterministic key the live drain computes (#67): both callers go through
+      // eventArmKeyForBinding, which normalizes a state-reflecting binding's epoch to a UTC day
+      // so the live drain's full-timestamp trigger_at and this due_date-derived epoch converge
+      // BYTE-FOR-BYTE. Persist the normalized epoch so a supersession re-point stays consistent.
+      const { key: triggeringEventId, epoch: armEpoch } = eventArmKeyForBinding(
+        o.id,
+        m.entityId,
+        m.stateEpoch,
+        b.source,
+        b.event_type,
+      );
       const res = await armDeadline({
         orgId,
         obligationId: o.id,
         contractId: c.id,
         projectId: c.project_id,
-        triggeringEventId: eventArmKey(o.id, m.entityId, m.stateEpoch),
+        triggeringEventId,
         armScopeEntityId: m.entityId,
-        armStateEpoch: m.stateEpoch,
+        armStateEpoch: armEpoch,
         anchorSource: 'trigger_at',
         triggeredAt: anchor,
         resolvedTimezone: resolved_timezone,

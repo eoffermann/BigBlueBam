@@ -4,7 +4,7 @@ import {
   bulwarkEventBindingSchema,
   type BulwarkDeadlineRule,
 } from '@bigbluebam/shared';
-import { eventArmKey } from '@bigbluebam/shared/bulwark-arm-key';
+import { eventArmKeyForBinding } from '@bigbluebam/shared/bulwark-arm-key';
 import { db } from '../db/index.js';
 import {
   bulwarkContracts,
@@ -96,10 +96,11 @@ export async function drainIngestEvent(
   // The legal anchor: trigger_at if present, else logged_at (THEME B).
   const anchor = event.trigger_at ? new Date(event.trigger_at) : new Date(event.logged_at);
   const anchorSource = event.trigger_at ? 'trigger_at' : 'logged_at';
-  // The state epoch: the source condition's defining timestamp (trigger_at preferred). The
-  // M6 bulwark-state-reconcile job MUST derive the same epoch from source state so the keys
-  // converge (STK1).
-  const stateEpoch = (event.trigger_at
+  // The raw state epoch: the source condition's defining timestamp (trigger_at preferred). For a
+  // state-reflecting binding (e.g. bam:task.overdue) eventArmKeyForBinding normalizes this to a
+  // UTC day so the M6 bulwark-state-reconcile job (which derives the epoch from tasks.due_date, a
+  // DATE) computes a BYTE-IDENTICAL key (#67, was STK1 comment-only convergence).
+  const rawStateEpoch = (event.trigger_at
     ? new Date(event.trigger_at)
     : new Date(event.logged_at)
   ).toISOString();
@@ -130,14 +131,24 @@ export async function drainIngestEvent(
         };
     const { due_at, resolved_timezone } = computeDueAt({ anchor, rule });
 
+    // Canonical, convergent arm key + the epoch actually keyed on (persisted so a later
+    // supersession re-point recomputes the same key). #67.
+    const { key: triggeringEventId, epoch: armEpoch } = eventArmKeyForBinding(
+      o.id,
+      entityId,
+      rawStateEpoch,
+      binding.data.source,
+      binding.data.event_type,
+    );
+
     const result = await armDeadline({
       orgId,
       obligationId: o.id,
       contractId: c.id,
       projectId: c.project_id,
-      triggeringEventId: eventArmKey(o.id, entityId, stateEpoch),
+      triggeringEventId,
       armScopeEntityId: entityId,
-      armStateEpoch: stateEpoch,
+      armStateEpoch: armEpoch,
       anchorSource,
       triggeredAt: anchor,
       loggedAt: new Date(event.logged_at),

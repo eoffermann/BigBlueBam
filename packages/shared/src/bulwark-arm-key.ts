@@ -56,6 +56,57 @@ export function eventArmKey(
   return uuidv5(armName([obligationId, scopeEntityId, stateEpoch]));
 }
 
+// ── State-reflecting binding epoch convergence (#67) ────────────────────────
+//
+// A "state-reflecting" binding is one whose trigger corresponds to a queryable persistent
+// condition, so bulwark-state-reconcile can re-derive the SAME clock the live fire-on-event
+// drain armed. For those, the two paths derive the state epoch from DIFFERENT sources:
+//   - the live drain, from the event's full-timestamp trigger_at;
+//   - state-reconcile, from tasks.due_date, a DATE (midnight UTC).
+// If they fed those raw values to eventArmKey the keys would differ and every such obligation
+// would double-arm -> double notice. This module OWNS the canonical granularity so the two
+// callers physically cannot diverge: both go through eventArmKeyForBinding, which truncates the
+// epoch to a UTC day for state-reflecting bindings. The beachhead is bam:task.overdue, whose
+// canonical epoch is the task's due date at day granularity.
+//
+// NOTE: non-state-reflecting event bindings pass the raw epoch through UNCHANGED so their
+// already-armed keys stay byte-stable (changing eventArmKey globally would re-key live rows).
+const STATE_REFLECTING_BINDINGS = new Set<string>(['bam:task.overdue']);
+
+export function isStateReflectingBinding(source: string, eventType: string): boolean {
+  return STATE_REFLECTING_BINDINGS.has(`${source}:${eventType}`);
+}
+
+// Truncate any ISO/timestamp epoch to the canonical UTC day-ISO string
+// (YYYY-MM-DDT00:00:00.000Z). Idempotent: a value already at UTC midnight maps to itself, so a
+// persisted (already-normalized) arm_state_epoch re-derives the same key on a supersession
+// re-point. Defensively passes an unparseable value through unchanged.
+export function normalizeStateEpochToDay(epoch: string): string {
+  const d = new Date(epoch);
+  if (Number.isNaN(d.getTime())) return epoch;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}T00:00:00.000Z`;
+}
+
+// The canonical event arm key BOTH the live drain and state-reconcile MUST use. Returns the key
+// AND the (possibly normalized) epoch so the caller persists the SAME epoch it keyed on into
+// arm_state_epoch (keeping a later supersession re-point via eventArmKey consistent). For a
+// state-reflecting binding the epoch is normalized to a UTC day; otherwise it is passed through.
+export function eventArmKeyForBinding(
+  obligationId: string,
+  scopeEntityId: string,
+  rawEpoch: string,
+  source: string,
+  eventType: string,
+): { key: string; epoch: string } {
+  const epoch = isStateReflectingBinding(source, eventType)
+    ? normalizeStateEpochToDay(rawEpoch)
+    : rawEpoch;
+  return { key: eventArmKey(obligationId, scopeEntityId, epoch), epoch };
+}
+
 // Calendar-armed binding: obligation + the anchor date (recomputed to the successor on a
 // supersession re-point, STJ4).
 export function calendarArmKey(obligationId: string, anchorDate: string): string {
