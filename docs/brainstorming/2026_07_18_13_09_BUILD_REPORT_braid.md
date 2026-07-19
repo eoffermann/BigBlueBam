@@ -94,10 +94,26 @@ Post-commit-review filed 3 (all fixed + closed):
   "19 apps" narrative drift (#36), local-DB `deployment_secrets`/`bam.platform_*` drift
   (#11/#14).
 
-## No HUMAN_SETUP required
+## Human actions required
 
-All dependencies are internal (Postgres, Redis, Qdrant, the platform llm-provider). No
-external secret or third-party account is needed.
+**No external secret or third-party account** - all dependencies are internal (Postgres,
+Redis, Qdrant, the platform llm-provider). Human-keystroke items: **2**, both non-blocking -
+see `docs/brainstorming/2026_07_18_13_09_HUMAN_SETUP_braid.md`: (1) the standing
+promotion-to-trunk decision, and (2) an FYI + optional-restore note that close-out cleaned
+cross-branch pollution from the shared local dev DB (see that doc for the caveat if you
+switch back to `worktree-robustness-audit`).
+
+## Close-out drift items (were wrongly parked as "not mine")
+
+- **Surface-map summary table**: DONE - added Basis/Bin/Bay rows, Total corrected to
+  1103/816/287/17, self-check 0.
+- **Site app-count copy**: DONE - 19 -> 21 (LAUNCHPAD_CATALOG source of truth) across the
+  site; typecheck clean.
+- **Local-DB + permission-catalog drift**: DONE - reverted 16 polluted `requires_superuser`
+  flags, removed 3 `config_health` perms, dropped `deployment_secrets` from the local dev DB;
+  `check-permission-catalog` now "up to date" + "in sync with DB", `db:check` clean of the
+  `deployment_secrets` drift. (These were cross-branch pollution, not on-branch; cleanup is
+  local-DB-only, with the restore caveat recorded in the HUMAN_SETUP doc.)
 
 ## How to see it in action
 
