@@ -2,7 +2,7 @@
 
 > Burn watches the work a services firm is actually doing against the contract that paid for it, blocks the charge that was never in scope before it posts, and reports which client is consuming its contract fastest and exactly what caused it.
 >
-> Status: **FINAL**, hardened through adversarial review rounds 1 and 2. Ready for app-build-from-spec. New app. Winner of the 2026-07-19 08:01 suite-brainstorm session (Seat F, 27 of 30 points).
+> Status: **FINAL**, hardened through adversarial review rounds 1, 2, and 3 (final pass). Ready for app-build-from-spec. New app. Winner of the 2026-07-19 08:01 suite-brainstorm session (Seat F, 27 of 30 points).
 > Chosen internal port: **4022** (verified free; highest current is bulwark-api at 4021).
 > Routes: SPA at `/burn/`, REST at `/burn/api/`, realtime at `/burn/ws`.
 > Chosen final name: **Burn** (single word). App id `burn`.
@@ -29,11 +29,14 @@ The axis is **latency plus interception**. Time trackers know hours but not scop
 
 `burn_engagements.envelope_basis` is `fixed | time_and_materials | retainer | not_to_exceed`, and **the margin formula branches on it.** Round 2 correctly found that an unbranched `sum(hours x bill_rate) - sum(hours x cost_rate)` measures, on a fixed-fee SOW, "the T&M invoice we did not send, minus cost", which moves the **wrong way**: delivering in half the budgeted hours shows LESS margin and overrunning shows MORE. That fires on the Gilligan seed's own flagship engagement (Howell Luau, fixed fee $18,000), so the demo would have shipped an inverted number.
 
-| `envelope_basis` | `revenue_basis` | Margin |
+| `envelope_basis` | `revenue_basis` | Revenue and margin |
 | --- | --- | --- |
-| `fixed`, `not_to_exceed` | `contract_value` | `chain_contract_value - attributed_cost`; pct over chain contract value; badged **`in_progress`** until the chain is `closed` or every deliverable is complete, because a partially delivered fixed fee has no final margin |
-| `retainer` | `contract_value_per_period` | the same, **per period**, with period boundaries computed in `burn_engagements.timezone` |
-| `time_and_materials` | `billable_recognized` | `attributed_billable - attributed_cost` |
+| `fixed` | `contract_value` | `revenue = chain_contract_value`; `margin = revenue - attributed_cost`; pct over contract value; badged **`in_progress`** until the chain is `closed` or every deliverable is complete, because a partially delivered fixed fee has no final margin |
+| **`not_to_exceed`** | **`billable_recognized_capped`** | **`revenue = min(attributed_billable, effective_cap)`; `margin = revenue - attributed_cost`.** Behaves as T&M until the cap binds. `margin_state='in_progress'` until the chain closes. Envelope and deny arithmetic against the cap are unchanged |
+| `retainer` | `contract_value_per_period` | `revenue = contract_value_per_period`; `margin = revenue - attributed_cost`, **per period**, with boundaries computed in `burn_engagements.timezone` (storage in 3.1) |
+| `time_and_materials` | `billable_recognized` | `revenue = attributed_billable`; `margin = revenue - attributed_cost` |
+
+**Why `not_to_exceed` is not grouped with `fixed` (round-3 blocker R3-D1).** NTE is T&M with a ceiling: the firm bills actual work up to the cap and **never the cap itself**. Grouping it with `fixed` would make a $6,000 NTE that delivered $2,000 report `margin = 6000 - attributed_cost`, booking $4,000 that can never be invoiced. That is R2-D2's defect inverted, and it **overstates**, which is the direction the buyer cannot detect. It fires on the seeded "Coconut Supply Chain Assessment" chain. Section 12.1 asserts all four bases, not three.
 
 `revenue_basis` is stored on `burn_engagement_rollups` alongside `metric_basis` and returned on every financial response.
 
@@ -41,8 +44,18 @@ The axis is **latency plus interception**. Time trackers know hours but not scop
 
 `metric_basis` is `true_margin` when cost-rate coverage is non-zero and `contract_consumption` otherwise. Round 2 found the discriminator stopped at the rollup while the burn-down, engagement detail, the precheck envelope block, `burn_variances.amount`, and the change-order scope table all emitted money with no basis at all. Fixed three ways:
 
-1. **Every response carrying a dollar or a derived percentage carries `metric_basis`, `revenue_basis`, `cost_rate_coverage_pct`, and `as_of`.**
-2. The shared money block in `packages/shared/src/schemas/burn.ts` is a **Zod discriminated union on `metric_basis`**, so a response is not constructible without it. Under `contract_consumption` the value is carried as `contract_consumption_pct` and **there is no `margin` key at all**, which is what stops a model from reading a field that is not there.
+1. **Every response carrying a dollar or a derived percentage carries `metric_basis` and `as_of`. The remaining fields are per-variant** (round-3 R3-D5, below).
+2. The shared money block in `packages/shared/src/schemas/burn.ts` is a **Zod discriminated union on `metric_basis`** with **three** members, so a response is not constructible without a discriminator. Under `contract_consumption` the value is carried as `contract_consumption_pct` and **there is no `margin` key at all**, which is what stops a model from reading a field that is not there.
+
+**The third member exists because suppression and the mandatory-field rule otherwise contradict each other (round-3 R3-D5).** Section 2.4 point 17 requires cost fields to be **suppressed entirely, not banded**, below the contributor floor, while rule 1 originally demanded `cost_rate_coverage_pct` on every money response. Both cannot hold, and the Gilligan seed deliberately builds a single-contributor chain, so this would have fired on the first member-tier Portfolio Board load: either Zod validation fails, or the implementer loosens the union to optional fields and reopens the "a model drops the sibling key" hole. The three members:
+
+| `metric_basis` | Carries |
+| --- | --- |
+| `true_margin` | `revenue_basis`, `margin_amount`, `margin_pct`, `cost_rate_coverage_pct`, `as_of` |
+| `contract_consumption` | `revenue_basis`, `contract_consumption_pct`, `cost_rate_coverage_pct`, `as_of`. **No `margin` key** |
+| **`suppressed`** | **`suppressed_reason`, `revenue_basis`, `contract_consumption_pct`, `as_of`. No cost, margin, or coverage keys at all** |
+
+This preserves both invariants (not constructible without a discriminator; absent rather than banded) and gives `ContributorFloorNotice` a typed thing to render.
 3. **The MCP tool is `burn_financials`.** `burn_margin` survives only as a **deprecated alias** with the identical discriminated response. Round 2's argument is correct and I accept it: an agent that calls a tool literally named `burn_margin` and reports "margin" has mislabeled the number, and the sibling `metric_basis` key is exactly the field a model drops. A tool name is a claim.
 
 **Account-level basis is the weakest member.** `/v1/financials/accounts` ranks chains; any `contract_consumption` chain in the group forces the whole row to `contract_consumption`, and the mixed state is surfaced explicitly rather than silently averaged.
@@ -156,13 +169,25 @@ The fast path therefore bulk-confirms with **`envelope_amount = NULL` and `envel
 | `bam.task` | `tasks` (`tasks.ts`) | **`valuation_basis='none'`, always.** Ingested for classification signal only. `time_logged_minutes` is **not** an epoch input and **not** a valuation input |
 | `helpdesk.ticket` | helpdesk tickets | `none` |
 | `banter.thread` | banter messages, opt-in | `none` (signal only) |
-| `bill.expense` | `bill_expenses` (`bill-expenses.ts`) | conditional, see 2.3.1.1 |
-| `bill.recurring` | `bill_recurring_invoices` | generated invoice total |
+| `bill.expense` | `bill_expenses` (`bill-expenses.ts`) | conditional, see 2.3.1.2 |
+| `bill.invoice` / `bill.recurring` | `bill_invoices` / `bill_recurring_invoices` | **`none` for every line that restates already-ingested work; only a genuinely new flat-fee remainder is priced.** See 2.3.1.1 |
 | `vcs.commit` | `github_integrations`, opt-in | `none` |
 
 Dropping `time_logged_minutes` from the task epoch also removes a large churn class, since it changes on every time-entry insert. There is **no per-org `hour_source` alternative** in v1: two mutually exclusive priced paths is exactly the kind of configuration that produces a 2x number in the field, and an org not using `time_entries` simply has no priced hours, which the queue-health surface reports honestly.
 
-##### 2.3.1.1 Expense valuation is conditional on `billable` and `status` (round-2 blocker R2-D5)
+##### 2.3.1.1 The second precedence rule: invoices are revenue restatements, not consumption (round-3 blocker R3-D4)
+
+**An invoice does not represent new work. It restates work already priced.** Verified: `bill_line_items` carries `time_entry_ids uuid[]` (`bill-line-items.ts:27`) and `apps/bill-api/src/services/invoice.service.ts:462-493` builds line items **directly from `time_entries`**. Valuing an invoice at its total therefore prices the identical hours a second time, which is R2-D1's exact failure class arriving on a second source. On a retainer chain it is worse: the seeded Castaway Rescue chain would consume from both the $4,500/mo generated invoice **and** the hours logged against it.
+
+Stated as bluntly as the first rule:
+
+- **`bill.invoice` and `bill.recurring` work items are `valuation_basis='none'` for every line that resolves to already-ingested work.** A line is a restatement when its `time_entry_ids` resolve to existing `bam.time_entry` work items, or when a `bill_expenses` row points at the invoice through `bill_expenses.invoice_id`.
+- **Only a genuinely new flat-fee remainder is priced**, as `valuation_basis='invoice'`: a line with no `time_entry_ids` and no linked expense, which is the milestone-fee case an SOW actually sells.
+- `bill.invoice` is an explicit member of the `source_type` enum, so an implementer never has to invent one and reach for a neighbouring rule. Burn keeps its `bill:invoice.created` and `invoice.finalized` subscriptions (8.3) because an invoice is a useful **classification and revenue-recognition** signal even when it prices nothing.
+
+Section 12.1 asserts that invoicing 10 already-ingested hours does not change `attributed_billable`.
+
+##### 2.3.1.2 Expense valuation is conditional on `billable` and `status` (round-2 blocker R2-D5)
 
 Verified in `apps/bill-api/src/db/schema/bill-expenses.ts`: `status: varchar('status', { length: 20 }).notNull().default('pending')` at `:38` and `billable: boolean('billable').notNull().default(false)` at `:40`. The round-2 draft valued `bill.expense` at `amount` unconditionally, so **by default every expense including internal costs was booked as `billable_amount` against a client envelope**, and a rejected expense was neither deleted nor epoch-changed so the anti-join never reversed it. The gate would deny real charges against consumption that was never chargeable.
 
@@ -171,7 +196,7 @@ Verified in `apps/bill-api/src/db/schema/bill-expenses.ts`: `status: varchar('st
 - `status IN ('rejected','void')` -> `attribution_state='excluded'`, `exclusion_reason='source_voided'`, dollars reversed in the same transaction.
 - Both `billable` and `status` are epoch inputs (2.3.2), so a flip of either is observed.
 
-##### 2.3.1.2 Rate resolution is delegated, and its failure mode is specified (round-1 D2, round-2 R2-I5)
+##### 2.3.1.3 Rate resolution is delegated, and its failure mode is specified (round-1 D2, round-2 R2-I5)
 
 `apps/bill-api/src/services/rate.service.ts:117` documents and implements **`user+project > user > project > org`** with an **inclusive** `effective_to` (`or(isNull(effective_to), gte(effective_to, date))`). Burn does not restate it. This build adds **`POST /internal/rates/resolve`** to bill-api (guarded by `INTERNAL_SERVICE_SECRET`) delegating to the existing `resolveRate`, and a **parity test** asserts Burn's own `burn_cost_rates` resolver mirrors that four-branch order and inclusive bound.
 
@@ -287,9 +312,31 @@ Every human decision writes `burn_classifier_feedback`, which becomes a retrieva
 
 Reclassification supersedes rather than mutates, in one transaction with `SELECT ... FOR UPDATE` on the live row.
 
-**The invariant is stated at the source-record grain, not the work-item grain:** *on a `classification_epoch` change, the new live work item **inherits** the prior live attribution when that attribution is `confirmed` or `method='human'`, carried forward with `method='human'`, revalued but **not** re-classified, and flagged for review only if a human explicitly requests it.* On a `cost_epoch`-only change there is no new classification decision at all: the row is revalued in place. Round 1's invariant was scoped to `work_item_id`, and since pass 2 inserts a **new** work item, the new row had no attributions and the invariant simply did not apply, so a typo fix silently discarded a human's decision and re-spent LLM budget.
+**The invariant is stated at the source-record grain, not the work-item grain, and its predicate includes the carry-forward method (round-3 R3-T6):**
 
-The engine also never supersedes a `confirmed` / `method='human'` attribution on a live row; it may only raise a `pending_review` proposal alongside it.
+> *on a `classification_epoch` change, the new live work item **inherits** the prior live attribution when* `state = 'confirmed' OR method IN ('human','inherited')`*, carried forward with `method='inherited'`, revalued but **not** re-classified, and flagged for review only if a human explicitly requests it.*
+
+**`inherited` must be in the predicate, not just in the enum.** The round-2 draft wrote the carry-forward as `method='human'` in this section and as `method='inherited'` in the 3.1 enum and the changelog. Under the schema reading, the first edit inherits correctly and the **second** `classification_epoch` change finds neither `confirmed` nor `human` and re-classifies from scratch, which is R2-T8's failure with a one-edit delay, and a test that edits once passes either way. `inherited` stays as the audit-visible method so a human decision and a carried-forward one remain distinguishable, and the predicate accepts both. Section 12.1 edits **twice**.
+
+On a `cost_epoch`-only change there is no new classification decision at all: the row is revalued in place.
+
+The engine also never supersedes a live attribution matching the same predicate; it may only raise a `pending_review` proposal alongside it.
+
+**The ingest write is a single upsert, used identically by both writers (round-3 R3-T7).** Supersede-then-insert is safe only because it holds `SELECT ... FOR UPDATE` on an **existing** live row. When no live row exists, which is the common case for a newly created expense, the bolt-dispatch path (`POST /v1/internal/events`, which takes no per-org lock) and reconcile pass 1 can both observe "no live row" and both insert, hitting the live-row unique index with a 23505. Unhandled that aborts the org's sweep transaction; `ON CONFLICT DO NOTHING` silently drops the newer observation. So the ingest write is stated once and shared:
+
+```sql
+INSERT INTO burn_work_items (...) VALUES (...)
+ON CONFLICT (organization_id, source_type, source_id)
+  WHERE attribution_state <> 'excluded'
+DO UPDATE SET
+  classification_epoch = EXCLUDED.classification_epoch,
+  cost_epoch           = EXCLUDED.cost_epoch,
+  ...
+WHERE burn_work_items.classification_epoch IS DISTINCT FROM EXCLUDED.classification_epoch
+   OR burn_work_items.cost_epoch           IS DISTINCT FROM EXCLUDED.cost_epoch;
+```
+
+A compare-and-set on both hashes: it is a no-op when both are equal (the cheap re-observation case), and a superseding update when either changed. **Both the event path and pass 1 use this identical statement**, which is the actual mechanism behind 4.2's "converge on exactly one live row in every ordering". Section 12.1 exercises the simultaneous case, not only sequential orderings.
 
 Concurrent triage returns **409 with current state**, never a raw 23505. `POST /v1/attributions/bulk` returns per-item `{ applied, conflicted, failed }`.
 
@@ -299,16 +346,32 @@ Concurrent triage returns **409 with current state**, never a raw 23505. `POST /
    - **burn-api sets `BBB_PERMISSIONS_ENFORCE=on` unconditionally in compose and services.mjs and REFUSES TO BOOT if the resolved value is anything else.** Not a default; a boot assertion.
    - **A second, independent in-route guard** on `/v1/cost-rates`, `/v1/financials/accounts`, `/v1/financials/export`, `POST /v1/prechecks/:id/label`, and `PATCH /v1/settings` checks the org role **directly off `request.user`**, so a resolver outage cannot open them.
    - Tests assert 403 with the resolver stubbed non-2xx, and assert boot failure when the mode is not `on`. The platform-wide posture question is tracked separately and is not Burn's to solve.
-2. **Financial flooring lives in one serializer, not on routes (round-2 blocker R2-S3).** Round 1 applied dollar flooring to `/v1/work-items` alone; `burn_attributions` carries its own `billable_amount` / `cost_amount` and `/v1/attributions` and `/v1/unscoped` had no annotation, so the same join ran. And the disclosure is not aggregate: for a single `bam.time_entry` row, `cost_amount / (minutes / 60)` **is that person's hourly cost rate to the cent**, which is the exact content of `burn_cost_rates` that Section 13 promises never to expose. One row sufficed.
+2. **Financial flooring lives in one serializer, not on routes (round-2 blocker R2-S3).** Round 1 applied dollar flooring to `/v1/work-items` alone, while `/v1/attributions` and `/v1/unscoped` project the same amounts (through the work-item join, since R3-T2 removed the attribution's own snapshot columns) and carried no annotation, so the same join ran. And the disclosure is not aggregate: for a single `bam.time_entry` row, `cost_amount / (minutes / 60)` **is that person's hourly cost rate to the cent**, which is the exact content of `burn_cost_rates` that Section 13 promises never to expose. One row sufficed.
    **`redactFinancialFields(row, viewerCaps)` is a single shared serializer** applied to every response containing a work-item or attribution projection: `/v1/work-items`, `/v1/attributions`, `/v1/unscoped`, `/v1/queue-health`, `/v1/change-orders/:id`, `burn_variances.detail`, every MCP payload, and the CSV export. Section 12.1 enumerates every member-reachable route and asserts the join fails on each.
+
+   **How `viewerCaps` is derived, and what it must never be derived from (round-3 blocker R3-S1).** burn-api is a satellite and therefore registers `httpPermissionsPlugin`, whose `canResolve` is a **hardcoded stub**: `packages/permissions/src/index.ts:307-319` is literally a comment saying the HTTP plugin exposes no synchronous probe, followed by `return true;`. The only in-tree precedent for field flooring in a satellite is `apps/bulwark-api/src/routes/deadlines.routes.ts:21-23`, which calls `fastify.canResolve(...)` and **therefore floors nothing today**. An implementer copying that precedent would have `viewerCaps` report `read_all` for every caller, shipping `cost_amount` to every project member at a 100 percent rate rather than only during a resolver blip, and the R2-S1 boot assertion does not help because `canResolve` ignores `mode` entirely.
+   - `viewerCaps` is built by an explicit **fail-closed `POST /internal/permissions/dual-read`** for `burn.financials.read_all` and `burn.costrate.read`, on the shape at `apps/bulwark-api/src/subscriptions/proposal-decided.ts:88`, where **anything other than an explicit `'allow'` is `false`**.
+   - It is resolved **once per request** and threaded into the serializer.
+   - **`fastify.canResolve` is explicitly forbidden as the source** for any Burn flooring decision.
+   - Section 12.1 asserts that with the resolver stubbed non-2xx, `/v1/work-items` returns no `cost_amount`.
+   *(The `canResolve` stub and the resulting live Bulwark flooring bypass are a platform defect tracked separately; Burn routes around it rather than depending on it.)*
+
+   **Agent surfaces: `viewerCaps` is the intersection, and any unresolvable asker fails closed (round-3 blocker R3-S2).** On an MCP call burn-api sees a **service-account bearer** while `asker_user_id` narrows the row set, and per 2.2.1 that parameter is a visibility narrowing, not an approval. Keying `viewerCaps` off the bearer would return fully unfloored `cost_amount` and `envelope_*` to an agent acting for a member asker, delivering per-person compensation through the agent channel. mcp-server cannot backstop this: `apps/mcp-server/src/lib/register-tool.ts:512` reads `BBB_PERMISSIONS_ENFORCE ?? 'off'` from **mcp-server's own** env (compose default `warn`), so its per-action check never denies, and its resolver returns `'unknown'` as pass-through on failure. Bulwark hit this exact hazard and wrote the rule down at `deadlines.routes.ts:11-19`; Burn adopts it verbatim across all eight serializer surfaces:
+   - When `asker_user_id` is present and differs from the bearer, **`viewerCaps` is the intersection of bearer and asker capabilities**.
+   - **Any unresolvable asker fails the floored fields closed.**
+   - Section 12.1: an admin service-account bearer with `asker_user_id` set to a plain member gets **no `cost_amount`** from `burn_list_unscoped`.
 3. **No floored quantity is emitted twice in different units, including `overage_amount` (round-2 blocker R2-S2).** The caller supplies `proposed_amount` and the round-2 draft returned an unfloored `overage_amount`, so `envelope_remaining = proposed_amount - overage_amount` in one subtraction. Sharper: a deliverable with zero consumption has `remaining == envelope_amount`, so probing each deliverable shortly after confirmation recovers `contract_value` **exactly**. Round 1's justification ("discloses nothing the caller could not compute") was false, and an implementer meeting the "no absolute recovery" test honestly would have had to weaken the test.
    - A deny to a non-`read_all` caller returns `verdict_reason`, a consumption **band**, and a **quantized** overage rounded up to `overage_bucket_amount` (default 10000 minor units, configurable), never an exact figure.
-   - Repeated member prechecks against the same deliverable are rate-limited and write an audit row.
-   - The Section 12.1 test probes a **newly confirmed deliverable specifically**, which is the exact case that made exact recovery possible.
+
+   **Quantizing the output is not sufficient, because the verdict itself is the oracle (round-3 R3-S3).** The caller controls `proposed_amount` and the verdict flips at `proposed_amount > envelope_remaining`, so **binary search recovers `envelope_remaining` exactly in roughly 24 probes regardless of how coarse the returned bucket is**; on a freshly confirmed deliverable that is `envelope_amount`, and summing across deliverables gives `contract_value`. At `usr_precheck_daily_cap` (200) that is about eight full recoveries per member per day, and Section 12.1's "not recoverable to within 5 percent" would be unsatisfiable by an honest implementation, which is verbatim the pressure R2-S2 warned makes an implementer weaken the test instead of the response. Two changes:
+   - **Quantize the decision input, not only the output.** For a non-`read_all` caller the deny is evaluated against `envelope_remaining` **rounded down to `overage_bucket_amount`**, so the verdict boundary carries at most one bucket of information about that deliverable no matter how many times it is probed.
+   - **A per-(member, deliverable) daily probe cap of `usr_precheck_per_deliverable_cap` (default 5)**, far below the org cap, since a real charge is prechecked once. Repeated near-boundary prechecks against one deliverable raise a `precheck_probing` variance and write an audit row.
+   - The Section 12.1 assertion is restated as **"not recoverable to finer than `overage_bucket_amount`"**, which is a property an honest implementation can actually satisfy, and the test probes a **newly confirmed deliverable specifically**.
 4. **`can_access` preflight on every cited source record**, fail-closed on non-2xx, timeout, or missing secret, with denied items dropped and reported as "N hidden by permissions". New `SUPPORTED_ENTITY_TYPES` entries `burn.engagement` and `burn.deliverable` (added to `apps/api/src/services/visibility.service.ts:107`, following the Bulwark precedent at `:139-142`).
 5. **Extracted clause text does not launder into member-readable fields (round-2 R2-S9).** The only access check was `preflightAccess(created_by, 'bin.asset', ...)`, the registrant's own visibility, and Bin's `visibility='private'` is owner-only with no org-admin bypass. Extraction writes LLM-produced `title` and `description` derived from clause text into `burn_deliverables`, served to any project member; flooring `cited_span.quote` and stopping left `description`, the same content one paraphrase removed, reaching an audience that could not open the document.
    - **`description` is floored to `burn.financials.read_all` alongside `quote`.** `title` remains the member-visible handle.
    - The source asset is **re-preflighted per reader**, not just per registrant, and deliverables whose asset the reader cannot access are dropped with a hidden count, exactly as point 4 does for cited source records.
+   - **A floored field that stays searchable is not floored (round-3 R3-S4).** Removing `description` and `quote` from the response leaves both inside a GIN-indexed generated `search_tsv` on a table members can list with the suite's standard `?filter[field]=value` convention. An implementer adding the obvious `filter[q]` over `search_tsv`, which both the FTS index and 2.3.4's lexical retrieval invite, would let a member confirm the presence of any term in the floored clause text one probe at a time and reconstruct a rate schedule or exclusivity terms without ever reading a floored field. The same applies to `burn_classifier_feedback.search_tsv` over `text_snapshot`. Therefore: **no member-reachable endpoint may filter, sort, rank, or highlight on `search_tsv` or on any `read_all`-floored column.** A `q` filter on `/v1/deliverables` for a non-`read_all` caller matches **`title` only**, through the separate GIN trigram index already declared in 3.1. `search_tsv` is reserved for internal candidate assembly and for `read_all` callers. Section 12.1 has the negative test.
 6. **Burn's project predicate is a distinct implementation, not a port (round-2 R2-S6).** `apps/bulwark-api/src/lib/project-scope.ts` operates on a single nullable `project_id` column and its documented SK3 fallback is that a NULL project passes for **every org member**. Burn engagements have no `project_id` column, so ported literally the `unlinked` state that Section 3.1 defines as `read_all`-only would become org-wide readable, inverting the D4 fix.
    ```sql
    EXISTS (SELECT 1 FROM burn_engagement_projects ep
@@ -342,7 +405,13 @@ Concurrent triage returns **409 with current state**, never a raw 23505. `POST /
     - The mandatory RLS test covers the reaper and one internal route.
 15. **Document parsing is bounded and inert.** `MAX_DOC_BYTES` (25 MB), `MAX_DOC_PAGES` (300), a wall-clock parse cap, and a parser with **JavaScript execution and external-entity resolution disabled**. A breach records `rejected_limits` and extracts nothing partial.
 16. **`/v1/internal/*` fails CLOSED on an empty secret**, rejecting 401 before any timing-safe compare. Deliberately stronger than `apps/api/src/routes/internal-llm.routes.ts:64`. Do not "align" it downward.
-17. **Small-team aggregates are suppressed, not banded (round-2 R2-S10).** Aggregation protects only above a contributor count of one: a retainer chain worked solely by one person makes `attributed_cost` that person's cost, and `cost_rate_coverage_pct` independently discloses which individuals have a rate configured. For a non-`read_all` caller, when a chain's **distinct contributor count is below `min_contributors_for_cost_aggregate` (default 3)**, the fields `attributed_cost`, `margin_amount`, `margin_pct`, and `cost_rate_coverage_pct` are **suppressed entirely, not banded**; the response carries `metric_basis`, `revenue_basis`, and the consumption band only, with `suppressed_reason='insufficient_contributors'`.
+17. **Cost aggregates are `read_all`-only; members get consumption percentage (round-2 R2-S10, hardened by round-3 R3-S5).** R2-S10 hardened the single-contributor **snapshot** and left the **time series** untouched. Above the contributor floor a member receives `attributed_cost` **and a burn-down series**, while Section 13 non-goal 6 deliberately preserves per-person hours to project members and Section 12.1's own surveillance test performs the `source_id` to `time_entries.user_id` join. The attacker therefore has, per day, an exact per-person hour vector and one aggregate cost scalar; three or more daily snapshots on a three-contributor chain solve the cost-rate vector by least squares, recovering exactly what Section 13 point 11 promises is floored behind two guards. The burn-down series hands over the time dimension in a single request.
+    Band-width tuning is a losing game against a time series, so the fix is the simpler branch:
+    - **`attributed_cost`, `margin_amount`, and `margin_pct` are floored to `burn.financials.read_all`** on every surface including every burn-down point. There is no member-visible cost band at any contributor count.
+    - **Members receive `consumption_pct`**, which is what the 1.2.1 basis model already needs and which is derived from contract value and billable amounts rather than from cost rates.
+    - `cost_rate_coverage_pct` is also `read_all`-only, since it independently discloses which individuals have a rate configured.
+    - Below `min_contributors_for_cost_aggregate` (default 3) a `read_all` caller still sees the figures; the **`metric_basis='suppressed'`** variant (1.2.2) with `suppressed_reason='insufficient_contributors'` is what a non-`read_all` caller receives, and it is now the ordinary member response for any chain, not an edge case.
+    - Section 12.1: ten daily snapshots plus the Bam hours join resolve no individual's rate.
 
 ### 2.5 Guardrails summary
 
@@ -437,7 +506,8 @@ A chain with **zero** linked projects is a defined, tested state: **visible only
 | `due_date` | date | |
 | `confidence` | numeric(5,2) | display only |
 | `review_status` | varchar(16) NOT NULL DEFAULT `'pending_review'` | `pending_review` \| `confirmed` \| `rejected` \| `superseded` |
-| `is_active` | boolean NOT NULL DEFAULT false | **set only by `POST /v1/deliverables/:id/confirm-envelope` under `burn.envelope.confirm` (2.2.1)** |
+| `is_active` | boolean NOT NULL DEFAULT false | **set only by `POST /v1/deliverables/:id/confirm-envelope` under `burn.envelope.confirm` (2.2.1). Exactly one writer, always** |
+| **`delta_confirmed_by` / `delta_confirmed_at`** | uuid / timestamptz | **the activation state of an AMENDMENT deliverable, set on `proposal.decided` (R3-D2). An amendment row never sets `is_active`** |
 | `supersedes_deliverable_id` | uuid | self-FK ON DELETE SET NULL; **restatement only**, with the same `dedup_key` migration and `restatement_unmatched` rule as the engagement path |
 | `search_tsv` | tsvector GENERATED ALWAYS AS ... STORED | below |
 | `qdrant_point_id` / `qdrant_synced_at` | uuid / timestamptz | reserved |
@@ -446,7 +516,14 @@ A chain with **zero** linked projects is a defined, tested state: **visible only
 | `extraction_run_id` | uuid | FK ON DELETE SET NULL |
 | `created_at` / `updated_at` | timestamptz NOT NULL DEFAULT now() | |
 
-**Effective envelope (round-2 blocker R2-D3).** `effective_envelope = envelope_amount + sum(envelope_amount_delta)` over the deliverable's amendment set, resolved on the chain exactly as `contract_value_delta` is at engagement level. **Consumption stays on the base row, so no attribution migration is needed and `ON DELETE RESTRICT` is never violated.** Round 2 was right that without this the flagship loop did not close: the change order is drafted off an `envelope_overrun` on a *specific* deliverable, but the only representable outcomes were a chain-level `contract_value_delta` and *new* deliverables, neither of which raises the overrun deliverable's envelope, so after approval **the same deliverable kept denying**. Section 12.1's "a stale deny does not persist after a change order expanded the envelope" was asserted against a model with no way to expand it. The burn-down now shows a **per-deliverable dated step-up**.
+**An amendment deliverable is a pure envelope-delta carrier (round-3 blocker R3-D2).** A row with `amends_deliverable_id IS NOT NULL` is **never an attribution target**. Round 3 found both possible readings of the round-2 text were broken. Created **inactive**, the 2.2.1 rule that `is_active` has exactly one writer means the effective envelope never rises after an approved change order and **the flagship loop still does not close** (story 3 fails); flipping `is_active` on `proposal.decided` instead would create a second writer of the field whose single-writer property is a security boundary. Created **active**, it is a deliverable on a chain linked to the same project, so 2.3.4 and 5.3 would surface it as a candidate and work would attribute to it instead of the base, **splitting consumption off the base row**, which is precisely what the base-row invariant exists to prevent; and because its own `envelope_amount` is NULL it is unpriced and therefore excluded from `envelope_overrun` and `consumption_erosion`, so the split dollars would be invisible to variance detection too. The rule:
+
+- **Excluded from candidate assembly (2.3.4) and from all three deterministic resolution paths in the gate (5.3).** Never rendered in `DeliverablePicker`.
+- **Any attribution naming an amendment deliverable resolves to its base row**, enforced in the service layer.
+- **Activation has its own state**: `delta_confirmed_by` / `delta_confirmed_at`, set on `proposal.decided`. **`is_active` keeps exactly one writer** and an amendment row never sets it.
+- Section 12.1 asserts that after a change order the **base** deliverable's consumption includes post-amendment work and **no attribution rows point at the amendment deliverable**.
+
+**Effective envelope (round-2 blocker R2-D3).** `effective_envelope = envelope_amount + sum(envelope_amount_delta)` over the deliverable's `delta_confirmed_at IS NOT NULL` amendment set, resolved on the chain exactly as `contract_value_delta` is at engagement level. **Consumption stays on the base row, so no attribution migration is needed and `ON DELETE RESTRICT` is never violated.** Round 2 was right that without this the flagship loop did not close: the change order is drafted off an `envelope_overrun` on a *specific* deliverable, but the only representable outcomes were a chain-level `contract_value_delta` and *new* deliverables, neither of which raises the overrun deliverable's envelope, so after approval **the same deliverable kept denying**. Section 12.1's "a stale deny does not persist after a change order expanded the envelope" was asserted against a model with no way to expand it. The burn-down now shows a **per-deliverable dated step-up**.
 
 `search_tsv`, null-safe with an explicit regconfig (a bare concatenation over nullable columns yields NULL, gutting recall on the shipped path):
 
@@ -483,7 +560,7 @@ Indexes: `UNIQUE (organization_id, engagement_id, dedup_key)`, `(organization_id
 | `billable_amount` / `cost_amount` | bigint | minor units; both pass through `redactFinancialFields` |
 | `currency` | varchar(3) | |
 | `valuation_basis` | varchar(16) NOT NULL DEFAULT `'none'` | `rate` \| `expense` \| `invoice` \| `none` \| `unrated` \| `no_cost_rate` |
-| `unrated_reason` | varchar(32) | `no_rate_configured` \| `rate_service_unavailable` (2.3.1.2) \| `currency_mismatch` |
+| `unrated_reason` | varchar(32) | `no_rate_configured` \| `rate_service_unavailable` (2.3.1.3) \| `currency_mismatch` |
 | `bill_rate_id` / `burn_cost_rate_id` | uuid | audit of the dollar figure |
 | `attribution_state` | varchar(24) NOT NULL DEFAULT `'pending'` | `pending` \| `pending_attribution` \| `attributed` \| `pending_review` \| `unscoped` \| `excluded_non_billable` \| `excluded` |
 | `exclusion_reason` | varchar(32) | `superseded_epoch` \| `source_deleted` \| **`source_voided`** \| `internal` \| `pre_sales` \| `pto` \| `warranty` \| `overhead` \| `rework` |
@@ -519,7 +596,6 @@ Plus `(organization_id, attribution_state, occurred_at DESC)`, `(organization_id
 | `method` | varchar(24) NOT NULL | `rule` \| `structural` \| `precedent` \| `lexical` \| `llm` \| `human` \| **`inherited`** (2.3.10 carry-forward) |
 | `candidate_set` | jsonb NOT NULL DEFAULT `'[]'` | decision reproducibility |
 | `rationale` | text | display only |
-| `billable_amount` / `cost_amount` | bigint | snapshotted; **redacted by the shared serializer (R2-S3)** |
 | `superseded_at` / `superseded_by` | timestamptz / uuid | self-FK guarded |
 | `decided_by` | uuid | `read_all`-floored |
 | `decided_at` | timestamptz | |
@@ -527,6 +603,10 @@ Plus `(organization_id, attribution_state, occurred_at DESC)`, `(organization_id
 | `created_at` | timestamptz NOT NULL DEFAULT now() | |
 
 Indexes: `UNIQUE (organization_id, work_item_id) WHERE superseded_at IS NULL`, `(organization_id, deliverable_id) WHERE superseded_at IS NULL`, `(organization_id, chain_root_id, state) WHERE superseded_at IS NULL`, `(organization_id, state, created_at DESC)`.
+
+**The attribution carries the classification decision and NO money (round-3 blocker R3-T2).** The round-2 draft snapshotted `billable_amount` / `cost_amount` here, outside the revalue path. Because `deliverable_id` lives on the attribution rather than the work item, every per-deliverable consumption figure including the gate's deny arithmetic must join `burn_attributions`, and `burn-revalue` rewrites amounts on `burn_work_items` while explicitly never superseding an attribution. That left two unstated outcomes, both wrong: sum the snapshot and adding cost rates leaves `attributed_cost` null forever (R2-T2's failure exactly relocated, story 2 still fails); sum the work item and the snapshot diverges permanently, so the gate and the rollup disagree about the same dollars with no reconciliation path.
+
+**The columns are deleted.** Every consumption and rollup query, and the gate's deny arithmetic in 5.3, **joins `burn_work_items` for amounts** and uses `burn_attributions` solely to answer "which deliverable does this belong to". This removes an entire staleness class rather than adding a cache-coherence invariant to maintain. `attribution_state` remains the one deliberate denormalization, and its mapping is published above.
 
 **`burn_attribution_rules`**
 
@@ -664,14 +744,17 @@ Indexes: `(organization_id)`, `(organization_id, project_id, user_id, effective_
 | `margin_amount` / `margin_pct` | bigint / numeric(6,2) | null unless cost coverage is non-zero |
 | `cost_rate_coverage_pct` / `priced_deliverable_coverage_pct` | numeric(6,2) | the second gates promotion (5.4) |
 | `distinct_contributor_count` | integer NOT NULL DEFAULT 0 | drives the 2.4 point 17 suppression |
-| `metric_basis` | varchar(24) NOT NULL | `true_margin` \| `contract_consumption` |
-| **`revenue_basis`** | varchar(24) NOT NULL | `contract_value` \| `contract_value_per_period` \| `billable_recognized` (1.2.1) |
+| `metric_basis` | varchar(24) NOT NULL | `true_margin` \| `contract_consumption` (the `suppressed` variant of 1.2.2 is a response shape, never a stored value) |
+| **`revenue_basis`** | varchar(24) NOT NULL | `contract_value` \| `billable_recognized_capped` \| `contract_value_per_period` \| `billable_recognized` (1.2.1) |
+| **`period_start` / `period_end` / `period_index`** | date / date / integer | **descriptive columns for a `retainer` chain (R3-D3). The rollup row is always the CURRENT period; prior periods are exposed through the burn-down series, not through additional rollup rows.** NULL for every non-retainer basis |
 | `margin_state` | varchar(16) | `in_progress` \| `final` (1.2.1) |
 | `work_item_count` | integer NOT NULL DEFAULT 0 | |
 | **`frozen_at`** | timestamptz | **set by `burn-retention` on purge; a frozen row is never recomputed (R2-T5)** |
 | `computed_at` | timestamptz NOT NULL DEFAULT now() | served as `as_of` |
 
 Indexes: `UNIQUE (organization_id, chain_root_id)`, `(organization_id, computed_at)`, `(organization_id, frozen_at)`.
+
+**Retainer periods have a defined home (round-3 R3-D3).** 1.2.1 computes retainer margin "per period" and the round-2 rollup had nowhere to put it, so an implementer would have silently picked current, trailing, or lifetime and rendered whichever with no label. **The unique key stays `(organization_id, chain_root_id)`** and the row is **always the current period**, carrying `period_start`, `period_end`, and `period_index` as descriptive columns; prior periods come from the burn-down series. The alternative of keying on `(chain_root_id, period_start)` would ripple through every rollup query for the sake of one basis. Period bounds ride on the money response alongside `as_of`, and Section 12.1 asserts against a stored, labeled period rather than an inferred one.
 
 **Refresh semantics.** A full per-chain recompute upserted in **one statement**, idempotent under retry. `GET /v1/financials` serves the rollup with `as_of`; a **missing** rollup computes that chain synchronously; a **stale** one (beyond `rollup_max_age_minutes`, 120) is served with `stale: true` and a refresh enqueued. It **never** falls back to an unbounded live aggregate.
 
@@ -775,9 +858,9 @@ Indexes: `UNIQUE (organization_id, source_idempotency_key)`, `(organization_id, 
 
 On-disk tip is `0238_bulwark_builtin_group_defaults.sql` (200 files). **The numbers of the last two files are assigned by a generator and this spec deliberately does not name them.**
 
-1. **`0239_burn_core.sql`** - `burn_engagements` (both self-FKs guarded, `chain_root_id`, `period_length_days`), `burn_engagement_projects`, `burn_deliverables` (incl. `amends_deliverable_id`, `envelope_amount_delta`, `lifecycle_status`, the null-safe `search_tsv` with the `'english'` regconfig, reserved qdrant columns), `burn_work_items` (incl. both epochs, `valuation_epoch`, `valued_at`, `reconcile_until`, `exclusion_reason`, `unrated_reason`, **and the partial live-row unique index, not a four-column key**), `burn_attributions`, `burn_extraction_runs`, `burn_ingest_events` (incl. claim columns and the per-org reaper index), all indexes, RLS. Seeds the **"Burn System" service-account user** for `agent_proposals` inserts (`actor_id NOT NULL`), as `0234_bulwark_core.sql` does for Bulwark. Additive only.
+1. **`0239_burn_core.sql`** - `burn_engagements` (both self-FKs guarded, `chain_root_id`, `period_length_days`), `burn_engagement_projects`, `burn_deliverables` (incl. `amends_deliverable_id`, `envelope_amount_delta`, **`delta_confirmed_by`/`delta_confirmed_at`**, `lifecycle_status`, the null-safe `search_tsv` with the `'english'` regconfig, reserved qdrant columns), `burn_work_items` (incl. both epochs, `valuation_epoch`, `valued_at`, `reconcile_until`, `exclusion_reason`, `unrated_reason`, **and the partial live-row unique index, not a four-column key**), `burn_attributions` (**carrying no money columns**), `burn_extraction_runs`, `burn_ingest_events` (incl. claim columns and the per-org reaper index), all indexes, RLS. Seeds the **"Burn System" service-account user** for `agent_proposals` inserts (`actor_id NOT NULL`), as `0234_bulwark_core.sql` does for Bulwark. Additive only.
 2. **`0240_burn_gate_variance.sql`** - `burn_prechecks` (incl. `superseded_at`/`superseded_by`, the partial unique index, `is_calibrating`, the key-prefix `CHECK`), `burn_variances`, `burn_classifier_feedback`, `burn_org_settings` (every threshold with its default **and** its `CHECK`), indexes, RLS. Additive only.
-3. **`0241_burn_rates_rollups_rules.sql`** - `burn_cost_rates`, `burn_engagement_rollups` (incl. `revenue_basis`, `frozen_at`, `distinct_contributor_count`), `burn_attribution_rules` (incl. the discriminating-key `CHECK`), **plus `CREATE INDEX IF NOT EXISTS idx_bill_expenses_created_at ON bill_expenses (organization_id, created_at)`** (2.3.2E: a Burn-owned additive index on another app's table, needed because `bill-expenses.ts:50-52` indexes only `organization_id`, `project_id`, and `status`). Additive only.
+3. **`0241_burn_rates_rollups_rules.sql`** - `burn_cost_rates`, `burn_engagement_rollups` (incl. `revenue_basis`, **`period_start`/`period_end`/`period_index`**, `frozen_at`, `distinct_contributor_count`), `burn_attribution_rules` (incl. the discriminating-key `CHECK`), **plus `CREATE INDEX IF NOT EXISTS idx_bill_expenses_created_at ON bill_expenses (organization_id, created_at)`** (2.3.2E: a Burn-owned additive index on another app's table, needed because `bill-expenses.ts:50-52` indexes only `organization_id`, `project_id`, and `status`). Additive only.
 4. **The generated permissions delta**, number assigned by `scripts/build-permission-delta.mjs`.
 5. **The built-in group defaults**, authored at **the generated delta's number plus one**, modeled on `0238_bulwark_builtin_group_defaults.sql`.
 
@@ -832,11 +915,19 @@ Two rounds handed this spec a citation for a "per-org advisory lock pattern" poi
 
 **Burn does not copy it. Burn uses `pg_advisory_xact_lock` / `pg_try_advisory_xact_lock` acquired inside the sweep transaction**, following the genuine implementation at `apps/braid-api/src/lib/advisory-lock.ts:79` (`await tx.execute(sql\`SELECT pg_advisory_xact_lock(${token.classHash}, ${token.keyHash})\`)`). A transaction-scoped lock is released by commit or rollback, so it is immune to pool routing and cannot leak. There is **no unlock call to get wrong.**
 
-Three consequences stated so no implementer reintroduces the old shape:
+Four consequences stated so no implementer reintroduces the old shape:
 
-1. **Every "lock" in this document is a Postgres transaction-scoped advisory lock, never a Redis lock.** The round-2 draft said "Redis lock" in Sections 4.2, 4.3, and 8.1 while citing a Postgres precedent; that inconsistency is removed. (Redis is still used for the circuit breaker, coverage counters, and the bindings cache, which are not locks.)
+1. **Every lock in this document is a Postgres transaction-scoped advisory lock, never a Redis lock.** The round-2 draft said "Redis lock" in Sections 4.2, 4.3, and 8.1 while citing a Postgres precedent; that inconsistency is removed. (Redis is still used for the circuit breaker, coverage counters, and the bindings cache, which are not locks.)
 2. **The lock lives in burn-api's sweep service, not the worker job.** BullMQ `concurrency: 1` bounds the worker *container*; it does not bound the burn-api *replica set*, and burn-api runs at 2 replicas.
 3. **A skipped-because-locked sweep emits a counted log line** through `@bigbluebam/logging`, so contention is visible rather than silent.
+4. **The rule applies to the SQL-only sweeps, and never to a job that makes an outbound HTTP call (round-3 blocker R3-T1).** R2-T1's fix is right for the sweeps and wrong generalized, because `pg_advisory_xact_lock` **cannot outlive its transaction**. A per-engagement xact lock around extraction would run the entire chunked extraction in one transaction, so 4.1 step 3's per-chunk `last_processed_chunk` writes would not be durable until commit and a crash would roll back **every** checkpoint, restarting a 40-page MSA from chunk zero and re-spending the whole LLM budget on each retry. The same shape on `burn-attribute-batch` would hold 25 items times one LLM call each open at `concurrency: 2` across 2 replicas: up to four long idle-in-transaction sessions on the highest-churn table, blocking autovacuum on `burn_work_items` and stalling `burn-variance-sweep` behind the same per-org lock for minutes.
+
+   **Hard rule: no transaction holding an advisory xact lock may contain an outbound HTTP call.**
+
+   | Job | Mutual exclusion |
+   | --- | --- |
+   | `burn-variance-sweep`, `burn-silent-deliverable-sweep`, `burn-rollup-refresh`, `burn-calibration-recompute`, `burn-retention`, `burn-revalue` | **per-org `pg_advisory_xact_lock`** (SQL-only work) |
+   | `burn-extract-deliverables`, `burn-attribute-batch` | **the row claim plus the live-row upsert** (4.2 already names claims as the correctness mechanism). The xact lock is taken only around the **short** claim transaction and the **short** commit transaction, and **each chunk checkpoint commits in its own transaction** |
 
 ### 4.1 Deliverable-extraction engine
 
@@ -878,9 +969,21 @@ Findings, keyed on `dedup_key`: `unscoped_work`, `envelope_overrun` (priced deli
 
 ### 4.5 Revaluation engine (round-2 blocker R2-T2)
 
-`burn-revalue`, triggered by any `burn_cost_rates` write and by observed `bill_rates` changes, plus a nightly catch-up. It re-resolves rates for work items whose `valuation_epoch` no longer matches, rewrites `billable_amount` / `cost_amount` / `valuation_basis` **in place**, and updates `valued_at`.
+`burn-revalue` re-resolves rates and rewrites `billable_amount` / `cost_amount` / `valuation_basis` **in place** on `burn_work_items`, updating `valued_at` and `valuation_epoch`.
 
 **It issues zero llm-provider calls, never supersedes an attribution, and never re-classifies.** Without it the cost-rate screen, whose entire purpose is flipping `metric_basis` to `true_margin`, would change nothing for any already-observed work item, and Playwright story 2 would fail forever.
+
+**Revaluation is fail-safe and monotonic in information (round-3 R3-T3).** The `unrated` rule in 2.3.1.3 was written for **first** valuation, where excluding rather than zeroing is correctly conservative. Revalue runs against rows that already have good dollars, so a rolling bill-api restart during the nightly pass would otherwise rewrite `valuation_basis='unrated'` over a correct `billable_amount` and drop those items out of consumption and the rollup wholesale: consumption collapses, the burn-down looks healthy, the gate under-blocks, which is the direction the buyer cannot detect and precisely the failure R2-I5 was written to prevent, arriving through the job R2-T2 added. Therefore:
+
+- On a resolve failure, revalue leaves `billable_amount`, `cost_amount`, `valuation_basis`, and `valued_at` **untouched**, increments a retry counter, and surfaces "N items awaiting revaluation" separately in queue health.
+- **`unrated` may only ever be written to a row with `valued_at IS NULL`**, that is, one that has never been successfully valued.
+- Section 12.1 has the negative test: with `/internal/rates/resolve` returning 404, run `burn-revalue` and assert **no previously-valued work item changes and no rollup moves**.
+
+**Triggers are real, and the selection predicate is computable (round-3 R3-T4).** The round-2 draft said "triggered by observed `bill_rates` changes" with no mechanism (`apps/bill-api/src/routes/rates.routes.ts` publishes no Bolt events and the catalog has no `rate.*` entry, so a client-rate correction was invisible until the nightly pass), and selected "work items whose `valuation_epoch` no longer matches", which is circular: computing the current epoch requires resolving both rate ids, one HTTP call per item, and the `(organization_id, valued_at)` index narrows nothing. That was one bill-api round trip per work item per night, unbatched, with no backoff, against a service whose failure downgraded the row. Three fixes:
+
+1. **This build adds `rate.created` and `rate.updated` to `billEvents`** and Burn subscribes (8.3). The pattern and drift-guard registration are already budgeted for `expense.created` / `expense.approved`.
+2. **`POST /internal/rates/resolve` gains a batch form** taking `(user_id, project_id, date)` tuples.
+3. **The on-write trigger is scoped to the set derivable from the rate row itself**: its `user_id`, `project_id`, and the `effective_from` / `effective_to` range matched against `occurred_at`. No full-table epoch comparison. The nightly pass is a **bounded sweep over `valued_at < now() - interval`** with a per-run item cap and flushed progress logging.
 
 ### 4.6 Change-order drafting, and how the loop actually closes
 
@@ -1188,12 +1291,12 @@ The inline advisory note and the member-facing feedback control render inside **
 
 Registered in `apps/worker/src/worker.ts` following the Bulwark block at `:2207-2260`. Repeatable jobs use `upsertJobScheduler`, whose real precedent is the **basis** block around `apps/worker/src/worker.ts:691-724` (the round-2 draft cited `:673-679`, which is `bearingSnapshotWorker` event handlers). Each job is a thin HTTP caller with **its own generous `AbortController` deadline distinct from `LLM_TIMEOUT_MS`**, following `apps/worker/src/jobs/bulwark-proposal-reconcile.job.ts:48`.
 
-**Every "lock" below is a Postgres transaction-scoped advisory lock held inside burn-api's sweep transaction (4.0), not a Redis lock and not a BullMQ concurrency setting.**
+**Locks are Postgres transaction-scoped advisory locks held inside burn-api (4.0), never Redis and never a BullMQ concurrency setting. Per 4.0 point 4 the LLM-calling jobs use claims instead, because no lock-holding transaction may contain an outbound HTTP call.**
 
-| Queue | Schedule | Concurrency / lock | Purpose |
+| Queue | Schedule | Concurrency / mutual exclusion | Purpose |
 | --- | --- | --- | --- |
-| `burn-extract-deliverables` | on demand | per-engagement xact lock | 4.1 |
-| `burn-attribute-batch` | on demand + every 2 min | **`concurrency: BURN_ATTRIBUTE_CONCURRENCY` (2)**, per-org xact lock, row claims with **lease renewal**, `limiter: { max: 30, duration: 60000 }` | 4.2 |
+| `burn-extract-deliverables` | on demand | **row claim; short claim/commit transactions only; each chunk checkpoint commits separately (R3-T1)** | 4.1 |
+| `burn-attribute-batch` | on demand + every 2 min | **`concurrency: BURN_ATTRIBUTE_CONCURRENCY` (2)**; **row claims with lease renewal as the correctness mechanism, no long-held lock (R3-T1)**; `limiter: { max: 30, duration: 60000 }` | 4.2 |
 | `burn-claim-reaper` | every 5 min | `concurrency: 1`, **iterates orgs setting the GUC per org (2.4 point 14)** | returns genuinely cold claims to `pending` |
 | `burn-variance-sweep` | every 30 min | per-org xact lock; flushed per-org and per-N-item progress logs | 4.3 plus the three reconcile passes |
 | `burn-revalue` | on cost-rate write + nightly | per-org xact lock | 4.5; **zero LLM calls**, never re-classifies |
@@ -1201,12 +1304,16 @@ Registered in `apps/worker/src/worker.ts` following the Bulwark block at `:2207-
 | `burn-rollup-refresh` | hourly + on demand | per-org xact lock | one idempotent upsert per chain; **skips `frozen_at IS NOT NULL`** |
 | `burn-calibration-recompute` | daily 04:00 UTC | per-org xact lock, **iterates orgs** | 5.4 / 5.6; drains the coverage counters; both demotion triggers |
 | `burn-proposal-reconcile` | every 15 min | `concurrency: 1` | per `braid-proposal-reconcile.job.ts` |
-| `burn-retention` | daily 05:00 UTC | per-org xact lock, **iterates orgs** | purges per settings; **sets `frozen_at` on any rollup whose chain it purges** |
+| `burn-retention` | daily 05:00 UTC | per-org xact lock, **iterates orgs** | purges per settings; **recomputes-then-freezes, one transaction per chain (R3-T5)** |
 | `burn-embed-sync` | registered, **scheduled off** | | behind `embedding_enabled` |
 
 10 job families plus the reaper.
 
-**Retention never rewrites history.** `burn-retention` exempts work items whose chain is not `closed`; for closed chains it **sets `frozen_at`** on the rollup, and both the hourly refresh and the on-miss compute skip frozen rows (3.1). Never purged at all: enforced, overridden, labeled, or superseded prechecks; `burn_classifier_feedback`; `burn_extraction_runs`.
+**Retention recomputes the record before freezing it (round-3 R3-T5).** R2-T5 stopped the hourly refresh from overwriting the record but never established **what the record is**. `burn-retention` at 05:00 would have stamped `frozen_at` on a row the hourly job last touched up to 60 minutes earlier, and which may legitimately be served with `stale: true` for up to `rollup_max_age_minutes` (120), making a stale figure permanently immutable because both write paths now skip it. Worse, a **missing** rollup is computed synchronously on read: a closed chain with no rollup row at purge time would freeze nothing, lose its work items, and the first `GET /v1/financials` would compute and persist **$0** as the permanent record.
+
+**One transaction per chain, in this order:** recompute the rollup to final -> set `frozen_at` and `margin_state='final'` -> **then** purge the work items. **The freeze is an upsert**, so a missing row is created rather than skipped. `burn-retention` exempts work items whose chain is not `closed`. Section 12.1 asserts the frozen figure equals the **pre-purge computed** figure, not merely "unchanged after the refresh runs", which would pass trivially on a stale or absent row.
+
+Never purged at all: enforced, overridden, labeled, or superseded prechecks; `burn_classifier_feedback`; `burn_extraction_runs`.
 
 ### 8.2 Bolt events published (source `burn`)
 
@@ -1229,7 +1336,7 @@ Via `publishBoltEvent(eventType, 'burn', payload, orgId, actorId?, actorType?)`,
 | `deliverable.silent` | inverse check fires | `deliverable.id`, `engagement.id`, `due_date`, `days_remaining` |
 | `consumption.threshold_crossed` | chain consumption crosses a band | `engagement.id`, `chain_root_id`, `band` |
 
-10 events. Plus two new **`bill`** events published from `apps/bill-api/src/routes/expenses.routes.ts`: `expense.created` and `expense.approved`.
+10 events. Plus **four** new **`bill`** events this build adds and registers: `expense.created` and `expense.approved` from `apps/bill-api/src/routes/expenses.routes.ts`, and **`rate.created` and `rate.updated` from `apps/bill-api/src/routes/rates.routes.ts`** (which publishes nothing today, R3-T4). All four follow the same `EventDefinition` shape rule below.
 
 **The drift guard is not in CI, and this build wires it.** `check:bolt-catalog` exists at `package.json:35` but grepping `.github/workflows/*.yml` returns nothing; CLAUDE.md's claim that it is "the CI drift guard" is stale. This build **adds a `check:bolt-catalog` step to `.github/workflows/lint.yml`** next to `check:permission-catalog` (`:49`).
 
@@ -1237,7 +1344,9 @@ Via `publishBoltEvent(eventType, 'burn', payload, orgId, actorId?, actorType?)`,
 
 A `burn-dispatch-hook.ts` in bolt-api, called alongside `dispatchToBraid` and the Bulwark hook in `apps/bolt-api/src/routes/event-ingestion.routes.ts`, forwarding to `${BURN_API_INTERNAL_URL}/v1/internal/events`, gated by a per-org Redis binding **set** on the `apps/bulwark-api/src/services/gate.service.ts` shape. **This is the one place that citation is genuinely right**: it is a `SADD` / `SISMEMBER` advisory cache over a durable table, exactly what Burn needs here, and its own header's warning against hardening it into a two-phase commit applies to Burn too.
 
-Subscribed: `bam:task.created`, `task.updated`, `task.moved`, `task.assigned`, `task.completed`, `bam:sprint.completed`, `helpdesk:ticket.created`, `ticket.replied`, `bill:invoice.created`, `invoice.finalized`, `recurring.invoice_generated`, `bill:expense.created` (new), `bill:expense.approved` (new), `bond:deal.won`, and `banter:message.posted` when enabled.
+Subscribed: `bam:task.created`, `task.updated`, `task.moved`, `task.assigned`, `task.completed`, `bam:sprint.completed`, `helpdesk:ticket.created`, `ticket.replied`, `bill:invoice.created`, `invoice.finalized`, `recurring.invoice_generated`, `bill:expense.created` (new), `bill:expense.approved` (new), **`bill:rate.created` and `bill:rate.updated` (new, R3-T4)**, `bond:deal.won`, and `banter:message.posted` when enabled.
+
+The invoice subscriptions are retained deliberately: per 2.3.1.1 an invoice prices nothing that restates already-ingested work, but it remains a useful **classification and revenue-recognition** signal. The two `rate.*` events are what make `burn-revalue`'s on-write trigger real rather than nightly-only (4.5).
 
 **Durability.** Every subscribed event corresponds to a persistent source row, so the three reconcile passes (2.3.2C) recover anything dropped on the bolt-api hop, converging on the same live row. Burn does not depend on a bolt-api sending-end outbox.
 
@@ -1333,21 +1442,35 @@ Adding `'burn'` to `LAUNCHPAD_CATALOG` trips three CI guards, because `scripts/d
 Add to the inter-service block in `env-hints.mjs`:
 
 ```js
+// inter-service URLs
 BURN_API_INTERNAL_URL:  { kind: 'computed', value: internal('burn-api') },
 BURN_API_URL:           { kind: 'computed', value: `${internal('burn-api')}/v1` },
 BILL_API_INTERNAL_URL:  { kind: 'computed', value: internal('bill-api') },
 BOLT_API_INTERNAL_URL:  { kind: 'computed', value: internal('bolt-api') },
+BRAID_API_INTERNAL_URL: { kind: 'computed', value: internal('braid-api') },
+// literals
 BURN_PRECHECK_TIMEOUT_MS:        { kind: 'literal', value: '800' },
 BURN_PRECHECK_BREAKER_THRESHOLD: { kind: 'literal', value: '5' },
 BURN_PRECHECK_BREAKER_PROBE_MS:  { kind: 'literal', value: '30000' },
 BURN_ATTRIBUTE_CONCURRENCY:      { kind: 'literal', value: '2' },
+MAX_DOC_BYTES:                   { kind: 'literal', value: '26214400' },
+MAX_DOC_PAGES:                   { kind: 'literal', value: '300' },
+// platform default; burn-api's compose entry overrides it to 'on' explicitly (9.1)
+BBB_PERMISSIONS_ENFORCE:         { kind: 'literal', value: 'warn' },
 ```
 
-**`BOLT_API_INTERNAL_URL` is a live pre-existing bug this build fixes.** Verified: it has **no** `ENV_HINTS` entry today, and `services.mjs` lists it as **required** on bulwark-api, so `buildServiceVariables` throws for bulwark-api on Railway before the service is created. Burn cannot list it as required without hitting the same wall, so the hint is added here and the pre-existing bulwark exposure is flagged.
+**Check every name Burn's own catalog block declares, not only the new inter-service URLs (round-3 blocker R3-I1).** The round-2 draft declared `BBB_PERMISSIONS_ENFORCE` **required** on burn-api as the fix for a security finding, and `hintFor('BBB_PERMISSIONS_ENFORCE')` returns `unknown`, so `railway-orchestrator.mjs:149-152` would **throw and abort the deploy before burn-api is ever created**: a security fix reproducing the exact deployment blocker raised one round earlier. `MAX_DOC_BYTES`, `MAX_DOC_PAGES`, and `BRAID_API_INTERNAL_URL` were optional-with-no-hint, so they would be silently omitted and **Burn's Braid counterparty resolution would simply be absent in production with no signal**. All four are hinted above. The `warn` literal matches the `${BBB_PERMISSIONS_ENFORCE:-warn}` default at `docker-compose.yml:125` and 19 other sites; burn-api's own compose entry sets `on` explicitly and asserts it at boot (9.1).
 
-**Add a coverage test** alongside `scripts/deploy/shared/railway-orchestrator.test.mjs` asserting that **every** name in **every** `APP_SERVICES[].env.{required,optional}` resolves to a non-`unknown` hint. That test is what stops the next app from reproducing this.
+**`BOLT_API_INTERNAL_URL` is a live pre-existing bug this build also fixes.** Verified: no `ENV_HINTS` entry today, and `services.mjs` lists it as **required** on bulwark-api, so `buildServiceVariables` throws for bulwark-api on Railway before that service is created.
 
-Also add the three new bill-api vars to **`.env.example`**.
+#### 9.6.3 The coverage test, and how it lands green (round-3 R3-I2, R3-I3)
+
+A test alongside `scripts/deploy/shared/railway-orchestrator.test.mjs` asserts that **every** name in **every** `APP_SERVICES[].env.{required,optional}` resolves to a non-`unknown` hint. Two things would otherwise make it worthless:
+
+1. **It cannot be committed green.** Run against the current catalog it fails on **16 pre-existing names**, and an autonomous build that sees red does the cheapest thing: narrow the test to burn-api or comment it out, at which point the guard that was supposed to stop the next app does not exist while the blocker reads as closed. So the test lands with an **explicit, named, dated allowlist of exactly those 16 pre-existing names**, carrying a comment that the allowlist is **append-forbidden: a new entry fails review**. Green on day one, closed for every new app, and shrinking rather than growing. `BOLT_API_INTERNAL_URL` is **not** in the allowlist because this build fixes it. Among the 16 are `BULWARK_API_URL`, `BASIS_API_URL`, `BRAID_API_URL`, and `BLIP_API_URL`, all `mcp-server:optional` with no hint, which is verbatim the localhost-default incident recorded at `env-hints.mjs:202-209` still open on four apps. The 16 are tracked separately.
+2. **It would land in a suite nothing executes.** `pnpm-workspace.yaml` covers only `apps/*` and `packages/*` and the root `test` script is `turbo run test`, so `scripts/` is not in the workspace graph; `scripts/deploy/shared/vitest.config.mjs` exists but is referenced by no workflow, and the only script-level test CI runs is `scripts/db-check.coverage.test.mjs`, invoked by an explicit `node` line at `db-drift.yml:72`. So, mirroring exactly what Section 8.2 does for `check:bolt-catalog`: add a root **`check:env-hints`** script running the deploy-shared vitest config, and a **`- name: Check env-hints coverage`** step in `.github/workflows/lint.yml` next to `check:permission-catalog` at `:49`.
+
+Also add the **four** new bill-api vars (`BURN_API_INTERNAL_URL`, `BURN_PRECHECK_TIMEOUT_MS`, `BURN_PRECHECK_BREAKER_THRESHOLD`, `BURN_PRECHECK_BREAKER_PROBE_MS`) to **`.env.example`**. Section 9.8's `grep BURN_` probe expects all four.
 
 ### 9.7 Resource sizing, and the LLM concurrency cap as a deliverable
 
@@ -1392,11 +1515,18 @@ docker compose exec -T postgres psql -U bigbluebam -d bigbluebam -c \
 # and the 3.4.1 group-defaults probe: owner 22, admin 22, member 14, viewer 7, guest 0
 
 # ── Build EVERY changed service, burn-api first ────────────────────
-docker compose build burn-api bill-api bolt-api worker mcp-server api frontend
-docker compose up -d --force-recreate burn-api bill-api bolt-api worker mcp-server api frontend
+# basis-api, braid-api and bulwark-api are included because 14.1 DELETES their
+# per-app can-access.client.ts; skipping them leaves three services running images
+# built from source that no longer exists (R3-I5).
+docker compose build burn-api bill-api bolt-api worker mcp-server api \
+                     basis-api braid-api bulwark-api frontend
+docker compose up -d --force-recreate burn-api bill-api bolt-api worker mcp-server api \
+                     basis-api braid-api bulwark-api frontend
 
 # ── Negative verification ──────────────────────────────────────────
 docker compose exec bill-api env | grep BURN_      # expect all four vars
+# One can_access probe per migrated app, asserting the fail-closed path still denies
+# for a non-visible entity (basis-api, braid-api, bulwark-api).
 # then POST an expense and assert a burn_prechecks row exists
 docker compose exec -T postgres psql -U bigbluebam -d bigbluebam -c \
   "SELECT verdict, verdict_reason, mode_at_decision FROM burn_prechecks ORDER BY created_at DESC LIMIT 1;"
@@ -1530,7 +1660,8 @@ Capture recipes in `packages/docs-capture` using the gilligan defaults from `pac
 
 **Valuation, the double count, and basis**
 - **Logging 60 minutes against a task produces exactly ONE priced work item totalling one hour** (R2-D1). A `bam.task` work item always has `valuation_basis='none'`, and `time_logged_minutes` appears in no epoch and no valuation.
-- **Fixed-fee margin moves the right way (R2-D2):** a `fixed` chain that under-burns hours reports **higher** margin than the same chain over-burning; `revenue_basis='contract_value'`; `margin_state='in_progress'` until the chain closes. A `retainer` chain computes per period in the engagement timezone. A `time_and_materials` chain uses `attributed_billable - attributed_cost`.
+- **Invoicing 10 already-ingested hours does not change `attributed_billable`** (R3-D4). A recurring invoice on the seeded retainer chain consumes nothing twice; only a line with no `time_entry_ids` and no linked expense prices as `valuation_basis='invoice'`.
+- **All FOUR bases are asserted (R3-D1):** a `fixed` chain under-burning hours reports **higher** margin than the same chain over-burning; **a `not_to_exceed` chain that delivered $2,000 against a $6,000 cap reports revenue $2,000, not $6,000**, and behaves as T&M until the cap binds; a `retainer` chain computes per period against **stored** `period_start` / `period_end` / `period_index` (R3-D3); a `time_and_materials` chain uses `attributed_billable - attributed_cost`.
 - **Expense conditionality (R2-D5):** `billable=false` contributes to `cost_amount` and **not** to envelope consumption; `status='rejected'` marks the item `excluded/source_voided` and reverses in-transaction, and **a subsequent precheck no longer denies**.
 - **Parity test:** Burn's cost resolver and Bill's `resolveRate` (`rate.service.ts:117`) agree across a fixture matrix on `user+project > user > project > org` and **inclusive** `effective_to`. `POST /internal/rates/resolve` returns the same row as a direct call.
 - **Rate-resolve failure (R2-I5):** with bill-api returning 404, **no work item receives a non-null `billable_amount`, no rollup changes**, the item is `unrated/rate_service_unavailable`, and it appears in queue health as awaiting valuation.
@@ -1538,15 +1669,18 @@ Capture recipes in `packages/docs-capture` using the gilligan defaults from `pac
 
 **Epochs, reconcile, and revaluation**
 - A task moved across the board three times with no title, description, or project change produces **one** work item, **zero** classifications, **zero** llm-provider calls. `updated_at` is asserted absent from every epoch input.
-- **Revaluation (R2-T2):** adding a cost rate for a user with 40 existing work items **moves `cost_rate_coverage_pct` and issues zero llm-provider calls**; the attribution is not superseded and the classification is unchanged.
-- **A `cost_epoch`-only change revalues without re-deciding; a `classification_epoch` change on a `confirmed`/`human` attribution CARRIES IT FORWARD** with `method='inherited'` (R2-T8). Test: confirm an attribution, edit the source minutes, assert **one** llm-provider call total and the human decision preserved.
+- **Revaluation (R2-T2):** adding a cost rate for a user with 40 existing work items **moves `cost_rate_coverage_pct` and issues zero llm-provider calls**; the attribution is not superseded and the classification is unchanged. Because the attribution carries no amounts (R3-T2), every consumption and rollup figure moves with it; a test asserts **no money column exists on `burn_attributions`** so the staleness class cannot be reintroduced.
+- **Revalue is fail-safe (R3-T3):** with `/internal/rates/resolve` returning 404, `burn-revalue` changes **no previously-valued work item** and **moves no rollup**; `unrated` is written only where `valued_at IS NULL`.
+- **Two successive `classification_epoch` changes preserve the human decision (R3-T6):** confirm an attribution, edit the description twice, and assert the decision survives **both** edits with **zero** llm-provider calls, proving the predicate accepts `method='inherited'` and not only `'human'`.
+- **A `cost_epoch`-only change revalues without re-deciding.**
+- **Concurrent first insert (R3-T7):** the event path and reconcile pass 1 observing the same brand-new source record simultaneously yield **one** live row, correct dollars, no 23505, and no aborted sweep. Exercised concurrently, not only in sequence.
 - **Backdated windowing (R2-T3):** a timesheet with `date` 120 days ago and `created_at` today is ingested by pass 1 **and is inside passes 2 and 3** because `reconcile_until` is anchored on `ingested_at`. An edit and a delete of that row are both observed.
 - **The revert case (R2-T4):** minutes 60 -> 90 -> 60 produces exactly one live row with the correct dollars, **no 23505**, and no permanently-excluded row. Asserted in both orderings.
 - Delete of an expense and of a task each mark `excluded/source_deleted` and reverse; `phantom_consumption` fires on a reversal burst.
 - The reconcile plan uses `tasks_project_id_idx` and `time_entries_task_id_idx` and never scans `time_entries` org-wide; the `bill_expenses` created_at scan uses the new `idx_bill_expenses_created_at`.
 
 **Chains and envelopes**
-- **The loop closes (R2-D3):** a change order approved on an `envelope_overrun` creates an amendment deliverable with `envelope_amount_delta`; the base deliverable's **effective envelope rises**; **the next precheck on it returns `allow`, not `deny`**; consumption is not reset; no attribution is migrated; the burn-down shows a per-deliverable dated step-up.
+- **The loop closes (R2-D3 + R3-D2):** a change order approved on an `envelope_overrun` creates an amendment deliverable whose `delta_confirmed_at` is set on `proposal.decided`; the base deliverable's **effective envelope rises**; **the next precheck returns `allow`, not `deny`**; consumption is not reset; no attribution is migrated. And the exclusion half: **post-amendment work attributes to the BASE row, no attribution row points at the amendment deliverable**, the amendment never appears in a candidate set or in `DeliverablePicker`, and **`is_active` was written by exactly one code path** across the whole flow.
 - An amendment leaves the base `active` and adds `contract_value_delta`; a restatement migrates by `dedup_key` and unmatched attributions become `pending_review/restatement_unmatched`, never silently dropped.
 - **Envelope confirmation (R2-D4, S7):** `is_active` cannot be set by `PATCH /v1/deliverables/:id`, by `burn_confirm_deliverable`, or by **any service-account token on any path**; only `POST /confirm-envelope` under `burn.envelope.confirm` sets it, and a service-account caller gets an `agent_proposals` row instead.
 - **Unpriced (R2-D6):** a bulk-confirmed unpriced deliverable returns `allow_with_note/envelope_unpriced`, **never a deny**, and is excluded from `envelope_overrun` and `consumption_erosion`. Promotion is blocked when `priced_deliverable_coverage_pct` is below the floor.
@@ -1582,7 +1716,10 @@ Capture recipes in `packages/docs-capture` using the gilligan defaults from `pac
 **Security**
 - **Enforcement (R2-S1):** burn-api **fails to boot** when `BBB_PERMISSIONS_ENFORCE` is not `on`; with the resolver stubbed non-2xx, `/v1/cost-rates` and `/v1/financials/accounts` still return **403** via the second in-route guard.
 - **The gate is not an oracle (S1):** a non-project member gets a scoped rejection from `POST /v1/precheck`, not envelope figures.
-- **No absolute recovery (R2-S2):** the test probes a **newly confirmed deliverable** and asserts `proposed_amount - overage` does **not** yield `envelope_remaining`, and that `contract_value` is not recoverable to within 5 percent from any combination of member-reachable responses.
+- **No absolute recovery, restated to what an honest implementation can satisfy (R2-S2 + R3-S3):** the test probes a **newly confirmed deliverable**, runs a **binary search over `proposed_amount`**, and asserts the recovered value is **not finer than `overage_bucket_amount`**, which holds because the decision input is quantized. The per-(member, deliverable) cap of 5 probes trips and raises `precheck_probing`.
+- **Serializer identity (R3-S1, R3-S2):** with the dual-read resolver stubbed non-2xx, `/v1/work-items` returns **no `cost_amount`**; and an **admin service-account bearer with `asker_user_id` set to a plain member gets no `cost_amount`** from `burn_list_unscoped`, proving the intersection rule. A test asserts `fastify.canResolve` appears nowhere in a flooring decision path.
+- **The search oracle is closed (R3-S4):** a member-tier `filter[q]` on `/v1/deliverables` matches `title` only and returns no row whose term appears solely in a floored `description` or `cited_span.quote`; no member-reachable endpoint filters, sorts, ranks, or highlights on `search_tsv`.
+- **Differencing over time (R3-S5):** ten daily snapshots plus the Bam hours join resolve **no** individual's cost rate, because `attributed_cost`, `margin_amount`, `margin_pct`, and `cost_rate_coverage_pct` are absent from every member response and every burn-down point; the member response is the `metric_basis='suppressed'` variant carrying `consumption_pct`.
 - **The surveillance join, enumerated (R2-S3):** for **every** member-reachable route (`/v1/work-items`, `/v1/attributions`, `/v1/unscoped`, `/v1/queue-health`, `/v1/change-orders/:id`, variance `detail`, every MCP payload, the CSV export) the test joins `source_id` to `time_entries.user_id` through `/b3/api/` and asserts **no dollar figure is obtainable**, and specifically that `cost_amount / hours` never yields a per-person rate.
 - **Clause text (R2-S9):** `description` is absent for a non-`read_all` caller; a deliverable whose Bin asset the **reader** cannot access is dropped with a hidden count, even though the registrant could see it.
 - **The predicate (R2-S6):** a zero-project chain is invisible to a plain org member (no null fallback); in a two-project chain, a member of project A **cannot** read work items whose own `project_id` is B; the parity test against `visibility.service.ts:203` covers the single-project case only.
@@ -1594,7 +1731,7 @@ Capture recipes in `packages/docs-capture` using the gilligan defaults from `pac
 
 **Rollups and retention**
 - `GET /v1/financials` never issues an unbounded live aggregate; a missing rollup computes one chain synchronously; a stale one is served with `as_of` and `stale: true`.
-- **Frozen rollups (R2-T5):** purge a closed chain, run the hourly refresh **and** an on-miss compute, and assert the figure is **unchanged** and `final: true`.
+- **Frozen rollups (R2-T5 + R3-T5):** retention **recomputes to final, freezes, then purges**, in one transaction per chain. The assertion is that the frozen figure **equals the pre-purge computed figure**, not merely that it is unchanged after a refresh, which would pass trivially on a stale or absent row. A closed chain with **no** rollup row at purge time gets one created by the freeze upsert, and a later `GET /v1/financials` returns that figure rather than computing $0.
 
 **Permissions**
 - Manifest: `burn.engagement.delete` carries the destructive flags; every row has an explicit `is_read`; `burn.variance.write` and `burn.rule.write` are `is_read:false`.
@@ -1604,6 +1741,7 @@ Capture recipes in `packages/docs-capture` using the gilligan defaults from `pac
 
 **Concurrency**
 - Two concurrent sweeps for one org: one proceeds, the other **skips and emits the counted log line**; the lock is `pg_advisory_xact_lock` inside the transaction and **releases on rollback** (asserted by forcing an error mid-sweep and confirming the next sweep acquires).
+- **No HTTP inside a lock-holding transaction (R3-T1):** a static check plus a runtime assertion confirm `burn-extract-deliverables` and `burn-attribute-batch` hold no advisory lock across an llm-provider or bill-api call, and that **a crash mid-extraction preserves `last_processed_chunk`** so a retry resumes rather than restarting at chunk zero.
 - **Lease renewal (R2-T9):** a batch running longer than `claim_lease_seconds` is **not** reclaimed by the reaper because the drain heartbeats; a genuinely dead claim **is** reclaimed after the lease.
 
 ### 12.2 Playwright user stories (GILLIGAN only)
@@ -1705,7 +1843,19 @@ Burn is **not**:
 
 Verified: `can-access.client.ts` exists at `apps/basis-api/src/lib/`, `apps/braid-api/src/lib/`, and `apps/bulwark-api/src/lib/`. CLAUDE.md records the opposite precedent explicitly, that `packages/storage` exists because it "consolidates the previously-triplicated MinIO clients". `can_access` is the suite's **fail-closed visibility preflight**: four independent copies means a fix to the fail-closed path or a `SUPPORTED_ENTITY_TYPES` change lands in one and silently not the other three. A fourth copy must not land under the word "reuse."
 
-**This build promotes it to `@bigbluebam/shared/visibility-client`**, a **subpath export** (not the browser-facing barrel) following the `bulwark-arm-key.ts` pattern documented at `packages/shared/src/index.ts:13-16`, because it needs `INTERNAL_SERVICE_SECRET` and must never reach an SPA bundle. **The three existing apps are migrated in the same change**, with their per-app files deleted and their existing tests re-pointed.
+**This build promotes it to `@bigbluebam/shared/visibility-client`**, a **subpath export** (not the browser-facing barrel) following the `bulwark-arm-key.ts` pattern, because it needs `INTERNAL_SERVICE_SECRET` and must never reach an SPA bundle.
+
+**A subpath is a three-file contract, and the third file is easy to miss (round-3 R3-I4).** The `src/index.ts:13-16` comment documents the non-re-export but not the build entry. `packages/shared/tsup.config.ts` uses an **explicit entry array**, verified as `entry: ['src/index.ts', 'src/bulwark-arm-key.ts']`. A build agent that adds only the `exports` block ships a package whose `./visibility-client` resolves to a `dist/visibility-client.js` that **does not exist**, and `docker compose build` then fails for burn-api, basis-api, braid-api, and bulwark-api simultaneously with a module-resolution error that reads like a workspace-linking problem. All three edits, named:
+
+1. `packages/shared/src/visibility-client.ts`.
+2. The `"./visibility-client"` block in `packages/shared/package.json` `exports` (types / import / require), mirroring the `bulwark-arm-key` block at `:11-15`.
+3. **Append `'src/visibility-client.ts'` to the `entry` array in `packages/shared/tsup.config.ts`.**
+
+**What actually moves, since the three copies are not a mechanical triplication (round-3 R3-I5).** Verified: bulwark exports `preflightAccess` (45 lines); braid exports `preflightAccess` plus `preflightMany` (71 lines); basis exports `canAccessEntity`, `entityTypeForDimension`, and `resolveVisibleValues` over a `DIMENSION_ENTITY_TYPE` map (92 lines).
+
+- **`preflightAccess` and `preflightMany` move to the shared package.** They are the visibility client.
+- **The basis-only `DIMENSION_ENTITY_TYPE` / `entityTypeForDimension` / `resolveVisibleValues` layer stays in `apps/basis-api/src/lib/`** as a thin wrapper over the shared primitive, because it is Class-B dimension-decomposition logic, not a visibility client, and folding it into a shared package would be a worse change than the duplication it removes.
+- All three apps' existing tests are re-pointed, their per-app files deleted, and **all three services rebuilt** (9.8).
 
 `braid-resolve.client.ts`, `internal-llm.client.ts`, and `project-scope.ts` are at two copies each and heading the same way; they are **recorded as a tracked follow-up** rather than consolidated here, because Burn's own `project-scope` is a distinct implementation (2.4 point 6) and folding a divergent variant into a shared package in the same PR would be a worse change than the duplication.
 
@@ -1732,16 +1882,24 @@ Everything the build needs to proceed is specified. These are genuine unknowns, 
 
 ## 16. Is this spec build-ready?
 
-**Yes, with two named caveats that are dependencies rather than defects.**
+**Yes. Build it.**
 
-**All 14 round-2 blockers are resolved in the spec text**, each with a stated mechanism, a schema change where one was needed, and a test that would fail if the fix regressed: R2-D1 (one priced hour source), R2-D2 (basis-aware revenue), R2-D3 (`amends_deliverable_id` + `envelope_amount_delta`), R2-D4 (`burn.envelope.confirm`, not agent-reachable), R2-D5 (expense `billable`/`status`), R2-S1 (`enforce=on` boot assertion plus second guards), R2-S2 (quantized overage), R2-S3 (one serializer), R2-S4 (rule constraints, coverage floors, no regex), R2-T1 (`pg_advisory_xact_lock`), R2-T2 (`valuation_epoch` and `burn-revalue`), R2-T3 (`reconcile_until`), R2-T4 (monotonic live-row key), R2-B1 (two-pass migration ordering plus the probe), R2-I1 (`ENV_HINTS` plus a coverage test).
+**All 21 blockers across three review rounds are resolved in the spec text**, each with a stated mechanism, a schema change where one was needed, and a test that fails if the fix regresses. Round 3's seven: R3-D1 (NTE revenue basis), R3-D2 (amendment deliverable as a pure delta carrier), R3-D4 (invoices are restatements), R3-S1 (`viewerCaps` from dual-read, `canResolve` forbidden), R3-S2 (bearer-asker intersection), R3-T1 (no HTTP inside a lock-holding transaction), R3-T2 (attribution carries no money), R3-I1 (four missing hints on Burn's own catalog block).
 
-**Two caveats an implementer must see before starting:**
+Round 3's own characterization is the strongest evidence: **almost every finding was a consequence of a round-2 fix rather than an original defect.** The defect rate per round fell from 44 to 43 to 22, and the last round produced no finding requiring a design change. That is a converged spec.
 
-1. **This build changes five services it does not own** (bill-api, bolt-api, worker, mcp-server, api) plus `apps/bill/`, and promotes `can-access.client.ts` into a shared package with three apps migrated. That is a large blast radius for one PR and it may be worth landing the consolidation (14.1) and the `ENV_HINTS` coverage test (9.6.2) as separate preceding PRs. **Nothing in the design depends on them landing together.**
-2. **The internal LLM concurrency cap (9.7.1) is specified as a deliverable of this build, on a route owned by the `api` container.** It has a mechanism, defaults, a 429 contract, a defined client behavior, and a done criterion, so it is buildable as written, but it is the one piece of Burn that lands outside Burn's own boundary and touches a path all 22 other apps use. If a reviewer wants it split out, split it **before** Burn ships rather than after, because Burn is the load that makes it necessary.
+### Residuals I am knowingly leaving open
 
-**No blocker is being let through quietly.** The one finding I partially rejected is R2-S3's sibling from round 1 (raising `burn.precheck.override` wholesale), argued in 5.6; every round-2 finding was accepted or accepted with a stated modification.
+Naming these because whatever I leave goes into the build.
+
+1. **Blast radius.** This build touches five services Burn does not own (bill-api, bolt-api, worker, mcp-server, api), plus `apps/bill/`, plus three services whose `can-access.client.ts` is deleted (basis-api, braid-api, bulwark-api). Nine services rebuilt. **Recommendation: land the shared-package consolidation (14.1) and the `ENV_HINTS` coverage test (9.6.3) as two separate preceding PRs.** Nothing in the design requires them to land together, and both are independently valuable.
+2. **The LLM concurrency cap (9.7.1) lands on the `api` container**, a route all 22 other apps use. It is fully specified and buildable as written. If it is split out, split it **before** Burn ships, because Burn is the load that makes it necessary.
+3. **Sixteen pre-existing unhinted env names** remain, quarantined behind the dated append-forbidden allowlist in 9.6.3. Four of them (`BULWARK_API_URL`, `BASIS_API_URL`, `BRAID_API_URL`, `BLIP_API_URL`) are live instances of the recorded localhost-default incident. Burn closes the door for new apps and does not fix the sixteen.
+4. **Two platform defects Burn routes around rather than fixes**, both tracked separately: the `canResolve` stub at `packages/permissions/src/index.ts:307-319` returning `true` unconditionally, **which means Bulwark's notice-body flooring does nothing today**; and the RLS GUC not binding in any of the four existing plugins. Burn implements its own path for both and does not touch theirs.
+5. **`time_entries` has no `updated_at`.** Content-hash epochs detect edits anyway, but only inside `reconcile_window_days` (90). Stated in 2.3.2 and tested for explicitly.
+6. **Extraction quality is best-effort and legally consequential.** Every envelope requires human confirmation, cites are offset-verified, and nothing auto-arms, but a wrong deliverable ledger produces wrong variance findings. The mitigations are structural; the residual is real.
+
+**No blocker is being let through quietly.** One finding was partially rejected across all three rounds: round 1's S3(a), raising `burn.precheck.override` wholesale above the member floor, argued in 5.6. Every round-2 and round-3 finding was accepted or accepted with a stated modification.
 
 ---
 
@@ -1809,6 +1967,40 @@ Round-1 dispositions are preserved in summary; each was verified as landed by ro
 - `R2-I6 ACCEPT (MAJOR)` - internal routes derive the org from the validated payload and set the GUC in-transaction; the reaper, retention, and calibration jobs **iterate orgs**; both are in the mandatory RLS test. This defect was introduced by round 1's own T6 fix. Sections 2.4(14), 8.1, 12.1.
 - `R2-I7 ACCEPT (MAJOR)` - the LLM cap is **moved out of the open questions into 9.7.1 as a specified deliverable** with a Redis token-bucket mechanism, named defaults, a 429 contract, defined client behavior, and a done criterion; `api` is added to the sizing paragraph; and "2 replicas" is restated as an explicit Railway-dashboard operator instruction rather than an unactionable compose claim. Sections 9.7, 9.7.1, 16.
 - `R2-I8 ACCEPT (MINOR bundle)` - (a) `apps/bill/` named as a changed app with the `BurnGateNotice` component and story 4 updated; (b) `bill-api` dropped from `burn-api.needs` with the mutual-dependency reasoning stated; (c) `frontend.depends_on` follows the freshest satellite precedent (bulwark, basis, braid are all present) with the ingress tradeoff stated explicitly; (d) the rollout reordered into two migrate passes; (e) the three new bill-api vars added to `.env.example`. Sections 7.8, 9.4, 9.5, 9.6, 9.8.
+
+### Round 3 (7 blockers, 15 majors) - all accepted, none rejected
+
+Round 3 verified the great majority of round 2 as genuinely landed (R2-D1, D4, D5, D6, D7, D8; S1, S4, S5, S6, S7, S8, S9; T1 mechanism, T3, T4, T6, T7, T9; I2, I3, I4, I5, I6, I7). **Almost every round-3 finding is a consequence of a round-2 fix rather than an original defect**, which is what convergence looks like. Every file:line was re-verified before folding; all held, including one contradiction inside this document's own text (R3-T6).
+
+**Design**
+- `R3-D1 ACCEPT (BLOCKER)` - `not_to_exceed` split out of the `fixed` row into `revenue_basis='billable_recognized_capped'` with `revenue = min(attributed_billable, effective_cap)`. Grouped with `fixed` it booked revenue the firm can never invoice, **overstating**, and it fired on the seeded Coconut chain. Section 12.1 now asserts all four bases. Sections 1.2.1, 3.1, 12.1.
+- `R3-D2 ACCEPT (BLOCKER)` - an amendment deliverable is a **pure envelope-delta carrier**: never an attribution target, excluded from candidate assembly and from all three deterministic gate paths, absent from `DeliverablePicker`, with any attribution naming it resolving to the base row, and its own `delta_confirmed_by`/`delta_confirmed_at` activation so **`is_active` keeps exactly one writer**. Both round-2 readings were broken (inactive left the loop open; active split consumption off the base row invisibly). Third attempt, closed properly. Sections 2.3.4, 3.1, 5.3, 7.2, 12.1.
+- `R3-D3 ACCEPT (MAJOR, option b)` - the rollup row is always the **current** period with `period_start`/`period_end`/`period_index` as descriptive columns and prior periods in the burn-down series. Option (a) would change the unique key and ripple through every rollup query for one basis. Sections 3.1, 8.1, 12.1.
+- `R3-D4 ACCEPT (MAJOR)` - verified `bill_line_items.time_entry_ids` and `invoice.service.ts:462-493`. **Invoices and recurring invoices are revenue restatements, not consumption**: `valuation_basis='none'` for every line resolving to already-ingested work, only a genuinely new flat-fee remainder priced, and `bill.invoice` added explicitly to the enum so nobody invents one and reaches for the neighbouring rule. R2-D1's failure class on a second source. Sections 2.3.1, 2.3.1.1, 8.3, 12.1.
+- `R3-D5 ACCEPT (MAJOR, third-discriminant-member fix)` - `metric_basis='suppressed'` is a third union member carrying `suppressed_reason`, `revenue_basis`, `contract_consumption_pct`, and `as_of`, with no cost, margin, or coverage keys. Preserves both the not-constructible-without-a-discriminator property and the absent-not-banded property, and gives `ContributorFloorNotice` a typed thing to render. Section 6.1(b) restated as "carries `metric_basis` and `as_of`; remaining fields are per-variant". Sections 1.2.2, 2.4(17), 6.1.
+
+**Security**
+- `R3-S1 ACCEPT (BLOCKER)` - verified `packages/permissions/src/index.ts:307-319` is a `return true;` stub and that `apps/bulwark-api/src/routes/deadlines.routes.ts:21-23` therefore floors nothing today. `viewerCaps` is built by a **fail-closed `POST /internal/permissions/dual-read`** for `burn.financials.read_all` and `burn.costrate.read`, resolved once per request, with **`fastify.canResolve` explicitly forbidden** as the source. Sections 2.4(2), 12.1.
+- `R3-S2 ACCEPT (BLOCKER)` - Bulwark's rule at `deadlines.routes.ts:11-19` adopted verbatim: when `asker_user_id` differs from the bearer, `viewerCaps` is the **intersection**, and any unresolvable asker fails the floored fields closed. mcp-server cannot backstop this (`register-tool.ts:512` reads its own env, default `warn`). Sections 2.4(2), 11.1, 12.1.
+- `R3-S3 ACCEPT (MAJOR)` - quantizing the output did not stop binary search over `proposed_amount` recovering `envelope_remaining` exactly. **The decision input is now quantized** for non-`read_all` callers, plus a per-(member, deliverable) cap of 5 probes and a `precheck_probing` variance. The 12.1 assertion is restated as "not finer than `overage_bucket_amount`", which an honest implementation can satisfy. Sections 2.4(3), 12.1.
+- `R3-S4 ACCEPT (MAJOR)` - **no member-reachable endpoint may filter, sort, rank, or highlight on `search_tsv` or any floored column**; a member-tier `q` matches `title` only through the existing trigram index. Field flooring that leaves the field searchable is not flooring. Sections 2.4(5), 3.1, 6.1, 12.1.
+- `R3-S5 ACCEPT (MAJOR, simpler branch)` - `attributed_cost`, `margin_amount`, `margin_pct`, and `cost_rate_coverage_pct` are floored to `read_all` on every surface including every burn-down point; members get `consumption_pct`. Band-width tuning is a losing game against a time series, and the basis model already needs consumption percentage. Sections 2.4(17), 6.1, 12.1.
+
+**Stability**
+- `R3-T1 ACCEPT (BLOCKER)` - the blanket xact-lock rule is scoped to the six SQL-only sweeps, with a hard rule that **no transaction holding an advisory xact lock may contain an outbound HTTP call**. The two LLM-calling jobs use the row claim plus the live-row upsert, with the lock taken only around short claim and commit transactions and **each chunk checkpoint committed separately**. R2-T1's fix was right for the sweeps and wrong generalized. Sections 4.0, 8.1, 12.1.
+- `R3-T2 ACCEPT (BLOCKER, option b)` - `billable_amount` and `cost_amount` are **deleted** from `burn_attributions`; every consumption and rollup query and the gate's deny arithmetic join `burn_work_items` for amounts, and the attribution carries the classification decision only. Removes an entire staleness class rather than adding a cache-coherence invariant. Sections 3.1, 5.3, 12.1.
+- `R3-T3 ACCEPT (MAJOR)` - revaluation is **fail-safe and monotonic in information**: a resolve failure leaves the row untouched and increments a retry counter, and `unrated` may only be written where `valued_at IS NULL`. Negative test added. Section 4.5, 12.1.
+- `R3-T4 ACCEPT (MAJOR)` - this build adds `rate.created`/`rate.updated` to `billEvents` (verified `rates.routes.ts` publishes nothing today), gives `/internal/rates/resolve` a **batch form**, scopes the on-write trigger to the set derivable from the rate row itself, and states the nightly pass as a bounded `valued_at < now() - interval` sweep with a per-run cap. Sections 4.5, 8.2, 8.3.
+- `R3-T5 ACCEPT (MAJOR)` - retention **recomputes to final, freezes, then purges**, one transaction per chain, with the freeze as an **upsert** so a missing row is created rather than skipped. The 12.1 assertion is against the pre-purge computed figure, not "unchanged", which passed trivially. Sections 8.1, 12.1.
+- `R3-T6 ACCEPT (MAJOR)` - a genuine contradiction inside this document: 2.3.10 wrote the carry-forward as `method='human'` while 3.1 and the changelog wrote `inherited`, so the **second** epoch change would have re-classified from scratch and a one-edit test passed either way. `inherited` stays as the audit-visible method and **the predicate is now `state='confirmed' OR method IN ('human','inherited')`**, stated in both places, with a two-edit test. Sections 2.3.10, 3.1, 12.1.
+- `R3-T7 ACCEPT (MAJOR)` - the ingest write is stated once as an `INSERT ... ON CONFLICT ... DO UPDATE` with compare-and-set on both epochs, used identically by the event path and reconcile pass 1, so the first-insert race has a mechanism rather than an assertion. Concurrency case added. Sections 2.3.10, 4.2, 12.1.
+
+**Infrastructure**
+- `R3-I1 ACCEPT (BLOCKER)` - verified zero `ENV_HINTS` entries for `BBB_PERMISSIONS_ENFORCE`, `MAX_DOC_BYTES`, `MAX_DOC_PAGES`, and `BRAID_API_INTERNAL_URL`. All four hinted. The required `BBB_PERMISSIONS_ENFORCE` would have thrown at `railway-orchestrator.mjs:149-152` and aborted the deploy before burn-api existed, which is a security fix reproducing the deployment blocker raised one round earlier; and unhinted optional `BRAID_API_INTERNAL_URL` would have silently removed Braid resolution in production. The `.env.example` count reconciled to four. Section 9.6.2.
+- `R3-I2 ACCEPT (MAJOR)` - the coverage test lands with an **explicit, named, dated, append-forbidden allowlist of the 16 pre-existing unhinted names**, so it is green on day one and closed for new apps, with `BOLT_API_INTERNAL_URL` excluded because this build fixes it. A test that cannot be committed green gets deleted by the next person. Section 9.6.3.
+- `R3-I3 ACCEPT (MAJOR)` - verified `pnpm-workspace.yaml` covers only `apps/*` and `packages/*` and that `scripts/deploy/shared/vitest.config.mjs` is referenced by no workflow. Added a root `check:env-hints` script and a `lint.yml` step next to `check:permission-catalog` at `:49`, mirroring exactly what 8.2 does for `check:bolt-catalog`. Sections 9.6.3, 12.4.
+- `R3-I4 ACCEPT (MAJOR)` - verified `tsup.config.ts` uses `entry: ['src/index.ts', 'src/bulwark-arm-key.ts']`. All three subpath edits named, including **appending to the `entry` array**, without which four services fail to build with an error that reads like a workspace-linking problem. Section 14.1.
+- `R3-I5 ACCEPT (MAJOR)` - verified the three clients differ materially (bulwark 45 lines / `preflightAccess`; braid 71 / `+preflightMany`; basis 92 / `canAccessEntity` + `entityTypeForDimension` + `resolveVisibleValues`). `preflightAccess` and `preflightMany` move to shared; **the basis-only dimension-decomposition layer stays put** as a thin wrapper. `basis-api braid-api bulwark-api` added to both the build and recreate lines in 9.8, with one `can_access` deny probe each. Sections 9.8, 14.1.
 
 ### Findings rejected
 

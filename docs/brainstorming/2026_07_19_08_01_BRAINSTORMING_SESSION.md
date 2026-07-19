@@ -1265,4 +1265,131 @@ Session log: `docs/brainstorming/2026_07_19_08_01_BRAINSTORMING_SESSION.md` (thi
 
 ## Phase 6 - Spec hardening
 
-_pending_
+Three adversarial rounds against `2026_07_19_08_01_APP_DESIGN_burn.md`, five
+reviewers per round (design, security, stability, best-practices, infrastructure)
+in rounds 1 and 2, four in the scoped round 3.
+
+| Round | Blockers | Majors | Spec size | Outcome |
+| --- | :-: | :-: | :-: | --- |
+| 1 | 10 | 26 | 1165 lines | 43 of 44 findings accepted |
+| 2 | 14 | 24 | 1634 lines | All accepted; best-practices verified all 8 round 1 items landed |
+| 3 | 7 | 15 | 1822 lines | All 22 accepted, none rejected |
+| final | - | - | 2014 lines | Build-ready |
+
+Full findings are preserved at `2026_07_19_08_01_SPEC_REVIEW_burn_round{1,2,3}.md`.
+
+**The counts do not fall monotonically and that is not the signal to read.** The
+spec grew 1165 to 2014 lines across the rounds, so later reviewers had more
+surface and more specificity to attack. What changed is the *character* of the
+findings: round 1 found original design defects, round 2 found defects the added
+detail exposed, and round 3 found almost exclusively consequences of round 2's
+own fixes while verifying the great majority of round 2 as genuinely landed.
+Round 3 produced no finding requiring a design change.
+
+### The findings that changed the product
+
+**Round 1 - margin is not margin.** The spec computed margin from `bill_rates`,
+which `apps/bill-api/src/services/invoice.service.ts:548-592` resolves into
+invoice line items as `unit_price`: it is the rate charged TO THE CLIENT. No
+internal cost rate exists anywhere in the platform. So the headline number was
+contract consumption at list price, definitionally zero margin on a T&M
+engagement. Resolved by owning `burn_cost_rates` as a new primitive AND
+guaranteeing no code path prints "margin" over a consumption figure, via a
+`metric_basis` discriminator on every financial response.
+
+**Round 2 - every logged hour counted twice.** `apps/api/src/routes/time-entry.routes.ts:38`
+increments `tasks.time_logged_minutes` on every time-entry insert, and the spec
+priced both `bam.time_entry` and the `bam.task` delta. Every headline number was
+inflated roughly 2x on the primary source, and in blocking mode the gate would
+have denied real charges at half the true burn. Resolved by making
+`bam.time_entry` the sole priced hour source and removing `time_logged_minutes`
+from every epoch.
+
+**Round 2 - the blocking gate was decorative.** With `work_ref_id` null in the
+pre-transaction case there is no prior attribution, so reaching a confident target
+required stage-two LLM adjudication inside an 800ms budget. Every gated expense
+would have either timed out and failed open or fallen to `needs_mapping`.
+Resolved by making the synchronous precheck path deterministic-only, so it never
+calls the LLM and classifier latency cannot touch money.
+
+**Round 3 - invoices double-counted on a second source.** `bill_line_items`
+carries `time_entry_ids uuid[]` and `invoice.service.ts:462-493` builds line items
+directly from `time_entries`, so an invoice is a restatement of hours already
+priced. The same failure class as the round 2 finding, one source over. Resolved
+by stating that invoices and recurring invoices are revenue restatements, not
+consumption.
+
+**Round 3 - `not_to_exceed` booked revenue the firm cannot invoice.** Grouped with
+`fixed`, so a $6,000 NTE that delivered $2,000 reported margin against the full
+cap. The round 1 defect inverted, and it overstates, which is the direction the
+buyer cannot detect. It fired on a seeded Gilligan chain and no test covered it.
+
+**Round 3 - the change-order loop still did not close.** The amendment deliverable
+had no defined activation path: created inactive the envelope never rises after an
+approved change order, created active it becomes an attribution candidate and
+splits consumption off the base row where variance detection cannot see it.
+Resolved by making it a pure envelope-delta carrier with its own activation state.
+
+### A self-inflicted finding worth recording
+
+The orchestrator directed `BBB_PERMISSIONS_ENFORCE=on` unconditionally on burn-api
+to close a security blocker (Burn would have been the first app with no legacy
+gate behind the non-enforcing permissions plugin). That made the var **required**
+in the deploy catalog, and required vars with no `ENV_HINTS` entry cause
+`railway-orchestrator.mjs:149-152` to throw. The security fix reproduced the exact
+Railway deployment blocker the infrastructure reviewer had raised one round
+earlier. Cheap to fix, and a clean demonstration of why multiple adversarial
+lenses earn their cost: a fix in one dimension is a defect in another, and no
+single reviewer sees both.
+
+### Live bugs found in shipped code
+
+The review's most valuable output was arguably not the spec. Three defects in
+already-shipped code surfaced and are tracked:
+
+1. **`canResolve` on `httpPermissionsPlugin` is a hardcoded `return true`**
+   (`packages/permissions/src/index.ts:307-319`). Every satellite api uses that
+   plugin, so `apps/bulwark-api/src/routes/deadlines.routes.ts:21-23`, which calls
+   it to decide whether to include floored fields, **floors nothing**. The file's
+   own comment documents the exact leak it was written to prevent. Independent of
+   `BBB_PERMISSIONS_ENFORCE`, since `canResolve` ignores `mode` entirely.
+2. **`BOLT_API_INTERNAL_URL` is required on bulwark-api with no `ENV_HINTS` entry**,
+   so Railway provisioning throws. bulwark-api may never have been created.
+3. **Sixteen further catalog env names have no hint**, including
+   `BULWARK_API_URL`, `BASIS_API_URL`, `BRAID_API_URL`, and `BLIP_API_URL` on
+   mcp-server, meaning those apps' MCP tools fall back to a localhost default in
+   production. This is the recorded Banter/Bureau/Blueprint incident, still open.
+
+Plus the RLS GUC discarded on a standalone statement across four apps, Bulwark's
+session-scoped advisory lock leaking on a pooled connection, `check:bolt-catalog`
+never wired into CI, and nginx alternation drift. Ten platform defects tracked in
+total, none dismissed as pre-existing.
+
+### The one partial rejection, sustained across all three rounds
+
+Round 1's S3(a) proposed raising `burn.precheck.override` wholesale above the
+member floor, because a member could override denies as `gate_wrong` and
+self-service-demote the org's gate. The spec took the finding's second alternative
+(split the label into an owner/admin-floored `burn.precheck.mark_wrong`) and
+rejected the first, arguing that forcing an admin into every override recreates
+precisely the friction that gets the feature switched off permanently, which is
+the risk the entire design exists to defeat. Argued in the spec's §5.6.
+
+### Residuals carried into the build
+
+Six, named explicitly in the spec's §16 rather than left implicit: the nine-service
+blast radius (with a recommendation to land the shared-package consolidation and
+the env-hints coverage test as separate preceding PRs); the LLM concurrency cap
+landing on the `api` container that all 22 apps use for permission resolution; the
+16 quarantined unhinted env names; the two platform defects Burn routes around
+rather than fixes; the `time_entries` edit window (that table has no `updated_at`);
+and extraction quality being best-effort on a legally consequential document.
+
+## Result
+
+**Winner: Burn (Seat F)**, 27 of a possible 30.
+**Runner-up: Buttress (Seat C)**, 25.
+
+- Session log: `docs/brainstorming/2026_07_19_08_01_BRAINSTORMING_SESSION.md`
+- Design spec: `docs/brainstorming/2026_07_19_08_01_APP_DESIGN_burn.md`
+- Review rounds: `docs/brainstorming/2026_07_19_08_01_SPEC_REVIEW_burn_round{1,2,3}.md`
