@@ -1,0 +1,374 @@
+{
+  "app": "bulwark",
+  "title": "Bulwark",
+  "toc": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "level": 2
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "level": 3
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "level": 3
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "level": 2
+    },
+    {
+      "anchor": "register-a-contract",
+      "title": "Register a contract",
+      "level": 3
+    },
+    {
+      "anchor": "review-the-obligation-ledger",
+      "title": "Review the obligation ledger",
+      "level": 3
+    },
+    {
+      "anchor": "edit-and-bind-an-obligation",
+      "title": "Edit and bind an obligation",
+      "level": 3
+    },
+    {
+      "anchor": "mark-an-obligation-as-occurred-start-the-clock-by-hand",
+      "title": "Mark an obligation as occurred (start the clock by hand)",
+      "level": 3
+    },
+    {
+      "anchor": "deadline-radar",
+      "title": "Deadline Radar",
+      "level": 3
+    },
+    {
+      "anchor": "notice-queue",
+      "title": "Notice Queue",
+      "level": 3
+    },
+    {
+      "anchor": "vendor-compliance-matrix",
+      "title": "Vendor compliance matrix",
+      "level": 3
+    },
+    {
+      "anchor": "contract-detail",
+      "title": "Contract detail",
+      "level": 3
+    },
+    {
+      "anchor": "settings",
+      "title": "Settings",
+      "level": 3
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "level": 3
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "level": 2
+    },
+    {
+      "anchor": "story-register-a-contract-from-bin",
+      "title": "Story: Register a contract from Bin",
+      "level": 3
+    },
+    {
+      "anchor": "story-review-and-confirm-the-extracted-ledger",
+      "title": "Story: Review and confirm the extracted ledger",
+      "level": 3
+    },
+    {
+      "anchor": "story-arm-and-watch-a-deadline-clock",
+      "title": "Story: Arm and watch a deadline clock",
+      "level": 3
+    },
+    {
+      "anchor": "story-draft-and-send-a-notice-to-protect-a-claim",
+      "title": "Story: Draft and send a notice to protect a claim",
+      "level": 3
+    },
+    {
+      "anchor": "story-chase-a-vendor-for-a-missing-certificate",
+      "title": "Story: Chase a vendor for a missing certificate",
+      "level": 3
+    },
+    {
+      "anchor": "story-handle-a-contract-amendment",
+      "title": "Story: Handle a contract amendment",
+      "level": 3
+    },
+    {
+      "anchor": "story-tune-org-wide-settings",
+      "title": "Story: Tune org-wide settings",
+      "level": 3
+    },
+    {
+      "anchor": "story-let-an-agent-assess-notice-risk-before-a-deadline-slips",
+      "title": "Story: Let an agent assess notice risk before a deadline slips",
+      "level": 3
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "level": 2
+    }
+  ],
+  "sections": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "text": "Bulwark turns a signed contract into an operational watch list. It pulls the executed document out of Bin, uses the internal AI provider to extract an obligation ledger with each obligation cited back to its clause, and lets a reviewer confirm, edit, or reject each one. Confirmed obligations can be bound to a real-world signal - a Bolt event pattern (for example a task going overdue), a manual \"this happened\" trigger, or a fixed contract date - so that a timezone-anchored deadline clock starts against reality as it is actually logged, not against a guess. When a clock is running, Bulwark watches it on the Deadline Radar and, on request, drafts the notice you would send to protect a claim. Every draft lands in a review queue for a human to approve and send. Nothing goes out unattended: the AI writes only the subject and body, while Bulwark fixes the recipient and attachments deterministically at send time. The same pattern powers vendor-compliance chasing, where Bulwark tracks the certificates and waivers your lower-tier vendors owe (COI, W-9, lien waiver, certified payroll) and drafts the chase when one is missing or expiring. The core objects you work with are contracts (a tracked document plus its metadata), obligations (clause-cited duties extracted from a contract), deadlines (armed clocks materialized from obligations), notices (drafted communications tied to a deadline), and vendor tiers with their compliance documents. Bulwark owns none of the source data: the document lives in Bin, the counterparty is a Bond or Braid record, the source events come from apps like Bill, Book, and Bam, and outbound mail goes through Blast. Drafts route to the shared agentproposals human-in-the-loop review queue."
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "text": "- Contract - a tracked, executed document registered from a Bin asset. Carries a title, kind, counterparty, project (job), timezone, effective and expiry dates, and an extraction status. - Obligation - a single duty extracted from a contract clause (for example \"give notice of a claim within 5 days\"). Each has a type, a cited clause span, a review status, and an armed/unarmed state. - Obligation type - one of 10 values: notice, insurance, indemnity, payment, retention, flowdown, renewal, termination, lien, other. Five of these (notice, lien, retention, indemnity, payment) are claim-or-money-waiving and never arm on model confidence alone; a human must confirm them. - Review status - Pending review, Confirmed, Auto-confirmed, Rejected, or Superseded. Only a confirmed (or auto-confirmed) obligation can arm. - Armed / unarmed - whether an obligation has a complete binding and is actively watching for its trigger. The card shows an armed or unarmed badge. - Event binding - what makes an obligation fire: a Bolt event pattern (an event source plus event type), a manual-trigger-only (\"unbound\") obligation you start by hand, or a fixed contract date. - Deadline - a materialized clock with a due date, produced when a bound obligation's trigger occurs. Status is Open, Missed, Discharged, Waived, or Voided. Missed and Voided are set by background sweeps, not by a button. - Discharge vs. waive - discharging closes a deadline because the obligation was satisfied; waiving closes it because the org decided not to act, which can forgo a claim. They are deliberately different actions. - Notice - a drafted communication for an open deadline. Notice status runs drafted, approved, sending, sent, sendfailed, or discarded. Discarding a draft is not the same as waiving the deadline. - Vendor tier - a lower-tier vendor tracked for the compliance documents it owes, with a chase status of idle, chasing, compliant, or blocked. - Compliance document - a required doc (COI, W-9, lien waiver, certified payroll, other) with a collection status (missing, requested, collected) and a validity status (unknown, valid, expiring, expired)."
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "text": "Bulwark is served at /bulwark/. The left sidebar has five destinations: Obligation Ledger (/), Deadline Radar (/radar), Notice Queue (/notices), Compliance (/compliance), and Settings (/settings). A Contract detail page (/contracts/:id) is reached by drilling in from the ledger, the radar, or the compliance table; it is not a top-level nav item. The top bar has the app launcher, an org switcher, notifications, a Help control (the \"(?)\" icon, which also offers right-click help on any documented control), and your user menu. What you can do depends on your permission tier (see the table in Working with AI agents). In practice the Obligation Ledger and Contract detail are owner/admin surfaces; members and viewers mainly use the Deadline Radar and Compliance. You need an org, and a project (job) if you want a contract scoped to one - every ledger read and write is project-scoped, with an org-admin override and an org-membership fallback for contracts that have no project."
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "text": ""
+    },
+    {
+      "anchor": "register-a-contract",
+      "title": "Register a contract",
+      "text": "Registering a contract points Bulwark at an executed document already stored in Bin and kicks off obligation extraction. This is how a person onboards a contract. To register a contract: 1. Go to Obligation Ledger (/). 2. In the Contracts rail on the left, click Register in the header. If no contracts exist yet, click Register contract in the empty state instead. (Both require the bulwark.contract.write permission; if you do not have it, the buttons are hidden.) 3. In the Register contract dialog, fill in the fields: - Title (required) - a human label, for example \"Acme subcontract - Phase 2\". - Contract kind - one of subcontract, sow, msa, grantaward, lease, amendment, other. - Timezone - IANA timezone for anchoring deadlines; leave blank to use the org default. - Bin asset id (required) - the id of the executed document in Bin. - Project (job) - a project id to scope the contract to a job, or blank for an org-scoped contract. - Counterparty (bond.company id) - the Bond company id of the other party. Leave blank to set later, but note that notice send fails closed until a counterparty is set. - Effective date and Expiry date - optional contract dates. 4. Click Register contract. 5. The dialog closes, the new contract is selected in the rail, and its ledger populates once extraction runs. Extraction is asynchronous, so obligations appear after the model finishes."
+    },
+    {
+      "anchor": "review-the-obligation-ledger",
+      "title": "Review the obligation ledger",
+      "text": "The ledger shows every obligation extracted from the selected contract, each cited to its clause, so you can confirm what will drive a clock before anything arms. To review and act on obligations: 1. On Obligation Ledger, pick a contract in the Contracts rail. The ledger opens on the right; a prompt reads \"Select a contract to view its clause-cited obligation ledger\" until you do. 2. Use the filter pills to narrow the list: All, Pending, Confirmed, Auto, Rejected. 3. Read each obligation card. It shows the obligation type badge, the review status badge, an armed/unarmed badge, the clause reference, a confidence percentage, the obligation title and trigger description, and a quoted clause span. The quote is marked either \"span verified against source\" or \"span not verified\", with its section and page. 4. For a card in Pending review, with bulwark.obligation.write, click Confirm to accept it. Claim-or-money-waiving types (notice, lien, retention, indemnity, payment) must be confirmed by a human here before they can arm. 5. To decline an obligation, click Reject and confirm the prompt. A rejected obligation cannot arm."
+    },
+    {
+      "anchor": "edit-and-bind-an-obligation",
+      "title": "Edit and bind an obligation",
+      "text": "Binding tells Bulwark what real-world signal starts the obligation's clock and how to compute the due date. To edit or bind an obligation: 1. On an obligation card, click Edit / bind (requires bulwark.obligation.write). The button toggles to Cancel while the form is open. 2. Adjust the fields: - Title - the obligation's label. - Type - one of the 10 obligation types. - Manual trigger only (unbound) - check this if no event bus will fire the trigger and you will start the clock by hand. - Event source and Event type - the Bolt event pattern to bind to (for example source bam, event type task.overdue). - Offset days - how many days after the anchor the deadline falls. - Unit - calendardays or businessdays. - From - the anchor: triggerevent, contracteffectivedate, or contractexpirydate. 3. Click Save binding. The card updates to show what the obligation is bound to, and a manual-trigger obligation is labeled \"(manual-trigger)\". Note: genuinely transient event bindings are handled best-effort. Bindings that reflect durable state (for example the beachhead task.overdue binding) fire reliably via the state-reconcile path; there is no live task.overdue publisher yet, so that binding is driven by the durable reconciliation sweep."
+    },
+    {
+      "anchor": "mark-an-obligation-as-occurred-start-the-clock-by-hand",
+      "title": "Mark an obligation as occurred (start the clock by hand)",
+      "text": "For a confirmed obligation that is manual-trigger-only, you record when the triggering event happened to start its deadline clock. To start the clock manually: 1. On a confirmed, unbound obligation card, click Mark occurred (requires bulwark.obligation.write and bulwark.deadline.write). This action appears only for confirmed obligations whose binding is manual-trigger-only. 2. In the panel that opens, set Occurred at to the date and time the triggering event happened. 3. Click Start the clock. Bulwark materializes a deadline anchored at the time you entered, and it appears on the Deadline Radar."
+    },
+    {
+      "anchor": "deadline-radar",
+      "title": "Deadline Radar",
+      "text": "The radar is the live view of armed clocks fired against logged events, with countdowns, so you can act before a window closes. To work the radar: 1. Go to Deadline Radar (/radar). The page is titled \"Deadline radar\". 2. If any waiver risks are open, a banner at the top lists them (\"N open waiver risks\") with a severity badge, a reason, a link to the contract, and how long ago each was detected. 3. Filter deadlines with the status pills: Open, Missed, Discharged, Waived, All (Open is selected by default). 4. Each row shows a live countdown (turning red when overdue), the due date and time, the deadline status badge, any notice status, the anchor source, and a link to the contract. 5. For an open deadline, act on it: - Draft notice (requires bulwark.notice.draft) - generates a draft and takes you to the Notice Queue. This appears only when no notice has been drafted yet. - Discharge (requires bulwark.deadline.write) - closes the clock because the obligation was satisfied. - Waive (requires bulwark.deadline.write) - closes the clock without discharging the obligation. Confirm the prompt; this can forgo a claim. Missed and voided statuses are applied by background sweeps, not from this page."
+    },
+    {
+      "anchor": "notice-queue",
+      "title": "Notice Queue",
+      "text": "The Notice Queue is the human-in-the-loop boundary for outbound notices. Every drafted notice waits here for a person; nothing is sent unattended. To review and send notices: 1. Go to Notice Queue (/notices). The page is titled \"Notice review queue\". 2. If you lack bulwark.notice.draft, the page shows a Restricted panel: drafted notice bodies are visible only to holders of that permission. (The API returns a null draft body to everyone else.) 3. Each card shows the notice status badge, the due date, a link to the contract, the draft subject, and the rendered draft body. The recipient and attachments are fixed deterministically by Bulwark, not by the draft text. 4. Choose an action: - Approve and send - sends the notice. The button changes to Sent afterward. - Discard draft - discards the generated text; the deadline clock stays live and can be re-drafted. Confirm the prompt. This is the default way to reject a bad draft. - Waive deadline - forgoes the underlying obligation and may waive a claim. Confirm the prompt. This is deliberately not the same as discarding the draft: discarding rejects the text and keeps the clock; waiving closes the clock."
+    },
+    {
+      "anchor": "vendor-compliance-matrix",
+      "title": "Vendor compliance matrix",
+      "text": "The Compliance page tracks lower-tier vendors and the documents each owes, so you can chase a missing or expiring certificate before it becomes a problem. To manage vendor compliance: 1. Go to Compliance (/compliance). The page is titled \"Vendor compliance\". 2. To add a vendor, click Add vendor tier (requires bulwark.compliance.chase) and fill in the inline form: - Parent contract - a tracked contract, or \"(org-level, owner/admin)\" for an org-wide tier. - Tier level - the numeric tier (for example 1). - Vendor id (bond.company, optional) - the Bond company id of the vendor. Then click Add tier. 3. The matrix lists each vendor tier as a row, with the tier level, the vendor's chase status badge (idle, chasing, compliant, blocked), and a column per document type: COI, W-9, Lien waiver, Cert. payroll, Other. 4. Each cell shows whether the doc is required, its collection status (missing, requested, collected), and its validity status (unknown, valid, expiring, expired). 5. For a chaseable cell (a doc that is not collected, or is expired) and with bulwark.compliance.chase: - Click Chase to draft a chase request for that document. - Once a chase is drafted, the cell shows Send; click it to approve and send the drafted chase. Compliance is not its own obligation type. It derives from flowdown obligations combined with the vendor tiers you define here."
+    },
+    {
+      "anchor": "contract-detail",
+      "title": "Contract detail",
+      "text": "The contract detail page is the drill-down for one tracked contract: its status, metadata, obligation rollup, and the destructive actions. To use contract detail: 1. Open it by clicking Contract detail from a ledger, a contract link on the radar, or a contract link in the compliance table. The URL is /contracts/:id. 2. The header shows the contract title, status badge, kind, and extraction status. 3. Actions (permission-gated): - Extract (requires bulwark.contract.write) - re-runs extraction on the document. A note confirms \"Extraction re-queued.\" - Delete (requires bulwark.contract.delete) - deletes the tracked contract, its obligations, and its live deadline clocks. Confirm the prompt. The Bin document itself is not affected. 4. If the contract is an amendment that supersedes another, a banner reads \"This contract supersedes\" with a link to the superseded contract. 5. The rollup cards summarize counts: Obligations, Pending review, Armed, Open deadlines, Missed. 6. The metadata block lists Counterparty, Project (job), Effective, Expiry, Timezone, Jurisdiction, and Bin document. If no counterparty is set, the counterparty row is highlighted and reads \"unset (notice send fails closed)\". 7. Below, each extracted obligation is listed with its type, review status, armed badge, title, and clause reference. Use Open in ledger to confirm / bind to jump to the ledger for editing."
+    },
+    {
+      "anchor": "settings",
+      "title": "Settings",
+      "text": "Settings holds the org-wide tunables for extraction, the radar, drafting caps, and retention. All fields are read-only unless you have bulwark.settings.write (owner or admin); a lock note tells you when they are read-only. To adjust settings: 1. Go to Settings (/settings). A note shows when the last radar sweep ran. 2. Under Extraction and timezone: - Default timezone (IANA) - the fallback timezone for new contracts. - Auto-confirm threshold (0-1) - a display-only auto-confirm floor. It never arms a claim-or-money-waiving obligation on model confidence alone. 3. Under Radar lead times (hours), set Critical, High, and Medium lead times. 4. Under Notice drafting: - Auto-draft notices during radar sweeps (off by default) - a checkbox. - Max auto-drafts per sweep - the cap on drafts generated per sweep. - Notice LLM daily cap - the daily ceiling on notice generations. 5. Under Compliance and retention: - Chase cadence (days) - how often to chase. - COI expiry lead (days) - how far ahead to flag an expiring COI. - Discharged deadline retention (days) - how long to keep discharged deadlines. - Inbox retention (days) - must be at least the discharged-deadline retention, so a late redelivery cannot re-arm a closed clock. 6. Click Save settings. The button briefly reads Saved on success."
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "text": "Agents drive Bulwark through 16 MCP tools that back the same REST surface and permission checks as the UI. Reads and writes that touch source-scoped records take an askeruserid, which Bulwark forwards to the platform canaccess check so an agent only sees and acts on what the named human may. There is no send tool: approving and sending a notice or chase is UI/HITL-only, gated by the agentproposals decision (a proposal.decided with a decider kill-switch and a permission re-check). The four state-changing destructive tools use the standard two-step confirm-token flow. The tools: - bulwarkextractobligations - register a contract from a Bin asset and extract its ledger, or re-extract an existing contract. The flagship operation. - bulwarkchecknoticerisk - assess notice and waiver-risk exposure for a job or contract; the flagship read. - bulwarklistcontracts - list contracts (project-scoped). - bulwarkgetcontract - get one contract with its embedded obligations and rollup. - bulwarkdeletecontract - delete a contract and its ledger (two-step confirm). - bulwarklistobligations - list obligations, filterable and sortable by confidence. - bulwarkgetobligation - get one obligation with its clause span, binding, and rule. - bulwarkconfirmobligation - confirm, edit, or bind an obligation. - bulwarkrejectobligation - reject an obligation (two-step confirm). - bulwarktriggerobligation - manually trigger a confirmed obligation, materializing a deadline. - bulwarklistdeadlines - list event-bound deadlines (project-scoped). - bulwarkdraftnotice - draft a notice for a deadline; the resulting proposal is the HITL boundary. - bulwarkwaivedeadline - waive an open deadline (two-step confirm). - bulwarkdiscardnotice - discard a bad draft while keeping the clock live (two-step confirm). - bulwarklistcompliance - list compliance documents with collection, validity, and chase state. - bulwarkchasecompliance - draft a chase for a missing or expiring document; the resulting proposal is the HITL boundary. Bulwark publishes Bolt events other apps and agents can subscribe to: contract.extracted, obligation.extracted, deadline.approaching, waiver.riskdetected, notice.drafted, and compliance.expiring. Permission tiers (from the built-in group defaults) determine what any actor, human or agent, can do: | Tier | Bulwark permissions | | --- | --- | | Owner / admin | All 12 (contract.read, contract.write, contract.delete, obligation.read, obligation.write, deadline.read, deadline.write, notice.draft, compliance.read, compliance.chase, settings.read, settings.write) | | Member | contract.write, obligation.write, deadline.read, deadline.write, compliance.read, settings.read (not contract.read, obligation.read, notice.draft, compliance.chase, contract.delete, or settings.write) | | Viewer | deadline.read, compliance.read, settings.read | | Guest | None |"
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "text": ""
+    },
+    {
+      "anchor": "story-register-a-contract-from-bin",
+      "title": "Story: Register a contract from Bin",
+      "text": "Who: An org admin or owner (anyone with bulwark.contract.write). Goal: Get an executed contract into Bulwark so its obligations can be extracted and watched. Before you start: The signed document is already uploaded to Bin and you have its Bin asset id. Ideally you also know the counterparty's Bond company id and the project (job) the contract belongs to. Steps 1. Open Bulwark at /bulwark/ and go to Obligation Ledger. 2. In the Contracts rail, click Register (or Register contract in the empty state). 3. In the Register contract dialog, enter a Title and paste the Bin asset id. 4. Set the Contract kind, and optionally the Timezone, Project (job), Counterparty (bond.company id), Effective date, and Expiry date. 5. Click Register contract. Result: The contract is created and selected in the rail. Extraction runs asynchronously; obligations appear in the ledger when it finishes. If you left the counterparty blank, set it later on the contract detail page before you try to send any notice. Related: Review the obligation ledger (next story). Agents do this with bulwarkextractobligations."
+    },
+    {
+      "anchor": "story-review-and-confirm-the-extracted-ledger",
+      "title": "Story: Review and confirm the extracted ledger",
+      "text": "Who: An owner or admin (or any member with bulwark.obligation.write). Goal: Turn raw extracted obligations into a trustworthy, confirmed ledger. Before you start: A contract has finished extracting and shows obligations in the ledger. Steps 1. On Obligation Ledger, select the contract in the Contracts rail. 2. Set the filter pill to Pending to see everything awaiting review. 3. For each card, read the quoted clause span and check whether it says \"span verified against source\". Compare the obligation type and title against the clause. 4. Click Confirm on obligations that are correct. For claim-or-money-waiving types (notice, lien, retention, indemnity, payment), your confirmation is required before they can arm. 5. Click Reject and confirm on any obligation the model got wrong. Result: The ledger reflects your decisions. Confirmed obligations are eligible to arm once bound; rejected ones cannot arm. Related: Arm and watch a clock (next story). Agents use bulwarklistobligations, bulwarkgetobligation, bulwarkconfirmobligation, and bulwarkrejectobligation."
+    },
+    {
+      "anchor": "story-arm-and-watch-a-deadline-clock",
+      "title": "Story: Arm and watch a deadline clock",
+      "text": "Who: An owner or admin with bulwark.obligation.write and bulwark.deadline.write. Goal: Make a confirmed obligation start a real countdown against reality. Before you start: The obligation is confirmed. You know what signals its trigger: a Bolt event, a fixed contract date, or a manual \"this happened\". Steps 1. On the obligation card, click Edit / bind. 2. To bind to an event, set Event source and Event type, then set Offset days, Unit (calendardays or businessdays), and From (triggerevent, contracteffectivedate, or contractexpirydate). To handle it by hand instead, check Manual trigger only (unbound). 3. Click Save binding. The card shows what it is bound to and flips to armed when the binding is complete. 4. For a manual-trigger obligation, when the event happens, click Mark occurred, set Occurred at, and click Start the clock. 5. Go to Deadline Radar and confirm the new deadline appears with a live countdown. Result: The obligation is armed. Its deadline shows on the radar and counts down; it turns red if it goes overdue. Missed status is set automatically by the sweep if the window passes. Related: Draft and send a notice (next story). Agents use bulwarkconfirmobligation to bind and bulwarktriggerobligation to mark a manual occurrence."
+    },
+    {
+      "anchor": "story-draft-and-send-a-notice-to-protect-a-claim",
+      "title": "Story: Draft and send a notice to protect a claim",
+      "text": "Who: An owner or admin (bulwark.notice.draft plus bulwark.deadline.write). Goal: Get a compliant notice out the door before an open deadline lapses. Before you start: An open deadline exists on the radar, and the contract has a counterparty set (notice send fails closed without one). Steps 1. On Deadline Radar, find the open deadline and click Draft notice. You are taken to the Notice Queue. 2. On the notice card, read the draft subject and body. Bulwark has already fixed the recipient and attachments deterministically. 3. If the draft is good, click Approve and send. The button changes to Sent. 4. If the draft is wrong, click Discard draft and confirm; the clock stays live so you can re-draft. 5. Only if the org has decided to forgo the obligation, click Waive deadline and confirm. This can waive a claim and is not the same as discarding a draft. Result: On approval, the notice sends and its status advances to sent. The deadline is protected. Discarding keeps the deadline open for another attempt; waiving closes it. Related: Handle an amendment (later story). Agents can draft with bulwarkdraftnotice, discard with bulwarkdiscardnotice, or waive with bulwarkwaivedeadline, but there is no agent send tool: approving and sending is human-only."
+    },
+    {
+      "anchor": "story-chase-a-vendor-for-a-missing-certificate",
+      "title": "Story: Chase a vendor for a missing certificate",
+      "text": "Who: An owner or admin (bulwark.compliance.chase). Goal: Collect a required compliance document from a lower-tier vendor. Before you start: You know the vendor and, ideally, its Bond company id. Steps 1. Go to Compliance. If the vendor is not listed, click Add vendor tier, choose the Parent contract (or org-level), set the Tier level and optional Vendor id, and click Add tier. 2. Find the vendor's row and the document column you need (COI, W-9, Lien waiver, Cert. payroll, or Other). 3. In a cell showing a missing, expired, or otherwise chaseable doc, click Chase to draft a chase request. 4. When the draft is ready the cell shows Send; click it to approve and send the chase. 5. Watch the cell's collection and validity badges update as the vendor responds. Result: A chase is drafted and, on your approval, sent. The vendor's chase status reflects the outcome (chasing, compliant, or blocked). Related: Agents use bulwarklistcompliance and bulwarkchasecompliance; sending remains human-only."
+    },
+    {
+      "anchor": "story-handle-a-contract-amendment",
+      "title": "Story: Handle a contract amendment",
+      "text": "Who: An owner or admin with bulwark.contract.write. Goal: Bring an amendment into Bulwark and connect it to the contract it changes. Before you start: The amendment document is in Bin, and the original contract is already tracked. Steps 1. On Obligation Ledger, click Register, set the Contract kind to amendment, provide the amendment's Bin asset id and Title, and click Register contract. 2. After extraction, review the amendment's obligations in the ledger and confirm or reject them as usual. 3. Where an amended obligation restates or terminates one on the base contract, use Edit / bind to reconcile it (an agent would set the supersession link and outcome directly). 4. Open the amendment's Contract detail; if a supersession link is set, the \"This contract supersedes\" banner links to the original. 5. Re-check the Deadline Radar to confirm clocks reflect the amended terms. Result: The amendment is tracked, its obligations reviewed, and its relationship to the original is visible. Superseded obligations show a Superseded review status. Related: Review and confirm the extracted ledger. Agents use bulwarkconfirmobligation with the supersession fields."
+    },
+    {
+      "anchor": "story-tune-org-wide-settings",
+      "title": "Story: Tune org-wide settings",
+      "text": "Who: An owner or admin (bulwark.settings.write). Goal: Set the extraction, radar, drafting, and retention defaults for the org. Before you start: You have owner or admin rights; other roles see these fields read-only. Steps 1. Go to Settings. 2. Set the Default timezone (IANA) and the Auto-confirm threshold (0-1). 3. Set the radar lead times: Critical, High, Medium (hours). 4. Decide whether to enable Auto-draft notices during radar sweeps, and set Max auto-drafts per sweep and Notice LLM daily cap. 5. Set Chase cadence (days), COI expiry lead (days), Discharged deadline retention (days), and Inbox retention (days). Keep inbox retention at least as large as discharged-deadline retention. 6. Click Save settings and confirm it reads Saved. Result: The new defaults apply org-wide to extraction, the radar, drafting caps, and retention."
+    },
+    {
+      "anchor": "story-let-an-agent-assess-notice-risk-before-a-deadline-slips",
+      "title": "Story: Let an agent assess notice risk before a deadline slips",
+      "text": "Who: An AI agent acting on behalf of a named human, plus a human reviewer. Goal: Surface at-risk deadlines and draft the protective notices for human approval. Before you start: The agent's policy allowlists bulwark., and it has the human's askeruserid. Steps 1. The agent calls bulwarkchecknoticerisk with the project or contract and the askeruserid, getting open deadlines and detected waiver risks scoped to what that human may see. 2. For a high-risk open deadline, the agent calls bulwarkdraftnotice, which creates a draft and an agentproposals row. 3. The draft appears in the human's Notice Queue (visible only to bulwark.notice.draft holders). 4. The human reads the draft and clicks Approve and send, Discard draft, or Waive deadline. 5. If the draft was wrong but the deadline still matters, the human (or the agent via bulwarkdiscardnotice) discards it, leaving the clock live for a re-draft. Result: Risk is triaged automatically, but nothing leaves the building without a human decision. The proposal decision carries a kill-switch and a permission re-check. Related: Draft and send a notice. See the full tool list in Working with AI agents."
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "text": "- Bin - stores the executed contract document and any collected compliance bytes. Bulwark reads the document by Bin asset id and never edits it. - Bond / Braid - provide the counterparty and vendor identities (the golden company id). Set the counterparty before sending notices. - Bill, Book, Bam - emit the source Bolt events obligations bind to. The beachhead task.overdue binding fires via the durable state-reconcile path because no live task.overdue publisher exists yet. - Blast - delivers approved notices and chases as transactional sends that bypass unsubscribe. - Bolt - receives the events Bulwark publishes (contract.extracted, obligation.extracted, deadline.approaching, waiver.riskdetected, notice.drafted, compliance.expiring) and can fire the events obligations watch. - agentproposals - the shared human-in-the-loop queue where drafted notices and chases wait for approval. - See the Bulwark MCP-tools reference and guide in docs/apps/bulwark/ for the full agent catalog."
+    }
+  ],
+  "labels": {
+    "Add tier": "vendor-compliance-matrix",
+    "Add vendor tier": "vendor-compliance-matrix",
+    "All": "review-the-obligation-ledger",
+    "Approve and send": "notice-queue",
+    "Armed": "contract-detail",
+    "Armed / unarmed": "key-concepts",
+    "Auto": "review-the-obligation-ledger",
+    "Auto-confirm threshold (0-1)": "settings",
+    "Auto-draft notices during radar sweeps": "story-tune-org-wide-settings",
+    "Auto-draft notices during radar sweeps (off by default)": "settings",
+    "Bin": "related",
+    "Bin asset id": "register-a-contract",
+    "Bin document": "contract-detail",
+    "Blast": "related",
+    "Bolt": "related",
+    "Bond / Braid": "related",
+    "COI": "vendor-compliance-matrix",
+    "COI expiry lead (days)": "settings",
+    "Cancel": "edit-and-bind-an-obligation",
+    "Cert. payroll": "vendor-compliance-matrix",
+    "Chase": "vendor-compliance-matrix",
+    "Chase cadence (days)": "settings",
+    "Compliance": "where-to-find-it",
+    "Compliance and retention": "settings",
+    "Compliance document": "key-concepts",
+    "Confirm": "review-the-obligation-ledger",
+    "Confirmed": "review-the-obligation-ledger",
+    "Contract": "key-concepts",
+    "Contract detail": "contract-detail",
+    "Contract kind": "register-a-contract",
+    "Contracts": "register-a-contract",
+    "Counterparty": "contract-detail",
+    "Counterparty (bond.company id)": "register-a-contract",
+    "Critical": "settings",
+    "Deadline": "key-concepts",
+    "Deadline Radar": "where-to-find-it",
+    "Default timezone (IANA)": "settings",
+    "Delete": "contract-detail",
+    "Discard draft": "notice-queue",
+    "Discharge": "deadline-radar",
+    "Discharge vs. waive": "key-concepts",
+    "Discharged": "deadline-radar",
+    "Discharged deadline retention (days)": "settings",
+    "Draft notice": "deadline-radar",
+    "Edit / bind": "edit-and-bind-an-obligation",
+    "Effective": "contract-detail",
+    "Effective date": "register-a-contract",
+    "Event binding": "key-concepts",
+    "Event source": "edit-and-bind-an-obligation",
+    "Event type": "edit-and-bind-an-obligation",
+    "Expiry": "contract-detail",
+    "Expiry date": "register-a-contract",
+    "Extract": "contract-detail",
+    "Extraction and timezone": "settings",
+    "From": "edit-and-bind-an-obligation",
+    "High": "settings",
+    "Inbox retention (days)": "settings",
+    "Jurisdiction": "contract-detail",
+    "Lien waiver": "vendor-compliance-matrix",
+    "Manual trigger only (unbound)": "edit-and-bind-an-obligation",
+    "Mark occurred": "mark-an-obligation-as-occurred-start-the-clock-by-hand",
+    "Max auto-drafts per sweep": "settings",
+    "Medium": "settings",
+    "Missed": "deadline-radar",
+    "Notice": "key-concepts",
+    "Notice LLM daily cap": "settings",
+    "Notice Queue": "where-to-find-it",
+    "Notice drafting": "settings",
+    "Obligation": "key-concepts",
+    "Obligation Ledger": "where-to-find-it",
+    "Obligation type": "key-concepts",
+    "Obligations": "contract-detail",
+    "Occurred at": "mark-an-obligation-as-occurred-start-the-clock-by-hand",
+    "Offset days": "edit-and-bind-an-obligation",
+    "Open": "deadline-radar",
+    "Open deadlines": "contract-detail",
+    "Open in ledger to confirm / bind": "contract-detail",
+    "Other": "vendor-compliance-matrix",
+    "Parent contract": "vendor-compliance-matrix",
+    "Pending": "review-the-obligation-ledger",
+    "Pending review": "contract-detail",
+    "Project (job)": "register-a-contract",
+    "Radar lead times (hours)": "settings",
+    "Register": "register-a-contract",
+    "Register contract": "register-a-contract",
+    "Reject": "review-the-obligation-ledger",
+    "Rejected": "review-the-obligation-ledger",
+    "Restricted": "notice-queue",
+    "Review status": "key-concepts",
+    "Save binding": "edit-and-bind-an-obligation",
+    "Save settings": "settings",
+    "Saved": "settings",
+    "Send": "vendor-compliance-matrix",
+    "Sent": "notice-queue",
+    "Settings": "where-to-find-it",
+    "Start the clock": "mark-an-obligation-as-occurred-start-the-clock-by-hand",
+    "Tier level": "vendor-compliance-matrix",
+    "Timezone": "register-a-contract",
+    "Title": "register-a-contract",
+    "Type": "edit-and-bind-an-obligation",
+    "Unit": "edit-and-bind-an-obligation",
+    "Vendor id": "story-chase-a-vendor-for-a-missing-certificate",
+    "Vendor tier": "key-concepts",
+    "W-9": "vendor-compliance-matrix",
+    "Waive": "deadline-radar",
+    "Waive deadline": "notice-queue",
+    "Waived": "deadline-radar",
+    "agent_proposals": "related",
+    "compliance documents": "overview",
+    "contracts": "overview",
+    "deadlines": "overview",
+    "notices": "overview",
+    "obligations": "overview",
+    "vendor tiers": "overview"
+  },
+  "crossrefs": [
+    {
+      "app": "blast",
+      "title": "Blast"
+    },
+    {
+      "app": "bolt",
+      "title": "Bolt"
+    }
+  ]
+}
