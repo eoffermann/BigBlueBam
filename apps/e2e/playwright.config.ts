@@ -58,6 +58,7 @@ export default defineConfig({
     appProject('blast'),
     appProject('board'),
     appProject('bolt'),
+    appProject('bulwark'),
     appProject('bond'),
     appProject('book'),
     appProject('braid'),
