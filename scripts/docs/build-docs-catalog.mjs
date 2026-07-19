@@ -35,6 +35,7 @@ import {
   parseAppModules,
   parseModules,
   listPlatformModules,
+  isStructuralWarning,
 } from './lib/tool-source.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
@@ -128,9 +129,26 @@ function main() {
   const totalTools = products.reduce((sum, p) => sum + p.toolCount, 0);
   console.log(`  Total: ${products.length} products, ${totalTools} tools`);
 
-  if (warnings.length > 0) {
+  // Split warnings into structural (fatal - the catalog is likely mis-counting)
+  // and soft (informational, e.g. a genuinely tool-less app).
+  const structural = warnings.filter(isStructuralWarning);
+  const soft = warnings.filter((w) => !isStructuralWarning(w));
+
+  if (soft.length > 0) {
     console.log('\nWarnings:');
-    for (const w of warnings) console.log(`  - ${w}`);
+    for (const w of soft) console.log(`  - ${w}`);
+  }
+
+  if (structural.length > 0) {
+    console.error(
+      '\nSTRUCTURAL ERRORS (the tool catalog would be mis-counted; refusing to continue):',
+    );
+    for (const w of structural) console.error(`  - ${w}`);
+    console.error(
+      '\nFix the app->module mapping in scripts/docs/lib/tool-source.mjs (APP_TOOL_MODULES)\n' +
+        'and/or the tool source, then re-run. The output file was NOT written.',
+    );
+    process.exit(1);
   }
 
   const json = JSON.stringify(products, null, 2) + '\n';

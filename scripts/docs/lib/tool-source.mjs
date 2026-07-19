@@ -370,6 +370,27 @@ export function parseModules(moduleNames, warnings = [], contextId = null) {
   return groups;
 }
 
+/**
+ * Classify a warning message as "structural" - i.e. it means the catalog is
+ * almost certainly under- or over-counting: a missing app->module mapping, a
+ * missing module file, a registration that did not match the parsed shape, or
+ * a nameless block. These must be fatal so a silent undercount cannot corrupt
+ * the canonical tool total. A legitimately tool-less app ("produced zero
+ * tools") is deliberately NOT structural - it is the one soft case.
+ *
+ * The recognized message forms are produced in THIS file (parseAppModules,
+ * parseModules, parseToolsFromFile), so keeping the classifier here keeps it in
+ * lockstep with the strings it matches.
+ */
+export function isStructuralWarning(message) {
+  return (
+    /No tool-module mapping for app id/.test(message) ||
+    /Missing tool module file:/.test(message) ||
+    /do not match the expected registerTool/.test(message) ||
+    /had no parseable name/.test(message)
+  );
+}
+
 /** Every tool-module basename present on disk (without .ts), sorted. */
 export function listAllToolModules() {
   return fs
