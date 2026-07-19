@@ -73,3 +73,7 @@ site/public/downloads/*
 
 # Autonomous cycle run logs (Windows Task Scheduler)
 .autonomous-logs/
+
+# Scratch/probe output - never commit (see issue #70)
+tmp/
+B3-FRNDO_LAUNCH_NOTES.md
