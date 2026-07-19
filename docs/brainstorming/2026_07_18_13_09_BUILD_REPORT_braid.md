@@ -57,6 +57,12 @@ Key commits: `8bbc22f5` (M1/M2) ... `2c2fc9ab` (M6), plus review-fix commits `f4
   records clustered into ONE golden profile (`772fc292...`, person, identity_count 3,
   confidence 0.95) - first identity `seed`, next two auto-attached on exact-email match.
   The core wedge works end to end.
+- **Phase 4 UI verification PASSED (live):** the gilligan Owner (Skipper) opens `/braid/`
+  and `GET /braid/api/v1/profiles` returns 200 with the golden profile (not 403). This
+  required migration `0233_braid_builtin_group_defaults.sql` - the built-in permission
+  groups (migration 0156) predated Braid's rows, so no group granted `braid.*` and every
+  non-SuperUser hit `implicit_deny`. 0233 backfills the defaults (Owner/Admin/Member = 9,
+  Viewer = 4 read-tier, Guest = 0) and is applied. Screenshots captured against gilligan.
 
 ## automated-review issues filed + disposition
 
@@ -71,9 +77,10 @@ Post-commit-review filed 3 (all fixed + closed):
 
 ## Pending / follow-ups (tracked as tasks, non-blocking)
 
-- **M10 screenshots** (gilligan): capture in progress at report time; the docs and marketing
-  section reference `docs/apps/braid/screenshots/*` and `site/public/screenshots/braid/*`
-  which light up once captured.
+- **M10 screenshots** (gilligan): DONE. Light catalog/detail/review-queue + dark catalog in
+  `docs/apps/braid/screenshots/` and `site/public/screenshots/braid/`; a thematic review
+  candidate (Jonas Grumby <-> Skipper, "'Skipper' is a nickname for Jonas Grumby") was seeded
+  for the queue shot. Rebuild the `site` service to serve the marketing images.
 - **Help Center index** (`help-index.json` build + wiring) not yet generated; the SPA
   `HelpTrigger app="braid"` is wired but the index is pending.
 - **Playwright user-story e2e** not yet added to `apps/e2e/`; the backend verification above
