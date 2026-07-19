@@ -5,6 +5,7 @@ import { Footer } from '@/components/layout/footer';
 import { BoltSection } from '@/components/sections/bolt-section';
 import { BenchSection } from '@/components/sections/bench-section';
 import { BasisSection } from '@/components/sections/basis-section';
+import { BraidSection } from '@/components/sections/braid-section';
 import { BookSection } from '@/components/sections/book-section';
 import { BlankSection } from '@/components/sections/blank-section';
 import { BillSection } from '@/components/sections/bill-section';
@@ -48,6 +49,7 @@ export function OperationsPage() {
         <BoltSection />
         <BenchSection />
         <BasisSection />
+        <BraidSection />
         <BookSection />
         <BlankSection />
         <BillSection />

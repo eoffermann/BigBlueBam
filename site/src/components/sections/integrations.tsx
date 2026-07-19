@@ -61,7 +61,7 @@ export function Integrations() {
               </div>
               <div>
                 <h3 className="text-base font-semibold text-zinc-900">MCP Server</h3>
-                <Badge variant="blue">804 tools</Badge>
+                <Badge variant="blue">833 tools</Badge>
               </div>
             </div>
             <p className="mb-4 text-sm text-zinc-600">
