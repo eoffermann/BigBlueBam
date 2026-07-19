@@ -342,6 +342,11 @@ export const ENV_HINTS = {
   RATE_LIMIT_MAX: { kind: 'literal', value: '100' },
   RATE_LIMIT_WINDOW_MS: { kind: 'literal', value: '60000' },
   WORKER_CONCURRENCY: { kind: 'literal', value: '5' },
+  // Internal LLM concurrency cap (Burn spec 9.7.1). Set on the api service: it
+  // fronts POST /internal/llm/chat with a per-calling-service Redis token bucket
+  // so a satellite's LLM fan-out cannot starve the shared permission resolver.
+  LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE: { kind: 'literal', value: '4' },
+  LLM_INTERNAL_RATE_PER_MINUTE: { kind: 'literal', value: '120' },
   PUBLIC_FORM_RATE_LIMIT: { kind: 'literal', value: '10' },
   PUBLIC_FORM_RATE_WINDOW_MS: { kind: 'literal', value: '3600000' },
   QUERY_TIMEOUT_MS: { kind: 'literal', value: '10000' },

@@ -12,6 +12,7 @@
  * Mount prefix: /internal/llm
  */
 import type { FastifyInstance } from 'fastify';
+import type Redis from 'ioredis';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -19,6 +20,117 @@ import { llmProviders } from '../db/schema/llm-providers.js';
 import { decryptApiKey } from '../services/llm-provider.service.js';
 import { env } from '../env.js';
 import { timingSafeEqual } from 'node:crypto';
+
+// ---------------------------------------------------------------------------
+// Internal LLM concurrency cap (Burn spec 9.7.1)
+//
+// A per-calling-service Redis token bucket in front of POST /internal/llm/chat.
+// The caller identifies itself with an `x-internal-service` header (e.g. `burn`,
+// `bolt`); absent, it is `unknown`. Two independent limits are enforced and BOTH
+// must admit or the request is rejected 429 + Retry-After:
+//
+//   - Concurrency: at most LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE in-flight
+//     /chat calls per service. Held in a sorted set keyed by a random token with
+//     score = admit time (ms). Stale tokens older than HOLD_WINDOW_MS are purged
+//     on every admit so a crashed request cannot permanently hold a slot, and the
+//     token is ZREM'd in a finally once the upstream call returns.
+//   - Rate: a fixed one-minute window counter (INCR + EXPIRE 60). Exceeding
+//     LLM_INTERNAL_RATE_PER_MINUTE rejects.
+//
+// Every Redis touch fails OPEN: a Redis outage must never block an LLM call,
+// mirroring the platform's "availability fails open" posture. On a Redis error we
+// log at debug and admit.
+// ---------------------------------------------------------------------------
+
+// Generous upper bound on a single /chat call (upstream timeout is 60s); a token
+// older than this is treated as a leaked slot from a crashed request.
+const INFLIGHT_HOLD_WINDOW_MS = 90_000;
+
+function bucketKey(service: string): string {
+  return `llm:bucket:${service}`;
+}
+
+interface BucketAdmission {
+  admitted: boolean;
+  // Set when rejected: HTTP Retry-After value in seconds.
+  retryAfter?: number;
+  // Set when admitted via the concurrency slot: the token to release.
+  inflightToken?: string;
+  service: string;
+}
+
+/**
+ * Try to admit one /chat call for `service`. Fails OPEN on any Redis error.
+ * When admitted through the concurrency slot, returns the token to release later.
+ */
+async function admitLlmCall(
+  redis: Redis | undefined,
+  service: string,
+  log: import('fastify').FastifyBaseLogger,
+): Promise<BucketAdmission> {
+  if (!redis) return { admitted: true, service };
+
+  const base = bucketKey(service);
+  const now = Date.now();
+
+  // ── Rate: fixed one-minute window ──────────────────────────────────────
+  try {
+    const minuteEpoch = Math.floor(now / 60_000);
+    const rateKey = `${base}:rate:${minuteEpoch}`;
+    const count = await redis.incr(rateKey);
+    if (count === 1) await redis.expire(rateKey, 60);
+    if (count > env.LLM_INTERNAL_RATE_PER_MINUTE) {
+      const secondsToWindowEnd = Math.max(1, Math.ceil(((minuteEpoch + 1) * 60_000 - now) / 1000));
+      return { admitted: false, retryAfter: secondsToWindowEnd, service };
+    }
+  } catch (err) {
+    log.debug({ err, service }, 'internal-llm: rate bucket check failed; admitting (fail-open)');
+    return { admitted: true, service };
+  }
+
+  // ── Concurrency: leak-safe in-flight sorted set ────────────────────────
+  try {
+    const inflightKey = `${base}:inflight`;
+    const token = globalThis.crypto.randomUUID();
+    // Purge leaked slots, then admit our token, then count. Doing the ZADD before
+    // the ZCARD keeps the check-and-set atomic enough for this advisory cap; if we
+    // are over the limit we immediately ZREM our own token and reject.
+    await redis.zremrangebyscore(inflightKey, 0, now - INFLIGHT_HOLD_WINDOW_MS);
+    await redis.zadd(inflightKey, now, token);
+    await redis.expire(inflightKey, Math.ceil(INFLIGHT_HOLD_WINDOW_MS / 1000));
+    const inFlight = await redis.zcard(inflightKey);
+    if (inFlight > env.LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE) {
+      await redis.zrem(inflightKey, token).catch(() => {});
+      return { admitted: false, retryAfter: 1, service };
+    }
+    return { admitted: true, inflightToken: token, service };
+  } catch (err) {
+    log.debug({ err, service }, 'internal-llm: concurrency bucket check failed; admitting (fail-open)');
+    return { admitted: true, service };
+  }
+}
+
+/** Release a concurrency slot. Never throws. */
+async function releaseLlmSlot(
+  redis: Redis | undefined,
+  service: string,
+  token: string | undefined,
+): Promise<void> {
+  if (!redis || !token) return;
+  try {
+    await redis.zrem(`${bucketKey(service)}:inflight`, token);
+  } catch {
+    // Swallow: the HOLD_WINDOW purge reaps it on the next admit.
+  }
+}
+
+// Per-request held concurrency slot, released by the onResponse hook once the
+// upstream call has fully returned. A WeakMap avoids augmenting FastifyRequest and
+// is naturally cleaned up when the request object is collected.
+const heldSlots = new WeakMap<
+  import('fastify').FastifyRequest,
+  { service: string; token: string }
+>();
 
 // ---------------------------------------------------------------------------
 // Internal auth guard (accepts x-internal-secret or x-internal-token)
@@ -100,6 +212,16 @@ const chatRequestSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export default async function internalLlmRoutes(fastify: FastifyInstance) {
+  // Release a held concurrency slot once the response is fully sent (spec 9.7.1).
+  // Only /chat admissions populate heldSlots; every other path is a no-op.
+  fastify.addHook('onResponse', async (request) => {
+    const slot = heldSlots.get(request);
+    if (slot) {
+      heldSlots.delete(request);
+      await releaseLlmSlot(fastify.redis, slot.service, slot.token);
+    }
+  });
+
   /**
    * POST /internal/llm/chat
    *
@@ -112,6 +234,29 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
     { preHandler: [requireInternalAuth] },
     async (request, reply) => {
       const body = chatRequestSchema.parse(request.body);
+
+      // Internal LLM concurrency cap (spec 9.7.1): admit through the per-service
+      // token bucket before any provider work. Fails open on a Redis outage. A
+      // held slot is released by the onResponse hook once the reply is sent.
+      const svcHeader = request.headers['x-internal-service'];
+      const service =
+        (Array.isArray(svcHeader) ? svcHeader[0] : svcHeader)?.toString().slice(0, 64) ||
+        'unknown';
+      const admission = await admitLlmCall(fastify.redis, service, request.log);
+      if (!admission.admitted) {
+        reply.header('Retry-After', String(admission.retryAfter ?? 1));
+        return reply.status(429).send({
+          error: {
+            code: 'RATE_LIMITED',
+            message: `Internal LLM concurrency/rate cap reached for service "${service}"`,
+            details: [],
+            request_id: request.id,
+          },
+        });
+      }
+      if (admission.inflightToken) {
+        heldSlots.set(request, { service, token: admission.inflightToken });
+      }
 
       // Fetch the provider row (raw, with encrypted key)
       const [provider] = await db

@@ -106,6 +106,15 @@ const envSchema = z.object({
   // Internal service-to-service authentication
   INTERNAL_SERVICE_SECRET: z.string().min(32).optional(),
 
+  // Internal LLM concurrency cap (Burn spec 9.7.1). POST /internal/llm/chat is
+  // shared by every satellite that decomposes/extracts via the Bam API, which
+  // also holds the permission resolver, so an unbounded fan-out contends with
+  // the request path of all other apps. A per-calling-service Redis token bucket
+  // (key llm:bucket:<service>) enforces both a max in-flight and a per-minute
+  // rate; exhaustion returns 429 + Retry-After. Both fail OPEN on a Redis outage.
+  LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE: z.coerce.number().int().positive().default(4),
+  LLM_INTERNAL_RATE_PER_MINUTE: z.coerce.number().int().positive().default(120),
+
   // Bolt workflow automation engine URL (fire-and-forget event publishing)
   BOLT_API_INTERNAL_URL: z.string().default('http://bolt-api:4006'),
 
