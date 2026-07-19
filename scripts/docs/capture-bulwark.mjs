@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * Focused Bulwark screenshot capture (gilligan only).
- * Models scripts/docs/capture-braid.mjs (same login + theme handling) but emits the
- * exact filenames the docs + marketing site expect:
- *   ledger.png, obligation-detail.png, approval-queue.png
+ * Full Bulwark screenshot set (gilligan only).
+ * Models scripts/docs/capture-braid.mjs (same login + theme handling) and emits the
+ * full docs + marketing filename set:
+ *   ledger.png, contract-detail.png (+ obligation-detail.png alias),
+ *   radar.png, notice-queue.png (+ approval-queue.png alias),
+ *   compliance.png, settings.png  (light for all)
+ *   ledger.png, radar.png         (dark)
  * to BOTH docs/apps/bulwark/screenshots/{light,dark}/ and
  *          site/public/screenshots/bulwark/{light,dark}/
  *
@@ -27,20 +30,25 @@ const CONTRACT = process.env.BULWARK_CONTRACT_ID || 'a362cf57-8336-40d5-aa4a-cf4
 const log = (...a) => console.log(`[bulwark-shots +${((Date.now() - START) / 1000).toFixed(1)}s]`, ...a);
 const START = Date.now();
 
-// name -> route. Which of these get dark captures is controlled below.
+// name -> route. `aliases` writes the same PNG under extra filenames so the
+// marketing site's existing src paths keep resolving.
+// Which scenes get dark captures is controlled by DARK_SCENES below.
 const SCENES = [
   { name: 'ledger', route: '/bulwark/', waitFor: 'main' },
-  { name: 'obligation-detail', route: `/bulwark/contracts/${CONTRACT}`, waitFor: 'main' },
-  { name: 'approval-queue', route: '/bulwark/notices', waitFor: 'main' },
+  { name: 'contract-detail', route: `/bulwark/contracts/${CONTRACT}`, waitFor: 'main', aliases: ['obligation-detail'] },
+  { name: 'radar', route: '/bulwark/radar', waitFor: 'main' },
+  { name: 'notice-queue', route: '/bulwark/notices', waitFor: 'main', aliases: ['approval-queue'] },
+  { name: 'compliance', route: '/bulwark/compliance', waitFor: 'main' },
+  { name: 'settings', route: '/bulwark/settings', waitFor: 'main' },
 ];
-const DARK_SCENES = new Set(['ledger']);
+const DARK_SCENES = new Set(['ledger', 'radar']);
 
 const DEST_DOCS = (theme) => path.join(ROOT, 'docs', 'apps', 'bulwark', 'screenshots', theme);
 const DEST_SITE = (theme) => path.join(ROOT, 'site', 'public', 'screenshots', 'bulwark', theme);
 
 async function login(page) {
   const email = process.env.DOCS_CAPTURE_USER || 'skipper@gilligantravel.example';
-  const password = process.env.DOCS_CAPTURE_PASSWORD || 'E2eTestP@ss123!';
+  const password = process.env.DOCS_CAPTURE_PASSWORD || 'Castaway2026!';
   log('login: navigating to /b3/login');
   await page.goto(`${BASE_URL}/b3/login`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
   if (!page.url().includes('/login')) { log('already authenticated'); return; }
@@ -85,12 +93,13 @@ async function capture(page, scene, theme) {
   }
   await page.waitForTimeout(900);
   const buf = await page.screenshot({ type: 'png' });
+  const names = [scene.name, ...(scene.aliases ?? [])];
   for (const dir of [DEST_DOCS(theme), DEST_SITE(theme)]) {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, `${scene.name}.png`), buf);
+    for (const name of names) fs.writeFileSync(path.join(dir, `${name}.png`), buf);
   }
   const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
-  log(`  wrote ${scene.name}.png (${w}x${h}, ${(buf.length / 1024).toFixed(0)}KB) to docs + site`);
+  log(`  wrote ${names.map((n) => `${n}.png`).join(', ')} (${w}x${h}, ${(buf.length / 1024).toFixed(0)}KB) to docs + site`);
 }
 
 const browser = await chromium.launch({ headless: true });

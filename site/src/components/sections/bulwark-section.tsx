@@ -120,15 +120,15 @@ export function BulwarkSection() {
         </div>
       </AnimatedReveal>
 
-      {/* Dark-mode ledger: the whole suite is theme-aware. */}
+      {/* Dark-mode radar: a distinct dark view; the whole suite is theme-aware. */}
       <AnimatedReveal delay={0.18} withScale>
         <div className="mt-8 mx-auto max-w-3xl">
           <FloatingFrame
-            src="/screenshots/bulwark/dark/ledger.png"
-            alt="The Bulwark obligation ledger in dark mode, with readable deadline and clause badges"
+            src="/screenshots/bulwark/dark/radar.png"
+            alt="The Bulwark deadline radar in dark mode, with live countdowns on armed obligation clocks"
           />
           <p className="mt-3 text-center text-sm text-zinc-500">
-            Light or dark, on the same shared shell as every other app in the suite.
+            The deadline radar in dark mode, on the same shared shell as every other app in the suite.
           </p>
         </div>
       </AnimatedReveal>
