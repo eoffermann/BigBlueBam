@@ -791,6 +791,27 @@ function buildManifest() {
     { id: 'braid.rule.write', app: 'braid', resource: 'rule', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'braid.settings.read', app: 'braid', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'braid.settings.write', app: 'braid', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Bulwark (contract-obligation / compliance app, spec Section 10 lines 679-692).
+    // Like basis and braid, bulwark-api is a satellite NOT in APP_TO_PREFIX and its
+    // bulwark_ MCP tools are deliberately kept out of EXPLICIT_TOOL_OVERRIDES (satellite
+    // deferral), so neither the route nor the tool scanner emits these ids. Hand-authored
+    // with EXPLICIT is_read on every row. Only contract.delete is manifest-destructive
+    // (is_destructive + requires_confirmation); the reject/waive confirm boundaries live at
+    // the MCP tool layer, NOT on the manifest rows, so obligation.write / deadline.write
+    // stay is_read:false WITHOUT manifest-level confirm. Keep in sync with the bulwark rows
+    // in the delta migration.
+    { id: 'bulwark.contract.read', app: 'bulwark', resource: 'contract', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.contract.write', app: 'bulwark', resource: 'contract', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.contract.delete', app: 'bulwark', resource: 'contract', verb: 'delete', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'bulwark.obligation.read', app: 'bulwark', resource: 'obligation', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.obligation.write', app: 'bulwark', resource: 'obligation', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.deadline.read', app: 'bulwark', resource: 'deadline', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.deadline.write', app: 'bulwark', resource: 'deadline', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.notice.draft', app: 'bulwark', resource: 'notice', verb: 'draft', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.compliance.read', app: 'bulwark', resource: 'compliance', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.compliance.chase', app: 'bulwark', resource: 'compliance', verb: 'chase', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.settings.read', app: 'bulwark', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bulwark.settings.write', app: 'bulwark', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
@@ -818,6 +839,10 @@ function buildManifest() {
       if (c.id.startsWith('braid.')) {
         migrationLabel = '0232';
         sourceFile = 'braid.routes.ts';
+      }
+      if (c.id.startsWith('bulwark.')) {
+        migrationLabel = '0237';
+        sourceFile = 'bulwark.routes.ts';
       }
       byId.set(c.id, {
         id: c.id,

@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1411,
-    "mcp_tools_scanned": 831,
+    "total": 1423,
+    "mcp_tools_scanned": 847,
     "rest_routes_scanned": 880,
-    "read_permissions": 546,
-    "destructive_permissions": 136
+    "read_permissions": 551,
+    "destructive_permissions": 137
   },
   "permissions": [
     {
@@ -23404,6 +23404,210 @@
       ]
     },
     {
+      "id": "bulwark.compliance.chase",
+      "app": "bulwark",
+      "resource": "compliance",
+      "verb": "chase",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.compliance.read",
+      "app": "bulwark",
+      "resource": "compliance",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.contract.delete",
+      "app": "bulwark",
+      "resource": "contract",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.contract.read",
+      "app": "bulwark",
+      "resource": "contract",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.contract.write",
+      "app": "bulwark",
+      "resource": "contract",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.deadline.read",
+      "app": "bulwark",
+      "resource": "deadline",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.deadline.write",
+      "app": "bulwark",
+      "resource": "deadline",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.notice.draft",
+      "app": "bulwark",
+      "resource": "notice",
+      "verb": "draft",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.obligation.read",
+      "app": "bulwark",
+      "resource": "obligation",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.obligation.write",
+      "app": "bulwark",
+      "resource": "obligation",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.settings.read",
+      "app": "bulwark",
+      "resource": "settings",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bulwark.settings.write",
+      "app": "bulwark",
+      "resource": "settings",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0237)",
+          "file": "bulwark.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "helpdesk.admin_project.list",
       "app": "helpdesk",
       "resource": "admin_project",
@@ -25261,6 +25465,70 @@
     {
       "tool": "braid_get_settings",
       "file": "braid-tools.ts"
+    },
+    {
+      "tool": "bulwark_extract_obligations",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_check_notice_risk",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_list_contracts",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_get_contract",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_delete_contract",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_list_obligations",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_get_obligation",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_confirm_obligation",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_reject_obligation",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_trigger_obligation",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_list_deadlines",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_draft_notice",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_waive_deadline",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_discard_notice",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_list_compliance",
+      "file": "bulwark-tools.ts"
+    },
+    {
+      "tool": "bulwark_chase_compliance",
+      "file": "bulwark-tools.ts"
     },
     {
       "tool": "bureau_list_floors",
