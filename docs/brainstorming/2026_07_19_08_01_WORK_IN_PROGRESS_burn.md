@@ -102,7 +102,7 @@ two failure modes are the sharpest in the spec.
 - [x] `burn.*` `agent_policies` allowlist
 - [x] `confirm_action` on destructive tools **and on gate disable** (`off`/`advisory`/`gate_paused_until`)
 - [x] `entity_links` upserts per §8.4; ported `braid-resolve.client.ts` with its soft-degradation contract per §8.5
-- [x] Surface-map rows for every endpoint; self-check prints `0`
+- [x] Surface-map rows for every endpoint (39 burn rows). Self-check prints `0` with the EM DASH variant, which is CLAUDE.md's actual command. The orchestrator's briefs transcribed it with an ASCII hyphen, which matches nothing in a document that uses em dashes 240 times, so that variant printed `0` vacuously and could never have caught a violation
 - [x] §12.1 assertions for §5, §6, §11
 
 
