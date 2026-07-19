@@ -9,7 +9,11 @@
  *   - approved / rejected -> drive it through the SAME bulwark-api internal route the Bolt
  *     subscription uses (POST /v1/internal/proposal-decided), which re-SELECTs the authoritative
  *     status, re-derives the decider, fail-closes on the §15 kill-switch + send permission, and
- *     drives the CAS-guarded send executor. Idempotent, so a duplicate delivery no-ops.
+ *     drives the CAS-guarded send executor. Idempotent, so a duplicate delivery no-ops. This is
+ *     ALSO the recovery path for a notice/chase whose transport blipped: the send executor left
+ *     the deadline in the recoverable `send_failed` state (never a false `sent`, #64) while the
+ *     proposal stays `approved`, so this pass re-drives the approve and the executor re-attempts
+ *     the dispatch (CAS send_failed|stale-sending -> sending) until it lands.
  *   - expired -> clear the draft's proposal ref and reset its status to none so the radar
  *     re-drafts. An unmet notice re-surfaces, never orphans.
  */

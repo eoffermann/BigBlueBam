@@ -86,7 +86,19 @@ export const BulwarkDeadlineStatus = z.enum([
 ]);
 export type BulwarkDeadlineStatus = z.infer<typeof BulwarkDeadlineStatus>;
 
-export const BulwarkNoticeStatus = z.enum(['none', 'drafted', 'approved', 'sent', 'discarded']);
+// notice_status lifecycle. `sending` is the intermediate state a send executor CAS-wins BEFORE
+// calling the transactional transport; `send_failed` is the recoverable state a transient
+// dispatch failure returns to (NOT `sent`), so proposal-reconcile / a retry re-drives it and no
+// email is ever silently dropped (Bulwark #64). Both fit the notice_status varchar(16) column.
+export const BulwarkNoticeStatus = z.enum([
+  'none',
+  'drafted',
+  'approved',
+  'sending',
+  'sent',
+  'send_failed',
+  'discarded',
+]);
 export type BulwarkNoticeStatus = z.infer<typeof BulwarkNoticeStatus>;
 
 export const BulwarkAnchorSource = z.enum(['trigger_at', 'logged_at', 'manual', 'calendar']);
@@ -124,11 +136,16 @@ export type BulwarkCollectionStatus = z.infer<typeof BulwarkCollectionStatus>;
 export const BulwarkValidityStatus = z.enum(['unknown', 'valid', 'expiring', 'expired']);
 export type BulwarkValidityStatus = z.infer<typeof BulwarkValidityStatus>;
 
+// chase_status lifecycle. `sending` / `send_failed` mirror the notice send state machine so a
+// transient chase dispatch failure is recoverable rather than falsely terminal (Bulwark #64).
+// Both fit the chase_status varchar(16) column.
 export const BulwarkComplianceChaseStatus = z.enum([
   'none',
   'drafted',
   'approved',
+  'sending',
   'sent',
+  'send_failed',
   'escalated',
 ]);
 export type BulwarkComplianceChaseStatus = z.infer<typeof BulwarkComplianceChaseStatus>;

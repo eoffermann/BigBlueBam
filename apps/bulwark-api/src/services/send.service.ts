@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, lt, or } from 'drizzle-orm';
 import { publishBoltEvent, bulwarkNoticeDraftSchema } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import {
@@ -36,6 +36,12 @@ import {
 //     it. Exactly-once is a CAS on the row.
 
 const SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000;
+
+// A send row CAS-won into the intermediate `sending` state is orphaned only if the process
+// crashed between winning the state and resolving the dispatch. sendTransactional is bounded by
+// UPSTREAM_TIMEOUT_MS (~10s), so any `sending` row older than this floor is definitively
+// orphaned and safe for another pass to recover WITHOUT racing a live in-flight dispatch (#64).
+const STALE_SENDING_MS = 5 * 60 * 1000;
 
 // ── Notice drafting ────────────────────────────────────────────────────────
 
@@ -198,13 +204,15 @@ export async function discardNotice(
     .limit(1);
   if (!deadline) throw new NotFoundError('Deadline not found');
 
+  // A `send_failed` draft is discardable too (operator recovery from a repeatedly-failing send);
+  // `sending` (in-flight) and `sent` (terminal) are not (#64).
   const [won] = await db
     .update(bulwarkNoticeDeadlines)
     .set({ notice_status: 'discarded', updated_at: new Date() })
     .where(
       and(
         eq(bulwarkNoticeDeadlines.id, deadlineId),
-        inArray(bulwarkNoticeDeadlines.notice_status, ['drafted', 'approved']),
+        inArray(bulwarkNoticeDeadlines.notice_status, ['drafted', 'approved', 'send_failed']),
       ),
     )
     .returning({ id: bulwarkNoticeDeadlines.id });
@@ -270,23 +278,38 @@ export async function executeSendNotice(
   const canSeeAsset = await preflightAccess(deciderId, 'bin.asset', contract.bin_asset_id);
   if (!canSeeAsset) annotation = 'attachment_dropped_access';
 
-  // Exactly-once CAS approved->sent (the REST-vs-subscription echo no-ops).
+  // Exactly-once dispatch gate (#64). Win the EXCLUSIVE right to dispatch by CAS-ing the row to
+  // the intermediate `sending` state BEFORE calling the transport. Only ONE concurrent caller
+  // can move approved|send_failed -> sending, so at most one dispatch fires. A row orphaned in
+  // `sending` by a crash (updated_at older than STALE_SENDING_MS) is recovered here and by
+  // proposal-reconcile; a freshly-`sending` row (an active dispatch in flight) is NOT matched,
+  // so a reconcile pass can never double-send under a live attempt. The terminal `sent` state
+  // is committed ONLY after the transport confirms delivery.
+  const staleBefore = new Date(Date.now() - STALE_SENDING_MS);
   const [won] = await db
     .update(bulwarkNoticeDeadlines)
-    .set({ notice_status: 'sent', updated_at: new Date() })
+    .set({ notice_status: 'sending', updated_at: new Date() })
     .where(
       and(
         eq(bulwarkNoticeDeadlines.id, deadlineId),
-        eq(bulwarkNoticeDeadlines.notice_status, 'approved'),
+        or(
+          inArray(bulwarkNoticeDeadlines.notice_status, ['approved', 'send_failed']),
+          and(
+            eq(bulwarkNoticeDeadlines.notice_status, 'sending'),
+            lt(bulwarkNoticeDeadlines.updated_at, staleBefore),
+          ),
+        ),
       ),
     )
     .returning({ id: bulwarkNoticeDeadlines.id });
-  if (!won) return { sent: false, annotation: 'not_approved_or_already_sent' };
+  if (!won) return { sent: false, annotation: 'not_sendable_or_already_sent' };
 
   // Real transactional dispatch (D6): POST the rendered notice to Blast's transactional path,
   // which bypasses blast_unsubscribes. Recipient is the DETERMINISTIC counterparty (THEME E),
-  // never a clause-named address. A failure annotates the proposal but leaves the CAS won (the
-  // send is terminal; the annotation records the delivery issue for the reviewer).
+  // never a clause-named address. sendTransactional does NOT throw on a Blast/network blip; it
+  // returns { sent:false }. On that transient failure we return the row to the RECOVERABLE
+  // `send_failed` state (never `sent`) and annotate, so proposal-reconcile / a retry re-drives
+  // it and the notice is never silently lost.
   const draft = bulwarkNoticeDraftSchema.safeParse(deadline.notice_draft);
   const subject = draft.success ? draft.data.subject : `Notice regarding ${contract.title}`;
   const bodyMarkdown = draft.success ? draft.data.body_markdown : `Notice regarding ${contract.title}.`;
@@ -300,8 +323,28 @@ export async function executeSendNotice(
   });
   if (!dispatch.sent) {
     annotation = annotation ? `${annotation};${dispatch.annotation}` : dispatch.annotation;
+    await db
+      .update(bulwarkNoticeDeadlines)
+      .set({ notice_status: 'send_failed', updated_at: new Date() })
+      .where(
+        and(
+          eq(bulwarkNoticeDeadlines.id, deadlineId),
+          eq(bulwarkNoticeDeadlines.notice_status, 'sending'),
+        ),
+      );
     await annotateProposal(deadline.notice_proposal_id, dispatch.annotation ?? 'send_failed');
+    return { sent: false, annotation };
   }
+  // Delivery confirmed: commit the terminal `sent` state from the `sending` we hold.
+  await db
+    .update(bulwarkNoticeDeadlines)
+    .set({ notice_status: 'sent', updated_at: new Date() })
+    .where(
+      and(
+        eq(bulwarkNoticeDeadlines.id, deadlineId),
+        eq(bulwarkNoticeDeadlines.notice_status, 'sending'),
+      ),
+    );
   return { sent: true, annotation };
 }
 
@@ -333,14 +376,18 @@ export async function approveAndSendNotice(
     )
     .returning({ id: bulwarkNoticeDeadlines.id });
   if (!won) {
-    // Maybe already approved (a racing path). Fall through to the send CAS which is idempotent.
+    // The drafted->approved CAS lost. Fall through to the send CAS (idempotent) as long as the
+    // row is in a state the executor can (re)drive: approved (racing path), sending/send_failed
+    // (a prior transient failure to recover, #64), or sent (echo no-op). Anything else
+    // (none/drafted/discarded) is a genuine conflict.
     const [dl] = await db
       .select({ notice_status: bulwarkNoticeDeadlines.notice_status })
       .from(bulwarkNoticeDeadlines)
       .where(eq(bulwarkNoticeDeadlines.id, deadlineId))
       .limit(1);
     if (!dl) throw new NotFoundError('Deadline not found');
-    if (dl.notice_status !== 'approved' && dl.notice_status !== 'sent')
+    const resendable = ['approved', 'sending', 'send_failed', 'sent'];
+    if (!resendable.includes(dl.notice_status))
       throw new ConflictError(`Deadline notice is ${dl.notice_status}, not drafted`);
   }
   return executeSendNotice(orgId, deadlineId, deciderId);
@@ -433,18 +480,42 @@ export async function executeSendChase(
     .limit(1);
   if (!doc) throw new NotFoundError('Compliance doc not found');
 
+  // Exactly-once dispatch gate mirroring the notice path (#64): CAS to the intermediate
+  // `sending` state (recovering an orphaned stale `sending`) BEFORE dispatch; commit terminal
+  // `sent` only on confirmed delivery, else return to the recoverable `send_failed` state.
+  const staleBefore = new Date(Date.now() - STALE_SENDING_MS);
   const [won] = await db
     .update(bulwarkComplianceDocs)
-    .set({ chase_status: 'sent', updated_at: new Date() })
+    .set({ chase_status: 'sending', updated_at: new Date() })
     .where(
       and(
         eq(bulwarkComplianceDocs.organization_id, orgId),
         eq(bulwarkComplianceDocs.id, complianceDocId),
-        eq(bulwarkComplianceDocs.chase_status, 'approved'),
+        or(
+          inArray(bulwarkComplianceDocs.chase_status, ['approved', 'send_failed']),
+          and(
+            eq(bulwarkComplianceDocs.chase_status, 'sending'),
+            lt(bulwarkComplianceDocs.updated_at, staleBefore),
+          ),
+        ),
       ),
     )
     .returning({ id: bulwarkComplianceDocs.id });
-  if (!won) return { sent: false, annotation: 'not_approved_or_already_sent' };
+  if (!won) return { sent: false, annotation: 'not_sendable_or_already_sent' };
+
+  const failChase = async (annotation: string): Promise<{ sent: boolean; annotation?: string }> => {
+    await db
+      .update(bulwarkComplianceDocs)
+      .set({ chase_status: 'send_failed', updated_at: new Date() })
+      .where(
+        and(
+          eq(bulwarkComplianceDocs.id, complianceDocId),
+          eq(bulwarkComplianceDocs.chase_status, 'sending'),
+        ),
+      );
+    await annotateProposal(doc.chase_proposal_id, annotation);
+    return { sent: false, annotation };
+  };
 
   const [tier] = await db
     .select()
@@ -452,8 +523,8 @@ export async function executeSendChase(
     .where(eq(bulwarkVendorTiers.id, doc.vendor_tier_id))
     .limit(1);
   if (!tier?.vendor_id) {
-    await annotateProposal(doc.chase_proposal_id, 'recipient_unresolved');
-    return { sent: true, annotation: 'recipient_unresolved' };
+    // No resolvable recipient: recoverable (not falsely `sent`) so a later vendor set re-drives.
+    return failChase('recipient_unresolved');
   }
   const recipient: TransactionalRecipient = {
     type: tier.vendor_type === 'bond.contact' ? 'bond.contact' : 'bond.company',
@@ -468,8 +539,18 @@ export async function executeSendChase(
       `Please provide a current copy at your earliest convenience.`,
     sourceApp: 'bulwark.chase',
   });
-  if (!dispatch.sent) await annotateProposal(doc.chase_proposal_id, dispatch.annotation ?? 'send_failed');
-  return { sent: true, annotation: dispatch.sent ? undefined : dispatch.annotation };
+  if (!dispatch.sent) return failChase(dispatch.annotation ?? 'send_failed');
+  // Delivery confirmed: commit terminal `sent` from the `sending` we hold.
+  await db
+    .update(bulwarkComplianceDocs)
+    .set({ chase_status: 'sent', updated_at: new Date() })
+    .where(
+      and(
+        eq(bulwarkComplianceDocs.id, complianceDocId),
+        eq(bulwarkComplianceDocs.chase_status, 'sending'),
+      ),
+    );
+  return { sent: true, annotation: undefined };
 }
 
 export async function approveAndSendChase(
