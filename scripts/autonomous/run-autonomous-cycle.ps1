@@ -64,6 +64,14 @@ try {
   Log 'launching Claude Code headless (this is a long run; expect a lengthy quiet period during brainstorm + build) ...'
   $cliLog = Join-Path $LogDir ("claude_$stamp.log")
 
+  # A cycle spawns background agents (spec-writer, five adversaries, per-milestone
+  # builders) that legitimately run far longer than the CLI's default 600s
+  # background-task ceiling. Without this, `claude -p` prints its foreground result,
+  # waits 600s, then TERMINATES the run while those agents are still working - which
+  # killed the 2026-07-18 20:00 Bulwark cycle mid spec-draft. 0 = wait indefinitely
+  # for background tasks, so the whole brainstorm+build can complete headless.
+  $env:CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS = '0'
+
   # Headless, unattended: bypass permission prompts (no human present) and stream
   # the transcript to a log. Working dir is the repo so the cycle acts on it.
   & $ClaudeExe -p $Prompt `
