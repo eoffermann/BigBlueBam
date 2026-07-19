@@ -576,15 +576,604 @@ Adaptation is the hard part and the actual product. Blitz holds a live model of 
 
 ## Phase 2 - Debate
 
-_pending_
+One debate round was run. Each seat received the full Phase 1 slate (via this
+document), a collision map naming every cluster its proposals sat in, and, for
+three seats, a specific challenge the orchestrator judged most likely to decide
+the vote: Seat D was asked why a vertical wedge beats a horizontal app for #23;
+Seat E was asked to defend against the same customer-fit critique that sank its
+two prior runners-up; Seat F was asked to answer "Burn is just Bulwark for SOWs."
+
+**Orchestrator note on what happened.** The round did an unusual amount of work.
+**Eleven of the 35 proposals were withdrawn or merged by their own authors**, with
+no orchestrator intervention and no merge negotiation required. Every one of the
+five name collisions was resolved by voluntary concession. Three of the seven
+clusters flagged in the collision map were fully resolved inside the debate
+itself, which is why Phase 4 below is short. A second debate round was considered
+and rejected: the ideas were converging rather than still colliding, and the
+remaining disagreements were genuine product disagreements that a vote resolves
+better than another round of argument.
+
+Full verbatim debate replies are preserved in the session transcript. Recorded
+below: every stance call, every structural change, each seat's revised slate, and
+each seat's strategy statement in its own words.
+
+### Cluster resolutions
+
+| Cluster | Contenders entering debate | Outcome |
+| --- | --- | --- |
+| Decision / rationale ledger | B/Bygone, C/Bylaw, F/Bequest | **Fully resolved.** B withdrew Bygone and donated prediction-grading; F withdrew Bequest and donated code-corroboration. C's Bylaw (renamed **Buttress**) absorbed both and stands alone. |
+| Process induction | A/Blaze, E/Bellwether | **Mutually conceded - orphaned.** Each seat withdrew its own version in favour of the other's. See the note below. |
+| Prose to themes | B/Bramble, G/Buzz | **Resolved.** G withdrew Buzz, conceding theme-identity-over-time was the hard part it had hand-waved, and folded Buzz's output objects into its own Badge. Bramble uncontested. |
+| Goal-directed execution | A/Behest, G/Blitz | **Resolved.** G withdrew Blitz as "a weaker twin," flagging the certified-metric adoption cliff Behest should absorb. |
+| Agent safety / rehearsal | A/Bracket, E/Backstop, E/Backlot | **Partly resolved.** E withdrew Backlot in favour of Bracket. Backstop and Bracket both stand, with an agreed partition (forward gate vs backward undo). |
+| Knowledge continuity on departure | C/Baton, C/Bloom, E/Baton, F/Bequest | **Resolved by boundary.** C withdrew Bloom, merged Baton+Bloom into **Byline** (never-written-down knowledge). E renamed Baton to **Brace** and narrowed to executed handover, ceding onboarding paths and bus-factor mapping. F withdrew Bequest. |
+| Money vs governing document | F/Burn, F/Burden, D/Bursar | **Partly resolved.** D conceded it would not fight to advance both, asking only that Burn carry a pre-transaction block. Both remain on the board. |
+
+### The mutual concession (Blaze / Bellwether)
+
+Seat A conceded Blaze to Seat E's Bellwether, judging E's "living operations
+manual plus conformance monitor" framing more legible to a non-technical ops lead
+and its own framing vulnerable to the charge of being a Bolt feature. In the same
+round, Seat E conceded Bellwether to Seat A's Blaze, judging A's specification
+better on per-step latency and branch-frequency distributions, the hours-saved
+estimate attached to each proposal, and correctly naming Bolt's `template-resolver`
+as the adoption target.
+
+Each surrendered the ground to the other. Both were offered the chance to reclaim
+it at submission time and neither did, each preferring a different app from its
+own slate. Process induction therefore leaves the session carried by nobody. Two
+other seats (B, C, F, G all noted it independently) had separately flagged the pair
+as one app that should not consume two finalist slots, and F added a substantive
+objection: induced procedures at 2-50 person data volumes will be dominated by a
+handful of high-frequency sequences the owner already knows about, with a long tail
+too sparse to cluster. The idea is recorded here as a live candidate for a future
+session rather than a rejected one.
+
+### Name concessions
+
+All five collisions cleared voluntarily. A vacated **Baton** (to C and E) and
+renamed to **Behalf**. D vacated **Bylaw** (to C) and renamed to **Gavel**. G
+vacated **Bloom** and **Beat** (both to C) and renamed to **Bough** and
+**Barometer**. C then renamed four of its own five anyway (Bylaw to Buttress, Beat
+to Brisk, Baton to Byline, Bloom withdrawn), observing that it was "the most
+collided seat by name and the least collided by mechanism" and wanted the free
+objections removed. B renamed **Bellwether** to **Bode**, trading the word rather
+than arguing over it, and claimed **Ballast** against two rival seats' alternates.
+E renamed **Baton** to **Brace**.
+
+### Post-debate slates
+
+| Seat | Revised five |
+| --- | --- |
+| A | **Behalf** (was Baton), **Bracket**, **Behest**, **Bogey** (re-aimed to commitment-time interrupt only, ceding forecasting to B), **Billet** (new - hire an AI role-holder with a job description, bounded authority, durable role memory, and a performance review it can fail) |
+| B | **Bandit**, **Bode** (was Bellwether), **Ballast**, **Bramble** (merge-ready), **Beam** (new - the only outward-facing proposal on the board) |
+| C | **Buttress** (Bylaw + B's Bygone), **Brisk** (was Beat), **Byline** (Baton + Bloom, re-aimed so the AI is the interviewer rather than the recorder), **Bearer** (new - informal promises to outsiders, matched against fulfilling artifacts), **Bazaar** |
+| D | **Bid**, **Blot** (v1 re-scoped to ingest an external corpus, removing its own cold-start dependency), **Gavel** (was Bylaw), **Bursar**, **Bollard** (v1 narrowed to conformance-pass only) |
+| E | **Backstop**, **Brace** (was Baton, narrowed to executed handover), **Banish** (new - erasure with retention adjudication and a signed certificate), **Beachhead** (new - entity archaeology over messy real-world files), **Bastion** |
+| F | **Brunt** (absorbed Bind), **Burn**, **Boomerang** (new - match shipped capability back to the customers who asked for it), **Burden** (added upstream-deprecation reading), **Barnacle** (new - price technical debt in delay-days and incident-dollars) |
+| G | **Badge** (widened from brand linter to outbound truth gate), **Bolster** (new - advocacy-window detection with rights and consent expiry), **Bough** (was Bloom), **Barometer** (was Beat, re-aimed to prospective contrast design after Bandit), **Bevel** (new - data-bound design compiler) |
+
+### Notable arguments made
+
+**Seat D's cold-start critique**, which several seats then answered directly and
+which shaped the rest of the session: it counted how many rival proposals are worth
+nothing on day 30 of a trial (Behalf needs 12 correct predictions per class; process
+induction needs a quarter of mined episodes; Bogey, Bequest and Beat need a year of
+graded history; Behest needs a certified metric library no customer has yet;
+Bramble and Buzz need a corpus), argued the suite has shipped three consecutive
+deepening layers that do not sell themselves, and framed the axis for #23 as
+**acquisition versus deepening**. It then applied the same test to its own slate and
+re-scoped Blot to ingest an external corpus.
+
+**Seat G's adjacency objection to the whole vertical**: each of Seat D's five
+requires a per-jurisdiction statutory corpus (state PRA exemptions, open-meeting
+notice standards, 2 CFR 200, adopted municipal code) that the customer cannot supply
+and BigBlueBam would have to acquire and maintain per state, which is "a content
+business bolted to a software business."
+
+**Seat A against Backstop, using Seat E's own scope text**: the expensive agent
+failures are exactly the irreversible ones (Blast sends, Bill invoices, Bulwark
+notices, Helpdesk replies), so an undo that cannot undo the class of damage that
+costs money "is a comfort object." Seat F made the adjacent point that the reliably
+deliverable half of Backstop is the explanation, and explanation is worth more
+before a change than after it.
+
+**Seat B against Behest's headline**: a control loop that reads a metric, sees it
+move, and attributes the movement to its own actions "is not verification, it is
+post hoc ergo propter hoc with a worker queue."
+
+**Seat E's three-way partition of "blast radius"**, offered so voters would not
+score three apps as duplicates: Brunt's radius is prospective and originates in a
+code diff; Ballast's is a data-quality incident propagating into metrics and
+dashboards; Backstop's is retrospective and originates in writes that already
+happened, and is the only one whose output is a reversal rather than a warning.
+
+**Seat F's answer to the Bulwark challenge**: Bulwark's unit of work is a clause
+with a date and its output is a notice; Burn's unit is every task, commit, ticket
+and hour the company logs, and its question is which priced envelope this belongs
+to, or whether it belongs to any. "Bulwark never touches a timesheet, never computes
+a rate, and structurally cannot: it has no attribution model."
+
+**Repo dependency, raised by both A and G against Seat F**: Brunt, Bind and Bequest
+require a connected code repository, and most 2-50 BigBlueBam customers do not write
+software. Seat G noted the suite's own canonical demo customer is a travel company,
+and added that the fraction of the base that is a dev shop already has GitHub,
+Linear, and Sentry. Both seats named Burn as the exception that escapes the critique.
+
+### Seat strategies, in their own words
+
+**Seat A:** "I am playing two horses and one option. Behalf and Bracket are the
+horses because they are the only proposals on a 35-app board that address the actual
+binding constraint on this suite, which is not that it lacks capabilities but that
+customers will not switch the existing ones on."
+
+**Seat B:** "I am concentrating, not defending a portfolio. I gave up my fifth-ranked
+app outright and conceded the framing on my fourth, because both were in collisions I
+would lose on merit and because a seat that fights for everything is discounted when
+it fights for anything."
+
+**Seat C:** "I was the most collided seat by name and the least collided by mechanism,
+so I spent this round separating those two facts... conceding to E where E is genuinely
+better buys credibility I intend to spend on the three-way decision-ledger fight."
+
+**Seat D:** "Six seats proposed apps whose customer is an existing BigBlueBam customer,
+which means every one of them competes for the same wallet and adds zero new logos...
+The suite does not have a distribution problem it can mine its way out of."
+
+**Seat E:** "I killed two of my own five before anyone had to argue with me, because in
+a seven-seat field the cheapest thing I can buy is credibility for the two I am actually
+defending... My lead is Backstop, and its strongest argument is not mine at all, it is
+the shape of this board: five of seven seats proposed granting more autonomous write
+authority to a platform with no restore path."
+
+**Seat F:** "I came in with five and I am leaving with four real ones, because two of my
+five were losing on purpose. Bequest was third in a three-way where the other two had
+better mechanics and better evidence, so conceding it early buys me more credibility
+than defending it would have won me votes."
+
+**Seat G:** "Badge is the only concept on the board no seat contested, and the slate's
+own center of gravity argues for it: five seats independently concluded the suite's next
+problem is making agent autonomy trustworthy, and every one of them guards inputs,
+behavior, permissions, or reversal. None guards the sentence that reaches the customer,
+which is the only failure that is public, legally exposed, and unreversible."
 
 ## Phase 3 - Submissions
 
-_pending_
+Each seat submitted one app. Two seats changed course from what they had signalled
+during debate: Seat A **reclaimed process induction** (which it and Seat E had
+conceded to each other) and withdrew all four of its other proposals in its favour,
+folding Behalf's earned-autonomy ramp into it as the adoption mechanism. Seat E
+**abandoned Backstop**, its declared lead, and submitted Banish instead, stating
+plainly that Seat A and Seat F had landed a real hit and that "the honest
+consequence of accepting that argument is that the gate belongs before the
+destructive act, not after." Seat E also declined to reclaim process induction:
+"I conceded it on the merits and nothing has changed except who is standing there."
+
+### SUBMISSION - Seat A: Blaze
+
+*Discovers how your company actually gets work done by mining what your people
+really did across all 22 apps, writes it down in plain language, tells you when
+someone goes off the path, and earns the right to automate the parts that never vary.*
+
+**Core mechanism: process induction over an event log that has no case identifier**,
+and that qualifier is the engineering problem. Celonis and Signavio assume an event
+log where every row carries a case id, which is why deploying them is a data-engineering
+project. This platform's log has none. Stage one infers episode membership: Blaze walks
+`entity_links` where explicit edges exist, and where they do not (most interesting
+cases, since a Banter thread and a Helpdesk ticket about the same situation are rarely
+linked) infers membership from temporal proximity, actor overlap, Braid-resolved
+counterparty identity, and semantic similarity of surrounding prose via Qdrant. Stage
+two is variant alignment and naming: aligning noisy episodes into a canonical procedure
+with its true statistical shape (per-step median and tail latency, branch frequency,
+who performs each step, where episodes stall), then having an LLM name it in the
+company's own vocabulary. Stage three is the two surfaces the customer buys: a **living
+operations manual** (each confirmed procedure becomes a Beacon article that regenerates
+as behaviour drifts) and a **conformance monitor** with thresholds derived from observed
+variance rather than guessed. Stage four is the adoption ramp folded in from Behalf:
+observed, then shadow (predict the step before it happens, record whether right, costing
+and risking nothing), then adopted (draft a Bolt automation via `template-resolver` into
+`agent_proposals` with evidence, shadow accuracy, and estimated hours saved per month).
+Judgment steps never leave shadow mode by design.
+
+**Wedge:** the ops lead of a 6-to-40-person company certain things are falling through
+cracks and unable to prove where. Axis is **zero instrumentation**: every process-mining
+vendor's dominant cost is constructing the event log, and this suite emits one by
+construction. Second-order fit: Bolt is the suite's most underused app relative to its
+power and the reason is authorship cost, not capability.
+
+**Defence against its objections, offered pre-emptively.** *A feature of Bolt:* Bolt is
+a runtime executing an authored rule; Blaze is retrospective inductive analysis with no
+rule in hand, and two of its three deliverables produce no automation at all. *A GROUP BY
+on activity_log:* there is no case identifier, so the sequences do not exist until
+something infers them; strip the LLM and embedding retrieval and you cannot segment
+episodes at all. *Insufficient SMB volume* (the objection that killed Behalf): the unit
+is an org-wide procedure, not one person's decision class - seventeen Won-to-invoice
+episodes in a quarter is ordinary for a six-person company and ample for latency
+distributions; the manual and conformance monitor are valuable at n=8, and only the
+automation ramp needs a larger sample. Backfits against history, so it has findings on
+install day.
+
+**Reuse:** `v_activity_unified`, partitioned `activity_log`, `entity_links`,
+`bolt_recent_events`/`bolt_event_trace`/`bolt_executions`, `braid_resolve`, Qdrant,
+internal llm-provider, Bolt automation schema + `template-resolver`, `agent_proposals`,
+Beacon + `beacon_upsert_by_slug`, `can_access`, worker. No new infrastructure dependency.
+Flagship tool `blaze_discover(scope, window)`; secondary `blaze_deviation_check(entity_ref)`,
+`blaze_procedure_for(entity_ref)`.
+
+### SUBMISSION - Seat B: Bandit
+
+*Every deliberate change your team makes gets registered as an experiment, and Bandit
+picks the causal design the data can actually support, watches the outcome, and tells you
+whether the change worked, did nothing, or cannot be judged and why.*
+
+**Core mechanism: a design selector with an admissibility refusal.** Given an intervention
+and an outcome expressed as a certified `basis_metrics` slug, Bandit reasons about what
+the data structurally permits: randomized split where the surface supports assignment,
+difference-in-differences where a genuinely untreated comparison group exists, synthetic
+control where it does not but a weighted composite tracks the treated unit pre-period,
+interrupted time series as fallback, and **"not identifiable"** when nothing holds, with a
+plain statement of what is confounded and what would have to be true to fix it. "That
+refusal is the product's spine. A tool that will not tell you when it cannot tell you is
+not measuring anything." Second mechanism: **continuous assumption auditing** (parallel
+trends, synthetic-control pre-fit error, sample-ratio mismatch, cross-arm contamination,
+novelty decay, multiple-comparison inflation), where a broken assumption automatically
+demotes a readout from "caused" to "associated" with the named violation. The LLM selects
+designs and narrates; the estimate is deterministic statistics, so readouts are
+reproducible and auditable. Third: a **self-calibration scoreboard** - every effect
+Bandit called "caused" is silently re-measured later and the front page publishes the hit
+rate.
+
+**Cold start, addressed directly:** Bandit does not wait for interventions to accumulate
+because they already happened and the platform recorded them. On install it runs a
+**retrospective backfill sweep** over `activity_log`, Bolt event and execution history,
+Blast send history, Bill rate and recurring-invoice changes, Bond pipeline configuration
+changes, Helpdesk SLA settings and Bam workflow changes, looking for timestamped step
+changes in configuration, and scores each retrospectively against every certified metric
+it plausibly touched using interrupted time series and synthetic control, which need only
+history. Day one the customer sees a ranked board of the changes they made last year and
+what each one did.
+
+**Wedge:** the owner who changes something operationally significant most weeks and has
+never once known whether it mattered. Optimizely/Statsig/Eppo are enterprise-priced,
+web-surface-only, and require you to instrument arms. Axis is **coverage plus zero
+instrumentation** - it measures pricing, SLA policy, staffing, automation rules and
+outreach cadence, which no experimentation vendor touches because those changes do not
+happen on a web page. Second axis is **honesty as a feature**.
+
+**Reuse:** Basis certified metrics via the bench-api internal query route (the pattern
+`apps/basis-api/src/lib/bench-client.ts` established), Bolt event catalog,
+`v_activity_unified`, worker, `agent_proposals`, `internal-llm.routes.ts`, `can_access`,
+Bench widgets for rendering. "New surface area is four tables, one API, one SPA, and a
+worker job - Bandit is deliberately parasitic on infrastructure that already exists."
+Flagship `bandit_measure(intervention, metric_slug)`; secondary `bandit_effect_of(entity_ref)`.
+
+### SUBMISSION - Seat C: Buttress
+
+*Every decision your team makes in chat, calls, and docs becomes a citable record bound
+to the artifact that proves or disproves it, and the app interrupts you in the channel
+when you start re-arguing one you already settled.*
+
+**The gap, verified:** searching `decision` across every `apps/*/src/db/schema/` returns
+exactly three hits, all machine-adjudication records. Twenty-two apps generate artifacts
+and none captures intent.
+
+**Four mechanisms.** *Extraction:* a worker emits candidate decisions as
+`{statement, rationale, alternatives_rejected, deciders, scope, reversibility, decided_at,
+implied_prediction, review_date, source_citations[]}`, every field anchored to a message id
+or transcript span, landing in `agent_proposals` for a named decider. *Contradiction in
+flight* - the mechanism that makes it a product rather than a database: every new message
+in a watched channel is embedded and matched against the confirmed ledger in Qdrant, and
+on collision Buttress posts one quiet in-thread card with the date, deciders, verbatim
+rationale, and alternatives already rejected, offering supersede or continue. Supersede
+links via `supersedes_id`, making the ledger a versioned graph. "Retrieval-on-entity-open
+fires too late: by the time you open the epic, the channel has already burned an hour."
+*Grading* (donated by Seat B): where a decision carried an implied prediction, the review
+date resolves it against a certified `basis_metrics` slug or entity state and scores it,
+accruing per-person and per-team calibration. *Enactment binding* (donated by Seat F):
+each decision binds to the artifact that enacts it, upgrading to `implemented` when the
+enacting evidence is found (the commit via `github_integrations` for engineering
+decisions; the Bolt event, Bill rate change, Blank form field or Beacon article for
+everything else) and demoting to `contradicted` when later evidence silently reverses it -
+"the specific failure a wiki can never catch: the policy is still on the page and the
+system stopped doing it four months ago."
+
+**Cold start, addressed:** the extraction worker's first pass runs over trailing history,
+not the live stream. A customer with six months of Banter gets a populated candidate queue
+on the first afternoon; confirming twenty takes twenty minutes. Contradiction detection is
+live from the first confirmed decision.
+
+**Wedge:** axis is **cost of re-litigation**. Existing options (an ADR folder only
+engineers write, a Notion page nobody updates) fail because capture is unpaid work with no
+deadline. Buttress's capture cost is one click on a proposal a machine already drafted. No
+product does contradiction detection against a confirmed decision graph, because it
+requires simultaneous access to where decisions are argued, measured, and enacted.
+
+**Reuse:** Banter messages/threads/`banter_call_transcripts`/in-thread cards, Brief, Board,
+Qdrant, `agent_proposals` + `proposal_decide`, `can_access`, Basis as grading oracle, the
+`github_integrations` webhook seam, `entity_links`, Bolt events out, internal llm-provider,
+worker. Flagship `buttress_why(topic | entity_ref)`; secondary `buttress_check_conflict(draft_text)`,
+callable by any of the 847 tools before acting.
+
+### SUBMISSION - Seat D: Bid
+
+*A protest-proof solicitation engine: it shreds an RFP into a machine-checkable compliance
+matrix, evaluates every response against the published criteria with page-level evidence
+citations, and records a scoring trail that survives a bid protest.*
+
+Seat D considered switching to Blot, "the stronger pure mechanism," but judged Seat G's
+jurisdictional-corpus objection decisive and submitted the one app on its slate that
+requires **zero jurisdictional corpus**.
+
+**Core mechanism: the requirement shred.** An LLM pass over the solicitation produces a
+typed relational matrix of every obligation the document imposes - mandatory submittals,
+certifications, format and page constraints, deadlines, and each scored criterion with its
+point weight - every row carrying a verbatim pointer back to the clause that created it.
+Not summarization: rows in `bid_requirements` with types and weights, independently
+checkable, addressable by an MCP tool, and diffable when an addendum lands. Addenda are
+first-class; issuing one re-runs the shred and shows exactly which requirements changed.
+Second mechanism: **evidence binding, not scoring**. Each response runs against the matrix
+to produce a per-requirement responsiveness verdict citing the exact page and passage that
+satisfies it, or a flagged gap. "Bid deliberately does not hand the evaluator a score...
+an AI that scores bids is a legal liability, an AI that finds and cites the passage a human
+must read is pure labor removal." Third: the **evaluation record** as byproduct, mapping
+each awarded point to a cited passage and a named evaluator - the packet a protest response
+is built from. Run in reverse it is the vendor product: shred the solicitation against your
+own draft and get the mandatory items you have not satisfied before you submit.
+
+**Answer to the jurisdictional-corpus objection:** "The objection is correct about four of
+my five proposals and does not apply to this one." v1 requires no jurisdictional content at
+all, because the solicitation is a self-contained authority stating its own submittals,
+page limits, criteria, weights and deadlines. Two optional layers are both customer-supplied
+and strictly additive: an evaluation policy (3-8 settings from the customer's own purchasing
+manual) and an optional boilerplate library of the customer's own past proposal content.
+"There is no path where a stale BigBlueBam-maintained corpus makes the app wrong, because
+there is no BigBlueBam-maintained corpus." Same property removes cold start: useful on
+minute one against a live RFP, with no history in the suite.
+
+**Wedge:** two buyers, one codebase. Buy side - agency purchasing officers and any org
+running a competitive selection. Sell side, the larger volume market - professional-services
+firms of 2-50 that live on RFP responses. Bonfire/Euna/Periscope collect documents on a
+deadline and do not read them. AI RFP-response tools address the vendor side only, have no
+evaluation half, and sit outside the CRM.
+
+**Reuse:** Bin + `@bigbluebam/storage`, Blank for intake, Bay's 48-hex token-gated public
+route so vendors submit without accounts, Bond, `braid_resolve` (detecting that three
+"competing" bidders share a principal), internal llm-provider and Bulwark's
+`extraction.service.ts` pattern, Qdrant, `agent_proposals`, Bolt, worker, `can_access` for
+evaluator isolation (which matters legally - evaluators frequently must not see each
+other's scores before consensus). Flagship `bid_shred(solicitation_id)` and
+`bid_evaluate_response(response_id)`. Explicitly out of v1: e-signature, sealed-bid
+cryptographic timing, advertisement syndication, and any state-specific procurement-code
+checking - "the only place a jurisdictional corpus could creep in, and it is banned from v1
+by design."
+
+### SUBMISSION - Seat E: Banish
+
+*Someone asks you to delete their data; Banish finds every trace of that person across all
+22 apps, works out what you are legally required to keep, erases the rest, and hands you
+proof.*
+
+**First mechanism: trace discovery beyond the foreign key.** Structured rows are the easy
+half and Braid already solved them - `braid_resolve` returns a stable golden id for one
+real-world person across Bond, Bill and Book, "which is precisely the find-every-row-for-this-human
+primitive, built once and currently pointed in only one direction." The hard remainder is
+unstructured and is where data actually hides: a name in a Banter thread, a phone number in
+a task comment, an address in a Brief doc, a face and signature in a Bin asset, their words
+quoted inside somebody else's Helpdesk reply. Retrieved semantically via Qdrant and
+`search_everything`, each proposed as a redaction target with surrounding context and a
+confidence score so humans triage the ambiguous ones rather than all of them.
+
+**Second mechanism, the product: retention adjudication.** Almost nothing can simply be
+deleted. A Bill invoice carries a statutory retention period and erasing it is itself a
+violation. A Bulwark-tracked obligation may require the counterparty record to survive. An
+active dispute is a legal hold. An aggregate a certified Basis metric depends on must not
+silently change under a dashboard already shown to a board. Banish classifies every trace
+into erase, redact-in-place, retain-with-cited-basis, or escalate, stating the reason for
+every retain. "`ON DELETE CASCADE` is the wrong answer to this problem executed instantly
+and irreversibly, which is exactly the failure mode the suite cannot tolerate."
+
+**Third surface, standing value between requests:** the same engine runs on a schedule
+across the whole org answering "what are you still holding that you no longer have a basis
+to hold?" - form submissions from a campaign that ended two years ago, guest comments on a
+closed project, call transcripts nobody has opened. Each becomes a minimization proposal.
+That is the artifact that answers the security questionnaire and shrinks breach blast radius.
+
+Every destructive action is a proposal, every run does a dry pass first, and the output is
+an **erasure certificate**: a dated per-system record of what was erased, what was retained
+and under which basis, with named human sign-off, generated from accepted decisions.
+
+**Wedge:** two dated buying triggers - a deletion request from a named human (reaching
+almost any team selling to EU, UK or California customers), and the enterprise customer or
+insurer who will not sign until you can demonstrate a deletion path. OneTrust and Transcend
+are five and six figures and are fundamentally connector frameworks: you build an
+integration per system, and once built it finds rows and cannot reason about your invoices.
+Axis is **completeness and proof at a price a 20-person company pays**. Distinct from Blot,
+which decides what must be released under compulsion; Banish decides what must be destroyed
+under obligation.
+
+**Reuse:** `braid_resolve` as identity spine ("the single heaviest reuse of a just-shipped
+app on this board"), Qdrant + `search_everything`, `can_access` and `@bigbluebam/permissions`
+(a reviewer must not gain read access to a ticket by adjudicating it), `agent_proposals`
+with no unattended path, Bin + `@bigbluebam/storage` including transcode-worker derivatives,
+Bill and Bulwark as retention-obligation inputs read via shared DB and never edited, Basis
+for the dependency check preventing a deletion silently altering a certified metric, Bolt
+for the statutory clock, worker. Existing per-app retention jobs remain in place; Banish is
+the subject-oriented basis-aware layer above them. Flagship `banish_discover(subject_ref)`;
+secondary `banish_hold(entity_ref, reason)` and `banish_basis_for(entity_ref)`.
+
+**Build argument, its fourth point:** "Two seats argued convincingly that the failures worth
+spending engineering on are the irreversible ones, so the guard belongs in front of the act.
+Erasure is the most irreversible act in the entire suite: there is no undo, ever, by
+definition... Banish is a forward gate on the one operation where a forward gate is the only
+possible gate."
+
+### SUBMISSION - Seat F: Burn
+
+*Burn watches the work your team is actually doing against the contract that paid for it,
+blocks the charge that was never in scope before it happens, and tells you this week which
+client you are losing money on and exactly what caused it.*
+
+Seat F confirmed Burn over Brunt, conceding that "two rival seats landed the same correct
+objection: it presumes the customer writes software, and the segment that does already owns
+GitHub, Linear and Sentry."
+
+Burn reads the signed SOW or engagement letter (a Bin asset, extracted through the same
+internal llm-provider path Bulwark uses) into a **deliverable ledger**: a typed list of what
+was actually sold, each with a clause citation and a priced envelope derived from contract
+value and Bill's `bill_rates`.
+
+**Core mechanism: continuous attribution**, distinct from extraction. Every unit of work the
+org logs - Bam tasks, time entries, Helpdesk tickets, Banter threads, commit and PR titles
+where a repo happens to be connected, Bill expenses, subcontractor invoices - is classified
+against that ledger by an LLM classifier over embedding retrieval, producing a
+`work item → deliverable` link with confidence, dollar cost, and Braid-resolved account.
+There is an explicit **`unscoped` bucket and the bucket is the product**: every item in it is
+work someone is doing that nobody sold. Low-confidence attributions are queued, not guessed.
+
+**Two tiers, and the first is a gate rather than a report** (folding in Seat D's concrete
+scope request). *Pre-transaction:* `burn_precheck(work_ref)` registers on the moments money
+commits - an expense logged in Bill, a subcontractor PO, a recurring charge, a task moved
+into an in-progress phase, an assignee change onto a job at rate - returning an allowability
+verdict with target deliverable, envelope remaining, and clause cite. For money-out events
+the org can configure a **hard block** so the charge does not post until a human maps it to
+a deliverable, approves it as absorbed cost with a recorded reason, or converts it to a
+change order. "That reason-of-record is the artifact firms never have when a client disputes
+the bill." *Post-transaction:* the standing variance report catches what arrives without
+passing a gate. The inverse check runs too: contracted deliverables with zero attributed
+activity as their deadline approaches.
+
+Every write is a proposal; each human accept, reject or reclassify tunes the attribution
+model for that org's vocabulary, "which matters enormously, because 'the reporting thing'
+means something specific at every firm and nothing generic."
+
+**Wedge:** services firms of 2-50, a horizontal buyer rather than a vertical bet. Time
+trackers know hours but not scope, project tools know tasks but not price, accounting knows
+invoices but not the work, "and none of them has ever read the contract." Kantata,
+Projectworks and Scoro start above this market and still only report variance after the
+fact. Axis is **latency plus interception** - "the entire difference between a change order
+and a write-off. Nothing at this price point blocks a charge against a contract term."
+
+**Not Bulwark for SOWs:** "Bulwark extracts a finite set of obligations and fires against
+their deadlines; its unit of work is a clause with a date and its output is a notice. Burn's
+unit of work is every task, ticket, hour and expense the company logs... Bulwark never
+touches a timesheet, never applies a rate, never computes a dollar of margin, and
+structurally cannot: it has no attribution model."
+
+**Reuse:** Bin + Bulwark extraction pattern + internal llm route; Bill as money plane and
+pre-transaction hook point; Bam tasks/phases/time entries; Bond; `braid_resolve`; Qdrant;
+`agent_proposals`; Bolt in and out; worker; `can_access` so a project lead sees their own
+job's variance and not the firm's whole P&L. Flagship `burn_precheck(work_ref)`; secondary
+`burn_attribute(work_ref)`, `burn_margin(account)`.
+
+### SUBMISSION - Seat G: Badge
+
+*Nothing leaves this company addressed to a customer until Badge has checked that we are
+allowed to say it, and that it sounds like us.*
+
+The evidence is in our own repo: the house style for the marketing site lives in
+`docs/marketing-voice.md` as hand-written prose no code path reads. Twenty-two apps can
+generate customer-facing text and zero of them can be told what the company is permitted to
+claim.
+
+Badge turns brand and claim authority into a typed, versioned, callable object: voice rules
+with positive and negative exemplars; a **claim library** where every assertable claim
+carries an evidence binding to a certified `basis_metrics` slug, a Bay-approved asset or
+review decision, an executed-contract clause in Bulwark's obligation ledger, a Bin-stored
+source document, or a named human attestation with owner and expiry; a terminology map;
+visual rules bound to Bin assets; per-audience registers.
+
+**Core mechanism: a compliance pass, not a chatbot.** `badge_check(text | asset, channel,
+audience)` returns flagged spans, the specific rule each violates, a conforming rewrite, and
+a hard block on any unsubstantiated claim - the claim library is an allowlist, so "the
+fastest CRM on the market" fails unless a claim record with live evidence backs it. Badge
+registers as a pre-publish gate on Blast sends, Beacon publishes and Bay approvals via Bolt,
+and because `agent_policies` enforcement already runs inside
+`apps/mcp-server/src/lib/register-tool.ts` on every service-account invocation, an org can
+make a passing `badge_check` a precondition of `blast_send_campaign` for every agent it
+runs. "The gate is not advisory."
+
+**Three mechanisms beyond a linter, all on shipped infrastructure.**
+*Claim-versus-commitment checking:* cross-references outbound claims against Bulwark's typed
+clause-cited obligation ledger, so a campaign cannot promise a four-hour SLA when the signed
+contract says twenty-four. "No standalone brand tool can do this at any price, because none
+of them has ever read your contracts." *Evidence decay and republication audit:* claims are
+live objects - when the Basis metric behind "99.9% uptime" falls below its certified
+threshold, when a case study is un-approved in Bay, when an attestation expires, Badge walks
+`badge_publications` and re-audits everything already published citing that evidence.
+"Your public surface stops being a snapshot and becomes a set of assertions with expiry
+dates." *Rule induction:* point Badge at 200 shipped assets and it infers the voice rules
+nobody wrote down, each landing in `agent_proposals`. Adoption cost is a directory of past
+work, not a week of writing guidelines.
+
+**Dependency discipline** (in response to the orchestrator's warning): v1 depends only on
+shipped surfaces - Bulwark obligations, Basis certified metrics, Bay review decisions, Bin
+assets, all in the tree today. "Explicitly additive, never load-bearing: if a customer-proof
+app or a theme-mining app is built later, they become two more evidence source types."
+
+**Wedge:** a 2-50 team has no brand manager, no comms review, no legal read on marketing
+copy, and the moment they turn on AI drafting their output collapses into generic model-voice
+within a week. Primary axis **trust at scale**; secondary axis **claim exposure**, which is
+money - "an unsubstantiated performance claim in an email to a prospect who later becomes a
+customer is a misrepresentation problem, and it is currently generated by software the
+customer bought from us." Frontify and Bynder are asset portals with a PDF stapled on and
+cannot block a send because they do not own the send. Grammarly Business and Writer enforce
+tone and terminology but have no concept of evidence and cannot block anything.
+
+**Reuse:** `llm-provider.service.ts` and the internal LLM route using the same client pattern
+as `apps/bulwark-api/src/lib/internal-llm.client.ts`; `agent_policies` + existing
+`register-tool.ts` middleware as the gate, with no new enforcement machinery; `agent_proposals`;
+Bolt pre-publish hooks and `claim.evidence_stale` / `check.blocked` out; Bulwark, Basis, Bay,
+Bin as the four v1 evidence types; Qdrant; permissions catalog separating who authors a rule
+from who requests an exception from who grants one; worker for the re-audit sweep. Flagship
+`badge_check(content, channel, audience)`; supporting `badge_claim_verify`, `badge_rewrite`,
+`badge_induct_rules`, `badge_publication_audit`.
+
+**Build argument:** "Five seats independently concluded that the suite's next problem is
+making its own autonomy trustworthy, and the surviving trust apps partition cleanly: Ballast
+guards the data going in, Bracket guards a behavior change before promotion, Backstop
+reverses damage after the fact, Bastion governs who can reach what. Every one of them is an
+internal control. Badge covers the only segment that is external, public, and unreversible...
+You can roll back a record. You cannot roll back a claim."
 
 ## Phase 4 - Overlap resolution
 
-_pending_
+All seven submissions were compared pairwise. **No perfect overlaps and no merge
+negotiations were required**, which is a direct consequence of how much work the debate
+round did: eleven proposals were withdrawn or merged by their own authors before submission,
+and every cluster the orchestrator flagged in the collision map was either resolved or
+explicitly partitioned by the seats themselves.
+
+Pairs examined and judged **distinct**:
+
+- **Bid / Burn** - the closest pair, and the only one that warranted serious consideration.
+  Both extract a governing contract document into a typed, machine-checkable matrix via the
+  same internal llm-provider seam. They were judged distinct on unit of work and lifecycle
+  position: Bid evaluates *external responses from third parties, pre-award*, and its product
+  is cited evidence for a human evaluator; Burn attributes *internal work, post-signature*,
+  and its product is a blocked charge and a drafted change order. A merged app would be
+  incoherent - it would have two different buyers, two different screens, and two different
+  moments. Both seats had already anticipated this: Seat D conceded during debate that it
+  would not fight to advance both its Bursar and Seat F's Burn, and Seat F folded Seat D's
+  pre-transaction-block request into Burn's specification. The shared extraction pass is
+  reuse of a proven path, which the rubric rewards.
+- **Blaze / Bandit** - both read the cross-app event log, but Blaze induces *what procedure
+  is happening* and Bandit estimates *whether a change caused an effect*. Different questions,
+  different outputs, non-overlapping tables. Seat A explicitly positioned them as complementary
+  during debate ("a Behest replan is a Bandit intervention with a known treatment date").
+- **Bandit / Buttress** - Buttress grades a decision's implied prediction against a certified
+  metric; Bandit estimates an intervention's causal effect. Adjacent and mutually
+  reinforcing, but the units differ (a stated expectation versus a treatment effect) and
+  Buttress's grading half was donated by Seat B itself, which would not have donated a
+  mechanism it considered its own submission's core.
+- **Banish / Badge** - both are gates on an irreversible act, but one guards destruction of
+  internal data and the other guards outbound assertion. No shared entity.
+- **Banish / Bid** - opposite directions over a partially shared corpus, as Seat E noted:
+  Bid concerns documents arriving for evaluation, Banish concerns records leaving. Seat D
+  had separately placed records destruction out of its own scope in Phase 1.
+- All remaining pairs are distinct without argument.
+
+**Result: seven surviving apps, no collapses, no discards.** The slate proceeds intact to
+the vote.
 
 ## Phase 5 - Voting
 
