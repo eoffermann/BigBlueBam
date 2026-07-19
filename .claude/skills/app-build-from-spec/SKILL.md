@@ -31,14 +31,22 @@ autonomously, start to finish.
    paid provider account, DNS, or a manual credential you cannot self-issue. Those - and
    ONLY those - go in the HUMAN_SETUP doc (gate 0b). An internal route, resolver, or
    invariant the spec designed is a thing you implement, never a thing you note and skip.
-0b. **HUMAN_SETUP is for external secrets/accounts only.** Write
-   `docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md` ONLY for items that require a
-   human-held external credential or third-party account. Never put internal engineering
-   work (cross-app routes, resolvers, migrations, providers, tests) there to avoid doing
-   it. Build and test everything that does not depend on a genuinely external secret, mark
-   only the truly-external-dependent path as pending, and continue. The only thing you
-   never do is merge to `main` (gate 2), and that is not a pause: promotion is simply out
-   of scope, so you keep producing on the branch.
+0b. **HUMAN_SETUP is the headless-safe human-actions doc (three categories, nothing else).**
+   Because this loop runs headless with no human watching the chat, anything that needs a
+   human keystroke is only "surfaced" when it is WRITTEN into
+   `docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md` as a checkbox with what / why / the
+   exact copy-paste command / how-to-verify. A chat message is not a report - no one reads
+   it during the run. The doc holds ONLY these three: (1) an external secret / third-party
+   account (API key, OAuth app registration, paid provider, DNS, a credential you cannot
+   self-issue); (2) a harness-blocked destructive keystroke you could not run yourself (a
+   `DROP`/`DELETE` on the shared dev DB, a scheduled-task registration) - after driving it as
+   far as the environment allows; (3) the standing note that promotion to `main`/`stable` is
+   the maintainer's decision. **Internal engineering NEVER goes here** (cross-app routes,
+   resolvers, migrations, providers, tests, drift fixes, local-DB cleanup you CAN run) - you
+   do that work; parking it here is just disowning in disguise. The `BUILD_REPORT` and the
+   cycle summary each carry a one-line pointer to this doc ("Human actions: N items" or
+   "none"). Build and test everything that does not depend on a category-1 external secret;
+   continue past everything else.
 1. **Branch-locked.** All work stays on `suite-brainstorm` or on **feature branches
    created off `suite-brainstorm`** (`git switch -c feat/<app>-<slice> suite-brainstorm`).
    Never work on, commit to, push to, or merge into `main` or `stable`.

@@ -46,6 +46,39 @@ If an item cannot be completed for a real, defensible reason, it gets a **record
 with the reason and the exact remaining command** - never the words "follow-up,"
 "deferred," "later," or "out of scope" for work you are capable of doing.
 
+## What "report it to the human" means (this loop is HEADLESS)
+
+This process normally runs headless, fired by the Task Scheduler with **no human watching
+the chat**. So "report it," "surface it," "flag it to the maintainer," or "hand it off"
+**never means saying it in a chat message** - that message is written to a transcript no
+one reads during the run and is effectively lost. It means **writing it into a persistent,
+discoverable document**, or it did not happen.
+
+The document is the cycle's human-actions doc:
+`docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md`. Every item that genuinely needs a human
+keystroke goes there as a **checkbox line** with four fields: **what** is needed, **why**
+(which feature/gate is blocked or which state is dirty without it), the **exact copy-paste
+command or action** (the literal SQL / CLI / admin-screen path - not "run the cleanup"),
+and **how to verify** it once done. The three legitimate categories, and only these:
+
+1. **Promotion to `main`/`stable`** - a standing line every cycle: "promotion is the
+   maintainer's decision; nothing was merged." (Always present.)
+2. **An external secret / third-party account** - the classic HUMAN_SETUP item.
+3. **A harness-blocked destructive keystroke** you could not run yourself (a `DROP`/`DELETE`
+   on the shared dev DB, a scheduled-task registration, etc.) - after you have driven it as
+   far as the environment allows and confirmed it is genuinely blocked.
+
+**Internal engineering NEVER goes in this doc** - if you are capable of doing it, you do it,
+you do not write it up as a human action. The doc is for the three hand-offs above, nothing
+else; using it to park buildable work is the same disowning bug in a different disguise.
+
+The `BUILD_REPORT_<app>.md` and the one-paragraph cycle summary each carry a **one-line
+pointer** to this doc ("Human actions required: see `<stamp>_HUMAN_SETUP_<app>.md` (N
+items)" or "none"). If there are zero human-keystroke items, the report still says so
+explicitly - never omit the line, so a maintainer can trust its absence means "nothing,"
+not "forgotten." A close-out WAIVER on any checklist line above is only valid if the
+remaining action is written into this doc.
+
 ## Procedure
 
 1. **Resolve the app + stamp.** Take the app id and the `docs/brainstorming/<stamp>_*`
