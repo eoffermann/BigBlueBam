@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseToolsFromFile, APP_TOOL_MODULES, TOOLS_DIR } from './lib/tool-source.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,42 +34,35 @@ const requestedApps = appsFlag ? appsFlag.split('=')[1].split(',').map((s) => s.
 // filename (without extension). Apps that share the main api (bam) use the
 // "api" directory for their API code.
 
+// The docs-folder name for each app carries the API metadata below. The
+// per-app MCP tool-module list (including Bam's multi-module set) is resolved
+// from the shared APP_TOOL_MODULES map keyed by Launchpad id (see
+// scripts/docs/lib/tool-source.mjs), so extract and the /docs catalog generator
+// agree on which tool files back which app.
 const APP_REGISTRY = {
-  bam:      { nginxPath: '/b3/',       apiPort: 4000, apiDir: 'api',          toolsFile: null },
-  banter:   { nginxPath: '/banter/',   apiPort: 4002, apiDir: 'banter-api',   toolsFile: 'banter-tools' },
-  beacon:   { nginxPath: '/beacon/',   apiPort: 4004, apiDir: 'beacon-api',   toolsFile: 'beacon-tools' },
-  bearing:  { nginxPath: '/bearing/',  apiPort: 4007, apiDir: 'bearing-api',  toolsFile: 'bearing-tools' },
-  bench:    { nginxPath: '/bench/',    apiPort: 4011, apiDir: 'bench-api',    toolsFile: 'bench-tools' },
-  bill:     { nginxPath: '/bill/',     apiPort: 4014, apiDir: 'bill-api',     toolsFile: 'bill-tools' },
-  blank:    { nginxPath: '/blank/',    apiPort: 4013, apiDir: 'blank-api',    toolsFile: 'blank-tools' },
-  blast:    { nginxPath: '/blast/',    apiPort: 4010, apiDir: 'blast-api',    toolsFile: 'blast-tools' },
-  blueprint:{ nginxPath: '/blueprint/',apiPort: 4015, apiDir: 'blueprint-api',toolsFile: 'blueprint-tools' },
-  board:    { nginxPath: '/board/',    apiPort: 4008, apiDir: 'board-api',    toolsFile: 'board-tools' },
-  bolt:     { nginxPath: '/bolt/',     apiPort: 4006, apiDir: 'bolt-api',     toolsFile: 'bolt-tools' },
-  bond:     { nginxPath: '/bond/',     apiPort: 4009, apiDir: 'bond-api',     toolsFile: 'bond-tools' },
-  book:     { nginxPath: '/book/',     apiPort: 4012, apiDir: 'book-api',     toolsFile: 'book-tools' },
-  brief:    { nginxPath: '/brief/',    apiPort: 4005, apiDir: 'brief-api',    toolsFile: 'brief-tools' },
-  bureau:   { nginxPath: '/bureau/',   apiPort: 4015, apiDir: 'bureau-api',   toolsFile: 'bureau-tools' },
-  helpdesk: { nginxPath: '/helpdesk/', apiPort: 4001, apiDir: 'helpdesk-api', toolsFile: 'helpdesk-tools' },
+  bam:      { nginxPath: '/b3/',       apiPort: 4000, apiDir: 'api',          appId: 'b3' },
+  banter:   { nginxPath: '/banter/',   apiPort: 4002, apiDir: 'banter-api',   appId: 'banter' },
+  beacon:   { nginxPath: '/beacon/',   apiPort: 4004, apiDir: 'beacon-api',   appId: 'beacon' },
+  bearing:  { nginxPath: '/bearing/',  apiPort: 4007, apiDir: 'bearing-api',  appId: 'bearing' },
+  bench:    { nginxPath: '/bench/',    apiPort: 4011, apiDir: 'bench-api',    appId: 'bench' },
+  bill:     { nginxPath: '/bill/',     apiPort: 4014, apiDir: 'bill-api',     appId: 'bill' },
+  blank:    { nginxPath: '/blank/',    apiPort: 4013, apiDir: 'blank-api',    appId: 'blank' },
+  blast:    { nginxPath: '/blast/',    apiPort: 4010, apiDir: 'blast-api',    appId: 'blast' },
+  blueprint:{ nginxPath: '/blueprint/',apiPort: 4015, apiDir: 'blueprint-api',appId: 'blueprint' },
+  board:    { nginxPath: '/board/',    apiPort: 4008, apiDir: 'board-api',    appId: 'board' },
+  bolt:     { nginxPath: '/bolt/',     apiPort: 4006, apiDir: 'bolt-api',     appId: 'bolt' },
+  bond:     { nginxPath: '/bond/',     apiPort: 4009, apiDir: 'bond-api',     appId: 'bond' },
+  book:     { nginxPath: '/book/',     apiPort: 4012, apiDir: 'book-api',     appId: 'book' },
+  brief:    { nginxPath: '/brief/',    apiPort: 4005, apiDir: 'brief-api',    appId: 'brief' },
+  bureau:   { nginxPath: '/bureau/',   apiPort: 4015, apiDir: 'bureau-api',   appId: 'bureau' },
+  bin:      { nginxPath: '/bin/',      apiPort: 4016, apiDir: 'bin-api',      appId: 'bin' },
+  bay:      { nginxPath: '/bay/',      apiPort: 4017, apiDir: 'bay-api',      appId: 'bay' },
+  blip:     { nginxPath: '/blip/',     apiPort: 4018, apiDir: 'blip-api',     appId: 'blip' },
+  basis:    { nginxPath: '/basis/',    apiPort: 4019, apiDir: 'basis-api',    appId: 'basis' },
+  braid:    { nginxPath: '/braid/',    apiPort: 4020, apiDir: 'braid-api',    appId: 'braid' },
+  bulwark:  { nginxPath: '/bulwark/',  apiPort: 4021, apiDir: 'bulwark-api',  appId: 'bulwark' },
+  helpdesk: { nginxPath: '/helpdesk/', apiPort: 4001, apiDir: 'helpdesk-api', appId: 'helpdesk' },
 };
-
-// Additional MCP tool files that are not app-specific (they serve the core
-// Bam platform). We group them under "bam".
-const BAM_TOOL_FILES = [
-  'bam-resolver-tools',
-  'comment-tools',
-  'import-tools',
-  'me-tools',
-  'member-tools',
-  'platform-tools',
-  'project-tools',
-  'report-tools',
-  'sprint-tools',
-  'task-tools',
-  'template-tools',
-  'user-resolver-tools',
-  'utility-tools',
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -115,83 +109,11 @@ function countFiles(dir, pattern) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP tool extraction (regex-based, no TS import required)
+// MCP tool extraction
 // ---------------------------------------------------------------------------
-
-/**
- * Parse a single *-tools.ts file and extract tool registrations.
- *
- * We look for `registerTool(server, {` blocks and extract the `name` and
- * `description` string literals, plus a summary of input parameter names
- * from `z.object({...})` or bare `{...}` shapes.
- */
-function extractToolsFromFile(filePath) {
-  const src = fs.readFileSync(filePath, 'utf-8');
-  const tools = [];
-
-  // Split on registerTool calls
-  const chunks = src.split(/registerTool\s*\(\s*server\s*,\s*\{/);
-  // First chunk is the preamble, skip it
-  for (let i = 1; i < chunks.length; i++) {
-    const chunk = chunks[i];
-
-    // Extract name
-    const nameMatch = chunk.match(/name:\s*['"`]([^'"`]+)['"`]/);
-    if (!nameMatch) continue;
-    const name = nameMatch[1];
-
-    // Extract description
-    const descMatch = chunk.match(/description:\s*['"`]([^'"`]+)['"`]/);
-    const description = descMatch ? descMatch[1] : '';
-
-    // Extract input parameter names from the input: { ... } block
-    // We find "input:" then collect key names until we hit "returns:" or "handler:"
-    const params = extractInputParams(chunk);
-
-    tools.push({ name, description, params });
-  }
-
-  return tools;
-}
-
-/**
- * Extract input parameter names from a tool registration chunk.
- * Looks for lines like `paramName: z.something()` within the input block.
- */
-function extractInputParams(chunk) {
-  // Find the input block - starts after "input:" or "input: {"
-  const inputStart = chunk.indexOf('input:');
-  if (inputStart === -1) return [];
-
-  // Find where the input block ends (at "returns:" or "handler:")
-  const afterInput = chunk.slice(inputStart);
-  const endIdx = findBlockEnd(afterInput, inputStart);
-  const inputBlock = afterInput.slice(0, endIdx);
-
-  // Extract parameter names (identifiers followed by ":")
-  // Match lines like: paramName: z.string()...
-  const paramRegex = /^\s+(\w+)\s*:/gm;
-  const params = [];
-  let m;
-  while ((m = paramRegex.exec(inputBlock)) !== null) {
-    const paramName = m[1];
-    // Skip known non-parameter keys
-    if (['input', 'returns', 'handler', 'name', 'description'].includes(paramName)) continue;
-    params.push(paramName);
-  }
-  return params;
-}
-
-/**
- * Find a reasonable end for the input block by looking for "returns:" or
- * "handler:" at a similar or lower indentation.
- */
-function findBlockEnd(text) {
-  const returnsIdx = text.search(/\n\s{4}returns:/);
-  const handlerIdx = text.search(/\n\s{4}handler:/);
-  const candidates = [returnsIdx, handlerIdx].filter((x) => x > 0);
-  return candidates.length > 0 ? Math.min(...candidates) : text.length;
-}
+// The registerTool(...) parser and the app -> tool-module mapping live in the
+// shared scripts/docs/lib/tool-source.mjs so this stage and the /docs catalog
+// generator never diverge. `parseToolsFromFile` is imported at the top.
 
 // ---------------------------------------------------------------------------
 // Write MCP tools markdown
@@ -312,7 +234,7 @@ function main() {
   if (dryRun) console.log('  (dry-run mode)');
   console.log('');
 
-  const toolsDir = path.join(ROOT, 'apps', 'mcp-server', 'src', 'tools');
+  const toolsDir = TOOLS_DIR;
   const allMeta = [];
 
   // Determine which apps to process
@@ -329,21 +251,17 @@ function main() {
     const appDocsDir = path.join(ROOT, 'docs', 'apps', appName);
 
     // --- MCP tools ---
-    const toolFilePaths = [];
-    if (appName === 'bam') {
-      for (const tf of BAM_TOOL_FILES) {
-        const fp = path.join(toolsDir, `${tf}.ts`);
-        if (fs.existsSync(fp)) toolFilePaths.push(fp);
-      }
-    } else if (reg.toolsFile) {
-      const fp = path.join(toolsDir, `${reg.toolsFile}.ts`);
-      if (fs.existsSync(fp)) toolFilePaths.push(fp);
-    }
+    // Resolve tool modules via the shared APP_TOOL_MODULES map (keyed by
+    // Launchpad id; Bam's id is `b3`).
+    const modules = APP_TOOL_MODULES[reg.appId] || [];
+    const toolFilePaths = modules
+      .map((m) => path.join(toolsDir, `${m}.ts`))
+      .filter((fp) => fs.existsSync(fp));
 
     let allTools = [];
     for (const fp of toolFilePaths) {
       try {
-        const tools = extractToolsFromFile(fp);
+        const tools = parseToolsFromFile(fp);
         allTools.push(...tools);
       } catch (err) {
         console.error(`  WARNING: Failed to parse ${path.basename(fp)}: ${err.message}`);

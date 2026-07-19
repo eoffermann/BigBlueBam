@@ -1,0 +1,24 @@
+# bin MCP Tools
+
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `bin_asset_archive` | Archive (soft-delete) a Bin asset. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed. The asset is hidden from default listings but versions are retained. | `id`, `confirm_action` |
+| `bin_asset_create` | Create a Bin asset (metadata only; the first version bytes are uploaded separately via the REST upload route). Use this to register a new file before uploading content, or to create a placeholder an agent will fill via bin_data_append_rows on a structured asset. | `content_type`, `folder_id`, `project_id`, `visibility` |
+| `bin_asset_delete` | Hard-delete a Bin asset: removes the catalog entry AND its stored bytes (all versions + derived proxy/poster). Irreversible — unlike bin_asset_archive, nothing is retained. Missing bytes are not an error (the row is deleted regardless). Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed. | `id`, `confirm_action` |
+| `bin_asset_get` | Get a Bin asset's metadata: name, content type, current version, size, scan status (serving is gated until clean/skipped), visibility, and folder/project placement. | none |
+| `bin_asset_list` | List Bin assets (the DAM library) visible to the caller, optionally scoped to a folder (pass folder_id="root" for unfiled) or project, and optionally including archived. Returns metadata only; use bin_data_read for structured-data contents. | `folder_id`, `project_id`, `include_archived` |
+| `bin_asset_update` | Update a Bin asset's mutable metadata: rename, move to a folder (folder_id, or null for root), and/or set its arbitrary tags (replaces the tag list). Used to organize the file hierarchy and make assets searchable. | `id`, `folder_id`, `tags` |
+| `bin_data_append_rows` | Append rows to a record-shaped structured-data asset. Commits a new immutable version (the original dialect is preserved). Each row is an object keyed by column name. | `asset_id`, `rows` |
+| `bin_data_array_op` | Add or delete a row in any structured-data grid. path=[] targets a record asset's top-level rows; a path like ["passengers"] targets a tree embedded grid (array-of-dicts). op is "append" (add a row at the end; value optional), "insert" (at index), or "delete" (remove index). Commits a new immutable version. | `asset_id`, `op`, `path`, `value`, `index` |
+| `bin_data_comment_create` | Add a review comment anchored to a cell/path of a structured-data asset. Record anchor: { rid, colId? }; tree anchor: { pointer }. Comments are authored by humans or agents identically. | `asset_id`, `shape`, `anchor`, `body`, `thread_parent_id` |
+| `bin_data_comment_list` | List review comments on a structured-data asset (open by default; pass include_resolved). | `asset_id`, `include_resolved` |
+| `bin_data_comment_resolve` | Mark a structured-data review comment resolved (or reopen it with resolved:false). | `asset_id`, `comment_id`, `resolved` |
+| `bin_data_open_session` | Open or resume the editing session for a structured-data asset. Returns the detected shape, the schema (pinned or inferred), the dialect, the base version, and the /bin/ws collaboration room. Use before a series of edits; the live human editor shares the same session. | none |
+| `bin_data_patch` | Apply cell patches to a record-shaped structured-data asset by 0-based row index. Commits a new immutable version. Each patch is { index, set: { column: newValue } }. | `asset_id`, `patches` |
+| `bin_data_patch_tree` | Edit a tree-shaped structured-data asset (JSON/YAML) by setting values at paths. Each patch is { path, value } where path is an array like ["passengers", 2, "vip"] or ["charter", "operator"]. Strings are coerced to the existing leaf's type (number/boolean). Commits a new immutable version. | `asset_id`, `patches` |
+| `bin_data_read` | Read a structured-data asset (CSV/TSV/JSON/JSONL/YAML) as records or a tree. Record-shaped assets return columns + rows with optional equality filtering (filter map), column projection, and offset/limit paging, plus an inferred field schema. Tree-shaped assets return the reconstructed value. Gated on scan status (clean/skipped only). | `asset_id`, `filter`, `columns`, `limit`, `offset` |
+| `bin_folder_create` | Create a Bin folder, optionally nested under a parent and/or scoped to a project. | `parent_id`, `project_id` |
+| `bin_folder_list` | List Bin folders for the caller’s org, optionally scoped to a project. | none |
+| `bin_tag_list` | List the distinct tags used across the org’s Bin assets (for tag pickers/filters). | none |
+| `bin_version_list` | List the immutable versions of a Bin asset, newest first. Each upload or structured-editor commit mints a monotonic version_number; bytes are never edited in place. | none |

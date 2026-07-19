@@ -1,0 +1,13 @@
+{
+  "app": "bulwark",
+  "nginx_path": "/bulwark/",
+  "api_port": 4021,
+  "api_dir": "bulwark-api",
+  "route_files": 8,
+  "schema_modules": 13,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "53dbd81c033aa928c5c739426c2deefbf70cf14af6ff9c2baf071baf7a0d3eb3",
+  "generated_at": "2026-07-19T11:30:45.793Z",
+  "mcp_tool_count": 16
+}

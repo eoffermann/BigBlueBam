@@ -1,0 +1,13 @@
+{
+  "app": "braid",
+  "nginx_path": "/braid/",
+  "api_port": 4020,
+  "api_dir": "braid-api",
+  "route_files": 1,
+  "schema_modules": 11,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "d31cd65985b7e16cc6b2b43a1f640ad5ed19057d10730f3cc7ac524a2eb943fd",
+  "generated_at": "2026-07-19T11:30:45.778Z",
+  "mcp_tool_count": 13
+}

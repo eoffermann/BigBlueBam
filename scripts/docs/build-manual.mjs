@@ -25,6 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readLaunchpadCatalog, docDirForAppId } from './lib/tool-source.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -47,27 +48,35 @@ function pngSize(filePath) {
   }
 }
 
-// The suite introduction plus the 16 documented apps. introduction is pinned
-// first, then bam, then the rest alphabetically.
-const APPS = [
-  'introduction',
-  'bam',
-  'banter',
-  'beacon',
-  'bearing',
-  'bench',
-  'bill',
-  'blank',
-  'blast',
-  'blueprint',
-  'board',
-  'bolt',
-  'bond',
-  'book',
-  'brief',
-  'bureau',
-  'helpdesk',
-];
+// The suite introduction plus every documented app. introduction is pinned
+// first, then bam, then the rest alphabetically (see orderRank below). The app
+// roster is derived from LAUNCHPAD_CATALOG so a new app flows in automatically;
+// an app that has no help.md yet degrades to a short text-only stub entry
+// rather than failing the build.
+const LAUNCHPAD = readLaunchpadCatalog();
+const LAUNCHPAD_BY_DIR = new Map(
+  LAUNCHPAD.map((a) => [docDirForAppId(a.id), a]),
+);
+const APPS = ['introduction', ...LAUNCHPAD.map((a) => docDirForAppId(a.id))];
+
+/**
+ * Build a minimal text-only manual entry for an app whose help.md does not
+ * exist yet, so the manual stays complete instead of dropping the app.
+ */
+function stubEntry(app) {
+  const meta = LAUNCHPAD_BY_DIR.get(app);
+  const name = meta ? meta.name : app.charAt(0).toUpperCase() + app.slice(1);
+  const desc = meta ? meta.description : '';
+  const markdown = [
+    `# ${name}`,
+    '',
+    desc ? `${name} (${desc}).` : `${name}.`,
+    '',
+    'A full guide for this app is coming soon. In the meantime, explore it in the app itself and use the in-app Help Center.',
+    '',
+  ].join('\n');
+  return { app, title: name, toc: [], markdown };
+}
 
 /**
  * Rewrite relative screenshot embeds to absolute, app-scoped public paths.
@@ -98,7 +107,8 @@ function build() {
     const indexPath = path.join(APPS_DIR, app, 'help-index.json');
 
     if (!fs.existsSync(helpPath)) {
-      problems.push(`${app}: missing help.md`);
+      problems.push(`${app}: missing help.md (using text-only stub entry)`);
+      entries.push(stubEntry(app));
       continue;
     }
 

@@ -1,0 +1,13 @@
+{
+  "app": "basis",
+  "nginx_path": "/basis/",
+  "api_port": 4019,
+  "api_dir": "basis-api",
+  "route_files": 1,
+  "schema_modules": 7,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "ee149ed7dd7d48b5a51f3c3138a219a5c55bd5e78e88cf103d48d6b80289ecfd",
+  "generated_at": "2026-07-19T11:30:45.768Z",
+  "mcp_tool_count": 16
+}

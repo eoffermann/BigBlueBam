@@ -41,6 +41,8 @@ const ACCENT = {
   bench: '4F46E5', bill: '16A34A', blank: '9333EA', blast: 'DC2626',
   blueprint: '0284C7', board: '4338CA', bolt: 'EA580C', bond: 'DB2777',
   book: '0D9488', brief: 'D97706', bureau: '6D28D9', helpdesk: 'E11D48',
+  bay: 'DB2777', bin: '0369A1', blip: '0891B2', basis: '4F46E5',
+  braid: '4338CA', bulwark: '1D4ED8',
 };
 const INK = '18181B', SUBTLE = '52525B', HAIR = 'E4E4E7', CODEBG = 'F4F4F5';
 const SEMANTIC = { tip: null, important: 'D97706', warning: 'DC2626', note: '475569', tryit: '059669' };

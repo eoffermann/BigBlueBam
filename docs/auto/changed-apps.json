@@ -1,85 +1,21 @@
 {
-  "generated_at": "2026-06-24T21:06:04.653Z",
+  "generated_at": "2026-07-19T11:30:45.850Z",
   "changed": [
     {
-      "app": "bam",
-      "reason": "src_hash_changed",
-      "new_hash": "3fb5d294cda70283d7d9b89465e7f183f3854f1586d478aeb3fdf7a93c3fea27"
+      "app": "bin",
+      "reason": "new"
     },
     {
-      "app": "banter",
-      "reason": "src_hash_changed",
-      "new_hash": "884c10332b3caf16fb2136478297fec2cb75afce9fea2b4324838334c47d6ba4"
+      "app": "basis",
+      "reason": "new"
     },
     {
-      "app": "beacon",
-      "reason": "src_hash_changed",
-      "new_hash": "14bd9afda2a2d0554f4db706166ed86138e7ea85bec053770fb457efeab879b0"
+      "app": "braid",
+      "reason": "new"
     },
     {
-      "app": "bearing",
-      "reason": "src_hash_changed",
-      "new_hash": "d9ba8a06821feab48798189aa80e7ccd93e5a967d54ce4f1c5b3c4cfd2024d30"
-    },
-    {
-      "app": "bench",
-      "reason": "src_hash_changed",
-      "new_hash": "1ef621bd1a782f46bab45c1aebab903f0cdca79962662d8a8c4a2afe29133947"
-    },
-    {
-      "app": "bill",
-      "reason": "src_hash_changed",
-      "new_hash": "56c33003f7b774c4e3e6624fba1225a8beeb205b5f6779224a6e35bf7dfb8381"
-    },
-    {
-      "app": "blank",
-      "reason": "src_hash_changed",
-      "new_hash": "bb1cab14bb64f07e767a0470c133476d64e3038842bffd18698f0a5f81f7155c"
-    },
-    {
-      "app": "blast",
-      "reason": "src_hash_changed",
-      "new_hash": "82e7ae67e596663dfb3c08e63e466c1292278802fb948178450df18779b6b6b3"
-    },
-    {
-      "app": "blueprint",
-      "reason": "src_hash_changed",
-      "new_hash": "80b196edd216fd4118342c4a45a88d5071d89641f6592e698e7d8852612185c4"
-    },
-    {
-      "app": "board",
-      "reason": "src_hash_changed",
-      "new_hash": "209df67fd8206e8964e709476acef737b698a498cbedc4e3f16c6f8169ccbff2"
-    },
-    {
-      "app": "bolt",
-      "reason": "src_hash_changed",
-      "new_hash": "75715a9215bd569490be1f894a350d23e146d60b400c5b4c76e169bdbcd1e882"
-    },
-    {
-      "app": "bond",
-      "reason": "src_hash_changed",
-      "new_hash": "fbb8934b398ce8a39f26c663a3dd96380ab5a7ad139d30a1adb0d32ba65f9e0a"
-    },
-    {
-      "app": "book",
-      "reason": "src_hash_changed",
-      "new_hash": "3923696e8b7008dcfa3caa1a2394cf2f221f6d673aad0b9d8d45bac511d36359"
-    },
-    {
-      "app": "brief",
-      "reason": "src_hash_changed",
-      "new_hash": "1e46fe0242b5bb7ab601be1ac8dd0e85c1656ed3dcc55cdca0e16e06b10bd7ed"
-    },
-    {
-      "app": "bureau",
-      "reason": "src_hash_changed",
-      "new_hash": "e02976ff3d906e751a962b3548e41315236270ec95fd3d02fc991272a8c23ff4"
-    },
-    {
-      "app": "helpdesk",
-      "reason": "src_hash_changed",
-      "new_hash": "c3f8eaa5dccb3c7662600229ca941c1c8f516807a871b3394ae19e353900da37"
+      "app": "bulwark",
+      "reason": "new"
     }
   ]
 }
