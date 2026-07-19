@@ -54,7 +54,9 @@ async function driveDecision(row: PendingRow, logger: Logger): Promise<'merged' 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Number(process.env.UPSTREAM_TIMEOUT_MS ?? 10000));
   try {
-    const res = await fetch(`${braidInternalUrl()}/internal/proposal-decided`, {
+    // braid-api registers its routes under /v1, so the internal decision route
+    // is /v1/internal/proposal-decided.
+    const res = await fetch(`${braidInternalUrl()}/v1/internal/proposal-decided`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
       signal: controller.signal,

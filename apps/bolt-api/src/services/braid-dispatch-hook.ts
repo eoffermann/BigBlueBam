@@ -70,7 +70,9 @@ export async function dispatchToBraid(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
-    await fetch(`${braidInternalUrl()}/internal/events`, {
+    // braid-api registers its routes under the /v1 prefix, so the internal
+    // ingest-trigger route is /v1/internal/events (verified live).
+    await fetch(`${braidInternalUrl()}/v1/internal/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': secret },
       signal: controller.signal,
