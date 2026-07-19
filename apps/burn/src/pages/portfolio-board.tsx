@@ -1,19 +1,21 @@
 import { useMemo, useState } from 'react';
-import { Users, ExternalLink } from 'lucide-react';
+import { Users, ExternalLink, FilePlus } from 'lucide-react';
 import { useCan } from '@bigbluebam/ui/use-can';
-import type { BurnMoneyBlock } from '@bigbluebam/shared';
+import type { BurnMoneyBlock, BurnEngagementCreate, BurnEngagementKind, BurnEnvelopeBasis } from '@bigbluebam/shared';
 import {
   useEngagements,
   useAccountFinancials,
   useChainFinancials,
   useQueueHealth,
+  useCreateEngagement,
   type EngagementRow,
 } from '@/hooks/use-burn';
-import { PageHeader, Card, LoadingState, ErrorState, EmptyState } from '@/components/primitives';
+import { PageHeader, Card, LoadingState, ErrorState, EmptyState, Btn } from '@/components/primitives';
 import { ChainStatusBadge, EnvelopeBasisBadge, type BurnChainStatus } from '@/components/badges';
 import { MoneyFigure } from '@/components/money-figure';
 import { BurnBar } from '@/components/burn-bar';
 import { formatCents, cn } from '@/lib/utils';
+import { ApiError } from '@/lib/api';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -42,7 +44,9 @@ function accountKey(e: EngagementRow): string {
 
 export function PortfolioBoardPage({ onNavigate }: Props) {
   const canReadAll = useCan('burn.financials.read_all');
+  const canWrite = useCan('burn.engagement.write');
   const [allAccounts, setAllAccounts] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
   const { data, isLoading, isError } = useEngagements();
   const { data: health } = useQueueHealth();
   const accountFin = useAccountFinancials(canReadAll && allAccounts);
@@ -65,18 +69,35 @@ export function PortfolioBoardPage({ onNavigate }: Props) {
         title="Portfolio Board"
         subtitle="One card per engagement chain, grouped by client. The headline figure is labeled from its metric and revenue basis."
         actions={
-          canReadAll ? (
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allAccounts}
-                onChange={(e) => setAllAccounts(e.target.checked)}
-              />
-              All accounts rollup
-            </label>
-          ) : undefined
+          <div className="flex items-center gap-3">
+            {canReadAll && (
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allAccounts}
+                  onChange={(e) => setAllAccounts(e.target.checked)}
+                />
+                All accounts rollup
+              </label>
+            )}
+            {canWrite && (
+              <Btn variant="primary" onClick={() => setShowRegister((s) => !s)}>
+                <FilePlus className="h-4 w-4" /> Register engagement
+              </Btn>
+            )}
+          </div>
         }
       />
+
+      {showRegister && canWrite && (
+        <RegisterEngagementForm
+          onClose={() => setShowRegister(false)}
+          onCreated={(id) => {
+            setShowRegister(false);
+            onNavigate(`/engagements/${id}`);
+          }}
+        />
+      )}
 
       {health?.data && <QueueHealthStrip health={health.data} onNavigate={onNavigate} canReadAll={canReadAll} />}
 
@@ -103,10 +124,19 @@ export function PortfolioBoardPage({ onNavigate }: Props) {
       ) : isError ? (
         <ErrorState message="Could not load engagements. The burn-api service may not be wired into the stack yet." />
       ) : groups.length === 0 ? (
-        <EmptyState
-          title="No engagements yet"
-          hint="Register a signed SOW, proposal, or engagement letter to start watching work against the contract that paid for it."
-        />
+        <div>
+          <EmptyState
+            title="No engagements yet"
+            hint="Register a signed SOW, proposal, or engagement letter to start watching work against the contract that paid for it."
+          />
+          {canWrite && (
+            <div className="-mt-6 flex justify-center">
+              <Btn variant="primary" onClick={() => setShowRegister(true)}>
+                <FilePlus className="h-4 w-4" /> Register engagement
+              </Btn>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-8">
           {groups.map(([key, chains]) => (
@@ -197,6 +227,266 @@ function ChainCard({ engagement, onNavigate }: { engagement: EngagementRow; onNa
           </div>
         )}
       </button>
+    </Card>
+  );
+}
+
+const ENGAGEMENT_KINDS: BurnEngagementKind[] = [
+  'sow',
+  'proposal',
+  'engagement_letter',
+  'msa',
+  'retainer',
+  'amendment',
+  'change_order',
+  'other',
+];
+const ENVELOPE_BASES: BurnEnvelopeBasis[] = ['fixed', 'time_and_materials', 'retainer', 'not_to_exceed'];
+
+const inputCls =
+  'w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm';
+
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs text-zinc-500 mb-1">{label}</span>
+      {children}
+      {hint && <span className="mt-1 block text-[11px] text-zinc-400">{hint}</span>}
+    </label>
+  );
+}
+
+// The flagship human onboarding path (spec 1.1): point Burn at a signed SOW/proposal in Bin
+// and register it as an engagement. Fields mirror burnEngagementCreateSchema exactly; the
+// server enqueues burn-extract-deliverables and returns immediately, so the detail page the
+// caller lands on shows the (extracting) ledger.
+function RegisterEngagementForm({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const create = useCreateEngagement();
+  const [title, setTitle] = useState('');
+  const [kind, setKind] = useState<BurnEngagementKind>('sow');
+  const [binAssetId, setBinAssetId] = useState('');
+  const [basis, setBasis] = useState<BurnEnvelopeBasis>('fixed');
+  const [currency, setCurrency] = useState('USD');
+  const [contractValue, setContractValue] = useState('');
+  const [budgetHours, setBudgetHours] = useState('');
+  const [periodLength, setPeriodLength] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [accountType, setAccountType] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const [billClientId, setBillClientId] = useState('');
+
+  const retainer = basis === 'retainer';
+  // Mirrors burnEngagementCreateRefined: a retainer needs a positive period length.
+  const periodOk = !retainer || (periodLength !== '' && Number(periodLength) > 0);
+  const valid = title.trim() !== '' && currency.trim().length === 3 && periodOk;
+
+  const submit = () => {
+    const input: BurnEngagementCreate = {
+      title: title.trim(),
+      engagement_kind: kind,
+      currency: currency.trim().toUpperCase(),
+      envelope_basis: basis,
+      timezone: 'UTC',
+      project_ids: [],
+      ...(binAssetId.trim() ? { bin_asset_id: binAssetId.trim() } : {}),
+      ...(contractValue !== '' ? { contract_value: Number(contractValue) } : {}),
+      ...(budgetHours !== '' ? { budget_hours: Number(budgetHours) } : {}),
+      ...(periodLength !== '' ? { period_length_days: Number(periodLength) } : {}),
+      ...(startDate ? { start_date: startDate } : {}),
+      ...(endDate ? { end_date: endDate } : {}),
+      ...(accountType.trim() ? { account_type: accountType.trim() } : {}),
+      ...(accountId.trim() ? { account_id: accountId.trim() } : {}),
+      ...(billClientId.trim() ? { bill_client_id: billClientId.trim() } : {}),
+    };
+    create.mutate(input, { onSuccess: (res) => onCreated(res.data.id) });
+  };
+
+  const err = create.error instanceof ApiError ? create.error : null;
+
+  return (
+    <Card className="mb-6 p-4 space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+        <FilePlus className="h-4 w-4 text-primary-500" /> Register engagement
+      </div>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        Point Burn at a signed SOW, proposal, or engagement letter stored in Bin. Burn reads its deliverable
+        ledger, then watches work against the contract that paid for it. Extraction runs in the background
+        after you register, so the new engagement opens in an extracting state.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Title">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={inputCls}
+            placeholder="e.g. Castaway Rescue Platform SOW"
+          />
+        </Field>
+        <Field label="Kind">
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as BurnEngagementKind)}
+            className={inputCls}
+          >
+            {ENGAGEMENT_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Signed document (Bin asset ID)"
+          hint="The signed SOW/proposal in Bin. Its deliverable ledger is extracted from here."
+        >
+          <input
+            value={binAssetId}
+            onChange={(e) => setBinAssetId(e.target.value)}
+            className={inputCls}
+            placeholder="bin asset uuid (optional)"
+          />
+        </Field>
+        <Field label="Envelope basis">
+          <select
+            value={basis}
+            onChange={(e) => setBasis(e.target.value as BurnEnvelopeBasis)}
+            className={inputCls}
+          >
+            {ENVELOPE_BASES.map((b) => (
+              <option key={b} value={b}>
+                {b.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Currency (ISO 4217)">
+          <input
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            maxLength={3}
+            className={cn(inputCls, currency.trim().length !== 3 && 'border-red-400')}
+            placeholder="USD"
+          />
+        </Field>
+        <Field label="Contract value (minor units / cents, optional)">
+          <input
+            type="number"
+            value={contractValue}
+            onChange={(e) => setContractValue(e.target.value)}
+            className={inputCls}
+            placeholder="e.g. 18000000"
+          />
+        </Field>
+        {retainer ? (
+          <Field
+            label="Period length (days)"
+            hint="Required for a retainer: it sets the per-period boundaries."
+          >
+            <input
+              type="number"
+              min={1}
+              value={periodLength}
+              onChange={(e) => setPeriodLength(e.target.value)}
+              className={cn(inputCls, !periodOk && 'border-red-400')}
+              placeholder="e.g. 30"
+            />
+          </Field>
+        ) : (
+          <Field label="Budget hours (optional)">
+            <input
+              type="number"
+              min={0}
+              value={budgetHours}
+              onChange={(e) => setBudgetHours(e.target.value)}
+              className={inputCls}
+              placeholder="e.g. 400"
+            />
+          </Field>
+        )}
+        <Field label="Start date (optional)">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="End date (optional)">
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className={inputCls}
+          />
+        </Field>
+        <Field
+          label="Client account type (optional)"
+          hint="e.g. bond.company — a bond.company id enables Braid golden-profile resolution."
+        >
+          <input
+            value={accountType}
+            onChange={(e) => setAccountType(e.target.value)}
+            className={inputCls}
+            placeholder="bond.company"
+          />
+        </Field>
+        <Field label="Client account ID (optional)">
+          <input
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            className={inputCls}
+            placeholder="account uuid"
+          />
+        </Field>
+        <Field label="Bill client ID (optional)">
+          <input
+            value={billClientId}
+            onChange={(e) => setBillClientId(e.target.value)}
+            className={inputCls}
+            placeholder="bill client uuid"
+          />
+        </Field>
+      </div>
+
+      {err && (
+        <div className="text-xs text-red-500">
+          <p>{err.message}</p>
+          {Array.isArray(err.details) && err.details.length > 0 && (
+            <ul className="mt-1 list-disc pl-4">
+              {err.details.map((d, i) => (
+                <li key={i}>
+                  {String((d as { field?: string }).field ?? '')}: {String((d as { issue?: string }).issue ?? '')}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Btn variant="primary" size="sm" disabled={!valid || create.isPending} onClick={submit}>
+          {create.isPending ? 'Registering...' : 'Register engagement'}
+        </Btn>
+        <Btn variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Btn>
+      </div>
     </Card>
   );
 }
