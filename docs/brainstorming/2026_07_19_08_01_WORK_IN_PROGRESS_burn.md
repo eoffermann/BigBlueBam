@@ -24,18 +24,24 @@ events and 16 subscriptions; **11 queues (10 job families + the claim reaper)**;
 
 ---
 
-## M0 - Preceding PRs (land before Burn code)
+## M0 - Preceding PRs - **COMPLETE**
 
-- [ ] `packages/shared/src/visibility-client.ts` exporting `preflightAccess` + `preflightMany`
-- [ ] `"./visibility-client"` block in `packages/shared/package.json` exports
-- [ ] **`'src/visibility-client.ts'` appended to the `entry` array in `packages/shared/tsup.config.ts`** (three-file contract; without it the dist artifact is never emitted and four services fail image build)
-- [ ] `basis-api`, `braid-api`, `bulwark-api` migrated onto it, per-app copies deleted
-- [ ] Basis-only `DIMENSION_ENTITY_TYPE` / `entityTypeForDimension` / `resolveVisibleValues` kept in `apps/basis-api/src/lib/` as a thin wrapper (Class-B decomposition, not a visibility client)
-- [ ] Fail-closed semantics preserved at the strictest of the three
-- [ ] `can_access` fail-closed probe passes in each of the three migrated apps
-- [ ] env-hints entries for **all eight names from §9.6.2**, not just one: `BOLT_API_INTERNAL_URL` (live bug - required on bulwark-api, orchestrator throws), `BILL_API_INTERNAL_URL` (required on burn-api, same class), `BURN_API_INTERNAL_URL`, `BURN_API_URL`, `BBB_PERMISSIONS_ENFORCE`, `BRAID_API_INTERNAL_URL`, `MAX_DOC_BYTES`, `MAX_DOC_PAGES`
-- [ ] env-hints coverage test with a dated, append-forbidden allowlist of the remaining pre-existing names
-- [ ] Root `check:env-hints` script + a step in `.github/workflows/lint.yml`
+Commits `24af7df2`, `6f06e22c`, plus the review-fix commits below.
+
+- [x] `packages/shared/src/visibility-client.ts` exporting `preflightAccess` + `preflightMany`
+- [x] `"./visibility-client"` block in `packages/shared/package.json` exports
+- [x] **`'src/visibility-client.ts'` appended to the tsup `entry` array** - verified by a successful `docker compose build basis-api braid-api bulwark-api`, which is the check that catches a missing entry
+- [x] `braid-api` and `bulwark-api` copies deleted, four call sites repointed
+- [x] `basis-api` keeps a thin wrapper for its dimension-decomposition layer, re-exporting the primitive as `canAccessEntity` so its two consumers were untouched
+- [x] Fail-closed contract pinned by tests (now 20, after the review fixes)
+- [x] `can_access` probe passes in each migrated app
+- [x] Eight env-hints entries. **Corrections found by the agent:** `BILL_API_INTERNAL_URL` is latent, not live; and `internal('burn-api')` would have thrown at module load since burn-api is not in the catalog, so a `plannedApp()` fallback was required
+- [x] `check-env-hints.mjs` wired into `lint.yml` - 90 variables checked, 15 grandfathered, fails on a stale allowlist entry too
+- [x] **#84 fixed at root cause:** `.gitattributes` had no `*.md` rule, so a Windows checkout gave `docs/apps/*/help.md` CRLF, the generator baked `\r\n` into `manual.generated.json`, and the committed artifact could never match a Linux CI run. Self-perpetuating: re-running `pnpm docs:manual` on Windows just re-baked it. Verified fixed against a clean clone in a Linux container
+- [x] **#86 fixed:** internal `can_access` and system-error routes admitted unauthenticated requests when `INTERNAL_SERVICE_SECRET` was unset, making the visibility matrix an open oracle. Now 401, matching `requireInternalAuth`
+- [x] **#80, #82 fixed:** `preflightMany` aggregate deadline (200 ids against a hung upstream was 100s), and an `onDegraded` hook distinguishing a real `allowed:false` from an outage
+- [x] **#85 fixed:** `plannedApp()` now throws on an unknown service name; a typo previously resolved to a plausible unreachable URL forever
+- [x] **#83 resolved by decision:** Burn does not make enforcement env-configurable. See M1
 
 ## M1 - Scaffold
 
