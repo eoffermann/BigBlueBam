@@ -50,3 +50,9 @@ jobs:
 
       - name: Check help index drift
         run: pnpm help:check
+
+      - name: Check docs catalog drift
+        run: pnpm docs:catalog:check
+
+      - name: Check docs manual drift
+        run: pnpm docs:manual:check

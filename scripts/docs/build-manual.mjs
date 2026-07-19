@@ -20,6 +20,8 @@
  *   title is taken from help-index.json.title, falling back to the markdown H1.
  *
  * Run: node scripts/docs/build-manual.mjs
+ *      node scripts/docs/build-manual.mjs --check  # fail (exit 1) if either
+ *                                                   # committed output is stale
  */
 
 import fs from 'node:fs';
@@ -27,12 +29,35 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readLaunchpadCatalog, docDirForAppId } from './lib/tool-source.mjs';
 
+const checkMode = process.argv.includes('--check');
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const APPS_DIR = path.join(ROOT, 'docs', 'apps');
 const OUT_FILE = path.join(ROOT, 'site', 'src', 'content', 'manual.generated.json');
 const OUT_DIMS = path.join(ROOT, 'site', 'src', 'content', 'manual-image-dims.generated.json');
 const PUBLIC_DIR = path.join(ROOT, 'site', 'public');
+
+// Files reported stale in --check mode (checked line-ending agnostically).
+const staleFiles = [];
+
+/**
+ * In normal mode write `content` to `file`; in --check mode compare it against
+ * the committed file (CRLF/LF agnostic, matching the help-index guard) and
+ * record staleness instead of writing.
+ */
+function emit(file, content) {
+  if (checkMode) {
+    const norm = (s) => s.replace(/\r\n?/g, '\n');
+    const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+    if (prev === null || norm(prev) !== norm(content)) {
+      staleFiles.push(path.relative(ROOT, file));
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content, 'utf8');
+}
 
 /** Read a PNG's intrinsic width/height from its header (IHDR at bytes 16-24). */
 function pngSize(filePath) {
@@ -143,8 +168,7 @@ function build() {
     return a.app.localeCompare(b.app);
   });
 
-  fs.mkdirSync(path.dirname(OUT_FILE), { recursive: true });
-  fs.writeFileSync(OUT_FILE, JSON.stringify(entries, null, 2) + '\n', 'utf8');
+  emit(OUT_FILE, JSON.stringify(entries, null, 2) + '\n');
 
   // Intrinsic dimensions for every embedded screenshot. The client reserves
   // space via aspect-ratio so lazy-loading images don't shift layout — which
@@ -162,8 +186,8 @@ function build() {
       else dimsMissing++;
     }
   }
-  fs.writeFileSync(OUT_DIMS, JSON.stringify(imageDims, null, 2) + '\n', 'utf8');
-  console.log(`Wrote ${path.relative(ROOT, OUT_DIMS)} with ${Object.keys(imageDims).length} image dimensions${dimsMissing ? ` (${dimsMissing} unreadable)` : ''}.`);
+  emit(OUT_DIMS, JSON.stringify(imageDims, null, 2) + '\n');
+  console.log(`${checkMode ? 'Checked' : 'Wrote'} ${path.relative(ROOT, OUT_DIMS)} with ${Object.keys(imageDims).length} image dimensions${dimsMissing ? ` (${dimsMissing} unreadable)` : ''}.`);
 
   // --- report ---
   // A genuinely-relative leftover is `](screenshots/` or `](./screenshots/`,
@@ -174,7 +198,7 @@ function build() {
     return acc + (matches ? matches.length : 0);
   }, 0);
 
-  console.log(`Wrote ${path.relative(ROOT, OUT_FILE)} with ${entries.length} entries.`);
+  console.log(`${checkMode ? 'Checked' : 'Wrote'} ${path.relative(ROOT, OUT_FILE)} with ${entries.length} entries.`);
   console.log(`  Apps: ${entries.map((e) => e.app).join(', ')}`);
   if (relativeImageLeftovers > 0) {
     console.error(`  WARNING: ${relativeImageLeftovers} relative screenshot path(s) not rewritten.`);
@@ -190,6 +214,16 @@ function build() {
     console.error(`  ERROR: expected ${APPS.length} entries, got ${entries.length}.`);
     process.exit(1);
   }
+
+  if (checkMode && staleFiles.length) {
+    console.error(
+      `\n[stale] ${staleFiles.length} generated manual file(s) out of date:\n` +
+        staleFiles.map((f) => `  - ${f}`).join('\n') +
+        '\nRun: pnpm docs:manual  (then commit the regenerated JSON).',
+    );
+    process.exit(1);
+  }
+  if (checkMode) console.log('\nManual generated files are current.');
 }
 
 build();

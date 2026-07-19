@@ -25,6 +25,8 @@
  *
  * Usage:
  *   node scripts/docs/build-docs-catalog.mjs [--dry-run]
+ *   node scripts/docs/build-docs-catalog.mjs --check   # fail (exit 1) if the
+ *                                                        # committed JSON is stale
  */
 
 import fs from 'node:fs';
@@ -39,6 +41,7 @@ import {
 } from './lib/tool-source.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
+const checkMode = process.argv.includes('--check');
 
 const OUT_FILE = path.join(
   ROOT,
@@ -152,6 +155,33 @@ function main() {
   }
 
   const json = JSON.stringify(products, null, 2) + '\n';
+
+  // --check: regenerate in memory and compare to the committed file, so CI can
+  // prove the "impossible to drift" guarantee. Compare line-ending agnostically
+  // - a Windows (autocrlf) checkout stores the JSON as CRLF while we emit LF,
+  // which would otherwise report an up-to-date file as stale.
+  if (checkMode) {
+    const norm = (s) => s.replace(/\r\n?/g, '\n');
+    const prev = fs.existsSync(OUT_FILE)
+      ? fs.readFileSync(OUT_FILE, 'utf-8')
+      : null;
+    if (prev === null) {
+      console.error(
+        `\n[stale] ${path.relative(ROOT, OUT_FILE)} does not exist. Run: pnpm docs:catalog`,
+      );
+      process.exit(1);
+    }
+    if (norm(prev) !== norm(json)) {
+      console.error(
+        `\n[stale] ${path.relative(ROOT, OUT_FILE)} is out of date.\n` +
+          'Run: pnpm docs:catalog  (then commit the regenerated JSON).',
+      );
+      process.exit(1);
+    }
+    console.log(`\n${path.relative(ROOT, OUT_FILE)} is current.`);
+    return;
+  }
+
   if (dryRun) {
     console.log('\n[dry-run] Not writing output.');
     return;

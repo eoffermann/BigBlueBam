@@ -41,9 +41,11 @@
     "docs:screenshots": "node scripts/docs/capture.mjs",
     "docs:extract": "node scripts/docs/extract.mjs",
     "docs:catalog": "node scripts/docs/build-docs-catalog.mjs",
+    "docs:catalog:check": "node scripts/docs/build-docs-catalog.mjs --check",
     "docs:compose": "node scripts/docs/compose.mjs",
     "docs:publish": "node scripts/docs/publish.mjs",
     "docs:manual": "node scripts/docs/build-manual.mjs",
+    "docs:manual:check": "node scripts/docs/build-manual.mjs --check",
     "docs:generate": "node scripts/docs/generate.mjs"
   },
   "devDependencies": {
