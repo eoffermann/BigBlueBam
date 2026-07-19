@@ -10,6 +10,7 @@ import {
   BURN_PERMISSIONS_ON_UNKNOWN,
   assertPermissionsEnforcement,
 } from './boot/assert-permissions-enforce.js';
+import { assertRlsBound } from './boot/assert-rls-bound.js';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
 import { db, connection } from './db/index.js';
@@ -130,6 +131,13 @@ for (const signal of signals) {
     process.exit(0);
   });
 }
+
+// Report the EFFECTIVE RLS posture before serving a single request (issue #90). This is
+// deliberately non-fatal: every service currently connects as a Postgres SUPERUSER, which
+// bypasses RLS unconditionally, so refusing to boot would make burn-api unstartable
+// everywhere without arming anything. It logs at fatal level with rls_backstop: 'absent'
+// so the posture is visible rather than assumed.
+await assertRlsBound(fastify.log);
 
 try {
   await fastify.listen({ port: env.PORT, host: env.HOST });

@@ -42,9 +42,38 @@ import { env } from '../env.js';
  * `burn-revalue` write.
  *
  * The cost of (B) is that org-scoped DB work must go through `runInOrgScope`, rather than
- * "any query anywhere in the request is magically scoped". That is the correct trade:
- * it is visible in the code, and a route that forgets it reads zero rows under enforce
- * mode rather than reading everyone's rows.
+ * "any query anywhere in the request is magically scoped". That is the correct trade: it
+ * is visible in the code.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHAT THIS DOES *NOT* GUARANTEE TODAY (issue #90). READ THIS BEFORE RELYING ON IT.
+ *
+ * An earlier version of this comment claimed that "a route that forgets `runInOrgScope`
+ * reads zero rows rather than reading everyone's rows." That is fail-closed language and
+ * it is NOT currently true. It holds only when the CONNECTING ROLE does not bypass RLS, and
+ * in every environment this repository can produce it does:
+ *
+ *   - Every service connects with the `POSTGRES_USER` credentials (`bigbluebam`), the only
+ *     login role in the cluster, and that role is a Postgres SUPERUSER. Superusers bypass
+ *     RLS unconditionally: `rolbypassrls` is not consulted and `ALTER ROLE ... NOBYPASSRLS`
+ *     cannot change it. Arming RLS needs a separate non-superuser application role in
+ *     `DATABASE_URL`, which is a platform change, not an env-var flip.
+ *   - `BBB_RLS_ENFORCE` is set in no compose file, no .env.example, no deploy adapter, and
+ *     no service catalog entry in this repository. `apps/api`'s `rls-boot.ts` is doubly
+ *     inert as a result: it targets `DATABASE_ROLE || 'bam_app'`, no such role exists, and
+ *     it logs "database role not found, skipping role flip" without issuing any ALTER.
+ *
+ * So the real position is: the mechanism below is correct and WILL be fail-closed once the
+ * platform posture allows it, but today the backstop is absent. All 14 `burn_*` policies
+ * are present and unevaluated, and the app-level `organization_id` predicate in each query
+ * is the ONLY tenant boundary. Write every query as if there were no RLS at all, because
+ * right now there effectively is not.
+ *
+ * `boot/assert-rls-bound.ts` reads the effective posture out of `pg_roles` at boot and logs
+ * `rls_backstop: 'absent'` at fatal level, so this is observable rather than assumed, and
+ * `test/rls-backstop.test.ts` is a standing probe that starts passing the day the platform
+ * flips. Neither refuses to start, because the bypass is the platform default and not a
+ * burn-api misconfiguration.
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * Org-less paths are handled by the same primitive with an explicit org argument:
