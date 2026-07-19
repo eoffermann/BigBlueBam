@@ -3,7 +3,7 @@ import { bulwarkDischargeSchema, bulwarkListQuerySchema } from '@bigbluebam/shar
 import { requireAuth } from '../plugins/auth.js';
 import { askerViewer, mapServiceError, readViewer, validationError, viewerOf } from '../lib/http.js';
 import * as deadlines from '../services/deadlines.service.js';
-import { draftNotice, approveAndSendNotice } from '../services/send.service.js';
+import { draftNotice, approveAndSendNotice, discardNotice } from '../services/send.service.js';
 
 export default async function deadlineRoutes(fastify: FastifyInstance) {
   const can = (p: string) => fastify.requireCan(p);
@@ -101,6 +101,27 @@ export default async function deadlineRoutes(fastify: FastifyInstance) {
         const asker = askerViewer(request);
         if (asker) await deadlines.loadScopedDeadline(asker, id);
         const data = await deadlines.dischargeDeadline(viewerOf(request), id, parsed.data);
+        return { data };
+      } catch (err) {
+        if (mapServiceError(request, reply, err)) return reply;
+        throw err;
+      }
+    },
+  );
+
+  // Discard a bad notice DRAFT (#47) without touching the obligation clock. Same project-scoped
+  // write guard + bulwark.notice.draft floor as draft-notice; the deadline stays open (this is
+  // NOT a waive, which forgoes the obligation via /discharge outcome=waived).
+  fastify.post(
+    '/deadlines/:id/discard-notice',
+    { preHandler: [requireAuth, can('bulwark.notice.draft')] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const viewer = viewerOf(request);
+        // Project-scope guard (SH1), mirroring draft-notice.
+        await deadlines.loadScopedDeadline(viewer, id);
+        const data = await discardNotice(viewer.org_id, id);
         return { data };
       } catch (err) {
         if (mapServiceError(request, reply, err)) return reply;

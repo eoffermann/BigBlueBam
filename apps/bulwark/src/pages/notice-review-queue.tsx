@@ -1,9 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Send, Loader2, ShieldAlert, Inbox, CheckCircle2, Ban } from 'lucide-react';
+import { Send, Loader2, ShieldAlert, Inbox, CheckCircle2, Trash2, Ban } from 'lucide-react';
 import type { BulwarkNoticeDeadline } from '@bigbluebam/shared';
 import { useCan } from '@bigbluebam/ui/use-can';
 import { markdownToHtml, sanitizeHtml } from '@bigbluebam/ui/markdown';
-import { useDeadlines, useApproveSendNotice, useDischargeDeadline } from '@/hooks/use-bulwark';
+import {
+  useDeadlines,
+  useApproveSendNotice,
+  useDiscardNotice,
+  useDischargeDeadline,
+} from '@/hooks/use-bulwark';
 import { formatDateTime } from '@/lib/utils';
 import { NoticeStatusBadge } from '@/components/badges';
 
@@ -93,6 +98,7 @@ function NoticeCard({
   onNavigate: (path: string) => void;
 }) {
   const approveSend = useApproveSendNotice();
+  const discardNotice = useDiscardNotice();
   const discharge = useDischargeDeadline();
   const [sent, setSent] = useState(false);
   const draft = deadline.notice_draft;
@@ -150,25 +156,48 @@ function NoticeCard({
           )}
           {sent ? 'Sent' : 'Approve and send'}
         </button>
-        {/* No dedicated discard-draft endpoint exists (M4 gap). Declining routes through waiving
-            the underlying deadline, the closest real action. */}
+        {/* Reject the bad DRAFT (#47): discards the generated text; the deadline clock stays
+            live and can be re-drafted. This is the default decline action. */}
+        <button
+          type="button"
+          disabled={discardNotice.isPending}
+          onClick={() => {
+            if (window.confirm('Discard this notice draft? The deadline stays live and can be re-drafted.')) {
+              discardNotice.mutate(deadline.id);
+            }
+          }}
+          className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 px-3 py-1.5 text-xs font-medium disabled:opacity-60"
+        >
+          {discardNotice.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+          Discard draft
+        </button>
+        {/* Separate, explicit affordance for genuinely WAIVING the underlying obligation clock
+            (forgoes the obligation - not the same as discarding a bad draft). */}
         <button
           type="button"
           disabled={discharge.isPending}
           onClick={() => {
-            if (window.confirm('Decline this notice and waive the underlying deadline?')) {
+            if (
+              window.confirm(
+                'Waive the underlying deadline? This forgoes the obligation and may waive a claim. It does NOT just discard the draft.',
+              )
+            ) {
               discharge.mutate({ id: deadline.id, input: { outcome: 'waived', confirm: true } });
             }
           }}
           className="inline-flex items-center gap-1 rounded-lg border border-red-300 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 px-3 py-1.5 text-xs font-medium disabled:opacity-60"
         >
           <Ban className="h-3.5 w-3.5" />
-          Decline and waive
+          Waive deadline
         </button>
-        {(approveSend.isError || discharge.isError) && (
+        {(approveSend.isError || discardNotice.isError || discharge.isError) && (
           <span className="text-[11px] text-red-600 dark:text-red-400">
-            {(approveSend.error ?? discharge.error) instanceof Error
-              ? (approveSend.error ?? discharge.error as Error).message
+            {(approveSend.error ?? discardNotice.error ?? discharge.error) instanceof Error
+              ? (approveSend.error ?? discardNotice.error ?? (discharge.error as Error)).message
               : 'Action failed.'}
           </span>
         )}

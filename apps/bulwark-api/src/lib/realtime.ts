@@ -37,6 +37,7 @@ export type BulwarkFrameType =
   | 'deadline.armed'
   | 'waiver.risk_detected'
   | 'notice.drafted'
+  | 'notice.discarded'
   | 'compliance.expiring';
 
 export interface BulwarkFrame {
@@ -45,7 +46,10 @@ export interface BulwarkFrame {
 }
 
 // Frames whose payload is owner/admin-floored: delivered to the admin room only (SK1).
-const ADMIN_ONLY_FRAMES: ReadonlySet<BulwarkFrameType> = new Set(['notice.drafted']);
+const ADMIN_ONLY_FRAMES: ReadonlySet<BulwarkFrameType> = new Set([
+  'notice.drafted',
+  'notice.discarded',
+]);
 
 async function publishToRoom(room: string, frame: BulwarkFrame): Promise<void> {
   try {

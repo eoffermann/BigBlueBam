@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { publishBoltEvent, bulwarkNoticeDraftSchema } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import {
@@ -174,6 +174,58 @@ export async function draftNotice(
     data: { deadline_id: deadlineId, proposal_id: proposal?.id ?? null },
   });
   return { drafted: true, proposal_id: proposal?.id ?? null };
+}
+
+// Discard a bad notice DRAFT (#47). Sets notice_status='discarded' WITHOUT touching the
+// obligation CLOCK: the deadline stays 'open' and can be re-drafted or discharged later. This
+// is deliberately NOT a waive (which forgoes the obligation via dischargeDeadline). CAS from
+// drafted/approved so a double-click is idempotent and a sent notice can never be un-sent. The
+// pending proposal is left intact; the send CAS (approved->sent) can no longer fire once the
+// status is 'discarded', so nothing can be dispatched from a discarded draft.
+export async function discardNotice(
+  orgId: string,
+  deadlineId: string,
+): Promise<{ discarded: boolean; notice_status: string }> {
+  const [deadline] = await db
+    .select()
+    .from(bulwarkNoticeDeadlines)
+    .where(
+      and(
+        eq(bulwarkNoticeDeadlines.organization_id, orgId),
+        eq(bulwarkNoticeDeadlines.id, deadlineId),
+      ),
+    )
+    .limit(1);
+  if (!deadline) throw new NotFoundError('Deadline not found');
+
+  const [won] = await db
+    .update(bulwarkNoticeDeadlines)
+    .set({ notice_status: 'discarded', updated_at: new Date() })
+    .where(
+      and(
+        eq(bulwarkNoticeDeadlines.id, deadlineId),
+        inArray(bulwarkNoticeDeadlines.notice_status, ['drafted', 'approved']),
+      ),
+    )
+    .returning({ id: bulwarkNoticeDeadlines.id });
+  if (!won) {
+    // Nothing draftable to discard. A sent notice is terminal (cannot be un-sent); anything
+    // else (none / already discarded) is an idempotent no-op.
+    if (deadline.notice_status === 'sent')
+      throw new ConflictError('Notice already sent; it cannot be discarded');
+    return { discarded: false, notice_status: deadline.notice_status };
+  }
+
+  const [contract] = await db
+    .select({ project_id: bulwarkContracts.project_id })
+    .from(bulwarkContracts)
+    .where(eq(bulwarkContracts.id, deadline.contract_id))
+    .limit(1);
+  await publishBulwarkFrame(orgId, contract?.project_id ?? null, {
+    type: 'notice.discarded',
+    data: { deadline_id: deadlineId, proposal_id: deadline.notice_proposal_id },
+  });
+  return { discarded: true, notice_status: 'discarded' };
 }
 
 // The exactly-once notice send executor (spec 2.4). Resolves the deterministic recipient +

@@ -19,7 +19,7 @@ import { registerTool } from '../lib/register-tool.js';
 /**
  * Bulwark MCP tools (Milestone M5 - AI contract-obligation monitor).
  *
- * 15 tools backing the bulwark-api REST surface at /bulwark/api/v1/* (spec
+ * 16 tools backing the bulwark-api REST surface at /bulwark/api/v1/* (spec
  * section 10 of docs/brainstorming/2026_07_19_03_00_APP_DESIGN_bulwark.md). The
  * HTTP client is shaped like braid-tools.ts / dedupe-tools.ts: it forwards the
  * caller's bearer token so bulwark-api applies the same per-viewer visibility
@@ -29,10 +29,11 @@ import { registerTool } from '../lib/register-tool.js';
  * Reads that surface source-scoped records and writes that mutate them take an
  * explicit asker_user_id (per docs/reference/agent-conventions.md) and forward
  * it as ?asker_user_id=<uuid> so bulwark-api's readViewer narrows visibility
- * fail-closed (a bogus asker resolves nothing). The three destructive tools
- * (bulwark_delete_contract / bulwark_reject_obligation / bulwark_waive_deadline)
- * use the Redis-backed confirm-token store two-step flow, mirroring
- * braid_merge_profiles / braid_split_profile exactly.
+ * fail-closed (a bogus asker resolves nothing). The four state-change confirm
+ * tools (bulwark_delete_contract / bulwark_reject_obligation /
+ * bulwark_waive_deadline / bulwark_discard_notice) use the Redis-backed
+ * confirm-token store two-step flow, mirroring braid_merge_profiles /
+ * braid_split_profile exactly.
  *
  * Following the basis/braid satellite pattern, bulwark_* tools are intentionally
  * NOT added to EXPLICIT_TOOL_OVERRIDES; the bulwark.* allowlist gating is
@@ -103,6 +104,7 @@ const BULWARK_CONFIRM_TTL_MS = 300_000;
 const BULWARK_DELETE_CONTRACT_ACTION = 'bulwark_delete_contract';
 const BULWARK_REJECT_OBLIGATION_ACTION = 'bulwark_reject_obligation';
 const BULWARK_WAIVE_DEADLINE_ACTION = 'bulwark_waive_deadline';
+const BULWARK_DISCARD_NOTICE_ACTION = 'bulwark_discard_notice';
 
 export function registerBulwarkTools(
   server: McpServer,
@@ -550,6 +552,59 @@ export function registerBulwarkTools(
       if (reason !== undefined) body.reason = reason;
       const r = await client.request('POST', `/deadlines/${id}/discharge${askerQs(asker_user_id)}`, body);
       return r.ok ? ok(r.data) : err('waiving deadline', r.data);
+    },
+  });
+
+  // ── bulwark_discard_notice (state change on a draft; Redis confirm-token two-step) ─────
+  registerTool(server, {
+    name: 'bulwark_discard_notice',
+    description:
+      'Discard a bad notice DRAFT (POST /deadlines/:id/discard-notice); sets notice_status=discarded WITHOUT waiving or discharging the obligation clock - the deadline stays open and can be re-drafted. This is the clean "reject draft" action; it is NOT bulwark_waive_deadline, which forgoes the obligation entirely. Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute.',
+    input: {
+      id: z.string().uuid(),
+      confirm_token: z
+        .string()
+        .optional()
+        .describe('Confirmation token from a prior staging call. Required to execute the discard.'),
+    },
+    returns: z.record(z.unknown()),
+    handler: async ({ id, confirm_token }) => {
+      if (!confirm_token) {
+        const token = crypto.randomBytes(16).toString('hex');
+        await confirmTokenStore.set(token, {
+          action: BULWARK_DISCARD_NOTICE_ACTION,
+          resource_id: id,
+          ttlMs: BULWARK_CONFIRM_TTL_MS,
+        });
+        return ok({
+          status: 'pending_confirmation',
+          message: `Discarding a notice draft rejects the generated text (the deadline clock is untouched). Re-call bulwark_discard_notice with this confirm_token to proceed. Token expires in ${Math.floor(
+            BULWARK_CONFIRM_TTL_MS / 1000,
+          )} seconds.`,
+          action: BULWARK_DISCARD_NOTICE_ACTION,
+          resource_id: id,
+          confirm_token: token,
+        });
+      }
+      const pending = await confirmTokenStore.get(confirm_token);
+      if (
+        !pending ||
+        pending.action !== BULWARK_DISCARD_NOTICE_ACTION ||
+        pending.resource_id !== id
+      ) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Invalid or expired confirm_token for this discard. Re-call bulwark_discard_notice without a token to stage a new one.',
+            },
+          ],
+          isError: true,
+        };
+      }
+      await confirmTokenStore.delete(confirm_token);
+      const r = await client.request('POST', `/deadlines/${id}/discard-notice`);
+      return r.ok ? ok(r.data) : err('discarding notice', r.data);
     },
   });
 

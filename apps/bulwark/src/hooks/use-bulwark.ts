@@ -238,6 +238,19 @@ export function useApproveSendNotice() {
   });
 }
 
+// Discard a bad notice DRAFT (#47): rejects the generated text without touching the deadline
+// clock. Distinct from useDischargeDeadline({ outcome: 'waived' }), which forgoes the obligation.
+export function useDiscardNotice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<{ data: { discarded: boolean; notice_status: string } }>(
+        `/deadlines/${id}/discard-notice`,
+      ),
+    onSuccess: () => invalidateRadar(qc),
+  });
+}
+
 export interface DischargeInput {
   outcome: 'discharged' | 'waived';
   confirm?: boolean;
