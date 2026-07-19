@@ -43,14 +43,14 @@ Commits `24af7df2`, `6f06e22c`, plus the review-fix commits below.
 - [x] **#85 fixed:** `plannedApp()` now throws on an unknown service name; a typo previously resolved to a plausible unreachable URL forever
 - [x] **#83 resolved by decision:** Burn does not make enforcement env-configurable. See M1
 
-## M1 - Scaffold
+## M1 - Scaffold - **COMPLETE**
 
-- [ ] `apps/burn-api` (Fastify, internal 4022) from the bulwark-api sibling
-- [ ] `apps/burn` SPA from the blip sibling
-- [ ] `@bigbluebam/logging`, `@bigbluebam/service-health` (`/health`, `/health/ready` - there is no `/readyz`)
-- [ ] `BBB_PERMISSIONS_ENFORCE=on` unconditional plus a boot assertion that exits non-zero otherwise
+- [x] `apps/burn-api` (Fastify, internal 4022) from the bulwark-api sibling
+- [x] `apps/burn` SPA from the blip sibling
+- [x] `@bigbluebam/logging`, `@bigbluebam/service-health` with `/health` and `/health/ready`
+- [x] Enforcement is a hardcoded `'on'` literal asserted at three points, NOT an env var (issue #83). Three deliberate departures from the sibling, each documented in-code: this one, the transaction-scoped RLS binding, and the health route names
 
-## M2 - Data model and permissions
+## M2 - Data model and permissions - **COMPLETE**
 
 **Do NOT pre-assign or pre-create the last two migration filenames.** Author
 `0239`-`0241` by hand; observe the number `build-permission-delta.mjs` prints and
@@ -59,16 +59,16 @@ sort first, match zero rows, get swallowed by `ON CONFLICT DO NOTHING`, and
 checksum as applied so it can never re-run - and then no built-in group grants any
 `burn.*` and every non-SuperUser including Owners hits `implicit_deny`.
 
-- [ ] 14 Drizzle schema modules plus `agent-proposals.ts`, `entity-links.ts`, `bbb-refs.ts`
-- [ ] `search_tsv` via `customType<{data:string}>({dataType:()=>'tsvector'})` per `braid-profiles.ts:15-18` (`db-check.mjs:454` treats an undeclared DB column as fatal; `text()` would only warn)
-- [ ] **Pass 1:** author and apply `0239`-`0241`
-- [ ] Append the 22 `burn.*` rows to the literal `HAND_AUTHORED` array at `scripts/generate-permission-manifest.mjs:719` with explicit `is_read` / `is_destructive` / `requires_confirmation` flags (the copy loop is at `:816`); add the `burn.` provenance branch beside the `bulwark.` one at `:843`; confirm `burn_*` is absent from `EXPLICIT_TOOL_OVERRIDES`
-- [ ] **Pass 2, four scripts in order:** `generate-permission-manifest.mjs` → `build-permission-codegen.mjs` → `check-permission-catalog.mjs` → `build-permission-delta.mjs`
-- [ ] Commit `packages/permissions/src/generated/permissions.ts` (M7's `useCan('burn.*')` will not typecheck without it)
-- [ ] Author the group-defaults file at the generator's number **+1**
-- [ ] Group-defaults probe: owner 22, admin 22, member 14, viewer 7, guest 0
-- [ ] §12.1 assertions for §3
-- [ ] `pnpm db:check` and `pnpm lint:migrations` green
+- [x] 14 Drizzle schema modules plus `agent-proposals.ts`, `entity-links.ts`, `bbb-refs.ts`
+- [x] `search_tsv` via `customType<{data:string}>({dataType:()=>'tsvector'})` per `braid-profiles.ts:15-18` (`db-check.mjs:454` treats an undeclared DB column as fatal; `text()` would only warn)
+- [x] **Pass 1:** authored and applied `0239`-`0241`
+- [x] Appended the 22 `burn.*` rows to the literal `HAND_AUTHORED` array at `scripts/generate-permission-manifest.mjs:719` with explicit `is_read` / `is_destructive` / `requires_confirmation` flags (the copy loop is at `:816`); add the `burn.` provenance branch beside the `bulwark.` one at `:843`; confirm `burn_*` is absent from `EXPLICIT_TOOL_OVERRIDES`
+- [x] **Pass 2, four scripts in order:** `generate-permission-manifest.mjs` → `build-permission-codegen.mjs` → `check-permission-catalog.mjs` → `build-permission-delta.mjs`
+- [x] Committed `packages/permissions/src/generated/permissions.ts` (M7's `useCan('burn.*')` will not typecheck without it)
+- [x] Generator assigned `0242`; group defaults authored at `0243`. **The ordering trap was avoided**
+- [x] Group-defaults probe: owner 22, admin 22, member 14, viewer 7, guest 0 - exactly as specified
+- [x] §12.1 assertions for §3. **They caught a spec defect:** three columns were declared too narrow for their own enum values, fixed in a new migration `0244` and corrected in the spec
+- [x] `db:check` 259/259 in sync, `lint:migrations` 206 files 0 violations, CI fully green
 
 ## M3 - Shared Zod - **COMPLETE** (`9f7a9dec`)
 
