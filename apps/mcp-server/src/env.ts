@@ -26,6 +26,7 @@ const envSchema = z.object({
   BASIS_API_URL: z.string().url().default('http://basis-api:4019/v1'),
   BRAID_API_URL: z.string().url().default('http://braid-api:4020/v1'),
   BULWARK_API_URL: z.string().url().default('http://bulwark-api:4021/v1'),
+  BURN_API_URL: z.string().url().default('http://burn-api:4022/v1'),
   BILL_API_URL: z.string().url().default('http://bill-api:4014/v1'),
   BLANK_API_URL: z.string().url().default('http://blank-api:4013/v1'),
   BLUEPRINT_API_URL: z.string().url().default('http://blueprint-api:4015/v1'),

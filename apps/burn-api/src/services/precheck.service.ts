@@ -1,4 +1,3 @@
-import { createHmac } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type {
   BurnPrecheckRequest,
@@ -20,6 +19,7 @@ import {
 } from '../db/schema/index.js';
 import { NotFoundError, RateLimitedError } from '../lib/errors.js';
 import { canAccessRowProject } from '../lib/project-scope.js';
+import { deriveIdempotencyKey } from '../lib/idempotency-key.js';
 import {
   PROBE_COUNTER_TTL_SECONDS,
   consumptionBand,
@@ -75,33 +75,6 @@ export interface PrecheckCaller {
     incr(key: string): Promise<number>;
     expire(key: string, seconds: number): Promise<unknown>;
   };
-}
-
-/**
- * The idempotency key is SERVER-DERIVED (spec 2.4 point 7). A caller-supplied key is
- * rejected by the `.strict()` Zod schema, which carries no key field at all.
- *
- * HMAC over the namespace, work ref, amount, currency, and an attempt nonce, so:
- *   - two callers cannot collide into each other's verdicts;
- *   - a caller cannot forge a key that maps onto a verdict issued for different money;
- *   - the `svc:` / `usr:` prefix is inside the signed material AND on the outside, so the
- *     calibration query's `LIKE 'svc:%'` restriction cannot be spoofed by a member.
- */
-export function deriveIdempotencyKey(
-  secret: string,
-  namespace: 'svc' | 'usr',
-  req: BurnPrecheckRequest,
-): string {
-  const material = [
-    namespace,
-    req.work_ref_type,
-    req.work_ref_id ?? '',
-    String(req.proposed_amount),
-    req.currency,
-    req.attempt_nonce ?? '',
-  ].join('|');
-  const digest = createHmac('sha256', secret).update(material).digest('hex').slice(0, 48);
-  return `${namespace}:${digest}`;
 }
 
 interface DeterministicTarget {
@@ -926,3 +899,6 @@ export async function recordOutcome(
     return { data: updated };
   });
 }
+
+// Re-exported so the service remains the single import site for gate callers.
+export { deriveIdempotencyKey };

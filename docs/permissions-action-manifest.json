@@ -1,7 +1,7 @@
 {
   "counts": {
     "total": 1445,
-    "mcp_tools_scanned": 847,
+    "mcp_tools_scanned": 865,
     "rest_routes_scanned": 880,
     "read_permissions": 560,
     "destructive_permissions": 138
@@ -26051,6 +26051,78 @@
     {
       "tool": "bureau_update_settings",
       "file": "bureau-tools.ts"
+    },
+    {
+      "tool": "burn_precheck",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_attribute",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_financials",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_margin",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_list_engagements",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_get_engagement",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_extract_deliverables",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_delete_engagement",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_list_deliverables",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_confirm_deliverable",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_reject_deliverable",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_list_unscoped",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_reclassify_attribution",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_override_precheck",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_list_variances",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_draft_change_order",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_set_gate_mode",
+      "file": "burn-tools.ts"
+    },
+    {
+      "tool": "burn_calibration_report",
+      "file": "burn-tools.ts"
     },
     {
       "tool": "edit_comment",

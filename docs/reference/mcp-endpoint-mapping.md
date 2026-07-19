@@ -2020,3 +2020,69 @@ AI contract-obligation monitor. 16 `bulwark_*` tools (spec section 10 of `docs/b
 
 `bulwark_extract_obligations` (flagship) backs two endpoints (`POST /v1/contracts` and `POST /v1/contracts/:id/extract`). `bulwark_check_notice_risk` (flagship) surfaces `GET /v1/deadlines` + `GET /v1/waiver-risks` for a job. `PATCH /v1/obligations/:id` backs two tools by intent (`bulwark_confirm_obligation` for confirm/edit/bind, `bulwark_reject_obligation` for reject). Section counts: 29 REST endpoints (27 distinct paths; PATCH obligations and the two flagship multi-endpoint tools counted per row), 16 with a `bulwark_*` tool, the remainder skip-annotated — 16 `bulwark_*` tools total.
 
+---
+
+## Burn (app)
+
+- **Service:** `apps/burn-api` · external `/burn/api/` · MCP module(s): `apps/mcp-server/src/tools/burn-tools.ts` (M5, shipped) · added on the `suite-brainstorm` branch.
+
+AI margin / envelope-attribution monitor. 17 `burn_*` tools plus one deprecated alias (spec section 11.1 of `docs/brainstorming/2026_07_19_08_01_APP_DESIGN_burn.md`), registered via `registerBurnTools` in `apps/mcp-server/src/server.ts` (env `BURN_API_URL`). Every chain read/write is project-membership-scoped through `burn_engagement_projects` **with no null fallback**, so a chain linked to zero projects is `burn.financials.read_all`-only rather than org-wide readable; work-item and attribution rows are scoped by the row's own `project_id`, not by chain reachability. All `burn_*` tools are fail-closed under `agent_policies` until an operator allowlists `burn.*`; following the basis/braid/bulwark satellite pattern, `burn_*` is intentionally NOT added to `EXPLICIT_TOOL_OVERRIDES`.
+
+**Two things about this section are unlike the other apps.**
+
+1. **`asker_user_id` narrows financial flooring, not only row visibility.** burn-api takes the **intersection** of the bearer's and the asker's capabilities (`apps/burn-api/src/lib/viewer-caps.ts`), so an admin service-account acting for a plain member receives no `cost_amount`. That matters because for one `bam.time_entry` row, `cost_amount / (minutes / 60)` is that person's hourly cost rate to the cent. mcp-server cannot backstop this (`register-tool.ts` reads `BBB_PERMISSIONS_ENFORCE` from its own env, compose default `warn`), so burn-api is the only enforcing layer.
+2. **Envelope confirmation is deliberately not agent-reachable at all** (spec 2.2.1). `POST /v1/deliverables/:id/confirm-envelope` and `/bulk-confirm-unpriced` have no tool by design, and a service-account caller hitting the route directly gets an `agent_proposals` row rather than a write. This is a security boundary, not a gap to be completed later.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /v1/engagements` | `burn_list_engagements` | List engagement chains (project-scoped; contract values floored) | `PortfolioBoardPage` |
+| `POST /v1/engagements` | `burn_extract_deliverables` | Register a chain from a Bin asset; enqueues extraction (Bin `can_access` preflight, Braid soft-resolve, `entity_links` upserts) | `PortfolioBoardPage` "Register engagement" |
+| `GET /v1/engagements/:id` | `burn_get_engagement` | Chain detail + rollup; cited records `can_access`-filtered per reader with a hidden count | `EngagementDetailPage` |
+| `PATCH /v1/engagements/:id` | — _(skip: metadata edit, SPA-surfaced)_ | Update chain metadata | `EngagementDetailPage` "Edit" |
+| `DELETE /v1/engagements/:id` | `burn_delete_engagement` | Delete a chain (owner/admin floor, confirm; refused for a root with live amendments) | `EngagementDetailPage` "Delete" |
+| `POST /v1/engagements/:id/projects` | — _(skip: link management, SPA-surfaced; project-scoped on both sides so linking cannot widen the caller's own visibility)_ | Link a project to a chain | `EngagementDetailPage` "Link project" |
+| `DELETE /v1/engagements/:id/projects/:projectId` | — _(skip: link management, SPA-surfaced)_ | Unlink a project | `EngagementDetailPage` "Unlink" |
+| `POST /v1/engagements/:id/extract` | `burn_extract_deliverables` | Re-run deliverable extraction | `EngagementDetailPage` "Extract" |
+| `GET /v1/engagements/:id/burndown` | — _(skip: resolver-done-internally; the series is a chart-only read and every point is serializer-floored per R3-S5)_ | Burn-down with engagement and deliverable dated step-ups | `EngagementDetailPage` (burn-down chart) |
+| `GET /v1/deliverables` | `burn_list_deliverables` | List / review queue; `description` and `cited_span.quote` floored, `q` matches title only without `read_all` | `EngagementDetailPage` (deliverables rail) |
+| `GET /v1/deliverables/:id` | — _(skip: resolver-done-internally; `burn_list_deliverables` is the agent slice)_ | Deliverable detail | — _(not surfaced; embedded in the rail)_ |
+| `PATCH /v1/deliverables/:id` | `burn_confirm_deliverable` | Edit content / set `review_status` / `lifecycle_status`. Cannot touch `envelope_amount` or `is_active` | `EngagementDetailPage` "Confirm" / "Edit" |
+| `PATCH /v1/deliverables/:id` (rejected) | `burn_reject_deliverable` | Reject a deliverable (destructive, confirm) | `EngagementDetailPage` "Reject" |
+| `POST /v1/deliverables/:id/confirm-envelope` | — _(skip: deliberately not agent-reachable per spec 2.2.1; the only writer of `is_active`, `burn.envelope.confirm` owner/admin floor, and a service-account caller gets an `agent_proposals` row instead of a write)_ | Set the envelope and activate the deliverable | `EngagementDetailPage` "Confirm envelope" |
+| `POST /v1/deliverables/bulk-confirm-unpriced` | — _(skip: deliberately not agent-reachable per spec 2.2.1)_ | Bulk-confirm N deliverables as `unpriced` (never an even split) | `EngagementDetailPage` "Confirm all as unpriced" |
+| `GET /v1/work-items` | — _(skip: resolver-done-internally; `burn_list_unscoped` is the agent slice)_ | The priced work-item ledger (serializer-redacted) | `EngagementDetailPage` (ledger tab) |
+| `GET /v1/unscoped` | `burn_list_unscoped` | The queue, three buckets that are never summed, `can_access`-filtered per cited record | `UnscopedQueuePage` |
+| `GET /v1/queue-health` | — _(skip: resolver-done-internally; dashboard aggregate surfaced by `burn_list_unscoped` per bucket)_ | Bucket figures, pending review, awaiting valuation, oldest age | `UnscopedQueuePage` (health banner) |
+| `GET /v1/attributions` | — _(skip: resolver-done-internally; projects the same amounts as `/v1/work-items` through the work-item join)_ | List attributions (serializer-redacted) | `UnscopedQueuePage` (history) |
+| `POST /v1/attributions` | `burn_attribute` | Attribute one work item to a deliverable | `UnscopedQueuePage` "Attribute" |
+| `PATCH /v1/attributions/:id` | `burn_reclassify_attribution` | Confirm / reclassify / unscope / non-billable; supersede-then-insert, 409 with current state | `UnscopedQueuePage` "Reclassify" |
+| `POST /v1/attributions/bulk` | — _(skip: UI bulk surface; an agent uses the single-item tool so each decision is individually auditable)_ | Cluster action, capped at 200, per-item results | `UnscopedQueuePage` "Apply to cluster" |
+| `GET /v1/rules` | — _(skip: rule authoring can neutralize the gate per spec 2.3.3 and is owner/admin human-only; the read is paired with it)_ | List attribution rules | `RulesSettingsPage` |
+| `POST /v1/rules` | — _(skip: rule authoring can neutralize the gate; owner/admin human-only)_ | Create a rule (`burn.rule.write`, match-ceiling validated) | `RulesSettingsPage` "New rule" |
+| `PATCH /v1/rules/:id` | — _(skip: rule authoring can neutralize the gate; owner/admin human-only)_ | Update a rule | `RulesSettingsPage` "Edit" |
+| `DELETE /v1/rules/:id` | — _(skip: rule authoring can neutralize the gate; owner/admin human-only)_ | Delete a rule | `RulesSettingsPage` "Delete" |
+| `POST /v1/precheck` | `burn_precheck` | **The gate (flagship).** Deterministic-only, quantized overage, per-user and per-deliverable probe caps | `GateConsolePage` (dry run) |
+| `GET /v1/prechecks` | — _(skip: UI surface; the gate log is a console read)_ | The gate log (`envelope_*` and `clause_ref` stripped without `read_all`) | `GateConsolePage` |
+| `POST /v1/prechecks/:id/override` | `burn_override_precheck` | Override with a typed code and reason. Cannot set `gate_wrong` | `GateConsolePage` "Override" |
+| `POST /v1/prechecks/:id/label` | — _(skip: the calibration label drives auto-demotion and is deliberately not agent-writable per spec 2.4 point 9; `wrong_call` / `gate_wrong` additionally need `burn.precheck.mark_wrong` plus the in-route role guard)_ | Set `advisory_feedback` / `gate_wrong`, or flag for review | `GateConsolePage` + the inline Bill advisory control |
+| `GET /v1/variances` | `burn_list_variances` | Variance inbox (`amount` and nested `detail` money floored) | `VarianceInboxPage` |
+| `PATCH /v1/variances/:id` | — _(skip: triage is a UI action)_ | Acknowledge / resolve / dismiss (`burn.variance.write`) | `VarianceInboxPage` "Acknowledge" / "Resolve" |
+| `POST /v1/change-orders` | `burn_draft_change_order` | Draft a change order into the approval queue. Never sent | `VarianceInboxPage` "Raise change order" |
+| `GET /v1/change-orders/:id` | — _(skip: proposal-inbox fetch path; project-scoped and serializer-redacted)_ | Fetch the drafted body | `VarianceInboxPage` (draft preview) |
+| `GET /v1/financials` | `burn_financials` | Per-chain figures, discriminated on `metric_basis` (also `burn_margin`, deprecated alias) | `PortfolioBoardPage` + `EngagementDetailPage` |
+| `GET /v1/financials/accounts` | `burn_financials` | Firm-wide roll-up (`all_accounts: true`); `read_all` + in-route role guard; account basis is the weakest member | `PortfolioBoardPage` "All accounts" |
+| `GET /v1/financials/export` | — _(skip: multipart/binary; CSV file download surface, `read_all` + in-route role guard)_ | CSV export; header row carries the basis discriminator | `PortfolioBoardPage` "Export CSV" |
+| `GET /v1/cost-rates` | — _(skip: per-person compensation, owner/admin SPA-only; deliberately NOT serializer-floored because `cost_amount` is the entire payload, so the route guards are the whole protection)_ | List cost rates | `CostRatesPage` |
+| `POST /v1/cost-rates` | — _(skip: per-person compensation, owner/admin SPA-only)_ | Create a cost rate (enqueues `burn-revalue`) | `CostRatesPage` "Add rate" |
+| `PATCH /v1/cost-rates/:id` | — _(skip: per-person compensation, owner/admin SPA-only)_ | Update a cost rate | `CostRatesPage` "Edit" |
+| `DELETE /v1/cost-rates/:id` | — _(skip: per-person compensation, owner/admin SPA-only)_ | Delete a cost rate | `CostRatesPage` "Delete" |
+| `GET /v1/calibration` | `burn_calibration_report` | Standing against all seven promotion preconditions plus coverage | `GateConsolePage` |
+| `GET /v1/settings` | — _(skip: settings SPA-surfaced)_ | Get org settings | `SettingsPage` |
+| `PATCH /v1/settings` | `burn_set_gate_mode` | Update settings. The tool covers `gate_mode` / `gate_paused_until` / `gate_enabled_refs` only, with a confirm token when the change WEAKENS enforcement; the rest is SPA-surfaced | `SettingsPage` + `GateConsolePage` "Promote" |
+| `POST /v1/internal/precheck` | — _(skip: internal service-to-service; the bill-api gate call, `INTERNAL_SERVICE_SECRET`, fails closed on empty; org derived from the validated payload)_ | Gate call from bill-api | — |
+| `POST /v1/internal/prechecks/:id/outcome` | — _(skip: internal service-to-service; bill-api post-commit callback, `INTERNAL_SERVICE_SECRET`)_ | Post-commit outcome callback | — |
+| `POST /v1/internal/events` | — _(skip: internal service-to-service; bolt-api dispatch-hook ingest, `INTERNAL_SERVICE_SECRET`)_ | Ingest from bolt-api | — |
+| `/burn/ws` | — _(skip: realtime/ws transport; project-scoped refs-and-bands-only frames, advisory with client refetch on reconnect)_ | Redis-PubSub project-scoped notifications | — |
+| `GET /health`, `GET /health/ready` | — _(skip: probe)_ | Health / readiness | — |
+
+`burn_precheck` (flagship) backs `POST /v1/precheck` and is the same engine bill-api reaches through `POST /v1/internal/precheck`. `burn_extract_deliverables` backs two endpoints (`POST /v1/engagements` and `POST /v1/engagements/:id/extract`). `burn_financials` backs two (`GET /v1/financials` and `/financials/accounts` via `all_accounts`), and `burn_margin` is a deprecated alias for it that returns the identical discriminated response. `PATCH /v1/deliverables/:id` backs two tools by intent (`burn_confirm_deliverable` for content/status, `burn_reject_deliverable` for reject, which is confirm-gated). Section counts: 47 REST endpoint rows (45 distinct paths; PATCH deliverables counted twice by intent, and the multi-endpoint tools counted per row), 14 rows with a `burn_*` tool, the remainder skip-annotated — 17 `burn_*` tools total plus one deprecated alias.

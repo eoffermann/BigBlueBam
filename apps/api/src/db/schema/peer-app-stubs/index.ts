@@ -567,3 +567,57 @@ export const bulwarkNoticeDeadlinesStub = pgTable(
     index('pas_bulwark_deadlines_contract_idx').on(table.contract_id),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// burn - engagements, engagement-project links, deliverables
+// ---------------------------------------------------------------------------
+// Burn's scoping is structurally DIFFERENT from every other app registered here
+// and the difference is the whole reason these three stubs exist rather than
+// two. burn_engagements has NO project_id column: a chain reaches projects
+// through the burn_engagement_projects join table, and spec 3.1 defines a
+// zero-project chain as burn.financials.read_all-only.
+//
+// So the preflight resolver must NOT reuse the `null project_id falls back to
+// org membership` shape that gateByContractScope uses for Bulwark. Applied to
+// Burn that fallback would make an unlinked chain -- the most sensitive state,
+// because nobody has scoped it yet -- readable by every org member, inverting
+// the D4 fix. The resolver joins through the link table instead and denies when
+// the join is empty.
+export const burnEngagementsStub = pgTable(
+  'burn_engagements',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_burn_engagements_org_idx').on(table.organization_id)],
+);
+
+export const burnEngagementProjectsStub = pgTable(
+  'burn_engagement_projects',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    engagement_id: uuid('engagement_id').notNull(),
+    project_id: uuid('project_id').notNull(),
+  },
+  (table) => [
+    index('pas_burn_eng_projects_engagement_idx').on(table.engagement_id),
+    index('pas_burn_eng_projects_project_idx').on(table.project_id),
+  ],
+);
+
+// Deliverables derive org + project scoping through the parent engagement
+// (joined via engagement_id), so a dangling deliverable fails closed as
+// not_found.
+export const burnDeliverablesStub = pgTable(
+  'burn_deliverables',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+    engagement_id: uuid('engagement_id').notNull(),
+  },
+  (table) => [
+    index('pas_burn_deliverables_org_idx').on(table.organization_id),
+    index('pas_burn_deliverables_engagement_idx').on(table.engagement_id),
+  ],
+);

@@ -522,7 +522,7 @@ export const APP_SERVICES = [
         'BLUEPRINT_API_URL', 'BUREAU_API_URL', 'BIN_API_URL', 'BAY_API_URL', 'BLIP_API_URL',
         // BASIS_API_URL + BRAID_API_URL are present in docker-compose.yml but were
         // missing here (pre-existing gap, spec 9.5/IK2); BULWARK_API_URL is the new one.
-        'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL',
+        'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL', 'BURN_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',
       ],

@@ -39,6 +39,9 @@ import {
   bulwarkContractsStub,
   bulwarkObligationsStub,
   bulwarkNoticeDeadlinesStub,
+  burnEngagementsStub,
+  burnEngagementProjectsStub,
+  burnDeliverablesStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -102,7 +105,10 @@ export type VisibilityEntityType =
   // Bulwark contract-obligation-monitor registration (APP_DESIGN_bulwark.md §2.5)
   | 'bulwark.contract'
   | 'bulwark.obligation'
-  | 'bulwark.deadline';
+  | 'bulwark.deadline'
+  // Burn margin/envelope-attribution monitor registration (APP_DESIGN_burn.md 2.4 point 4)
+  | 'burn.engagement'
+  | 'burn.deliverable';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -141,6 +147,9 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bulwark.contract',
   'bulwark.obligation',
   'bulwark.deadline',
+  // Burn margin/envelope-attribution monitor registration (APP_DESIGN_burn.md 2.4 point 4)
+  'burn.engagement',
+  'burn.deliverable',
 ] as const;
 
 export type PreflightReason =
@@ -1717,6 +1726,11 @@ export async function preflightAccess(
       return preflightBulwarkObligation(asker, entityId);
     case 'bulwark.deadline':
       return preflightBulwarkDeadline(asker, entityId);
+    // Burn margin/envelope-attribution monitor registration (APP_DESIGN_burn.md 2.4 point 4)
+    case 'burn.engagement':
+      return preflightBurnEngagement(asker, entityId);
+    case 'burn.deliverable':
+      return preflightBurnDeliverable(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -1728,7 +1742,84 @@ export async function preflightAccess(
 // These are not part of the public surface but are useful to unit-test the
 // individual branches without going through the dispatch table.
 
+/**
+ * Burn engagement preflight (APP_DESIGN_burn.md 2.4 points 4 and 6).
+ *
+ * DELIBERATELY NOT gateByContractScope. Burn engagements have no project_id
+ * column; a chain reaches projects only through burn_engagement_projects. The
+ * Bulwark helper treats a null project as "org membership is the gate", and
+ * Burn's equivalent state -- a chain linked to zero projects -- is defined by
+ * spec 3.1 as burn.financials.read_all-only. Reusing the helper would make the
+ * least-scoped chains the most widely readable ones.
+ *
+ * Org admins pass. Everyone else must be a member of at least one LINKED
+ * project. An empty link set denies, with no fallback.
+ */
+async function preflightBurnEngagement(
+  asker: AskerContext,
+  engagementId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      id: burnEngagementsStub.id,
+      organization_id: burnEngagementsStub.organization_id,
+    })
+    .from(burnEngagementsStub)
+    .where(eq(burnEngagementsStub.id, engagementId))
+    .limit(1);
+
+  const engagement = rows[0];
+  if (!engagement) return { allowed: false, reason: 'not_found' };
+  if (engagement.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' }; // cross-org - do not disclose
+  }
+  if (isOrgAdmin(asker.role)) {
+    return { allowed: true, reason: 'ok', entity_org_id: engagement.organization_id };
+  }
+
+  const linked = await db
+    .select({ project_id: burnEngagementProjectsStub.project_id })
+    .from(burnEngagementProjectsStub)
+    .where(eq(burnEngagementProjectsStub.engagement_id, engagementId));
+
+  // No null/empty fallback: a zero-project chain denies for every non-admin.
+  for (const link of linked) {
+    if (await isProjectMember(link.project_id, asker.id)) {
+      return { allowed: true, reason: 'ok', entity_org_id: engagement.organization_id };
+    }
+  }
+  return {
+    allowed: false,
+    reason: 'not_project_member',
+    entity_org_id: engagement.organization_id,
+  };
+}
+
+/** Deliverables inherit the parent engagement's scope; a dangling row denies. */
+async function preflightBurnDeliverable(
+  asker: AskerContext,
+  deliverableId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({
+      engagement_id: burnDeliverablesStub.engagement_id,
+      organization_id: burnDeliverablesStub.organization_id,
+    })
+    .from(burnDeliverablesStub)
+    .where(eq(burnDeliverablesStub.id, deliverableId))
+    .limit(1);
+
+  const deliverable = rows[0];
+  if (!deliverable) return { allowed: false, reason: 'not_found' };
+  if (deliverable.organization_id !== asker.org_id) {
+    return { allowed: false, reason: 'not_found' };
+  }
+  return preflightBurnEngagement(asker, deliverable.engagement_id);
+}
+
 export const __test__ = {
+  preflightBurnEngagement,
+  preflightBurnDeliverable,
   loadAsker,
   isOrgAdmin,
   isProjectMember,

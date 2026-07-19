@@ -3608,7 +3608,7 @@
     "id": "platform",
     "name": "Platform",
     "description": "Cross-cutting agent and platform tools available across every app: identity, audit, heartbeat, agent policies, proposals, visibility preflight, unified activity, cross-app search, resolvers, composite views, entity links, attachments, dedupe, expertise, webhooks, and more.",
-    "toolCount": 36,
+    "toolCount": 54,
     "categories": [
       {
         "name": "Activity",
@@ -3696,6 +3696,83 @@
           {
             "name": "attachment_meta",
             "description": "Discovery endpoint for the federated attachment surface. Returns the static set of supported parent entity_type values, the valid scan_status filter values, and the default/max list limits — so an agent can self-describe attachment_list/attachment_get capabilities without consulting docs or guessing. Read-only; no parameters. AGENTIC_TODO §17 Wave 4."
+          }
+        ]
+      },
+      {
+        "name": "Burn",
+        "tools": [
+          {
+            "name": "burn_attribute",
+            "description": "Attribute one work item to a deliverable, or mark it unscoped / non-billable (POST /attributions). Use the single-item form rather than a bulk call so each decision is individually auditable."
+          },
+          {
+            "name": "burn_calibration_report",
+            "description": "Standing against all seven preconditions for promoting the gate from advisory to blocking, plus gate coverage over the trailing 7 days (GET /calibration). Each unmet precondition names its own shortfall. Advisory is a complete product: an org with no promotion path still gets the queue, the variance inbox, change-order drafts, and the financial figures."
+          },
+          {
+            "name": "burn_confirm_deliverable",
+            "description": "Confirm or edit an extracted deliverable: title, description, kind, due date, review_status, lifecycle_status (PATCH /deliverables/:id). IT CANNOT SET THE ENVELOPE OR ACTIVATE THE DELIVERABLE. Pricing an envelope and flipping is_active are human-only and are not agent-reachable by any path; a service-account attempt on the confirm-envelope route produces an approval-queue proposal instead of a write."
+          },
+          {
+            "name": "burn_delete_engagement",
+            "description": "Delete an engagement and its deliverables (destructive). Refused when the row is a chain root with live amendments, because deleting it would detach their consumption from every rollup. Two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute."
+          },
+          {
+            "name": "burn_draft_change_order",
+            "description": "Draft a change order against an engagement, optionally resolving a variance (POST /change-orders). THE DRAFT IS NEVER SENT: it becomes a pending row in the human approval queue, and that queue IS the confirmation step, which is why this tool takes no confirm_token. On approval it creates the amendment engagement and deliverable, which raises the base deliverable effective envelope so the next precheck allows the charge that was blocked."
+          },
+          {
+            "name": "burn_extract_deliverables",
+            "description": "Register an engagement document and extract its deliverables, or re-run extraction on an existing chain. Provide EITHER engagement_id (re-extract via POST /engagements/:id/extract) OR the new-engagement fields including title (create via POST /engagements, which can_access-preflights the Bin asset). Extraction is async. NOTE: extracted deliverables land as pending_review with NO envelope; pricing them is a human-only step (see burn_confirm_deliverable)."
+          },
+          {
+            "name": "burn_financials",
+            "description": "Financial figures for one engagement chain, or the firm-wide account roll-up with all_accounts=true (GET /financials, /financials/accounts). THE RESPONSE IS A DISCRIMINATED UNION on metric_basis and you MUST read that discriminator before reading any number. Under `true_margin` the figures are margin. Under `contract_consumption` there is NO margin key at all -- the number is how much of the contract value has been consumed, which is a different quantity, and reporting it as margin is wrong. Under `suppressed` the caller lacks burn.financials.read_all or the chain is below the contributor floor, and only contract_consumption_pct is present."
+          },
+          {
+            "name": "burn_get_engagement",
+            "description": "Fetch one engagement chain with its rollup (GET /engagements/:id). Cited source records are can_access-filtered PER READER, so a document the registrant could open is still dropped for a reader who cannot, and the response reports how many were hidden."
+          },
+          {
+            "name": "burn_list_deliverables",
+            "description": "List deliverables / the extraction review queue (GET /deliverables). `description` and the cited clause quote are floored to burn.financials.read_all, and for a caller without it the `q` filter matches TITLE ONLY -- the full-text index covers the floored clause text, so searching it would be a way to read what the response withholds."
+          },
+          {
+            "name": "burn_list_engagements",
+            "description": "List engagement chains (GET /engagements). Project-scoped: a chain linked to no project is visible only to a burn.financials.read_all holder. Contract values are floored for anyone else."
+          },
+          {
+            "name": "burn_list_unscoped",
+            "description": "The unscoped-work queue (GET /unscoped). THREE BUCKETS THAT ARE NEVER SUMMED: `sold_by_nobody` is work inside a tracked contract that no deliverable covers; `unclassified` is work the classifier could not place; `outside_contract` is work on a project with no active engagement. They are opposite problems with opposite remedies, so do not add them together or present one total. Amounts are floored without burn.financials.read_all, and cited source records are can_access-filtered per reader with a hidden count."
+          },
+          {
+            "name": "burn_list_variances",
+            "description": "The variance inbox (GET /variances): envelope overruns, unscoped work, silent deliverables, ungated charges, gate outages, and rule overreach. Amounts and every money key nested in the detail object are floored without burn.financials.read_all."
+          },
+          {
+            "name": "burn_margin",
+            "description": "DEPRECATED alias for burn_financials; use that instead. Returns the identical discriminated response. Note that despite the name, when metric_basis is `contract_consumption` the response carries NO margin key: the figure is contract consumption, not margin."
+          },
+          {
+            "name": "burn_override_precheck",
+            "description": "Override a precheck verdict with a typed code and a written reason (POST /prechecks/:id/override). Valid codes are absorbed_cost, mapped_manually, and change_order_pending. IT CANNOT SET gate_wrong: that label drives automatic demotion of the whole gate and is owner/admin human-only, set through a different route."
+          },
+          {
+            "name": "burn_precheck",
+            "description": "Ask whether a proposed charge is allowable against its engagement envelope BEFORE it is committed (POST /precheck). Returns a verdict (allow / allow_with_note / needs_mapping / deny), the target deliverable, a clause cite, and a QUANTIZED overage. Only `deny` blocks, and only when the org has earned blocking mode for this class; `needs_mapping` never blocks. The synchronous path is deterministic-only and issues no model calls. The overage is rounded up to the org bucket and the deny boundary itself is evaluated against a bucket-aligned figure, so repeated probing cannot recover the exact envelope. A per-user daily cap and a per-deliverable probe cap both apply."
+          },
+          {
+            "name": "burn_reclassify_attribution",
+            "description": "Re-decide an existing attribution: move it to a different deliverable, unscope it, or mark it non-billable (PATCH /attributions/:id). Supersede-then-insert, so the previous decision is retained as history. Returns 409 with the current state if the row changed since you read it."
+          },
+          {
+            "name": "burn_reject_deliverable",
+            "description": "Reject an extracted deliverable (PATCH /deliverables/:id with review_status=rejected; destructive - it stops being a valid attribution target and any envelope it carried stops constraining charges). Two-step confirm: call once WITHOUT confirm_token to stage a token, then again WITH it to execute."
+          },
+          {
+            "name": "burn_set_gate_mode",
+            "description": "Change the spend-gate mode or pause it (PATCH /settings). A CONFIRM TOKEN IS REQUIRED WHEN THE TARGET WEAKENS ENFORCEMENT -- setting `off`, dropping to `advisory`, or setting gate_paused_until -- because switching the control off is the consequential direction and is how a firm stops noticing it is over-delivering. Promoting to `blocking` needs no token, but it is rejected server-side unless all seven calibration preconditions hold, including an explicit acknowledgement that is deliberately not agent-suppliable."
           }
         ]
       },

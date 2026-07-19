@@ -187,6 +187,7 @@ services:
       BASIS_API_URL: http://basis-api:4019/v1
       BRAID_API_URL: http://braid-api:4020/v1
       BULWARK_API_URL: http://bulwark-api:4021/v1
+      BURN_API_URL: http://burn-api:4022/v1
       BILL_API_URL: http://bill-api:4014/v1
       BLANK_API_URL: http://blank-api:4013/v1
       BIN_API_URL: http://bin-api:4016/v1
