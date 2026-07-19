@@ -70,21 +70,26 @@ checksum as applied so it can never re-run - and then no built-in group grants a
 - [ ] §12.1 assertions for §3
 - [ ] `pnpm db:check` and `pnpm lint:migrations` green
 
-## M3 - Shared Zod
+## M3 - Shared Zod - **COMPLETE** (`9f7a9dec`)
 
-- [ ] `packages/shared/src/schemas/burn.ts` + `export * from './burn.js'` in `schemas/index.ts`
-- [ ] Money block is a discriminated union on `metric_basis` including a `suppressed` member
-- [ ] **Three-file contract again, same as M0:** `packages/shared/src/burn-precheck-key.ts` + a `"./burn-precheck-key"` exports block + **`'src/burn-precheck-key.ts'` appended to the tsup `entry` array**
+- [x] `packages/shared/src/schemas/burn.ts` + `export * from './burn.js'` in `schemas/index.ts`
+- [x] Money block is a discriminated union on `metric_basis` including a `suppressed` member
+- [x] **Three-file contract again, same as M0:** `packages/shared/src/burn-precheck-key.ts` + a `"./burn-precheck-key"` exports block + **`'src/burn-precheck-key.ts'` appended to the tsup `entry` array**. Verified by `dist/burn-precheck-key.{js,cjs,d.ts}` being emitted
+- [x] 26 tests. **Spec correction found while implementing:** §6.1 lists `margin_state` on `/v1/financials` generically, but §12.1 asserts no response carries the string "margin" under `metric_basis='contract_consumption'`. The `contract_consumption` variant therefore carries **`completion_state`**; `margin_state` exists only on `true_margin`
+- [x] **Naming resolved:** §1.2.2's table says `contract_consumption_pct` and §2.4 point 17 says `consumption_pct` for the same figure. The wire name is `contract_consumption_pct` (§1.2.2 is the authoritative variant table); it is sourced from `burn_engagement_rollups.consumption_pct`
 
-## M4 - Serializer and viewerCaps (lands and goes green BEFORE M5)
+## M4 - Serializer and viewerCaps - **COMPLETE** (`bdf33534`)
 
 Split out deliberately: every money figure in the app projects through this, and its
 two failure modes are the sharpest in the spec.
 
-- [ ] `viewerCaps` from a fail-closed `POST /internal/permissions/dual-read`, resolved once per request. **Never `fastify.canResolve`** - it is a hardcoded `return true` at `packages/permissions/src/index.ts:307-319`, which is why `bulwark-api/src/routes/deadlines.routes.ts:21-23` floors nothing today
-- [ ] `redactFinancialFields` applied across all eight surfaces
-- [ ] Bearer-intersect-asker rule on MCP surfaces; unresolvable asker fails floored fields closed
-- [ ] §12.1 serializer-identity tests, including an assertion that `fastify.canResolve` appears in no flooring path
+- [x] `viewerCaps` from a fail-closed `POST /internal/permissions/dual-read`, resolved once per request (`src/lib/viewer-caps.ts` + `src/plugins/viewer-caps.ts`). **Never `fastify.canResolve`**. A 2xx carrying `decision: 'unknown'` is treated as an OUTAGE, not a deny, so `resolved` stays false and the suppression reason names it
+- [x] `redactFinancialFields` applied across all eight surfaces (`src/lib/redact-financial-fields.ts`). Surfaces are exported as `BURN_FLOORED_SURFACES` data and enumerated by name in the test, so a ninth cannot be added without a fixture. The walk RECURSES (variance `detail` is JSONB; unscoped clusters embed their rows) and DELETES rather than nulls
+- [x] `buildMoneyBlock` makes a cost leak to a non-`read_all` caller structurally impossible: that branch returns the `suppressed` union member, which has no cost/margin/coverage key to populate
+- [x] Bearer-intersect-asker rule; unresolvable AND malformed asker both fail floored fields closed
+- [x] §12.1 serializer-identity tests (78), including the `canResolve`-absent-from-the-flooring-path assertion (per-file and whole-`src` sweep)
+
+**Note for M5:** `/v1/cost-rates` is deliberately NOT one of the eight serializer surfaces - `cost_amount` is its entire payload. It is gated by `burn.costrate.read` at the route plus the second in-route role guard (2.4 point 1); `viewerCaps.costrate_read` is resolved for it and is already on the request.
 
 ## M5 - REST routes and 17 MCP tools, together
 
