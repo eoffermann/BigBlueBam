@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCreateExpense } from '@/hooks/use-expenses';
+import { BurnGateNotice } from '@/components/burn-gate-notice';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -99,6 +100,14 @@ export function ExpenseNewPage({ onNavigate }: Props) {
           <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
           <span className="text-sm text-zinc-700 dark:text-zinc-300">Billable to client</span>
         </label>
+
+        {/* Burn pre-transaction gate advisory (Burn spec 7.8) */}
+        <BurnGateNotice
+          amount={amount}
+          billable={billable}
+          title={description || undefined}
+          description={description || undefined}
+        />
       </div>
 
       <div className="flex items-center gap-3">

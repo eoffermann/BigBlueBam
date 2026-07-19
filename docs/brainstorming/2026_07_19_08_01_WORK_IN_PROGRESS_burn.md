@@ -154,9 +154,9 @@ two failure modes are the sharpest in the spec.
 
 ## M7 - SPA
 
-- [ ] 7 screens
-- [ ] Shell parity: sidebar (`w-[260px] bg-sidebar`, `bg-primary-600` badge, `SidebarPlatformFooter`), top bar (`LaunchpadTrigger`, breadcrumb, `OrgSwitcher`, search, Banter link, `NotificationsBell`, `HelpTrigger`, `UserMenu`), `<Launchpad currentApp="burn" />`, `globals.css` copied verbatim, `mountBureauClient` + `initSystemErrorReporter({service:'burn'})` + `@bigbluebam/bureau-client`, `PermissionsProvider`, auth store, loading gate, saved-theme, `?`-opens-Help
-- [ ] The one Bill SPA change (§7.8): the inline advisory-feedback control in `apps/bill/`
+- [x] 7 screens (Portfolio Board, Unscoped Queue, Engagement detail, Gate Console, Variances/change-orders, Cost Rates, Settings + Rules editor)
+- [x] Shell parity: sidebar (`w-[260px] bg-sidebar`, `bg-primary-600` badge, `SidebarPlatformFooter`), top bar (`LaunchpadTrigger`, breadcrumb, `OrgSwitcher`, search, Banter link, `NotificationsBell`, `HelpTrigger`, `UserMenu`), `<Launchpad currentApp="burn" />`, `globals.css` copied verbatim, `mountBureauClient` + `initSystemErrorReporter({service:'burn'})` + `@bigbluebam/bureau-client`, `PermissionsProvider`, auth store, loading gate, saved-theme, `?`-opens-Help
+- [x] The one Bill SPA change (§7.8): the inline advisory-feedback control (`BurnGateNotice`) in `apps/bill/` on the expense create + approve flows
 
 ## M8 - Launchpad and infra
 

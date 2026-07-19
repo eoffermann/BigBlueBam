@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
+import { Fragment } from 'react';
 import { useExpenses, useApproveExpense, useRejectExpense, useReimburseExpense } from '@/hooks/use-expenses';
 import { formatDate, formatCents, statusBadgeClass, cn } from '@/lib/utils';
+import { BurnGateNotice } from '@/components/burn-gate-notice';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -69,7 +71,8 @@ export function ExpenseListPage({ onNavigate }: Props) {
               <tr><td colSpan={7} className="text-center py-12 text-zinc-400">No expenses yet.</td></tr>
             ) : (
               expenses.map((exp: any) => (
-                <tr key={exp.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                <Fragment key={exp.id}>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
                   <td className="px-4 py-3 font-medium">{exp.description}</td>
                   <td className="px-4 py-3 text-zinc-500">{exp.category || '—'}</td>
                   <td className="px-4 py-3 text-zinc-500">{exp.vendor || '—'}</td>
@@ -108,6 +111,21 @@ export function ExpenseListPage({ onNavigate }: Props) {
                     )}
                   </td>
                 </tr>
+                {/* Burn pre-transaction gate advisory on the approve flow (Burn spec 7.8) */}
+                {exp.status === 'pending' && exp.billable && (
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                    <td colSpan={7} className="px-4 pb-3 pt-0">
+                      <BurnGateNotice
+                        amount={exp.amount}
+                        billable={exp.billable}
+                        title={exp.description}
+                        description={exp.description}
+                        projectId={exp.project_id ?? null}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))
             )}
           </tbody>
