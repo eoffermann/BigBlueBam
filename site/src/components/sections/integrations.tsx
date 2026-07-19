@@ -61,11 +61,11 @@ export function Integrations() {
               </div>
               <div>
                 <h3 className="text-base font-semibold text-zinc-900">MCP Server</h3>
-                <Badge variant="blue">833 tools</Badge>
+                <Badge variant="blue">849 tools</Badge>
               </div>
             </div>
             <p className="mb-4 text-sm text-zinc-600">
-              A full Model Context Protocol server exposes every action across all twenty-one apps
+              A full Model Context Protocol server exposes every action across all twenty-two apps
               (Bam, Banter, Beacon, Bearing, Bench, Bill, Blank, Blast, Blueprint, Board, Bolt,
               Bond, Book, Brief, Bureau, Helpdesk) plus cross-cutting platform capabilities (cross-app search,
               composite views, entity linking, scheduled posts, upserts, agent policies, outbound

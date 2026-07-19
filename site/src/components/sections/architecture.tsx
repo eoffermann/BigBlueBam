@@ -63,8 +63,8 @@ export function Architecture() {
       <AnimatedReveal delay={0.4}>
         <div className="mt-10 rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center">
           <div className="mb-4 flex flex-wrap justify-center gap-2">
-            <Badge variant="blue">833 MCP Tools</Badge>
-            <Badge variant="blue">21 Apps</Badge>
+            <Badge variant="blue">849 MCP Tools</Badge>
+            <Badge variant="blue">22 Apps</Badge>
             <Badge variant="blue">900+ Tests</Badge>
             <Badge variant="blue">MIT License</Badge>
           </div>

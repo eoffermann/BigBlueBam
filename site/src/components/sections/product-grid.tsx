@@ -268,7 +268,7 @@ const categories: Category[] = [
 
 const mcpServer: Product = {
   name: 'MCP Server',
-  subtitle: '833 AI Tools',
+  subtitle: '849 AI Tools',
   description: 'One Model Context Protocol server that hands AI agents every app plus cross-cutting platform powers (search, composite views, proposals, policies, webhooks). It is the front door the whole suite shares.',
   icon: Bot,
   color: 'bg-slate-100 text-slate-600',
@@ -303,17 +303,17 @@ export function ProductGrid() {
       <AnimatedReveal>
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <Badge variant="blue" className="mb-4">
-            21 Apps + MCP Platform, One Stack
+            22 Apps + MCP Platform, One Stack
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-            Not a 22nd tab. The twenty-one you stop opening tabs for.
+            Not a 23rd tab. The twenty-two you stop opening tabs for.
           </h2>
           <p className="mt-4 text-lg text-zinc-600">
             "All-in-one" usually means a pile of shallow features that don't quite replace the
-            specialist tools you're already paying for. This isn't that. Twenty-one genuinely capable
+            specialist tools you're already paying for. This isn't that. Twenty-two genuinely capable
             apps (work, communication, sales, operations, media review, telemetry), built as one
-            system, self-hosted, and wired together through a single MCP server with 833 tools
-            across 51 modules. No tab-switching, no integration spreadsheet, no app that didn't get
+            system, self-hosted, and wired together through a single MCP server with 849 tools
+            across 52 modules. No tab-switching, no integration spreadsheet, no app that didn't get
             the memo.
           </p>
         </div>

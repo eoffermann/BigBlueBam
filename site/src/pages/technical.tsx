@@ -129,8 +129,8 @@ export function TechnicalPage() {
                 <div>
                   <h3 className="text-xl font-bold text-zinc-900">One server, every action</h3>
                   <p className="mt-3 text-zinc-600">
-                    The built-in Model Context Protocol server exposes 833 structured tools that
-                    mirror every UI action across all twenty-one apps, plus cross-cutting platform
+                    The built-in Model Context Protocol server exposes 849 structured tools that
+                    mirror every UI action across all twenty-two apps, plus cross-cutting platform
                     capabilities: agent identity, approval queues, visibility preflight, unified
                     activity, cross-app search, composite views, entity linking, scheduled posts,
                     upserts, attachment metadata, agent policies, and outbound webhooks. AI agents
@@ -149,7 +149,7 @@ export function TechnicalPage() {
                 </div>
                 <div>
                   <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500">
-                    833 MCP tools across 21 apps and the platform
+                    849 MCP tools across 22 apps and the platform
                   </h3>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {capabilities.map((cap) => (
@@ -239,8 +239,8 @@ export function TechnicalPage() {
           <AnimatedReveal delay={0.5}>
             <div className="mt-10 rounded-xl border border-zinc-200 bg-zinc-50 p-6">
               <div className="mb-4 flex flex-wrap justify-center gap-2">
-                <Badge variant="blue">833 MCP Tools</Badge>
-                <Badge variant="blue">21 Apps</Badge>
+                <Badge variant="blue">849 MCP Tools</Badge>
+                <Badge variant="blue">22 Apps</Badge>
                 <Badge variant="blue">900+ Tests</Badge>
                 <Badge variant="blue">MIT License</Badge>
               </div>

@@ -53,10 +53,10 @@ export function Hero() {
             className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600"
           >
             The average company runs more than a hundred apps and loses half a workday a week just
-            switching between them. BigBlueBam is the other bet: twenty-one apps (boards, chat, CRM,
+            switching between them. BigBlueBam is the other bet: twenty-two apps (boards, chat, CRM,
             docs, helpdesk, and a dozen more) that behave like a single product. Self-hosted, open
             source, and built for AI from day one, so agents can work the same boards, sprints, and
-            tickets your team does, through one MCP server with 833 tools. The ones you bring on
+            tickets your team does, through one MCP server with 849 tools. The ones you bring on
             never ask where anything lives. Neither will you.
           </motion.p>
 
