@@ -21,6 +21,20 @@ function toBigint(v: number | null | undefined): bigint | null {
 }
 
 /**
+ * Coerce the bigint policy columns (max_rows / max_bytes) to numbers. Drizzle
+ * returns them as BigInt, which JSON.stringify cannot serialize, so returning a
+ * raw row from a route 500s even when the DB write succeeded. Every read/write
+ * that returns a policy to the client must pass through this.
+ */
+function serializePolicy<T extends { max_rows: unknown; max_bytes: unknown }>(row: T) {
+  return {
+    ...row,
+    max_rows: row.max_rows == null ? null : Number(row.max_rows),
+    max_bytes: row.max_bytes == null ? null : Number(row.max_bytes),
+  };
+}
+
+/**
  * List every retention policy for an app (app-wide default + any per-report_type
  * overrides). The Blip SPA's retention page GETs /apps/:id/retention on load and
  * picks the app default via `.find(p => !p.report_type)`; without this the page
@@ -35,11 +49,7 @@ export async function listRetention(appId: string, orgId: string) {
     .where(
       and(eq(blipRetentionPolicies.tracked_app_id, appId), eq(blipRetentionPolicies.org_id, orgId)),
     );
-  return rows.map((r) => ({
-    ...r,
-    max_rows: r.max_rows == null ? null : Number(r.max_rows),
-    max_bytes: r.max_bytes == null ? null : Number(r.max_bytes),
-  }));
+  return rows.map(serializePolicy);
 }
 
 /** Upsert the retention policy for (app, report_type). Returns the stored row. */
@@ -79,7 +89,7 @@ export async function setRetention(appId: string, orgId: string, userId: string,
       .set(values)
       .where(eq(blipRetentionPolicies.id, existing[0]!.id))
       .returning();
-    return updated[0]!;
+    return serializePolicy(updated[0]!);
   }
 
   const inserted = await db

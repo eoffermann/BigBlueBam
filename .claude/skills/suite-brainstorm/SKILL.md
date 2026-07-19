@@ -1,9 +1,9 @@
 ---
 name: suite-brainstorm
-description: Run a competitive, multi-agent brainstorming session that selects the next app the BigBlueBam suite should build, then produces a hardened design spec for it. Five "ideator" seats each propose five adjacent, AI-native apps; they debate, negotiate, submit one each, merge overlaps, and vote (no self-votes) to a single winner. The whole session is logged to docs/brainstorming/<stamp>_BRAINSTORMING_SESSION.md, and the winner gets a full design spec (docs/brainstorming/<stamp>_APP_DESIGN_<appname>.md) drafted and then hardened by five adversarial reviewers. Use when asked to brainstorm / pick / spec the suite's next app.
+description: Run a competitive, multi-agent brainstorming session that selects the next app the BigBlueBam suite should build, then produces a hardened design spec for it. Seven "ideator" seats each propose five adjacent, AI-native apps; they debate, negotiate, submit one each, merge overlaps, and vote (no self-votes) to a single winner. The whole session is logged to docs/brainstorming/<stamp>_BRAINSTORMING_SESSION.md, and the winner gets a full design spec (docs/brainstorming/<stamp>_APP_DESIGN_<appname>.md) drafted and then hardened by five adversarial reviewers. Use when asked to brainstorm / pick / spec the suite's next app.
 ---
 
-# Suite brainstorm - five seats → debate → merge → vote → winner → hardened spec
+# Suite brainstorm - seven seats → debate → merge → vote → winner → hardened spec
 
 You are the **orchestrator** of a competitive brainstorming session whose single
 output is the next app BigBlueBam should build, plus a build-ready design spec for
@@ -12,14 +12,14 @@ never talk directly), and keep the session document current at each step. The
 seats are stateful `brainstorm-ideator` subagents - spawn each once, then continue
 it across rounds with **SendMessage** so it keeps its context and identity.
 
-The prize is deliberately scarce: five seats, one winner. Reward **innovation**
+The prize is deliberately scarce: seven seats, one winner. Reward **innovation**
 and **customer fit**. A clone of an existing product, or a CRUD app with a chatbot
 bolted on, is a losing idea by construction - push the seats toward AI-native,
 adjacent, genuinely-new capabilities that move the suite forward.
 
 ## Subagents this skill drives
 
-- **brainstorm-ideator** - spawn **exactly five**, one per innovation lens. Each
+- **brainstorm-ideator** - spawn **exactly seven**, one per innovation lens. Each
   proposes five apps and then defends/aligns/opposes/revises across every round.
   Drive them with SendMessage; never re-spawn (that would wipe the seat's memory).
 - **brainstorm-spec-writer** - one seat, invoked after a winner is chosen and
@@ -40,17 +40,19 @@ adjacent, genuinely-new capabilities that move the suite forward.
    empty section per phase below. You append to this file at the end of **every**
    phase - verbatim seat replies, negotiation transcripts, strategies, vote
    tables. It must be readable by someone who watched none of the tool calls.
-4. **Assign five distinct lenses**, one per seat. Use these unless the user asks
+4. **Assign seven distinct lenses**, one per seat. Use these unless the user asks
    for others:
    - Seat A - **AI-native automation & autonomous agent workflows**
    - Seat B - **Data, intelligence & analytics**
    - Seat C - **Communication, collaboration & community**
    - Seat D - **A vertical / industry wedge** (pick one under-served vertical)
    - Seat E - **Operator / developer experience & platform tooling**
+   - Seat F - **Engineering & Software Development**
+   - Seat G - **Creative & Marketing**
 
-## Phase 1 - Ideation (five seats × five apps)
+## Phase 1 - Ideation (seven seats × five apps)
 
-Spawn all five `brainstorm-ideator` agents **in one message** (parallel). Give
+Spawn all seven `brainstorm-ideator` agents **in one message** (parallel). Give
 each its seat id, its lens, the rubric reminder (not a clone; AI-native; real
 wedge; adjacent + reuses the platform), the naming convention (single word,
 "B-" alliterative family preferred), and the required output shape (see the agent
@@ -61,26 +63,26 @@ proposals," labeled by seat and lens.
 
 ## Phase 2 - Debate
 
-Send **every** seat, via SendMessage, the other four seats' five-app blocks. Ask
+Send **every** seat, via SendMessage, the other six seats' five-app blocks. Ask
 each to take an align / oppose / ignore stance on the others' relevant apps, to
 revise its own five if warranted, and to return its updated five-app block plus
 **Debate notes** (its calls + one-paragraph strategy). Its standing goal: land at
-least one app in the Final 5.
+least one app in the Final 7.
 
 Run **one full debate round** by default; run a second only if the ideas are
 still colliding hard and another round would sharpen them (say why in the doc).
 Append every seat's debate reply and revised block verbatim under "Phase 2 -
 Debate."
 
-## Phase 3 - Selection (five submissions)
+## Phase 3 - Selection (seven submissions)
 
 SendMessage each seat: pick your single strongest app (current, post-debate
-description) and submit it as `SUBMISSION - Seat X`. Collect all five submissions.
+description) and submit it as `SUBMISSION - Seat X`. Collect all seven submissions.
 Append them verbatim under "Phase 3 - Submissions."
 
 ## Phase 4 - Overlap resolution (orchestrator judgement)
 
-Compare the five submitted apps pairwise. Classify each overlapping pair:
+Compare the seven submitted apps pairwise. Classify each overlapping pair:
 
 - **Perfect overlap** (same app, different words): **collapse** into one entry.
   Note in the doc which two submissions collapsed and keep the stronger framing.
@@ -93,14 +95,14 @@ Compare the five submitted apps pairwise. Classify each overlapping pair:
 - **Distinct**: both continue unchanged.
 
 Record the full merge transcript (every relayed turn) and each outcome under
-"Phase 4 - Overlap resolution." After this phase you have **1–5 surviving apps**.
+"Phase 4 - Overlap resolution." After this phase you have **1–7 surviving apps**.
 
 **Short-circuit:** if exactly **one** app survives Phase 4, it **wins** outright -
 skip Phase 5, note the walkover in the doc, and go to Phase 6.
 
 ## Phase 5 - Final vote
 
-SendMessage all five seats the final slate of surviving apps (with current
+SendMessage all seven seats the final slate of surviving apps (with current
 descriptions). Each seat scores **every** finalist **1–5** and **must abstain on
 any app it owns or co-owns** (no self-votes). Collect the scorecards.
 
