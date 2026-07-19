@@ -450,7 +450,7 @@ Concurrent triage returns **409 with current state**, never a raw 23505. `POST /
 | `contract_value` | bigint | minor units. `read_all`-floored |
 | `contract_value_delta` | bigint | for an amendment; chain value is `sum(coalesce(contract_value_delta, contract_value))` |
 | `currency` | varchar(3) NOT NULL DEFAULT `'USD'` | one per chain, enforced on insert |
-| `envelope_basis` | varchar(16) NOT NULL DEFAULT `'fixed'` | `fixed` \| `time_and_materials` \| `retainer` \| `not_to_exceed`. **Drives `revenue_basis` (1.2.1)** |
+| `envelope_basis` | varchar(32) NOT NULL DEFAULT `'fixed'` | `fixed` \| `time_and_materials` \| `retainer` \| `not_to_exceed`. **Drives `revenue_basis` (1.2.1)** |
 | `period_length_days` | integer | required when `envelope_basis='retainer'` |
 | `budget_hours` | numeric(10,2) | |
 | `bin_asset_id` | uuid | nullable (manual entry) |
@@ -654,7 +654,7 @@ Indexes: `(organization_id, is_enabled, priority)`, `(outcome_deliverable_id)`.
 | `confidence` | numeric(5,2) | |
 | `clause_ref` | varchar(64) | `read_all`-floored |
 | `outcome` | varchar(24) NOT NULL DEFAULT `'pending'` | `pending` \| `proceeded` \| `abandoned` \| `overridden` \| `mapped` \| `mapped_and_posted` \| `change_order_raised` \| `absorbed` |
-| `advisory_feedback` | varchar(16) | `right_call` \| `would_have_mapped` (**member-writable, feeds nothing**) \| `wrong_call` (**`burn.precheck.mark_wrong` only, in the numerator**) |
+| `advisory_feedback` | varchar(32) | `right_call` \| `would_have_mapped` (**member-writable, feeds nothing**) \| `wrong_call` (**`burn.precheck.mark_wrong` only, in the numerator**) |
 | `override_reason_code` | varchar(24) | `absorbed_cost` \| `mapped_manually` \| `change_order_pending` \| `gate_wrong` (**`mark_wrong` only**) |
 | `override_reason_text` | text | required, min `override_reason_min_chars` (20) on a deny override |
 | `overridden_by` | uuid | `read_all`-floored |
@@ -745,7 +745,7 @@ Indexes: `(organization_id)`, `(organization_id, project_id, user_id, effective_
 | `cost_rate_coverage_pct` / `priced_deliverable_coverage_pct` | numeric(6,2) | the second gates promotion (5.4) |
 | `distinct_contributor_count` | integer NOT NULL DEFAULT 0 | drives the 2.4 point 17 suppression |
 | `metric_basis` | varchar(24) NOT NULL | `true_margin` \| `contract_consumption` (the `suppressed` variant of 1.2.2 is a response shape, never a stored value) |
-| **`revenue_basis`** | varchar(24) NOT NULL | `contract_value` \| `billable_recognized_capped` \| `contract_value_per_period` \| `billable_recognized` (1.2.1) |
+| **`revenue_basis`** | varchar(32) NOT NULL | `contract_value` \| `billable_recognized_capped` \| `contract_value_per_period` \| `billable_recognized` (1.2.1) |
 | **`period_start` / `period_end` / `period_index`** | date / date / integer | **descriptive columns for a `retainer` chain (R3-D3). The rollup row is always the CURRENT period; prior periods are exposed through the burn-down series, not through additional rollup rows.** NULL for every non-retainer basis |
 | `margin_state` | varchar(16) | `in_progress` \| `final` (1.2.1) |
 | `work_item_count` | integer NOT NULL DEFAULT 0 | |
