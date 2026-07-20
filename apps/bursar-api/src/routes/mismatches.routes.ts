@@ -48,7 +48,7 @@ export default async function mismatchRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post('/mismatches/:id/dismiss', { preHandler: [requireAuth, can('bursar.mismatch.resolve')] }, async (request, reply) => {
+  fastify.post('/mismatches/:id/dismiss', { preHandler: [requireAuth, can('bursar.mismatch.dismiss')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = bursarMismatchDecisionSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
@@ -60,7 +60,7 @@ export default async function mismatchRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post('/mismatches/:id/mark-wrong', { preHandler: [requireAuth, can('bursar.mismatch.resolve')] }, async (request, reply) => {
+  fastify.post('/mismatches/:id/mark-wrong', { preHandler: [requireAuth, can('bursar.detector.mark_wrong')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = bursarMarkWrongSchema.safeParse(request.body);
     if (!parsed.success) return validationError(request, reply, parsed.error);

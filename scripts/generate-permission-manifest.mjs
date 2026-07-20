@@ -857,6 +857,63 @@ function buildManifest() {
     { id: 'burn.costrate.write', app: 'burn', resource: 'costrate', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'burn.settings.read', app: 'burn', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
     { id: 'burn.settings.write', app: 'burn', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    // Bursar (AI absence-detection / bid-leveling + scope-drift monitor, spec section 13.1).
+    // Same satellite deferral as basis/braid/bulwark/burn: bursar-api is NOT in APP_TO_PREFIX and
+    // its bursar_ MCP tools are deliberately kept out of EXPLICIT_TOOL_OVERRIDES (satellite pattern,
+    // fail-closed under an operator agent_policies allowlist of 'bursar.*'), so neither the route
+    // scanner nor the tool scanner emits these ids. The 36 rows are the §13.1 action table verbatim
+    // (the single source of truth). Two rows the table explicitly DELETES do not appear here:
+    // bursar.usage.read and bursar.usage.attest were leftovers of the cut dormant_seat detector with
+    // no route/tool/UI, and a route-and-tool walker could never emit them, so including them would
+    // make the §17.3 probe compare a generated catalog against a larger table and FAIL a correct
+    // build. bursar.spend.read_all IS retained (route-file permission metadata on GET /spend and
+    // /spend/by-vendor, burn's financial-flooring pattern).
+    //
+    // EXPLICIT is_read on every row so no flag depends on verb inference. Manifest flags carry only
+    // is_read / is_destructive / requires_confirmation / requires_superuser; the floored / viewer
+    // tiering from §13.2 lives in the 0259_bursar_builtin_group_defaults.sql group-defaults file, not
+    // here. is_destructive matches the table's destructive column (vendor.delete, scope.write,
+    // award.amend, award.terminate, mismatch.dismiss); requires_confirmation matches the confirm
+    // column (vendor.delete, scope.promote_rival, offer.unseal, award.create, award.amend,
+    // award.terminate). Note scope.write is destructive WITHOUT confirm and mismatch.dismiss is
+    // destructive WITHOUT confirm, which the two flags being independent supports. Keep in sync with
+    // the bursar rows in the delta migration and the group-defaults file.
+    { id: 'bursar.vendor.read', app: 'bursar', resource: 'vendor', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.vendor.write', app: 'bursar', resource: 'vendor', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.vendor.delete', app: 'bursar', resource: 'vendor', verb: 'delete', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'bursar.request.read', app: 'bursar', resource: 'request', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.request.write', app: 'bursar', resource: 'request', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.scope.write', app: 'bursar', resource: 'scope', verb: 'write', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.scope.confirm', app: 'bursar', resource: 'scope', verb: 'confirm', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.scope.promote_rival', app: 'bursar', resource: 'scope', verb: 'promote_rival', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'bursar.offer.read', app: 'bursar', resource: 'offer', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.offer.write', app: 'bursar', resource: 'offer', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.offer.ingest', app: 'bursar', resource: 'offer', verb: 'ingest', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.offer.unseal', app: 'bursar', resource: 'offer', verb: 'unseal', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'bursar.leveling.run', app: 'bursar', resource: 'leveling', verb: 'run', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.coverage.read', app: 'bursar', resource: 'coverage', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.coverage.override', app: 'bursar', resource: 'coverage', verb: 'override', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.award.read', app: 'bursar', resource: 'award', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.award.create', app: 'bursar', resource: 'award', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: true, requires_superuser: false },
+    { id: 'bursar.award.amend', app: 'bursar', resource: 'award', verb: 'amend', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'bursar.award.terminate', app: 'bursar', resource: 'award', verb: 'terminate', is_read: false, is_destructive: true, requires_confirmation: true, requires_superuser: false },
+    { id: 'bursar.baseline.read', app: 'bursar', resource: 'baseline', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.spend.read', app: 'bursar', resource: 'spend', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.spend.read_all', app: 'bursar', resource: 'spend', verb: 'read_all', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.spend.import', app: 'bursar', resource: 'spend', verb: 'import', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.mismatch.read', app: 'bursar', resource: 'mismatch', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.mismatch.resolve', app: 'bursar', resource: 'mismatch', verb: 'resolve', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.mismatch.dismiss', app: 'bursar', resource: 'mismatch', verb: 'dismiss', is_read: false, is_destructive: true, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.renewal.read', app: 'bursar', resource: 'renewal', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.renewal.decide', app: 'bursar', resource: 'renewal', verb: 'decide', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.gate.run', app: 'bursar', resource: 'gate', verb: 'run', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.draft.read', app: 'bursar', resource: 'draft', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.draft.create', app: 'bursar', resource: 'draft', verb: 'create', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.draft.approve', app: 'bursar', resource: 'draft', verb: 'approve', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.detector.mark_wrong', app: 'bursar', resource: 'detector', verb: 'mark_wrong', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.library.write', app: 'bursar', resource: 'library', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.settings.read', app: 'bursar', resource: 'settings', verb: 'read', is_read: true, is_destructive: false, requires_confirmation: false, requires_superuser: false },
+    { id: 'bursar.settings.write', app: 'bursar', resource: 'settings', verb: 'write', is_read: false, is_destructive: false, requires_confirmation: false, requires_superuser: false },
   ];
   for (const c of HAND_AUTHORED) {
     if (!byId.has(c.id)) {
@@ -892,6 +949,10 @@ function buildManifest() {
       if (c.id.startsWith('burn.')) {
         migrationLabel = '0242';
         sourceFile = 'burn.routes.ts';
+      }
+      if (c.id.startsWith('bursar.')) {
+        migrationLabel = '0258';
+        sourceFile = 'bursar.routes.ts';
       }
       byId.set(c.id, {
         id: c.id,

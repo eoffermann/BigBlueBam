@@ -9,7 +9,7 @@ import * as library from '../services/library.service.js';
 export default async function libraryRoutes(fastify: FastifyInstance) {
   const can = (p: string) => fastify.requireCan(p);
 
-  fastify.get('/library', { preHandler: [requireAuth, can('bursar.library.read')] }, async (request) => {
+  fastify.get('/library', { preHandler: [requireAuth, can('bursar.settings.read')] }, async (request) => {
     return library.listLibrary(viewerOf(request));
   });
 

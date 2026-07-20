@@ -84,6 +84,7 @@ export const APP_TOOL_MODULES = {
   braid: ['braid-tools'],
   bulwark: ['bulwark-tools'],
   burn: ['burn-tools'],
+  bursar: ['bursar-tools'],
 };
 
 // Friendly category labels for tool modules. Used to group a multi-module

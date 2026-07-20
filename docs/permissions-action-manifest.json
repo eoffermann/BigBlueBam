@@ -1,10 +1,10 @@
 {
   "counts": {
-    "total": 1445,
-    "mcp_tools_scanned": 865,
+    "total": 1481,
+    "mcp_tools_scanned": 885,
     "rest_routes_scanned": 880,
-    "read_permissions": 560,
-    "destructive_permissions": 138
+    "read_permissions": 572,
+    "destructive_permissions": 143
   },
   "permissions": [
     {
@@ -23982,6 +23982,618 @@
       ]
     },
     {
+      "id": "bursar.award.amend",
+      "app": "bursar",
+      "resource": "award",
+      "verb": "amend",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.award.create",
+      "app": "bursar",
+      "resource": "award",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.award.read",
+      "app": "bursar",
+      "resource": "award",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.award.terminate",
+      "app": "bursar",
+      "resource": "award",
+      "verb": "terminate",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.baseline.read",
+      "app": "bursar",
+      "resource": "baseline",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.coverage.override",
+      "app": "bursar",
+      "resource": "coverage",
+      "verb": "override",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.coverage.read",
+      "app": "bursar",
+      "resource": "coverage",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.detector.mark_wrong",
+      "app": "bursar",
+      "resource": "detector",
+      "verb": "mark_wrong",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.draft.approve",
+      "app": "bursar",
+      "resource": "draft",
+      "verb": "approve",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.draft.create",
+      "app": "bursar",
+      "resource": "draft",
+      "verb": "create",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.draft.read",
+      "app": "bursar",
+      "resource": "draft",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.gate.run",
+      "app": "bursar",
+      "resource": "gate",
+      "verb": "run",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.leveling.run",
+      "app": "bursar",
+      "resource": "leveling",
+      "verb": "run",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.library.write",
+      "app": "bursar",
+      "resource": "library",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.mismatch.dismiss",
+      "app": "bursar",
+      "resource": "mismatch",
+      "verb": "dismiss",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.mismatch.read",
+      "app": "bursar",
+      "resource": "mismatch",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.mismatch.resolve",
+      "app": "bursar",
+      "resource": "mismatch",
+      "verb": "resolve",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.offer.ingest",
+      "app": "bursar",
+      "resource": "offer",
+      "verb": "ingest",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.offer.read",
+      "app": "bursar",
+      "resource": "offer",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.offer.unseal",
+      "app": "bursar",
+      "resource": "offer",
+      "verb": "unseal",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.offer.write",
+      "app": "bursar",
+      "resource": "offer",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.renewal.decide",
+      "app": "bursar",
+      "resource": "renewal",
+      "verb": "decide",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.renewal.read",
+      "app": "bursar",
+      "resource": "renewal",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.request.read",
+      "app": "bursar",
+      "resource": "request",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.request.write",
+      "app": "bursar",
+      "resource": "request",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.scope.confirm",
+      "app": "bursar",
+      "resource": "scope",
+      "verb": "confirm",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.scope.promote_rival",
+      "app": "bursar",
+      "resource": "scope",
+      "verb": "promote_rival",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.scope.write",
+      "app": "bursar",
+      "resource": "scope",
+      "verb": "write",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.settings.read",
+      "app": "bursar",
+      "resource": "settings",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.settings.write",
+      "app": "bursar",
+      "resource": "settings",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.spend.import",
+      "app": "bursar",
+      "resource": "spend",
+      "verb": "import",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.spend.read",
+      "app": "bursar",
+      "resource": "spend",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.spend.read_all",
+      "app": "bursar",
+      "resource": "spend",
+      "verb": "read_all",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.vendor.delete",
+      "app": "bursar",
+      "resource": "vendor",
+      "verb": "delete",
+      "is_destructive": true,
+      "is_read": false,
+      "requires_confirmation": true,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.vendor.read",
+      "app": "bursar",
+      "resource": "vendor",
+      "verb": "read",
+      "is_destructive": false,
+      "is_read": true,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
+      "id": "bursar.vendor.write",
+      "app": "bursar",
+      "resource": "vendor",
+      "verb": "write",
+      "is_destructive": false,
+      "is_read": false,
+      "requires_confirmation": false,
+      "requires_superuser": false,
+      "sources": [
+        {
+          "source": "rest",
+          "ref": "hand_authored (migration 0258)",
+          "file": "bursar.routes.ts"
+        }
+      ]
+    },
+    {
       "id": "helpdesk.admin_project.list",
       "app": "helpdesk",
       "resource": "admin_project",
@@ -26123,6 +26735,86 @@
     {
       "tool": "burn_calibration_report",
       "file": "burn-tools.ts"
+    },
+    {
+      "tool": "bursar_level_quotes",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_scope_gap",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_vendor_view",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_mismatches",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_spend_by_vendor",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_renewals_due",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_exclusion_diff",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_get_matrix",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_get_totals",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_list_requests",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_get_request",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_get_scope_tree",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_upsert_scope_node",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_list_offers",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_get_coverage",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_get_baseline",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_list_awards",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_resolve_vendor",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_list_leveling_runs",
+      "file": "bursar-tools.ts"
+    },
+    {
+      "tool": "bursar_draft_clarification",
+      "file": "bursar-tools.ts"
     },
     {
       "tool": "edit_comment",

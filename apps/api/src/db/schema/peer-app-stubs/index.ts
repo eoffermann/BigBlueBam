@@ -636,3 +636,67 @@ export const burnDeliverablesStub = pgTable(
     index('pas_burn_deliverables_engagement_idx').on(table.engagement_id),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// bill - expenses
+// ---------------------------------------------------------------------------
+// Real schema: apps/bill-api/src/db/schema/bill-expenses.ts. Mirrors bill.invoice:
+// no per-expense visibility enum, so any org member can read any expense in their
+// org - org match is the entire rule. Registered here because Bursar's drift
+// findings cite bill.expense rows; without this type, can_access returns
+// unsupported_entity_type and treat-non-ok-as-deny silently drops every citation.
+export const billExpensesStub = pgTable('bill_expenses', {
+  id: uuid('id').primaryKey(),
+  organization_id: uuid('organization_id').notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// bursar - vendors / requests / offers / awards / mismatches
+// ---------------------------------------------------------------------------
+// Real schema: apps/bursar-api/src/db/schema/bursar-*.ts (spec 16.3). Every
+// bursar_* row is org-scoped by organization_id with no per-row visibility enum,
+// so org match is the entire rule (mirrors bill.invoice / bulwark.contract).
+export const bursarVendorsStub = pgTable(
+  'bursar_vendors',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_bursar_vendors_org_idx').on(table.organization_id)],
+);
+
+export const bursarRequestsStub = pgTable(
+  'bursar_requests',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_bursar_requests_org_idx').on(table.organization_id)],
+);
+
+export const bursarOffersStub = pgTable(
+  'bursar_offers',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_bursar_offers_org_idx').on(table.organization_id)],
+);
+
+export const bursarAwardsStub = pgTable(
+  'bursar_awards',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_bursar_awards_org_idx').on(table.organization_id)],
+);
+
+export const bursarMismatchesStub = pgTable(
+  'bursar_mismatches',
+  {
+    id: uuid('id').primaryKey(),
+    organization_id: uuid('organization_id').notNull(),
+  },
+  (table) => [index('pas_bursar_mismatches_org_idx').on(table.organization_id)],
+);

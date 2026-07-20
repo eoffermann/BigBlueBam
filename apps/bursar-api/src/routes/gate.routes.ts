@@ -11,14 +11,14 @@ import * as gate from '../services/gate.service.js';
 export default async function gateRoutes(fastify: FastifyInstance) {
   const can = (p: string) => fastify.requireCan(p);
 
-  fastify.post('/gate/scope-gap', { preHandler: [requireAuth, can('bursar.gate.check')] }, async (request, reply) => {
+  fastify.post('/gate/scope-gap', { preHandler: [requireAuth, can('bursar.gate.run')] }, async (request, reply) => {
     const parsed = bursarScopeGapSchema.safeParse(request.body ?? {});
     if (!parsed.success) return validationError(request, reply, parsed.error);
     const result = await gate.evaluateScopeGap(viewerOf(request), parsed.data, 'api', viewerOf(request).id);
     return { data: result };
   });
 
-  fastify.get('/gate/checks', { preHandler: [requireAuth, can('bursar.gate.read')] }, async (request) => {
+  fastify.get('/gate/checks', { preHandler: [requireAuth, can('bursar.gate.run')] }, async (request) => {
     return gate.listGateChecks(viewerOf(request));
   });
 }

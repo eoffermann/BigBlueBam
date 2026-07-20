@@ -23,7 +23,7 @@ export default async function scopeRoutes(fastify: FastifyInstance) {
   // ── Reads ──────────────────────────────────────────────────────────────────
   fastify.get(
     '/requests/:id/scope',
-    { preHandler: [requireAuth, can('bursar.scope.read')] },
+    { preHandler: [requireAuth, can('bursar.request.read')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
       try {

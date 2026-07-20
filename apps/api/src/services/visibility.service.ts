@@ -42,6 +42,12 @@ import {
   burnEngagementsStub,
   burnEngagementProjectsStub,
   burnDeliverablesStub,
+  billExpensesStub,
+  bursarVendorsStub,
+  bursarRequestsStub,
+  bursarOffersStub,
+  bursarAwardsStub,
+  bursarMismatchesStub,
 } from '../db/schema/peer-app-stubs/index.js';
 
 /**
@@ -108,7 +114,16 @@ export type VisibilityEntityType =
   | 'bulwark.deadline'
   // Burn margin/envelope-attribution monitor registration (APP_DESIGN_burn.md 2.4 point 4)
   | 'burn.engagement'
-  | 'burn.deliverable';
+  | 'burn.deliverable'
+  // Bursar absence-detection / bid-leveling registration (APP_DESIGN_bursar.md §16.3).
+  // bill.expense was missing platform-wide (only bill.invoice + bill.client existed), so
+  // under treat-non-ok-as-deny every Bursar drift citation of an expense silently dropped.
+  | 'bill.expense'
+  | 'bursar.vendor'
+  | 'bursar.request'
+  | 'bursar.offer'
+  | 'bursar.award'
+  | 'bursar.mismatch';
 
 export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   'bam.task',
@@ -150,6 +165,13 @@ export const SUPPORTED_ENTITY_TYPES: readonly VisibilityEntityType[] = [
   // Burn margin/envelope-attribution monitor registration (APP_DESIGN_burn.md 2.4 point 4)
   'burn.engagement',
   'burn.deliverable',
+  // Bursar absence-detection / bid-leveling registration (APP_DESIGN_bursar.md §16.3)
+  'bill.expense',
+  'bursar.vendor',
+  'bursar.request',
+  'bursar.offer',
+  'bursar.award',
+  'bursar.mismatch',
 ] as const;
 
 export type PreflightReason =
@@ -1731,6 +1753,19 @@ export async function preflightAccess(
       return preflightBurnEngagement(asker, entityId);
     case 'burn.deliverable':
       return preflightBurnDeliverable(asker, entityId);
+    // Bursar absence-detection / bid-leveling registration (APP_DESIGN_bursar.md §16.3)
+    case 'bill.expense':
+      return preflightBillExpense(asker, entityId);
+    case 'bursar.vendor':
+      return preflightBursarVendor(asker, entityId);
+    case 'bursar.request':
+      return preflightBursarRequest(asker, entityId);
+    case 'bursar.offer':
+      return preflightBursarOffer(asker, entityId);
+    case 'bursar.award':
+      return preflightBursarAward(asker, entityId);
+    case 'bursar.mismatch':
+      return preflightBursarMismatch(asker, entityId);
     default:
       return { allowed: false, reason: 'unsupported_entity_type' };
   }
@@ -1815,6 +1850,113 @@ async function preflightBurnDeliverable(
     return { allowed: false, reason: 'not_found' };
   }
   return preflightBurnEngagement(asker, deliverable.engagement_id);
+}
+
+// ---------------------------------------------------------------------------
+// bill.expense + bursar.* (APP_DESIGN_bursar.md §16.3)
+// ---------------------------------------------------------------------------
+//
+// Every one of these rows is org-scoped by organization_id with no per-row
+// visibility enum, so org match is the entire rule (mirrors bill.invoice). A
+// cross-org row denies as not_found so its existence is never disclosed. The
+// financial FLOORING that Bursar applies on top of read access is a bursar-api
+// serializer concern (viewer-caps.ts), not a can_access concern; can_access
+// answers only "may this asker see that this row exists".
+
+/** bill.expense: org membership is the entire rule (mirrors bill.invoice). */
+async function preflightBillExpense(
+  asker: AskerContext,
+  expenseId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: billExpensesStub.id, organization_id: billExpensesStub.organization_id })
+    .from(billExpensesStub)
+    .where(eq(billExpensesStub.id, expenseId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+}
+
+/** bursar.vendor: org membership is the entire rule. */
+async function preflightBursarVendor(
+  asker: AskerContext,
+  vendorId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: bursarVendorsStub.id, organization_id: bursarVendorsStub.organization_id })
+    .from(bursarVendorsStub)
+    .where(eq(bursarVendorsStub.id, vendorId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+}
+
+/** bursar.request: org membership is the entire rule. */
+async function preflightBursarRequest(
+  asker: AskerContext,
+  requestId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: bursarRequestsStub.id, organization_id: bursarRequestsStub.organization_id })
+    .from(bursarRequestsStub)
+    .where(eq(bursarRequestsStub.id, requestId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+}
+
+/** bursar.offer: org membership is the entire rule. (Seal state is a bursar-api serializer concern.) */
+async function preflightBursarOffer(
+  asker: AskerContext,
+  offerId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: bursarOffersStub.id, organization_id: bursarOffersStub.organization_id })
+    .from(bursarOffersStub)
+    .where(eq(bursarOffersStub.id, offerId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+}
+
+/** bursar.award: org membership is the entire rule. */
+async function preflightBursarAward(
+  asker: AskerContext,
+  awardId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: bursarAwardsStub.id, organization_id: bursarAwardsStub.organization_id })
+    .from(bursarAwardsStub)
+    .where(eq(bursarAwardsStub.id, awardId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
+}
+
+/** bursar.mismatch: org membership is the entire rule. */
+async function preflightBursarMismatch(
+  asker: AskerContext,
+  mismatchId: string,
+): Promise<PreflightResult> {
+  const rows = await db
+    .select({ id: bursarMismatchesStub.id, organization_id: bursarMismatchesStub.organization_id })
+    .from(bursarMismatchesStub)
+    .where(eq(bursarMismatchesStub.id, mismatchId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { allowed: false, reason: 'not_found' };
+  if (row.organization_id !== asker.org_id) return { allowed: false, reason: 'not_found' };
+  return { allowed: true, reason: 'ok', entity_org_id: row.organization_id };
 }
 
 export const __test__ = {
