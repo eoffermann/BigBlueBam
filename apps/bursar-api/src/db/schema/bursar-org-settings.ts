@@ -14,8 +14,10 @@ export const bursarOrgSettings = pgTable('bursar_org_settings', {
   node_term_overlap_floor: numeric('node_term_overlap_floor', { precision: 5, scale: 4 })
     .notNull()
     .default('0.3000'),
-  blanket_fanout_cap: integer('blanket_fanout_cap').notNull().default(25),
-  blanket_cumulative_cap: integer('blanket_cumulative_cap').notNull().default(100),
+  // §4.3 caps at their spec defaults (corrected from the M1 seed of 25/100 in migration 0254): the
+  // split-blanket attack (14 mandatory nodes over 4 lines) must trip a cap of 4, not slip under 100.
+  blanket_fanout_cap: integer('blanket_fanout_cap').notNull().default(4),
+  blanket_cumulative_cap: integer('blanket_cumulative_cap').notNull().default(4),
   evidence_concentration_floor: numeric('evidence_concentration_floor', { precision: 5, scale: 4 })
     .notNull()
     .default('0.5000'),
@@ -30,7 +32,9 @@ export const bursarOrgSettings = pgTable('bursar_org_settings', {
   renewal_lead_bands: jsonb('renewal_lead_bands')
     .notNull()
     .default(['t_minus_90', 't_minus_60', 't_minus_30', 't_minus_7']),
-  parse_quality_floor: numeric('parse_quality_floor', { precision: 5, scale: 4 }).notNull().default('0.4000'),
+  // Spec floor 0.35 (corrected from the M1 seed of 0.40 in migration 0254). Below this an offer is
+  // `unparseable` and can never produce an `absent` verdict (spec 4.1).
+  parse_quality_floor: numeric('parse_quality_floor', { precision: 5, scale: 4 }).notNull().default('0.3500'),
   payee_match_threshold: numeric('payee_match_threshold', { precision: 5, scale: 4 })
     .notNull()
     .default('0.4500'),

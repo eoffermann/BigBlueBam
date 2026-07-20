@@ -7,6 +7,7 @@ import {
   integer,
   bigint,
   jsonb,
+  text,
   timestamp,
   index,
   uniqueIndex,
@@ -37,6 +38,12 @@ export const bursarOffers = pgTable(
     // Deterministic-parse lifecycle (M4). Nullable until a parse starts; the M3 reaper reverts a
     // stuck 'parsing' offer so a crashed parse is never a permanent wedge (migration 0253).
     normalization_status: varchar('normalization_status', { length: 16 }),
+    // The unparseable / blocked reason (mirrors bursar_extraction_runs.error), surfaced in the UI
+    // so "we could not read it" is explicit (migration 0254, M4).
+    normalization_error: text('normalization_error'),
+    parsed_at: timestamp('parsed_at', { withTimezone: true }),
+    // Page count used in the parse_quality density denominator (auditability).
+    page_count: integer('page_count'),
     parse_quality: numeric('parse_quality', { precision: 5, scale: 4 }),
     injection_suspected: boolean('injection_suspected').notNull().default(false),
     injection_signals: jsonb('injection_signals').notNull().default({}),
@@ -44,6 +51,13 @@ export const bursarOffers = pgTable(
     unsubpriced_mandatory_count: integer('unsubpriced_mandatory_count').notNull().default(0),
     evidence_concentration: numeric('evidence_concentration', { precision: 5, scale: 4 }),
     sealed_until: timestamp('sealed_until', { withTimezone: true }),
+    // Unseal audit persisted on the row (migration 0254, M4). The Bam activity_log is
+    // project-scoped (project_id NOT NULL) and cannot represent an org-only bursar event, so the
+    // unseal who/when/reason lives here; the durable offer.unsealed Bolt event is the cross-app
+    // audit fan-out (spec 5.6 / 16 / 25).
+    unsealed_at: timestamp('unsealed_at', { withTimezone: true }),
+    unsealed_by: uuid('unsealed_by').references(() => users.id, { onDelete: 'set null' }),
+    unseal_reason: text('unseal_reason'),
     source_format: varchar('source_format', { length: 24 }),
     bin_asset_id: uuid('bin_asset_id'),
     bin_asset_version_id: uuid('bin_asset_version_id'),

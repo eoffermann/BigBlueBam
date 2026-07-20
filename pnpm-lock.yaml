@@ -4108,12 +4108,18 @@ importers:
       '@bigbluebam/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@bigbluebam/structured-data':
+        specifier: workspace:*
+        version: link:../../packages/structured-data
       '@fastify/cookie':
         specifier: ^11.0.0
         version: 11.0.2
       '@fastify/cors':
         specifier: ^10.0.0
         version: 10.1.0
+      '@fastify/multipart':
+        specifier: ^9.0.0
+        version: 9.4.0
       '@fastify/rate-limit':
         specifier: ^10.0.0
         version: 10.3.0

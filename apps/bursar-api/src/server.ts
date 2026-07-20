@@ -2,6 +2,7 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import { sql } from 'drizzle-orm';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
@@ -23,6 +24,7 @@ import vendorRoutes from './routes/vendors.routes.js';
 import requestRoutes from './routes/requests.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import scopeRoutes from './routes/scope.routes.js';
+import offerRoutes from './routes/offers.routes.js';
 import internalRoutes from './routes/internal.routes.js';
 
 // ── Boot assertion, FIRST, before anything binds a port or opens a pool (spec 13.3).
@@ -86,6 +88,14 @@ await fastify.register(rateLimit, {
   timeWindow: env.RATE_LIMIT_WINDOW_MS,
 });
 
+// Multipart offer ingest (spec 11 / 5.4). The per-file ceiling is MAX_DOC_BYTES, deliberately
+// BELOW nginx's server-level client_max_body_size (25m); an over-limit file part is truncated and
+// the upload route returns a 413 mapped to "this file is larger than 20MB". The global nginx limit
+// is NOT raised for one app's worst case.
+await fastify.register(multipart, {
+  limits: { fileSize: env.MAX_DOC_BYTES, files: 1, fields: 10 },
+});
+
 fastify.addHook('onSend', async (_req, reply) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('X-Frame-Options', 'DENY');
@@ -132,6 +142,8 @@ await fastify.register(
     // M3: scope derivation + the confirmed tree, and the /internal/* engine transport
     // (run-derivation async-start + the run-reaper).
     await v1.register(scopeRoutes);
+    // M4: offer ingest + deterministic parse.
+    await v1.register(offerRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },

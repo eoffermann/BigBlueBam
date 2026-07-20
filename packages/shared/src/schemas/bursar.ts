@@ -281,3 +281,112 @@ export interface BursarDeriveScopeJobData {
   /** Inline source text; absent when the worker must read the pinned Bin bytes itself. */
   source_text?: string;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Offers (M4): ingest and deterministic parse (Stage 1, NO LLM)     */
+/* ------------------------------------------------------------------ */
+
+// The source format an offer document was declared as. Content-type pinning (spec 5.4) checks
+// the detected magic bytes against this declared value, so a PDF header on a file declared
+// `csv` is rejected before it is parsed. `xlsx` means an XLSX the caller exported to a text
+// codec; the raw .xlsx zip container is NOT parsed in v1 (no OCR, no zip extraction).
+export const BursarSourceFormat = z.enum([
+  'text',
+  'email',
+  'pdf',
+  'csv',
+  'tsv',
+  'jsonl',
+  'json',
+  'yaml',
+  'xlsx',
+]);
+export type BursarSourceFormat = z.infer<typeof BursarSourceFormat>;
+
+// The line role (spec 6.1 / 4.4). ONLY `base` counts toward coverage and totals; the others are
+// carried for provenance but never contribute a covered node or a priced total.
+export const BursarLineRole = z.enum(['base', 'option', 'alternate', 'allowance', 'note']);
+export type BursarLineRole = z.infer<typeof BursarLineRole>;
+
+// The parse lifecycle state persisted on bursar_offers.normalization_status. `unparseable` is a
+// terminal state that (spec 4.1) can NEVER produce an `absent` verdict downstream: "we could not
+// read it" is not evidence of omission. `blocked` is a §5.8 re-assertion / limits failure.
+export const BursarNormalizationStatus = z.enum([
+  'pending',
+  'parsing',
+  'parsed',
+  'unparseable',
+  'blocked',
+  'failed',
+]);
+export type BursarNormalizationStatus = z.infer<typeof BursarNormalizationStatus>;
+
+// Create an offer under a request. The byte source is EITHER a Bin asset (access-checked via
+// §5.8 and version-pinned, exactly like a request document) OR inline `source_text` for a pasted
+// text/email offer. `sealed_until` opens the offer under the shared seal predicate (spec 5.6).
+export const bursarOfferCreateSchema = z.object({
+  vendor_id: z.string().uuid().nullable().optional(),
+  label: z.string().max(512).nullable().optional(),
+  currency: z.string().length(3).default('USD'),
+  bin_asset_id: z.string().uuid().nullable().optional(),
+  source_text: z.string().max(4_000_000).nullable().optional(),
+  source_format: BursarSourceFormat.nullable().optional(),
+  sealed_until: z.string().datetime({ offset: true }).nullable().optional(),
+});
+export type BursarOfferCreate = z.infer<typeof bursarOfferCreateSchema>;
+
+// The upload/ingest body (POST /offers/:id/upload). Accepts a Bin asset reference to (re)attach
+// and pin, or inline text, then kicks off the deterministic parse. Sent as JSON or as multipart
+// form fields; the multipart file part, when present, is the inline document bytes.
+export const bursarOfferUploadSchema = z.object({
+  bin_asset_id: z.string().uuid().nullable().optional(),
+  source_text: z.string().max(4_000_000).nullable().optional(),
+  source_format: BursarSourceFormat.nullable().optional(),
+  vendor_id: z.string().uuid().nullable().optional(),
+});
+export type BursarOfferUpload = z.infer<typeof bursarOfferUploadSchema>;
+
+// Unseal a sealed offer (floored, confirm-required). Every unseal writes activity_log and
+// publishes offer.unsealed (spec 5.6). The reason is recorded on the audit row.
+export const bursarUnsealOfferSchema = z
+  .object({
+    reason: z.string().max(1000),
+  })
+  .partial();
+export type BursarUnsealOffer = z.infer<typeof bursarUnsealOfferSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Internal engine transport (M4 offer parse)                        */
+/* ------------------------------------------------------------------ */
+
+// The org comes from the VALIDATED payload on this session-less internal route. The worker sends
+// the raw document bytes base64-encoded (`source_bytes_b64`, the canonical path for PDFs and
+// structured files) OR pre-decoded `source_text` (inline text/email offers and tests). Exactly
+// one is required. `declared_format` drives content-type pinning; `byte_len` is the pre-decode
+// size for the malicious-document ceiling.
+export const bursarParseOfferSchema = z
+  .object({
+    organization_id: z.string().uuid(),
+    offer_id: z.string().uuid(),
+    claimant: z.string().min(1).max(64),
+    source_text: z.string().max(4_000_000).optional(),
+    source_bytes_b64: z.string().max(40_000_000).optional(),
+    content_type: z.string().max(128).nullable().optional(),
+    declared_format: BursarSourceFormat.nullable().optional(),
+    byte_len: z.coerce.number().int().nonnegative().optional(),
+  })
+  .refine((v) => v.source_text !== undefined || v.source_bytes_b64 !== undefined, {
+    message: 'one of source_text or source_bytes_b64 is required',
+  });
+export type BursarParseOffer = z.infer<typeof bursarParseOfferSchema>;
+
+// BullMQ queue for the event-triggered deterministic offer parse. bursar-api is the producer;
+// the worker consumer registration (worker.ts cron) lands in M8, but the event-triggered enqueue
+// from the ingest route is wired at M4.
+export const BURSAR_PARSE_OFFER_QUEUE = 'bursar-parse-offer';
+export interface BursarParseOfferJobData {
+  organization_id: string;
+  offer_id: string;
+  /** Inline source text; absent when the worker must read the pinned Bin bytes itself. */
+  source_text?: string;
+}

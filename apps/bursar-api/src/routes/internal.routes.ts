@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'drizzle-orm';
-import { bursarRunDerivationSchema, bursarRunReaperSchema } from '@bigbluebam/shared';
+import {
+  bursarRunDerivationSchema,
+  bursarRunReaperSchema,
+  bursarParseOfferSchema,
+  type BursarSourceFormat,
+} from '@bigbluebam/shared';
 import { requireInternalSecret } from '../lib/internal-secret.js';
 import { validationError } from '../lib/http.js';
 import { runInOrgScope } from '../plugins/rls.js';
@@ -15,6 +20,29 @@ import { LlmThrottledError } from '../lib/llm-errors.js';
 import { reapOrg, DEFAULT_REAPER_LEASE_MS } from '../services/engines/reaper.engine.js';
 import { reapAllStale, makeDbReaperStore } from '../services/engines/reaper.store.js';
 import { runInjectionPrescan } from '../services/scope.service.js';
+import { parseOfferDocument, withParseBudget, type ParseOutcome } from '../services/engines/parse.engine.js';
+import {
+  claimOfferForParse,
+  loadOfferForParse,
+  loadParseSettings,
+  loadRequestNodes,
+  persistParseOutcome,
+} from '../services/engines/parse.store.js';
+
+/** Map a MIME content-type to a Bursar source format for content-type pinning (spec 5.4). */
+function formatFromContentType(ct: string | null | undefined): BursarSourceFormat | null {
+  if (!ct) return null;
+  const c = ct.toLowerCase();
+  if (c.includes('pdf')) return 'pdf';
+  if (c.includes('tab-separated') || c.includes('tsv')) return 'tsv';
+  if (c.includes('csv')) return 'csv';
+  if (c.includes('ndjson') || c.includes('jsonl')) return 'jsonl';
+  if (c.includes('yaml')) return 'yaml';
+  if (c.includes('json')) return 'json';
+  if (c.includes('spreadsheet') || c.includes('excel') || c.includes('officedocument.spreadsheet')) return 'xlsx';
+  if (c.includes('rfc822') || c.includes('message/')) return 'email';
+  return 'text';
+}
 
 /**
  * Internal, service-to-service routes (spec 5.5). Session-less: `organization_id` comes from the
@@ -130,5 +158,101 @@ export default async function internalRoutes(fastify: FastifyInstance) {
     }
     const summary = await reapAllStale(leaseMs);
     return { data: summary };
+  });
+
+  /**
+   * ── /internal/parse-offer ─────────────────────────────────────────────────
+   * Deterministic Stage-1 offer parse (spec 4.1, M4). Session-less: `organization_id` comes from
+   * the VALIDATED payload. The worker forwards the pinned Bin bytes (base64) after its own §5.8
+   * re-assertion, or inline text; this route runs the WHOLE pipeline (ceilings, content-type
+   * pinning, extraction, segmentation, parse_quality, lexicons, structural matching, the two §4.3
+   * counters) under a wall-clock budget and persists. NO LLM. Unlike derivation this is a single
+   * bounded invocation, so it does not poll: it returns the terminal parse result directly.
+   */
+  fastify.post('/internal/parse-offer', async (request, reply) => {
+    if (!requireInternalSecret(request, reply)) return reply;
+    const parsed = bursarParseOfferSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    const data = parsed.data;
+    const started = Date.now();
+
+    const offer = await loadOfferForParse(data.organization_id, data.offer_id);
+    if (!offer) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Offer not found', details: [], request_id: request.id },
+      });
+    }
+
+    // Resolve the document bytes: base64 (canonical, PDFs + structured) or inline text.
+    const buf =
+      data.source_bytes_b64 !== undefined
+        ? Buffer.from(data.source_bytes_b64, 'base64')
+        : Buffer.from(data.source_text ?? '', 'utf8');
+    const byteLen = data.byte_len ?? buf.length;
+    const declaredFormat: BursarSourceFormat =
+      data.declared_format ??
+      (offer.source_format as BursarSourceFormat | null) ??
+      formatFromContentType(data.content_type) ??
+      'text';
+
+    request.log.info(
+      { org_id: data.organization_id, offer_id: data.offer_id, bytes: byteLen, format: declaredFormat },
+      'bursar parse-offer: claiming + reading bytes',
+    );
+    await claimOfferForParse(data.organization_id, data.offer_id);
+
+    const [nodes, settings] = await Promise.all([
+      loadRequestNodes(data.organization_id, offer.request_id),
+      loadParseSettings(data.organization_id),
+    ]);
+
+    request.log.info(
+      { org_id: data.organization_id, offer_id: data.offer_id, nodes: nodes.length, elapsedMs: Date.now() - started },
+      'bursar parse-offer: parsing',
+    );
+    let outcome: ParseOutcome;
+    try {
+      outcome = await withParseBudget(
+        () =>
+          parseOfferDocument({
+            buf,
+            declaredFormat,
+            nodes,
+            settings,
+            byteLen,
+            uncompressedBytes: null,
+            entryCount: null,
+          }),
+        settings.limits.parseWallClockMs,
+      );
+    } catch (err) {
+      // A wall-clock overrun (spec 5.4): mark the offer failed so the reaper does not have to, and
+      // surface the reason. Never silently succeed.
+      await claimOfferForParse(data.organization_id, data.offer_id).catch(() => {});
+      request.log.warn({ err: (err as Error).message, offer_id: data.offer_id }, 'bursar parse-offer: budget exceeded');
+      return reply.status(200).send({ data: { offer_id: data.offer_id, status: 'failed', error: (err as Error).message } });
+    }
+
+    request.log.info(
+      { org_id: data.organization_id, offer_id: data.offer_id, status: outcome.status, elapsedMs: Date.now() - started },
+      'bursar parse-offer: persisting',
+    );
+    await persistParseOutcome(data.organization_id, offer, outcome, declaredFormat, byteLen);
+
+    request.log.info(
+      { org_id: data.organization_id, offer_id: data.offer_id, status: outcome.status, elapsedMs: Date.now() - started },
+      'bursar parse-offer: done',
+    );
+    return {
+      data: {
+        offer_id: data.offer_id,
+        status: outcome.status,
+        parse_quality: outcome.parse_quality,
+        unsubpriced_mandatory_count: outcome.counters.unsubpriced_mandatory_count,
+        evidence_concentration: outcome.counters.evidence_concentration,
+        blanket_suspected: outcome.blanket_suspected,
+        manipulation_suspected: outcome.manipulation.suspected,
+      },
+    };
   });
 }

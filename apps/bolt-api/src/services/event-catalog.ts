@@ -3293,6 +3293,53 @@ const bursarEvents: EventDefinition[] = [
       { name: 'org.id', type: 'uuid', description: 'Organization ID' },
     ],
   },
+  {
+    source: 'bursar',
+    event_type: 'offer.received',
+    description:
+      'Fired when a vendor offer is created under a request (spec 16.1, M4), before the deterministic parse runs. Refs only, never document text.',
+    payload_schema: [
+      { name: 'offer.id', type: 'uuid', description: 'The created offer' },
+      { name: 'request.id', type: 'uuid', description: 'The parent request' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'offer.normalized',
+    description:
+      'Fired when the deterministic Stage-1 parse finishes for an offer (spec 4.1, M4). Carries the terminal parse status and parse_quality scalar only, never the parsed lines.',
+    payload_schema: [
+      { name: 'offer.id', type: 'uuid', description: 'The parsed offer' },
+      { name: 'request.id', type: 'uuid', description: 'The parent request' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+      { name: 'status', type: 'string', description: 'parsed | unparseable | blocked | failed' },
+      { name: 'parse_quality', type: 'number', description: 'The 0.0-1.0 parse-quality score' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'offer.manipulation_suspected',
+    description:
+      'Fired when an offer parse quarantines the document (spec 5.3, M4): a blanket-claim lexicon hit, a §4.3 cumulative/concentration cap trip, or an injection signal. Carries the reasons scalar only; the cited spans live on the bursar_mismatches finding.',
+    payload_schema: [
+      { name: 'offer.id', type: 'uuid', description: 'The quarantined offer' },
+      { name: 'request.id', type: 'uuid', description: 'The parent request' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+      { name: 'reasons', type: 'string', description: 'Comma-joined quarantine reasons' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'offer.unsealed',
+    description:
+      'Fired when a sealed offer is unsealed (spec 5.6, M4). The unseal is a floored, confirm-required action; this event is the cross-app audit fan-out. Refs only.',
+    payload_schema: [
+      { name: 'offer.id', type: 'uuid', description: 'The unsealed offer' },
+      { name: 'request.id', type: 'uuid', description: 'The parent request' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

@@ -35,9 +35,11 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),
 
-  // Bounded, inert document parsing (spec 5.4). Set BELOW nginx's client_max_body_size,
-  // which is deliberately not modified for Bursar.
-  MAX_DOC_BYTES: z.coerce.number().int().positive().default(26_214_400),
+  // Bounded, inert document parsing (spec 5.4). Default 20MB, deliberately BELOW nginx's
+  // server-level client_max_body_size (25m / 26_214_400) so an over-limit file yields Bursar's
+  // "this file is larger than 20MB" 413 rather than a bare nginx 413. The global nginx limit is
+  // NOT raised for one app's worst case.
+  MAX_DOC_BYTES: z.coerce.number().int().positive().default(20_971_520),
   MAX_DOC_PAGES: z.coerce.number().int().positive().default(300),
 
   // Per-call LLM deadline, and the deadline for the START call of an async engine run.
