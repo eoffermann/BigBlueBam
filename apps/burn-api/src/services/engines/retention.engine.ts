@@ -23,7 +23,109 @@ export interface RetentionResult {
   orgs: number;
   chains_frozen: number;
   work_items_purged: number;
+  ingest_events_purged: number;
+  prechecks_purged: number;
   skipped_locked: number;
+}
+
+/** Bounded delete chunk so a single sweep never issues one unbounded DELETE. */
+const PURGE_CHUNK = 5000;
+
+/**
+ * Purge TERMINAL ingest events (`processed` / `skipped`) older than `ingest_retention_days`
+ * (#98). This is the disk-full class: processed inbox rows were never purged, so the table
+ * grew without bound. Pending/claimed rows are NEVER touched - they are still owed work. The
+ * delete is chunked with flushed per-pass progress logging.
+ */
+async function purgeProcessedIngestEvents(
+  oid: string,
+  retentionDays: number,
+  log: { info: (o: unknown, m?: string) => void },
+): Promise<number> {
+  let total = 0;
+  for (;;) {
+    const del = await runInOrgScope(oid, async (tx) =>
+      rows<{ id: string }>(
+        await tx.execute(sql`
+          DELETE FROM burn_ingest_events
+           WHERE id IN (
+             SELECT id FROM burn_ingest_events
+              WHERE organization_id = ${oid}
+                AND status IN ('processed', 'skipped')
+                AND COALESCE(processed_at, received_at) < now() - (${retentionDays}::text || ' days')::interval
+              ORDER BY received_at ASC
+              LIMIT ${PURGE_CHUNK}
+           )
+          RETURNING id
+        `),
+      ),
+    );
+    total += del.length;
+    if (del.length > 0) {
+      log.info(
+        { org_id: oid, purged_this_pass: del.length, ingest_events_purged: total },
+        'burn retention: ingest-event purge progress',
+      );
+    }
+    if (del.length < PURGE_CHUNK) break;
+  }
+  return total;
+}
+
+/**
+ * Purge expired prechecks older than the retention horizon (#98). Burn has no dedicated
+ * `precheck_retention_days` setting (the spec names none), so prechecks reuse
+ * `ingest_retention_days`. NEVER purged (spec 8.1): enforced, overridden, labeled
+ * (advisory_feedback set), or superseded rows - each is part of the dispute / calibration
+ * record. Chunked with flushed progress logging.
+ */
+async function purgeExpiredPrechecks(
+  oid: string,
+  retentionDays: number,
+  log: { info: (o: unknown, m?: string) => void },
+): Promise<number> {
+  let total = 0;
+  for (;;) {
+    const del = await runInOrgScope(oid, async (tx) =>
+      rows<{ id: string }>(
+        await tx.execute(sql`
+          DELETE FROM burn_prechecks
+           WHERE id IN (
+             SELECT id FROM burn_prechecks
+              WHERE organization_id = ${oid}
+                AND created_at < now() - (${retentionDays}::text || ' days')::interval
+                AND enforced = false
+                AND override_reason_code IS NULL
+                AND overridden_at IS NULL
+                AND advisory_feedback IS NULL
+                AND superseded_at IS NULL
+              ORDER BY created_at ASC
+              LIMIT ${PURGE_CHUNK}
+           )
+          RETURNING id
+        `),
+      ),
+    );
+    total += del.length;
+    if (del.length > 0) {
+      log.info(
+        { org_id: oid, purged_this_pass: del.length, prechecks_purged: total },
+        'burn retention: precheck purge progress',
+      );
+    }
+    if (del.length < PURGE_CHUNK) break;
+  }
+  return total;
+}
+
+/** Per-org retention settings, with the shipped defaults when no settings row exists yet. */
+async function loadRetentionSettings(oid: string): Promise<{ ingest_retention_days: number }> {
+  const s = rows<{ ingest_retention_days: number }>(
+    await (await import('../../db/index.js')).db.execute(
+      sql`SELECT ingest_retention_days FROM burn_org_settings WHERE organization_id = ${oid}`,
+    ),
+  )[0];
+  return { ingest_retention_days: Number(s?.ingest_retention_days ?? 400) };
 }
 
 export async function runRetention(
@@ -34,8 +136,13 @@ export async function runRetention(
   const orgIds = orgId ? [orgId] : await allBurnOrgIds();
   let frozen = 0;
   let purged = 0;
+  let ingestPurged = 0;
+  let prechecksPurged = 0;
   let skipped = 0;
-  log.info({ orgs: orgIds.length }, 'burn retention: starting (recompute -> freeze -> purge, one tx per chain)');
+  log.info(
+    { orgs: orgIds.length },
+    'burn retention: starting (freeze closed chains, then purge terminal ingest events + expired prechecks)',
+  );
 
   for (const oid of orgIds) {
     // Closed chains eligible for freeze+purge, EXCLUDING any chain whose rollup is already
@@ -109,8 +216,34 @@ export async function runRetention(
       frozen += 1;
       purged += res.purged;
     }
+
+    // Volume retention (#98): wire the previously-dead `ingest_retention_days` setting.
+    // Processed inbox rows and expired non-durable prechecks are the disk-full class; both
+    // are purged in bounded chunks with flushed progress logging. These deletes are
+    // time-based on terminal rows, so they run outside the per-chain sweep lock.
+    const settings = await loadRetentionSettings(oid);
+    ingestPurged += await purgeProcessedIngestEvents(oid, settings.ingest_retention_days, log);
+    prechecksPurged += await purgeExpiredPrechecks(oid, settings.ingest_retention_days, log);
   }
 
-  log.info({ orgs: orgIds.length, frozen, purged, skipped, elapsedMs: Date.now() - started }, 'burn retention: done');
-  return { orgs: orgIds.length, chains_frozen: frozen, work_items_purged: purged, skipped_locked: skipped };
+  log.info(
+    {
+      orgs: orgIds.length,
+      frozen,
+      work_items_purged: purged,
+      ingest_events_purged: ingestPurged,
+      prechecks_purged: prechecksPurged,
+      skipped,
+      elapsedMs: Date.now() - started,
+    },
+    'burn retention: done',
+  );
+  return {
+    orgs: orgIds.length,
+    chains_frozen: frozen,
+    work_items_purged: purged,
+    ingest_events_purged: ingestPurged,
+    prechecks_purged: prechecksPurged,
+    skipped_locked: skipped,
+  };
 }
