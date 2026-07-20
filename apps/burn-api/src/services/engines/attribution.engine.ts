@@ -45,6 +45,8 @@ export interface AttributeBatchResult {
   pending_review: number;
   pending_attribution: number;
   unscoped: number;
+  /** Parked (LLM-throttled) work items re-attempted this drain (#96). */
+  redriven: number;
 }
 
 /**
@@ -105,36 +107,88 @@ export async function attributeBatch(
   )[0] ?? { attribute_batch_size: 25, claim_lease_seconds: 300, auto_attribute_threshold: '0.90', review_threshold: '0.60', unscoped_alert_floor: 10000, llm_provider_id: null };
 
   const claimed = await claimBatch(orgId, claimedBy, settings.attribute_batch_size);
-  const result: AttributeBatchResult = { claimed: claimed.length, attributed: 0, pending_review: 0, pending_attribution: 0, unscoped: 0 };
-  if (claimed.length === 0) return result;
+  const result: AttributeBatchResult = { claimed: claimed.length, attributed: 0, pending_review: 0, pending_attribution: 0, unscoped: 0, redriven: 0 };
 
-  log.info({ org_id: orgId, claimed: claimed.length }, 'burn attribute-batch: claimed rows; processing (no lock held)');
+  const classifyOpts = {
+    autoThreshold: Number(settings.auto_attribute_threshold),
+    reviewThreshold: Number(settings.review_threshold),
+    providerId: settings.llm_provider_id,
+    log,
+  };
 
-  const leaseThird = Math.max(30, Math.floor(settings.claim_lease_seconds / 3)) * 1000;
-  let lastHeartbeat = Date.now();
+  if (claimed.length > 0) {
+    log.info({ org_id: orgId, claimed: claimed.length }, 'burn attribute-batch: claimed rows; processing (no lock held)');
 
-  for (const ev of claimed) {
-    // Heartbeat mid-batch so a batch longer than the lease is not reclaimed by the reaper.
-    if (Date.now() - lastHeartbeat > leaseThird) {
-      await heartbeatClaims(orgId, claimedBy);
-      lastHeartbeat = Date.now();
+    const leaseThird = Math.max(30, Math.floor(settings.claim_lease_seconds / 3)) * 1000;
+    let lastHeartbeat = Date.now();
+
+    for (const ev of claimed) {
+      // Heartbeat mid-batch so a batch longer than the lease is not reclaimed by the reaper.
+      if (Date.now() - lastHeartbeat > leaseThird) {
+        await heartbeatClaims(orgId, claimedBy);
+        lastHeartbeat = Date.now();
+      }
+      try {
+        const outcome = await processOneEvent(orgId, ev, {
+          ...classifyOpts,
+          floor: settings.unscoped_alert_floor,
+        });
+        result[outcome] = (result[outcome] as number) + 1;
+      } catch (err) {
+        log.debug?.({ err, event_id: ev.id }, 'burn attribute-batch: event failed; leaving claimed for retry');
+      }
     }
-    try {
-      const outcome = await processOneEvent(orgId, ev, {
-        autoThreshold: Number(settings.auto_attribute_threshold),
-        reviewThreshold: Number(settings.review_threshold),
-        floor: settings.unscoped_alert_floor,
-        providerId: settings.llm_provider_id,
-        log,
-      });
-      result[outcome] = (result[outcome] as number) + 1;
-    } catch (err) {
-      log.debug?.({ err, event_id: ev.id }, 'burn attribute-batch: event failed; leaving claimed for retry');
-    }
+  }
+
+  // Re-drive LLM-throttled parked items (#96). A 429 parks a work item in
+  // `pending_attribution` while its ingest event is already `processed`, so nothing else ever
+  // looks at it again (the reaper only reverts stale CLAIMED ingest rows). Without this, a
+  // sustained throttle drops those items out of every rollup permanently. Re-attempting reuses
+  // classifyWorkItem, which respects the token bucket and, on a repeated 429, re-defers to
+  // pending_attribution - it NEVER marks a throttled item unscoped.
+  if (settings.llm_provider_id) {
+    await redrivePendingAttribution(orgId, classifyOpts, settings.attribute_batch_size, result);
   }
 
   log.info({ org_id: orgId, ...result, elapsedMs: Date.now() - started }, 'burn attribute-batch: done');
   return result;
+}
+
+/**
+ * Re-attempt classification for work items parked in `pending_attribution` by an earlier LLM
+ * 429 (#96). Bounded per drain (batch size) and driven oldest-first so a persistent throttle
+ * clears the backlog fairly. classifyWorkItem re-defers on a repeated 429 (never unscoped) and
+ * writes a real attribution once budget is available, so an item eventually attributes once
+ * throttling clears.
+ */
+async function redrivePendingAttribution(
+  orgId: string,
+  opts: { autoThreshold: number; reviewThreshold: number; providerId: string | null; log: { info: (o: unknown, m?: string) => void; debug?: (o: unknown, m?: string) => void } },
+  limit: number,
+  result: AttributeBatchResult,
+): Promise<void> {
+  const parked = await runInOrgScope(orgId, async (tx) =>
+    rows<{ id: string; project_id: string | null }>(
+      await tx.execute(sql`
+        SELECT id, project_id FROM burn_work_items
+         WHERE organization_id = ${orgId} AND attribution_state = 'pending_attribution'
+         ORDER BY updated_at ASC
+         LIMIT ${limit}
+      `),
+    ),
+  );
+  if (parked.length === 0) return;
+  opts.log.info({ org_id: orgId, parked: parked.length }, 'burn attribute-batch: re-driving LLM-throttled work items');
+
+  for (const wi of parked) {
+    try {
+      const outcome = await classifyWorkItem(orgId, wi.id, wi.project_id, opts);
+      result[outcome] = (result[outcome] as number) + 1;
+      result.redriven += 1;
+    } catch (err) {
+      opts.log.debug?.({ err, work_item_id: wi.id }, 'burn attribute-batch: redrive failed; leaving pending_attribution for the next drain');
+    }
+  }
 }
 
 /**
@@ -147,7 +201,7 @@ export async function attributeAllPending(
   claimedBy: string,
   log: { info: (o: unknown, m?: string) => void; debug?: (o: unknown, m?: string) => void },
 ): Promise<{ orgs: number; result: AttributeBatchResult }> {
-  const total: AttributeBatchResult = { claimed: 0, attributed: 0, pending_review: 0, pending_attribution: 0, unscoped: 0 };
+  const total: AttributeBatchResult = { claimed: 0, attributed: 0, pending_review: 0, pending_attribution: 0, unscoped: 0, redriven: 0 };
   let orgIds: string[];
   if (orgId) {
     orgIds = [orgId];
@@ -163,6 +217,7 @@ export async function attributeAllPending(
     total.pending_review += r.pending_review;
     total.pending_attribution += r.pending_attribution;
     total.unscoped += r.unscoped;
+    total.redriven += r.redriven;
   }
   return { orgs: orgIds.length, result: total };
 }

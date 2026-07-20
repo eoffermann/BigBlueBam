@@ -664,6 +664,73 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
     });
   });
 
+  describe('LLM-throttled attribution redrive (#96)', () => {
+    // A 429 parks a work item in `pending_attribution` while its ingest event is already
+    // `processed`; the claim reaper only reverts stale CLAIMED ingest rows, so nothing looked
+    // at the parked work item again. The redrive in attribute-batch closes that gap. These
+    // assert the DB-level contract the redrive relies on: the parked item is findable, is NOT
+    // in the reaper's scope, and leaves the parked set once it attributes.
+    async function insertParked(sourceId: string, state: string) {
+      const [row] = await sql`
+        INSERT INTO burn_work_items (
+          organization_id, source_type, source_id, source_epoch, classification_epoch,
+          cost_epoch, project_id, occurred_at, reconcile_until, minutes, attribution_state
+        ) VALUES (
+          ${ORG_ID}, 'bam.time_entry', ${sourceId}, 'e', 'cls', 'cost', ${PROJECT_ID}, now(),
+          now() + interval '90 days', 60, ${state}
+        ) RETURNING id`;
+      return row.id as string;
+    }
+
+    async function redriveScan() {
+      return sql<{ id: string }[]>`
+        SELECT id, project_id FROM burn_work_items
+         WHERE organization_id = ${ORG_ID} AND attribution_state = 'pending_attribution'
+         ORDER BY updated_at ASC LIMIT 25`;
+    }
+
+    it('the redrive scan finds a parked pending_attribution work item', async () => {
+      await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
+      const id = await insertParked(uuid(), 'pending_attribution');
+      const found = await redriveScan();
+      expect(found.map((r) => r.id)).toContain(id);
+
+      // The reaper's scope is CLAIMED ingest events, which this parked item is not: proving
+      // the pre-fix gap. There is no pending/claimed ingest row that would resurface it.
+      const claimedIngest = await sql`
+        SELECT count(*)::int AS n FROM burn_ingest_events
+         WHERE organization_id = ${ORG_ID} AND status = 'claimed'`;
+      expect(claimedIngest[0].n).toBe(0);
+      await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
+    });
+
+    it('once throttling clears and the item attributes, it leaves the parked set', async () => {
+      await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
+      const id = await insertParked(uuid(), 'pending_attribution');
+      expect((await redriveScan()).map((r) => r.id)).toContain(id);
+
+      // A successful re-attempt writes attribution_state='attributed' (what classifyWorkItem
+      // does on a clear-budget success). The redrive scan no longer returns it.
+      await sql`UPDATE burn_work_items SET attribution_state = 'attributed', updated_at = now() WHERE id = ${id}`;
+      expect((await redriveScan()).map((r) => r.id)).not.toContain(id);
+      await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
+    });
+
+    it('a still-throttled redrive re-defers to pending_attribution, never unscoped', async () => {
+      await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
+      const id = await insertParked(uuid(), 'pending_attribution');
+      // Simulate a repeated 429: the item stays pending_attribution (the redrive's own
+      // re-defer arm), and is therefore still found by the next scan rather than dropped.
+      await sql`UPDATE burn_work_items SET attribution_state = 'pending_attribution', updated_at = now() WHERE id = ${id}`;
+      const scan = (await redriveScan()).map((r) => r.id);
+      expect(scan).toContain(id);
+      // It must NOT have been marked unscoped by the throttle path.
+      const [row] = await sql`SELECT attribution_state FROM burn_work_items WHERE id = ${id}`;
+      expect(row.attribution_state).not.toBe('unscoped');
+      await sql`DELETE FROM burn_work_items WHERE organization_id = ${ORG_ID}`;
+    });
+  });
+
   describe('the project-scope predicate has no null fallback (R2-S6)', () => {
     it('resolves a zero-project chain to zero members through the EXISTS predicate', async () => {
       // A chain with no linked projects is read_all-only BY CONSTRUCTION: the predicate
