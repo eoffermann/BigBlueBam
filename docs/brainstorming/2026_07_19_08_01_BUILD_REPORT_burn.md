@@ -49,7 +49,12 @@ Milestones (all committed on `suite-brainstorm`):
 
 - **Static gates green locally:** typecheck (shared, burn-api, burn, worker, bolt-api, bill-api,
   bill, api, mcp-server, ui), `check-bolt-catalog` 0, `lint:migrations` 0, `check-permission-catalog`
-  in sync, `docs:catalog --check` current, surface-map self-check 0, env-hints OK.
+  in sync, `docs:catalog --check` current, `docs:manual --check` current, surface-map
+  self-check 0, env-hints OK. `db:check` shows 259 Drizzle = 259 DB tables, ZERO burn drift
+  (all 14 `burn_*` tables declared). The 6 remaining `db:check` WARNINGS are pre-existing and
+  non-burn - `guest_invitations.token`, `login_history.ip_address`, `sessions.ip_address`,
+  `brief_documents.visibility`, `beacon_entries.visibility`, `blip_saved_views.scope` - tracked
+  as task #40; warnings only, absent from CI's fresh-DB drift check.
 - **M6b: 41 unit tests** (breaker + the 5 fail-open assertions).
 - **Phase 4 backend + UI verification PASSED (live, gilligan):** seeded a "Castaway Rescue
   Platform SOW" engagement with a confirmed $5,000 priced-envelope deliverable, then proved:
