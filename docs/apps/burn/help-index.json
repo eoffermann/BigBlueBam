@@ -415,6 +415,10 @@
   },
   "crossrefs": [
     {
+      "app": "bin",
+      "title": "Bin"
+    },
+    {
       "app": "bam",
       "title": "Bam"
     },

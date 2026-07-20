@@ -313,6 +313,10 @@
   },
   "crossrefs": [
     {
+      "app": "bin",
+      "title": "Bin"
+    },
+    {
       "app": "bench",
       "title": "Bench"
     },

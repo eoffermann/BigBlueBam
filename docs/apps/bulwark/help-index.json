@@ -363,6 +363,10 @@
   },
   "crossrefs": [
     {
+      "app": "bin",
+      "title": "Bin"
+    },
+    {
       "app": "blast",
       "title": "Blast"
     },
