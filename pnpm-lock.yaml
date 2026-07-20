@@ -4120,6 +4120,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.0
         version: 11.2.0
+      argon2:
+        specifier: ^0.41.1
+        version: 0.41.1
       bullmq:
         specifier: ^5.0.0
         version: 5.73.0

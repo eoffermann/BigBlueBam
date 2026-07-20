@@ -49,3 +49,6 @@ export { bursarGateChecks } from './bursar-gate-checks.js';
 export { bursarIngestEvents } from './bursar-ingest-events.js';
 export { bursarDetectorFeedback } from './bursar-detector-feedback.js';
 export { bursarDrafts } from './bursar-drafts.js';
+
+// Settings audit (migration 0252)
+export { bursarSettingsAudit } from './bursar-settings-audit.js';

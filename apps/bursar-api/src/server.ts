@@ -7,9 +7,36 @@ import { sql } from 'drizzle-orm';
 import { createErrorHandler, httpSystemErrorRecorder } from '@bigbluebam/logging';
 import { healthCheckPlugin } from '@bigbluebam/service-health';
 import { env } from './env.js';
+import {
+  BURSAR_PERMISSIONS_MODE,
+  BURSAR_PERMISSIONS_ON_UNKNOWN,
+  assertPermissionsEnforcement,
+} from './boot/assert-permissions-enforce.js';
+import { assertRlsBound } from './boot/assert-rls-bound.js';
 import { db, connection } from './db/index.js';
 import redisPlugin from './plugins/redis.js';
+import authPlugin from './plugins/auth.js';
+import permissionsPlugin from './plugins/permissions.js';
+import viewerCapsPlugin from './plugins/viewer-caps.js';
 import rlsPlugin from './plugins/rls.js';
+import vendorRoutes from './routes/vendors.routes.js';
+import requestRoutes from './routes/requests.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
+
+// ── Boot assertion, FIRST, before anything binds a port or opens a pool (spec 13.3).
+// bursar-api, like burn-api, has no legacy requireAuth+role gate behind the permission plugin,
+// and packages/permissions short-circuits in 'warn' mode without ever denying. An unenforced
+// bursar-api would serve sealed rival bids, per-vendor spend, and the finding-suppression
+// knobs to any member. The mode is a HARDCODED invariant, not an env var (burn issue #83:
+// ENV_HINTS is a flat global map with no per-service override). onUnknown is 'deny' because
+// mode 'on' is not by itself fail-closed (burn issue #89). Both are asserted here and again at
+// the plugin registration site.
+try {
+  assertPermissionsEnforcement(BURSAR_PERMISSIONS_MODE, BURSAR_PERMISSIONS_ON_UNKNOWN);
+} catch (err) {
+  console.error(`[bursar-api] FATAL ${(err as Error).name}: ${(err as Error).message}`);
+  process.exit(1);
+}
 
 const fastify = Fastify({
   logger: {
@@ -64,7 +91,12 @@ fastify.addHook('onSend', async (_req, reply) => {
 });
 
 await fastify.register(redisPlugin);
+await fastify.register(authPlugin);
 await fastify.register(rlsPlugin);
+await fastify.register(permissionsPlugin);
+// Financial flooring (spec 5.6). Resolved once per request from a fail-closed dual-read;
+// NEVER from fastify.canResolve, which is a hardcoded `return true` stub.
+await fastify.register(viewerCapsPlugin);
 
 // Health + readiness. The routes registered are exactly /health, /health/ready, and
 // /metrics; there is no /healthz and no /readyz anywhere in this platform, and the compose
@@ -86,13 +118,18 @@ await fastify.register(healthCheckPlugin, {
   },
 });
 
-// M0 SCAFFOLD. The /v1 REST surface (spec 11), the /bursar/ws hub (spec 11.1), the auth and
-// permission plugins, and the internal routes all land in M2 onward. What exists here is
-// deliberately the minimum that boots, holds a database and Redis connection, and answers
-// the healthcheck, so that the nginx /bursar/ blocks have a resolvable upstream to point at.
-// The ordering matters: nginx resolves literal upstream hostnames at CONFIG LOAD time and
-// the compose-mounted config has no `resolver` directive, so adding those blocks before this
-// container exists takes the whole suite's frontend down.
+// Bursar REST surface (spec 11), mounted under /v1. Each route file registers its own
+// permission gates (fastify.requireCan); there is no blanket requireAuth on the prefix. M2
+// lands vendors, requests, and settings; later milestones add offers, leveling, awards,
+// spend, drafts, and the /internal/* + /bursar/ws surfaces.
+await fastify.register(
+  async (v1) => {
+    await v1.register(vendorRoutes);
+    await v1.register(requestRoutes);
+    await v1.register(settingsRoutes);
+  },
+  { prefix: '/v1' },
+);
 
 const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 for (const signal of signals) {
@@ -103,6 +140,12 @@ for (const signal of signals) {
     process.exit(0);
   });
 }
+
+// Report the EFFECTIVE RLS posture before serving a single request. Deliberately non-fatal:
+// every service currently connects as a Postgres SUPERUSER (bypasses RLS), so refusing to boot
+// would make bursar-api unstartable everywhere without arming anything. It logs at fatal level
+// with rls_backstop: 'absent' so the posture is visible rather than assumed.
+await assertRlsBound(fastify.log);
 
 try {
   await fastify.listen({ port: env.PORT, host: env.HOST });

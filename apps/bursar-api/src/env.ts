@@ -47,6 +47,12 @@ const envSchema = z.object({
   BURSAR_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
   BURSAR_ENGINE_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
 
+  // Deadline for the request-path internal round trips: the permission dual-read (viewer
+  // caps / financial flooring), the Braid resolve, and the Bin asset access preflight. These
+  // are short synchronous calls in front of a route handler, NOT the LLM/engine work, so the
+  // budget is small and independent of BURSAR_LLM_TIMEOUT_MS.
+  UPSTREAM_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+
   // NOTE: BBB_PERMISSIONS_ENFORCE is deliberately ABSENT from this schema. Bursar's
   // per-action enforcement is a hardcoded boot invariant, not an env-driven setting
   // (spec 13.3, and burn issue #83: ENV_HINTS is a flat global map with no per-service
