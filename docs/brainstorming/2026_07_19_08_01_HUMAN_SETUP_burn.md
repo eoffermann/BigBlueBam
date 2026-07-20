@@ -17,18 +17,32 @@ gate does nothing until an operator opts in.
       is non-empty, and an over-envelope billable expense in a `blocking`-mode org returns
       HTTP 409 `BURN_ENVELOPE_EXCEEDED`. Leaving it unset is a safe default (gate absent).
 
-## 2. Local Docker disk / frontend image (LOCAL ENV - already worked around)
+## 2. Local Docker environment (LOCAL ENV - two distinct issues, both worked around)
 
-During Phase 4 the Docker WSL2 VM ran **out of disk** (196GB images + 126GB build cache),
-which made Docker serve stale cached images (the frontend image lacked the burn SPA, and
-api/mcp-server lagged burn's permissions/tools). This is a host-environment issue, not a
-code defect - the Dockerfile is correct and the SPA builds cleanly on the host and in CI.
+Two separate Docker Desktop / WSL2 problems surfaced during deploy. Neither is a code defect
+- the Dockerfiles are correct, the SPA builds cleanly on the host, and CI/Railway (clean
+Docker, no WSL2) build correctly.
 
-- [x] Reclaimed ~140GB of dangling images + build cache (no volumes touched); rebuilt
-      api + mcp-server; rebuilt the frontend image now that disk is free.
+**2a. Disk exhaustion (FIXED).** The Docker WSL2 VM ran out of disk (196GB images + 126GB
+build cache); postgres could not extend files and Docker served stale api/mcp-server images
+(so burn's 22 permissions + MCP tools looked missing). Reclaimed ~140GB of dangling images +
+build cache (no volumes touched) and rebuilt api + mcp-server. Resolved.
 - [ ] Ongoing: keep the Docker Desktop disk from filling (`docker system prune` periodically).
-      If `/burn/` ever 404s after a fresh `docker compose up`, the frontend image is stale -
-      free disk and `docker compose build frontend && docker compose up -d --force-recreate frontend`.
+
+**2b. The `frontend` image will not pick up the burn SPA (needs a Docker Desktop restart).**
+Even `docker compose build --no-cache frontend` (after disk was freed) produces a byte-identical
+stale image with NO `/usr/share/nginx/html/burn` - while the `site` image (small `site/` build
+context) rebuilds fresh. Root cause: the frontend builds from the **repo-root** context, and
+Docker Desktop's WSL2 file share is dropping the newly-added `apps/burn` from that large context
+(the large-context truncation noted in CLAUDE.md). Worked around for the live stack: built the
+burn SPA on the host (`pnpm --filter @bigbluebam/burn build`) and `docker cp`'d the dist into the
+running frontend container, so `http://localhost/burn/` serves 200. That cp is EPHEMERAL - lost
+on a frontend recreate.
+- [ ] **To bake burn into the frontend image: restart Docker Desktop** (resyncs the WSL2 file
+      share), then `docker compose build frontend && docker compose up -d --force-recreate frontend`
+      and confirm `docker run --rm --entrypoint sh bigbluebam-frontend -c 'ls /usr/share/nginx/html/burn'`
+      lists `index.html` + `assets`. Until then, if `/burn/` 404s after a recreate, re-run:
+      `pnpm --filter @bigbluebam/burn build && docker cp apps/burn/dist/. bigbluebam-frontend-1:/usr/share/nginx/html/burn/`.
 
 ## 3. Promotion to trunk (STANDING DECISION - not a blocker)
 
