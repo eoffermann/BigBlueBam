@@ -1,47 +1,50 @@
 # Bursar - App Design Specification
 
+> ## STATUS: BUILD-READY
+> Three adversarial review rounds complete (13 + 11 + 13 blockers, all folded). No round 4.
+> This document is the authoritative build input. Where it disagrees with the session
+> submission, this document wins; where it disagrees with the monorepo, the monorepo wins and
+> §25 records the discrepancy.
+
 **Session:** 2026_07_19_20_05
 **Winner:** Bursar (4.80 mean, 24 raw total), co-authored by Seat B (data/intelligence lens)
 and Seat D (vertical wedge lens). Seat E withdrew its competing Ballast entry in Bursar's
-favor and contributed two detectors by name.
-**App id:** `bursar` | **API:** `bursar-api` internal `:4023` | **SPA:** `/bursar/`
-**Status:** design, post-adversarial-round-2. See Changelog (§25).
+favor.
+**App id:** `bursar` | **API:** `bursar-api` internal `:4023` | **SPA:** `/bursar/`, dev `:3023`
 
-> **Counting rule, adopted in round 2.** Three separate count contradictions survived a full
-> rewrite, which is a process failure, not arithmetic. From here: **no section states a count in
-> prose.** Permissions are counted by the §17.3 probe against the §13.1 table. Tables are
-> enumerated by a generated RLS loop over the `bursar_` prefix (§17.1). Bolt events, MCP tools,
-> and nginx files are single enumerated tables that other sections reference by name, never by
-> number.
+> **Counting rule.** No section states a count in prose. Permissions are counted by the §17.3
+> probe against the §13.1 table. Tables are enumerated by a generated RLS loop over the
+> `bursar_` prefix. Bolt events, MCP tools, and nginx files are enumerated tables referenced by
+> name. Seed figures have exactly one source (§19.3).
 
 ---
 
 ## Table of contents
 
 1. Overview and positioning
-2. The category boundary, defended
-3. AI-native design: the absence-detection engine
-4. The coverage-collapse cluster: blanket claims, fan-out, rollup, ruler capture
-5. Adversarial input: injection and malicious documents
+2. The category boundary
+3. The absence-detection engine
+4. The coverage-collapse cluster
+5. Adversarial input
 6. Data model
-7. The frozen baseline and post-award drift
-8. The detector catalog
-9. `bursar_scope_gap` as a read-only advisory tool
+7. Baseline and post-award drift
+8. Detector catalog
+9. `bursar_scope_gap` (advisory only)
 10. Comparable totals
 11. API surface
 12. MCP surface
 13. Permissions
-14. Frontend, including the help system
+14. Frontend and help
 15. Background work
 16. Events and integration
 17. Migration plan
 18. Infrastructure
 19. Seed data (GILLIGAN)
 20. Test plan
-21. Milestones M0..M9
+21. Milestones
 22. Reuse ledger
-23. Non-goals (explicit)
-24. v1.1 and beyond: what was cut, and why
+23. Non-goals
+24. v1.1 and beyond
 25. Open questions and risks
 26. Changelog
 
@@ -51,8 +54,8 @@ favor and contributed two detectors by name.
 
 ### 1.1 One-liner
 
-One canonical record per vendor and per scope, so you can see what each bidder quietly left
-out before you sign, and exactly what you got billed for that nobody agreed to after.
+One canonical record per vendor and per scope, so you can see what each bidder quietly left out
+before you sign, and exactly what you got billed for that nobody agreed to after.
 
 ### 1.2 The spine
 
@@ -73,812 +76,690 @@ normalize every incompatible inbound offer onto it, and produce **the exclusion 
 items present in your request, or in a rival offer, but ABSENT from this one, each cited to the
 source line that should have covered it.
 
-**This is absence detection, not summarization.** A model that summarizes what IS in a document
-is a commodity. A model that reliably reports what SHOULD be there and is not has to enumerate
-a candidate space, prove non-coverage per candidate, resist a counterparty actively trying to
-collapse the diff (§4, §5), and survive its own false-positive rate.
+**This is absence detection, not summarization.** The product's entire claim is that a gap is
+*reported*. §4.7's diff-completeness invariant exists because every defense in §4 terminates in
+"does not auto-publish", and an unpublished node that silently vanishes from the diff delivers
+the attacker's goal anyway.
 
 **Award** freezes the accepted tree as an immutable baseline, recording both what you got and
-**what you knowingly did not get**.
+what you knowingly did not get. **Post-purchase**, the same spine drives the mismatch set (§8).
 
-**Post-purchase.** The same spine drives the mismatch set (§8).
+### 1.4 Where the data comes from
 
-### 1.4 Where the data actually comes from
+Pre-award runs on uploaded documents and works on day one. **Post-award is fed predominantly by
+CSV statement import, not platform events**: `bill_expenses` has no funding-source field, there
+is no AP ledger in the platform, and `bill_invoices`/`bill_payments` are money-in
+(`bill-invoices.ts:23 client_id`; `bill-payments.ts invoice_id NOT NULL`). Onboarding is "upload
+last year's statement", not "connect your ledger".
 
-The pre-award half runs on uploaded documents and works on day one.
+### 1.5 Cadence
 
-**The post-award half is fed predominantly by CSV statement import, not by platform events.**
-Verified: `bill_expenses` has no funding-source field, there is no AP ledger anywhere in the
-platform, and `bill_invoices`/`bill_payments` are **money-in** (`bill-invoices.ts:23 client_id`;
-`bill-payments.ts invoice_id NOT NULL`). So `expense.submitted`/`expense.approved` are ingested
-where they exist, and everything else arrives through `POST /v1/spend/import`. The onboarding
-flow is "upload last year's statement", not "connect your ledger".
-
-### 1.5 Cadence: episodic, not daily
-
-A buyer runs a procurement a few times a year and reviews spend monthly. The retention
-mechanism is a **weekly digest** (§15), not a dashboard nobody opens.
+Episodic. The retention mechanism is a **weekly digest** (§15), not a daily dashboard.
 
 ---
 
-## 2. The category boundary, defended
+## 2. The category boundary
 
-| App | Counterparty role | Document state | Ledger row exists? |
+| App | Counterparty role | Document state | Ledger row? |
 | --- | --- | --- | --- |
-| **Bill** | Customer pays *us* | invoice we issue | yes, we wrote it |
-| **Burn** | Customer pays *us* | signed SOW | yes, `burn_work_items` |
-| **Bulwark** | Counterparty signed *with us* | executed contract | yes, clause-derived obligations |
-| **Bursar** | **We pay the vendor** | **unsigned offers from non-counterparties** | **no - nobody has one** |
+| **Bill** | Customer pays *us* | invoice we issue | yes |
+| **Burn** | Customer pays *us* | signed SOW | yes |
+| **Bulwark** | Counterparty signed *with us* | executed contract | yes |
+| **Bursar** | **We pay the vendor** | **unsigned offers from non-counterparties** | **no** |
 
-1. **Pre-counterparty.** Bulwark extracts obligations from an *executed* contract. Bursar
-   operates on offers from parties who have signed nothing and therefore produce no clause, no
-   obligation, and no ledger row anyone else can read. The exclusion diff cannot be a Bulwark
-   feature: there is nothing to extract an obligation *from* yet, and the interesting content is
-   what the document does not say.
+1. **Pre-counterparty.** Bulwark extracts obligations from an *executed* contract. Bursar works
+   on offers from parties who signed nothing, producing no clause, no obligation, no ledger row.
 2. **Absence versus presence.** Burn and Bulwark answer "what does this commit us to." Bursar
-   answers "what does this conspicuously fail to commit them to, given a ruler derived from a
-   different document."
+   answers "what does this conspicuously fail to commit them to."
 
-**The enforceable boundary is the table list in §6**, not a claim about rows: Bursar defines no
-obligation table, no notice-deadline table, no work-item or attribution table, and no invoice
-table, and writes zero rows in Bill, Burn, or Bulwark. **The Bulwark handoff is an
-`entity_links` row plus a deep link.**
+**The enforceable boundary is §6's table list**: Bursar defines no obligation table, no
+notice-deadline table, no work-item table, no invoice table, and writes zero rows in Bill, Burn,
+or Bulwark. The Bulwark handoff is an `entity_links` row plus a deep link.
 
 ---
 
-## 3. AI-native design: the absence-detection engine
+## 3. The absence-detection engine
 
-### 3.0 The design thesis
+### 3.0 Thesis
 
-Asking a model to enumerate absences is asking it to search an unbounded space with no
-grounding. Bursar inverts the question: **enumerate the candidate space deterministically** (the
-scope tree), then ask a **bounded, per-node, closed-book question** with the offer's lines in
-front of the model as typed data - *"Here is requirement R and here are the lines of this offer.
-Does any of them cover R? Answer by `offer_line_id`."*
-
-- The model can only be wrong about nodes we already enumerated, and enumeration is auditable.
-- A wrong `covered` is catchable by three verification predicates (§3.5).
-- A wrong `absent` is a coverage-of-input failure, measurable against a fixture corpus (§20.2).
-- Answers are constrained to an id space the engine controls.
+Enumerate the candidate space deterministically (the scope tree), then ask a bounded, per-node,
+closed-book question with the offer's lines as typed data: *"Here is requirement R and here are
+the lines of this offer. Does any cover R? Answer by `offer_line_id`."* The model can only be
+wrong about nodes we enumerated; a wrong `covered` is catchable by §3.5's predicates; a wrong
+`absent` is measurable (§20.2).
 
 ### 3.1 One classification mode: full offer, all strengths
 
-**v1 has no retrieval layer at all.** Round 1 removed the vector channel (no embedding provider
-exists: `brief-embed.job.ts` and `beacon-vector-sync.job.ts:123` both write zero vectors, and
-`internal-llm.routes.ts` exposes only chat). Round 2 removes the surviving lexical/structural
-retrieval mode for the long tail, because it could never produce a publishable verdict: with
-vector gone it had **one** applicable channel, so it could not clear the two-channel bar, and
-`medium` is excluded from every headline figure. It cost a trigram index on an unbounded column
-and a CI recall gate to produce nothing anyone would see.
+**v1 has no retrieval layer.** No embedding provider exists (`brief-embed.job.ts` and
+`beacon-vector-sync.job.ts:123` both write zero vectors; `internal-llm.routes.ts` exposes only
+chat). The lexical/structural fallback was also cut: with vector gone it had one channel, could
+never clear the band bar, and `medium` is excluded from headlines.
 
-So: **every node of every strength is classified in full-offer mode.** The complete line set is
-passed as a typed `{offer_line_id, raw_text}` array. There is no retrieval, therefore no
-retrieval-recall failure mode, no `applicable_channels` arithmetic, and no divide-by-zero in the
-confidence formula.
+Every node of every strength is classified in full-offer mode: the complete line set as a typed
+`{offer_line_id, raw_text}` array. No retrieval means no retrieval-recall failure mode.
 
-Deleted with it: the `raw_text` trigram index, the recall CI gate, the `classification_mode`
-column, and the retrieval branch of M5. (Trigram indexes remain where they earn their keep:
-`bursar_payee_aliases.normalized_payee` and `bursar_baseline_items.title`.)
+**Token math.** 300 lines at ~25 tokens = ~7,500 tokens; plus nodes, instructions, schema,
+~8,500 per call. Batching 6 nodes against one shared line array amortizes the payload.
 
-**Token math.** A 300-line offer at ~25 tokens/line is ~7,500 tokens of line data; plus nodes,
-instructions, and response schema, ~8,500 tokens per call. Batching 6 nodes against one shared
-line array amortizes the payload, so 40 nodes over a 300-line offer is ~7 calls. §3.9 bounds the
-worst case.
+**Sliding windows** apply beyond `max_lines_per_window` (default 250, overlap 50), merged by
+§3.8's lattice.
 
-**Sliding windows** apply to documents beyond `max_lines_per_window` (default 250, overlap 50).
-Their merge rule is §3.8, which is load-bearing and was missing.
+### 3.2 Stage 0 - scope-tree derivation (the ruler)
 
-### 3.2 Stage 0 - Canonical scope-tree derivation (the ruler)
-
-Sources in strict precedence:
-
-| Precedence | `derived_from` | Source | Default `normative_strength` |
+| Precedence | `derived_from` | Source | Default strength |
 | --- | --- | --- | --- |
 | 1 | `request` | the buyer's RFQ/RFP/SOW (a Bin asset) | `mandatory` |
-| 2 | `library` | `bursar_scope_library` category template | `should_have` |
-| 3 | `rival_offer` | union-of-rivals (§4.5) | `nice_to_have`, **and never auto-published** |
-| 4 | `human` | hand-added or edited | as set |
+| 2 | `library` | category template | `should_have` |
+| 3 | `rival_offer` | union-of-rivals (§4.5) | `nice_to_have`, **never auto-published** |
+| 4 | `human` | hand-added | as set |
 
-Source 1 runs the checkpointed chunk loop ported from
-`apps/burn-api/src/services/engines/extraction.engine.ts:103-173`, with **three fixes to the
-port, not carried forward**:
+Runs the checkpointed chunk loop ported from `extraction.engine.ts:103-173`, with **three fixes
+to the port**:
 
-**(a) Chunk-relative ordinal.** The burn original declares `let ordinal = 0` before the loop
-while `startChunk` skips ahead on resume, so a crash-resumed run produces different `dedup_key`
-values and **duplicates rows** - in Bursar, a duplicated matrix row across every offer. Bursar's
-ordinal is `${chunkIndex}:${indexWithinChunk}`; `test/dedup-key.resume.test.ts` asserts
-byte-equality across a simulated crash.
+**(a) Chunk-relative ordinal.** The original declares `let ordinal = 0` before the loop while
+`startChunk` skips ahead on resume, producing different `dedup_key` values and **duplicate
+rows** - in Bursar, a duplicated matrix row across every offer. Bursar's ordinal is
+`${chunkIndex}:${indexWithinChunk}`; `test/dedup-key.resume.test.ts` asserts byte-equality.
 
-**(b) A dropped chunk can no longer report success.** The original does
-`log.debug(...); continue` on `LlmError` and still finishes `succeeded`. A scope tree missing an
-entire chunk would be presented as `derived`, a human would confirm it, and **every offer would
-then come back clean on requirements that were never enumerated** - invisible to the
-false-absence gate, because the node does not exist. Bursar counts `chunks_failed`, lands the
-run `partial`, **blocks `scope_status` from reaching `derived`**, and surfaces "we could not read
-N sections of this document" with the chunk ranges.
+**(b) A dropped chunk cannot report success.** The original does `log.debug; continue` on
+`LlmError` and finishes `succeeded`. A tree missing a chunk would be confirmed and **every offer
+would come back clean on requirements never enumerated** - invisible to the false-absence gate,
+because the node does not exist. Bursar counts `chunks_failed`, lands `partial`, **blocks
+`scope_status` from `derived`**, and surfaces "we could not read N sections" with chunk ranges.
 
-**(c) Per-chunk-line span verification** rather than whole-document (§5.5).
+**(c) Per-chunk-line span verification**, not whole-document (§5.5).
 
-**The tree must be human-confirmed before verdicts are publishable.** `scope_status` goes
-`derived` -> `confirmed`; an unconfirmed tree yields `provisional` verdicts and no Bolt event.
-An injection-suspected request cannot reach `confirmed` until flagged spans are cleared (§5.5).
+**Derivation is async-start, exactly as leveling is** (§18.6). Round 2 applied that fix to
+leveling only, leaving `bursar-derive-scope` a synchronous thin caller that reproduces the same
+blocker on Stage 0: a multi-chunk RFQ aborts the caller, fetch-abort does not stop the handler,
+BullMQ retries, and two writers on one `last_processed_chunk` regress it - **which defeats fix
+(a), since divergent ordinals are precisely what duplicates matrix rows.**
+`POST /internal/run-derivation` returns 202 + run id, the worker polls, work is bounded to one
+chunk per invocation, and re-entry on a live lease is rejected.
 
-### 3.3 Stage 1 - Offer parse into lines (deterministic, no LLM)
+**The tree must be human-confirmed before verdicts publish.** `scope_status`:
+`pending` -> `deriving` -> `derived` -> `confirmed`. An unconfirmed tree yields `provisional`
+verdicts and no Bolt event. An injection-suspected request cannot reach `confirmed` (§5.5).
 
-Worker `bursar-parse-offer` owns the byte path, reading through `getObjectBuffer`
-(`apps/worker/src/utils/storage.ts`, which wraps `@bigbluebam/storage`; it is **not** itself a
-storage export).
+### 3.3 Stage 1 - parse into lines (deterministic, no LLM)
+
+Worker `bursar-parse-offer` reads bytes via `getObjectBuffer`
+(`apps/worker/src/utils/storage.ts`, which wraps `@bigbluebam/storage`; not itself a storage
+export).
 
 | Format | Path |
 | --- | --- |
-| plain text / email body | UTF-8 decode |
-| PDF with a text layer | `Tj`/`TJ` show-operator extraction (`burn-extract-deliverables.job.ts:30-43`) |
+| plain text / email | UTF-8 decode |
+| PDF with text layer | `Tj`/`TJ` show-operator extraction (`burn-extract-deliverables.job.ts:30-43`) |
 | CSV / TSV / JSONL / XLSX-exported | `@bigbluebam/structured-data` codecs |
-| scanned image PDF | **no OCR in v1** -> `unparseable`, never levelled |
+| scanned image PDF | **no OCR** -> `unparseable`, never levelled |
 
-**Parse quality** (`parse_quality`, 0.0-1.0) is computed per format from extracted characters per
-page, ratio of structured lines, and currency/quantity token presence. Below
-`parse_quality_floor` (default 0.35) the offer is `unparseable`, and **an offer below the floor
-can never produce an `absent` verdict** - "we could not read it" is not evidence of omission.
+`parse_quality` (0.0-1.0) from extracted characters per page, structured-line ratio, and
+currency/quantity token presence. Below `parse_quality_floor` (default 0.35) -> `unparseable`,
+and **such an offer can never produce `absent`** - "we could not read it" is not evidence of
+omission.
 
-Lines carry `raw_text` (bounded 4,000 chars), `char_start`/`char_end`, `page`, `ordinal`, parsed
-`quantity`/`unit`/`unit_price_minor`/`extended_minor`, and `line_role`
-(`base`/`option`/`alternate`/`allowance`/`note`) where **only `base` counts toward coverage and
-totals**.
+Lines carry `raw_text` (bounded 4,000), `char_start`/`char_end`, `page`, `ordinal`, parsed
+`quantity`/`unit`/`unit_price_minor`/`extended_minor`, `line_role`
+(`base`/`option`/`alternate`/`allowance`/`note`, only `base` counts toward coverage and totals).
 
-Progress logging before the byte read, before the parse, before the leveling handoff.
+Progress logging before the byte read, before the parse, before the handoff.
 
-### 3.4 Stage 2 - Classification
+### 3.4 Stage 2 - classification
 
-**Deterministic pre-pass (no LLM), whole-document:**
+**Deterministic pre-pass, whole-document:** the exclusion lexicon (hits pinned into every
+window, §3.8); the blanket-claim lexicon (§4.2); exact structural match on quantity + unit.
+**No zero-candidate short-circuit.**
 
-- **Explicit-exclusion lexicon** (`excludes`, `not included`, `out of scope`,
-  `customer-provided`, `by others`, `at additional cost`, `T&M at prevailing rates`, …). This is
-  the highest-value verdict class - the thing the vendor *told* you and you did not read. Hits
-  are recorded per line and **pinned into every window** (§3.8).
-- **Blanket-claim lexicon** (§4.2) - new in round 2.
-- **Exact structural match** on quantity + unit.
-- **No zero-candidate short-circuit.** Removed in round 1 and it stays removed.
-
-**LLM classification** goes through the internal proxy as
-`apps/burn-api/src/lib/llm-client.ts:59-102` does, with `X-Internal-Service: bursar` for its own
-token bucket.
+**LLM classification** via the internal proxy as `apps/burn-api/src/lib/llm-client.ts:59-102`,
+with `X-Internal-Service: bursar`.
 
 | Failure | Handling |
 | --- | --- |
-| `LlmThrottledError` (429) | **defer.** Run `partial` at checkpoint; BullMQ retries and resumes. Never a default verdict. |
-| `LlmError` | node lands `ambiguous`/`pending_review`, never `absent` |
-| `LlmMalformedError` | truncated/unparseable JSON, or `finish_reason === 'length'` (§3.9 makes this buildable). **Retry at a smaller batch, capped at 2 retries, then land `ambiguous`** - the round-1 spec had no terminal rule |
-| **Node missing from a batch response** | **`ambiguous`, retried individually. Never `absent`.** |
-| **No LLM provider configured** | the run **fails loudly** with `status='blocked'` and a settings deep link. Round 1 would have produced a silent all-`ambiguous` result indistinguishable from a hard document |
+| `LlmThrottledError` (429) | **defer.** Run `partial` at checkpoint; retry resumes. Never a default verdict. |
+| `LlmError` | `ambiguous`/`pending_review`, never `absent` |
+| `LlmMalformedError` | truncated JSON or `finish_reason === 'length'` (§3.10). Retry at a smaller batch, **capped at 2**, then `ambiguous` |
+| Node missing from a batch response | **`ambiguous`, retried individually. Never `absent`.** |
+| No LLM provider configured | run **fails loudly**, `status='blocked'`, settings deep link |
 
-**The six verdicts:**
+**Six verdicts:** `covered` (line id + span verifying against that line + node-term overlap),
+`partial` (citation + typed deltas), `excluded_explicit` (citation of the exclusion language),
+`absent` (**non-empty rejected set by line id**), `ambiguous`, `not_applicable`.
 
-| Verdict | Evidence required to persist |
-| --- | --- |
-| `covered` | >=1 `offer_line_id` + span verifying against that line + node-term overlap (§3.5) |
-| `partial` | citation + typed delta fields (§3.7) |
-| `excluded_explicit` | citation of the exclusion language itself |
-| `absent` | **the rejected near-miss set**, non-empty, by `offer_line_id` |
-| `ambiguous` | the candidate ids |
-| `not_applicable` | none |
+### 3.5 Stage 3 - three verification predicates
 
-### 3.5 Stage 3 - Three verification predicates
+1. **Span verifies against the cited line**, not the document. Defeats instruction-shaped
+   injection.
+2. **Rejected-candidate requirement for `absent`**: non-empty, by `offer_line_id`, each id
+   validated as belonging to this offer.
+3. **Node-term overlap**: minimum lexical overlap between the cited line and the node's
+   distinctive terms (title tokens minus stopwords, plus unit/quantity). Below
+   `node_term_overlap_floor` (default 0.25 Jaccard over stemmed tokens) -> `ambiguous`.
 
-Round 1 had two. Round 2 adds the third, because **two were not enough to bind coverage to the
-requirement** (§4.1).
+**Predicate 3 is NOT the defense against blanket coverage.** A blanket sentence that names the
+requirements has *maximal* overlap by construction. Predicate 3 catches topically-adjacent
+mis-citation. The blanket family is defeated by §4, and saying otherwise would leave the hole
+behind a control that looks like it closes it.
 
-**(1) Span verifies against the cited line, not the document.** The model answers with an
-`offer_line_id`; the engine verifies the quoted span is a substring of **that row's `raw_text`**.
-Round 1 replaced burn's whole-document `verifyCite` with this, and it defeats
-instruction-shaped injection.
+Any predicate failing demotes `covered`/`partial`/`excluded_explicit` to
+`ambiguous`/`pending_review`.
 
-**(2) Rejected-candidate requirement for `absent`.** Non-empty, by `offer_line_id`, each id
-validated as belonging to this offer. An `absent` with an empty rejected set while candidates
-existed is downgraded to `ambiguous`. A classifier that cannot articulate why nothing counts did
-not do the work.
-
-**(3) Node-term overlap (new).** The cited line must share minimum lexical overlap with the
-node's distinctive terms (title tokens minus stopwords, plus `unit` and `quantity` where
-present). Below `node_term_overlap_floor` (default 0.25 Jaccard over stemmed tokens) the verdict
-demotes to `ambiguous`.
-
-**Honest limitation, stated because a reviewer will test it.** Predicate 3 is **not** the defense
-against the blanket-coverage attack. A blanket sentence that names the requirements
-("...including installation, crew training, warranty...") has *high* term overlap by
-construction. Predicate 3 catches a different and more common failure - a model grabbing a
-topically adjacent line - and it is worth having for that. The blanket attack is defeated by the
-fan-out cap and the enumeration requirement in §4, and pretending otherwise would leave the real
-hole open behind a predicate that looks like it covers it.
-
-Demotion table:
-
-| Verdict | Any predicate fails |
-| --- | --- |
-| `covered` | -> `ambiguous`, `pending_review` |
-| `partial` | -> `ambiguous`, `pending_review` |
-| `excluded_explicit` | -> `ambiguous`, `pending_review` (a fabricated exclusion is defamatory-adjacent) |
-| `absent` | governed by predicate 2 |
-
-### 3.6 Stage 4 - Confidence banding and HITL routing
+### 3.6 Stage 4 - banding and HITL
 
 ```
-score = w1*evidence_strength
-      + w2*classifier_self_report
-      + w3*(span_verified_against_line ? 1 : 0)
-      + w4*node_term_overlap
+score = w1*evidence_strength + w2*classifier_self_report
+      + w3*(span_verified_against_line ? 1 : 0) + w4*node_term_overlap
       - penalty(parse_quality below target)
-      - penalty(injection_suspected)
-      - penalty(blanket_suspected)
       - penalty(window_coverage incomplete)
 ```
 
-The round-1 formula had a `w4*(channels_agreeing / applicable_channels)` term which, in
-full-offer mode, **divided by zero and produced NaN** - and `NaN >= 0.85` is false, so every
-verdict would have silently failed to reach `high`. With retrieval deleted (§3.1) the term is
-replaced by node-term overlap, which is always defined. `test/confidence-no-nan.test.ts` asserts
-a finite score for every input combination.
+`test/confidence-no-nan.test.ts` asserts a finite score for every input.
 
 | Band | Rule | Behavior |
 | --- | --- | --- |
-| `high` | `>= 0.85` AND all three predicates pass AND not blanket-suspected AND complete window coverage | auto-published |
-| `medium` | `0.60 - 0.85` | published with a caution chip, `needs_review`, **excluded from every headline figure** |
+| `high` | `>= 0.85`, all three predicates pass, complete window coverage, **and §4 caps not tripped** | auto-published |
+| `medium` | `0.60 - 0.85` | caution chip, `needs_review`, **excluded from every headline figure** |
 | `low` | `< 0.60`, `ambiguous`, or the mandatory bar unmet | HITL, not published |
 
-**The asymmetric rule.** False absence destroys trust in one screenshot and is strictly worse
-than a false present, which merely leaves the customer where they already were.
+**The asymmetric rule.** False absence destroys trust in one screenshot; a false present merely
+leaves the customer where they were.
 
 > **`mandatory` + `absent` is publishable only if EITHER
-> (A) the offer parsed cleanly (`parse_quality >= floor`), window coverage is complete, and the
-> offer is neither injection- nor blanket-suspected; OR (B) a human has confirmed it.
-> Otherwise it lands `ambiguous` in the review queue.**
+> (A) the offer parsed cleanly (`parse_quality >= floor`) with complete window coverage;
+> OR (B) a human has confirmed it.**
+
+**Suspicion flags do not gate `absent`.** `blanket_suspected` and `injection_suspected` block
+auto-published **`covered`** and nothing else. Round 2 had them gate the mandatory-absent bar
+too, which meant **one word bought a vendor immunity from the flagship output**: writing
+"turnkey" once suppressed every published gap against them. A blanket claim is evidence *for*
+absence, not against it. Only parse-quality and window-coverage - the genuine "we could not read
+it" conditions - precondition `absent`.
 
 **HITL destinations:** internal adjudication is `review_status='pending_review'` at
-`/bursar/review`. Anything leaving the building is a `bursar_drafts` row (§6.1) with a
-content-free `agent_proposals` summary. **Bursar never sends anything to a vendor; there is no
-outbound transport in v1.**
+`/bursar/review`. Anything leaving the building is a `bursar_drafts` row with a content-free
+`agent_proposals` summary. **No outbound transport exists in v1.**
 
 ### 3.7 Typed deltas
 
-`partial` carried all real heterogeneity in free text, so options, alternates, allowances, and
-tiers had no representation. Added: `delta_kind`
-(`quantity`/`term`/`tier`/`allowance`/`alternate`/`option`/`geography`), `delta_quantity`,
-`delta_unit`, **`delta_amount_minor`** - the last is what makes a `partial` valuable in
-`gap_adjusted` (§10), which round 1 could not do.
+`delta_kind` (`quantity`/`term`/`tier`/`allowance`/`alternate`/`option`/`geography`),
+`delta_quantity`, `delta_unit`, **`delta_amount_minor`** - the last is what lets a `partial`
+contribute to `gap_adjusted` (§10).
 
-### 3.8 The window merge lattice, and pinned exclusions
+### 3.8 Window merge lattice and pinned exclusions
 
-Round 1 specified only "absent in every window", leaving the **normal** case undefined: window 1
-says `covered` on line 40, window 5 says `excluded_explicit` on line 280, and iteration order
-decided. Worse, real proposals put exclusions in a terminal block hundreds of lines from the
-priced line, so **the exclusion and its target are frequently never in the same window** - a
-systematic false-`covered` generator invisible to a false-absence gate.
+Real proposals put exclusions in a terminal block hundreds of lines from the priced line, so the
+exclusion and its target are frequently never in the same window - a systematic false-`covered`
+generator invisible to a false-absence gate.
 
-**Merge lattice**, applied per `(offer, node)` across windows, highest wins:
+**Merge lattice**, per `(offer, node)` across windows, highest wins:
 
 ```
 excluded_explicit  >  partial  >  covered  >  ambiguous  >  absent
 ```
 
-**Exclusion pinning.** The exclusion lexicon runs as a whole-document deterministic pre-pass
-(§3.4) and **its hit lines are pinned into every window** regardless of window boundaries, so a
-terminal exclusions block is in front of the classifier for every node. Pinned lines are marked
-so they do not inflate the fan-out count (§4.3).
+**Exclusion pinning.** Lexicon hits are pinned into every window regardless of boundaries.
 
-**Per-window results are durable** (§6.1 `bursar_leveling_window_results`). Round 1 computed
-"absent in every window" from non-durable state over a 2-D checkpoint on a 3-D loop, so a
-mid-run throttle meant either re-running every window or writing `window_coverage='partial'`,
-which permanently demotes a genuine absence.
+**Pinned lines are exempt from the fan-out count ONLY for the verdict the exemption exists for.**
+A pinned line's matches count toward fan-out **unless the resulting verdict is
+`excluded_explicit`**. Round 2's blanket exemption was readable off the spec: *"Nothing is
+excluded: installation, crew training and warranty are all provided under this price"* takes the
+`exclusion_hit` flag, gets pinned everywhere, and was then exempt from the load-bearing defense.
+`test/fanout-pinned.test.ts` covers it.
 
-**Gate:** a long-document fixture with a terminal exclusions block must produce
-`excluded_explicit`, not `covered` (§20.2). **If that gate cannot be met, the v1 envelope is
-declared as 5-page documents** and longer offers are surfaced as "too long to level reliably"
-rather than levelled badly.
+**Per-window results are durable** (`bursar_leveling_window_results`), and **"continue" resumes
+the same run row** - `partial` -> `running` with a new `claimed_by`, checkpoint preserved. If it
+minted a new run, earlier windows would be invisible, `window_coverage` would land `partial`,
+and a mandatory `absent` would demote to `ambiguous`, **permanently suppressing the headline
+finding after any throttle.** The lattice reads by `(offer_id, scope_node_id)` scoped to the run.
 
-### 3.9 Cost, latency, and caps - designed, not asserted
+**Gate:** a long-document fixture with a terminal exclusions block must yield
+`excluded_explicit`. **If unmeetable, the v1 envelope is 5-page documents** and longer offers are
+surfaced as "too long to level reliably" rather than levelled badly.
 
-Round 1 asserted a "per-run cap" that **existed nowhere in the spec** - a phantom
-cross-reference, and exactly the shape round 1 had killed on the drift sweep.
+### 3.9 Cost, latency, and caps
 
-Measured constraints, verified in code:
+Verified constraints: proxy concurrency 4/service and rate 120/min (`apps/api/src/env.ts:115-116`);
+proxy upstream deadline **hardcoded 60s** (`internal-llm.routes.ts:325`); an aborted client does
+**not** release the concurrency slot for 90s; burn's inherited `LLM_TIMEOUT_MS` of 15000 would
+abort routinely.
 
-| Constraint | Value | Source |
-| --- | --- | --- |
-| Proxy concurrency per service | 4 | `apps/api/src/env.ts:115` |
-| Proxy rate per service | 120/min | `apps/api/src/env.ts:116` |
-| Proxy upstream deadline | hardcoded 60s | `internal-llm.routes.ts:325`, not env-tunable |
-| In-flight hold after client abort | 90s | an aborted client does **not** release the slot |
-| Burn's inherited `LLM_TIMEOUT_MS` | 15000 | would abort routinely on an 8.5k-token call |
+- `BURSAR_LLM_TIMEOUT_MS` default **60000**, matching the proxy's own deadline.
+- A timeout **retries at a smaller batch**, never the same size.
+- Caps in `bursar_org_settings`, persisted as used on the run row: `max_nodes_per_run` (400),
+  `max_offers_per_run` (8), `max_llm_calls_per_run` (250).
+- A BullMQ limiter sized under 120/min.
 
-**Decisions:**
+**The cap contract, stated because round 2's worked example violated its own caps:**
 
-- `BURSAR_LLM_TIMEOUT_MS` default **60000**, matching the proxy's own deadline. Inheriting
-  burn's 15s would abort mid-generation, and because the aborted client does not release the
-  concurrency slot, a run of timeouts starves Bursar's own bucket and then 429s itself.
-- A **timeout retries at a smaller batch**, never the same size.
-- Committed caps in `bursar_org_settings`, persisted as used on the run row
-  (`llm_calls_used`, `nodes_classified`): `max_nodes_per_run` (default 400),
-  `max_offers_per_run` (default 8), `max_llm_calls_per_run` (default 250).
-- A **BullMQ limiter** sized under the 120/min ceiling.
-- Hitting a cap stops **cleanly** at `status='partial'` with a first-class
-  "levelled 6 of 15 offers - continue" affordance, never silent truncation.
-- `POST /requests/:id/level` runs a **cost preflight** returning estimated calls, tokens, and
-  wall-clock before the run starts, so a 400-node x 15-offer request (~500 calls, >4M input
-  tokens, ~30 min) is a visible choice rather than a surprise.
+| Situation | Behavior |
+| --- | --- |
+| Preflight | `POST /requests/:id/level` returns estimated calls, tokens, wall-clock, plus `would_exceed: {offers, calls}` |
+| `max_offers_per_run` exceeded at start | **422 `rejected_limits`**, nothing runs |
+| `max_llm_calls_per_run` exceeded mid-flight | stop cleanly at `status='partial'` with the "levelled 6 of 8 - continue" affordance |
 
-**CI caveat recorded:** recorded-response stubs mean CI never exercises the real timeout path.
-§20.2 marks it explicitly rather than implying coverage.
+**Worked example, inside the caps:** 60 nodes x 6 offers, batched 6 nodes per call =
+60 calls, ~510k input tokens, ~4 min wall-clock at the concurrency ceiling. A larger request is
+a visible 422 with a preflight number, not a surprise.
 
 ### 3.10 `finish_reason` requires an additive `apps/api` change
 
-Round 1 specified checking `finish_reason` without noticing it is **not obtainable**:
 `internal-llm.routes.ts:349,389` return `{data:{content: text}}` and discard Anthropic's
-`stop_reason` and OpenAI's `finish_reason` entirely, and §18 listed no `apps/api` edit.
-
-**This build makes one additive change**: the proxy returns
-`{data: {content, finish_reason, usage}}`. Purely additive - every existing caller reads
-`data.content` and is unaffected. Without it, truncation detection is guesswork and the
-`LlmMalformedError` path is undetectable at its most common trigger.
+`stop_reason` and OpenAI's `finish_reason`, so truncation detection is otherwise guesswork.
+**This build makes one additive change**: the proxy returns `{data: {content, finish_reason,
+usage}}`. Every existing caller reads `data.content` and is unaffected.
 
 ---
 
 ## 4. The coverage-collapse cluster
 
-Four separate findings across two reviewers are **one attack**: a single crafted line, or one
-colluding bidder, collapsing the exclusion diff. They are solved together and stated in one
-place, because they will be tested as one attack.
+A single crafted line, a *set* of coordinated lines, or one colluding bidder can collapse the
+exclusion diff. They are solved together because they will be tested together.
 
-### 4.1 The attack, with no injection at all
+### 4.1 The two attacks
 
-A vendor writes one ordinary sentence:
+**Single blanket line.** *"All requirements, including installation, crew training, warranty,
+data export and escalation cap, are fully included in this all-inclusive price."* Cited for all
+14 nodes; span verifies each time; node-term overlap maximal; `high` band; diff clean.
 
-> *"All requirements, including installation, crew training, warranty, data export and
-> escalation cap, are fully included in this all-inclusive price."*
+**Split blanket - and this is the one round 2 did not stop.** Four ordinary lines:
 
-Under round 1's design this **succeeds completely**: the model cites that line for all 14 nodes;
-the span verifies against the cited line every time; node-term overlap is high by construction
-(the sentence names the requirements); `span_verified` adds weight; full-offer mode clears the
-`high` bar; everything auto-publishes and the diff goes clean. No imperative, no role token, no
-invisible text, so the injection pre-scan sees nothing.
+> *"Installation, crew training and the 24-month warranty are provided at no additional charge."*
+> *"Escalation cap, spares and commissioning are provided at no additional charge."* (and so on)
 
-Worse, round 1's own §3.7 bundling design **legitimized this shape**, and the rollup pass then
-propagated it to the rest of the tree.
+Fan-out is 3 per line, **under the round-2 cap of 4**. No lexicon token. The cap counted per
+`offer_line_id`, and **the attacker chooses the line count**. Worse, round 2's §4.4 explicitly
+accepted "an itemized list the classifier can cite per node" as enumeration, so each line
+**auto-published** at `high` band. And §4.6's fixture said "*one* all-inclusive line", so the
+split attack **passed CI** - the same "fixtures prove the wrong thing" failure already seen on
+the injection corpus.
 
-### 4.2 Defense 1: the blanket-claim lexicon (deterministic)
+### 4.2 Defense 1: blanket-claim lexicon (deterministic)
 
-A whole-document pre-pass flags lines matching blanket-coverage patterns: `all requirements`,
-`fully included`, `all-inclusive`, `turnkey`, `everything listed`, `as specified in your
-RFQ/RFP`, `complete solution`, `no exclusions`, `comprehensive`. Hits set
-`bursar_offer_lines.blanket_claim = true`.
+Whole-document pre-pass for `all requirements`, `fully included`, `all-inclusive`, `turnkey`,
+`everything listed`, `as specified in your RFQ/RFP`, `no additional charge`, `no exclusions`,
+`complete solution`, `comprehensive`. Sets `bursar_offer_lines.blanket_claim`. A `covered`
+verdict citing such a line cannot auto-publish.
 
-A `covered` verdict citing a blanket-claim line **cannot auto-publish**; it routes to review with
-`blanket_suspected = true` on the coverage row.
+Necessary but not sufficient: a lexicon is evadable, which is why 4.3 and 4.4 do not depend on
+language at all.
 
-### 4.3 Defense 2: the fan-out cap (structural, and the real defense)
+### 4.3 Defense 2: cumulative per-offer caps (the load-bearing defense)
 
-`bursar_line_node_matches` makes fan-out countable. A single line matched to more than
-`blanket_fanout_cap` nodes (default **4**) causes **all** of those verdicts to route to review
-and blocks auto-publish for every one of them.
+Two guards, both computed **per offer**, not per line, so neither depends on the attacker's line
+count:
 
-This is the load-bearing defense, because it does not depend on recognizing language. A blanket
-claim is definitionally high fan-out; if a vendor invents phrasing the lexicon misses, the
-fan-out cap still catches it. Pinned exclusion lines (§3.8) are excluded from the fan-out count
-so a legitimate global exclusion is not penalized.
+**(a) Unsubpriced-coverage cap.** Count distinct **`mandatory`** nodes whose only `covered`
+evidence is a **non-sub-priced** citation, across **all** lines of the offer. Above
+`blanket_cumulative_cap` (default 4), **all of them** route to review and none auto-publish.
+The split attack yields 14 such nodes and trips immediately.
 
-### 4.4 Defense 3: bundling requires explicit enumeration, and rollup is de-transitivized
+**(b) Evidence-concentration guard.**
+`distinct_cited_lines / covered_mandatory_nodes` below `evidence_concentration_floor`
+(default 0.5) routes all covered mandatory nodes to review. Four lines covering 14 nodes gives
+0.29.
 
-**"Bundling line" is now defined** rather than inferred: a line the **classifier** matched to
->= 2 nodes, recorded in `bursar_line_node_matches`. Round 1 had the same pass produce and consume
-`allocation_weight`, with no definition.
+Per-line fan-out is retained as a cheap early signal (`blanket_fanout_cap`, default 4) but is no
+longer the boundary.
 
-**A bundling line may auto-publish `covered` for multiple nodes only if the line itself
-enumerates them** - sub-pricing, or an itemized list the classifier can cite per node. A bundle
-that enumerates ("Installation $3,200; Training $2,400; Warranty 24mo $1,800") auto-publishes. A
-bare "all-inclusive turnkey" does not. This is the distinction that separates a legitimate bundle
-from a blanket claim, and legitimate bundles overwhelmingly itemize.
+### 4.4 Defense 3: only explicit sub-pricing enumerates
 
-**Downward subsumption is verdict-preserving.** It may only promote `absent` or `ambiguous`
-children to `derived_covered`. It **may never overwrite `excluded_explicit` or `partial`** -
-round 1's rule would have let a bundling parent erase an explicit exclusion on a child, which is
-the single most valuable finding in the app. Capped at **one level** unless descendants were
-explicitly enumerated by the bundling line.
+**A bundling line may auto-publish `covered` for more than one node ONLY at
+`allocation_method='explicit_subprice'`** - a per-node **monetary sub-price** with a **distinct
+cited span per node**.
 
-**Upward rollup is de-transitivized.** A parent whose children are all covered becomes
-`derived_covered`, which is **excluded from the exclusion diff and is never itself an input to
-another rollup**. Round 1's rule composed recursively, so one "turnkey" line walked coverage to
-the root of the tree.
+The round-2 "or an itemized list" branch is **deleted**. A name-only list is a restatement of
+the requirement, not evidence of coverage, and it is exactly the high-overlap shape §3.5 already
+concedes is undetectable. "Installation $3,200; Training $2,400; Warranty 24mo $1,800"
+auto-publishes. "Installation, training and warranty are provided" does not.
 
-**`allocation_weight` has a specified derivation ladder** (round 1 had none, while §10 built gap
-valuation on top of it). `allocation_method` records which rung was used:
+**"Bundling line" is defined**, not inferred: a line the classifier matched to >= 2 nodes,
+recorded in `bursar_line_node_matches`.
 
-| Rung | Method | Usable for gap valuation? |
-| --- | --- | --- |
-| 1 | `explicit_subprice` - the line itemizes | yes |
-| 2 | `rival_distribution` - other offers priced these nodes separately | yes |
-| 3 | `quantity_unit` - node quantity x a library unit price | yes, marked `estimated` |
-| 4 | `equal_split` - last resort | **no. Gap valuation REFUSES equal-split observations** |
+**Downward subsumption is verdict-preserving**: may only promote `absent`/`ambiguous` children
+to `derived_covered`; **may never overwrite `excluded_explicit` or `partial`**; capped at one
+level unless descendants were explicitly sub-priced.
 
-Rung 4 exists so the data model is total, not so it can drive a headline. An equal split of a
-$16,400 turnkey line across 12 nodes gives $1,367/node, and "the cheapest bid is really the most
-expensive" must never be an artifact of that heuristic.
+**Upward rollup is de-transitivized**: a parent whose children are all covered becomes
+`derived_covered`, **excluded from the diff and never itself a rollup input**. Round 1's rule
+composed recursively, walking coverage to the root.
 
-### 4.5 Defense 4: rival-derived nodes are proposals, not writes
+**`allocation_weight` ladder**, recorded in `allocation_method`:
 
-A bidder must not be able to write the ruler. Round 1's §4.2(d) quarantine covered promotion into
-`bursar_scope_library` but **phase 1 promoted into `bursar_scope_nodes`, a different table**. Two
-colluding bidders - or one vendor under two `bursar_vendors` rows, since uniqueness is only on
-`lower(display_name)` - satisfy the ">=2 offers" rule and inject nodes only they cover. Rivals
-score `absent`. And because `gap_adjusted` is the Matrix's default sort key, the attacker
-**directly manipulates the award ranking**. Rival nodes defaulting to `nice_to_have` meant they
-got *less* scrutiny.
+| Rung | Method | Usable for gap valuation? | Enumerates? |
+| --- | --- | --- | --- |
+| 1 | `explicit_subprice` | yes | **yes - the only rung that does** |
+| 2 | `rival_distribution` | yes | no |
+| 3 | `quantity_unit` | yes, `estimated` | no |
+| 4 | `equal_split` | **no - refused** | no |
 
-Fixed:
+Rung 4 exists so the model is total, not so it can drive a headline: an equal split of a $16,400
+turnkey line across 12 nodes gives $1,367/node, and the flagship claim must never be an artifact
+of that heuristic.
 
-- Rival-derived nodes land `review_status='pending_review'` and are **excluded from
-  `gap_adjusted`, from the exclusion diff, and from producing any `absent` verdict** until a
-  human promotes them.
-- The >=2 supporting offers must come from **distinct `braid_profile_id`** (falling back to
-  distinct `bond_company_id`, then to a human decision), **not distinct `vendor_id`**.
-- Injection-suspected and blanket-suspected offers cannot contribute.
-- `bursar_scope_nodes.contributing_offer_ids uuid[]` records the supporting set for audit.
+### 4.5 Defense 4: rival-derived nodes are proposals
 
-### 4.6 The gate
+A bidder must not write the ruler. Two colluding bidders - or one vendor under two
+`bursar_vendors` rows, since uniqueness is only on `lower(display_name)` - could satisfy a
+">=2 offers" rule and inject nodes only they cover, and because `gap_adjusted` sorts the Matrix,
+that **directly manipulates the award ranking**.
 
-`test/fixtures/blanket-coverage/`: **one all-inclusive line over a 14-node tree must NOT produce
-a fully-covered tree.** Plus >= 3 non-imperative blanket-coverage fixtures in the injection
-corpus (§20.2) - round 1's 8 fixtures were all instruction-shaped, which is the class the
-structural defense already handles, so they proved the wrong thing.
+- Rival-derived nodes land `pending_review`, **excluded from `gap_adjusted`, from the diff, and
+  from producing `absent`** until promoted.
+- Supporting offers must be **distinct `braid_profile_id`** (fallback `bond_company_id`, then a
+  human decision), **not distinct `vendor_id`**.
+- Injection- and blanket-suspected offers cannot contribute.
+- `contributing_offer_ids uuid[]` recorded.
+- **Promotion has its own floored, confirm-required action `bursar.scope.promote_rival`**, and
+  the payload must echo `contributing_offer_ids` so the audit records what the promoter was
+  shown. Round 2 gated the entire ruler-capture defense on member-level unfloored
+  `bursar.scope.write`, while floring `scope.confirm` for a strictly less consequential act.
+
+### 4.6 Fixtures
+
+`test/fixtures/coverage-collapse/`:
+
+- **single-blanket**: one all-inclusive line over a 14-node tree -> tree NOT fully covered.
+- **split-blanket**: **4 lines x 3-4 nodes, no lexicon token** -> tree NOT fully covered, and
+  §4.3's cumulative caps trip.
+- **name-list**: a line naming nodes without prices -> no auto-publish.
+- **legitimate-subprice**: an itemized priced bundle -> auto-publishes correctly (the
+  false-positive guard, so the defense does not make real bundles unusable).
+
+### 4.7 The diff-completeness invariant
+
+**Every §4 defense terminates in "does not auto-publish". If an unpublished node simply vanishes
+from the exclusion diff, the attacker's goal is met anyway**: the buyer sees no gap on crew
+training and signs. The defense would convert a false `covered` into a **silent omission**, which
+§1.3 says is the entire product. Round 2's Playwright step ("none auto-published `covered`")
+passes on an empty diff.
+
+> **INVARIANT.** For a request whose tree is `confirmed`, the exclusion diff enumerates **every
+> `mandatory` node, exactly once**, in exactly one of three states:
+> **`published`** (a verdict cleared §3.6), **`needs_review`** (classified, band or cap withheld
+> it), **`unverified`** (classification never completed - throttle, malformed, unparseable
+> offer).
+>
+> `published + needs_review + unverified == count(mandatory nodes)`.
+
+- A request with any node in `needs_review` or `unverified` renders a **blocking banner** and is
+  **excluded from any "clean" / "no gaps" / "fully covered" affordance** anywhere in the UI.
+- The Matrix and the Diff both render withheld rows explicitly, with the reason
+  (`blanket_cap`, `concentration`, `band`, `throttled`, `unparseable`).
+- **CI gate**: the identity above, asserted per fixture (§20.2).
+- **Playwright negative**: the blanket offer produces **14 diff rows, none missing** (§20.3).
+
+This is also the better product. The blanket-offer UI treatment is
+**"this offer claims blanket coverage; here is what it does not itemize"** - a list of 14
+unsubstantiated nodes, which is more useful to a buyer than either a clean diff or a silent one.
 
 ---
 
-## 5. Adversarial input: injection and malicious documents
+## 5. Adversarial input
 
-### 5.1 Structural defenses (offers and requests alike)
+### 5.1 Structural defenses
 
-- **Bytes never enter the instruction role.** Candidates are a typed JSON array in a data role.
-- **Answers are by `offer_line_id`, spans verify against that line only** (§3.5 predicate 1).
-  Injected instruction text lives in *some* line; citing it fails verification against the
-  requirement.
+Bytes never enter the instruction role; candidates are a typed JSON array in a data role.
+Answers are by `offer_line_id`, spans verify against that line only (§3.5 predicate 1).
 
-### 5.2 The deterministic pre-scan, scoped to what the parser can actually see
+### 5.2 Pre-scan signals the parser can actually see
 
-Round 1 listed six signals, **three of which the specified parser cannot implement**: the ported
-`Tj`/`TJ` regex carries no graphics state (no `Tf` size, no fill colour, no `Tm`/`Td`) and never
-reads `/Info` or XMP. Worse, the GILLIGAN seed's fourth offer was a zero-font-size quote and
-Playwright asserted on it - **the flagship demo was asserted against a detector the spec gave no
-means to build.**
+The ported `Tj`/`TJ` regex carries no graphics state (no `Tf` size, no fill colour, no
+`Tm`/`Td`) and never reads `/Info` or XMP, so **rendering-property detection is not buildable
+against the specified parser.** v1 signals: imperative second-person directives at a
+reader-model; instruction-override markers; role tokens; zero-width/bidi control runs; and
+**blanket-coverage claims** (§4.2).
 
-v1 signals, all implementable against extracted text:
-
-| Signal | Example |
-| --- | --- |
-| imperative second-person directives at a reader-model | "respond", "you must answer", "for each requirement" |
-| instruction-override markers | "ignore previous", "disregard the above" |
-| role tokens | `system:`, `assistant:`, `<\|im_start\|>` |
-| zero-width / bidi control runs | U+200B, U+202E |
-| **blanket-coverage claims** (§4.2) | "all requirements are fully included" |
-
-**Cut to v1.1:** zero-font-size, background-colour-matched, off-page positioning, and
-metadata-embedded prose. All four require graphics-state tracking with per-line `render_props`,
-which is a real PDF-parsing project. §24 records it; §19 re-scopes the seed fixture to a
-**blanket-coverage** offer, which is both lexicon-detectable today and a better demo, since it
-showcases the §4 cluster defense.
+**Cut to v1.1** (§24): zero-font-size, colour-matched, off-page positioning, metadata-embedded
+prose - all require graphics-state tracking with per-line `render_props`.
 
 ### 5.3 Quarantine and the product finding
 
-Injection- or blanket-suspected offers never auto-publish `covered`, never contribute
-rival-derived nodes (§4.5), and carry a confidence penalty. A hit opens a `bursar_mismatches` row
-(`offer_manipulation_suspected`, severity `high`) citing the offending span. "This bidder
-embedded text instructing our analysis tool to mark everything as covered" is arguably the most
-valuable thing this app can tell a buyer.
+Suspected offers never auto-publish `covered`, never contribute rival nodes, and carry a
+confidence penalty - **but never have their `absent` verdicts suppressed** (§3.6). A hit opens a
+`bursar_mismatches` row (`offer_manipulation_suspected`, severity `high`) citing the span.
 
 ### 5.4 Malicious documents
 
-- Uncompressed-size and archive entry-count ceilings **before** decompression.
-- **Content-type pinning**: sniffed type must match declared `source_format`, else `unparseable`.
-- Per-parse wall-clock and memory caps in a bounded child context.
-- **`MAX_DOC_BYTES` default lowered to 20MB.** nginx enforces a server-level
-  `client_max_body_size 25m` (`nginx-with-site.conf:18`), so round 1's 26,214,400-byte value was
-  unreachable and the user would have received a bare nginx 413 instead of the "we cannot read
-  this" affordance. **Judgement call:** lower Bursar's cap rather than raise nginx's, because
-  raising a global body limit to accommodate one app's worst case is a suite-wide change with no
-  suite-wide justification. The 413 path is still handled: the SPA maps it to "this file is
-  larger than 20MB".
-- **CSV formula neutralization** attaches to the two export routes named in §11
-  (`GET /v1/spend/export`, `GET /v1/requests/:id/diff/export`). Round 1 claimed the mitigation
-  with no endpoint to attach it to. It ships as a shared helper in `@bigbluebam/shared`, because
-  bearing-api and the frontend timeline export do the same unescaped thing today (§25.10).
+Uncompressed-size and entry-count ceilings before decompression; content-type pinning against
+the declared `source_format`; per-parse wall-clock and memory caps in a bounded child context.
+
+**`MAX_DOC_BYTES` default 20MB.** nginx enforces a server-level `client_max_body_size 25m`
+(`nginx-with-site.conf:18`), so a 26MB value would be unreachable and the user would get a bare
+413. **Judgement call:** lower Bursar's cap rather than raise a global limit for one app's worst
+case. The 413 is mapped to "this file is larger than 20MB".
+
+**CSV formula neutralization** (leading `=`, `+`, `-`, `@`) attaches to the two export routes
+named in §11, as a shared helper in `@bigbluebam/shared` - bearing-api and the frontend timeline
+export do the same unescaped thing today (§25.10).
 
 ### 5.5 Stage 0 is defended too
 
-Round 1 opened §4 saying every input is adversarial, then defended only offers. **The RFQ is the
-higher-leverage target**: it is routinely drafted on an incumbent's template, ingested through
-the same untrusted byte path, and poisoning it edits the ruler *every competitor* is measured
-against - and those nodes default to `mandatory`.
+**The RFQ is the higher-leverage target**: routinely drafted on an incumbent's template,
+ingested through the same untrusted byte path, and poisoning it edits the ruler *every*
+competitor is measured against - and those nodes default to `mandatory`.
 
-- The pre-scan runs on the request document; `bursar_requests` gains `injection_suspected` and
-  `injection_signals`.
-- A `request_manipulation_suspected` finding opens on a hit.
-- **An injection-suspected request cannot reach `scope_status='confirmed'`** until flagged spans
-  are cleared.
-- Stage 0 span verification is **per-chunk-line**, not whole-document - nearly free, since the
-  chunk loop already knows its line boundaries, and round 1 left in place the exact property that
-  makes the attack work.
+The pre-scan runs on the request document; `bursar_requests` gains `injection_suspected` and
+`injection_signals`; a `request_manipulation_suspected` finding opens; **`confirmed` is blocked**
+until flagged spans are cleared; and Stage 0 verification is **per-chunk-line**.
 
-### 5.6 Bid confidentiality, made enforceable
+### 5.6 Bid confidentiality, enforced in one place
 
-Round 1 specified `sealed_until` but left it unenforceable. All four holes closed:
-
-- **`offer.unseal` is floored** (owner/admin only). Round 1 left it out of the floored list, so
-  every member held it.
-- **The seal is a service-layer predicate on every read path**, not just the offer route. Round 1
-  gated the derived surfaces (matrix, diff, totals, coverage) on `coverage.read`, which `viewer`
-  holds, so sealed pricing leaked through every figure computed from it.
-  `test/sealed-bid-viewer.test.ts` asserts a viewer's matrix contains **no sealed column**.
-- **Every unseal is logged to `activity_log` and publishes `offer.unsealed`.** Round 1 deferred
-  "whether unsealing is logged" to a human policy decision. That was wrong: whether a
-  confidentiality control is audited is a security requirement, not a procurement-policy choice.
-  What remains a human decision (§25.7) is *who* may unseal and whether the vendor is told.
-- **The whole of `bursar_org_settings` is audited**, not just the exclusion lexicon.
-  `confidence_weights`, `node_term_overlap_floor`, `blanket_fanout_cap`, and
-  `parse_quality_floor` sat unaudited beside the audited lexicon, so an admin could zero the
-  `span_verified` weight and silently suppress findings.
+- **`offer.unseal` is floored**; every unseal writes `activity_log` and publishes
+  `offer.unsealed`. The *audit* is a security requirement, not a policy question; *who may
+  unseal* remains a human decision (§25.7).
+- **The seal is a predicate in the shared query/repository layer** that every read of offers,
+  lines, coverage, and totals passes through - the same placement as burn's
+  `redact-financial-fields.ts` - **not endpoint-by-endpoint.** Round 2 enumerated endpoints and
+  then added two CSV exports and four MCP read tools that bypassed it, reopening the finding at
+  new surfaces. A shared predicate cannot be forgotten by a new route.
+- `test/sealed-bid.test.ts` covers the matrix, diff, totals, coverage, **both CSV exports**, and
+  the four MCP read tools.
+- **All of `bursar_org_settings` is audited** with a before/after diff, not just the lexicon -
+  otherwise an admin can zero the `span_verified` weight and silently suppress findings.
 
 ### 5.7 Draft confidentiality
 
-`bursar_drafts` fixed the container in round 1 but made confidentiality **worse**: `draft.read`
-was granted to `viewer`, so read access to the org's negotiating positions became *broader* than
-`agent_proposals` gave.
+`draft.read` is **not** granted to `viewer`; `draft.approve` is floored; reads are scoped to the
+request owner plus explicit holders (RLS is org-level only and cannot do this alone); the
+`agent_proposals` summary is a **content-free template**
+(`"Bursar draft awaiting review: <draft_kind> for <vendor display_name>"`); and grounding is
+enforced by a single builder `buildDraftGrounding(offer_id, request_id)` that can only select
+lines of that offer and nodes of that request. `grounding_set` is written from its output, so
+`test/draft-grounding.test.ts` asserts **the builder**.
 
-- **`draft.read` removed from `viewer`; `draft.approve` floored.**
-- Reads are scoped to **the request owner plus explicit holders**, not org-wide - RLS is
-  org-level only and cannot do this alone.
-- The `agent_proposals` summary is pinned to a **content-free template**
-  (`"Bursar draft awaiting review: <draft_kind> for <vendor display_name>"`), because an
-  unconstrained summary reintroduces the original leak at lower volume.
-- **The grounding constraint has a named enforcement point**: a single builder function
-  `buildDraftGrounding(offer_id, request_id)` that can only select lines belonging to that offer
-  and nodes belonging to that request. `grounding_set` is written from its output, so
-  `test/draft-grounding.test.ts` asserts **the builder**, not a downstream artifact.
+### 5.8 Bin asset access - checked at attach AND at read
+
+`bin_assets` uses **`org_id`** (`apps/bin-api/src/db/schema/bin-assets.ts:29`), and org-scoping
+alone is insufficient: Bin has private and project-scoped assets (`bin_private_not_owner` is a
+live `PreflightReason`), so a member who cannot see a private asset could still put its uuid in
+`bin_asset_id` and get its **verbatim text into Bursar as cited spans**.
+
+**At attach**, `assertBinAssetReadable(actingUserId, orgId, assetId)`:
+`can_access('bin.asset', …)` via `packages/shared/src/visibility-client.ts` (already a supported
+type, so this is reuse); `org_id` equality as defence in depth; **`scan_status = 'clean'`**;
+**404, not 403**. The resolved `bin_asset_version_id` is **pinned** on the referencing row.
+
+**At read**, the worker re-asserts `scan_status='clean'` and `org_id` **immediately before the
+byte read** and reads **the pinned version**. Parsing is async, so between attach and parse
+`scan_status` can flip to infected, visibility can flip to private, and `current_version_id` can
+advance to different bytes - and Bursar lifts that content verbatim into `cited_span`. A failed
+re-assertion lands `blocked`, never parses.
+
+`test/bin-asset-access.test.ts`: cross-org, private-same-org, unscanned, **flipped-after-attach**,
+**version-advanced-after-attach**.
 
 ---
 
 ## 6. Data model
 
-All tables prefixed `bursar_`, all org-scoped, Drizzle schema in `apps/bursar-api/src/db/schema/`
-(auto-discovered by `scripts/db-check.mjs`). Money is `bigint` **minor units** with explicit
-`currency varchar(3)`. Cross-app refs are dotted with no cross-schema FK.
+All tables prefixed `bursar_`, org-scoped, Drizzle schema in `apps/bursar-api/src/db/schema/`.
+Money is `bigint` minor units with explicit `currency varchar(3)`. Cross-app refs are dotted with
+no cross-schema FK.
 
-**The table list is not counted in prose.** §17.1 generates RLS policies by looping
-`information_schema` over the `bursar_` prefix, and `test/rls-coverage.test.ts` asserts every
-`bursar_%` table has RLS enabled and a policy. Round 1 said "21 tables" while defining 23, and an
-RLS migration authored to "all 21" would have left two org-scoped tables unprotected - silently,
-because the backstop is inert today.
+**No table count in prose.** §17.1 generates RLS policies by looping `information_schema` over
+the `bursar_` prefix; `test/rls-coverage.test.ts` asserts every `bursar_%` table is covered.
 
 ### 6.1 Tables
 
-#### `bursar_vendors`
-`id`, `organization_id`, `display_name`, `braid_profile_id`, `bond_company_id`, `category`,
-`criticality`, `owner_user_id` (SET NULL), `status`, `notes`, `created_by`, timestamps.
-Unique `(organization_id, lower(display_name))`.
+**`bursar_vendors`** - `id`, `organization_id`, `display_name`, `braid_profile_id`,
+`bond_company_id`, `category`, `criticality`, `owner_user_id` (SET NULL), `status`, `notes`,
+`created_by`, timestamps. Unique `(organization_id, lower(display_name))`.
 
-#### `bursar_payee_aliases` - payee resolution is Bursar's own, not Braid's
-Braid **cannot** do this: `packages/shared/src/schemas/braid.ts:142-148` constrains
-`source_type` to a five-value enum with `source_id: z.string().uuid()`, so a payee string fails
-Zod; and `apps/braid-api/src/services/resolve.service.ts` mints a **fresh singleton profile per
-unseen pair**, so every card string would create its own golden profile - the opposite of dedup.
+**`bursar_payee_aliases`** - payee resolution is **Bursar's own, not Braid's**.
+`packages/shared/src/schemas/braid.ts:142-148` constrains `source_type` to a five-value enum with
+`source_id: z.string().uuid()`, so a payee string fails Zod; and
+`apps/braid-api/src/services/resolve.service.ts` **mints a fresh singleton profile per unseen
+pair**, so every card string would create its own golden profile - the opposite of dedup.
 
 `id`, `organization_id`, `vendor_id` (CASCADE), `raw_payee`, `normalized_payee`, `source`,
-`confidence`, `resolved_by` (`deterministic`/`trigram`/`human`), `first_seen_at`, `last_seen_at`.
+`confidence`, `resolved_by`, `first_seen_at`, `last_seen_at`.
 Unique `(organization_id, normalized_payee)`; GIN trigram on `normalized_payee`.
 
 Normalization: uppercase-fold, strip card noise (`*`, `SQ *`, `TST*`), strip trailing
-phone/city/state, strip corporate suffixes, collapse whitespace. Trigram match above 0.45; below
-the auto-accept threshold (0.65) it becomes a **human review item, never a silent join**.
-Unmatched spend keeps `vendor_id NULL`, which is `unbaselined_vendor`'s input.
+phone/city/state, strip corporate suffixes, collapse whitespace. Trigram above 0.45; below
+auto-accept (0.65) it is a **human review item, never a silent join**. Unmatched spend keeps
+`vendor_id NULL`. Braid is called only for `bond_company_id` -> golden id
+(`burn-api/src/lib/braid-resolve.client.ts:19-51`), degrading to `null` on every failure.
 
-Braid is called only for `bond_company_id` -> golden id, per
-`apps/burn-api/src/lib/braid-resolve.client.ts:19-51`, degrading to `null` on every failure.
+**`bursar_requests`** - plus `injection_suspected`, `injection_signals jsonb`, `scope_status`,
+`scope_confirmed_at/by`, `bin_asset_id`, **`bin_asset_version_id`**, `source_doc_hash`.
 
-#### `bursar_requests`
-`id`, `organization_id`, `title`, `category`, `bin_asset_id`, `source_doc_hash`, `status`,
-`scope_status`, `scope_confirmed_at/by`, `currency`, `budget_minor`, `due_at`, `owner_user_id`,
-**`injection_suspected`**, **`injection_signals jsonb`**, `created_by`, timestamps.
+**`bursar_scope_nodes`** - `parent_id` (guarded self-FK, RESTRICT), `path`, `ordinal`, `title`,
+`description`, `node_kind`, `normative_strength` CHECK
+(`mandatory`,`should_have`,`nice_to_have`,`informational`), `unit`, `quantity`, `derived_from`,
+`contributing_offer_ids uuid[]`, `cited_span jsonb`, `confidence`, `review_status`, `dedup_key`,
+`extraction_run_id`, `tree_suspect`, `archived_at`, timestamps.
+Unique `(organization_id, request_id, dedup_key)`. **Soft-archive only**; coverage FKs RESTRICT.
 
-#### `bursar_scope_nodes`
-`id`, `organization_id`, `request_id` (CASCADE), `parent_id` (guarded self-FK, RESTRICT), `path`,
-`ordinal`, `title`, `description`, `node_kind` (CHECK), `normative_strength` CHECK in
-(`mandatory`,`should_have`,`nice_to_have`,`informational`), `unit`, `quantity`, `derived_from`
-CHECK, **`contributing_offer_ids uuid[]`** (§4.5), `cited_span jsonb`, `confidence`,
-`review_status`, `dedup_key`, `extraction_run_id`, `tree_suspect`, `archived_at`, timestamps.
-Unique `(organization_id, request_id, dedup_key)`. **Deletion is soft-archive only**; coverage
-FKs are RESTRICT.
+**`bursar_offers`** - plus `parse_quality`, `injection_suspected`, `injection_signals`,
+`blanket_suspected`, **`unsubpriced_mandatory_count`**, **`evidence_concentration`** (§4.3, both
+computed per offer and persisted for auditability), `sealed_until`, `bin_asset_version_id`,
+`uncompressed_bytes`. Unique `(organization_id, request_id, vendor_id, source_doc_hash)`.
 
-#### `bursar_offers`
-`id`, `organization_id`, `request_id` (CASCADE), `vendor_id`, `bin_asset_id`, `source_format`,
-`source_doc_hash`, `doc_bytes`, `doc_pages`, `uncompressed_bytes`, `normalization_status` CHECK,
-`parse_quality`, `injection_suspected`, `injection_signals`, **`blanket_suspected`**,
-`sealed_until`, `line_count`, `total_minor`, `currency`, `valid_until`, `received_at/by`,
-timestamps.
-**Unique `(organization_id, request_id, vendor_id, source_doc_hash)`** - concurrent-ingest guard.
+**`bursar_offer_lines`** - `raw_text` (bounded 4,000), `char_start`, `char_end`, `page`,
+`quantity`, `unit`, `unit_price_minor`, `extended_minor`, `line_role`, `blanket_claim`,
+`exclusion_hit`, `parsed_by`. Unique `(organization_id, offer_id, ordinal)`; GIN tsvector on
+`raw_text` (UI search only). **No trigram index** - deleted with retrieval.
 
-#### `bursar_offer_lines`
-`id`, `organization_id`, `offer_id` (CASCADE), `ordinal`, `raw_text` (bounded 4,000),
-`char_start`, `char_end`, `page`, `quantity`, `unit`, `unit_price_minor`, `extended_minor`,
-`line_role` CHECK, **`blanket_claim boolean`**, **`exclusion_hit boolean`** (pinned into every
-window), `parsed_by`, `created_at`.
-Unique `(organization_id, offer_id, ordinal)`; GIN tsvector on `raw_text` (UI search).
-**No trigram index** - deleted with the retrieval mode (§3.1).
+**`bursar_line_node_matches`** - `offer_line_id` (CASCADE), `scope_node_id` (RESTRICT),
+`coverage_id`, `allocation_weight numeric(6,5)`, `allocation_method varchar(24)`, `match_method`.
+Unique `(organization_id, offer_line_id, scope_node_id)`. Weights per line sum to 1.0. **Both
+§4.3 caps are computed from this table.**
 
-#### `bursar_line_node_matches`
-`id`, `organization_id`, `offer_line_id` (CASCADE), `scope_node_id` (RESTRICT), `coverage_id`,
-`allocation_weight numeric(6,5)`, **`allocation_method varchar(24)`** (§4.4 ladder),
-`match_method`, `created_at`. Unique `(organization_id, offer_line_id, scope_node_id)`.
-Weights per `offer_line_id` sum to 1.0. **Fan-out is counted from this table** (§4.3).
-
-#### `bursar_offer_coverage`
-`id`, `organization_id`, `request_id`, `offer_id`, `scope_node_id` (RESTRICT), `verdict` CHECK
-(six), `matched_line_ids uuid[]`, `cited_span jsonb`, `rejected_candidates jsonb`,
-**`node_term_overlap numeric(4,3)`**, `classifier_confidence`, `composite_confidence`,
-`confidence_band`, `decided_by` (`deterministic`/`llm`/`human`/**`agent`**), `review_status`,
-`provisional`, **`blanket_suspected`**, `window_coverage`, `subsumed_by_coverage_id`,
-**`derived_covered boolean`** (§4.4), `delta_kind`, `delta_quantity`, `delta_unit`,
-`delta_amount_minor`, `priced_amount_minor`, `overridden_verdict/by/at`, `leveling_run_id`,
-timestamps.
+**`bursar_offer_coverage`** - `verdict` CHECK (six), `matched_line_ids uuid[]`, `cited_span`,
+`rejected_candidates`, `node_term_overlap`, `classifier_confidence`, `composite_confidence`,
+`confidence_band`, `decided_by` (`deterministic`/`llm`/`human`), `review_status`,
+**`withheld_reason varchar(24)`** (§4.7), `provisional`, `blanket_suspected`, `window_coverage`,
+`subsumed_by_coverage_id`, `derived_covered`, `delta_*`, `priced_amount_minor`,
+`overridden_*`, `leveling_run_id`.
 Unique `(organization_id, offer_id, scope_node_id)`.
-CHECK: `verdict <> 'absent' OR decided_by = 'human' OR jsonb_array_length(rejected_candidates) > 0`.
+CHECK `verdict <> 'absent' OR decided_by = 'human' OR jsonb_array_length(rejected_candidates) > 0`.
 
-#### `bursar_leveling_window_results` - new (§3.8)
-`id`, `organization_id`, `leveling_run_id`, `offer_id`, `scope_node_id`, `window_index`,
-`verdict`, `cited_span jsonb`, `created_at`.
-Unique `(organization_id, leveling_run_id, offer_id, scope_node_id, window_index)`.
-Durable per-window results, merged by the §3.8 lattice.
+**`decided_by` has no `'agent'` value in v1.** Round 2 added it with no write path, gate, or
+permission - an unspecified enum value is an invitation, and the natural implementation would
+write a verdict that skipped every §3.5 predicate and every §4 cap: the collapse attack with a
+service token instead of a document. The `absent` CHECK exempts only `human`, so it would not
+have constrained it either. There is no agent adjudication path in v1 (coverage override has no
+MCP tool), so the value is simply removed. §24 records the reintroduction conditions.
 
-#### `bursar_offer_totals` - §10
-`id`, `organization_id`, `offer_id` (CASCADE), `currency`, `total_kind` CHECK in
+**`bursar_leveling_window_results`** - `leveling_run_id`, `offer_id`, `scope_node_id`,
+`window_index`, `verdict`, `cited_span`. Unique on all five. Durable per-window results.
+
+**`bursar_offer_totals`** - `currency`, `total_kind` CHECK
 (`stated`,`base_only`,`gap_adjusted`,`should_have_supplement`), `amount_minor`, `estimated`,
 `unvalued_gap_count`, `renderable boolean`, `provenance jsonb`, `computed_at`.
-Unique `(organization_id, offer_id, currency, total_kind)`.
-`normalized_to_term` is **cut to v1.1** (§24) - there is no term column on offers or requests to
-normalize to.
+`normalized_to_term` is cut to v1.1 (no term columns to normalize against).
 
-#### `bursar_leveling_runs`
-`id`, `organization_id`, `request_id`, `offer_ids uuid[]`, `phase` (`enumerate`/`classify`),
-`status` (`running`/`succeeded`/`partial`/`failed`/`blocked`/`rejected_limits`),
-**`last_processed_offer_index`**, **`last_processed_node_index`**,
-**`last_processed_window_index`** (the 3-D checkpoint, §3.8), `node_count`, `nodes_classified`,
-**`llm_calls_used`**, `absent_count`, `excluded_count`, `low_confidence_count`,
-**`heartbeat_at`**, **`claimed_by`**, `model_hint`, `started_at`, `finished_at`.
+**`bursar_leveling_runs`** / **`bursar_extraction_runs`** - `status`
+(`running`/`succeeded`/`partial`/`failed`/`blocked`/`rejected_limits`),
+`last_processed_offer_index`, `last_processed_node_index`, `last_processed_window_index` (the 3-D
+checkpoint), `last_processed_chunk` (extraction), `chunks_failed`, `llm_calls_used`,
+**`heartbeat_at`**, **`claimed_by`**, counts, timestamps.
 
-#### `bursar_awards`, `bursar_baseline_items`, `bursar_baseline_item_nodes`
-Award chain via `supersedes_award_id` + `chain_root_id`, `baseline_hash`, `total_minor`,
-`currency`, `term_start`, `term_end` (both nullable, §7.3), `auto_renew`, `renewal_notice_days`,
-`timezone`, `contract_bin_asset_id`, `status`, `awarded_at/by`.
+**`bursar_awards`** / **`bursar_baseline_items`** / **`bursar_baseline_item_nodes`** - chain via
+`supersedes_award_id` + `chain_root_id`, `baseline_hash`, nullable `term_start`/`term_end` (§7.3),
+`auto_renew`, `renewal_notice_days`, `timezone`, `contract_bin_asset_id`, `awarded_at/by`.
+Baseline items carry **`kind`** CHECK (`included`,`excluded_at_award`,`absent_at_award`).
 
-`bursar_baseline_items` carries **`kind`** CHECK in
-(`included`,`excluded_at_award`,`absent_at_award`) - freezing what you knowingly did *not* get is
-half the value of freezing. Node linkage is the M:N `bursar_baseline_item_nodes`.
+**Immutability on four paths**: `BEFORE UPDATE` with a `WHEN` clause scoped to content columns
+(so additive migrations are not aborted); `BEFORE DELETE`; `ON DELETE RESTRICT` from awards (a
+cascade does not fire a row trigger); **`BEFORE TRUNCATE` statement trigger**; and
+`bursar-retention` carries an explicit exclusion list naming the table.
 
-**Immutability on four paths:** `BEFORE UPDATE` trigger with a `WHEN` clause scoped to content
-columns (so additive migrations are not aborted); `BEFORE DELETE` trigger; `ON DELETE RESTRICT`
-from awards (a cascade does not fire a BEFORE UPDATE trigger); and `bursar-retention` carries an
-explicit exclusion list naming the table. **`TRUNCATE` bypasses both row triggers**, so a
-`BEFORE TRUNCATE` statement trigger is added too - round 1 left that path open.
-
-#### `bursar_spend_events`
-`id`, `organization_id`, `vendor_id`, `award_id`, `source_type` CHECK in
-(`bill.expense`,`import.csv`,`manual`), `source_id`, **`spend_import_id`**, `occurred_on`,
-`amount_minor`, `currency`, `payee_raw`, **`normalized_payee`**, `description`,
+**`bursar_spend_events`** - `source_type` CHECK (`bill.expense`,`import.csv`,`manual`),
+`spend_import_id`, `occurred_on`, `amount_minor`, `currency`, `payee_raw`, `normalized_payee`,
 `funding_source` (import-only), `external_ref`, `matched_baseline_item_id`, `match_method`,
-`match_confidence`, **`dedup_key`**, timestamps.
-**Unique `(organization_id, dedup_key)`** where `dedup_key` is derived from
-`(normalized_payee, occurred_on, amount_minor, currency, external_ref)` via
-`apps/burn-api/src/lib/idempotency-key.ts`. Index `(organization_id, normalized_payee)` for
-§8 detector 3.
+`match_confidence`, `dedup_key`, **`occurrence_ordinal integer`**.
+Unique `(organization_id, dedup_key)`. Index `(organization_id, normalized_payee)`.
 
-#### `bursar_spend_imports` - new (stability F1)
-`id`, `organization_id`, `file_sha256`, `filename`, `row_count`, `rows_inserted`,
-`rows_deduped`, `status`, `imported_by`, `created_at`.
-Unique `(organization_id, file_sha256)`.
+**The dedup recipe is a plain local `sha256`** over the canonicalized tuple
+`(normalized_payee, occurred_on, amount_minor, currency, external_ref, occurrence_ordinal)`,
+implemented in `apps/bursar-api/src/lib/spend-dedup-key.ts`.
 
-**Why this exists.** `POST /v1/spend/import` is the primary input for the entire post-award half
-and round 1 gave it **no idempotency key at all** - while the offer path got a unique constraint
-for exactly this hazard. A re-uploaded statement doubled every row, which doubles `price_drift`
-magnitudes and mints phantom `scope_divergence` findings, with no way for the user to tell.
-Import is now an upsert against `dedup_key` under a batch row keyed by file hash, and the UI
-reports "412 rows, 0 new, 412 already imported".
+Two round-2 errors fixed. First, **the `idempotency-key.ts` citation was wrong**: it is an HMAC
+over `BurnPrecheckRequest` against a `.strict()` type, it lives in burn-api where bursar-api
+cannot import it, and keying dedup on a **rotatable secret** means every row re-imports after a
+rotation. Second, the recipe **discarded legitimate identical same-day charges** - two genuine
+$4.99 same-payee charges with no external ref collapsed to one, the import reported "already
+imported", and every downstream figure under-reported with no signal. That is the mirror of the
+doubling bug and harder to notice. `occurrence_ordinal` is the row's index within its dedup group
+**in the source file**, so the second genuine $4.99 gets ordinal 1 and its own row.
 
-#### `bursar_mismatches`, `bursar_renewals`, `bursar_scope_library`, `bursar_ingest_events`, `bursar_detector_feedback`, `bursar_extraction_runs`, `bursar_gate_checks`, `bursar_drafts`, `bursar_org_settings`
+**`bursar_spend_imports`** - `file_sha256`, `filename`, `row_count`, `rows_inserted`,
+`rows_deduped`, `status`, `imported_by`. Unique `(organization_id, file_sha256)` **with
+`ON CONFLICT ... DO UPDATE SET status='running'`**, and a non-`succeeded` batch **resumes the
+upsert loop**. Round 2's bare unique constraint made a crashed import un-retryable: die at row
+200 of 412 and the re-upload collides, the natural implementation short-circuits "already
+imported, 0 new", and 212 rows are missing forever - even though row-level dedup already makes
+the retry safe. **"0 new" is derived from `rows_deduped`, never from the batch row's existence.**
 
-Notable changes:
+**`bursar_scope_library`** - built-ins are **global** (`organization_id IS NULL`,
+`is_global = true`) so orgs created after the seed migration are not born with an empty library.
+Two guards make that safe: global rows are **immutable to org callers** (API filters
+`is_global = false` on writes, plus a `BEFORE INSERT OR UPDATE OR DELETE` trigger), and the RLS
+policy is the variant
+`organization_id = current_setting('app.current_org_id', true)::uuid OR (organization_id IS NULL AND is_global)`
+with a `WITH CHECK` forbidding org-null inserts - the blanket policy evaluates NULL (not true)
+for global rows, so they would vanish the day a non-superuser role is armed.
+`test/library-visibility.test.ts` covers both halves.
 
-- **`bursar_scope_library`** built-ins are global (`organization_id IS NULL`,
-  `is_global = true`) so orgs created after the seed migration are not born with an empty
-  library. Two round-2 fixes make that safe (§5 security F4):
-  - **Global rows are immutable to org callers.** The API filters `is_global = false` on every
-    write, and a `BEFORE INSERT OR UPDATE OR DELETE` trigger rejects org-caller writes to global
-    rows. Round 1 gated library CRUD on an ordinary org action with nothing marking global rows
-    seed-only, so **any org admin could edit rows every other tenant consumes** - a cross-tenant
-    write path.
-  - **The RLS policy is not the blanket one.** `organization_id = current_setting(...)::uuid`
-    evaluates NULL (not true) for global rows, so they would become invisible the day a
-    non-superuser role is armed, silently restoring the empty-library cold start. Policy is
-    `organization_id = current_setting('app.current_org_id', true)::uuid OR (organization_id IS
-    NULL AND is_global)`, with a `WITH CHECK` forbidding org-null inserts.
-    `test/library-visibility.test.ts` asserts both halves.
-- **`bursar_org_settings`** gains `llm_provider_id uuid` (round 1 omitted it though burn has one),
-  `node_term_overlap_floor`, `blanket_fanout_cap`, `max_nodes_per_run`, `max_offers_per_run`,
-  `max_llm_calls_per_run`, `max_lines_per_window`, `window_overlap_lines`,
-  `price_drift_threshold_pct`, `renewal_lead_bands jsonb`, `parse_quality_floor jsonb`,
-  `payee_match_threshold`, `payee_auto_accept_threshold`, `blanket_lexicon jsonb`,
-  `exclusion_lexicon jsonb`, `digest_day`/`digest_hour`. **All of it is audited to `activity_log`
-  with a before/after diff** (§5.6).
-- **`bursar_drafts`** per §5.7. Body here under RLS with real `bursar.draft.*` gating; the
-  `agent_proposals` row carries a content-free templated summary only. Round 1's placement was
-  wrong in both directions: `apps/api/src/routes/proposals.routes.ts` gates on `shadowOnly(...)`,
-  which per `packages/permissions/src/index.ts:357-377` **logs and never denies**; and any org
-  admin reads every app's proposals.
-- **`bursar_ingest_events`** and **`bursar_extraction_runs`** gain `heartbeat_at` + `claimed_by`
-  (§18.6).
+**`bursar_org_settings`** - `llm_provider_id`, `node_term_overlap_floor`,
+`blanket_fanout_cap`, **`blanket_cumulative_cap`**, **`evidence_concentration_floor`**,
+`max_nodes_per_run`, `max_offers_per_run`, `max_llm_calls_per_run`, `max_lines_per_window`,
+`window_overlap_lines`, `price_drift_threshold_pct`, `renewal_lead_bands`, `parse_quality_floor`,
+`payee_match_threshold`, `payee_auto_accept_threshold`, `blanket_lexicon`, `exclusion_lexicon`,
+`digest_day`/`digest_hour`, `retention_days`. **All audited** (§5.6).
+
+Also: **`bursar_mismatches`**, **`bursar_renewals`**, **`bursar_ingest_events`** (+ heartbeat/claim),
+**`bursar_detector_feedback`**, **`bursar_gate_checks`**, **`bursar_drafts`** (§5.7).
 
 ### 6.2 Reused platform tables
 
-`agent_proposals` (ref-only), `entity_links` (**`org_id`**, not `organization_id`),
-`organizations`/`users`, `bin_assets` (read-only, **`org_id`**, access-checked §6.4),
-`bond_companies`, `bill_expenses` (read-only; Bursar never writes a Bill row),
-`v_activity_unified`, `permissions`/`permission_group_defaults`, `activity_log`.
+`agent_proposals` (ref-only), `entity_links` (**`org_id`**), `organizations`/`users`,
+`bin_assets` (read-only, **`org_id`**, access-checked §5.8), `bond_companies`, `bill_expenses`
+(read-only), `v_activity_unified`, `permissions`/`permission_group_defaults`, `activity_log`.
 
 ### 6.3 RLS posture
 
-Policies are **generated** by a `DO $$` loop over `information_schema` for the `bursar_` prefix
-(§17.1), so the set cannot drift from the table list. PG16 has no
-`CREATE POLICY IF NOT EXISTS`, so the loop emits `DROP POLICY IF EXISTS ... ; CREATE POLICY ...`
-per `0116*.sql:23-47`. `bursar_scope_library` takes the §6.1 variant policy.
+Policies are **generated** by a `DO $$` loop over `information_schema` for the `bursar_` prefix,
+emitting `DROP POLICY IF EXISTS ... ; CREATE POLICY ...` (PG16 has no `CREATE POLICY IF NOT
+EXISTS`) per `0116*.sql:23-47`, with `bursar_scope_library` taking the §6.1 variant.
 
-Bursar uses **burn's `runInOrgScope`** (`apps/burn-api/src/plugins/rls.ts:102-112`) rather than
-the older four services', for the reason burn's plugin documents: they issue
-`set_config('app.current_org_id', $1, true)` as a standalone statement, and `is_local=true`
-scopes it to the current transaction - which for a standalone statement commits immediately,
-discarding the GUC before the next query runs. Those plugins are inert today only because the
-role has BYPASSRLS.
+Bursar uses **burn's `runInOrgScope`** (`burn-api/src/plugins/rls.ts:102-112`), not the older
+services' - they issue `set_config('app.current_org_id', $1, true)` as a standalone statement,
+and `is_local=true` scopes it to the current transaction, which for a standalone statement
+commits immediately, discarding the GUC before the next query. Those plugins are inert today
+only because the role has BYPASSRLS.
 
-**The honest caveat stays** (reviewers rated it worth keeping): today the backstop is **absent**,
-because every service connects as the `bigbluebam` superuser and superusers bypass RLS
-unconditionally. Every Bursar query carries an explicit `organization_id` predicate as if there
-were no RLS, because there effectively is not. `boot/assert-rls-bound.ts` logs
-`rls_backstop: 'absent'` at fatal level; `test/rls-backstop.test.ts` starts passing the day the
-platform arms a non-superuser role.
-
-### 6.4 Bin asset access - the round-1 fix was wrong and incomplete
-
-Round 1 added `AND a.organization_id = ...` to the worker join. **`bin_assets` has no such
-column** - `apps/bin-api/src/db/schema/bin-assets.ts:29` is **`org_id`**. So the corrected join
-was a runtime 42703: the guard would fail the *query* rather than the tenant check, and the first
-person to "fix" the error would delete the predicate.
-
-Org-scoping was also not the whole hole. Bin has private and project-scoped assets
-(`bin_private_not_owner` is a live `PreflightReason`), so a member who cannot see a private asset
-in `/bin/` could still put its uuid in `bin_asset_id` and get its **verbatim text into Bursar as
-cited spans**. And `getObjectBuffer` bypasses the `scan_status` gate entirely - Bursar is the one
-app that must not parse unscanned bytes, given its own threat model.
-
-**The v1 guard is `assertBinAssetReadable(actingUserId, orgId, assetId)`**, called at every write
-path accepting a `bin_asset_id` (request create/update, offer create, award contract link):
-
-1. `can_access('bin.asset', assetId, actingUserId)` via
-   `packages/shared/src/visibility-client.ts` - `bin.asset` is already a supported type, so this
-   is reuse, not a new resolver;
-2. `org_id` equality as a defence-in-depth predicate;
-3. **`scan_status = 'clean'`** required;
-4. **404, not 403**, so the endpoint is not an existence oracle.
-
-The worker join uses `a.org_id`. `test/bin-asset-access.test.ts` covers cross-org,
-**private-same-org**, and **unscanned** cases. Filed against burn-api and bulwark-api as
-pre-existing (§25.10).
+**The honest caveat stands.** Today the backstop is **absent**: every service connects as the
+`bigbluebam` superuser, and superusers bypass RLS unconditionally. Every Bursar query carries an
+explicit `organization_id` predicate as if there were no RLS, because there effectively is not.
+`boot/assert-rls-bound.ts` logs `rls_backstop: 'absent'` at fatal level;
+`test/rls-backstop.test.ts` starts passing the day the platform arms a non-superuser role.
 
 ---
 
-## 7. The frozen baseline and post-award drift
+## 7. Baseline and post-award drift
 
 ### 7.1 The freeze
 
@@ -886,62 +767,47 @@ pre-existing (§25.10).
 line into `bursar_baseline_items` including `excluded_at_award` and `absent_at_award` rows; link
 nodes via `bursar_baseline_item_nodes`; stamp `coverage_verdict_at_award`; compute
 `baseline_hash`; set the request `awarded`; write `entity_links`; publish `award.recorded` and
-`baseline.frozen`.
-
-**409 if a leveling run holds a live lease** (§18.6), so a freeze never attests to a
-half-computed diff.
+`baseline.frozen`. **409 if a leveling run holds a live lease.**
 
 ### 7.2 The chain
 
-Amendments never mutate. A new row with `supersedes_award_id` inherits `chain_root_id`; the
-predecessor flips to `superseded`. Drift resolves over the chain, taking the latest active item
-per `(chain_root_id, ordinal)`.
+A new row with `supersedes_award_id` inherits `chain_root_id`; the predecessor flips to
+`superseded`. Drift resolves over the chain, latest active item per `(chain_root_id, ordinal)`.
 
 ### 7.3 Drift computation
 
-1. **Vendor resolution** via `bursar_payee_aliases` trigram, never Braid.
-2. **Award selection**, including the null-term case round 1 broke on (its own GILLIGAN
-   one-time-purchase scenario): a null `term_end` means open-ended, selected when
+1. **Vendor resolution** via trigram, never Braid.
+2. **Award selection**, including null terms: null `term_end` means open-ended, selected when
    `occurred_on >= term_start` (or unconditionally when both are null) and no bounded award
-   matches; ambiguity picks the most recently awarded and records `match_method='fuzzy'`.
-3. **Line matching**, deterministic only: exact description, trigram over
-   `bursar_baseline_items.title`, then unit-price equality within tolerance. **No LLM matcher** -
-   it was the only LLM call in a 30-minute sweep and nothing binding depends on it.
-4. **Currency guard, hard precondition.** Drift is computed only when the spend event's currency
-   equals the baseline item's; otherwise `currency_mismatch` and skip. Without this an FX move
-   reads as double-digit price drift.
+   matches; ambiguity picks the most recent and records `match_method='fuzzy'`.
+3. **Line matching, deterministic only**: exact description, trigram over
+   `bursar_baseline_items.title`, then unit-price equality within tolerance. **No LLM matcher.**
+4. **Currency guard, hard precondition**: drift computed only on currency equality; otherwise
+   `currency_mismatch` and skip. Without it an FX move reads as double-digit price drift.
 
-Metrics: unit-price drift, extended drift, quantity drift, cadence drift, **new-line drift**
-(invoiced item matching no baseline item), and **silent line**.
-
-**Silent-line requires a bounded term.** Round 1 made it uncomputable on the open-ended awards
-§7.3 itself introduced: "never invoiced across a full term" has no meaning when `term_end` is
-null. Rule: silent-line evaluates only on awards with a non-null `term_end` that has passed, or
-on a rolling 12-month window for open-ended awards, and the finding states which basis it used.
+Metrics: unit-price, extended, quantity, cadence, **new-line drift**, and **silent line**.
+Silent-line evaluates only on awards with a non-null elapsed `term_end`, or a rolling 12-month
+window for open-ended awards, **and the finding states which basis it used**.
 
 **Dollars at stake are computed, never estimated.** Unquantifiable drift stores `NULL` and the UI
 shows "not quantified".
 
 ---
 
-## 8. The detector catalog
+## 8. Detector catalog
 
-| # | `detector` | Fires when | Threshold | Job |
-| --- | --- | --- | --- | --- |
-| 1 | `price_drift` | unit price deviates from the frozen baseline, same currency | `price_drift_threshold_pct`, **default 10%**, min absolute $25 | `bursar-drift-sweep` |
-| 2 | `scope_divergence` | invoiced line with no baseline item, or a silent baseline item (§7.3 basis stated) | any | `bursar-drift-sweep` |
-| 3 | `unbaselined_vendor` | recurring spend (>=2 events in 180d) with no award, **grouped by `normalized_payee`** | >=2 events | `bursar-drift-sweep` |
-| 4 | `renewal_cliff` | `notice_deadline` enters a lead band; absorbs auto-renew-unreviewed as a severity bump | bands **`t_minus_90/60/30/7`**, `alerted_bands` idempotency | `bursar-renewal-radar` |
-| + | `offer_manipulation_suspected` | §5.3 | any | `bursar-parse-offer` |
-| + | `request_manipulation_suspected` | §5.5 | any | `bursar-derive-scope` |
+| `detector` | Fires when | Threshold | Job |
+| --- | --- | --- | --- |
+| `price_drift` | unit price deviates from the frozen baseline, same currency | `price_drift_threshold_pct` default **10%**, min absolute **$25** | `bursar-drift-sweep` |
+| `scope_divergence` | invoiced line with no baseline item, or a silent baseline item (basis stated) | any | `bursar-drift-sweep` |
+| `unbaselined_vendor` | recurring spend (>=2 events in 180d) with no award, **grouped by `normalized_payee`** | >=2 events | `bursar-drift-sweep` |
+| `renewal_cliff` | `notice_deadline` enters a lead band; absorbs auto-renew-unreviewed as a severity bump | bands `t_minus_90/60/30/7`, `alerted_bands` idempotency | `bursar-renewal-radar` |
+| `offer_manipulation_suspected` | §5.3 | any | `bursar-parse-offer` |
+| `request_manipulation_suspected` | §5.5 | any | `bursar-derive-scope` |
 
-**Detector 3 groups by `normalized_payee`, not `vendor_id`** - round 1 contradicted itself, since
-§6.1 states unmatched spend keeps `vendor_id NULL`, so a `vendor_id` grouping would have made the
-detector fire on nothing. This is the shadow-IT bucket and, like Burn's `unscoped`, **the bucket
-is the product**.
-
-Round-1 cuts stand (§24): `dormant_seat` and `card_fragmentation` are import-only and deferred;
-`duplicate_tool` deferred; `orphaned_custody` is a vendor-detail badge.
+`unbaselined_vendor` groups by `normalized_payee` because unmatched spend keeps `vendor_id NULL`
+- a `vendor_id` grouping would fire on nothing. This is the shadow-IT bucket, and like Burn's
+`unscoped`, **the bucket is the product**.
 
 **Noise control**: `dedup_key` upsert bumps `last_seen_at`; per-org per-detector daily cap
 (default 200) records `detector_capped`; `dismissed` is sticky by `dedup_key` unless the evidence
@@ -949,83 +815,64 @@ hash changes.
 
 ---
 
-## 9. `bursar_scope_gap` as a read-only advisory tool
+## 9. `bursar_scope_gap` (advisory only)
 
 **The enforcing bill-api gate is cut from v1** (§24, top item). `POST /v1/gate/scope-gap` and the
-MCP tool answer on demand *does this outgoing charge match something we agreed to?*, returning
-`pass`/`advisory` plus cited reasons and recording a `bursar_gate_checks` audit row. **No
+MCP tool return `pass`/`advisory` plus cited reasons and record a `bursar_gate_checks` row. **No
 preHandler in bill-api, no enforcement, no blocking verdict, no composition with Burn's
 precheck.**
 
-Why: it required a bill-api migration, a second **serial** preHandler on every money-out write
+Why: a bill-api migration, a **serial** second preHandler on every money-out write
 (`burn-precheck.hook.ts` is a single preHandler, so a second runs after it: 400ms + 400ms), a
-ported Redis breaker (without which every write pays the full timeout for any Bursar outage), a
-recovery detector, and an internal auth surface - for the piece least connected to the winning
-wedge.
+ported Redis breaker, a recovery detector, and an internal auth surface - for the piece least
+connected to the winning wedge.
 
 **Internal-caller shape specified now** so v1.1 does not improvise: `POST
-/v1/internal/gate/scope-gap` with `INTERNAL_SERVICE_SECRET` **plus `acting_user_id`** resolved
-through viewer-caps, returning **reason codes and a check id only - never cited spans, baseline
-quotes, or prices.**
+/v1/internal/gate/scope-gap` with `INTERNAL_SERVICE_SECRET` **plus `acting_user_id`** through
+viewer-caps, returning **reason codes and a check id only - never cited spans, baseline quotes,
+or prices.**
 
 ---
 
 ## 10. Comparable totals
-
-The seed narrative's punchline is "the cheapest bid is the most expensive", and round 1 could
-compute **neither** it nor two of its own four total kinds.
 
 | `total_kind` | Definition |
 | --- | --- |
 | `stated` | what the vendor's document says |
 | `base_only` | sum of `line_role='base'` lines |
 | `gap_adjusted` | `base_only` + valued **mandatory** gaps: `absent`, `excluded_explicit`, **and `partial` via `delta_amount_minor`** |
-| `should_have_supplement` | the same valuation over `should_have` nodes, reported **separately** so it never silently inflates the mandatory comparison |
-
-`normalized_to_term` is **cut to v1.1**: there is no `term_months` on offers and no
-`target_term_months` on requests to normalize against, and adding both is real scope for a total
-the seed does not need.
+| `should_have_supplement` | the same over `should_have` nodes, reported **separately** |
 
 ### 10.1 The valuation ladder
 
-Round 1 said "the rival distribution" and left four cases undefined. The ladder, in order, with
-`provenance.kind` recorded:
+| Rung | `provenance.kind` | Source | Admissible when |
+| --- | --- | --- | --- |
+| 1 | `offer_line` | **this** offer priced it as an option/allowance | always - one observation suffices, it is the vendor's own price |
+| 2 | `rival_median` | median across rivals pricing it **separately** | **>= 2 admissible observations** |
+| 3 | `library_unit` | node `quantity` x library unit price | library has a unit price |
+| 4 | — | none | the gap is `unvalued` |
 
-| Rung | Source | Admissible when |
-| --- | --- | --- |
-| 1 | `offer_line` - this offer priced it as an option/allowance | always |
-| 2 | `rival_median` - median across rivals that priced it **separately** | >= 2 admissible rival observations |
-| 3 | `library_unit` - node `quantity` x library unit price | library has a unit price for the category |
-| 4 | *(none)* | -> the gap is `unvalued` |
+**Admissibility:** a rival that is itself `absent` contributes nothing; a rival pricing it inside
+a bundle contributes only at `explicit_subprice` or `rival_distribution` (**equal-split
+observations are refused**, §4.4); a **different-currency** rival is inadmissible, matching §7.3;
+**fewer than 2 admissible observations means no `rival_median`** - with two offers the "median"
+is one observation.
 
-**Admissibility rules**, each of which round 1 left open:
+### 10.2 Refusing to render a number
 
-- A rival that is itself `absent` on the node contributes **nothing** (it is not an observation).
-- A rival that priced it **inside a bundle** contributes only if `allocation_method` is
-  `explicit_subprice` or `rival_distribution`. **Equal-split allocations are refused** (§4.4).
-- A rival in a **different currency** is inadmissible, matching §7.3's currency guard.
-- **Fewer than 2 admissible observations means no `rival_median`** - with two offers the "median"
-  is one observation, which is not a distribution.
-
-### 10.2 The single-offer request, and refusing to render a number
-
-"Should I sign this one quote" is a large share of real usage and round 1 gave it nothing. When
-gaps cannot be valued above rung 3, `bursar_offer_totals.renderable = false` and the UI shows:
+When gaps cannot be valued above rung 3, `renderable = false` and the UI shows:
 
 > **Cheapest on stated price. 3 gaps unpriced** - crew training, installation, escalation cap.
 
-That is honest and still useful: the exclusion diff is the product, and the dollar figure is a
-convenience. Fabricating a total from one observation to preserve a headline would be exactly the
-CFO-credibility failure §7.3 refuses elsewhere.
-
-`gap_adjusted` remains the Matrix's default sort key **only when `renderable`**; otherwise the
-Matrix sorts on `stated` and shows the unpriced-gap count as a second column.
+`gap_adjusted` sorts the Matrix **only when `renderable`**; otherwise it sorts on `stated` and
+shows the unpriced-gap count as a second column. Fabricating a total from one observation to
+preserve a headline would be the CFO-credibility failure §7.3 refuses elsewhere.
 
 ---
 
 ## 11. API surface
 
-Base `/bursar/api/v1/...`, mounted at `/v1` per `apps/burn-api/src/server.ts:138-151`. Cursor
+Base `/bursar/api/v1/...`, mounted at `/v1` per `burn-api/src/server.ts:138-151`. Cursor
 pagination, `?filter[field]=`, `?sort=-field`, platform error envelope.
 
 **Vendors:** `GET/POST /vendors`, `GET/PATCH /vendors/:id`, `DELETE /vendors/:id`
@@ -1033,70 +880,62 @@ pagination, `?filter[field]=`, `?sort=-field`, platform error envelope.
 `DELETE /vendors/:id/aliases/:alias_id`, `GET /vendors/alias-review`.
 
 **Requests and scope:** `GET/POST /requests`, `GET/PATCH /requests/:id`,
-`POST /requests/:id/derive-scope`, `GET /requests/:id/scope`,
-`POST /requests/:id/scope/nodes`, `PATCH/DELETE /scope-nodes/:id` (DELETE archives),
-`POST /scope-nodes/:id/promote` (`scope.write`, promotes a rival-derived node out of
-`pending_review`, §4.5), `POST /requests/:id/scope/apply-library`,
-`POST /requests/:id/scope/confirm` (**409 while `deriving`; blocked while
-`injection_suspected`**).
+`POST /requests/:id/derive-scope`, `GET /requests/:id/scope`, `POST /requests/:id/scope/nodes`,
+`PATCH/DELETE /scope-nodes/:id` (DELETE archives),
+**`POST /scope-nodes/:id/promote-rival`** (`scope.promote_rival`, floored, confirm-required,
+payload echoes `contributing_offer_ids`), `POST /requests/:id/scope/apply-library`,
+`POST /requests/:id/scope/confirm` (409 while `deriving`; blocked while `injection_suspected`).
 
 **Offers:** `GET/POST /requests/:id/offers`, `POST /offers/:id/upload` (`offer.ingest`,
 multipart), `GET /offers/:id`, `GET /offers/:id/lines`, `POST /offers/:id/reparse`,
-`POST /offers/:id/unseal` (**`offer.unseal`, floored**), `DELETE /offers/:id`.
+`POST /offers/:id/unseal` (`offer.unseal`, floored), `DELETE /offers/:id`.
 
-**Leveling and diff:** `POST /requests/:id/level` (`leveling.run`; **cost preflight**; returns
-**202 + run id**, §18.6; 409 if a run holds a live lease), `GET /requests/:id/leveling-runs`
-(**the authoritative progress source**), `GET /requests/:id/matrix`,
-`GET /requests/:id/exclusion-diff`, `GET /requests/:id/totals`, `GET /coverage/:id`,
-`POST /coverage/:id/override` (`coverage.override`), `GET /review`.
+**Leveling and diff:** `POST /requests/:id/level` (cost preflight; **202 + run id**;
+**422 `rejected_limits`** if `max_offers_per_run` exceeded; 409 on a live lease),
+`GET /requests/:id/leveling-runs` (**authoritative progress**), `GET /requests/:id/matrix`,
+`GET /requests/:id/exclusion-diff` (**satisfies §4.7's invariant**), `GET /requests/:id/totals`,
+`GET /coverage/:id`, `POST /coverage/:id/override`, `GET /review`.
 
 **Awards:** `POST /awards` (`award.create`), `GET /awards`, `GET /awards/:id`,
-`GET /awards/:id/baseline`, `POST /awards/:id/amend` (**`award.amend`**),
-`POST /awards/:id/terminate` (**`award.terminate`**). No baseline write path exists.
+`GET /awards/:id/baseline`, `POST /awards/:id/amend` (`award.amend`),
+`POST /awards/:id/terminate` (`award.terminate`). No baseline write path exists.
 
-Round 1 referenced amend and terminate in the permission flag table while giving them **no
-action**, so they would have shipped gated on `award.create` - meaning anyone who can award can
-terminate a baseline chain.
-
-**Spend:** `GET /spend`, `GET /spend/by-vendor`, `POST /spend/import` (`spend.import`;
-idempotent per §6.1), `GET /spend/imports`, **`GET /spend/export`** (CSV, formula-neutralized).
+**Spend:** `GET /spend`, `GET /spend/by-vendor` (both carry `spend.read_all` as **route-file
+permission metadata** so the manifest generator emits the action - burn's pattern for financial
+flooring), `POST /spend/import` (`spend.import`), `GET /spend/imports`,
+**`GET /spend/export`** (CSV, neutralized).
 
 **Mismatches, renewals, drafts:** `GET /mismatches`, `GET /mismatches/:id`,
 `POST /mismatches/:id/resolve|dismiss`, `POST /mismatches/:id/mark-wrong`, `GET /renewals`,
-`POST /renewals/:id/decide` (`renewal.decide`), `GET /drafts` (`draft.read`, owner-scoped),
-`POST /drafts/clarification|negotiation-brief` (`draft.create`),
-`POST /drafts/:id/approve|reject` (**`draft.approve`, floored**),
-**`GET /requests/:id/diff/export`** (CSV, formula-neutralized).
+`POST /renewals/:id/decide`, `GET /drafts` (owner-scoped), `POST /drafts/clarification|negotiation-brief`,
+`POST /drafts/:id/approve|reject`, **`GET /requests/:id/diff/export`** (CSV, neutralized).
 
 **Gate, library, settings, internal:** `POST /gate/scope-gap`, `GET /gate/checks`, library CRUD
-(`library.write`; **global rows rejected**), `GET/PATCH /settings`,
-`POST /internal/run-derivation`, `/internal/run-leveling`, `/internal/events`,
-`/internal/engines/:name`, `/health`, `/health/ready`, `/metrics`.
+(global rows rejected), `GET/PATCH /settings`, `POST /internal/run-derivation` (**202**),
+`/internal/run-leveling` (**202**), `/internal/events`, `/internal/engines/:name`, `/health`,
+`/health/ready`, `/metrics`.
 
 Internal routes register outside any session gate (`server.ts:135-137`).
 
 ### 11.1 Realtime `/bursar/ws`
 
 Rooms `org:<id>`, `request:<id>` (`scope.progress`, `leveling.progress` with
-`offer n/N, node m/M, window w/W`, `matrix.updated`), `vendor:<id>`.
-
-No browser-side WS precedent exists in `apps/burn/src`, so: exponential backoff reconnect (1s,
-capped 30s, jittered), a visible "reconnecting" state, and **`GET /requests/:id/leveling-runs`
-polled at 5s as the authoritative fallback**. The WS is an optimization; the poll is the truth.
+`offer n/N, node m/M, window w/W`, `matrix.updated`), `vendor:<id>`. No browser WS precedent
+exists in `apps/burn/src`, so: exponential backoff (1s, capped 30s, jittered), a visible
+"reconnecting" state, and **`GET /requests/:id/leveling-runs` polled at 5s as the authoritative
+fallback.**
 
 ---
 
 ## 12. MCP surface
 
-Module `apps/mcp-server/src/tools/bursar-tools.ts`, client shaped like `createBurnClient`
-(`burn-tools.ts:55-80`), forwarding the caller's bearer token. Round 1 asserted "18 tools"
-without naming one, which is unfalsifiable and is precisely how the Bolt 17-vs-18 contradiction
-happened. The enumeration is authoritative:
+`apps/mcp-server/src/tools/bursar-tools.ts`, client shaped like `createBurnClient`
+(`burn-tools.ts:55-80`), forwarding the caller's bearer token.
 
 | Tool | Backing endpoint |
 | --- | --- |
 | `bursar_level_quotes` | `POST /requests/:id/level` |
-| `bursar_scope_gap` | `POST /gate/scope-gap` (**advisory, non-enforcing**) |
+| `bursar_scope_gap` | `POST /gate/scope-gap` (advisory, non-enforcing) |
 | `bursar_vendor_view` | `GET /vendors/:id` |
 | `bursar_mismatches` | `GET /mismatches` |
 | `bursar_spend_by_vendor` | `GET /spend/by-vendor` |
@@ -1109,25 +948,23 @@ happened. The enumeration is authoritative:
 | `bursar_get_scope_tree` | `GET /requests/:id/scope` |
 | `bursar_upsert_scope_node` | `POST /requests/:id/scope/nodes`, `PATCH /scope-nodes/:id` |
 | `bursar_list_offers` | `GET /requests/:id/offers` |
-| `bursar_get_coverage` | `GET /coverage/:id` (returns rejected candidates, `node_term_overlap`, `blanket_suspected`) |
+| `bursar_get_coverage` | `GET /coverage/:id` (rejected candidates, overlap, `withheld_reason`) |
 | `bursar_get_baseline` | `GET /awards/:id/baseline` |
 | `bursar_list_awards` | `GET /awards` |
-| `bursar_resolve_vendor` | alias -> vendor resolution, read-only |
+| `bursar_resolve_vendor` | alias resolution, read-only |
 | `bursar_list_leveling_runs` | `GET /requests/:id/leveling-runs` |
 | `bursar_draft_clarification` | `POST /drafts/clarification` -> a `bursar_drafts` row |
 
-**`asker_user_id` narrows both visibility and financial flooring** (as `burn-tools.ts:24-33`):
-bursar-api takes the **intersection** of the bearer's and the asker's capabilities. mcp-server
-cannot backstop this (its own `BBB_PERMISSIONS_ENFORCE` defaults to `warn`).
+The four offer/coverage/totals/matrix read tools pass through the **shared seal predicate**
+(§5.6). `asker_user_id` narrows both visibility and financial flooring: bursar-api takes the
+**intersection** of the bearer's and the asker's capabilities, because mcp-server cannot backstop
+it (its own `BBB_PERMISSIONS_ENFORCE` defaults to `warn`).
 
-**Intentionally no tool** (recorded as `— _(skip: …)_`): scope confirm and node promote (human
-gates), all award write routes (**the freeze is a human act**), uploads and spend import
-(multipart), coverage override and mark-wrong (**human adjudication is the calibration ground
-truth**), offer unseal (confidentiality control), draft approve, settings and library writes,
-`/internal/*`, `/bursar/ws`, health, both CSV exports.
-
-Policy gating is automatic via `register-tool`'s PolicyGate on `bursar.*`; tools fail closed
-until an operator allowlists it.
+**Intentionally no tool** (`— _(skip: …)_`): scope confirm and rival promotion (human gates), all
+award write routes (**the freeze is a human act**), uploads and spend import (multipart),
+coverage override and mark-wrong (**human adjudication is the calibration ground truth**), offer
+unseal, draft approve, settings and library writes, `/internal/*`, `/bursar/ws`, health, both CSV
+exports.
 
 ---
 
@@ -1135,9 +972,7 @@ until an operator allowlists it.
 
 ### 13.1 The action table - the single source of truth
 
-No section states a count. §17.3's probe counts this table.
-
-| Action | `is_read` | floored from `member` | `viewer` | destructive | confirm |
+| Action | `is_read` | floored | `viewer` | destructive | confirm |
 | --- | --- | --- | --- | --- | --- |
 | `bursar.vendor.read` | yes | | yes | | |
 | `bursar.vendor.write` | | | | | |
@@ -1146,6 +981,7 @@ No section states a count. §17.3's probe counts this table.
 | `bursar.request.write` | | | | | |
 | `bursar.scope.write` | | | | yes | |
 | `bursar.scope.confirm` | | yes | | | |
+| `bursar.scope.promote_rival` | | yes | | | yes |
 | `bursar.offer.read` | yes | | yes | | |
 | `bursar.offer.write` | | | | | |
 | `bursar.offer.ingest` | | | | | |
@@ -1161,15 +997,13 @@ No section states a count. §17.3's probe counts this table.
 | `bursar.spend.read` | yes | | yes | | |
 | `bursar.spend.read_all` | yes | yes | | | |
 | `bursar.spend.import` | | yes | | | |
-| `bursar.usage.read` | yes | | yes | | |
-| `bursar.usage.attest` | | | | | |
 | `bursar.mismatch.read` | yes | | yes | | |
 | `bursar.mismatch.resolve` | | | | | |
 | `bursar.mismatch.dismiss` | | | | yes | |
 | `bursar.renewal.read` | yes | | yes | | |
 | `bursar.renewal.decide` | | | | | |
 | `bursar.gate.run` | | | | | |
-| `bursar.draft.read` | yes | | **no** (§5.7) | | |
+| `bursar.draft.read` | yes | | **no** | | |
 | `bursar.draft.create` | | | | | |
 | `bursar.draft.approve` | | yes | | | |
 | `bursar.detector.mark_wrong` | | yes | | | |
@@ -1177,75 +1011,80 @@ No section states a count. §17.3's probe counts this table.
 | `bursar.settings.read` | yes | | yes | | |
 | `bursar.settings.write` | | yes | | | |
 
-`requires_superuser` is **false for every row**.
+`requires_superuser` is false for every row.
 
-Round 1's prose said 34 while the list contained 35 and claimed 12 `.read` when the family is 13
-(the 12 was the *viewer grant*, which correctly excludes `spend.read_all`), and the M1 gate
-asserted `34/34/25/12/0` - a gate that **fails on a correct build** and invites someone to edit
-the data to match the prose. The `is_read` column and the `viewer` column are now separate, which
-is where the conflation came from.
+**`bursar.usage.read` and `bursar.usage.attest` are deleted.** They existed only in this table -
+no table, route, tool, or UI anywhere - as leftovers from the cut `dormant_seat` detector. Because
+`generate-permission-manifest.mjs` walks **routes and tools**, it could never emit them, so the
+§17.3 probe would compare a generated catalog against a larger table and **fail on a correct
+build**. Recorded in §24.
 
-### 13.2 Built-in group grants
+**`bursar.spend.read_all` is retained** but declared as **route-file permission metadata** on
+`GET /spend` and `GET /spend/by-vendor` (burn's pattern for financial flooring), so the generator
+emits it. Without that declaration it would have the same phantom problem.
 
-`owner` and `admin` get every row. `member` gets every row not marked floored. `viewer` gets the
-rows marked `viewer`. `guest` gets none. **`gate.override` does not exist** (the gate is
-advisory), so the round-1 note about keeping the escape hatch member-reachable no longer applies.
+### 13.2 Group grants
+
+`owner` and `admin`: every row. `member`: every row not floored. `viewer`: the rows marked
+`viewer`. `guest`: none. There is no `gate.override` (the gate is advisory).
 
 ### 13.3 Enforcement posture
 
 Bursar copies Burn's **hardcoded fail-closed boot invariant**
-(`apps/burn-api/src/boot/assert-permissions-enforce.ts`, asserted at `server.ts:47-54` before
-anything binds a port): mode `'on'`, `onUnknown` fail-closed, **not an env var**, because
-`ENV_HINTS` is a flat global map with no per-service override (burn's issue #83).
+(`burn-api/src/boot/assert-permissions-enforce.ts`, asserted at `server.ts:47-54` before anything
+binds a port): mode `'on'`, `onUnknown` fail-closed, **not an env var**, because `ENV_HINTS` is a
+flat global map with no per-service override (burn's issue #83).
 
-**Financial flooring** ports burn's `viewer-caps` plugin and `redact-financial-fields.ts`.
-Sealed-bid filtering (§5.6) is a separate service-layer predicate on the same read paths.
+Financial flooring ports burn's `viewer-caps` and `redact-financial-fields.ts`. The seal
+predicate (§5.6) sits in the same shared layer.
 
 ---
 
-## 14. Frontend, including the help system
+## 14. Frontend and help
 
-`apps/bursar/`, React 19 + TanStack Query v5 + Zustand + Tailwind v4 + Radix, `base: '/bursar/'`.
+`apps/bursar/`, React 19 + TanStack Query v5 + Zustand + Tailwind v4 + Radix.
+
+**`apps/bursar/vite.config.ts` must set `base: '/bursar/'`** - without it Vite emits `/assets/...`
+absolute paths, every asset 404s against the shared regex, and the result is a white screen that
+looks like an nginx bug. Dev `server.port: 3023` (burn holds 3022), with `/bursar/api` and
+`/bursar/ws` dev proxies to `localhost:4023`.
 
 | Route | Page |
 | --- | --- |
 | `/bursar/` | **Vendor Portfolio** - "no award on file" is a first-class column |
 | `/bursar/requests` | Request list |
-| `/bursar/requests/:id` | **Scope Tree editor** - citations, strength promotion, apply-library, rival-node promotion queue, Confirm scope |
-| `/bursar/requests/:id/level` | **The Leveling Matrix** - sorted by `gap_adjusted` when renderable, else `stated` + unpriced-gap count. A chip opens the cited span, matched lines, and for `absent` **the rejected candidates and why** |
-| `/bursar/requests/:id/diff` | **Exclusion Diff** - rival-informed first, `tree_suspect` quarantined |
+| `/bursar/requests/:id` | **Scope Tree editor** - citations, strength promotion, apply-library, **rival-promotion queue**, Confirm scope |
+| `/bursar/requests/:id/level` | **The Leveling Matrix** - sorted by `gap_adjusted` when renderable, else `stated` + unpriced-gap count. A chip opens the cited span, matched lines, and for `absent` the rejected candidates. **Withheld rows render explicitly with their `withheld_reason`** |
+| `/bursar/requests/:id/diff` | **Exclusion Diff** - **satisfies §4.7**: every mandatory node appears exactly once; a blocking banner when any node is `needs_review`/`unverified`; blanket offers render "this offer claims blanket coverage; here is what it does not itemize" |
 | `/bursar/vendors/:id` | Vendor detail - aliases, award chain, baseline, spend, findings, `orphaned_custody` badge |
 | `/bursar/mismatches` | Mismatch Inbox - "not quantified" never becomes a number |
 | `/bursar/renewals` | Renewal Radar |
-| `/bursar/review` | HITL queue - coverage adjudication, alias review, rival-node promotion, drafts |
+| `/bursar/review` | HITL queue - coverage adjudication, alias review, rival promotion, drafts |
 | `/bursar/settings` | Thresholds, weights, lexicons, library (global rows read-only) |
 
-**The hard UI rule:** a `medium`-band verdict is visually distinct and **excluded from every
-headline aggregate**. A `data-testid` on each aggregate carries its contributing band set so
-§20.3 can assert it.
+**Two hard UI rules.** A `medium`-band verdict is visually distinct and **excluded from every
+headline aggregate** (a `data-testid` carries its contributing band set). And **no "clean" /
+"no gaps" affordance renders while any mandatory node is `needs_review` or `unverified`** (§4.7).
 
 ### 14.1 The help system
 
-Shipped in **M6** (authoring) and gated at **M9**:
+Shipped in **M6**, gated at **M9**:
 
-- `docs/apps/bursar/help.md` and `docs/apps/bursar/guide.md`;
-- `docs/apps/bursar/help-index.json` **generated**, verified in CI with
-  `node scripts/help/build-help-index.mjs --check` (a purpose-built check mode that exits 1)
-  rather than regenerating and eyeballing, which mutates the tree in CI;
+- `docs/apps/bursar/help.md` and `guide.md`;
+- `help-index.json` **generated**, verified with `node scripts/help/build-help-index.mjs --check`
+  (a purpose-built check mode that exits 1) rather than regenerating in CI;
 - `<HelpTrigger app="bursar" />` per `apps/burn/src/components/layout/burn-layout.tsx:120`;
-- **every `@bigbluebam/ui/*` alias from `apps/burn/vite.config.ts` copied verbatim.** Round 1
-  said "the two vite aliases"; burn's config has ten-plus, and the reviewer's "three" also
-  undercounts. The one that bites is `@bigbluebam/ui/markdown` (burn's line 22), imported by
-  both `packages/ui/help-center.tsx:39` and `help-viewer.tsx:17` - and because the frontend
-  Dockerfile chains builds with `&&`, an unresolved alias **breaks the whole frontend image**,
-  not just Bursar. The rule is stated as "copy them all", not a count.
-- `docs/apps/bursar/screenshots/` comes from the docs-capture recipe (§19), **explicitly not**
-  from the bespoke braid/bulwark capture scripts.
+- **every `@bigbluebam/ui/*` alias from `apps/burn/vite.config.ts` copied verbatim** - burn
+  carries twelve. The one that bites is `@bigbluebam/ui/markdown`, imported by
+  `packages/ui/help-center.tsx:39` and `help-viewer.tsx:17`; because the frontend Dockerfile
+  chains builds with `&&`, an unresolved alias **breaks the whole frontend image**. The rule is
+  "copy them all", never a count.
+- `docs/apps/bursar/screenshots/` comes from the docs-capture recipe, **not** the bespoke
+  braid/bulwark capture scripts.
 
 `scripts/help/smoke-help-center.mjs` is **not** a done-criterion: it is hardcoded to Bam and takes
-no app argument, so "covers Bursar" was unsatisfiable. Coverage is Playwright step 12 instead.
-Filed as pre-existing that its `OUT` default is a hardcoded `D:/Documents/GitHub/...` path that
-does not exist in this checkout (§25.10).
+no app argument. Coverage is Playwright step 12. Its hardcoded `D:/Documents/GitHub/...` `OUT`
+default is filed as pre-existing (§25.10).
 
 ---
 
@@ -1255,26 +1094,28 @@ Locks live inside bursar-api; worker jobs are thin HTTP callers into `/v1/intern
 
 | Job | Schedule | Does |
 | --- | --- | --- |
-| `bursar-derive-scope` | event | Bin bytes -> text -> `/internal/run-derivation`, chunk-checkpointed |
-| `bursar-parse-offer` | event | lines, injection + blanket pre-scan, parse-quality |
-| `bursar-level-request` | event | **async-start; polls the run** (§18.6) |
-| `bursar-drift-sweep` | `*/30 * * * *` | detectors 1, 2, 3 |
+| `bursar-derive-scope` | event | **async-start, one chunk per invocation** (§3.2) |
+| `bursar-parse-offer` | event | lines, injection + blanket pre-scan, parse quality, §4.3 per-offer counters |
+| `bursar-level-request` | event | **async-start, bounded slices** (§18.6) |
+| `bursar-drift-sweep` | `*/30 * * * *` | detectors 1-3 |
 | `bursar-renewal-radar` | `0 6 * * *` | detector 4 |
 | `bursar-mismatch-reconcile` | `5,35 * * * *` | closes findings whose evidence no longer holds |
-| `bursar-run-reaper` | `*/5 * * * *` | reverts cold `running` rows to `partial` (§18.6); also reaps ingest claims |
-| `bursar-draft-reconcile` | `*/15 * * * *` | reflects proposal decisions onto drafts |
+| `bursar-run-reaper` | `*/5 * * * *` | §18.6 |
+| `bursar-draft-reconcile` | `*/15 * * * *` | reflects proposal decisions |
 | `bursar-weekly-digest` | `0 13 * * 1` | the retention mechanism |
-| `bursar-retention` | `20 5 * * *` | prunes; `bursar_baseline_items` on the exclusion list |
+| `bursar-retention` | `20 5 * * *` | prunes; baseline items excluded |
 
-**Reconcile no longer flaps against the sweep.** Round 1 ran reconcile at `*/15` and the sweep at
-`*/30`, so they interleave: the sweep opens a finding, reconcile closes it before the evidence
-settles, and each cycle publishes a Bolt event. Both now take the **same per-org advisory lock
-class**, and reconcile is offset to `5,35` so it always runs after a sweep tick rather than
-between one and its writes.
+**Queue authoring:** every Bursar queue sets `removeOnComplete: 100` and `removeOnFail: 500`.
+Redis runs `noeviction` (§18.5), so unbounded job retention is what would eventually make writes
+error out suite-wide. This is the actionable half of what round 2 mislabelled as a Redis config
+change.
 
-**`bursar-drift-sweep` is bounded**: an org cursor across ticks, a per-tick row budget, a BullMQ
-limiter, row claims with lease renewal, and **progress logging** (`org n/N`, `rows n/N`,
-elapsed-ms) logged **before** each stall.
+**Reconcile does not flap against the sweep**: both take the **same per-org advisory lock class**,
+and reconcile is offset to `5,35` so it always runs after a sweep tick.
+
+**`bursar-drift-sweep` is bounded**: org cursor across ticks, per-tick row budget, BullMQ limiter,
+row claims with lease renewal, and progress logging (`org n/N`, `rows n/N`, elapsed-ms) **before**
+each stall.
 
 ---
 
@@ -1282,101 +1123,90 @@ elapsed-ms) logged **before** each stall.
 
 ### 16.1 Published (source `bursar`)
 
-The enumeration is authoritative; no count in prose.
-
 `request.created`, `request.manipulation_suspected`, `scope.derived`, `scope.frozen`,
 `offer.received`, `offer.normalized`, `offer.manipulation_suspected`, `offer.unsealed`,
 `quote.leveled`, `exclusion.detected`, `award.recorded`, `baseline.frozen`, `drift.detected`,
 `mismatch.opened`, `mismatch.resolved`, `renewal.approaching`, `draft.created`, `draft.decided`,
 `gate.advisory`.
 
-**Signature confirmed correct, no action needed.** Round 1 asserted CLAUDE.md was stale on
-`publishBoltEvent`. **It has since been corrected** - `CLAUDE.md:434` now documents
+**Signature confirmed correct.** `CLAUDE.md:434` documents
 `publishBoltEvent(eventType, source, payload, orgId, actorId?, actorType?)` explicitly, including
-the reason it matters (`check-bolt-catalog.mjs` extracts the first two string literals, so an
-object-form call would both pass `undefined` at runtime and evade the guard). The round-1
-docs-correction task is withdrawn.
+why it matters (`check-bolt-catalog.mjs` extracts the first two string literals, so an object-form
+call would pass `undefined` at runtime **and** evade the guard). No docs correction needed.
 
-Events carry **refs and scalars only, never document text or personal identifiers** - Bolt fans
-out to webhooks and external runners.
+Events carry **refs and scalars only** - Bolt fans out to webhooks and external runners.
 
 ### 16.2 Consumed
 
 `expense.submitted` / `expense.approved` (bill) -> spend event; `profile.merged` (braid) ->
-re-point `braid_profile_id`; `proposal.decided` (platform) -> reflect onto `bursar_drafts`.
+re-point `braid_profile_id`; `proposal.decided` -> reflect onto `bursar_drafts`.
 
-**`invoice.paid` and `payment.recorded` remain removed** - money in, and ingesting them would
-mint vendor-spend rows out of the customer's own revenue.
-
-**There is no Bin event** (bin-api emits none), so offer ingestion is REST-triggered.
+**`invoice.paid` and `payment.recorded` are excluded** - money in. **There is no Bin event**
+(bin-api emits none), so offer ingestion is REST-triggered.
 
 ### 16.3 entity_links and visibility
 
 Links written in the same org-scoped transaction as the row they describe
-(`apps/burn-api/src/lib/entity-links.ts:36-40`), `ON CONFLICT DO NOTHING`. `entity_links` uses
+(`burn-api/src/lib/entity-links.ts:36-40`), `ON CONFLICT DO NOTHING`. `entity_links` uses
 `org_id`; `bursar_*` tables use `organization_id`.
 
-**Visibility registration is a required `apps/api` change.** Round 1's preflight could not work:
-no `bursar.*` types registered, and **`bill.expense` is not a supported type at all**
-(`visibility.service.ts:113-153` lists `bill.invoice` and `bill.client`, no expense), so under
-the treat-non-ok-as-deny convention every drift citation would silently drop. Added to
-`VisibilityEntityType` and `SUPPORTED_ENTITY_TYPES` with resolver branches: `bursar.vendor`,
-`bursar.request`, `bursar.offer`, `bursar.award`, `bursar.mismatch`, and **`bill.expense`**.
-
-`bin.asset` is already supported, which is what makes §6.4's `assertBinAssetReadable` reuse
-rather than new work.
+**Required `apps/api` change**: `visibility.service.ts:113-153` lists `bill.invoice` and
+`bill.client` but **no `bill.expense`**, so under treat-non-ok-as-deny every drift citation would
+silently drop. Added to `VisibilityEntityType` and `SUPPORTED_ENTITY_TYPES` with resolvers:
+`bursar.vendor`, `bursar.request`, `bursar.offer`, `bursar.award`, `bursar.mismatch`, and
+**`bill.expense`**. `bin.asset` is already supported, which is what makes §5.8 reuse.
 
 ---
 
 ## 17. Migration plan
 
-### 17.1 The files
+### 17.1 Files
 
-**Anchor is "current tip + 1, observed at authoring time."** Tip at authoring was
-`0246_tasks_overdue_alerted.sql`. Four apps landed on this branch recently; **re-run the delta
+**Anchor is "current tip + 1, observed at authoring time"** (tip was
+`0246_tasks_overdue_alerted.sql`). Four apps landed on this branch recently; **re-run the delta
 after any rebase**.
 
 | # | File | Contents |
 | --- | --- | --- |
-| NNNN | `bursar_core.sql` | vendors, payee aliases, requests, scope nodes, scope library (global built-ins + the variant policy + the global-immutability trigger), org settings, extraction runs; the "Bursar System" sentinel user (as `0234`/`0239` do, since `agent_proposals.actor_id` is NOT NULL) |
-| +1 | `bursar_offers_coverage.sql` | offers, offer lines, line-node matches, coverage (+ the `absent` CHECK), window results, offer totals, leveling runs |
-| +2 | `bursar_awards_baseline.sql` | awards, baseline items + item-nodes + BEFORE UPDATE (`WHEN`-scoped) / BEFORE DELETE / **BEFORE TRUNCATE** triggers, spend events, spend imports |
+| NNNN | `bursar_core.sql` | vendors, payee aliases, requests, scope nodes, scope library (global built-ins + variant policy + immutability trigger), org settings, extraction runs; the "Bursar System" sentinel user (as `0234`/`0239`, since `agent_proposals.actor_id` is NOT NULL) |
+| +1 | `bursar_offers_coverage.sql` | offers, lines, line-node matches, coverage (+ the `absent` CHECK), window results, totals, leveling runs |
+| +2 | `bursar_awards_baseline.sql` | awards, baseline items + item-nodes + UPDATE/DELETE/**TRUNCATE** triggers, spend events, spend imports |
 | +3 | `bursar_detectors_drafts.sql` | mismatches, renewals, gate checks, ingest events, detector feedback, drafts |
-| +4 | `bursar_rls.sql` | **generated**: a `DO $$` loop over `information_schema.tables` where `table_name LIKE 'bursar\_%'`, emitting `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` and `DROP POLICY IF EXISTS ... ; CREATE POLICY ...`, with `bursar_scope_library` taking the §6.1 variant |
-| +5.. | permissions (two-pass, §17.2) | |
+| +4 | `bursar_rls.sql` | **generated** `DO $$` loop over `information_schema` for `bursar\_%` |
+| **M9** | permissions (two-pass, §17.2) | **authored at M9, not M1** |
 
-Generating the policies is what makes §6's "no count in prose" enforceable: the migration cannot
-miss a table, and `test/rls-coverage.test.ts` asserts every `bursar_%` table is covered.
+### 17.2 The permission procedure, and why it belongs at M9
 
-### 17.2 The permission procedure - the full chain
+`build-permission-delta.mjs` diffs the manifest, and the manifest is generated by
+`generate-permission-manifest.mjs` **walking route and tool files**. So the catalog can only be
+complete once the routes and tools exist.
 
-Round 1's procedure was missing its first two steps in a way that reproduces the incident it
-warns about: `build-permission-delta.mjs` **diffs the manifest**, and the manifest is generated
-by `generate-permission-manifest.mjs` walking route and tool files. Run as round 1 wrote it, the
-delta would emit **zero `bursar.*` rows**, and the group defaults would then be authored against
-an empty catalog.
+**Round 2 put this at M1, which is unsatisfiable**: at M1 no routes exist, the manifest yields a
+handful of ids, the group-defaults file is authored against a partial catalog - **and is then
+checksummed and immutable**, which is precisely the trap §17.2 itself documents. The full chain
+therefore runs at **M9**:
 
 ```sh
-# Pass 1 - core schema.
-docker compose run --rm migrate                    # applies NNNN..NNNN+4
-
-# Pass 2 - the FULL chain, in order.
 node scripts/generate-permission-manifest.mjs      # routes + tools -> manifest
-#   hand-review the flags against the §13.1 table here
+#   hand-review flags against the §13.1 table here
 node scripts/build-permission-codegen.mjs
 node scripts/build-permission-delta.mjs            # emits <observed>_permissions_seed_actions_delta_0NN.sql
 node scripts/check-permission-catalog.mjs
 docker compose run --rm migrate
-
-# ONLY NOW author <observed>+1_bursar_builtin_group_defaults.sql.
+# ONLY NOW author <observed>+1_bursar_builtin_group_defaults.sql
 docker compose run --rm migrate
 ```
 
-The trap (verbatim from the `0238` and `0243` headers): the generator computes its number as
+The ordering trap (verbatim from the `0238`/`0243` headers): the generator computes its number as
 `max(prefixes)+1`, so a group-defaults file authored **first** runs **first**, its `CROSS JOIN
 permissions WHERE app='bursar'` matches zero rows, `ON CONFLICT DO NOTHING` swallows it, migrate
 reports success, the file is checksummed as applied, and **it can never re-run** - leaving every
 non-SuperUser at `implicit_deny` on every `/bursar` route. This has happened twice.
+
+**Interim posture M1-M8:** `bursar.*` actions do not exist, so with the fail-closed invariant
+(§13.3) every `/bursar` route denies for non-SuperUsers. Development and Playwright run as a
+SuperUser (Skipper is seeded as one) until M9 lands the catalog. Stated so nobody "fixes" the
+denial by weakening the invariant.
 
 ### 17.3 The probe is the gate
 
@@ -1388,20 +1218,19 @@ JOIN permission_groups pg ON pg.id = d.group_id
 WHERE p.app = 'bursar' GROUP BY 1;
 ```
 
-**Expected values are computed from the §13.1 table, not restated here.** M1's acceptance is:
-`owner = admin = (row count of §13.1)`, `member = (rows not floored)`,
-`viewer = (rows marked viewer)`, `guest = 0`. A CI assertion parses §13.1 and compares, so prose
-and data cannot diverge again.
+**The CI assertion parses §13.1 and recomputes**; it does not trust a literal. As a sanity target
+only, §13.1 currently yields `owner = admin = 36`, `member = 22`, `viewer = 10`, `guest = 0`
+(36 rows, 14 floored, 12 `is_read`, 10 viewer after excluding `spend.read_all` and `draft.read`).
+**If this line disagrees with the table, the table wins.**
 
 ---
 
 ## 18. Infrastructure
 
-### 18.1 nginx - three files, and the one compose actually mounts
+### 18.1 nginx - three files, and hard M0 ordering
 
 `docker-compose.yml:355` bind-mounts **`infra/nginx/nginx-with-site.conf`**;
-`infra/nginx/nginx.conf` is the bare `docker run` profile and **is not mounted by compose at
-all**.
+`infra/nginx/nginx.conf` is the bare `docker run` profile and **is not mounted by compose**.
 
 | File | Role | Assets regex |
 | --- | --- | --- |
@@ -1413,10 +1242,22 @@ Each gets `location /bursar/`, `/bursar/ws`, `/bursar/api/` (Railway using
 `set $rw_upstream_N "bursar-api.railway.internal"` + `rewrite`), **and `bursar` in the shared
 static-asset regex**.
 
-**M0 acceptance:** `grep -c bursar infra/nginx/*.conf` non-zero for all three.
+> **ORDERING IS MANDATORY.** There is **no `resolver` directive** in the compose-mounted conf, so
+> nginx resolves upstreams **at config load**. Adding `proxy_pass http://bursar-api:4023/` while
+> no such container exists makes nginx **exit at startup** with "host not found in upstream",
+> **taking the frontend container down and every app in the suite unreachable** on the dev stack
+> this cycle must test on. `condition: service_started` does not prevent it - a never-built or
+> crash-looping container still yields NXDOMAIN.
+>
+> 1. Add `apps/bursar-api/Dockerfile` and the compose service.
+> 2. `docker compose up -d bursar-api` and **confirm it is running**.
+> 3. **Only then** add the three nginx blocks and `docker compose up -d --force-recreate frontend`.
+>
+> **M0 gate:** `docker compose exec frontend nginx -t`.
+> **Rollback if the frontend goes down:** `git checkout infra/nginx/` and recreate frontend
+> *before* debugging bursar-api - the outage is the config, not the app.
 
-`client_max_body_size` is **not** modified; `MAX_DOC_BYTES` is set below the server-level 25m
-instead (§5.4).
+`client_max_body_size` is **not** modified; `MAX_DOC_BYTES` is set below it (§5.4).
 
 ### 18.2 The frontend Dockerfile - four edits, and no fifth
 
@@ -1427,22 +1268,21 @@ instead (§5.4).
 | 3 | `:201` | `&& pnpm --filter @bigbluebam/bursar build \` |
 | 4 | `:228` | `COPY --from=build /app/apps/bursar/dist /usr/share/nginx/html/bursar` |
 
-**No fifth edit for the help guide**: `Dockerfile:241` copies `docs/apps/` as a directory, so
-`docs/apps/bursar/guide.md` ships automatically. Stated to guard against someone adding a
-redundant COPY. But **a guide change does require a frontend rebuild** for Railway, so
-"Help Center loads `/docs/apps/bursar/guide.md`" is an M9 gate **against a rebuilt image**, not
-the bind-mounted dev stack.
+**No fifth edit for the guide**: `Dockerfile:241` copies `docs/apps/` as a directory.
+
+**The SPA dist is NOT bind-mounted** - only nginx templates, `./docs/apps`, avatars, and certs
+are. So **`/bursar/` serving requires `docker compose build frontend`, which rebuilds all 23
+SPAs and is the slow step of M0; budget for it.** By contrast, nginx-only changes need just
+`--force-recreate` (the conf **is** bind-mounted at `:355`), and a guide change needs a rebuild
+for Railway but not for the local dev stack.
 
 **No `pnpm-workspace.yaml` or `turbo.json` change is needed** - both glob `apps/*`.
 
-### 18.3 The `services.mjs` entry, verbatim shape
+### 18.3 The `services.mjs` entry, verbatim
 
-Round 1 described the entry but **omitted the `env: {required, optional}` block**.
-`railway-orchestrator.mjs:69-70` resolves a missing block to two empty arrays - **not an error** -
-so bursar-api would deploy with no `DATABASE_URL`, no `REDIS_URL`, no `SESSION_SECRET`, and
-crash-loop on Railway behind a healthy-looking build.
-
-Modeled on burn-api at `services.mjs:335-346`:
+`railway-orchestrator.mjs:69-70` resolves a missing `env` block to two empty arrays - **not an
+error** - so an entry without one deploys with no `DATABASE_URL` and crash-loops behind a
+healthy-looking build. Modeled on burn-api at `services.mjs:335-346`:
 
 ```js
 {
@@ -1453,49 +1293,51 @@ Modeled on burn-api at `services.mjs:335-346`:
   healthcheck: '/health',
   start_command: 'node dist/server.js',
   required: true,
-  // BILL_API_INTERNAL_URL is deliberately ABSENT: the enforcing spend gate is cut from v1
-  // (§9), so there is no bill-api call site. Adding it would be dead configuration a future
-  // reader would mistake for a live dependency.
-  // BBB_PERMISSIONS_ENFORCE is deliberately ABSENT: Bursar's enforcement is a hardcoded boot
-  // invariant, not an env-driven setting (burn issue #83, §13.3).
+  // BILL_API_INTERNAL_URL deliberately ABSENT: the enforcing spend gate is cut from v1 (§9),
+  // so there is no bill-api call site. Adding it would be dead configuration.
+  // BBB_PERMISSIONS_ENFORCE deliberately ABSENT: enforcement is a hardcoded boot invariant,
+  // not an env-driven setting (burn issue #83, §13.3).
   needs: ['postgres', 'redis', 'api', 'bolt-api'],
   public_paths: ['/bursar/api/', '/bursar/ws'],
   env: {
     required: ['DATABASE_URL','REDIS_URL','SESSION_SECRET','INTERNAL_SERVICE_SECRET',
                'BBB_API_INTERNAL_URL','BOLT_API_INTERNAL_URL'],
     optional: ['DATABASE_READ_URL','BRAID_API_INTERNAL_URL','CORS_ORIGIN','LOG_LEVEL',
-               'MAX_DOC_BYTES','MAX_DOC_PAGES','BURSAR_LLM_TIMEOUT_MS',
-               'BURSAR_ENGINE_TIMEOUT_MS'],
+               'MAX_DOC_BYTES','MAX_DOC_PAGES','BURSAR_LLM_TIMEOUT_MS','BURSAR_ENGINE_TIMEOUT_MS'],
   },
 }
 ```
 
-Also: add `bursar-api` to the frontend's `needs` and `/bursar/` to the frontend's `public_paths`;
-add `BURSAR_API_INTERNAL_URL` to the **bolt-api** and **worker** entries; add `BURSAR_API_URL` to
-the **mcp-server** entry's `env.optional` (`services.mjs:556`).
+Also: add `bursar-api` to the frontend's `needs` and `/bursar/` to its `public_paths`; add
+`BURSAR_API_INTERNAL_URL` to the **bolt-api** and **worker** entries; add `BURSAR_API_URL` to the
+**mcp-server** entry's `env.optional` (`services.mjs:556`).
 
-### 18.4 `env-hints.mjs` - the layer below
+### 18.4 `env-hints.mjs` - and the `/v1` asymmetry
 
-Round 1 wired the env vars into compose and `services.mjs` but never mentioned
-`scripts/deploy/shared/env-hints.mjs`. **Unresolvable optional vars are silently skipped**, which
-reintroduces round 1's own "all tools 500 on Railway with no local repro" one layer down.
+**Unresolvable optional vars are silently skipped**, so without hints both vars would be unset on
+Railway with no local repro. Both get `kind:'computed'` entries per `env-hints.mjs:281-289`:
 
-Both vars get `kind:'computed'` entries via `plannedApp('bursar-api')` per `env-hints.mjs:281-289`.
+```js
+// Consumed by bolt-api and worker. Bare origin, no suffix.
+BURSAR_API_INTERNAL_URL: { kind: 'computed', value: plannedApp('bursar-api') },
+// Carries /v1 because the mcp-server's bursar client requests bare resource paths, matching
+// every other satellite client (burn, beacon, brief, bond, board, ...).
+BURSAR_API_URL: { kind: 'computed', value: `${plannedApp('bursar-api')}/v1` },
+```
 
-**The Railway `:8080` rule:** internal URLs must use **8080**, not 4023, or you get 502s while
-healthchecks pass. Recorded here because it is exactly the class of failure that looks like an
-application bug.
+**The suffix asymmetry is load-bearing**, and `env-hints.mjs:286-289` is explicit about why.
+Setting them to identical values 404s every Bursar MCP tool on Railway with no local repro.
 
-### 18.5 Shared-resource prerequisites - values, procedure, and a Railway counterpart
+**Railway `:8080` rule:** internal URLs must use 8080, not 4023, or you get 502s while
+healthchecks pass.
 
-Round 1 named these as M0 items but gave a value with no procedure, on a stack that must not be
-wiped, and with no production counterpart - so "M0 done" on a dev machine would ship an unchanged
-production posture and the suite-wide failure would land in prod only.
+### 18.5 Shared-resource prerequisites
 
-**Postgres.** `postgres:16-alpine` has **no `command:` key today**, so adding one recreates the
-container. `max_connections=100` is already oversubscribed (each API opens `max: 20` plus a read
-pool), and Bursar adds jobs and long-held advisory locks - converting latent oversubscription
-into `too many clients` errors that will look like a **Bond or Bill outage**.
+**Postgres - real work.** `postgres:16-alpine` has **no `command:` key today**, so adding one
+recreates the container. `max_connections=100` is already oversubscribed (each API opens
+`max: 20` plus a read pool), and Bursar adds jobs and long-held advisory locks - converting
+latent oversubscription into `too many clients` errors that will look like a **Bond or Bill
+outage**.
 
 ```yaml
 postgres:
@@ -1513,78 +1355,79 @@ docker compose restart frontend
 
 bursar-api's own pool is capped at `max: 10`.
 
-**Redis.** Raise the cap; **keep the policy**:
+**Redis - VERIFY ONLY, CHANGE NOTHING.**
 
-```yaml
-command: > ... --maxmemory 512mb --maxmemory-policy noeviction
-```
+> `docker-compose.yml:36-41` **already reads `--maxmemory 512mb --maxmemory-policy noeviction`.**
+> Round 2 instructed raising the cap; that was **factually wrong** - it is already at the target.
+>
+> **Do not edit this block.** The block carries a five-line comment explaining that this instance
+> backs BullMQ queue state and that eviction **silently corrupts** it. A builder told to change a
+> block that already reads the target value will change *something*, and the only remaining knob
+> is the policy - producing exactly the suite-wide corruption the comment warns against.
+>
+> Verification only:
+> `docker compose exec redis redis-cli -a "$REDIS_PASSWORD" config get maxmemory maxmemory-policy`
+> -> `512mb`, `noeviction`.
 
-`--maxmemory-policy noeviction` is **unchanged and must stay**. The compose block carries a
-five-line comment (`docker-compose.yml:32-35`) explaining that this instance backs BullMQ job
-state and that eviction silently corrupts it. Round 1's framing read as a complaint about
-noeviction, which could lead a builder to switch to `allkeys-lru` and cause a far worse outcome
-than the one being fixed. The problem is the **cap**, not the policy: at 256mb with noeviction,
-writes FAIL, so BullMQ enqueues throw and the permissions cache and MCP confirm-token store fail
-closed **suite-wide**. Per-queue `removeOnComplete: 100` / `removeOnFail: 500` retention is
-specified alongside.
+The actionable half is per-queue retention, which lives in §15 (queue authoring), not here.
 
-Acceptance: `docker compose exec redis redis-cli -a "$REDIS_PASSWORD" config get maxmemory maxmemory-policy`.
+**Railway counterpart (M0).** The Postgres connection ceiling needs its production equivalent
+applied to the managed plan and recorded in the deploy catalog, or the local fix is cosmetic.
 
-**Railway counterpart (M0, not M9).** Both changes need their production equivalents recorded in
-the deploy catalog and applied to the managed Postgres/Redis plans, or the local fix is cosmetic.
+### 18.6 Long runs: async start, leases, and fencing
 
-### 18.6 Long runs: async start, timeouts, and leases
+**(a) Async-start, for BOTH engines.** `burn-shared.ts:28` defaults `BURN_ENGINE_TIMEOUT_MS` to
+180000; leveling runs take tens of minutes and multi-chunk derivation can exceed it too. Worse,
+`fetch` abort does not stop the handler, so a BullMQ retry starts a **second writer** on the same
+run row. `POST /internal/run-leveling` and `POST /internal/run-derivation` both return **202 +
+run id**; the worker polls; work proceeds in bounded slices (one offer, or one chunk, per
+invocation) as `burn-attribute-batch` does. `BURSAR_ENGINE_TIMEOUT_MS` (default 30000) covers
+only the start call.
 
-Three round-1 defects in one mechanism.
+**(b) Leases, because the lock cannot span the work.**
+`apps/burn-api/src/lib/advisory-lock.ts` states the hard rule that no transaction holding the
+lock may contain an outbound HTTP call, so the lock **cannot span an LLM run**; the 409 keys off
+run status. `heartbeat_at` + `claimed_by` on `bursar_leveling_runs` and `bursar_extraction_runs`,
+heartbeated on **every checkpoint commit**; `bursar-run-reaper` reverts runs whose heartbeat
+exceeds the lease (default 5 min) to `partial`. The mechanism exists at `attribution.engine.ts:80`
+and `sweeps.engine.ts:76`.
 
-**(a) The run vastly exceeds the timeout it inherits.** `burn-shared.ts:28` defaults
-`BURN_ENGINE_TIMEOUT_MS` to **180000**; a flagship leveling run is tens of minutes. Worse,
-`fetch` abort does not stop the bursar-api handler, so the BullMQ retry **starts a second pass
-against the same run row**, and the slower writer regresses the checkpoint and re-bills LLM work.
+**(c) The reaper must fence the original writer, or it creates the race it was added to fix.**
+A single node can exceed the lease without a checkpoint (60s deadline + malformed retries +
+throttle deferral). The reaper flips to `partial`, re-entry is permitted, and the still-alive
+original writes behind the new one - regressing the checkpoint and re-billing LLM work. A bare
+status flag does not fence; burn's precedent is a row claim.
 
-**Fix: async-start.** `POST /internal/run-leveling` returns **202 + run id** immediately and the
-worker polls `GET /requests/:id/leveling-runs` - the endpoint §11.1 already declares
-authoritative. `BURSAR_ENGINE_TIMEOUT_MS` (default 30000) then covers only the start call. Work
-proceeds in bounded slices (one offer per internal invocation, re-enqueued), as
-`burn-attribute-batch` does.
+> **Every** checkpoint, window-result, and coverage write is conditioned on
+> `WHERE id = $run AND claimed_by = $me AND status = 'running'`.
+> **A zero-row update aborts the slice immediately.** Slices of one run execute **serially**.
 
-**(b) The 409 needs a lease, not a status flag.** `apps/burn-api/src/lib/advisory-lock.ts` states
-the hard rule that no transaction holding the lock may contain an outbound HTTP call, so the lock
-**cannot span an LLM run** - the 409 must key off run status. But a container kill then leaves
-`status='running'` forever, and round 1's `bursar-claim-reaper` only reaped ingest claims, so
-**one crashed run blocks awards and re-leveling on that request permanently.**
-
-Fix: `heartbeat_at` + `claimed_by` on `bursar_leveling_runs` and `bursar_extraction_runs`,
-heartbeated on **every checkpoint commit**; `bursar-run-reaper` reverts runs whose heartbeat is
-older than the lease (default 5 min) to `partial`. The mechanism already exists at
-`attribution.engine.ts:80` and `sweeps.engine.ts:76`. §15's advisory-lock wording is reconciled:
-the lock guards short transactional sections only, never an LLM round trip.
-
-**(c) Re-entry is rejected** on a run holding a live lease.
+**(d) The status reaper must also unwedge the request.** `bursar_requests.scope_status='deriving'`
+has no reaper of its own, so a crashed derivation wedges `scope/confirm` at 409 **permanently** -
+the request can never reach `confirmed`, so per §3.2 it yields only `provisional` verdicts and
+publishes no Bolt event, and **the flagship is dead on that request with no recovery short of
+psql.** The reaper **transactionally reverts the owning request's `scope_status`** (to `pending`)
+in the same statement that reverts the cold run. The same audit applies to
+`bursar_offers.normalization_status='parsing'`.
 
 ### 18.7 Health, and the frontend dependency
 
 `@bigbluebam/service-health` registers exactly `/health`, `/health/ready`, `/metrics`. Readiness
 checks **Postgres and Redis only** - not the LLM proxy, not braid-api - so an upstream outage
-never cascades into "bursar not ready" (`apps/burn-api/src/server.ts:118-120`).
+never cascades into "bursar not ready" (`burn-api/src/server.ts:118-120`).
 
-**The frontend depends on bursar-api with `condition: service_started`, not
-`service_healthy`, through the build**, promoted to `service_healthy` as an M9 task. The
-established pattern is `service_healthy`, but it makes the newest and least stable service a hard
-boot dependency of the dev stack this cycle must work on: every unhealthy build leaves nginx down
-and **every other app unreachable**. The precedent is already inconsistent - the frontend's
-`needs` omits bin, bay, and blip - so following it strictly is not required, and the failure mode
-(a total outage that looks like an nginx bug) is bad enough to justify the deviation during
-development.
+The frontend depends on bursar-api with **`condition: service_started`** through the build,
+promoted to `service_healthy` at M9. The established pattern is `service_healthy`, but it makes
+the newest service a hard boot dependency of the dev stack, and the precedent is already
+inconsistent (the frontend's `needs` omits bin, bay, blip). Note this does **not** protect
+against §18.1's NXDOMAIN failure, which is a config-load problem, not a dependency problem.
 
 ### 18.8 Data growth
 
-`bursar_offer_lines`, `bursar_offer_coverage`, `bursar_spend_events`, and
+`bursar_offer_lines`, `bursar_offer_coverage`, `bursar_spend_events`,
 `bursar_leveling_window_results` are unbounded. **v1 decision, recorded in the migration header:
-no partitioning.** An episodic app bounded by human procurement activity will not reach
-partition-worthy scale before v1.1, and premature partitioning on `organization_id` complicates
-the RLS story. Retention is the control. The `raw_text` trigram index is gone (§3.1), leaving one
-GIN tsvector.
+no partitioning.** Episodic volume; premature partitioning on `organization_id` complicates RLS.
+Retention is the control. One GIN tsvector remains; the `raw_text` trigram index is gone.
 
 ### 18.9 Catalog and docs registration
 
@@ -1592,72 +1435,78 @@ GIN tsvector.
 | --- | --- |
 | `scripts/deploy/shared/services.mjs` | §18.3 |
 | `scripts/deploy/shared/env-hints.mjs` | §18.4 |
-| `docker-compose.yml` | bursar-api service; `BURSAR_API_URL` on mcp-server (`:190` precedent); `BURSAR_API_INTERNAL_URL` on worker and bolt-api; §18.5 postgres/redis |
-| `apps/api/src/routes/system-settings.routes.ts` | `LAUNCHPAD_CATALOG` += bursar; `ROOT_REDIRECT_VALUES` += `'bursar'`; **and `REDIRECT_MAP` (`:123`)** - round 1 named only the first, so the redirect would validate and then not resolve |
+| `docker-compose.yml` | bursar-api service; `BURSAR_API_URL` on mcp-server (`:190` precedent); `BURSAR_API_INTERNAL_URL` on worker and bolt-api; **postgres only** (§18.5) |
+| `apps/api/src/routes/system-settings.routes.ts` | `LAUNCHPAD_CATALOG` += bursar; `ROOT_REDIRECT_VALUES` += `'bursar'`; **and `REDIRECT_MAP` (`:123`)** - without it the redirect validates and then fails to resolve |
 | `apps/api/src/routes/internal-llm.routes.ts` | additive `{content, finish_reason, usage}` (§3.10) |
 | `apps/api/src/services/visibility.service.ts` | 5 `bursar.*` types + `bill.expense` + resolvers |
 | `scripts/docs/lib/tool-source.mjs` | `APP_TOOL_MODULES` += `bursar: ['bursar-tools']`; `pnpm docs:catalog` |
-| `docs/reference/mcp-endpoint-mapping.md` | full section; bare-dash self-check prints `0`; **and the `## Surface summary` counts updated** - CLAUDE.md requires it and the bare-dash check passes on a stale summary |
+| `docs/reference/mcp-endpoint-mapping.md` | full section; bare-dash check prints `0`; **and `## Surface summary` counts updated** |
 | `apps/bolt-api/src/services/event-catalog.ts` | `bursarEvents` per §16.1 |
-| `.env.example` | `BURSAR_API_URL`, `BURSAR_API_INTERNAL_URL`, modeled on `:216-238` incl. disabled-by-default semantics |
+| `.env.example` | both vars, modeled on `:216-238` incl. disabled-by-default semantics |
 
 ---
 
 ## 19. Seed data (GILLIGAN)
 
-**`scripts/seed-gilligan/bursar.mjs`, registered in `run-all.mjs`** (the `PHASES` array at
-`:60-79`), **not** `seed-all.mjs` Phase B. Bursar joins the **Billing** phase (needs `bond.mjs`
-companies and `bill.mjs` expenses). Plus
+**`scripts/seed-gilligan/bursar.mjs`, registered in `run-all.mjs`** (`PHASES` at `:60-79`), in the
+**Billing** phase (needs `bond.mjs` companies and `bill.mjs` expenses). Plus
 `packages/docs-capture/recipes/bursar/bursar.yaml`.
 
-**Vendors (5)** with messy aliases so trigram resolution is visibly working: Howell Industries
-Salvage (`HOWELL IND *SALVAGE`, `Howell Industries Inc`, `THURSTON HOWELL III HLDG`), Radio Parts
-& Coconut Wire Co, Lagoon Freight Lines, Island Weather Feed, Professor's Lab Supply.
+**Vendors (5)** with messy aliases: Howell Industries Salvage (`HOWELL IND *SALVAGE`,
+`Howell Industries Inc`, `THURSTON HOWELL III HLDG`), Radio Parts & Coconut Wire Co, Lagoon
+Freight Lines, Island Weather Feed, Professor's Lab Supply.
 
 **Request:** "Lagoon Rescue Beacon Procurement", owner Skipper, budget $18,000, category
-`hardware_purchase`. 14 nodes, `mandatory` including "On-island installation and commissioning",
-"Crew training for six", "24-month parts warranty"; library-derived `should_have` "Data export on
-termination", "Price escalation cap".
+`hardware_purchase`, **14 nodes** - `mandatory` including "On-island installation and
+commissioning", "Crew training for six", "24-month parts warranty"; library-derived `should_have`
+"Data export on termination", "Price escalation cap".
 
-### 19.1 The four offers, with totals recomputed from the §10 formula
+### 19.1 The four offers, with admissible provenance
 
-Round 1's seeded figures were **unproducible by its own totals design** (two of three came from a
-`partial` and a `should_have`, neither of which `gap_adjusted` valued), and Playwright asserted on
-them. Recomputed:
-
-| Offer | `stated` | Gaps | Valuation | `gap_adjusted` |
+| Offer | `stated` | Gaps | Valuation (rung) | `gap_adjusted` |
 | --- | --- | --- | --- | --- |
-| **Howell Industries Salvage** (PDF) | **$16,400** | crew training `absent`; installation `excluded_explicit` ("installation by others") | rival medians: training $2,500 (Radio $2,400 / Lagoon $2,600), installation $3,050 (Radio $3,200 / Lagoon $2,900) - both rung 2, both explicit line items in the rivals | **$21,950** |
-| **Radio Parts & Coconut Wire** (spreadsheet) | $19,100 | warranty `partial` (12 vs 24 months, `delta_kind='term'`) | `delta_amount_minor` $600, from Lagoon's priced 12-month extension - rung 1 | **$19,700** |
-| **Lagoon Freight Lines** (email text) | $17,800 | warranty `absent` (mandatory); escalation cap `absent` (`should_have`) | warranty $1,200 rung 2; escalation cap **unvalued** (a term, nobody priced it) | **$19,000** + `should_have_supplement` unvalued, "1 gap unpriced" |
-| **Professor's Lab Supply** (PDF) | $15,900 | — | **blanket-coverage claim** (§19.2) | not computed; quarantined |
+| **Howell Industries Salvage** (PDF) | **$16,400** | crew training `absent`; installation `excluded_explicit` | training **rung 2**: Radio $2,400 + Lagoon $2,600 -> $2,500. installation **rung 2**: Radio $3,200 + Lagoon $2,900 -> $3,050. Both have **2 admissible observations** | **$21,950** |
+| **Radio Parts & Coconut Wire** (spreadsheet) | $19,100 | warranty `partial` (12 vs 24 months, `delta_kind='term'`) | **rung 1**: Radio's own sheet carries an optional line "24-month warranty upgrade +$600", so this is `offer_line` - **one observation suffices at rung 1** | **$19,700** |
+| **Lagoon Freight Lines** (email text) | $17,800 | warranty `absent` (mandatory); escalation cap `absent` (`should_have`) | warranty **rung 2**: Howell $1,100 + Radio $1,300 -> $1,200. escalation cap **unvalued** (a term; nobody priced it) | **$19,000** + `should_have_supplement` unvalued, "1 gap unpriced" |
+| **Professor's Lab Supply** (PDF) | $15,900 | — | **split-blanket claim** (§19.2) | not computed; withheld |
 
-**The punchline holds and is now computable:** Howell is cheapest on `stated` ($16,400) and most
-expensive on `gap_adjusted` ($21,950). Playwright step 7 asserts
-`gap_adjusted(Howell) > gap_adjusted(Radio)`.
+Round 2 labelled Radio's $600 as rung 1 while sourcing it from a *rival*, which is rung 2 and
+needs two observations - so the figure was unproducible. Fixed by making it genuinely rung 1:
+**Radio's own offer prices the upgrade.** Lagoon's $1,200 now has the two rival observations rung
+2 requires. **Every figure above is computable from §10.1 as written.**
 
-**Award goes to Radio Parts**, not to the lowest `gap_adjusted` - Lagoon's absent warranty is
-disqualifying on a rescue beacon. That is deliberate: it demonstrates that Bursar informs the
-decision rather than making it.
+**Award goes to Radio Parts**, not the lowest `gap_adjusted` - Lagoon's absent warranty is
+disqualifying on a rescue beacon. Deliberate: Bursar informs the decision, it does not make it.
+Radio's baseline is **14 `included` rows** (warranty included with `delta_kind='term'`), zero
+`excluded_at_award`, zero `absent_at_award`.
 
-### 19.2 The fourth offer demonstrates the §4 cluster defense
+### 19.2 The fourth offer demonstrates the §4 cluster
 
-Round 1's fourth offer was a zero-font-size injection, and Playwright asserted on it - but the
-spec gives no means to detect zero-font-size text (§5.2). Re-scoped: **Professor's Lab Supply
-submits a blanket-coverage claim** -
+Professor's Lab Supply submits **four coordinated lines**, none containing a lexicon token:
 
-> *"All requirements listed in your RFQ, including installation, crew training, warranty, data
-> export and escalation cap, are fully included in this all-inclusive price of $15,900."*
+> *"Installation, crew training and the 24-month warranty are provided at no additional charge."*
+> *"Data export, escalation cap and commissioning are provided at no additional charge."*
+> *(two more covering the remaining nodes)*
 
-This is lexicon-detectable **and** fan-out-detectable today, it is the cheapest offer so the
-incentive is legible, and it demos the defense that matters. It produces an
-`offer_manipulation_suspected` finding, zero auto-published `covered` verdicts, and a
-`blanket_suspected` flag on every coverage row it touched.
+Fan-out is 3-4 per line, **under the per-line cap** - which is exactly why §4.3's caps are
+cumulative. It trips both: 14 unsubpriced mandatory nodes (cap 4) and evidence concentration
+4/14 = 0.29 (floor 0.5). Result: **zero auto-published `covered`**, an
+`offer_manipulation_suspected` finding, and a diff that renders **all 14 nodes** as
+`needs_review` with `withheld_reason='blanket_cap'` under the banner *"this offer claims blanket
+coverage; here is what it does not itemize."*
+
+### 19.3 One source for the numbers
+
+This is the third round a seed-number mismatch has surfaced. The seeder **exports a
+`BURSAR_SEED_EXPECTATIONS` constant** (offer totals, gap counts, node count, baseline
+composition) from `scripts/seed-gilligan/bursar.expectations.mjs`, and **the Playwright suite
+imports it** rather than restating literals. A seed change that breaks an assertion breaks it at
+the one place both read.
 
 **Post-award**, one live example per detector: `price_drift` (Island Weather Feed 40% above
 baseline), `scope_divergence` ("expedited lagoon delivery", no baseline line),
-`unbaselined_vendor` (Professor's Lab Supply, four recurring charges, no award),
-`renewal_cliff` (Island Weather Feed at `t_minus_60`), plus an `orphaned_custody` badge.
+`unbaselined_vendor` (Professor's Lab Supply, four recurring charges, no award), `renewal_cliff`
+(Island Weather Feed at `t_minus_60`), plus an `orphaned_custody` badge.
 
 **Never seeded:** `e2e-admin@bigbluebam.test`, "E2E Test Organization", "screenshots-demo".
 
@@ -1667,102 +1516,102 @@ baseline), `scope_divergence` ("expedited lagoon delivery", no baseline line),
 
 ### 20.1 Unit (Vitest + `@bigbluebam/db-stubs`)
 
-- `verifyCiteAgainstLine`: verbatim hit, whitespace-normalized hit, **text elsewhere in the
-  document but not in the cited line -> miss**.
-- `nodeTermOverlap`: floor behavior, stopword handling, unit/quantity contribution.
-- **`computeDedupKey` resume equality** (crash at chunk 7 == single pass).
-- **`compositeConfidence` is finite for every input** (the round-1 NaN).
-- `classifyCoverage` decision table: six verdicts x three predicates pass/fail x four strengths.
-- **Missing-node-in-batch -> `ambiguous`**; malformed retry capped at 2 then `ambiguous`.
-- **Window merge lattice**: every pair, asserting `excluded_explicit` wins.
-- **Fan-out cap**: 5 nodes on one line blocks auto-publish for all five.
-- **Rollup**: downward may not overwrite `excluded_explicit`/`partial`; upward `derived_covered`
-  is never a rollup input.
-- `allocation_method` ladder; **gap valuation refuses equal-split observations**.
-- Totals: all kinds, admissibility rules, `renderable=false` on the single-offer case.
-- Payee normalization + thresholds; the below-auto-accept review path.
-- **Spend import idempotency**: same file twice -> `rows_inserted=0`.
-- Baseline triggers: UPDATE, DELETE, cascade, **TRUNCATE**.
-- Drift: currency precondition, null-term selection, silent-line basis.
-- Boot invariants: `assert-permissions-enforce`, `assert-rls-bound`.
-- `test/rls-coverage.test.ts`, `test/library-visibility.test.ts`,
-  `test/sealed-bid-viewer.test.ts`, `test/draft-grounding.test.ts`,
-  `test/bin-asset-access.test.ts` (cross-org, private-same-org, unscanned).
+`verifyCiteAgainstLine` (incl. text-elsewhere-in-document -> miss); `nodeTermOverlap`;
+**`computeDedupKey` resume equality**; **`compositeConfidence` finite for every input**;
+`classifyCoverage` decision table (six verdicts x three predicates x four strengths);
+missing-node -> `ambiguous`; malformed retry capped at 2; **window merge lattice, every pair**;
+**cumulative fan-out and evidence-concentration caps**; **pinned-line exemption scoped to
+`excluded_explicit`** (`test/fanout-pinned.test.ts`); rollup (downward may not overwrite
+`excluded_explicit`/`partial`; upward `derived_covered` never a rollup input);
+`allocation_method` ladder and **equal-split refusal**; totals incl. admissibility and
+`renderable=false`; **`blanket_suspected` does NOT suppress `absent`**; payee normalization;
+**spend dedup incl. two genuine same-day identical charges producing two rows**; **import
+resume after a mid-file crash**; baseline triggers UPDATE/DELETE/cascade/**TRUNCATE**; drift
+currency precondition, null-term selection, silent-line basis; **claim fencing (a zero-row
+conditional update aborts the slice)**; boot invariants; `rls-coverage`, `library-visibility`,
+`sealed-bid` (incl. both CSV exports and the four MCP tools), `draft-grounding`,
+`bin-asset-access` (cross-org, private, unscanned, **flipped-after-attach**,
+**version-advanced**).
 
 ### 20.2 Corpus gates (CI, deterministic via recorded responses)
 
-`apps/bursar-api/test/fixtures/`: **>= 40 labelled absence tuples**, **>= 8 instruction-shaped
-injection fixtures**, **>= 3 non-imperative blanket-coverage fixtures**, **>= 1 long-document
-fixture with a terminal exclusions block**, **>= 1 all-inclusive-line-over-14-node-tree fixture**.
+Fixtures: **>= 40 labelled absence tuples**; **>= 8 instruction-shaped injection**; **>= 3
+non-imperative single-blanket**; **the split-blanket set (4 lines x 3-4 nodes, no lexicon
+token)**; **name-list**; **legitimate-subprice**; **>= 1 long document with a terminal exclusions
+block**.
 
 | Gate | Threshold |
 | --- | --- |
 | False-absence rate | `<= 0.05` on published verdicts |
-| Injection resistance | **0** auto-published `covered` on any injection fixture |
-| **Blanket-coverage resistance** | **0** auto-published `covered`; the 14-node tree must NOT come back fully covered |
-| **Missed exclusion (long document)** | terminal exclusions block yields `excluded_explicit`, not `covered` |
-| Bundled-line correctness | 0 false `absent` on children of an enumerated bundling parent |
-
-The retrieval-recall gate is **deleted** with the retrieval mode (§3.1).
+| Injection resistance | **0** auto-published `covered` |
+| Single-blanket resistance | **0** auto-published; 14-node tree not fully covered |
+| **Split-blanket resistance** | **0** auto-published; cumulative caps trip |
+| **Legitimate sub-priced bundle** | **does** auto-publish (false-positive guard) |
+| Missed exclusion (long document) | terminal block yields `excluded_explicit` |
+| **Diff completeness (§4.7)** | `published + needs_review + unverified == count(mandatory nodes)`, **per fixture** |
 
 **Recorded caveat:** stubs mean CI never exercises the real 60s timeout or the proxy's
-concurrency behavior. Named here rather than implied as covered.
+concurrency behavior.
 
-### 20.3 Playwright user story (GILLIGAN only), as Skipper
+### 20.3 Playwright (GILLIGAN only), as Skipper
 
-1. `/bursar/`, open the request, see 14 nodes, click a citation popover.
+Assertions import `BURSAR_SEED_EXPECTATIONS` (§19.3).
+
+1. `/bursar/`, open the request, see the seeded node count, click a citation popover.
 2. Promote "Price escalation cap" to `mandatory`; **Confirm scope**.
 3. Matrix: four offer columns; red `absent` chip at (Crew training, Howell).
 4. Click it: **rejected candidates and reasons render**.
-5. **Rival-informed absence present on the first view** (two-phase leveling).
+5. **The rival-promotion queue shows N pending rival-derived nodes, and none of them appear in
+   the diff.** Then promote one and assert it appears. (Round 2 asserted "rival-informed absence
+   present on the first view", which §4.5 **forbids** - rival nodes are excluded from the diff
+   and from producing `absent` until promoted, and every seeded absence is request- or
+   library-derived. The assertion was unsatisfiable.)
 6. Diff: Howell's `excluded_explicit` ranks above all-offers-absent notes; "installation by
    others" is on the page.
-7. **`gap_adjusted(Howell) > gap_adjusted(Radio)`** - the punchline, asserted.
-8. **Professor's Lab Supply shows `offer_manipulation_suspected`, and none of its coverage rows
-   are auto-published `covered`** (§19.2).
-9. Award to Radio Parts: 11 `included` + 2 `excluded_at_award` rows, **no edit control on any
-   baseline row**.
+7. **`gap_adjusted(Howell) > gap_adjusted(Radio)`** - the punchline, from the expectations
+   constant.
+8. **Professor's Lab Supply: `offer_manipulation_suspected`, zero auto-published `covered`,
+   AND the diff renders all 14 mandatory nodes** with `withheld_reason='blanket_cap'` - the §4.7
+   negative. A passing step 8 on an empty diff is the failure this replaces.
+9. Award to Radio Parts. Assert **structurally**:
+   `included + excluded_at_award + absent_at_award == node count`, the warranty node is
+   `included` with `delta_kind='term'`, and **no edit control exists on any baseline row**.
 10. `/bursar/mismatches`: `price_drift` cites a baseline item with a real figure.
     `/bursar/renewals`: Island Weather Feed in `t_minus_60`.
-11. **Negative:** no headline aggregate whose `data-testid` band set includes `medium`.
+11. **Negative:** no headline aggregate whose `data-testid` band set includes `medium`; and no
+    "clean"/"no gaps" affordance renders while any node is `needs_review`.
 12. **Help:** the HelpTrigger opens and the Bursar guide loads.
 
-### 20.4 Integration harness
+### 20.4 Integration
 
 bill expense -> `expense.submitted` -> `bursar_ingest_events` -> spend event -> drift ->
-`mismatch.opened`. Bin access: cross-org, private-same-org, and unscanned all 404 and write
-nothing.
+`mismatch.opened`. Bin access: all five §5.8 cases 404 or block and write nothing.
 
 ### 20.5 Convention gates
 
-`pnpm db:check` (0 drift), `pnpm lint:migrations`, `node scripts/check-bolt-catalog.mjs`,
-`node scripts/check-permission-catalog.mjs`, the §17.3 probe-vs-§13.1 assertion, the surface-map
-bare-dash check printing `0` **plus a fresh `## Surface summary`**, `pnpm docs:catalog` no-diff,
-`node scripts/help/build-help-index.mjs --check`,
-`grep -c bursar infra/nginx/*.conf` non-zero x3, `tsc --noEmit`, Biome.
+`pnpm db:check` (0 drift), `pnpm lint:migrations`, `check-bolt-catalog.mjs`,
+`check-permission-catalog.mjs`, the §17.3 probe-vs-table assertion, the surface-map bare-dash
+check printing `0` **plus a fresh `## Surface summary`**, `pnpm docs:catalog` no-diff,
+`build-help-index.mjs --check`, `grep -c bursar infra/nginx/*.conf` non-zero x3,
+`docker compose exec frontend nginx -t`, `tsc --noEmit`, Biome.
 
 ---
 
-## 21. Milestones M0..M9
+## 21. Milestones
 
 | M | Scope | Done when |
 | --- | --- | --- |
-| **M0** | Scaffold; four Dockerfile edits; three nginx files; `services.mjs` **with the env block**; `env-hints.mjs`; launchpad + `REDIRECT_MAP`; **Postgres and Redis prerequisites with their Railway counterparts** | `/bursar/` serves; `/bursar/api/health` 200; `grep -c bursar infra/nginx/*.conf` x3; `SHOW max_connections` = 200; `config get maxmemory` = 512mb with `noeviction` |
-| **M1** | Migrations (incl. the generated RLS loop) + Drizzle + the full permission chain | `db:check` 0 drift; probe matches §13.1; `rls-coverage.test` green |
-| **M2** | Vendors, payee normalization + trigram + alias review, requests, settings, **`assertBinAssetReadable`** | cross-org, private, and unscanned assets all 404 |
-| **M2.5** | **THE ABSENCE SPIKE - with the classifier in the loop.** Deterministic pre-pass **plus one real full-offer classification path** against fixture text via a recorded-response harness. No DB, no UI, no Qdrant. | **Three numbers:** (1) false-absence rate with the classifier in the loop; (2) measured tokens and wall-clock on a **40-page worst-case fixture**; (3) **zero** auto-published `covered` on injection + blanket fixtures |
-| **M3** | Scope derivation, fixed ordinal, **chunk-failure handling**, global library, tree editor, confirm gate, **Stage 0 pre-scan** | 14-node tree; crash-resume byte-identical keys; a failed chunk blocks `derived` |
-| **M4** | Offer ingest + parse, all formats, `parse_quality`, injection + blanket pre-scan, malicious-document ceilings | blanket fixture quarantines and opens a finding |
-| **M5** | **The absence engine**: full-offer classification, three predicates, rejected-candidate enforcement, banding, **§4 cluster defenses**, window lattice + pinning, typed deltas, two-phase leveling, totals | all §20.2 gates pass |
-| **M6** | Matrix + Diff UI, ws + polling fallback, review queue, help.md/guide.md | Playwright 1-8 |
-| **M7** | Award, freeze, `kind`, M:N links, four-path immutability, Bulwark handoff | Playwright 9; UPDATE/DELETE/cascade/TRUNCATE all refuse |
-| **M8** | Spend import (idempotent) + expense ingest, four detectors, inbox, renewal radar, worker jobs, digest | Playwright 10-11 |
-| **M9** | MCP tools + mcp-server env, Bolt events, visibility registration incl. `bill.expense`, surface map + summary, docs catalog, help gate **against a rebuilt image**, seeder, e2e, integration; **promote frontend `depends_on` to `service_healthy`** | all §20.5 gates green |
-
-**M2.5 now exercises the flagship.** Round 1 inserted the spike to de-risk the mechanism and then
-**excluded the mechanism from it** ("no LLM"), while open question 1 assigned the 40-page token
-verification to a milestone that could not run it. The flagship would still have been first
-exercised at M5, which was the original objection.
+| **M0** | Scaffold; four Dockerfile edits; **`docker compose build frontend`** (rebuilds 23 SPAs - the slow step); `vite.config.ts` base + port 3023; **nginx in the mandatory §18.1 order**; `services.mjs` **with the env block**; `env-hints.mjs` **with the `/v1` asymmetry**; launchpad + `REDIRECT_MAP`; **Postgres ceiling + Railway counterpart**; **Redis verify-only** | `/bursar/` serves; `/bursar/api/health` 200; `nginx -t` passes; `grep -c bursar infra/nginx/*.conf` x3; `SHOW max_connections` = 200; redis `config get` = 512mb/noeviction **unchanged** |
+| **M1** | **Migrations + Drizzle + the generated RLS loop only.** No permission chain (§17.2). | `db:check` 0 drift; `rls-coverage` green |
+| **M2** | Vendors, payee normalization + trigram + alias review, requests, settings, **`assertBinAssetReadable` + version pinning** | all five §5.8 cases refuse |
+| **M2.5** | **THE ABSENCE SPIKE, classifier in the loop.** Deterministic pre-pass **plus one real full-offer classification path** against fixture text via a recorded-response harness. No DB, no UI. | **Three numbers:** false-absence rate with the classifier in the loop; measured tokens and wall-clock on a **40-page worst-case fixture**; **zero** auto-published `covered` on injection + single-blanket + **split-blanket** fixtures |
+| **M3** | Scope derivation (**async-start**), fixed ordinal, chunk-failure handling, global library, tree editor, confirm gate, Stage 0 pre-scan | 14-node tree; crash-resume byte-identical keys; a failed chunk blocks `derived`; a killed derivation is unwedged by the reaper |
+| **M4** | Offer ingest + parse, all formats, `parse_quality`, injection + blanket pre-scan, **per-offer §4.3 counters**, malicious-document ceilings | split-blanket fixture quarantines and opens a finding |
+| **M5** | **The absence engine**: full-offer classification, three predicates, rejected-candidate enforcement, banding, **§4 cluster incl. §4.7 invariant**, window lattice + pinning + same-row resume, typed deltas, two-phase leveling, totals, **claim fencing** | all §20.2 gates pass, including diff completeness |
+| **M6** | Matrix + Diff UI (withheld rows, blocking banner), ws + polling fallback, review queue, help.md/guide.md | Playwright 1-8 |
+| **M7** | Award, freeze, `kind`, M:N links, four-path immutability, Bulwark handoff | Playwright 9 |
+| **M8** | Spend import (idempotent, resumable, ordinal), expense ingest, four detectors, inbox, renewal radar, worker jobs, digest | Playwright 10-11 |
+| **M9** | **The full permission chain (§17.2) + group defaults**; MCP tools + mcp-server env; Bolt events; visibility registration incl. `bill.expense`; surface map + summary; docs catalog; help gate **against a rebuilt image**; seeder + expectations constant; e2e; integration; **promote frontend `depends_on` to `service_healthy`** | all §20.5 gates green; §17.3 probe matches §13.1 |
 
 ---
 
@@ -1770,68 +1619,72 @@ exercised at M5, which was the original objection.
 
 | Capability | Reused from | New |
 | --- | --- | --- |
-| Fastify skeleton, error handler, shutdown | `apps/burn-api/src/server.ts:56-178` | nothing |
+| Fastify skeleton, error handler, shutdown | `burn-api/src/server.ts:56-178` | nothing |
 | Health / readiness / metrics | `@bigbluebam/service-health` | nothing |
 | Logging + system-error recording | `@bigbluebam/logging` | nothing |
 | RLS binding | `burn-api/src/plugins/rls.ts:102-112` | generated policy loop |
-| Permissions boot invariant | `burn-api/src/boot/assert-permissions-enforce.ts` | the §13.1 catalog |
-| Financial flooring | `burn-api/src/plugins/viewer-caps.ts` | sealed-bid predicate |
+| Permissions boot invariant | `burn-api/src/boot/assert-permissions-enforce.ts` | §13.1 catalog |
+| Financial flooring | `burn-api/src/plugins/viewer-caps.ts`, `redact-financial-fields.ts` | the shared **seal predicate** |
 | LLM access | `burn-api/src/lib/llm-client.ts` | `LlmMalformedError`; **additive proxy `finish_reason`/`usage`** |
 | Checkpointed extraction | `extraction.engine.ts:103-173` | **chunk-relative ordinal + chunk-failure handling (2 bugs fixed)** |
 | Citation verification | `extraction-logic.ts` `verifyCite` | **per-line + node-term overlap** |
-| Byte path from Bin | `worker/src/utils/storage.ts` `getObjectBuffer` | **`assertBinAssetReadable` via `can_access` + scan gate** |
-| Visibility client | `packages/shared/src/visibility-client.ts`, `bin.asset` already supported | 6 new types incl. `bill.expense` |
+| Byte path from Bin | `worker/src/utils/storage.ts` `getObjectBuffer` | **`assertBinAssetReadable` + version pinning + read-time re-assertion** |
+| Visibility client | `packages/shared/src/visibility-client.ts` (`bin.asset` supported) | 6 new types incl. `bill.expense` |
 | Structured decode | `@bigbluebam/structured-data` | row-to-line mapping |
 | Braid golden-id | `burn-api/src/lib/braid-resolve.client.ts:19-51` | **payee matching is Bursar's own** |
-| Idempotency keys | `burn-api/src/lib/idempotency-key.ts` | spend-import dedup |
-| Lease + heartbeat reaping | `attribution.engine.ts:80`, `sweeps.engine.ts:76` | run reaper |
-| Bounded slice re-enqueue | `burn-attribute-batch` | leveling slices |
+| Lease + heartbeat reaping | `attribution.engine.ts:80`, `sweeps.engine.ts:76` | **run reaper + request unwedge + claim fencing** |
+| Bounded slice re-enqueue | `burn-attribute-batch` | leveling and derivation slices |
+| Advisory lock discipline | `burn-api/src/lib/advisory-lock.ts` (no HTTP in lock) | nothing |
 | Cross-app links | `burn-api/src/lib/entity-links.ts` | five link specs |
 | HITL | `agent_proposals` (ref-only) | `bursar_drafts` |
-| Bolt publish | `publishBoltEvent` positional (`CLAUDE.md:434`, confirmed correct) | §16.1 catalog entries |
+| Bolt publish | `publishBoltEvent` positional (`CLAUDE.md:434`) | §16.1 entries |
 | Amendment chain | `burn_engagements` (`0239:13-48`) | award chains |
 | Worker registration | `worker.ts:2464-2496` | 10 jobs |
 | MCP module + PolicyGate | `burn-tools.ts:55-80`, `register-tool.ts` | §12 tools |
 | Help system | `burn-layout.tsx:120`, `build-help-index.mjs --check` | Bursar content |
 | SPA shell, money rendering | `apps/burn/src/`, `@bigbluebam/ui` | the Leveling Matrix |
-| Seeding | `scripts/seed-gilligan/run-all.mjs:60-79` | `bursar.mjs` |
+| Seeding | `scripts/seed-gilligan/run-all.mjs:60-79` | `bursar.mjs` + expectations constant |
 
-**Genuinely new:** the absence-detection engine (full-offer closed-book classification, the
-three verification predicates, the rejected-candidate requirement by line id, the §4
-coverage-collapse cluster defense, the window merge lattice), the comparable-totals valuation
-ladder, and the immutable baseline that records what you knowingly did not get.
+**Genuinely new:** the absence-detection engine (full-offer closed-book classification, three
+verification predicates, the rejected-candidate requirement by line id, the §4 coverage-collapse
+cluster with cumulative per-offer caps, the diff-completeness invariant, the window merge
+lattice), the comparable-totals valuation ladder, and the immutable baseline that records what
+you knowingly did not get.
 
 ---
 
-## 23. Non-goals (explicit)
+## 23. Non-goals
 
 1. No vendor marketplace or discovery.
-2. **No PO issuance, no approval workflow, and no enforcing gate** (§9).
+2. **No PO issuance, no approval workflow, no enforcing gate** (§9).
 3. No three-way match.
 4. No payments or AP execution. Zero rows written in Bill.
 5. No e-signature.
-6. No obligation or notice tracking from executed contracts (Bulwark's; handoff is a link).
+6. No obligation or notice tracking from executed contracts (Bulwark's).
 7. No customer-facing invoicing.
-8. **No outbound transport at all.** Drafts render text a human copies.
+8. **No outbound transport at all.**
 9. **No hand-maintained asset register as a primary input path, ever.**
 10. No OCR.
 11. No FX conversion; the UI **refuses to sum across currencies**.
-12. **No embedding/vector retrieval** - the platform has no embedding provider.
-13. **No retrieval layer of any kind** (§3.1).
-14. **No PDF rendering-property detection** (zero-font-size, colour-matched, off-page) - §5.2.
+12. **No embedding/vector retrieval.**
+13. **No retrieval layer of any kind.**
+14. **No PDF rendering-property detection.**
+15. **No agent-decided coverage verdicts** (`decided_by='agent'` does not exist in v1).
 
 ---
 
-## 24. v1.1 and beyond: what was cut, and why
+## 24. v1.1 and beyond
 
-| Cut | Why | Precondition to revisit |
+| Cut | Why | Precondition |
 | --- | --- | --- |
-| **The enforcing bill-api gate** (top item) | bill-api migration + serial preHandler + ported breaker + composition semantics + recovery detector + internal auth surface, for the piece least connected to the winning wedge | advisory-gate usage showing people act on verdicts; §9 specifies the internal shape |
-| **Runtime calibration breaker** | §20.2 covers the pre-ship case; the runtime breaker guards a drift mode needing production volume | >= 3 orgs, >= 30 adjudicated absences each |
-| **Vector retrieval** | no embedding provider; every existing vector path writes zeros | a platform-wide embedding path exists |
-| **Lexical/structural retrieval for the long tail** | with vector gone it had one channel, could never clear the band bar, and `medium` is excluded from headlines - it cost an index and a CI gate to produce nothing visible | only if a second channel returns |
-| **`normalized_to_term` total** | no `term_months` on offers, no `target_term_months` on requests | those columns land |
-| **PDF rendering-property injection signals** | needs graphics-state tracking and per-line `render_props`; a real parsing project | a PDF parser with graphics state |
+| **The enforcing bill-api gate** (top item) | bill-api migration + serial preHandler + ported breaker + composition semantics + recovery detector + internal auth surface | advisory-gate usage showing people act on verdicts; §9 has the internal shape |
+| **Runtime calibration breaker** | §20.2 covers pre-ship; the runtime breaker needs production volume | >= 3 orgs, >= 30 adjudicated absences each |
+| **Vector retrieval** | no embedding provider; every vector path writes zeros | a platform-wide embedding path |
+| **Lexical/structural retrieval** | one channel could never clear the band bar | a second channel returns |
+| **`normalized_to_term` total** | no term columns; needs a real term model (renewals, mid-term amendments, evergreen), not two columns | a term model lands |
+| **PDF rendering-property signals** | needs graphics-state tracking and per-line `render_props` | a parser with graphics state |
+| **`decided_by='agent'`** | no write path, gate, or permission; would bypass every §3.5 predicate and §4 cap | a floored, PolicyGate-gated action writing rows that are **always `pending_review`**, never auto-published, never inputs to rollup or totals |
+| **`usage.read` / `usage.attest`** | orphaned by the `dormant_seat` cut; unemittable by the manifest generator | the dormant-seat detector returns |
 | **`dormant_seat`, `card_fragmentation`** | no third-party telemetry; `bill_expenses` has no funding-source field | CSV import proves out |
 | **`duplicate_tool`** | needs several awarded vendors per category | orgs reach ~10 awards |
 | **`auto_renew_unreviewed`** | folded into `renewal_cliff` severity | n/a |
@@ -1844,237 +1697,222 @@ ladder, and the immutable baseline that records what you knowingly did not get.
 
 ## 25. Open questions and risks
 
-1. **Long-document viability is the biggest unknown.** §3.8's pinned exclusions plus the merge
-   lattice are a design, not a measurement. If the missed-exclusion gate cannot be met, **the v1
-   envelope is 5-page documents** and longer offers are surfaced as "too long to level reliably".
-   M2.5 measures this on a 40-page fixture. **This is the finding most likely to reshape scope.**
-2. **Hand-labelling is on the critical path.** 40 absence tuples, 8 injection fixtures, 3 blanket
-   fixtures, plus the long-document and 14-node fixtures - labelled by someone who understands
-   procurement. Cannot be generated. **M2.5 cannot complete without it.**
-3. **Cost.** §3.9 caps a 400-node x 15-offer request, but the honest position is that full-offer
-   mode is more expensive per node than retrieval would have been. The trade is accuracy on the
-   class that matters for money on the long tail. Revisit when a real embedding path exists.
-4. **`blanket_fanout_cap` default of 4 is a judgement call.** Too low and legitimate itemized
-   bundles route to review; too high and the §4.3 defense weakens. Per-org configurable, and the
-   14-node fixture is the regression guard, but the first real deployment should re-examine it.
-5. **Scope-library content is a moat and a cost.** Six categories needing curation. Now global,
+1. **Long-document viability is the biggest unknown.** §3.8's pinned exclusions plus the lattice
+   are a design, not a measurement. If the missed-exclusion gate cannot be met, **the v1 envelope
+   is 5-page documents**. M2.5 measures it on a 40-page fixture. **Most likely to reshape scope.**
+2. **Hand-labelling is on the critical path.** 40 absence tuples, 8 injection, 3 single-blanket,
+   the split-blanket set, name-list, legitimate-subprice, and the long-document fixture - labelled
+   by someone who understands procurement. **M2.5 cannot complete without it.**
+3. **The cumulative caps are judgement calls.** `blanket_cumulative_cap` 4 and
+   `evidence_concentration_floor` 0.5 are chosen, not derived. The `legitimate-subprice` fixture
+   is the false-positive guard, but a real customer with genuinely bundled quotes may need them
+   tuned. Per-org configurable.
+4. **Cost.** Full-offer mode is more expensive per node than retrieval would have been. The trade
+   is accuracy on the class that matters. Revisit when a real embedding path exists.
+5. **Node-term overlap could suppress legitimate coverage** where a vendor's vocabulary differs
+   entirely ("beacon commissioning" vs "on-island installation"). The floor is low and failure
+   demotes to `ambiguous` rather than `absent`, so it is queue volume, not a wrong claim.
+6. **Scope-library content is a moat and a cost.** Six categories needing curation; now global,
    so the investment is made once.
-6. **Node-term overlap could suppress legitimate coverage** where a vendor uses entirely
-   different vocabulary ("beacon commissioning" vs "on-island installation"). The floor is low
-   (0.25) and failure demotes to `ambiguous` rather than `absent`, so the failure mode is a
-   review item rather than a wrong claim - but it is a real source of queue volume.
-7. **Who may unseal, and whether the vendor is told.** The *audit* is now a requirement (§5.6),
-   but the policy is a **human decision**.
+7. **Who may unseal, and whether the vendor is told.** The audit is a requirement (§5.6); the
+   policy is a **human decision**.
 8. **The weekly digest's delivery channel** - Banter, Blast, or in-app. **Human decision** before
    M8.
-9. **The advisory gate may see no use.** If v1 telemetry shows nobody calls it, that is evidence
+9. **The advisory gate may see no use.** If telemetry shows nobody calls it, that is evidence
    *against* prioritizing the enforcing gate in v1.1.
 10. **Pre-existing defects to file as tasks**, not work around:
     - `burn-extract-deliverables.job.ts:56-61` and bulwark's equivalent: `bin_assets` joined with
-      no org predicate, and no `can_access`/`scan_status` check - cross-tenant and private-asset
+      no org predicate and no `can_access`/`scan_status` check - cross-tenant and private-asset
       document read.
-    - `extraction.engine.ts`: `let ordinal = 0` before a resumable loop (dedup-key divergence
-      producing duplicate rows), and `log.debug; continue` on `LlmError` allowing a run that
-      dropped a whole chunk to report `succeeded`.
-    - `proposals.routes.ts`: `shadowOnly` gating means proposal routes **never deny**, and any
-      org admin reads every app's proposals.
-    - `brief-embed.job.ts` upserts into a `brief_documents` Qdrant collection **nothing ever
-      creates** (the only `createCollection` is private to beacon-api at
-      `qdrant.service.ts:59-90`).
-    - `visibility.service.ts` has no `bill.expense` type, so any citation of an expense is
-      silently dropped platform-wide.
+    - `extraction.engine.ts`: `let ordinal = 0` before a resumable loop (dedup-key divergence ->
+      duplicate rows), and `log.debug; continue` on `LlmError` letting a run that dropped a whole
+      chunk report `succeeded`.
+    - `proposals.routes.ts`: `shadowOnly` gating means proposal routes **never deny**, and any org
+      admin reads every app's proposals.
+    - `brief-embed.job.ts` upserts into a `brief_documents` Qdrant collection **nothing creates**
+      (the only `createCollection` is private to beacon-api at `qdrant.service.ts:59-90`).
+    - `visibility.service.ts` has no `bill.expense` type - any citation of an expense is silently
+      dropped platform-wide.
     - `scripts/help/smoke-help-center.mjs` is hardcoded to Bam and its `OUT` default is a
       hardcoded `D:/Documents/GitHub/...` path absent from this checkout.
     - CSV export escaping: bearing-api and the frontend timeline export write unescaped
-      formula-capable cells today; §5.4's helper should be shared, not Bursar-local.
+      formula-capable cells today; §5.4's helper should be shared.
+    - **No `resolver` directive in the nginx configs**, so any reference to a not-yet-running
+      upstream takes the whole frontend down at config load. Affects every future app addition,
+      not just Bursar (§18.1).
 
 ---
 
 ## 26. Changelog
 
-### Round 2 - 11 blockers, ~25 majors. All accepted or accepted-with-modification. Two rejections with reasons.
+### Round 3 (final) - 13 blockers, ~20 majors. All accepted or accepted-with-modification. Two rejections.
 
-**The coverage-collapse cluster (security F1, F2 + design F1), folded as one §4.**
+**The split-blanket cluster (design + security, converged independently)**
 
-- [security] **Blanket-coverage attack succeeds with no injection.** ACCEPTED as the round's
-  central finding. Four combined defenses in a single new §4: blanket-claim lexicon, **fan-out
-  cap on `bursar_line_node_matches`** (the load-bearing one, since it does not depend on
-  recognizing language), **bundling requires explicit enumeration to auto-publish**, and the
-  de-transitivized rollup. Plus >= 3 non-imperative blanket fixtures as a CI gate, and the GILLIGAN
-  fourth offer re-scoped to demo it (§19.2).
-- [security] **Node-term overlap as the fix.** ACCEPTED-WITH-MODIFICATION as predicate 3 (§3.5),
-  **but explicitly documented as NOT the defense against the blanket attack** - a sentence naming
-  the requirements has high overlap by construction. It earns its place against topically-adjacent
-  mis-citation. Saying otherwise would leave the real hole behind a predicate that looks like it
-  covers it.
-- [design] **Rollup walks coverage to the root; downward subsumption erases `excluded_explicit`.**
-  ACCEPTED in full: bundling line **defined** as classifier-matched to >=2 nodes; downward
-  subsumption verdict-preserving and one level deep; upward produces `derived_covered`, excluded
-  from the diff and never a rollup input; 14-node CI fixture (§4.6).
-- [security] **`rival_offer` promotion lets a bidder write the ruler.** ACCEPTED. Rival nodes are
-  `pending_review` proposals excluded from `gap_adjusted`/diff/`absent`; supporting offers must be
-  distinct `braid_profile_id`; injection- and blanket-suspected offers barred;
-  `contributing_offer_ids` recorded (§4.5).
+- [security][design] **Four coordinated sub-cap lines defeat the entire §4 cluster.** ACCEPTED in
+  full, as the round's central finding. Three fixes: (1) the **"or an itemized list" enumeration
+  branch is deleted** - only `explicit_subprice` (per-node monetary sub-price with a distinct
+  cited span) enumerates; (2) **the caps are cumulative per offer**, not per line - an
+  unsubpriced-mandatory-node count plus an evidence-concentration guard, neither depending on the
+  attacker's line count; (3) a **split-blanket fixture** (4 lines x 3-4 nodes, no lexicon token)
+  added to §4.6 and the §20.2 gate, alongside a `legitimate-subprice` false-positive guard.
+  Round 2's fixture said "*one* all-inclusive line", so the split attack passed CI - the same
+  "fixtures prove the wrong thing" failure already seen on the injection corpus (§4.1).
+- [security] **Every defense terminates in "does not auto-publish", which converts a false
+  `covered` into a silent omission.** ACCEPTED, and this is the more important half. New **§4.7
+  diff-completeness invariant**: every `mandatory` node of a confirmed tree appears exactly once
+  as `published` / `needs_review` / `unverified`; the identity is a CI gate per fixture; a
+  blocking banner and suppression of every "clean" affordance in the UI; and Playwright step 8
+  now asserts **14 rows, none missing** rather than "none auto-published", which passed on an
+  empty diff.
 
 **DESIGN**
 
-- [design] **`bursar_offer_totals` cannot compute two kinds or reproduce its own seed numbers.**
-  ACCEPTED. `normalized_to_term` cut to v1.1 (no term columns); `gap_adjusted` extended to value
-  `partial` via `delta_amount_minor`; `should_have_supplement` separated; full admissibility
-  ruleset (§10.1) covering absent rivals, bundled rivals, foreign currency, and the <2-observation
-  case; `renderable=false` + "N gaps unpriced" for the single-offer request; **§19.1 seed figures
-  recomputed from the formula** ($21,950 / $19,700 / $19,000).
-- [design] **M2.5 excludes the flagship it exists to de-risk.** ACCEPTED. Redefined with a real
-  full-offer classification path via a recorded-response harness, and three numeric done-whens
-  including the 40-page measurement (§21).
-- [design] `finish_reason` unbuildable; no `llm_provider_id`. ACCEPTED. Additive `apps/api` change
-  returning `{content, finish_reason, usage}` (§3.10, §18.9); `llm_provider_id` added; a missing
-  provider now **fails loudly** with `status='blocked'` (§3.4).
-- [design] **No cross-window merge rule; exclusions systematically out of window.** ACCEPTED. Merge
-  lattice, whole-document exclusion pre-pass **pinned into every window**, durable per-window
-  results, a missed-exclusion CI gate, and an explicit 5-page-envelope fallback (§3.8).
-- [design] Cost/latency/caps asserted not designed. ACCEPTED. §3.9 with verified proxy limits,
-  60s timeout, three committed caps, partial as a first-class state, and a cost preflight.
-- [design] `allocation_weight` has no derivation rule. ACCEPTED. Four-rung ladder +
-  `allocation_method`; **gap valuation refuses equal-split observations** (§4.4).
-- [design] Detector contradictions and missing thresholds. ACCEPTED. `unbaselined_vendor` groups by
-  `normalized_payee`; silent-line requires a bounded term or a rolling window with the basis
-  stated; thresholds and renewal bands specified (§8).
-- [design] **Delete the long-tail retrieval mode.** ACCEPTED per direction. Retrieval, the
-  `raw_text` trigram index, the recall gate, `classification_mode`, and `applicable_channels` are
-  all gone; all four strengths classify in full-offer mode (§3.1). This also dissolves stability
-  F9's NaN at the source.
+- [design] **`usage.read` / `usage.attest` exist only in §13.1**, orphaned by the `dormant_seat`
+  cut, and unemittable by `generate-permission-manifest.mjs` (which walks routes and tools), so
+  the probe would **fail on a correct build**. ACCEPTED - both deleted, recorded in §24.
+  `spend.read_all` is retained but declared as **route-file permission metadata** (burn's
+  financial-flooring pattern) so the generator emits it.
+- [design] **Playwright step 5 asserts an outcome §4.5 forbids.** ACCEPTED - rewritten to assert
+  the promotion queue and the *absence* of rival nodes from the diff, with the absence assertion
+  moved post-promotion; §14's "rival-informed first" phrasing corrected.
+- [design] **`blanket_suspected` suppressed published mandatory `absent` verdicts**, so writing
+  "turnkey" once bought immunity from the flagship output. ACCEPTED as a **product bug**, not a
+  nit: suspicion flags now gate auto-published `covered` **only**; parse-quality and
+  window-coverage remain the genuine absence preconditions (§3.6). The reviewer's UI treatment
+  ("this offer claims blanket coverage; here is what it does not itemize") is adopted as the
+  §4.7 / §19.2 demo.
+- [design] **Two of three seeded totals still unproducible**, one level deeper. ACCEPTED - Radio's
+  $600 is made genuinely rung 1 (its own optional line, where one observation suffices) and
+  Lagoon's $1,200 given the two rival observations rung 2 requires. **All three figures now
+  compute from §10.1 as written**, and §19.3 makes the seeder export a single
+  `BURSAR_SEED_EXPECTATIONS` constant the Playwright suite imports - this was the third round a
+  seed-number mismatch surfaced.
+- [design] **§3.9's worked example violated its own caps** and `rejected_limits` had no trigger.
+  ACCEPTED - explicit cap contract (preflight `would_exceed`; 422 at start on offers; `partial`
+  mid-flight on calls) and the example replaced with 60 nodes x 6 offers, inside the caps.
 
 **SECURITY**
 
-- [security] **The round-1 Bin fix cites a column that does not exist and does not close the
-  hole.** ACCEPTED in full. `bin_assets` is **`org_id`** (`bin-assets.ts:29`), so the round-1 join
-  was a runtime 42703. Replaced with `assertBinAssetReadable` calling `can_access('bin.asset', …)`
-  via `packages/shared/src/visibility-client.ts`, plus `org_id` defence-in-depth and a
-  **`scan_status='clean'`** requirement; tests cover cross-org, private-same-org, and unscanned
-  (§6.4).
-- [security] **Global scope library creates a cross-tenant write path and breaks under RLS.**
-  ACCEPTED. Global rows immutable to org callers (API filter + trigger); variant policy
-  `organization_id = current_setting(...) OR (organization_id IS NULL AND is_global)` with a
-  `WITH CHECK`; `test/library-visibility.test.ts` (§6.1).
-- [security] Three pre-scan signals unimplementable; **the seed asserts on one of them.**
-  ACCEPTED. Rendering and metadata signals cut to v1.1 (§5.2, §23.14); the GILLIGAN fourth offer
-  re-scoped to a blanket-coverage claim, which is detectable today and a better demo (§19.2).
-- [security] Sealed bids unenforceable. ACCEPTED. `offer.unseal` floored; seal is a service-layer
-  predicate on **every** read path with a viewer test; `offer.unsealed` event; **the audit is a
-  requirement, not a policy question** - only *who may unseal* remains a human decision; the whole
-  of `bursar_org_settings` is audited (§5.6).
-- [security] Draft confidentiality now broader than before. ACCEPTED. `draft.read` off `viewer`,
-  `draft.approve` floored, owner-scoped reads, content-free proposal template, and grounding
-  enforced by a named builder the test asserts (§5.7).
-- [security] **Stage 0 has no injection defense.** ACCEPTED. Pre-scan on the request document,
-  `request_manipulation_suspected`, `confirmed` blocked while suspected, and Stage 0 verification
-  ported to per-chunk-line (§5.5).
-- [security, minor] CSV neutralization had no endpoint. ACCEPTED. Two export routes named (§11),
-  helper shared in `@bigbluebam/shared`, and the bearing-api/frontend instances filed (§25.10).
+- [security] **Pinned exclusion lines were exempt from fan-out with no verdict restriction**, so
+  *"Nothing is excluded: installation, training and warranty are all provided"* takes the flag and
+  escapes the load-bearing defense. ACCEPTED - the exemption is scoped to the verdict it exists
+  for: a pinned line's matches count toward fan-out **unless the verdict is
+  `excluded_explicit`**, with a unit test (§3.8).
+- [security] **The seal predicate omitted the two CSV exports and four MCP tools.** ACCEPTED, and
+  generalized per the reviewer: the seal moves into the **shared query/repository layer** every
+  read passes through (burn's `redact-financial-fields.ts` placement) rather than
+  endpoint-by-endpoint, so a new route cannot forget it (§5.6).
+- [security] **Bin access checked at attach only**, while parse is async - `scan_status` can flip,
+  visibility can flip, `current_version_id` can advance. ACCEPTED - **version pinned at attach**,
+  and `scan_status`/`org_id` **re-asserted in the worker immediately before the byte read**,
+  failing to `blocked` (§5.8), with two new test cases.
+- [security] **Rival promotion gated on member-level unfloored `scope.write`.** ACCEPTED - new
+  floored, confirm-required `bursar.scope.promote_rival`, payload echoing
+  `contributing_offer_ids` (§4.5, §11, §13.1).
+- [security] **`decided_by='agent'` has no write path, gate, or permission.** ACCEPTED, taking the
+  **drop** branch: an unspecified enum value is an invitation, the natural implementation would
+  bypass every predicate and cap, and the `absent` CHECK exempts only `human` so it would not
+  constrain it. There is no agent adjudication path in v1. §24 records the reintroduction
+  conditions.
 
 **STABILITY**
 
-- [stability] **No idempotency on `POST /spend/import`.** ACCEPTED. `dedup_key` +
-  `UNIQUE (organization_id, dedup_key)` from `(normalized_payee, occurred_on, amount_minor,
-  currency, external_ref)` via the existing `idempotency-key.ts`, plus `bursar_spend_imports`
-  keyed by file SHA-256 (§6.1).
-- [stability] **Run exceeds the 180s thin-caller timeout; retry re-enters a live run.** ACCEPTED.
-  Async-start (202 + run id) with worker polling, bounded slices per
-  `burn-attribute-batch`, `BURSAR_ENGINE_TIMEOUT_MS`, re-entry rejected on a live lease (§18.6).
-- [stability] **409 has no lease and no reaper.** ACCEPTED. `heartbeat_at` + `claimed_by` on both
-  run tables, heartbeat per checkpoint, `bursar-run-reaper`; §15's advisory-lock wording
-  reconciled with `advisory-lock.ts`'s no-HTTP-in-lock rule (§18.6).
-- [stability] The "per-run cap" was a **phantom cross-reference**. ACCEPTED - it is now real
-  (§3.9) with `llm_calls_used` persisted and a BullMQ limiter under the 120/min ceiling.
-- [stability] Timeout + non-released concurrency slot. ACCEPTED (§3.9).
-- [stability] 2-D checkpoint over a 3-D loop. ACCEPTED. `last_processed_window_index` +
-  `bursar_leveling_window_results` (§3.8, §6.1).
-- [stability] **A dropped chunk reports `succeeded`.** ACCEPTED, and it is the more dangerous of
-  the two ported bugs: a tree missing a chunk gets confirmed and every offer then comes back clean
-  on requirements never enumerated, invisible to the false-absence gate. `chunks_failed`, run
-  `partial`, `derived` blocked (§3.2b).
-- [stability] M0 prerequisites compose-only. ACCEPTED. Railway counterparts are M0 (§18.5).
-- [stability, folded] NaN composite (dissolved by the retrieval cut, plus an explicit finiteness
-  test); malformed-retry capped at 2; reconcile/sweep flapping fixed with a shared lock class and
-  a `5,35` offset; `TRUNCATE` trigger added.
+- [stability] **Async-start applied to leveling only; derivation still synchronous**, reproducing
+  the round-2 blocker on Stage 0 - and **defeating the chunk-relative `dedup_key` fix**, since
+  two writers on one checkpoint produce exactly the divergent ordinals that duplicate matrix rows.
+  ACCEPTED - identical 202 contract, one chunk per invocation, live-lease re-entry rejection
+  stated for both engines in the same place (§3.2, §18.6).
+- [stability] **`scope_status='deriving'` has no reaper**, so a crashed derivation wedges
+  `confirm` at 409 forever and the flagship is dead on that request with no recovery short of
+  psql. ACCEPTED - the reaper **transactionally reverts the owning request's `scope_status`** in
+  the same statement as the cold run; same audit for `normalization_status` (§18.6d).
+- [stability] **The reaper creates the two-writer race it was added to fix.** ACCEPTED, and this
+  is the subtlest finding of the round: a bare status flag does not fence a still-alive writer.
+  **Every checkpoint/window/coverage write is conditioned on
+  `WHERE id = $run AND claimed_by = $me AND status = 'running'`, and a zero-row update aborts the
+  slice**; slices execute serially (§18.6c).
+- [stability] **"Continue" must resume the same run row**, or earlier windows go invisible and a
+  mandatory `absent` permanently demotes to `ambiguous` after any throttle. ACCEPTED (§3.8).
+- [stability] **Spend `dedup_key` discarded legitimate identical same-day charges** - the mirror
+  of the doubling bug and harder to notice. ACCEPTED - `occurrence_ordinal` within the source
+  file's dedup group. **And the `idempotency-key.ts` citation is dropped**: verified it is an HMAC
+  over `BurnPrecheckRequest` against a `.strict()` type, in an app bursar-api cannot import, keyed
+  on a **rotatable secret** (every row would re-import after rotation). Replaced with a local
+  `sha256` over the canonicalized tuple (§6.1).
+- [stability] **`UNIQUE (org, file_sha256)` made a crashed import un-retryable.** ACCEPTED -
+  `ON CONFLICT DO UPDATE SET status='running'`, non-`succeeded` batches resume the upsert loop,
+  and "0 new" derives from `rows_deduped`, never from the batch row's existence (§6.1).
 
 **BEST-PRACTICES**
 
-- [best-practices] **Permission catalog does not add up (35 not 34; `.read` is 13 not 12; member
-  26 not 25) and the M1 gate fails on a correct build.** ACCEPTED, and generalized per direction:
-  §13.1 is now a **single table with separate `is_read` and `viewer` columns**, no section states a
-  count, and §17.3's probe is asserted against the table in CI so prose and data cannot diverge.
-- [best-practices] **"21 tables" while defining 23.** ACCEPTED, and generalized: RLS policies are
-  **generated** by a `DO $$` loop over `information_schema` for the `bursar_` prefix, with
-  `test/rls-coverage.test.ts` (§17.1, §6).
-- [best-practices] **"Two vite aliases"; more are needed.** ACCEPTED-WITH-MODIFICATION. Verified
-  burn's config carries ten-plus, so **the reviewer's "three" also undercounts**. Stated as the
-  rule "copy every `@bigbluebam/ui/*` alias verbatim", naming `@bigbluebam/ui/markdown` as the one
-  that breaks the whole chained frontend build (§14.1).
-- [best-practices] `amend`/`terminate` have no action. ACCEPTED. `bursar.award.amend` and
-  `bursar.award.terminate` added, floored, destructive, confirmation-required (§11, §13.1).
-- [best-practices] `smoke-help-center.mjs` cannot cover Bursar. ACCEPTED. Dropped as a
-  done-criterion in favor of Playwright step 12; its hardcoded `D:/` path filed (§25.10).
-- [best-practices] "18 tools" unfalsifiable. ACCEPTED. Full enumeration in §12.
-- [best-practices] `--check` mode; screenshots provenance. ACCEPTED (§14.1, §19).
-- [best-practices] **CLAUDE.md has since been corrected on `publishBoltEvent`.** ACCEPTED -
-  verified at `CLAUDE.md:434`. The round-1 staleness claim is **withdrawn** and the docs-correction
-  task cancelled (§16.1).
-- [best-practices] `REDIRECT_MAP` also needs the entry. ACCEPTED (§18.9).
+- [best-practices] **The M1 done-when is unsatisfiable**: the catalog is generated from route
+  files M2-M8 have not written, so M1 would author group defaults against a partial catalog **and
+  checksum it immutably** - the exact trap §17.2 documents. ACCEPTED - **M1 is migrations +
+  Drizzle + the RLS loop only; the full permission chain moves to M9**, stated explicitly in both
+  §17.1 and §21, plus the M1-M8 interim posture (SuperUser-only `/bursar` access) so nobody
+  "fixes" the denial by weakening the fail-closed invariant.
+- [best-practices] **Playwright step 9 asserts baseline counts that do not follow from the seed**
+  (11 + 2 = 13 against 14 nodes, and Radio has no `excluded_explicit`). ACCEPTED - §19.1 states
+  Radio's baseline as 14 `included`, and step 9 asserts **structurally**
+  (`included + excluded + absent == node count`, warranty `included` with `delta_kind='term'`).
+- [best-practices] Count re-derivation. ACCEPTED - reconciled after the `usage.*` deletion and the
+  `promote_rival` addition; §17.3 states the sanity target once, explicitly subordinate to the
+  table, with the CI assertion recomputing.
+- Confirmed RESOLVED by the reviewer: the generated RLS loop, and the "copy every alias verbatim"
+  rule (burn carries **twelve**).
 
 **INFRASTRUCTURE**
 
-- [infrastructure] **`services.mjs` entry has no `env` block**; `railway-orchestrator.mjs:69-70`
-  makes that a silent empty-array, not an error. ACCEPTED. Verbatim block in §18.3 with inline
-  comments for the two deliberate absences.
-- [infrastructure] **`env-hints.mjs` never mentioned**; unresolvable optional vars are silently
-  skipped. ACCEPTED. Both vars as `kind:'computed'` via `plannedApp('bursar-api')`, plus the
-  Railway `:8080` rule (§18.4).
-- [infrastructure] **Postgres change is a value with no procedure.** ACCEPTED. Full runbook with
-  `--force-recreate` (never `down -v`), the `SHOW max_connections` acceptance check, `shm_size`,
-  and the frontend restart (§18.5).
-- [infrastructure] **Redis framing risks a builder switching to `allkeys-lru`.** ACCEPTED, and
-  this was the most valuable catch of the infrastructure set: the fix is the **cap**, not the
-  policy. `--maxmemory 512mb`, `noeviction` **unchanged**, the compose comment quoted, `config get`
-  acceptance (§18.5).
-- [infrastructure] `client_max_body_size 25m` makes the 26MB scenario unreachable.
-  ACCEPTED-WITH-MODIFICATION: `MAX_DOC_BYTES` lowered to 20MB rather than raising nginx's limit,
-  because raising a global body limit for one app's worst case is a suite-wide change with no
-  suite-wide justification. The 413 path is mapped to a real message (§5.4).
-- [infrastructure] Proxy timeout hardcoded at 60s. ACCEPTED. Batch sized against it, smaller-batch
-  retry, CI-coverage caveat recorded (§3.9, §20.2).
-- [infrastructure] `depends_on: service_healthy` makes the newest service a hard boot dependency.
-  ACCEPTED. `service_started` through the build, promoted at M9, with the inconsistent precedent
-  (bin/bay/blip) noted (§18.7).
-- [infrastructure] No fifth Dockerfile edit; guide needs a rebuild. ACCEPTED (§18.2).
+- [infrastructure] **No `resolver` directive**, so adding a `proxy_pass` to a non-existent
+  upstream makes nginx exit at config load and **takes the whole suite down**. ACCEPTED as the
+  highest-severity infrastructure finding: hard M0 ordering (container first, confirmed running,
+  nginx last), `nginx -t` as an M0 gate, and an explicit rollback note. Also filed as a
+  platform-wide pre-existing hazard affecting every future app addition (§25.10).
+- [infrastructure] **`BURSAR_API_URL` needs `/v1`; `BURSAR_API_INTERNAL_URL` does not.** ACCEPTED -
+  verified at `env-hints.mjs:286-289` with the rationale; both spelled out separately (§18.4).
+- [infrastructure] **The Redis premise was false.** ACCEPTED, and this reverses a round-2 edit of
+  mine: `docker-compose.yml:36-41` **already reads `--maxmemory 512mb --maxmemory-policy
+  noeviction`**. The reviewer's danger analysis is exactly right - a builder told to change a
+  block that already reads the target will change the only remaining knob, the policy, causing
+  the suite-wide BullMQ corruption the block's own comment warns against. Rewritten as
+  **"verify only, change nothing"**, with the actionable half (per-queue retention) moved to §15
+  and the Railway counterpart kept as the only real work (§18.5).
+- [infrastructure] **M0 does not budget for the frontend rebuild.** ACCEPTED - the SPA dist is not
+  bind-mounted (only nginx templates, `docs/apps`, avatars, certs are), so `/bursar/` needs
+  `docker compose build frontend`, rebuilding 23 SPAs. Noted as M0's slow step, with the contrast
+  that nginx-only changes need just `--force-recreate` (§18.2).
+- [infrastructure] **`vite.config.ts` needs `base` and a non-colliding dev port.** ACCEPTED -
+  `base: '/bursar/'` (without it every asset 404s and it looks like an nginx bug) and port 3023
+  (burn holds 3022), plus dev proxies (§14).
 
 ### Rejections
 
-- [design, rejected] **"Add `term_months` to offers and `target_term_months` to requests"** as the
-  fix for `normalized_to_term`. REJECTED in favor of the reviewer's own alternative: cut the total
-  to v1.1. Comparing a 12-month to a 36-month quote is genuinely valuable, but it needs a term
-  model (renewal alignment, mid-term amendments, evergreen terms) rather than two columns, and the
-  seed does not need it. Adding two columns to satisfy one total kind would leave a half-built
-  term model that later has to be undone. Recorded in §24 with the precondition.
-- [security, partial-rejection] **"Node-term overlap defeats the blanket-coverage attack."**
-  The predicate is ACCEPTED (§3.5 predicate 3); the *claim about what it defends* is REJECTED. A
-  blanket sentence naming the requirements has high term overlap by construction, so relying on it
-  would leave the hole open behind a control that appears to close it. The defense is the fan-out
-  cap plus the enumeration requirement (§4.3, §4.4), and §3.5 says so explicitly.
+- [design, rejected] **"Add `term_months` / `target_term_months`"** to rescue
+  `normalized_to_term`. REJECTED again, consistent with round 2, in favor of the reviewer's own
+  alternative (cut to v1.1). Comparing a 12-month to a 36-month quote needs a real term model -
+  renewal alignment, mid-term amendments, evergreen terms - not two columns, and two columns would
+  leave a half-built model someone later has to undo. Recorded in §24 with the precondition.
+- [security, partial-rejection] **"Node-term overlap defeats blanket coverage."** The predicate is
+  ACCEPTED (§3.5 predicate 3); the claim about what it defends is REJECTED, unchanged from round
+  2 and now reinforced by the split-blanket attack, which has *maximal* term overlap by
+  construction. §3.5 states the limitation explicitly. The defenses are §4.3's cumulative caps and
+  §4.4's sub-pricing requirement.
 
-### Round 1 (carried forward, all resolved or superseded)
+### Rounds 1-2 (carried forward)
 
-Braid payee resolution moved in-house; embedding dependency removed; money-in events dropped;
-zero-candidate short-circuit removed; two-phase leveling; typed deltas; baseline `kind`
-discriminator and M:N node links; soft-archive; currency guard and null-term selection; detector
-cut from nine to four; `bursar_drafts`; `assertBinAssetInOrg` (superseded this round by
-`assertBinAssetReadable`); help system; gilligan seeder; three nginx files; four Dockerfile edits;
-Postgres/Redis ceilings; the corrected permission chain; positional `publishBoltEvent`.
+Braid payee resolution moved in-house; embedding dependency removed; retrieval deleted entirely;
+money-in events dropped; two-phase leveling; typed deltas; baseline `kind` + M:N node links;
+soft-archive; currency guard and null-term selection; detectors cut from nine to four;
+`bursar_drafts`; `assertBinAssetReadable`; help system; gilligan seeder; three nginx files; four
+Dockerfile edits; the corrected permission chain; positional `publishBoltEvent` (confirmed);
+window merge lattice; per-offer parse quality; Stage 0 injection defense; sealed bids; the
+`services.mjs` env block; `env-hints.mjs`.
 
-### Kept unchanged (praised across both rounds)
+### Kept unchanged (praised across all three rounds)
 
-- The **rejected-candidate requirement**, now hardened twice: ids must be engine-supplied and
-  belong to the offer (round 1), and it no longer exempts `decided_by='deterministic'`.
+- The **rejected-candidate requirement**, hardened twice (engine-supplied ids belonging to the
+  offer; no `deterministic` exemption).
 - The **honest RLS posture** in §6.3, including the "the backstop is absent today" caveat.
-- The **§17.2 two-pass permission diagnosis**, correct from the start and now complete.
+- The **§17.2 two-pass permission diagnosis**, correct from the start, completed in round 2 and
+  correctly sequenced in round 3.
