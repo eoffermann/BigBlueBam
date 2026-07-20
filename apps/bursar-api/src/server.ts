@@ -25,6 +25,7 @@ import requestRoutes from './routes/requests.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import scopeRoutes from './routes/scope.routes.js';
 import offerRoutes from './routes/offers.routes.js';
+import levelingRoutes from './routes/leveling.routes.js';
 import internalRoutes from './routes/internal.routes.js';
 
 // ── Boot assertion, FIRST, before anything binds a port or opens a pool (spec 13.3).
@@ -144,6 +145,8 @@ await fastify.register(
     await v1.register(scopeRoutes);
     // M4: offer ingest + deterministic parse.
     await v1.register(offerRoutes);
+    // M5: the absence engine + coverage-collapse cluster (leveling, matrix, diff, totals, review).
+    await v1.register(levelingRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },

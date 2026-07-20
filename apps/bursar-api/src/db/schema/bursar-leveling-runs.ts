@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, integer, text, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, integer, jsonb, text, timestamp, index } from 'drizzle-orm/pg-core';
 import { organizations } from './bbb-refs.js';
 import { bursarRequests } from './bursar-requests.js';
 
@@ -26,6 +26,8 @@ export const bursarLevelingRuns = pgTable(
     node_count: integer('node_count'),
     llm_calls_used: integer('llm_calls_used').notNull().default(0),
     coverage_written: integer('coverage_written').notNull().default(0),
+    // The per-run caps enforced, persisted as used for audit (spec 3.9, migration 0255).
+    caps_used: jsonb('caps_used').notNull().default({}),
     claimed_by: varchar('claimed_by', { length: 64 }),
     heartbeat_at: timestamp('heartbeat_at', { withTimezone: true }),
     error: text('error'),

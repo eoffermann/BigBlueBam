@@ -3,8 +3,10 @@ import IORedis from 'ioredis';
 import {
   BURSAR_DERIVE_SCOPE_QUEUE,
   BURSAR_PARSE_OFFER_QUEUE,
+  BURSAR_LEVEL_QUEUE,
   type BursarDeriveScopeJobData,
   type BursarParseOfferJobData,
+  type BursarLevelJobData,
 } from '@bigbluebam/shared';
 import { env } from '../env.js';
 
@@ -22,6 +24,7 @@ import { env } from '../env.js';
 
 let deriveQueue: Queue<BursarDeriveScopeJobData> | null = null;
 let parseOfferQueue: Queue<BursarParseOfferJobData> | null = null;
+let levelQueue: Queue<BursarLevelJobData> | null = null;
 let connection: IORedis | null = null;
 
 function getConnection(): IORedis {
@@ -83,11 +86,41 @@ export async function enqueueOfferParse(data: BursarParseOfferJobData): Promise<
   }
 }
 
+function getLevelQueue(): Queue<BursarLevelJobData> {
+  if (!levelQueue) {
+    levelQueue = new Queue<BursarLevelJobData>(BURSAR_LEVEL_QUEUE, { connection: getConnection() });
+  }
+  return levelQueue;
+}
+
+/**
+ * Enqueue async-start leveling (spec 3.9, 18.6, M5). bursar-api is the producer; the worker
+ * consumer registration lands in M8. Best-effort: a dropped enqueue leaves the run row at 'running'
+ * and the reaper recovers it. Deduplicated per run so a double-submit does not double-drive. A
+ * BullMQ limiter sized under the proxy's 120/min lives on the worker consumer.
+ */
+export async function enqueueLeveling(data: BursarLevelJobData): Promise<boolean> {
+  try {
+    await getLevelQueue().add('level', data, {
+      deduplication: { id: `bursar:level:${data.organization_id}:${data.run_id}`, ttl: 30_000 },
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 15_000 },
+      removeOnComplete: 1000,
+      removeOnFail: 2000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function closeBursarQueues(): Promise<void> {
   await deriveQueue?.close().catch(() => {});
   await parseOfferQueue?.close().catch(() => {});
+  await levelQueue?.close().catch(() => {});
   deriveQueue = null;
   parseOfferQueue = null;
+  levelQueue = null;
   if (connection) {
     connection.disconnect();
     connection = null;

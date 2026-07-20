@@ -390,3 +390,59 @@ export interface BursarParseOfferJobData {
   /** Inline source text; absent when the worker must read the pinned Bin bytes itself. */
   source_text?: string;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Leveling (M5): the absence engine + coverage-collapse cluster     */
+/* ------------------------------------------------------------------ */
+
+// The six coverage verdicts (spec 6.1). Mirrors the bursar_offer_coverage_verdict_check DB
+// constraint. `not_applicable` is a cleared, non-gap verdict; `absent` requires evidence.
+export const BursarVerdict = z.enum([
+  'covered',
+  'partial',
+  'excluded_explicit',
+  'absent',
+  'ambiguous',
+  'not_applicable',
+]);
+export type BursarVerdict = z.infer<typeof BursarVerdict>;
+
+// POST /requests/:id/level. Preflight + async start (202 + run id). `run_id` continues an existing
+// `partial` run (spec 3.9's "levelled 6 of 8, continue" affordance) rather than minting a new one.
+// `dry_run` returns only the cost preflight (estimated calls/tokens/wall-clock + would_exceed)
+// without starting a run.
+export const bursarLevelSchema = z
+  .object({
+    run_id: z.string().uuid().nullable().optional(),
+    dry_run: z.boolean().optional(),
+  })
+  .partial();
+export type BursarLevel = z.infer<typeof bursarLevelSchema>;
+
+// POST /coverage/:id/override. A human adjudication overrides a coverage verdict (decided_by
+// becomes 'human'). The reason is recorded; a delta amount may be supplied for a partial.
+export const bursarCoverageOverrideSchema = z.object({
+  verdict: BursarVerdict,
+  reason: z.string().min(1).max(2000),
+  delta_amount_minor: z.coerce.number().int().nullable().optional(),
+});
+export type BursarCoverageOverride = z.infer<typeof bursarCoverageOverrideSchema>;
+
+// Internal async-start leveling transport. The org comes from the VALIDATED payload on this
+// session-less route (spec 5.5); the worker forwards the same run_id until `done`.
+export const bursarRunLevelingSchema = z.object({
+  organization_id: z.string().uuid(),
+  request_id: z.string().uuid(),
+  run_id: z.string().uuid(),
+  claimant: z.string().min(1).max(64),
+});
+export type BursarRunLeveling = z.infer<typeof bursarRunLevelingSchema>;
+
+// BullMQ queue for async-start leveling. bursar-api is the producer; the worker consumer
+// registration (worker.ts) lands in M8, mirroring derivation and parse.
+export const BURSAR_LEVEL_QUEUE = 'bursar-level';
+export interface BursarLevelJobData {
+  organization_id: string;
+  request_id: string;
+  run_id: string;
+}

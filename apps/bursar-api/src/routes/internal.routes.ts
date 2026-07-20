@@ -4,6 +4,8 @@ import {
   bursarRunDerivationSchema,
   bursarRunReaperSchema,
   bursarParseOfferSchema,
+  bursarRunLevelingSchema,
+  publishBoltEvent,
   type BursarSourceFormat,
 } from '@bigbluebam/shared';
 import { requireInternalSecret } from '../lib/internal-secret.js';
@@ -28,6 +30,14 @@ import {
   loadRequestNodes,
   persistParseOutcome,
 } from '../services/engines/parse.store.js';
+import {
+  runLevelingSlice,
+  LevelingLeaseHeldError,
+  LevelingRunNotFoundError,
+} from '../services/engines/leveling.engine.js';
+import { makeDbLevelingStore, makeLlmCoverageClassifier } from '../services/engines/leveling.store.js';
+import { loadLevelingSettings } from '../services/leveling.service.js';
+import type { CoverageClassifier } from '../services/engines/leveling-classifier.js';
 
 /** Map a MIME content-type to a Bursar source format for content-type pinning (spec 5.4). */
 function formatFromContentType(ct: string | null | undefined): BursarSourceFormat | null {
@@ -59,6 +69,12 @@ function formatFromContentType(ct: string | null | undefined): BursarSourceForma
 const NULL_CLASSIFIER: ScopeClassifier = {
   async classifyChunk() {
     throw new Error('classifier invoked without a configured provider');
+  },
+};
+
+const NULL_COVERAGE_CLASSIFIER: CoverageClassifier = {
+  async classifyBatch() {
+    throw new Error('coverage classifier invoked without a configured provider');
   },
 };
 
@@ -254,5 +270,70 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         manipulation_suspected: outcome.manipulation.suspected,
       },
     };
+  });
+
+  /**
+   * ── /internal/run-leveling ─────────────────────────────────────────────────
+   * Async-start leveling (spec 3.4-3.9, M5). Each call processes AT MOST ONE offer of the request
+   * and returns quickly; the worker polls with the same run_id until `done`. A live lease held by a
+   * different claimant returns 409; a throttle returns 429 (the worker resumes from the checkpoint);
+   * an unknown run returns 404. No provider configured -> the engine fails the run at 'blocked'.
+   */
+  fastify.post('/internal/run-leveling', async (request, reply) => {
+    if (!requireInternalSecret(request, reply)) return reply;
+    const parsed = bursarRunLevelingSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    const { organization_id: orgId, request_id, run_id, claimant } = parsed.data;
+
+    const { providerId, settings, parseQualityFloor } = await loadLevelingSettings(orgId);
+    const classifier: CoverageClassifier = providerId ? makeLlmCoverageClassifier(providerId) : NULL_COVERAGE_CLASSIFIER;
+    const store = makeDbLevelingStore();
+
+    try {
+      const result = await runLevelingSlice(
+        { orgId, requestId: request_id, runId: run_id, claimant, providerId, settings, parseQualityFloor },
+        store,
+        classifier,
+        request.log,
+      );
+      // Events (refs + scalars only, best-effort): a published mandatory gap for the offer just
+      // processed fires exclusion.detected; the terminal run fires quote.leveled.
+      if (result.publishedGaps > 0 && result.processedOfferId) {
+        await publishBoltEvent(
+          'exclusion.detected',
+          'bursar',
+          { 'offer.id': result.processedOfferId, 'request.id': request_id, 'org.id': orgId, gap_count: result.publishedGaps },
+          orgId,
+        ).catch(() => {});
+      }
+      if (result.done && (result.status === 'succeeded' || result.status === 'partial')) {
+        await publishBoltEvent(
+          'quote.leveled',
+          'bursar',
+          { 'request.id': request_id, 'run.id': run_id, 'org.id': orgId, status: result.status, offer_count: result.offerCount },
+          orgId,
+        ).catch(() => {});
+      }
+      reply.status(result.done ? 200 : 202);
+      return { data: result };
+    } catch (err) {
+      if (err instanceof LevelingLeaseHeldError) {
+        return reply.status(409).send({
+          error: { code: 'RUN_CLAIMED', message: 'Leveling run is claimed by another worker', details: [], request_id: request.id },
+        });
+      }
+      if (err instanceof LlmThrottledError) {
+        reply.header('retry-after', String(err.retryAfterSeconds));
+        return reply.status(429).send({
+          error: { code: 'LLM_THROTTLED', message: 'LLM concurrency cap reached; retry to resume from the checkpoint', details: [], request_id: request.id },
+        });
+      }
+      if (err instanceof LevelingRunNotFoundError) {
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: 'Leveling run not found', details: [], request_id: request.id },
+        });
+      }
+      throw err;
+    }
   });
 }

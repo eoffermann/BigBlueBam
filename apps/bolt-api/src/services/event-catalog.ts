@@ -3340,6 +3340,31 @@ const bursarEvents: EventDefinition[] = [
       { name: 'org.id', type: 'uuid', description: 'Organization ID' },
     ],
   },
+  {
+    source: 'bursar',
+    event_type: 'quote.leveled',
+    description:
+      'Fired when a leveling run finishes for a request (spec 16.1, M5): the absence engine has classified every offer against the confirmed tree, banded, and applied the coverage-collapse defenses. Carries the run status + counts only, never coverage detail.',
+    payload_schema: [
+      { name: 'request.id', type: 'uuid', description: 'The levelled request' },
+      { name: 'run.id', type: 'uuid', description: 'The leveling run' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+      { name: 'status', type: 'string', description: 'succeeded | partial | blocked | failed' },
+      { name: 'offer_count', type: 'number', description: 'Offers levelled' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'exclusion.detected',
+    description:
+      'Fired when leveling publishes a mandatory gap (an auto-published excluded_explicit or absent verdict) against an offer (spec 16.1, M5). Refs + the node/verdict scalar only; the cited spans live on the coverage row. This is the flagship "here is what the offer does not cover" signal.',
+    payload_schema: [
+      { name: 'offer.id', type: 'uuid', description: 'The offer with the gap' },
+      { name: 'request.id', type: 'uuid', description: 'The parent request' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+      { name: 'gap_count', type: 'number', description: 'Published mandatory gaps for this offer' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

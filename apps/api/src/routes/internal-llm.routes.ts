@@ -343,10 +343,17 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
 
           const result = await response.json() as {
             content?: Array<{ type: string; text?: string }>;
+            stop_reason?: string | null;
+            usage?: unknown;
           };
           const text = result.content?.find((c) => c.type === 'text')?.text ?? '';
+          // Additive (spec 3.10): expose the stop reason + usage so callers can detect truncation.
+          // Anthropic's 'max_tokens' is normalized to 'length' so a single downstream
+          // `finish_reason === 'length'` check works for both provider families. Every existing
+          // caller reads only `data.content` and is unaffected.
+          const finish_reason = result.stop_reason === 'max_tokens' ? 'length' : (result.stop_reason ?? null);
 
-          return reply.send({ data: { content: text } });
+          return reply.send({ data: { content: text, finish_reason, usage: result.usage ?? null } });
         } else {
           // OpenAI or OpenAI-compatible
           const endpoint = provider.api_endpoint || 'https://api.openai.com';
@@ -382,11 +389,15 @@ export default async function internalLlmRoutes(fastify: FastifyInstance) {
           }
 
           const result = await response.json() as {
-            choices?: Array<{ message?: { content?: string } }>;
+            choices?: Array<{ message?: { content?: string }; finish_reason?: string | null }>;
+            usage?: unknown;
           };
           const text = result.choices?.[0]?.message?.content ?? '';
+          // Additive (spec 3.10): OpenAI already reports 'length' on truncation. Every existing
+          // caller reads only `data.content` and is unaffected.
+          const finish_reason = result.choices?.[0]?.finish_reason ?? null;
 
-          return reply.send({ data: { content: text } });
+          return reply.send({ data: { content: text, finish_reason, usage: result.usage ?? null } });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
