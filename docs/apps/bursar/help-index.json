@@ -1,0 +1,350 @@
+{
+  "app": "bursar",
+  "title": "Bursar",
+  "toc": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "level": 2
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "level": 3
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "level": 3
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "level": 2
+    },
+    {
+      "anchor": "vendor-portfolio",
+      "title": "Vendor Portfolio",
+      "level": 3
+    },
+    {
+      "anchor": "vendor-detail",
+      "title": "Vendor detail",
+      "level": 3
+    },
+    {
+      "anchor": "requests-and-the-scope-tree-editor",
+      "title": "Requests and the Scope Tree editor",
+      "level": 3
+    },
+    {
+      "anchor": "leveling-matrix",
+      "title": "Leveling Matrix",
+      "level": 3
+    },
+    {
+      "anchor": "exclusion-diff",
+      "title": "Exclusion Diff",
+      "level": 3
+    },
+    {
+      "anchor": "mismatch-inbox",
+      "title": "Mismatch Inbox",
+      "level": 3
+    },
+    {
+      "anchor": "renewal-radar",
+      "title": "Renewal Radar",
+      "level": 3
+    },
+    {
+      "anchor": "review-queue",
+      "title": "Review Queue",
+      "level": 3
+    },
+    {
+      "anchor": "settings",
+      "title": "Settings",
+      "level": 3
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "level": 3
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "level": 2
+    },
+    {
+      "anchor": "story-compare-competing-quotes-and-find-what-one-leaves-out",
+      "title": "Story: Compare competing quotes and find what one leaves out",
+      "level": 3
+    },
+    {
+      "anchor": "story-see-through-a-blanket-all-inclusive-quote",
+      "title": "Story: See through a blanket \"all inclusive\" quote",
+      "level": 3
+    },
+    {
+      "anchor": "story-adjudicate-a-verdict-the-engine-held-for-review",
+      "title": "Story: Adjudicate a verdict the engine held for review",
+      "level": 3
+    },
+    {
+      "anchor": "story-add-a-vendor-and-watch-its-award-status",
+      "title": "Story: Add a vendor and watch its award status",
+      "level": 3
+    },
+    {
+      "anchor": "story-tune-a-detector-threshold",
+      "title": "Story: Tune a detector threshold",
+      "level": 3
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "level": 2
+    }
+  ],
+  "sections": [
+    {
+      "anchor": "overview",
+      "title": "Overview",
+      "text": "Bursar turns a request for quotes into a governed comparison. You create a request, derive its scope tree (the ruler), and confirm it. From then on every offer under that request is leveled against the tree: line by line, node by node, Bursar decides whether each mandatory requirement is covered, partially covered, explicitly excluded, or absent. The product is the absence: the requirement a vendor left out and hoped you would not notice. Bursar does two jobs. First, comparison: the Leveling Matrix and the Exclusion Diff make every offer legible against the same scope, and comparable totals are shown only when they can be computed honestly. Second, stewardship after the award: once you award an offer its priced baseline is frozen, and Bursar watches real spend against that baseline, raising mismatches when billing drifts and renewal notices before a contract rolls over. Bursar never fabricates a conclusion. When the engine cannot verify a requirement it says so, and the offer is held out of any clean verdict rather than passed. A blanket claim (\"all inclusive\") is treated as a claim, not a fact: Bursar lists exactly what the offer does not itemize. This restraint is the whole point, so the interface is built to never round a \"we could not tell\" up to a \"covered\". The objects you work with are vendors (grouped in the Vendor Portfolio), requests (each with a scope tree of typed nodes), offers (a vendor's quote), coverage verdicts (the per-node decision), totals (the comparable price), awards (a frozen baseline), mismatches (billing drift), and renewals (upcoming rollovers)."
+    },
+    {
+      "anchor": "key-concepts",
+      "title": "Key concepts",
+      "text": "- Vendor - a company you buy from. The Vendor Portfolio lists every vendor with award status as a first-class column. - Request - a request for quotes. It carries a scope tree and the offers submitted against it. - Scope tree - the ruler. A tree of scope nodes derived from the request, each with a normative strength. Every offer is measured against the confirmed tree. - Normative strength - how much a node matters: mandatory, shouldhave, nicetohave, or informational. Only mandatory nodes appear in the Exclusion Diff. - Offer - a vendor's quote, parsed into lines. Only base lines count toward coverage and totals. - Coverage verdict - the per-node, per-offer decision: Covered, Partial, Excluded, Absent, Ambiguous, or N/A. An absent verdict must carry evidence, so \"we could not read it\" never becomes \"absent\". - Confidence band - how sure the engine is: high, low, or medium. A medium-band verdict is shown distinctly and is excluded from every headline count, because a medium result is exactly the one a human should look at rather than tally. - Withheld reason - why a verdict was held out of publication: blanketcap, concentration, band, throttled, or unparseable. Withheld rows are always shown with their reason, never hidden. - Review state - where a node stands in the Exclusion Diff: published (a verdict cleared), needs review (classified but withheld), or unverified (never classified). For any offer these three always sum to the mandatory-node count. - Blanket claim - an offer that asserts it covers everything. Bursar renders it as \"this offer claims blanket coverage; here is what it does not itemize\" and lists the unsubstantiated nodes. - Comparable total - the price used to rank offers. Shown as a gap-adjusted total only when every gap can be valued; otherwise Bursar shows the stated total plus an unpriced-gap count and never invents a number. - Award - the offer you chose. Awarding freezes a priced baseline that later spend is measured against. - Orphaned custody - an award whose owning request or offer can no longer be resolved. The baseline still holds, but the chain that produced it is broken. - Mismatch - drift between what was awarded and what is being billed. Some mismatches cannot be put in dollars; those read as \"not quantified\", never as a number. - Renewal - an award approaching rollover, grouped by how much notice lead time remains."
+    },
+    {
+      "anchor": "where-to-find-it",
+      "title": "Where to find it",
+      "text": "Bursar is served at /bursar/. It shares your BigBlueBam session, so if you are signed in to the suite you are signed in to Bursar. Press ? from any Bursar screen, or use the help control in the top bar, to open this help. The left sidebar has six entries: Vendor Portfolio (/), Requests (/requests), Mismatches (/mismatches), Renewals (/renewals), Review (/review), and Settings (/settings). Three more screens are reached by drilling in: a request's Scope Tree editor (/requests/:id), its Leveling Matrix (/requests/:id/level), and its Exclusion Diff (/requests/:id/diff); plus the vendor detail page (/vendors/:id) opened from a Portfolio row. Before Bursar is useful you need an organization, at least one vendor, and a request whose scope tree has been confirmed. Most write actions are floored to org admins during the current rollout."
+    },
+    {
+      "anchor": "feature-reference",
+      "title": "Feature reference",
+      "text": ""
+    },
+    {
+      "anchor": "vendor-portfolio",
+      "title": "Vendor Portfolio",
+      "text": "The Vendor Portfolio is the Bursar home page. It lists every active vendor with its category, criticality, and an Award column. A vendor with no award shows a No award on file badge; a vendor whose award chain is broken shows an orphaned custody badge. Award status is deliberately a first-class column: a vendor you are paying with no award on file is the thing to notice. To work the portfolio: 1. Open /bursar/. 2. Scan the Award column for No award on file or orphaned custody badges. 3. Click a row to open the vendor detail page. 4. To add a vendor, click Add vendor, fill in the name, optional category, and criticality, then click Add vendor again."
+    },
+    {
+      "anchor": "vendor-detail",
+      "title": "Vendor detail",
+      "text": "Opened from a Portfolio row (/vendors/:id), this page gathers everything about one vendor: its Award chain, the frozen Baseline of the active award, recorded Spend, open Findings, and its Payee aliases. If the active award has lost its chain, an orphaned custody banner appears at the top. Sections whose data is not yet available render as empty rather than failing."
+    },
+    {
+      "anchor": "requests-and-the-scope-tree-editor",
+      "title": "Requests and the Scope Tree editor",
+      "text": "A request holds the scope tree that offers are measured against. The Requests list shows each request with its scope status. Opening a request lands on the Scope Tree editor (/requests/:id). To prepare a request: 1. On Requests, click New request, give it a title and currency, then Create request. 2. On the Scope Tree editor, click Derive scope. Bursar reads the request and proposes a tree of nodes, each with a normative strength and a cited span. 3. Review the nodes. A node whose citation did not verify is marked unverified cite. 4. Optionally paste library entry IDs into Apply library entries and click Apply to fold in reusable scope. 5. If the request shows Request manipulation suspected, the flagged spans must be cleared before you can confirm. An admin can tick Clear injection flag on confirm (admin). 6. Click Confirm scope. The confirmed tree is now the ruler. Rival-derived nodes (proposals lifted from competing offers) never join the counted tree on their own. They appear in the Rival-proposal queue, where you click Promote to accept one after seeing how many offers support it."
+    },
+    {
+      "anchor": "leveling-matrix",
+      "title": "Leveling Matrix",
+      "text": "Confirm a request's scope, then open the Leveling Matrix (/requests/:id/level) to compare offers. Rows are scope nodes; columns are offers. Each cell is a coverage verdict you can click to open its evidence: the cited span, the matched lines, and, for an Absent verdict, the rejected candidates the engine considered and dropped. Reading the Matrix: 1. Click Level offers to start a run. Progress appears as \"offer n/N, node m/M, window w/W\" and refreshes every 5 seconds. 2. Each offer column shows its comparable total. When gaps can be valued the columns are sorted by the gap-adjusted total; otherwise the column shows the stated total and an unpriced gaps count instead of a fabricated number. 3. A cell held out of publication shows its withheld reason (for example withheld: blanketcap). Withheld cells are always visible. 4. A medium-band verdict is drawn distinctly (a dashed outline and a \"(medium)\" tag) and is left out of the Published gaps headline count. That count names the bands that contributed so you can confirm medium was excluded. 5. Click any cell to open the evidence panel on the right."
+    },
+    {
+      "anchor": "exclusion-diff",
+      "title": "Exclusion Diff",
+      "text": "The Exclusion Diff (/requests/:id/diff) is the buyer-facing summary. For every offer it lists every mandatory node exactly once, in one of three states: published, needs review, or unverified. The three always sum to the mandatory-node count, shown in the header. How to read it: 1. If any node is needs review or unverified, a red This offer is not clear banner appears. While that banner is up, no clean or fully-covered conclusion is offered anywhere for that offer. 2. An offer that claims blanket coverage shows a This offer claims blanket coverage; here is what it does not itemize panel listing the unsubstantiated nodes. 3. An offer with every mandatory node published and no gaps shows a green No gaps on mandatory scope state. This only appears when nothing is needs review or unverified. 4. Gap rows (Absent or Excluded) are tinted so they stand out in the full node list."
+    },
+    {
+      "anchor": "mismatch-inbox",
+      "title": "Mismatch Inbox",
+      "text": "The Mismatch Inbox (/mismatches) lists drift between what was awarded and what is being billed, ordered by severity. The Amount column shows money when the detector could value the drift and the literal words not quantified when it could not. A not-quantified mismatch is never shown as a number. With the right permission you can Resolve, Dismiss, or Mark wrong a finding from the row."
+    },
+    {
+      "anchor": "renewal-radar",
+      "title": "Renewal Radar",
+      "text": "The Renewal Radar (/renewals) lists awards approaching rollover, grouped by lead band (for example 90d, 30d, 7d, or overdue), with the renewal date and the notice-by date. Jump to a vendor from any row."
+    },
+    {
+      "anchor": "review-queue",
+      "title": "Review Queue",
+      "text": "The Review page (/review) is where a human settles what the engine could not. It has three tabs: - Coverage adjudication - coverage rows held for review. Click Adjudicate, pick a verdict, type a reason, and click Apply to override. - Alias review - payee strings sitting between the match thresholds, waiting to be linked to a vendor. - Drafts - clarification and negotiation-brief drafts. Approve or reject each; approval routes it into the platform approval queue rather than sending it. Rival-proposal promotion is handled in each request's Scope Tree editor, where the promoter can see the supporting offers first."
+    },
+    {
+      "anchor": "settings",
+      "title": "Settings",
+      "text": "The Settings page (/settings) holds detector Thresholds and weights, Run caps, Lexicons (the blanket and exclusion phrase lists and the renewal lead bands), and the Scope library. Global built-in library rows are read-only and marked global (read-only); your org's own entries can be edited. Weakening a weight is audited with a before/after diff. Settings writes are limited to org admins."
+    },
+    {
+      "anchor": "working-with-ai-agents",
+      "title": "Working with AI agents",
+      "text": "Agents read Bursar through its MCP tools and drive the same comparisons a human would. The read tools include bursarlistrequests, bursargetrequest, bursargetscopetree, bursarlistoffers, bursargetmatrix, bursargettotals, bursargetcoverage (which returns rejected candidates, overlap, and the withheld reason), bursarexclusiondiff, bursarvendorview, bursarresolvevendor, bursarspendbyvendor, bursarmismatches, bursarrenewalsdue, bursargetbaseline, bursarlistawards, and bursarlistlevelingruns. bursarlevelquotes starts a leveling run and bursardraftclarification drafts a clarification into the review queue. Some acts are deliberately human-only and have no tool: confirming a scope, promoting a rival, awarding, freezing a baseline, overriding a coverage verdict, and marking a mismatch wrong. Those are the calibration ground truth, so a person makes them. When an agent narrows a read to the human it acts for, Bursar takes the intersection of the agent's and that human's access, never the wider of the two. See the Bursar MCP-tools reference in docs/apps/bursar/ for the full catalog."
+    },
+    {
+      "anchor": "user-stories",
+      "title": "User Stories",
+      "text": ""
+    },
+    {
+      "anchor": "story-compare-competing-quotes-and-find-what-one-leaves-out",
+      "title": "Story: Compare competing quotes and find what one leaves out",
+      "text": "Who: A buyer taking in vendor quotes. Goal: See which offer omits a mandatory requirement. Before you start: A request with a confirmed scope tree and at least two offers submitted against it. Steps 1. Open the request from Requests and confirm its scope status reads confirmed. 2. Click Leveling Matrix. 3. Click Level offers and wait for the progress line to finish. 4. Read down the mandatory rows. A red Absent cell is a requirement that offer left out. 5. Click the Absent cell to see the rejected candidates, confirming the engine looked and found nothing. 6. Click Exclusion Diff for the buyer-facing summary of every mandatory node per offer. Result: You can name exactly which offer omits which requirement, with evidence. Related: bursargetmatrix and bursarexclusiondiff return the same view to an agent."
+    },
+    {
+      "anchor": "story-see-through-a-blanket-all-inclusive-quote",
+      "title": "Story: See through a blanket \"all inclusive\" quote",
+      "text": "Who: A buyer facing a quote that claims to cover everything. Goal: Find out what the blanket claim does not actually itemize. Before you start: A leveled request that includes an offer claiming blanket coverage. Steps 1. Open the request's Exclusion Diff. 2. Find the offer with the amber This offer claims blanket coverage; here is what it does not itemize panel. 3. Read the list of unsubstantiated nodes under it. 4. Note that a red This offer is not clear banner is present, so Bursar offers no clean verdict for this offer. Result: The blanket claim is shown for what it is: a list of requirements the offer never substantiated."
+    },
+    {
+      "anchor": "story-adjudicate-a-verdict-the-engine-held-for-review",
+      "title": "Story: Adjudicate a verdict the engine held for review",
+      "text": "Who: A reviewer with coverage-override permission. Goal: Settle a coverage verdict the engine withheld. Before you start: A leveled request with at least one withheld coverage row. Steps 1. Open Review and stay on the Coverage adjudication tab. 2. Find the row and read its verdict, band, and withheld reason. 3. Click open matrix to see the evidence in context if you need it. 4. Click Adjudicate, choose the correct verdict, type a reason, and click Apply. Result: The verdict is published with your reason recorded, and the Matrix and Diff update."
+    },
+    {
+      "anchor": "story-add-a-vendor-and-watch-its-award-status",
+      "title": "Story: Add a vendor and watch its award status",
+      "text": "Who: A procurement admin. Goal: Track a new vendor and notice when it has spend but no award. Before you start: Vendor-write permission. Steps 1. On the Vendor Portfolio, click Add vendor. 2. Enter the name, an optional category, and a criticality, then click Add vendor. 3. Open the new vendor and review its Award chain, Baseline, Spend, and Findings. 4. Back on the portfolio, watch the Award column for a No award on file badge on any vendor you are paying. Result: The vendor is tracked, and unawarded spend is visible at a glance."
+    },
+    {
+      "anchor": "story-tune-a-detector-threshold",
+      "title": "Story: Tune a detector threshold",
+      "text": "Who: An org admin. Goal: Adjust a detector weight and keep an audit trail. Before you start: Settings-write permission (org admin). Steps 1. Open Settings. 2. In Thresholds and weights, change a value such as Blanket cumulative cap. 3. Click Save. 4. Confirm the success message. The before and after values are recorded in the settings audit. Result: The detector runs with the new setting, and the change is auditable."
+    },
+    {
+      "anchor": "related",
+      "title": "Related",
+      "text": "- Bin stores the request and offer documents Bursar reads. - Bond and Braid resolve a vendor to a golden client identity. - Bill is where awarded spend originates and where mismatches are measured against the baseline. - Bolt receives Bursar events such as a detected exclusion. - Banter carries notifications and the review handoff. - See the Bursar MCP-tools reference and guide.md in docs/apps/bursar/."
+    }
+  ],
+  "labels": {
+    "Absent": "key-concepts",
+    "Add vendor": "vendor-portfolio",
+    "Adjudicate": "review-queue",
+    "Alias review": "review-queue",
+    "Ambiguous": "key-concepts",
+    "Amount": "mismatch-inbox",
+    "Apply": "requests-and-the-scope-tree-editor",
+    "Apply library entries": "requests-and-the-scope-tree-editor",
+    "Award": "key-concepts",
+    "Award chain": "vendor-detail",
+    "Banter": "related",
+    "Baseline": "vendor-detail",
+    "Bill": "related",
+    "Bin": "related",
+    "Blanket claim": "key-concepts",
+    "Blanket cumulative cap": "story-tune-a-detector-threshold",
+    "Bolt": "related",
+    "Bond": "related",
+    "Braid": "related",
+    "Clear injection flag on confirm (admin)": "requests-and-the-scope-tree-editor",
+    "Comparable total": "key-concepts",
+    "Confidence band": "key-concepts",
+    "Confirm scope": "requests-and-the-scope-tree-editor",
+    "Coverage adjudication": "review-queue",
+    "Coverage verdict": "key-concepts",
+    "Covered": "key-concepts",
+    "Create request": "requests-and-the-scope-tree-editor",
+    "Derive scope": "requests-and-the-scope-tree-editor",
+    "Dismiss": "mismatch-inbox",
+    "Drafts": "review-queue",
+    "Excluded": "key-concepts",
+    "Exclusion Diff": "where-to-find-it",
+    "Findings": "vendor-detail",
+    "Level offers": "leveling-matrix",
+    "Leveling Matrix": "where-to-find-it",
+    "Lexicons": "settings",
+    "Mark wrong": "mismatch-inbox",
+    "Mismatch": "key-concepts",
+    "Mismatch Inbox": "mismatch-inbox",
+    "Mismatches": "where-to-find-it",
+    "N/A": "key-concepts",
+    "New request": "requests-and-the-scope-tree-editor",
+    "No award on file": "vendor-portfolio",
+    "No gaps on mandatory scope": "exclusion-diff",
+    "Normative strength": "key-concepts",
+    "Offer": "key-concepts",
+    "Orphaned custody": "key-concepts",
+    "Partial": "key-concepts",
+    "Payee aliases": "vendor-detail",
+    "Promote": "requests-and-the-scope-tree-editor",
+    "Published gaps": "leveling-matrix",
+    "Renewal": "key-concepts",
+    "Renewal Radar": "renewal-radar",
+    "Renewals": "where-to-find-it",
+    "Request": "key-concepts",
+    "Request manipulation suspected": "requests-and-the-scope-tree-editor",
+    "Requests": "where-to-find-it",
+    "Resolve": "mismatch-inbox",
+    "Review": "where-to-find-it",
+    "Review state": "key-concepts",
+    "Rival-proposal queue": "requests-and-the-scope-tree-editor",
+    "Run caps": "settings",
+    "Save": "story-tune-a-detector-threshold",
+    "Scope Tree editor": "where-to-find-it",
+    "Scope library": "settings",
+    "Scope tree": "key-concepts",
+    "Settings": "where-to-find-it",
+    "Spend": "vendor-detail",
+    "This offer is not clear": "exclusion-diff",
+    "Thresholds and weights": "settings",
+    "Vendor": "key-concepts",
+    "Vendor Portfolio": "where-to-find-it",
+    "Withheld reason": "key-concepts",
+    "awards": "overview",
+    "band": "key-concepts",
+    "blanket_cap": "key-concepts",
+    "concentration": "key-concepts",
+    "coverage": "overview",
+    "global (read-only)": "settings",
+    "informational": "key-concepts",
+    "mandatory": "key-concepts",
+    "medium": "key-concepts",
+    "mismatches": "overview",
+    "needs review": "key-concepts",
+    "nice_to_have": "key-concepts",
+    "not quantified": "mismatch-inbox",
+    "offers": "overview",
+    "open matrix": "story-adjudicate-a-verdict-the-engine-held-for-review",
+    "orphaned custody": "vendor-portfolio",
+    "published": "key-concepts",
+    "renewals": "overview",
+    "requests": "overview",
+    "scope tree": "overview",
+    "should_have": "key-concepts",
+    "throttled": "key-concepts",
+    "totals": "overview",
+    "unparseable": "key-concepts",
+    "unpriced gaps": "leveling-matrix",
+    "unverified": "key-concepts",
+    "unverified cite": "requests-and-the-scope-tree-editor",
+    "vendor detail": "where-to-find-it",
+    "vendors": "overview",
+    "withheld": "leveling-matrix",
+    "withheld: blanket_cap": "leveling-matrix"
+  },
+  "crossrefs": [
+    {
+      "app": "bin",
+      "title": "Bin"
+    },
+    {
+      "app": "bond",
+      "title": "Bond"
+    },
+    {
+      "app": "braid",
+      "title": "Braid"
+    },
+    {
+      "app": "bill",
+      "title": "Bill"
+    },
+    {
+      "app": "bolt",
+      "title": "Bolt"
+    },
+    {
+      "app": "banter",
+      "title": "Banter"
+    }
+  ]
+}
