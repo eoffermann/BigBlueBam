@@ -33,6 +33,10 @@ import {
 import { processBlastSendJob, type BlastSendJobData } from './jobs/blast-send.job.js';
 import { processBondStaleDealsJob, type BondStaleDealsJobData } from './jobs/bond-stale-deals.job.js';
 import {
+  processBamTaskOverdueSweepJob,
+  type BamTaskOverdueSweepJobData,
+} from './jobs/bam-task-overdue-sweep.job.js';
+import {
   processBillPdfGenerateJob,
   type BillPdfGenerateJobData,
 } from './jobs/bill-pdf-generate.job.js';
@@ -959,6 +963,44 @@ bondStaleDealsQueue.upsertJobScheduler(
   { pattern: '0 2 * * *' }, // 2 AM daily
   { name: 'daily-sweep', data: {} },
 ).catch((err) => logger.error({ err }, 'Failed to register bond stale-deals scheduler'));
+
+// Bam task-overdue sweep worker (low-latency live path for the task.overdue Bolt event).
+// Runs every 30 minutes; emits task.overdue with trigger_at = due_date so it converges on the
+// same Bulwark arm key as the 30-min state-reconcile backstop, and stamps overdue_alerted_at for
+// idempotency (reset on the task.service due_date-change path).
+const bamTaskOverdueSweepWorker = new Worker<BamTaskOverdueSweepJobData>(
+  'bam-task-overdue-sweep',
+  async (job: Job<BamTaskOverdueSweepJobData>) => {
+    await processBamTaskOverdueSweepJob(job, logger);
+  },
+  { ...connection, concurrency: 1 },
+);
+
+bamTaskOverdueSweepWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'bam-task-overdue-sweep' }, 'Job completed');
+});
+
+bamTaskOverdueSweepWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'bam-task-overdue-sweep', err }, 'Job failed');
+  // Mirror into system_errors so the SuperUser Log Analysis tab
+  // surfaces this failure. Best-effort, never throws.
+  void recordWorkerError({
+    queueName: 'bam-task-overdue-sweep',
+    jobId: job?.id,
+    jobName: job?.name,
+    err: err as Error,
+  });
+});
+
+// Schedule the task-overdue sweep every 30 minutes (low-latency but not hammering; the 30-min
+// Bulwark state-reconcile is the durable backstop). Offset to :07 / :37 to avoid the on-the-hour
+// and on-the-half-hour job pileups.
+const bamTaskOverdueSweepQueue = new Queue('bam-task-overdue-sweep', { connection: redis });
+bamTaskOverdueSweepQueue.upsertJobScheduler(
+  'bam-task-overdue-sweep-30m',
+  { pattern: '7,37 * * * *' }, // every 30 minutes at :07 and :37
+  { name: 'sweep', data: {} },
+).catch((err) => logger.error({ err }, 'Failed to register bam task-overdue sweep scheduler'));
 
 // ---------------------------------------------------------------------------
 // Wave 2C deferred workers (Bill, Blank, Bench, Brief, Helpdesk).
@@ -2516,6 +2558,7 @@ const workers = [
   boltScheduleTickWorker,
   blastSendWorker,
   bondStaleDealsWorker,
+  bamTaskOverdueSweepWorker,
   billPdfGenerateWorker,
   billEmailSendWorker,
   billOverdueReminderWorker,
@@ -2597,6 +2640,7 @@ logger.info(
       'bolt-schedule',
       'blast-send',
       'bond-stale-deals',
+      'bam-task-overdue-sweep',
       'bill-pdf-generate',
       'bill-email-send',
       'bill-overdue-reminder',

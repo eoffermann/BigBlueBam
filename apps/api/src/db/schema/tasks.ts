@@ -53,6 +53,11 @@ export const tasks = pgTable(
     start_date: date('start_date'),
     due_date: date('due_date'),
     completed_at: timestamp('completed_at', { withTimezone: true }),
+    // Idempotency marker for the bam-task-overdue-sweep worker job (migration 0246).
+    // Set to NOW() when a task.overdue Bolt event has been emitted for the current
+    // due-date arming; cleared back to NULL on the task.service due_date-change path so
+    // a re-dated task re-arms (mirrors bond_deals.rotting_alerted_at on stage change).
+    overdue_alerted_at: timestamp('overdue_alerted_at', { withTimezone: true }),
     position: doublePrecision('position').default(0).notNull(),
     labels: uuid('labels')
       .array()

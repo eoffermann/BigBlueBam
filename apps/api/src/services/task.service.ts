@@ -830,6 +830,13 @@ export async function updateTask(taskId: string, data: UpdateTaskInput, actorId?
       .limit(1);
     oldStartDate = prevDates?.start_date ?? null;
     oldDueDate = prevDates?.due_date ?? null;
+
+    // Re-arm the overdue sweep when the due date actually changes: clearing the
+    // idempotency marker lets bam-task-overdue-sweep re-emit task.overdue for the
+    // new date (mirrors bond resetting rotting_alerted_at when a deal changes stage).
+    if (data.due_date !== undefined && data.due_date !== oldDueDate) {
+      updateValues.overdue_alerted_at = null;
+    }
   }
 
   const [task] = await db
