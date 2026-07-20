@@ -9,9 +9,9 @@ app: bursar
 
 Bursar is BigBlueBam's vendor-side procurement and absence-detection tool: it reads a request into a scope tree, then levels every competing offer against that tree and tells you, node by node, what each offer leaves out. A buyer takes in several quotes, one of them quietly omits a mandatory requirement or claims to cover everything without itemizing it, and nobody notices until the work is underway and the omission is a bill. Bursar is the reader and the referee. You create a request, derive and confirm its scope tree, and from then on every offer under that request is classified line by line into a coverage verdict for each scope node: covered, partial, explicitly excluded, or absent. The product is the absence: the requirement a vendor left out. After you award an offer, Bursar freezes its priced baseline and watches real spend against it, raising mismatches when billing drifts and renewal notices before a contract rolls over. Bursar owns none of the source data: the documents live in Bin, spend comes from Bill, and the vendor is a Bond or Braid record. Reach for it when you compare vendor quotes and need to know, with evidence, which offer omits the thing you actually require.
 
-![The Vendor Portfolio with award status as a first-class column](screenshots/light/vendor-portfolio.png)
+![The Vendor Portfolio with award status as a first-class column](screenshots/light/01-vendor-portfolio.png)
 
-![The Leveling Matrix with a coverage verdict in every cell](screenshots/light/leveling-matrix.png)
+![The Leveling Matrix with a coverage verdict in every cell](screenshots/light/04-leveling-matrix.png)
 
 ## Key Features
 

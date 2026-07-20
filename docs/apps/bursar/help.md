@@ -44,7 +44,7 @@ Before Bursar is useful you need an organization, at least one vendor, and a req
 
 The Vendor Portfolio is the Bursar home page. It lists every active vendor with its category, criticality, and an **Award** column. A vendor with no award shows a **No award on file** badge; a vendor whose award chain is broken shows an **orphaned custody** badge. Award status is deliberately a first-class column: a vendor you are paying with no award on file is the thing to notice.
 
-![The Vendor Portfolio: every vendor with award status as a first-class column](screenshots/light/vendor-portfolio.png)
+![The Vendor Portfolio: every vendor with award status as a first-class column](screenshots/light/01-vendor-portfolio.png)
 
 To work the portfolio:
 
@@ -76,7 +76,7 @@ Rival-derived nodes (proposals lifted from competing offers) never join the coun
 
 Confirm a request's scope, then open the **Leveling Matrix** (`/requests/:id/level`) to compare offers. Rows are scope nodes; columns are offers. Each cell is a coverage verdict you can click to open its evidence: the cited span, the matched lines, and, for an **Absent** verdict, the rejected candidates the engine considered and dropped.
 
-![The Leveling Matrix: scope nodes down, offers across, a verdict in every cell](screenshots/light/leveling-matrix.png)
+![The Leveling Matrix: scope nodes down, offers across, a verdict in every cell](screenshots/light/04-leveling-matrix.png)
 
 Reading the Matrix:
 
@@ -90,7 +90,7 @@ Reading the Matrix:
 
 The **Exclusion Diff** (`/requests/:id/diff`) is the buyer-facing summary. For every offer it lists every mandatory node exactly once, in one of three states: **published**, **needs review**, or **unverified**. The three always sum to the mandatory-node count, shown in the header.
 
-![The Exclusion Diff: every mandatory node, exactly once, per offer](screenshots/light/exclusion-diff.png)
+![The Exclusion Diff: every mandatory node, exactly once, per offer](screenshots/light/05-exclusion-diff.png)
 
 How to read it:
 
