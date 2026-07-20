@@ -290,6 +290,37 @@ import { processBurnProposalReconcileJob } from './jobs/burn-proposal-reconcile.
 import { processBurnRetentionJob } from './jobs/burn-retention.job.js';
 import { processBurnEmbedSyncJob } from './jobs/burn-embed-sync.job.js';
 
+// Bursar (contract intake / scope-derivation / leveling engine) jobs (Bursar spec 3.2 / 4.1 / 15).
+// 10 queues: 3 EVENT-DRIVEN consumers (derive-scope, parse-offer, level) enqueued by bursar-api,
+// and 7 SCHEDULED sweeps that are thin HTTP callers to bursar-api's internal engine dispatcher.
+// Locks live inside bursar-api. Queue contracts live in @bigbluebam/shared.
+import {
+  BURSAR_DERIVE_SCOPE_QUEUE,
+  BURSAR_PARSE_OFFER_QUEUE,
+  BURSAR_LEVEL_QUEUE,
+  BURSAR_DRIFT_SWEEP_QUEUE,
+  BURSAR_RENEWAL_RADAR_QUEUE,
+  BURSAR_MISMATCH_RECONCILE_QUEUE,
+  BURSAR_RUN_REAPER_QUEUE,
+  BURSAR_DRAFT_RECONCILE_QUEUE,
+  BURSAR_WEEKLY_DIGEST_QUEUE,
+  BURSAR_RETENTION_QUEUE,
+  type BursarDeriveScopeJobData,
+  type BursarParseOfferJobData,
+  type BursarLevelJobData,
+  type BursarSweepJobData,
+} from '@bigbluebam/shared';
+import { processBursarDeriveScopeJob } from './jobs/bursar-derive-scope.job.js';
+import { processBursarParseOfferJob } from './jobs/bursar-parse-offer.job.js';
+import { processBursarLevelJob } from './jobs/bursar-level.job.js';
+import { processBursarDriftSweepJob } from './jobs/bursar-drift-sweep.job.js';
+import { processBursarRenewalRadarJob } from './jobs/bursar-renewal-radar.job.js';
+import { processBursarMismatchReconcileJob } from './jobs/bursar-mismatch-reconcile.job.js';
+import { processBursarRunReaperJob } from './jobs/bursar-run-reaper.job.js';
+import { processBursarDraftReconcileJob } from './jobs/bursar-draft-reconcile.job.js';
+import { processBursarWeeklyDigestJob } from './jobs/bursar-weekly-digest.job.js';
+import { processBursarRetentionJob } from './jobs/bursar-retention.job.js';
+
 const env = loadEnv();
 
 const logger = pino({
@@ -2518,6 +2549,88 @@ registerBurnSweep(BURN_RETENTION_QUEUE, processBurnRetentionJob, { id: 'burn-ret
 // Embed-sync: registered but scheduled OFF (behind embedding_enabled). Consumer exists so the
 // queue is a stable contract; no upsertJobScheduler.
 registerBurnSweep(BURN_EMBED_SYNC_QUEUE, processBurnEmbedSyncJob, null);
+
+// ─── Bursar (contract intake / scope-derivation / leveling) engine ─────────
+// 10 queues: 3 EVENT-DRIVEN consumers (derive-scope, parse-offer, level) enqueued by bursar-api,
+// and 7 SCHEDULED sweeps that are thin HTTP callers to bursar-api's internal engine dispatcher
+// (POST /v1/internal/engines/<name> with an empty body for a scheduled tick). Locks live inside
+// bursar-api. Every Bursar queue explicitly sets removeOnComplete:100 / removeOnFail:500 (spec 15,
+// Redis noeviction hygiene): the event queues' producer sets them at enqueue time in bursar-api;
+// the scheduled queues set them here via BURSAR_JOB_OPTS on upsertJobScheduler.
+const BURSAR_JOB_OPTS = {
+  attempts: 5,
+  backoff: { type: 'exponential' as const, delay: 30_000 },
+  removeOnComplete: 100,
+  removeOnFail: 500,
+};
+
+// The 3 event-driven consumers. NO scheduler (bursar-api is the producer). Mirrors burnExtractWorker.
+const bursarDeriveScopeWorker = new Worker<BursarDeriveScopeJobData>(
+  BURSAR_DERIVE_SCOPE_QUEUE,
+  async (job) => { await processBursarDeriveScopeJob(job, logger); },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bursarDeriveScopeWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BURSAR_DERIVE_SCOPE_QUEUE }, 'Job completed'); });
+bursarDeriveScopeWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BURSAR_DERIVE_SCOPE_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BURSAR_DERIVE_SCOPE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+const bursarParseOfferWorker = new Worker<BursarParseOfferJobData>(
+  BURSAR_PARSE_OFFER_QUEUE,
+  async (job) => { await processBursarParseOfferJob(job, logger); },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bursarParseOfferWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BURSAR_PARSE_OFFER_QUEUE }, 'Job completed'); });
+bursarParseOfferWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BURSAR_PARSE_OFFER_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BURSAR_PARSE_OFFER_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+const bursarLevelWorker = new Worker<BursarLevelJobData>(
+  BURSAR_LEVEL_QUEUE,
+  async (job) => { await processBursarLevelJob(job, logger); },
+  { ...connection, concurrency: env.WORKER_CONCURRENCY },
+);
+bursarLevelWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue: BURSAR_LEVEL_QUEUE }, 'Job completed'); });
+bursarLevelWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: BURSAR_LEVEL_QUEUE, err }, 'Job failed');
+  void recordWorkerError({ queueName: BURSAR_LEVEL_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+// The 7 scheduled sweeps. Mirrors registerBurnSweep, plus an optional BullMQ limiter for the
+// bounded drift-sweep. Each scheduled queue passes opts: BURSAR_JOB_OPTS so removeOnComplete:100 /
+// removeOnFail:500 apply to every fired job.
+function registerBursarSweep(
+  queue: string,
+  handler: (job: Job<BursarSweepJobData>, l: typeof logger) => Promise<void>,
+  schedule: { id: string; pattern: string },
+  limiter?: { max: number; duration: number },
+) {
+  const w = new Worker<BursarSweepJobData>(
+    queue,
+    async (job) => { await handler(job, logger); },
+    { ...connection, concurrency: 1, ...(limiter ? { limiter } : {}) },
+  );
+  w.on('completed', (job) => { logger.info({ jobId: job.id, queue }, 'Job completed'); });
+  w.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, queue, err }, 'Job failed');
+    void recordWorkerError({ queueName: queue, jobId: job?.id, jobName: job?.name, err: err as Error });
+  });
+  const q = makeQueue<BursarSweepJobData>(queue);
+  q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, { name: 'run', data: {}, opts: BURSAR_JOB_OPTS })
+    .catch((err) => logger.error({ err }, `Failed to register ${queue} scheduler`));
+}
+
+// drift-sweep every 30 min, with a bounded BullMQ limiter (spec: bounded sweep) of 20/min.
+registerBursarSweep(BURSAR_DRIFT_SWEEP_QUEUE, processBursarDriftSweepJob, { id: 'bursar-drift-sweep-30min', pattern: '*/30 * * * *' }, { max: 20, duration: 60000 });
+registerBursarSweep(BURSAR_RENEWAL_RADAR_QUEUE, processBursarRenewalRadarJob, { id: 'bursar-renewal-radar-daily', pattern: '0 6 * * *' });
+// mismatch-reconcile at :05 and :35 — offset so it runs AFTER the :00/:30 drift-sweep tick lands.
+registerBursarSweep(BURSAR_MISMATCH_RECONCILE_QUEUE, processBursarMismatchReconcileJob, { id: 'bursar-mismatch-reconcile-hourly', pattern: '5,35 * * * *' });
+registerBursarSweep(BURSAR_RUN_REAPER_QUEUE, processBursarRunReaperJob, { id: 'bursar-run-reaper-5min', pattern: '*/5 * * * *' });
+registerBursarSweep(BURSAR_DRAFT_RECONCILE_QUEUE, processBursarDraftReconcileJob, { id: 'bursar-draft-reconcile-15min', pattern: '*/15 * * * *' });
+registerBursarSweep(BURSAR_WEEKLY_DIGEST_QUEUE, processBursarWeeklyDigestJob, { id: 'bursar-weekly-digest-monday', pattern: '0 13 * * 1' });
+registerBursarSweep(BURSAR_RETENTION_QUEUE, processBursarRetentionJob, { id: 'bursar-retention-daily', pattern: '20 5 * * *' });
 
 // §1 Wave 5 banter subs — pattern-match consumer.
 // Subscribes to the banter:events Redis channel (the same fan-out used by

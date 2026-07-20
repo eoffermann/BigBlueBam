@@ -506,3 +506,217 @@ export const bursarAwardTerminateSchema = z.object({
   reason: z.string().min(1).max(2000),
 });
 export type BursarAwardTerminate = z.infer<typeof bursarAwardTerminateSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Spend (M8): observed statement stream, import, export             */
+/* ------------------------------------------------------------------ */
+
+// One parsed statement row for POST /spend/import. amount_minor is signed minor units; a
+// statement credit is negative. occurred_on is YYYY-MM-DD. external_ref is a statement/transaction
+// reference used in the dedup tuple. The server normalizes payee_raw and resolves the vendor.
+export const bursarSpendRowSchema = z.object({
+  payee_raw: z.string().min(1).max(512),
+  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD'),
+  amount_minor: z.coerce.number().int(),
+  currency: z.string().length(3).default('USD'),
+  external_ref: z.string().max(256).nullable().optional(),
+  funding_source: z.string().max(64).nullable().optional(),
+});
+export type BursarSpendRow = z.infer<typeof bursarSpendRowSchema>;
+
+// POST /spend/import. The client sends already-parsed rows plus the file identity. file_sha256 is
+// the sha256 of the raw uploaded file and is the resumability key: re-uploading the same file
+// RESUMES the upsert (idempotent), never doubles. filename is advisory.
+export const bursarSpendImportSchema = z.object({
+  file_sha256: z.string().regex(/^[0-9a-f]{64}$/i, 'expected a 64-char hex sha256'),
+  filename: z.string().max(512).nullable().optional(),
+  rows: z.array(bursarSpendRowSchema).min(1).max(20_000),
+});
+export type BursarSpendImport = z.infer<typeof bursarSpendImportSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Mismatches (M8): the detector inbox                               */
+/* ------------------------------------------------------------------ */
+
+export const BursarDetector = z.enum([
+  'price_drift',
+  'scope_divergence',
+  'unbaselined_vendor',
+  'renewal_cliff',
+  'offer_manipulation_suspected',
+  'request_manipulation_suspected',
+]);
+export type BursarDetector = z.infer<typeof BursarDetector>;
+
+// POST /mismatches/:id/resolve|dismiss carry an optional human note recorded on the row.
+export const bursarMismatchDecisionSchema = z
+  .object({
+    note: z.string().max(2000),
+  })
+  .partial();
+export type BursarMismatchDecision = z.infer<typeof bursarMismatchDecisionSchema>;
+
+// POST /mismatches/:id/mark-wrong: a human verdict the detector fired incorrectly, feeding
+// threshold calibration (bursar_detector_feedback). The reason is required for a wrong verdict.
+export const bursarMarkWrongSchema = z.object({
+  reason: z.string().min(1).max(2000),
+});
+export type BursarMarkWrong = z.infer<typeof bursarMarkWrongSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Renewals (M8): the renewal radar                                  */
+/* ------------------------------------------------------------------ */
+
+// POST /renewals/:id/decide. `renew` records the intent to renew; `let_lapse` to not; `defer`
+// snoozes the radar for this cycle. A note is recorded on the row.
+export const BursarRenewalDecision = z.enum(['renew', 'let_lapse', 'defer']);
+export type BursarRenewalDecision = z.infer<typeof BursarRenewalDecision>;
+
+export const bursarRenewalDecideSchema = z.object({
+  decision: BursarRenewalDecision,
+  note: z.string().max(2000).nullable().optional(),
+});
+export type BursarRenewalDecide = z.infer<typeof bursarRenewalDecideSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Drafts (M8): the HITL choke point, confidential                   */
+/* ------------------------------------------------------------------ */
+
+export const BursarDraftKind = z.enum(['clarification', 'negotiation_brief']);
+export type BursarDraftKind = z.infer<typeof BursarDraftKind>;
+
+// POST /drafts/clarification and /drafts/negotiation-brief. The grounding is derived server-side by
+// buildDraftGrounding(offer_id, request_id); a caller cannot supply arbitrary grounding text. The
+// draft is owner-scoped to created_by plus explicit holders (spec 5.7).
+export const bursarDraftCreateSchema = z.object({
+  request_id: z.string().uuid(),
+  offer_id: z.string().uuid().nullable().optional(),
+  vendor_id: z.string().uuid().nullable().optional(),
+  award_id: z.string().uuid().nullable().optional(),
+  mismatch_id: z.string().uuid().nullable().optional(),
+  title: z.string().max(512).nullable().optional(),
+  // A human prompt/intent the draft body is built around; NEVER the grounding itself.
+  prompt: z.string().max(4000).nullable().optional(),
+});
+export type BursarDraftCreate = z.infer<typeof bursarDraftCreateSchema>;
+
+// POST /drafts/:id/approve|reject. Approve is floored (bursar.draft.approve). A reason is optional
+// on approve, recommended on reject.
+export const bursarDraftDecisionSchema = z
+  .object({
+    reason: z.string().max(2000),
+  })
+  .partial();
+export type BursarDraftDecision = z.infer<typeof bursarDraftDecisionSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Gate (M8): advisory scope-gap check                               */
+/* ------------------------------------------------------------------ */
+
+// POST /gate/scope-gap. ADVISORY ONLY (spec 9): returns pass|advisory + cited reason codes and
+// records a bursar_gate_checks row. There is NO enforcement, NO bill-api preHandler, NO blocking.
+export const bursarScopeGapSchema = z.object({
+  request_id: z.string().uuid().nullable().optional(),
+  vendor_id: z.string().uuid().nullable().optional(),
+  // A dotted reference to the money-out subject being advised on (e.g. bill.expense:<id>).
+  subject_ref: z.string().max(96).nullable().optional(),
+});
+export type BursarScopeGap = z.infer<typeof bursarScopeGapSchema>;
+
+export const BursarGateVerdict = z.enum(['pass', 'advisory']);
+export type BursarGateVerdict = z.infer<typeof BursarGateVerdict>;
+
+/* ------------------------------------------------------------------ */
+/*  Library CRUD (M8): org library entries; global rows rejected      */
+/* ------------------------------------------------------------------ */
+
+export const bursarLibraryCreateSchema = z.object({
+  category: z.string().max(64).default('general'),
+  title: z.string().min(1).max(512),
+  description: z.string().max(4000).nullable().optional(),
+  node_kind: z.string().max(32).default('requirement'),
+  normative_strength: BursarNormativeStrength.default('mandatory'),
+  unit: z.string().max(32).nullable().optional(),
+  default_quantity: z.coerce.number().nullable().optional(),
+  unit_price_minor: z.coerce.number().int().nullable().optional(),
+  currency: z.string().length(3).nullable().optional(),
+  tags: z.array(z.string().max(64)).max(50).optional(),
+});
+export type BursarLibraryCreate = z.infer<typeof bursarLibraryCreateSchema>;
+
+export const bursarLibraryUpdateSchema = bursarLibraryCreateSchema.partial();
+export type BursarLibraryUpdate = z.infer<typeof bursarLibraryUpdateSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Internal engine transport (M8): event inbox + engine dispatch     */
+/* ------------------------------------------------------------------ */
+
+// POST /internal/events (spec 16.2). bolt-api's dispatch hook POSTs subscribed events here; the
+// route persists to bursar_ingest_events (idempotent on source_idempotency_key) and consumes
+// expense.created/approved -> spend event and profile.merged -> re-point braid_profile_id.
+// invoice.paid and payment.recorded (money in) are intentionally NOT subscribed and are ignored.
+export const bursarInternalEventSchema = z.object({
+  organization_id: z.string().uuid(),
+  event: z.string().min(1).max(96),
+  source: z.string().min(1).max(48),
+  event_id: z.string().max(128).nullable().optional(),
+  payload: z.record(z.unknown()).default({}),
+});
+export type BursarInternalEvent = z.infer<typeof bursarInternalEventSchema>;
+
+// POST /internal/engines/:name (spec 15). The worker sweep/cron jobs are thin HTTP callers into
+// this one dispatcher, since the per-org advisory locks live inside bursar-api. Omit
+// organization_id to sweep every org that has work; pass it to sweep one org.
+export const bursarRunEngineSchema = z
+  .object({
+    organization_id: z.string().uuid().optional(),
+    // Bound a single tick: max orgs and max rows per org. The route clamps to safe ceilings.
+    org_budget: z.coerce.number().int().positive().max(1000).optional(),
+    row_budget: z.coerce.number().int().positive().max(50_000).optional(),
+    lease_ms: z.coerce.number().int().positive().max(3_600_000).optional(),
+  })
+  .partial();
+export type BursarRunEngine = z.infer<typeof bursarRunEngineSchema>;
+
+// The engine names the /internal/engines/:name dispatcher accepts (spec 15). run-reaper is also
+// reachable via the dedicated /internal/run-reaper route (M3); it is included here so the M8
+// worker can drive every scheduled engine through one uniform transport.
+export const BURSAR_ENGINE_NAMES = [
+  'drift-sweep',
+  'renewal-radar',
+  'mismatch-reconcile',
+  'draft-reconcile',
+  'weekly-digest',
+  'retention',
+  'run-reaper',
+] as const;
+export type BursarEngineName = (typeof BURSAR_ENGINE_NAMES)[number];
+
+// BullMQ queue names for the M8 scheduled/sweep worker jobs. The three event queues
+// (BURSAR_DERIVE_SCOPE_QUEUE / BURSAR_PARSE_OFFER_QUEUE / BURSAR_LEVEL_QUEUE) are declared above.
+// Every Bursar queue sets removeOnComplete:100, removeOnFail:500 (spec 15, Redis noeviction
+// hygiene). The worker registration lands in M8.
+export const BURSAR_DRIFT_SWEEP_QUEUE = 'bursar-drift-sweep';
+export const BURSAR_RENEWAL_RADAR_QUEUE = 'bursar-renewal-radar';
+export const BURSAR_MISMATCH_RECONCILE_QUEUE = 'bursar-mismatch-reconcile';
+export const BURSAR_RUN_REAPER_QUEUE = 'bursar-run-reaper';
+export const BURSAR_DRAFT_RECONCILE_QUEUE = 'bursar-draft-reconcile';
+export const BURSAR_WEEKLY_DIGEST_QUEUE = 'bursar-weekly-digest';
+export const BURSAR_RETENTION_QUEUE = 'bursar-retention';
+
+// The engine-name path segment each sweep queue drives on /internal/engines/:name.
+export const BURSAR_SWEEP_ENGINE_BY_QUEUE: Record<string, BursarEngineName> = {
+  [BURSAR_DRIFT_SWEEP_QUEUE]: 'drift-sweep',
+  [BURSAR_RENEWAL_RADAR_QUEUE]: 'renewal-radar',
+  [BURSAR_MISMATCH_RECONCILE_QUEUE]: 'mismatch-reconcile',
+  [BURSAR_RUN_REAPER_QUEUE]: 'run-reaper',
+  [BURSAR_DRAFT_RECONCILE_QUEUE]: 'draft-reconcile',
+  [BURSAR_WEEKLY_DIGEST_QUEUE]: 'weekly-digest',
+  [BURSAR_RETENTION_QUEUE]: 'retention',
+};
+
+// Shared job-data shape for the scheduled sweep jobs. All optional: a scheduled tick carries an
+// empty object and the engine sweeps every org with work.
+export interface BursarSweepJobData {
+  organization_id?: string;
+}

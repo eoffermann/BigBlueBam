@@ -46,6 +46,12 @@ export const bursarSpendEvents = pgTable(
     match_confidence: numeric('match_confidence', { precision: 5, scale: 4 }),
     dedup_key: varchar('dedup_key', { length: 64 }).notNull(),
     occurrence_ordinal: integer('occurrence_ordinal').notNull().default(0),
+    // M8 drift-sweep claim/lease state (migration 0257). drift_evaluated_at IS NULL marks the
+    // un-swept backlog; drift_claimed_at + drift_claimed_by fence a lease so two sweep workers do
+    // not double-evaluate a row.
+    drift_claimed_at: timestamp('drift_claimed_at', { withTimezone: true }),
+    drift_claimed_by: varchar('drift_claimed_by', { length: 64 }),
+    drift_evaluated_at: timestamp('drift_evaluated_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

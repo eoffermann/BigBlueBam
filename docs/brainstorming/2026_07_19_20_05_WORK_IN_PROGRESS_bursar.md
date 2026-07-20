@@ -435,7 +435,7 @@ These are recorded in spec section 25 as human decisions, not build decisions. S
 picking silently.
 
 - [ ] **Who may unseal a sealed bid, and whether the vendor is told.** The audit trail is a security requirement and is built regardless; the policy is a human call.
-- [ ] **The weekly digest's delivery channel** (Banter, Blast, or in-app). Needed before M8 ships `bursar-weekly-digest`.
+- [x] **The weekly digest's delivery channel** (Banter, Blast, or in-app). **RESOLVED (M8): in-app notifications.** `bursar-weekly-digest` inserts a `notifications` row (`type='bursar_digest'`) for each org owner/admin, surfaced by the platform NotificationsBell. Rationale: it is the safest default with zero external-service dependency (no SMTP/Banter/Blast coupling, nothing leaves the platform), and the channel can be widened to Banter or Blast later without changing the digest computation. The digest carries counts only (open findings, at-stake total, approaching renewals), never finding content.
 - [ ] **Fixture hand-labelling.** 40 absence tuples, 8 injection, 3 single-blanket, the split-blanket set, name-list, legitimate-subprice, and the 40-page long-document fixture, labelled by someone who understands procurement. **M2.5 cannot complete without it.**
 - [ ] **The cumulative cap values.** `blanket_cumulative_cap` 4 and `evidence_concentration_floor` 0.5 are chosen, not derived. Per-org configurable; the `legitimate-subprice` fixture is the false-positive guard.
 - [ ] **Long-document viability.** If M2.5's measurement cannot meet the missed-exclusion gate, the v1 envelope drops to 5-page documents and longer offers are surfaced as "too long to level reliably". This is the risk most likely to reshape scope.

@@ -26,6 +26,9 @@ const envSchema = z.object({
   // Burn ingest target (spec §8.3). bolt-api forwards the 16 subscribed events here so Burn's
   // durable inbox (/v1/internal/events) materializes work items and runs attribution.
   BURN_API_INTERNAL_URL: z.string().default('http://burn-api:4022'),
+  // Bursar ingest target (spec 16.2). bolt-api forwards the 3 subscribed bill/braid events here so
+  // Bursar's durable inbox (/v1/internal/events) ingests spend and re-points braid_profile_id.
+  BURSAR_API_INTERNAL_URL: z.string().default('http://bursar-api:4023'),
 
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_SECURE: z.coerce.boolean().default(false),

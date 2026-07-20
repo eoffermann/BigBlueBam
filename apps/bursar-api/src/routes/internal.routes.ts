@@ -5,12 +5,18 @@ import {
   bursarRunReaperSchema,
   bursarParseOfferSchema,
   bursarRunLevelingSchema,
+  bursarInternalEventSchema,
+  bursarRunEngineSchema,
   publishBoltEvent,
   type BursarSourceFormat,
 } from '@bigbluebam/shared';
 import { requireInternalSecret } from '../lib/internal-secret.js';
 import { validationError } from '../lib/http.js';
 import { runInOrgScope } from '../plugins/rls.js';
+import { consumeInternalEvent } from '../services/ingest.service.js';
+import { runDriftSweep } from '../services/engines/drift.engine.js';
+import { runRenewalRadar } from '../services/engines/renewal.engine.js';
+import { runMismatchReconcile, runRetention, runWeeklyDigest, runDraftReconcile } from '../services/engines/post-award-jobs.js';
 import {
   runDerivationSlice,
   LeaseHeldError,
@@ -334,6 +340,68 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         });
       }
       throw err;
+    }
+  });
+
+  /**
+   * ── /internal/events ──────────────────────────────────────────────────────
+   * The durable event inbox (spec 16.2). bolt-api's bursar-dispatch-hook POSTs subscribed events
+   * here: bill:expense.created / expense.approved -> a spend event; braid:profile.merged ->
+   * re-point braid_profile_id on affected vendors. invoice.paid / payment.recorded are money-in and
+   * are NOT subscribed (so they never arrive). Idempotent on (organization_id, source_idempotency_key):
+   * a re-delivery persists once and consumes once. Fails CLOSED on an empty secret.
+   */
+  fastify.post('/internal/events', async (request, reply) => {
+    if (!requireInternalSecret(request, reply)) return reply;
+    const parsed = bursarInternalEventSchema.safeParse(request.body);
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    const outcome = await consumeInternalEvent(parsed.data, request.log);
+    return { data: outcome };
+  });
+
+  /**
+   * ── /internal/engines/:name ───────────────────────────────────────────────
+   * The uniform sweep/cron engine dispatcher (spec 15). The worker's scheduled jobs are thin HTTP
+   * callers into this route, since the per-org advisory locks live inside bursar-api. Omit
+   * organization_id to sweep every org with work; pass it to sweep one. Fails CLOSED on an empty
+   * secret.
+   */
+  fastify.post('/internal/engines/:name', async (request, reply) => {
+    if (!requireInternalSecret(request, reply)) return reply;
+    const { name } = request.params as { name: string };
+    const parsed = bursarRunEngineSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return validationError(request, reply, parsed.error);
+    const orgId = parsed.data.organization_id;
+    const log = request.log;
+
+    switch (name) {
+      case 'drift-sweep': {
+        const budgets = {
+          orgBudget: parsed.data.org_budget ?? 25,
+          rowBudget: parsed.data.row_budget ?? 500,
+          leaseMs: parsed.data.lease_ms ?? 5 * 60 * 1000,
+        };
+        return { data: await runDriftSweep(log, orgId, budgets) };
+      }
+      case 'renewal-radar':
+        return { data: await runRenewalRadar(log, orgId) };
+      case 'mismatch-reconcile':
+        return { data: await runMismatchReconcile(log, orgId) };
+      case 'draft-reconcile':
+        return { data: await runDraftReconcile(log, orgId) };
+      case 'weekly-digest':
+        return { data: await runWeeklyDigest(log, orgId) };
+      case 'retention':
+        return { data: await runRetention(log, orgId) };
+      case 'run-reaper': {
+        const leaseMs = parsed.data.lease_ms ?? DEFAULT_REAPER_LEASE_MS;
+        if (orgId) return { data: { ...(await reapOrg(makeDbReaperStore(), orgId, leaseMs)), orgs: 1 } };
+        return { data: await reapAllStale(leaseMs) };
+      }
+      default:
+        return reply.status(404).send({
+          error: { code: 'NOT_FOUND', message: `Unknown engine '${name}'`, details: [], request_id: request.id },
+        });
     }
   });
 }

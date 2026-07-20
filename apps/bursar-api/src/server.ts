@@ -27,6 +27,13 @@ import scopeRoutes from './routes/scope.routes.js';
 import offerRoutes from './routes/offers.routes.js';
 import levelingRoutes from './routes/leveling.routes.js';
 import awardRoutes from './routes/awards.routes.js';
+import spendRoutes from './routes/spend.routes.js';
+import mismatchRoutes from './routes/mismatches.routes.js';
+import renewalRoutes from './routes/renewals.routes.js';
+import draftRoutes from './routes/drafts.routes.js';
+import gateRoutes from './routes/gate.routes.js';
+import libraryRoutes from './routes/library.routes.js';
+import requestDiffRoutes from './routes/requests-diff.routes.js';
 import internalRoutes from './routes/internal.routes.js';
 
 // ── Boot assertion, FIRST, before anything binds a port or opens a pool (spec 13.3).
@@ -150,6 +157,15 @@ await fastify.register(
     await v1.register(levelingRoutes);
     // M7: award + baseline freeze + immutability (the hinge to the post-award half).
     await v1.register(awardRoutes);
+    // M8: the post-award half - spend, the four detectors' inbox, renewal radar, drafts, the
+    // advisory gate, library CRUD, and the diff CSV export.
+    await v1.register(spendRoutes);
+    await v1.register(mismatchRoutes);
+    await v1.register(renewalRoutes);
+    await v1.register(draftRoutes);
+    await v1.register(gateRoutes);
+    await v1.register(libraryRoutes);
+    await v1.register(requestDiffRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },

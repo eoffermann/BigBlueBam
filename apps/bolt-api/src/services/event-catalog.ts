@@ -3392,6 +3392,90 @@ const bursarEvents: EventDefinition[] = [
       { name: 'absent_at_award', type: 'number', description: 'Items absent at award' },
     ],
   },
+  {
+    source: 'bursar',
+    event_type: 'drift.detected',
+    description:
+      'Fired when the drift sweep opens or updates a post-award drift finding (spec 8, M8). Refs + the detector/severity scalar only; cited spans live on the bursar_mismatches row.',
+    payload_schema: [
+      { name: 'mismatch.id', type: 'uuid', description: 'The drift finding' },
+      { name: 'detector', type: 'string', description: 'The detector that opened the finding' },
+      { name: 'severity', type: 'string', description: 'The finding severity scalar' },
+      { name: 'vendor.id', type: 'uuid', description: 'The implicated vendor (nullable)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'mismatch.opened',
+    description:
+      'Fired when a detector opens a new mismatch finding (spec 8, M8).',
+    payload_schema: [
+      { name: 'mismatch.id', type: 'uuid', description: 'The opened mismatch finding' },
+      { name: 'detector', type: 'string', description: 'The detector that opened the finding' },
+      { name: 'severity', type: 'string', description: 'The finding severity scalar' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'mismatch.resolved',
+    description:
+      'Fired when a mismatch is resolved or dismissed by a human, or auto-closed by reconcile (spec 8, M8).',
+    payload_schema: [
+      { name: 'mismatch.id', type: 'uuid', description: 'The resolved mismatch finding' },
+      { name: 'detector', type: 'string', description: 'The detector that opened the finding' },
+      { name: 'status', type: 'string', description: 'resolved | dismissed' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'renewal.approaching',
+    description:
+      'Fired when a renewal notice deadline enters a lead band (spec 8, M8). Carries the band scalar only.',
+    payload_schema: [
+      { name: 'renewal.id', type: 'uuid', description: 'The renewal whose deadline entered a band' },
+      { name: 'award.id', type: 'uuid', description: 'The parent award' },
+      { name: 'band', type: 'string', description: 't_minus_90 | 60 | 30 | 7' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'draft.created',
+    description:
+      'Fired when a clarification or negotiation-brief draft is created and queued for HITL review (spec 5.7, M8). Content-free: refs + the draft kind only.',
+    payload_schema: [
+      { name: 'draft.id', type: 'uuid', description: 'The created draft' },
+      { name: 'kind', type: 'string', description: 'The draft kind scalar' },
+      { name: 'vendor.id', type: 'uuid', description: 'The implicated vendor (nullable)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'draft.decided',
+    description:
+      'Fired when a draft is approved or rejected (spec 5.7, M8). Refs + decision scalar only.',
+    payload_schema: [
+      { name: 'draft.id', type: 'uuid', description: 'The decided draft' },
+      { name: 'decision', type: 'string', description: 'approved | rejected' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'gate.advisory',
+    description:
+      'Fired when the advisory scope-gap gate returns a verdict (spec 9, M8). ADVISORY ONLY - never blocks. Reason codes + verdict scalar only, never cited spans or prices.',
+    payload_schema: [
+      { name: 'check.id', type: 'uuid', description: 'The advisory gate check' },
+      { name: 'verdict', type: 'string', description: 'pass | advisory' },
+      { name: 'request.id', type: 'uuid', description: 'The originating request (nullable)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

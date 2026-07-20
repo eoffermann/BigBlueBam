@@ -10,6 +10,9 @@ export * from './bolt-graph-shape.js';
 export * from './bolt-automation-versions/index.js';
 export * from './mention-syntax.js';
 export * from './queues.js';
+// CSV formula-injection neutralization, shared by Bursar's spend + diff CSV exports (and any
+// future export surface). Pure, no node imports, so it is safe in this browser-facing barrel.
+export * from './csv-safe.js';
 // NOTE: bulwark-arm-key.ts is intentionally NOT re-exported here. It imports node:crypto and is
 // server-only; re-exporting it from this browser-facing barrel drags node:crypto into every SPA
 // bundle and breaks the rollup production build. Server code (bulwark-api, apps/worker) imports it
