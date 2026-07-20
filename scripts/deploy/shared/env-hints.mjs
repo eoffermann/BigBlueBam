@@ -59,7 +59,10 @@ function internal(name) {
 // URL that nothing ever checks. Entries are removed as each service lands in APP_SERVICES;
 // check-env-hints.mjs fails on a stale entry, so this set can only shrink.
 export const PLANNED_APP_SERVICES = new Set([
-  'burn-api', // Burn, in build on suite-brainstorm as of 2026-07-19
+  // Empty. burn-api landed in APP_SERVICES and was removed from here; bursar-api landed in
+  // the same commit as its hints, so it never needed an entry. Shrink-only by design: add
+  // a name here ONLY while its APP_SERVICES block is genuinely still unwritten, and delete
+  // it the moment that block lands.
 ]);
 
 function plannedApp(name) {
@@ -275,18 +278,35 @@ export const ENV_HINTS = {
   // no hint it silently resolved to SKIP and Braid resolution was simply absent in
   // production on all three.
   BRAID_API_INTERNAL_URL: { kind: 'computed', value: internal('braid-api') },
-  // Burn. Both entries use plannedApp() because the burn-api APP_SERVICES block lands in a
-  // later commit than these hints; the value is identical either way.
+  // Burn. These used plannedApp() while the burn-api APP_SERVICES block was still unlanded;
+  // it has since landed, so they resolve through internal() like every other service.
   //
   // BURN_API_INTERNAL_URL is the spend-gate precheck base, consumed by bill-api, bolt-api,
   // and worker. It is OPTIONAL on bill-api by design (unset means the gate is absent and
   // expenses post normally), which is precisely the dangerous case: with no hint it would
   // never be set on Railway, the preHandler would no-op, and Burn's flagship gate would not
   // exist in production with nothing anywhere reporting its absence.
-  BURN_API_INTERNAL_URL: { kind: 'computed', value: plannedApp('burn-api') },
+  BURN_API_INTERNAL_URL: { kind: 'computed', value: internal('burn-api') },
   // Carries /v1 because the mcp-server's burn client requests bare resource paths, matching
   // every other satellite client (beacon, brief, bond, board, ...).
-  BURN_API_URL: { kind: 'computed', value: `${plannedApp('burn-api')}/v1` },
+  BURN_API_URL: { kind: 'computed', value: `${internal('burn-api')}/v1` },
+  // Bursar. Same two-var shape as Burn, and the SUFFIX ASYMMETRY IS LOAD-BEARING.
+  //
+  // BURSAR_API_INTERNAL_URL is the bare origin, with no suffix. It is consumed
+  // server-to-server by bolt-api and the worker, which address bursar-api's internal routes
+  // under their own prefixes.
+  BURSAR_API_INTERNAL_URL: { kind: 'computed', value: internal('bursar-api') },
+  // BURSAR_API_URL carries /v1 because the mcp-server's bursar client requests bare resource
+  // paths, matching every other satellite client (burn, beacon, brief, bond, board, ...).
+  // Setting these two to identical values 404s every Bursar MCP tool on Railway, with no
+  // local repro because the compose stack sets them explicitly.
+  BURSAR_API_URL: { kind: 'computed', value: `${internal('bursar-api')}/v1` },
+  // Per-call LLM deadline for the classification and derivation passes.
+  BURSAR_LLM_TIMEOUT_MS: { kind: 'literal', value: '60000' },
+  // Bounds only the 202-returning START leg of an engine run, never the run itself. The
+  // leveling and derivation engines proceed in bounded slices under a heartbeat lease, so a
+  // multi-minute run is expected and this value must not be raised to try to cover it.
+  BURSAR_ENGINE_TIMEOUT_MS: { kind: 'literal', value: '30000' },
   // The three bill-api-side spend-gate tunables (Burn spec 5.5.1). BURN_PRECHECK_TIMEOUT_MS
   // is the AUTHORITATIVE client deadline and must stay strictly ABOVE burn-api's own
   // precheck_budget_ms (CHECK-clamped to [100, 750]): a timeout budget stored in the

@@ -40,6 +40,7 @@ import {
   GitMerge,
   ShieldCheck,
   Flame,
+  ShoppingCart,
   Box,
   type LucideIcon,
 } from 'lucide-react';
@@ -88,6 +89,7 @@ const ICONS: Record<string, LucideIcon> = {
   'git-merge': GitMerge,
   'shield-check': ShieldCheck,
   flame: Flame,
+  'shopping-cart': ShoppingCart,
 };
 
 // Hard-coded fallback used ONLY when the API is unreachable on the very

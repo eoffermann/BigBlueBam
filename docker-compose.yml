@@ -11,6 +11,15 @@ services:
   postgres:
     <<: *common
     image: postgres:16-alpine
+    # Connection headroom. The stock max_connections=100 is already oversubscribed: each of
+    # the 20+ API services opens a write pool plus an optional read pool, and the newer
+    # products add background jobs and long-held advisory locks on top. Exhaustion does not
+    # present as "the new service is broken" -- it presents as `too many clients already`
+    # somewhere else entirely, typically Bond or Bill, which is why it is raised here rather
+    # than trimmed service by service. shared_buffers and shm_size are raised to match so the
+    # extra backends are not fighting over the default 128MB.
+    command: postgres -c max_connections=200 -c shared_buffers=512MB
+    shm_size: 256mb
     environment:
       POSTGRES_DB: bigbluebam
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
@@ -188,6 +197,7 @@ services:
       BRAID_API_URL: http://braid-api:4020/v1
       BULWARK_API_URL: http://bulwark-api:4021/v1
       BURN_API_URL: http://burn-api:4022/v1
+      BURSAR_API_URL: http://bursar-api:4023/v1
       BILL_API_URL: http://bill-api:4014/v1
       BLANK_API_URL: http://blank-api:4013/v1
       BIN_API_URL: http://bin-api:4016/v1
@@ -297,6 +307,14 @@ services:
         condition: service_healthy
       burn-api:
         condition: service_healthy
+      bursar-api:
+        # service_started, NOT service_healthy, for the duration of the Bursar build cycle.
+        # Bursar is the least stable service on this branch right now, and service_healthy
+        # would make every unhealthy build of it take the whole suite's nginx down with it.
+        # Promoted to service_healthy at M9. Note this does NOT protect against the config
+        # -load NXDOMAIN failure mode -- nginx resolves literal upstream hostnames when it
+        # parses the config, which is a config problem, not a dependency-ordering one.
+        condition: service_started
       helpdesk-api:
         condition: service_healthy
       banter-api:
@@ -1011,6 +1029,60 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4022/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - backend
+      - frontend
+
+  bursar-api:
+    <<: *common
+    build:
+      context: .
+      dockerfile: apps/bursar-api/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bigbluebam}
+      - DATABASE_READ_URL=${DATABASE_READ_URL:-}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - BBB_API_INTERNAL_URL=http://api:4000
+      # bolt-api for publishBoltEvent; braid-api for counterparty golden-id resolution.
+      # Request-time deps only, deliberately NOT in depends_on, so the boot graph stays
+      # acyclic. BILL_API_INTERNAL_URL is deliberately absent: the enforcing spend gate is
+      # cut from v1, so there is no bill-api call site to configure.
+      - BOLT_API_INTERNAL_URL=http://bolt-api:4006
+      - BRAID_API_INTERNAL_URL=http://braid-api:4020
+      - NODE_ENV=production
+      - PORT=4023
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost}
+      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_WINDOW_MS=60000
+      # NOTE: BBB_PERMISSIONS_ENFORCE is deliberately NOT set here. Bursar's per-action
+      # enforcement is a hardcoded, fail-closed boot invariant, never an env-driven setting.
+      - MAX_DOC_BYTES=${MAX_DOC_BYTES:-26214400}
+      - MAX_DOC_PAGES=${MAX_DOC_PAGES:-300}
+      - BURSAR_LLM_TIMEOUT_MS=${BURSAR_LLM_TIMEOUT_MS:-60000}
+      - BURSAR_ENGINE_TIMEOUT_MS=${BURSAR_ENGINE_TIMEOUT_MS:-30000}
+      # Must be non-empty: the /v1/internal transport and the outbound
+      # /internal/permissions/dual-read call both carry it, and an empty value refuses boot.
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # /health, NOT /readyz. There is no /readyz anywhere in this platform; a service
+      # configured against one never reports healthy and blocks every service_healthy
+      # dependent.
+      test: ["CMD", "curl", "-sf", "http://localhost:4023/health"]
       interval: 10s
       timeout: 5s
       retries: 3

@@ -23,6 +23,7 @@ COPY apps/basis/package.json ./apps/basis/
 COPY apps/braid/package.json ./apps/braid/
 COPY apps/bulwark/package.json ./apps/bulwark/
 COPY apps/burn/package.json ./apps/burn/
+COPY apps/bursar/package.json ./apps/bursar/
 COPY apps/bill/package.json ./apps/bill/
 COPY apps/blank/package.json ./apps/blank/
 COPY apps/blueprint/package.json ./apps/blueprint/
@@ -136,6 +137,12 @@ COPY apps/burn/public ./apps/burn/public
 COPY apps/burn/index.html ./apps/burn/
 COPY apps/burn/tsconfig.json apps/burn/tsconfig.node.json apps/burn/vite.config.ts ./apps/burn/
 
+# Bursar frontend
+COPY apps/bursar/src ./apps/bursar/src
+COPY apps/bursar/public ./apps/bursar/public
+COPY apps/bursar/index.html ./apps/bursar/
+COPY apps/bursar/tsconfig.json apps/bursar/tsconfig.node.json apps/bursar/vite.config.ts ./apps/bursar/
+
 # Bill frontend
 COPY apps/bill/src ./apps/bill/src
 COPY apps/bill/public ./apps/bill/public
@@ -199,6 +206,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/braid build \
  && pnpm --filter @bigbluebam/bulwark build \
  && pnpm --filter @bigbluebam/burn build \
+ && pnpm --filter @bigbluebam/bursar build \
  && pnpm --filter @bigbluebam/bill build \
  && pnpm --filter @bigbluebam/blank build \
  && pnpm --filter @bigbluebam/blueprint build \
@@ -226,6 +234,7 @@ COPY --from=build /app/apps/basis/dist /usr/share/nginx/html/basis
 COPY --from=build /app/apps/braid/dist /usr/share/nginx/html/braid
 COPY --from=build /app/apps/bulwark/dist /usr/share/nginx/html/bulwark
 COPY --from=build /app/apps/burn/dist /usr/share/nginx/html/burn
+COPY --from=build /app/apps/bursar/dist /usr/share/nginx/html/bursar
 COPY --from=build /app/apps/bill/dist /usr/share/nginx/html/bill
 COPY --from=build /app/apps/blank/dist /usr/share/nginx/html/blank
 COPY --from=build /app/apps/blueprint/dist /usr/share/nginx/html/blueprint

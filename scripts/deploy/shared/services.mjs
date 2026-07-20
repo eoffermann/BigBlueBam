@@ -151,7 +151,13 @@ export const APP_SERVICES = [
       // /internal/events (Braid live-ingest transport, spec §6); optional soft-dependency.
       // BURN_API_INTERNAL_URL: bolt-api forwards the 16 subscribed events to burn-api's
       // /v1/internal/events (Burn live-ingest transport, spec §8.3); optional soft-dependency.
-      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL', 'BULWARK_API_INTERNAL_URL', 'BURN_API_INTERNAL_URL'],
+      // BURSAR_API_INTERNAL_URL: bolt-api forwards the subscribed source events to
+      // bursar-api's /v1/internal/events (Bursar live-ingest transport); optional
+      // soft-dependency. Configured here at M0 so the value exists on Railway before the
+      // consuming route lands, which is the failure mode section 18.4 of the Bursar spec
+      // exists to prevent: an unresolvable optional var is silently SKIPPED, so the
+      // transport would simply be absent in production with nothing reporting it.
+      optional: ['CORS_ORIGIN', 'LOG_LEVEL', 'RATE_LIMIT_MAX', 'RATE_LIMIT_WINDOW_MS', 'INTERNAL_SERVICE_SECRET', 'BRAID_API_INTERNAL_URL', 'BULWARK_API_INTERNAL_URL', 'BURN_API_INTERNAL_URL', 'BURSAR_API_INTERNAL_URL'],
     },
   },
   {
@@ -342,6 +348,45 @@ export const APP_SERVICES = [
         'LOG_LEVEL',
         'MAX_DOC_BYTES',
         'MAX_DOC_PAGES',
+      ],
+    },
+  },
+  {
+    name: 'bursar-api',
+    description: 'Bursar API — vendor-side procurement, exclusion diff, spend baseline',
+    dockerfile: 'apps/bursar-api/Dockerfile',
+    port: 4023,
+    healthcheck: '/health',
+    start_command: 'node dist/server.js',
+    required: true,
+    // BILL_API_INTERNAL_URL deliberately ABSENT: the enforcing spend gate is cut from v1,
+    // so there is no bill-api call site. Adding it would be dead configuration that reads
+    // as a wired integration.
+    // BBB_PERMISSIONS_ENFORCE deliberately ABSENT: enforcement is a hardcoded boot
+    // invariant, not an env-driven setting (burn issue #83).
+    needs: ['postgres', 'redis', 'api', 'bolt-api'],
+    public_paths: ['/bursar/api/', '/bursar/ws'],
+    // The env block is NOT optional boilerplate. railway-orchestrator.mjs resolves a missing
+    // one to two empty arrays without erroring, so an entry without it deploys with no
+    // DATABASE_URL and crash-loops behind a build that looks perfectly healthy.
+    env: {
+      required: [
+        'DATABASE_URL',
+        'REDIS_URL',
+        'SESSION_SECRET',
+        'INTERNAL_SERVICE_SECRET',
+        'BBB_API_INTERNAL_URL',
+        'BOLT_API_INTERNAL_URL',
+      ],
+      optional: [
+        'DATABASE_READ_URL',
+        'BRAID_API_INTERNAL_URL',
+        'CORS_ORIGIN',
+        'LOG_LEVEL',
+        'MAX_DOC_BYTES',
+        'MAX_DOC_PAGES',
+        'BURSAR_LLM_TIMEOUT_MS',
+        'BURSAR_ENGINE_TIMEOUT_MS',
       ],
     },
   },
@@ -553,7 +598,7 @@ export const APP_SERVICES = [
         'BLUEPRINT_API_URL', 'BUREAU_API_URL', 'BIN_API_URL', 'BAY_API_URL', 'BLIP_API_URL',
         // BASIS_API_URL + BRAID_API_URL are present in docker-compose.yml but were
         // missing here (pre-existing gap, spec 9.5/IK2); BULWARK_API_URL is the new one.
-        'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL', 'BURN_API_URL',
+        'BASIS_API_URL', 'BRAID_API_URL', 'BULWARK_API_URL', 'BURN_API_URL', 'BURSAR_API_URL',
         'MCP_AUTH_REQUIRED', 'LOG_LEVEL', 'INTERNAL_SERVICE_SECRET',
         'MCP_INTERNAL_API_TOKEN',
       ],
@@ -604,6 +649,11 @@ export const APP_SERVICES = [
         // The 7 bulwark-* jobs invoke the engine over bulwark-api's internal
         // routes (Bulwark spec §4 / §9.2).
         'BULWARK_API_INTERNAL_URL',
+        // BURN_API_INTERNAL_URL is set on the worker in docker-compose.yml but was missing
+        // from this catalog entry, so on Railway the worker's burn call sites resolved to
+        // nothing. Pre-existing gap, recorded and fixed here rather than left.
+        // BURSAR_API_INTERNAL_URL is the same transport for Bursar's internal event inbox.
+        'BURN_API_INTERNAL_URL', 'BURSAR_API_INTERNAL_URL',
         // Lets the daily turn-cert-expiry watchdog warn before the LiveKit
         // TURN cert lapses; no-op until set (format turn.example.com:port).
         'LIVEKIT_TURN_CHECK_TARGET',
@@ -664,10 +714,10 @@ export const APP_SERVICES = [
     needs: [
       'api', 'helpdesk-api', 'banter-api', 'beacon-api', 'brief-api',
       'bolt-api', 'bearing-api', 'board-api', 'bond-api', 'blast-api',
-      'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'burn-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
+      'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'burn-api', 'bursar-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/burn/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/', '/bin/', '/bay/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/burn/', '/bursar/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/', '/bin/', '/bay/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];

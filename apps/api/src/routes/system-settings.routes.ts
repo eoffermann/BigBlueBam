@@ -62,6 +62,7 @@ export const LAUNCHPAD_APP_IDS = [
   'braid',
   'bulwark',
   'burn',
+  'bursar',
 ] as const;
 
 export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
@@ -101,6 +102,7 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'braid', name: 'Braid', description: 'Customer Identity', icon_name: 'git-merge', color: '#4338ca', path: '/braid/' },
   { id: 'bulwark', name: 'Bulwark', description: 'Contract Obligations', icon_name: 'shield-check', color: '#1d4ed8', path: '/bulwark/' },
   { id: 'burn', name: 'Burn', description: 'Scope and Margin', icon_name: 'flame', color: '#ea580c', path: '/burn/' },
+  { id: 'bursar', name: 'Bursar', description: 'Vendor Procurement', icon_name: 'shopping-cart', color: '#0f766e', path: '/bursar/' },
 ];
 
 // Valid values for the root_redirect setting
@@ -114,6 +116,7 @@ const ROOT_REDIRECT_VALUES = [
   'bearing',
   'board',
   'bond',
+  'bursar',
   'helpdesk',
 ] as const;
 
@@ -130,6 +133,9 @@ const REDIRECT_MAP: Record<RootRedirectValue, string | null> = {
   bearing: '/bearing/',
   board: '/board/',
   bond: '/bond/',
+  // Both halves are required. ROOT_REDIRECT_VALUES alone makes the setting VALIDATE and
+  // then fail to resolve, which presents as a redirect that silently does nothing.
+  bursar: '/bursar/',
   helpdesk: '/helpdesk/',
 };
 

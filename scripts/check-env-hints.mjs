@@ -156,21 +156,27 @@ function main() {
   return 1;
 }
 
-process.exit(main());
-
 // A planned service that has since landed in APP_SERVICES must be removed from
 // PLANNED_APP_SERVICES, otherwise plannedApp() keeps hand-rolling a URL that internal()
 // should now own. Shrink-only, same discipline as the grandfathered allowlist.
-const stalePlanned = [...PLANNED_APP_SERVICES].filter((n) => APP_SERVICES.some((s) => s.name === n));
-if (stalePlanned.length) {
-  console.error(
-    `
-PLANNED_APP_SERVICES is stale: ${stalePlanned.join(', ')} now exist(s) in APP_SERVICES.
-` +
-      `Remove them from PLANNED_APP_SERVICES in scripts/deploy/shared/env-hints.mjs so
-` +
-      `internal() resolves them and the typo guard stays meaningful.
-`,
+//
+// This check used to sit BELOW `process.exit(main())`, which made it unreachable: the
+// process had already exited by the time control reached it. It never once ran, and it was
+// silently passing over a genuinely stale entry (burn-api). It now runs BEFORE main(), and
+// contributes its result to main()'s exit code rather than setting process.exitCode after
+// the exit call.
+function checkStalePlanned() {
+  const stalePlanned = [...PLANNED_APP_SERVICES].filter((n) =>
+    APP_SERVICES.some((s) => s.name === n),
   );
-  process.exitCode = 1;
+  if (stalePlanned.length === 0) return 0;
+  console.error(
+    `\nPLANNED_APP_SERVICES is stale: ${stalePlanned.join(', ')} now exist(s) in APP_SERVICES.\n` +
+      `Remove them from PLANNED_APP_SERVICES in scripts/deploy/shared/env-hints.mjs so\n` +
+      `internal() resolves them and the typo guard stays meaningful.\n`,
+  );
+  return 1;
 }
+
+const staleCode = checkStalePlanned();
+process.exit(main() || staleCode);
