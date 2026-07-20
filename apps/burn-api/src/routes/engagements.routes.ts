@@ -7,6 +7,7 @@ import {
 import { requireAuth } from '../plugins/auth.js';
 import { askerViewer, mapServiceError, readViewer, validationError, viewerOf } from '../lib/http.js';
 import { redactFinancialFields } from '../lib/redact-financial-fields.js';
+import { enqueueExtraction } from '../lib/queue.js';
 import * as engagements from '../services/engagements.service.js';
 
 export default async function engagementRoutes(fastify: FastifyInstance) {
@@ -45,11 +46,14 @@ export default async function engagementRoutes(fastify: FastifyInstance) {
       if (!parsed.success) return validationError(request, reply, parsed.error);
       try {
         const asker = askerViewer(request);
-        const result = await engagements.createEngagement(
-          viewerOf(request),
-          parsed.data,
-          asker?.id ?? null,
-        );
+        const viewer = viewerOf(request);
+        const result = await engagements.createEngagement(viewer, parsed.data, asker?.id ?? null);
+        // An engagement created WITH a source contract (bin_asset_id) kicks off extraction
+        // immediately, so a user does not have to make a second /extract call. Best-effort and
+        // deduped with any explicit /extract in the same window.
+        if (parsed.data.bin_asset_id) {
+          await enqueueExtraction({ organization_id: viewer.org_id, engagement_id: result.data.id });
+        }
         reply.status(201);
         return redactFinancialFields(result, await request.viewerCaps());
       } catch (err) {
@@ -155,13 +159,20 @@ export default async function engagementRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       try {
-        await engagements.loadScopedEngagement(viewerOf(request), id);
-        // The extraction ENGINE lands in M6. This route is the enqueue point and is
-        // deliberately shipped now rather than later: the tool and the endpoint land in the
-        // same slice, and a 202 with a queued marker is an honest answer that the SPA and
-        // the MCP tool can both build against.
-        return reply.status(202).send({
-          data: { engagement_id: id, status: 'queued', queue: 'burn-extract-deliverables' },
+        const viewer = viewerOf(request);
+        await engagements.loadScopedEngagement(viewer, id);
+        // Actually enqueue the extraction job. The worker's burn-extract-deliverables handler
+        // reads the engagement's bin.asset bytes and POSTs the parsed text to
+        // /v1/internal/run-extraction. Best-effort: a Redis hiccup does not fail the request,
+        // but the response reports whether the job was accepted rather than claiming `queued`
+        // when nothing ran.
+        const enqueued = await enqueueExtraction({ organization_id: viewer.org_id, engagement_id: id });
+        return reply.status(enqueued ? 202 : 503).send({
+          data: {
+            engagement_id: id,
+            status: enqueued ? 'queued' : 'enqueue_failed',
+            queue: 'burn-extract-deliverables',
+          },
         });
       } catch (err) {
         if (mapServiceError(request, reply, err)) return reply;
