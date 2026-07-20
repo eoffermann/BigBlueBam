@@ -114,3 +114,43 @@ never parked here.
 The autonomous loop never merges to trunk. All Bursar work lives on `suite-brainstorm` and
 on feature branches off it. Promoting any of it to `main` and then `stable` is the
 maintainer's decision, taken separately from this cycle. The loop does not wait on it.
+
+## Remaining live-completion tail (recorded 2026-07-20)
+
+Bursar M1-M9 is code-complete, CI-green, and backend-live at M9 (bursar-api,
+worker, mcp-server all rebuilt and serving M9; migrations 0247-0259 applied;
+36 permissions seeded; 20 MCP tools registered; 10 worker jobs firing). The
+following finish the consumer-facing surface. None is core engineering; each is
+either an external dependency or a mechanical live run.
+
+- [ ] **Frontend `--no-cache` rebuild.** The plain `docker compose build frontend`
+      reused a stale cached image (missing the bursar SPA). Fix:
+      `docker compose build --no-cache frontend && docker compose up -d --force-recreate frontend`.
+      Verify: `curl -s -o /dev/null -w '%{http_code}' http://localhost/bursar/` prints 200.
+      (In progress at hand-off.)
+- [ ] **LLM provider for the flagship flow (EXTERNAL SECRET).** The derive ->
+      confirm -> level -> award chain calls the internal LLM proxy, and this dev
+      stack has **0 llm_providers** configured, so the gilligan seed only produced
+      the request + 5 fallback nodes + 4 offers + spend (no confirmed tree, no
+      coverage, no award). Either (a) configure an org LLM provider (an
+      Anthropic/OpenAI key via /b3 Settings -> AI, which cannot be self-issued),
+      OR (b) preferred: extend `scripts/seed-gilligan/bursar.mjs` to
+      DETERMINISTICALLY materialize the confirmed 14-node tree + the leveled
+      coverage matching `BURSAR_SEED_EXPECTATIONS` (Howell crew-training absent +
+      installation excluded_explicit; Radio warranty partial/term; Lagoon warranty
+      absent; Professor split-blanket withheld=blanket_cap) + offer_totals + the
+      Radio award/baseline, via direct inserts (the seed runs in the api container
+      with DATABASE_URL). Option (b) makes the demo + e2e reproducible without any
+      external key and matches spec 19's "computable provenance" intent.
+- [ ] **gilligan screenshots.** Once the demo data + frontend are live, run the
+      docs-capture recipe `packages/docs-capture/recipes/bursar/bursar.yaml` to
+      produce `docs/apps/bursar/screenshots/`, and copy the marketing set into
+      `site/public/screenshots/bursar/{light,dark}/`.
+- [ ] **Live 12-step Playwright.** `E2E_ADMIN_EMAIL=skipper@gilligantravel.example
+      pnpm --filter @bigbluebam/e2e test src/apps/bursar` against the seeded stack.
+- [ ] **Re-add the Launchpad tile (LAST).** Only after screenshots exist and the
+      12-step passes: re-add the `bursar` row to LAUNCHPAD_APP_IDS + LAUNCHPAD_CATALOG
+      in apps/api/src/routes/system-settings.routes.ts (the two marker comments say
+      where), rebuild api, run `pnpm docs:readme && pnpm docs:catalog`, and confirm
+      `pnpm check:app-completeness` exits 0 for bursar. The completeness gate blocks
+      this until the screenshots + marketing + help all exist - by design.
