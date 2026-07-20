@@ -13,6 +13,7 @@ COPY packages/logging/package.json ./packages/logging/
 COPY packages/service-health/package.json ./packages/service-health/
 COPY packages/db-stubs/package.json ./packages/db-stubs/
 COPY packages/permissions/package.json ./packages/permissions/
+COPY packages/structured-data/package.json ./packages/structured-data/
 
 RUN pnpm install --no-frozen-lockfile
 
@@ -26,6 +27,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
+COPY packages/structured-data/ ./packages/structured-data/
 COPY apps/bursar-api/src ./apps/bursar-api/src
 COPY apps/bursar-api/tsconfig.json apps/bursar-api/tsup.config.ts ./apps/bursar-api/
 
@@ -34,6 +36,7 @@ RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/service-health build \
  && pnpm --filter @bigbluebam/db-stubs build \
  && pnpm --filter @bigbluebam/permissions build \
+ && pnpm --filter @bigbluebam/structured-data build \
  && pnpm --filter @bigbluebam/bursar-api build
 
 # Create a deploy-ready directory with all prod deps
@@ -49,6 +52,7 @@ COPY packages/logging/ ./packages/logging/
 COPY packages/service-health/ ./packages/service-health/
 COPY packages/db-stubs/ ./packages/db-stubs/
 COPY packages/permissions/ ./packages/permissions/
+COPY packages/structured-data/ ./packages/structured-data/
 COPY apps/bursar-api/ ./apps/bursar-api/
 
 WORKDIR /app/apps/bursar-api
