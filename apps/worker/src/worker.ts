@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Worker, type Job } from 'bullmq';
+import { Worker, Queue, type Job, type QueueOptions } from 'bullmq';
 import Redis from 'ioredis';
 import pino from 'pino';
 import { loadEnv } from './env.js';
@@ -315,6 +315,30 @@ logger.info('Connected to Postgres');
 // BullMQ connection options
 const connection = { connection: redis };
 
+// Bounded retention for every BullMQ queue. Without these bounds BullMQ keeps
+// every completed and failed job (and its full payload) in Redis forever, which
+// is what filled Redis to its maxmemory cap and, under the noeviction policy,
+// blocked ALL enqueues with "OOM command not allowed". Failed jobs are retained
+// longer than completed ones so there is still a debugging trail.
+const DEFAULT_JOB_OPTS = {
+  removeOnComplete: { count: 1000, age: 24 * 3600 }, // keep last 1000 or 24h
+  removeOnFail: { count: 5000, age: 7 * 24 * 3600 }, // keep last 5000 or 7d
+} as const;
+
+// Factory that stamps DEFAULT_JOB_OPTS onto every queue it creates. Callers may
+// pass extra QueueOptions (e.g. a typed generic is applied via makeQueue<T>()),
+// and a caller-supplied defaultJobOptions (attempts/backoff/DLQ retention) is
+// MERGED over the retention bounds so retry config is preserved while the
+// removeOnComplete/removeOnFail caps always apply.
+function makeQueue<T = unknown>(name: string, extra: Partial<QueueOptions> = {}): Queue<T> {
+  const { defaultJobOptions, ...rest } = extra;
+  return new Queue<T>(name, {
+    ...rest,
+    connection: redis,
+    defaultJobOptions: { ...DEFAULT_JOB_OPTS, ...(defaultJobOptions ?? {}) },
+  });
+}
+
 // Email worker
 const emailWorker = new Worker<EmailJobData>(
   'email',
@@ -516,7 +540,7 @@ banterScheduledPostWorker.on('failed', (job, err) => {
 });
 
 // Schedule banter retention as a daily cron (1 AM UTC, offset from other sweeps)
-const banterRetentionQueue = new Queue('banter-retention', { connection: redis });
+const banterRetentionQueue = makeQueue('banter-retention');
 banterRetentionQueue
   .upsertJobScheduler(
     'banter-retention-daily',
@@ -601,8 +625,7 @@ beaconExpirySweepWorker.on('failed', (job, err) => {
 });
 
 // Schedule the expiry sweep as a daily repeatable job
-import { Queue } from 'bullmq';
-const beaconExpirySweepQueue = new Queue('beacon-expiry-sweep', { connection: redis });
+const beaconExpirySweepQueue = makeQueue('beacon-expiry-sweep');
 beaconExpirySweepQueue.upsertJobScheduler(
   'beacon-expiry-sweep-daily',
   { pattern: '0 3 * * *' }, // 3 AM daily
@@ -641,7 +664,7 @@ livekitIpDriftWorker.on('failed', (job, err) => {
 });
 
 // Hourly at :17 — offset from the pile of on-the-hour jobs.
-const livekitIpDriftQueue = new Queue('livekit-ip-drift', { connection: redis });
+const livekitIpDriftQueue = makeQueue('livekit-ip-drift');
 livekitIpDriftQueue.upsertJobScheduler(
   'livekit-ip-drift-hourly',
   { pattern: '17 * * * *' },
@@ -677,7 +700,7 @@ turnCertExpiryWorker.on('failed', (job, err) => {
   });
 });
 
-const turnCertExpiryQueue = new Queue('turn-cert-expiry', { connection: redis });
+const turnCertExpiryQueue = makeQueue('turn-cert-expiry');
 turnCertExpiryQueue.upsertJobScheduler(
   'turn-cert-expiry-daily',
   { pattern: '23 4 * * *' }, // 04:23 UTC daily
@@ -685,7 +708,7 @@ turnCertExpiryQueue.upsertJobScheduler(
 ).catch((err) => logger.error({ err }, 'Failed to register turn cert expiry scheduler'));
 
 // Schedule bearing snapshot as a daily repeatable job (midnight UTC)
-const bearingSnapshotQueue = new Queue('bearing-snapshot', { connection: redis });
+const bearingSnapshotQueue = makeQueue('bearing-snapshot');
 bearingSnapshotQueue.upsertJobScheduler(
   'bearing-snapshot-daily',
   { pattern: '0 0 * * *' }, // midnight UTC
@@ -720,7 +743,7 @@ bearingSnapshotWorker.on('failed', (job, err) => {
 // ─── Basis (governed metric layer) scheduled jobs ──────────────────────────
 // Cron minutes are pinned OFF :00 (the hourly snapshot owns :00) so the
 // retention DROP (ACCESS EXCLUSIVE) never overlaps a snapshot write (spec 6).
-const basisPartitionProvisionQueue = new Queue('basis-partition-provision', { connection: redis });
+const basisPartitionProvisionQueue = makeQueue('basis-partition-provision');
 basisPartitionProvisionQueue
   .upsertJobScheduler('basis-partition-provision-daily', { pattern: '45 2 * * *' }, { name: 'provision', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register basis-partition-provision scheduler'));
@@ -730,7 +753,7 @@ new Worker<BasisPartitionProvisionJobData>(
   { ...connection, concurrency: 1 },
 );
 
-const basisSnapshotQueue = new Queue('basis-metric-snapshot', { connection: redis });
+const basisSnapshotQueue = makeQueue('basis-metric-snapshot');
 basisSnapshotQueue
   .upsertJobScheduler('basis-metric-snapshot-hourly', { pattern: '0 * * * *' }, { name: 'snapshot-hour', data: { grain: 'hour' } })
   .catch((err) => logger.error({ err }, 'Failed to register basis-metric-snapshot hourly scheduler'));
@@ -743,7 +766,7 @@ new Worker<BasisMetricSnapshotJobData>(
   { ...connection, concurrency: 1 },
 );
 
-const basisExplainQueue = new Queue('basis-explain', { connection: redis });
+const basisExplainQueue = makeQueue('basis-explain');
 basisExplainQueue
   .upsertJobScheduler('basis-explain-narrative', { pattern: '*/10 * * * *' }, { name: 'narrate', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register basis-explain scheduler'));
@@ -753,7 +776,7 @@ new Worker<BasisExplainJobData>(
   { ...connection, concurrency: 1 },
 );
 
-const basisMovementScanQueue = new Queue('basis-movement-scan', { connection: redis });
+const basisMovementScanQueue = makeQueue('basis-movement-scan');
 basisMovementScanQueue
   .upsertJobScheduler('basis-movement-scan-daily', { pattern: '30 4 * * *' }, { name: 'scan', data: { grain: 'day' } })
   .catch((err) => logger.error({ err }, 'Failed to register basis-movement-scan scheduler'));
@@ -763,7 +786,7 @@ new Worker<BasisMovementScanJobData>(
   { ...connection, concurrency: 1 },
 );
 
-const basisRetentionSweepQueue = new Queue('basis-retention-sweep', { connection: redis });
+const basisRetentionSweepQueue = makeQueue('basis-retention-sweep');
 basisRetentionSweepQueue
   .upsertJobScheduler('basis-retention-sweep-daily', { pattern: '15 3 * * *' }, { name: 'sweep', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register basis-retention-sweep scheduler'));
@@ -898,7 +921,7 @@ boltScheduleTickWorker.on('failed', (job, err) => {
 });
 
 // Schedule bolt schedule-tick as a once-a-minute repeating job
-const boltScheduleQueue = new Queue('bolt-schedule', { connection: redis });
+const boltScheduleQueue = makeQueue('bolt-schedule');
 boltScheduleQueue.upsertJobScheduler(
   'bolt-schedule-tick',
   { pattern: '* * * * *' }, // every minute
@@ -957,7 +980,7 @@ bondStaleDealsWorker.on('failed', (job, err) => {
 
 // Schedule bond stale-deals sweep as a daily repeatable job at 02:00 UTC
 // (offset from beacon-expiry-sweep @ 03:00 and bearing-snapshot @ 00:00)
-const bondStaleDealsQueue = new Queue('bond-stale-deals', { connection: redis });
+const bondStaleDealsQueue = makeQueue('bond-stale-deals');
 bondStaleDealsQueue.upsertJobScheduler(
   'bond-stale-deals-daily',
   { pattern: '0 2 * * *' }, // 2 AM daily
@@ -995,7 +1018,7 @@ bamTaskOverdueSweepWorker.on('failed', (job, err) => {
 // Schedule the task-overdue sweep every 30 minutes (low-latency but not hammering; the 30-min
 // Bulwark state-reconcile is the durable backstop). Offset to :07 / :37 to avoid the on-the-hour
 // and on-the-half-hour job pileups.
-const bamTaskOverdueSweepQueue = new Queue('bam-task-overdue-sweep', { connection: redis });
+const bamTaskOverdueSweepQueue = makeQueue('bam-task-overdue-sweep');
 bamTaskOverdueSweepQueue.upsertJobScheduler(
   'bam-task-overdue-sweep-30m',
   { pattern: '7,37 * * * *' }, // every 30 minutes at :07 and :37
@@ -1029,7 +1052,7 @@ billPdfGenerateWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const billPdfGenerateQueue = new Queue('bill-pdf-generate', { connection: redis });
+const billPdfGenerateQueue = makeQueue('bill-pdf-generate');
 billPdfGenerateQueue
   .upsertJobScheduler(
     'bill-pdf-generate-sweep',
@@ -1060,7 +1083,7 @@ billEmailSendWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const billEmailSendQueue = new Queue('bill-email-send', { connection: redis });
+const billEmailSendQueue = makeQueue('bill-email-send');
 billEmailSendQueue
   .upsertJobScheduler(
     'bill-email-send-sweep',
@@ -1091,7 +1114,7 @@ billOverdueReminderWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const billOverdueReminderQueue = new Queue('bill-overdue-reminder', { connection: redis });
+const billOverdueReminderQueue = makeQueue('bill-overdue-reminder');
 billOverdueReminderQueue
   .upsertJobScheduler(
     'bill-overdue-reminder-daily',
@@ -1124,7 +1147,7 @@ billRecurringGenerateWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const billRecurringGenerateQueue = new Queue('bill-recurring-generate', { connection: redis });
+const billRecurringGenerateQueue = makeQueue('bill-recurring-generate');
 billRecurringGenerateQueue
   .upsertJobScheduler(
     'bill-recurring-generate-daily',
@@ -1155,7 +1178,7 @@ blankConfirmationEmailWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const blankConfirmationEmailQueue = new Queue('blank-confirmation-email', { connection: redis });
+const blankConfirmationEmailQueue = makeQueue('blank-confirmation-email');
 blankConfirmationEmailQueue
   .upsertJobScheduler(
     'blank-confirmation-email-sweep',
@@ -1188,7 +1211,7 @@ blankFileProcessWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const blankFileProcessQueue = new Queue('blank-file-process', { connection: redis });
+const blankFileProcessQueue = makeQueue('blank-file-process');
 blankFileProcessQueue
   .upsertJobScheduler(
     'blank-file-process-sweep',
@@ -1242,7 +1265,7 @@ benchMvRefreshWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const benchMvRefreshQueue = new Queue('bench-mv-refresh', { connection: redis });
+const benchMvRefreshQueue = makeQueue('bench-mv-refresh');
 benchMvRefreshQueue
   .upsertJobScheduler(
     'bench-mv-refresh-tick',
@@ -1273,7 +1296,7 @@ briefEmbedWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const briefEmbedQueue = new Queue('brief-embed', { connection: redis });
+const briefEmbedQueue = makeQueue('brief-embed');
 briefEmbedQueue
   .upsertJobScheduler(
     'brief-embed-tick',
@@ -1304,7 +1327,7 @@ briefSnapshotWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const briefSnapshotQueue = new Queue('brief-snapshot', { connection: redis });
+const briefSnapshotQueue = makeQueue('brief-snapshot');
 briefSnapshotQueue
   .upsertJobScheduler(
     'brief-snapshot-daily',
@@ -1358,7 +1381,7 @@ briefCleanupWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const briefCleanupQueue = new Queue('brief-cleanup', { connection: redis });
+const briefCleanupQueue = makeQueue('brief-cleanup');
 briefCleanupQueue
   .upsertJobScheduler(
     'brief-cleanup-weekly',
@@ -1389,7 +1412,7 @@ helpdeskSlaMonitorWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const helpdeskSlaMonitorQueue = new Queue('helpdesk-sla-monitor', { connection: redis });
+const helpdeskSlaMonitorQueue = makeQueue('helpdesk-sla-monitor');
 helpdeskSlaMonitorQueue
   .upsertJobScheduler(
     'helpdesk-sla-monitor-tick',
@@ -1420,7 +1443,7 @@ boardThumbnailWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const boardThumbnailQueue = new Queue('board-thumbnail', { connection: redis });
+const boardThumbnailQueue = makeQueue('board-thumbnail');
 boardThumbnailQueue
   .upsertJobScheduler(
     'board-thumbnail-sweep-daily',
@@ -1451,7 +1474,7 @@ boltExecutionCleanupWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const boltExecutionCleanupQueue = new Queue('bolt-execution-cleanup', { connection: redis });
+const boltExecutionCleanupQueue = makeQueue('bolt-execution-cleanup');
 boltExecutionCleanupQueue
   .upsertJobScheduler(
     'bolt-execution-cleanup-daily',
@@ -1482,7 +1505,7 @@ bondBulkScoreWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const bondBulkScoreQueue = new Queue('bond-bulk-score', { connection: redis });
+const bondBulkScoreQueue = makeQueue('bond-bulk-score');
 bondBulkScoreQueue
   .upsertJobScheduler(
     'bond-bulk-score-daily',
@@ -1536,7 +1559,7 @@ agentWebhookDlqWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const agentWebhookDlqQueue = new Queue('agent-webhook-dlq', { connection: redis });
+const agentWebhookDlqQueue = makeQueue('agent-webhook-dlq');
 agentWebhookDlqQueue
   .upsertJobScheduler(
     'agent-webhook-dlq-tick',
@@ -1643,7 +1666,7 @@ bureauPresenceReapWorker.on('failed', (job, err) => {
 });
 // BullMQ's repeat scheduler does not accept a sub-minute cron pattern, so use
 // `every` (milliseconds) for the 15s cadence per design doc §13.
-const bureauPresenceReapQueue = new Queue('bureau-presence-reap', { connection: redis });
+const bureauPresenceReapQueue = makeQueue('bureau-presence-reap');
 bureauPresenceReapQueue
   .upsertJobScheduler(
     'bureau-presence-reap-tick',
@@ -1674,7 +1697,7 @@ bureauChatExpiryWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const bureauChatExpiryQueue = new Queue('bureau-chat-expiry', { connection: redis });
+const bureauChatExpiryQueue = makeQueue('bureau-chat-expiry');
 bureauChatExpiryQueue
   .upsertJobScheduler(
     'bureau-chat-expiry-hourly',
@@ -1808,7 +1831,7 @@ bureauAnalyticsRollupWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const bureauAnalyticsRollupQueue = new Queue('bureau-analytics-rollup', { connection: redis });
+const bureauAnalyticsRollupQueue = makeQueue('bureau-analytics-rollup');
 bureauAnalyticsRollupQueue
   .upsertJobScheduler(
     'bureau-analytics-rollup-daily',
@@ -1841,7 +1864,7 @@ bookCalendarSyncWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const bookCalendarSyncQueue = new Queue('book-calendar-sync', { connection: redis });
+const bookCalendarSyncQueue = makeQueue('book-calendar-sync');
 bookCalendarSyncQueue
   .upsertJobScheduler(
     'book-calendar-sync-tick',
@@ -1875,7 +1898,7 @@ binAvScanWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const binAvScanQueue = new Queue('bin-av-scan', { connection: redis });
+const binAvScanQueue = makeQueue('bin-av-scan');
 binAvScanQueue
   .upsertJobScheduler(
     'bin-av-scan-tick',
@@ -1906,7 +1929,7 @@ binTranscodeWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const binTranscodeQueue = new Queue('bin-transcode', { connection: redis });
+const binTranscodeQueue = makeQueue('bin-transcode');
 binTranscodeQueue
   .upsertJobScheduler(
     'bin-transcode-tick',
@@ -1939,7 +1962,7 @@ binModelProcessWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const binModelProcessQueue = new Queue('bin-model-process', { connection: redis });
+const binModelProcessQueue = makeQueue('bin-model-process');
 binModelProcessQueue
   .upsertJobScheduler(
     'bin-model-process-tick',
@@ -1998,7 +2021,7 @@ blipPartitionProvisionWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const blipPartitionProvisionQueue = new Queue('blip-partition-provision', { connection: redis });
+const blipPartitionProvisionQueue = makeQueue('blip-partition-provision');
 blipPartitionProvisionQueue
   .upsertJobScheduler(
     'blip-partition-provision-daily',
@@ -2028,7 +2051,7 @@ blipRetentionSweepWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const blipRetentionSweepQueue = new Queue('blip-retention-sweep', { connection: redis });
+const blipRetentionSweepQueue = makeQueue('blip-retention-sweep');
 blipRetentionSweepQueue
   .upsertJobScheduler(
     'blip-retention-sweep-daily',
@@ -2058,7 +2081,7 @@ blipWatchEvalWorker.on('failed', (job, err) => {
     err: err as Error,
   });
 });
-const blipWatchEvalQueue = new Queue('blip-watch-eval', { connection: redis });
+const blipWatchEvalQueue = makeQueue('blip-watch-eval');
 blipWatchEvalQueue
   .upsertJobScheduler(
     'blip-watch-eval-tick',
@@ -2187,9 +2210,7 @@ banterFeedFaninWorker.on('failed', (job, err) => {
 // Event-driven match-on-ingest consumer + three scheduled sweeps (Braid spec §4.6).
 // The ingest queue is also produced to by braid-api's /internal/events route + resolve
 // path (the live transport) and by the nightly rescan (the source-diff fallback).
-const braidMatchQueue = new Queue<BraidMatchOnIngestJobData>(BRAID_MATCH_ON_INGEST_QUEUE, {
-  connection: redis,
-});
+const braidMatchQueue = makeQueue<BraidMatchOnIngestJobData>(BRAID_MATCH_ON_INGEST_QUEUE);
 
 const braidMatchWorker = new Worker<BraidMatchOnIngestJobData>(
   BRAID_MATCH_ON_INGEST_QUEUE,
@@ -2230,7 +2251,7 @@ braidRescanWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'braid-rescan', err }, 'Job failed');
   void recordWorkerError({ queueName: 'braid-rescan', jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const braidRescanQueue = new Queue('braid-rescan', { connection: redis });
+const braidRescanQueue = makeQueue('braid-rescan');
 braidRescanQueue
   .upsertJobScheduler('braid-rescan-daily', { pattern: '20 3 * * *' }, { name: 'rescan', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register braid-rescan scheduler'));
@@ -2249,7 +2270,7 @@ braidProposalReconcileWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'braid-proposal-reconcile', err }, 'Job failed');
   void recordWorkerError({ queueName: 'braid-proposal-reconcile', jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const braidProposalReconcileQueue = new Queue('braid-proposal-reconcile', { connection: redis });
+const braidProposalReconcileQueue = makeQueue('braid-proposal-reconcile');
 braidProposalReconcileQueue
   .upsertJobScheduler('braid-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, { name: 'reconcile', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register braid-proposal-reconcile scheduler'));
@@ -2268,7 +2289,7 @@ braidCandidateRetentionWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: 'braid-candidate-retention', err }, 'Job failed');
   void recordWorkerError({ queueName: 'braid-candidate-retention', jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const braidCandidateRetentionQueue = new Queue('braid-candidate-retention', { connection: redis });
+const braidCandidateRetentionQueue = makeQueue('braid-candidate-retention');
 braidCandidateRetentionQueue
   .upsertJobScheduler('braid-candidate-retention-daily', { pattern: '50 3 * * *' }, { name: 'sweep', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register braid-candidate-retention scheduler'));
@@ -2327,7 +2348,7 @@ bulwarkRadarWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: BULWARK_RADAR_SWEEP_QUEUE, err }, 'Job failed');
   void recordWorkerError({ queueName: BULWARK_RADAR_SWEEP_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const bulwarkRadarQueue = new Queue<BulwarkSweepJobData>(BULWARK_RADAR_SWEEP_QUEUE, { connection: redis });
+const bulwarkRadarQueue = makeQueue<BulwarkSweepJobData>(BULWARK_RADAR_SWEEP_QUEUE);
 bulwarkRadarQueue
   .upsertJobScheduler('bulwark-radar-sweep-15min', { pattern: '*/15 * * * *' }, { name: 'sweep', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-radar-sweep scheduler'));
@@ -2347,7 +2368,7 @@ bulwarkStateReconcileWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: BULWARK_STATE_RECONCILE_QUEUE, err }, 'Job failed');
   void recordWorkerError({ queueName: BULWARK_STATE_RECONCILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const bulwarkStateReconcileQueue = new Queue<BulwarkSweepJobData>(BULWARK_STATE_RECONCILE_QUEUE, { connection: redis });
+const bulwarkStateReconcileQueue = makeQueue<BulwarkSweepJobData>(BULWARK_STATE_RECONCILE_QUEUE);
 bulwarkStateReconcileQueue
   .upsertJobScheduler('bulwark-state-reconcile-30min', { pattern: '*/30 * * * *' }, { name: 'reconcile', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-state-reconcile scheduler'));
@@ -2367,7 +2388,7 @@ bulwarkGateReconcileWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: BULWARK_GATE_RECONCILE_QUEUE, err }, 'Job failed');
   void recordWorkerError({ queueName: BULWARK_GATE_RECONCILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const bulwarkGateReconcileQueue = new Queue<BulwarkSweepJobData>(BULWARK_GATE_RECONCILE_QUEUE, { connection: redis });
+const bulwarkGateReconcileQueue = makeQueue<BulwarkSweepJobData>(BULWARK_GATE_RECONCILE_QUEUE);
 bulwarkGateReconcileQueue
   .upsertJobScheduler('bulwark-gate-reconcile-20min', { pattern: '*/20 * * * *' }, { name: 'reconcile', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-gate-reconcile scheduler'));
@@ -2387,7 +2408,7 @@ bulwarkProposalReconcileWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: BULWARK_PROPOSAL_RECONCILE_QUEUE, err }, 'Job failed');
   void recordWorkerError({ queueName: BULWARK_PROPOSAL_RECONCILE_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const bulwarkProposalReconcileQueue = new Queue<BulwarkSweepJobData>(BULWARK_PROPOSAL_RECONCILE_QUEUE, { connection: redis });
+const bulwarkProposalReconcileQueue = makeQueue<BulwarkSweepJobData>(BULWARK_PROPOSAL_RECONCILE_QUEUE);
 bulwarkProposalReconcileQueue
   .upsertJobScheduler('bulwark-proposal-reconcile-10min', { pattern: '*/10 * * * *' }, { name: 'reconcile', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-proposal-reconcile scheduler'));
@@ -2407,7 +2428,7 @@ bulwarkRetentionWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: BULWARK_RETENTION_QUEUE, err }, 'Job failed');
   void recordWorkerError({ queueName: BULWARK_RETENTION_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const bulwarkRetentionQueue = new Queue<BulwarkSweepJobData>(BULWARK_RETENTION_QUEUE, { connection: redis });
+const bulwarkRetentionQueue = makeQueue<BulwarkSweepJobData>(BULWARK_RETENTION_QUEUE);
 bulwarkRetentionQueue
   .upsertJobScheduler('bulwark-retention-daily', { pattern: '50 4 * * *' }, { name: 'sweep', data: {} })
   .catch((err) => logger.error({ err }, 'Failed to register bulwark-retention scheduler'));
@@ -2442,7 +2463,7 @@ function registerBurnSweep(
     void recordWorkerError({ queueName: queue, jobId: job?.id, jobName: job?.name, err: err as Error });
   });
   if (schedule) {
-    const q = new Queue<BurnSweepJobData>(queue, { connection: redis });
+    const q = makeQueue<BurnSweepJobData>(queue);
     // Each fired scheduled job carries attempts + exponential backoff, so a transient failure
     // is retried within the tick rather than waiting a whole cron interval to run again.
     q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, { name: 'run', data: {}, opts: BURN_JOB_OPTS })
@@ -2480,7 +2501,7 @@ burnAttributeWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: BURN_ATTRIBUTE_BATCH_QUEUE, err }, 'Job failed');
   void recordWorkerError({ queueName: BURN_ATTRIBUTE_BATCH_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
 });
-const burnAttributeQueue = new Queue<BurnSweepJobData>(BURN_ATTRIBUTE_BATCH_QUEUE, { connection: redis });
+const burnAttributeQueue = makeQueue<BurnSweepJobData>(BURN_ATTRIBUTE_BATCH_QUEUE);
 burnAttributeQueue
   .upsertJobScheduler('burn-attribute-batch-2min', { pattern: '*/2 * * * *' }, { name: 'drain', data: {}, opts: BURN_JOB_OPTS })
   .catch((err) => logger.error({ err }, 'Failed to register burn-attribute-batch scheduler'));
@@ -2521,7 +2542,7 @@ const banterPatternMatchConsumer = await startBanterPatternMatchConsumer(
 // §13 Wave 4 scheduled banter — startup reconciler.
 // Re-enqueue any pending scheduled-message rows whose BullMQ job may have been
 // lost (e.g. Redis was flushed). Safe to call because BullMQ dedups by jobId.
-const banterScheduledPostQueue = new Queue('banter-scheduled-post', { connection: redis });
+const banterScheduledPostQueue = makeQueue('banter-scheduled-post');
 reconcileScheduledPosts(
   async (jobId, data, delayMs) => {
     await banterScheduledPostQueue.add('scheduled-post', data, {

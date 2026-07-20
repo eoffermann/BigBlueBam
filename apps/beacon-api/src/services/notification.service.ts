@@ -62,6 +62,8 @@ function getQueue(redisUrl: string): Queue {
         port: Number(url.port) || 6379,
         password: url.password || undefined,
       },
+      // Bound job history so this producer cannot refill Redis (OOM root cause).
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: 500 },
     });
   }
   return _queue;

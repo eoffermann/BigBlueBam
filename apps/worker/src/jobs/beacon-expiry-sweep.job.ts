@@ -98,6 +98,8 @@ async function runSweep(
   if (step1Rows.length > 0) {
     const notifQueue = new Queue('notifications', {
       connection: getQueueConn(),
+      // Bound job history so this producer cannot refill Redis (OOM root cause).
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: 500 },
     });
 
     for (const row of step1Rows) {
@@ -151,6 +153,8 @@ async function runSweep(
   if (step2Rows.length > 0) {
     const notifQueue = new Queue('notifications', {
       connection: getQueueConn(),
+      // Bound job history so this producer cannot refill Redis (OOM root cause).
+      defaultJobOptions: { removeOnComplete: 100, removeOnFail: 500 },
     });
 
     for (const row of step2Rows) {
@@ -226,6 +230,8 @@ async function runSweep(
   if (pendingBeacons.length > 0) {
     const agentQueue = new Queue('beacon-agent-verify', {
       connection: getQueueConn(),
+      // Bound job history so this producer cannot refill Redis (OOM root cause).
+      defaultJobOptions: { removeOnComplete: 500, removeOnFail: 1000 },
     });
 
     for (const row of pendingBeacons) {
