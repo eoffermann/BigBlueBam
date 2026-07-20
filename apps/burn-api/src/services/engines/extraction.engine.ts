@@ -141,7 +141,11 @@ export async function runExtraction(
         verified_quote: verified ? item.quote : null,
         source_doc_hash: input.source_doc_hash,
       });
-      const reviewStatus = verified && item.confidence >= 0.9 ? 'pending_review' : 'pending_review';
+      // Every extracted deliverable lands in pending_review: the spec (2.2, 2.2.1) requires
+      // human confirmation before a deliverable becomes a gate input, and no claim-money path
+      // auto-confirms. verified/confidence feed the low-confidence COUNT and the reviewer's
+      // sort order, never an auto-confirm branch.
+      const reviewStatus = 'pending_review';
       await runInOrgScope(orgId, async (tx) => {
         await tx.execute(sql`
           INSERT INTO burn_deliverables (
