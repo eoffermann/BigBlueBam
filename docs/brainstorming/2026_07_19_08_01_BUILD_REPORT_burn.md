@@ -78,8 +78,33 @@ Milestones (all committed on `suite-brainstorm`):
 
 ## automated-review issues
 
-The post-commit-review pipeline (ci-watchdog, security, stability, best-practices) was run over
-the whole resume body (ec064a56..b916e292); dispositions appended as issues are filed and fixed.
+The post-commit-review pipeline (ci-watchdog, security, stability, best-practices) ran over the
+whole resume body. It filed 9 issues; **all 9 fixed + closed**, each in its own `Fixes #<n>`
+commit:
+- **#94** (stability, HIGH): nightly retention re-freeze zeroed already-frozen rollups (missing
+  `WHERE frozen_at IS NULL` guard). Fixed `64594853` (+ NOT-EXISTS on frozen chains; SQL-proven
+  immutable + 3 live tests).
+- **#96** (stability, HIGH): LLM-throttled `pending_attribution` items were never re-driven and
+  dropped out of every rollup. Fixed `587b56ee` (attribute-batch re-drives them; 3 live tests).
+- **#98** (stability): unbounded `burn_ingest_events`/`burn_prechecks` growth; retention settings
+  were dead config (the disk-full incident's shape). Fixed `3688f282` (batched purge wired to
+  `ingest_retention_days`).
+- **#99** (stability): burn workers ran `attempts=1`. Fixed `764c3bae` (attempts:5 + exp backoff +
+  DLQ).
+- **#93** (best-practices): 3 registered Bolt events never published. Fixed `cadabe44` (producers
+  for `precheck.blocked`/`precheck.overridden`/`consumption.threshold_crossed`, refs-only).
+- **#95** (best-practices): `/burndown` omitted the `metric_basis` discriminator. Fixed `9afe8fb8`.
+- **#97** (best-practices): dead ternary. Fixed `7030d849`.
+- **#92** (security, low): cited-source `can_access` filter only covered `bam.task`. Fixed
+  `d8c79820` (fails closed on un-preflightable types).
+- **#100** (ci): Lint `docs:manual:check` drift (burn screenshots added without regenerating the
+  manual). Fixed `e56b33a9`.
+- Also fixed the extract-enqueue gap the stability review noted (`POST /extract` returned 202 but
+  never enqueued the job): `d0b38081` wires a real producer.
+
+Disclosure note: the security + stability reviewers again published file:line detail to the
+public repo; the sensitive issue bodies were redacted and the bugs fixed fast (a recurring
+reviewer-agent behavior worth a durable fix).
 
 ## main -> branch sync
 
