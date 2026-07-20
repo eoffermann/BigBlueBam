@@ -1,51 +1,43 @@
 # blip MCP Tools
 
-Every Blip REST endpoint has a paired MCP tool (full parity), except the public ingest endpoint (`public-inbound`) and the live-tail WebSocket (`realtime`), which are intentionally not exposed as tools. Authority is the default grant, enforced by `requireCan` against the named `blip.<resource>.<verb>` permission and delegatable per the standard model. Destructive tools (`blip_app_delete`, `blip_key_revoke`, `blip_entry_purge`, `blip_watch_delete`) take an inline `confirm_action: boolean` (call without it to preview, again with `true` to execute). All `blip_*` tools obey the `blip.*` `agent_policies` allowlist and kill switch.
 
-| Tool | REST endpoint | Authority | Description |
-|------|---------------|-----------|-------------|
-| `blip_app_create` | `POST /blip/api/apps` | admin | Declare a tracked app. |
-| `blip_app_list` | `GET /blip/api/apps` | member | List tracked apps. |
-| `blip_app_get` | `GET /blip/api/apps/:id` | member | App detail plus health. |
-| `blip_app_update` | `PATCH /blip/api/apps/:id` | admin | Edit app config. |
-| `blip_app_delete` | `DELETE /blip/api/apps/:id` | owner | Delete the app and its data (confirm). |
-| `blip_collection_set` | `POST /blip/api/apps/:id/collection` | admin | Start or stop collection. |
-| `blip_key_create` | `POST /blip/api/apps/:id/keys` | admin | Mint a key; token shown once. |
-| `blip_key_list` | `GET /blip/api/apps/:id/keys` | admin | List keys, never the secret. |
-| `blip_key_suspend` | `POST /blip/api/keys/:id/suspend` | admin | Suspend or resume a key. |
-| `blip_key_revoke` | `POST /blip/api/keys/:id/revoke` | admin | Revoke a key, terminal (confirm). |
-| `blip_key_update` | `PATCH /blip/api/keys/:id` | admin | Label or rate-limit override. |
-| `blip_ratelimit_set` | `PUT /blip/api/apps/:id/rate-limit` | admin | App default rate limit. |
-| `blip_retention_set` | `PUT /blip/api/apps/:id/retention` | admin | Retention policy (per type). |
-| `blip_transform_set` | `PUT /blip/api/apps/:id/transform` | admin | PII transform rules. |
-| `blip_report_types_list` | `GET /blip/api/apps/:id/types` | member | Observed report types. |
-| `blip_field_catalog_list` | `GET /blip/api/apps/:id/types/:t/fields` | member | Field catalog for a type. |
-| `blip_field_index` | `POST /blip/api/apps/:id/types/:t/fields/:f/index` | admin | Promote a field to indexed. |
-| `blip_field_set_metric` | `POST /blip/api/apps/:id/types/:t/fields/:f/metric` | admin | Mark or unmark a Bench metric. |
-| `blip_entry_query` | `POST /blip/api/apps/:id/entries/query` | member | Filter, sort, paginate; `format=jsonl` option. |
-| `blip_entry_tail` | `POST /blip/api/apps/:id/entries/tail` | member | Entries with `seq > cursor` plus new max seq. |
-| `blip_entry_purge` | `POST /blip/api/apps/:id/entries/purge` | admin | Purge a collection (confirm). |
-| `blip_entry_export` | `POST /blip/api/apps/:id/entries/export` | member | Freeze a collection to a Bin JSONL asset. |
-| `blip_capture_url` | `GET /blip/api/captures/:ref/url` | member | Short-TTL presigned URL for a capture or thumbnail. |
-| `blip_timelapse_create` | `POST /blip/api/apps/:id/timelapse` | member | Compile capture-bearing entries into a video. |
-| `blip_timelapse_get` | `GET /blip/api/timelapse/:id` | member | Job status plus the Bin video asset when ready. |
-| `blip_timelapse_list` | `GET /blip/api/apps/:id/timelapse` | member | List timelapse jobs for an app. |
-| `blip_watch_create` | `POST /blip/api/apps/:id/watches` | admin | Create a match or window watch. |
-| `blip_watch_list` | `GET /blip/api/apps/:id/watches` | member | List watches for an app. |
-| `blip_watch_get` | `GET /blip/api/watches/:id` | member | Watch detail. |
-| `blip_watch_update` | `PATCH /blip/api/watches/:id` | admin | Edit a watch. |
-| `blip_watch_set_enabled` | `POST /blip/api/watches/:id/enabled` | admin | Enable or disable a watch. |
-| `blip_watch_delete` | `DELETE /blip/api/watches/:id` | admin | Delete a watch (confirm). |
-| `blip_watch_test` | `POST /blip/api/apps/:id/watches/test` | member | Dry-run a predicate over recent entries. |
-| `blip_watch_history` | `GET /blip/api/watches/:id/history` | member | Recent firings of a watch. |
-| `blip_view_create` | `POST /blip/api/views` | member | Create a saved view. |
-| `blip_view_list` | `GET /blip/api/apps/:id/types/:t/views` | member | List views for a type. |
-| `blip_view_update` | `PATCH /blip/api/views/:id` | member (owner/admin for org-shared) | Edit a view. |
-| `blip_view_delete` | `DELETE /blip/api/views/:id` | member (owner/admin) | Delete a view. |
-
-## Related Apps
-
-- [Bin (Digital asset management)](../bin/mcp-tools.md)
-- [Bench (Analytics)](../bench/mcp-tools.md)
-- [Bolt (Workflow Automation)](../bolt/mcp-tools.md)
-- [Banter (Team chat)](../banter/mcp-tools.md)
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `blip_app_create` | Declare a Blip tracked app: the unit of control that owns collection on/off, the default rate limit, the default 14-day retention, PII transform rules, and the report types observed under it. Org-scoped. | `slug`, `platform` |
+| `blip_app_delete` | Delete a Blip tracked app and ALL of its data (keys, entries, watches, views, captures). Terminal and owner-gated. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed. | `id`, `confirm_action` |
+| `blip_app_get` | Get a Blip tracked app’s detail: config (rate limit, retention default, transform), collection state, and health (recent ingest/error/dead-letter counts). | none |
+| `blip_app_list` | List Blip tracked apps for the caller’s org, with per-app health/collection state. | `include_archived` |
+| `blip_app_update` | Edit a Blip tracked app’s mutable config: rename, description, platform hint. | `id`, `platform` |
+| `blip_capture_url` | Get a short-TTL presigned GET URL for a stored screen capture (or its thumbnail). Agents and the viewer never receive base64; they resolve capture refs to URLs through this tool. Pass thumb:true for the thumbnail key. | `ref`, `thumb` |
+| `blip_collection_set` | Start or stop collection for a Blip tracked app. When disabled, the edge rejects ingest with 409 within the key-cache TTL (~1s). Does not delete existing data. | `id`, `enabled` |
+| `blip_entry_export` | Freeze a (tracked_app, report_type) collection (optionally filtered) into an immutable JSONL asset in Bin, returning the Bin asset ref. Use for archival, sharing, or feeding the frozen log into the Bin structured-data viewer. | `id`, `report_type`, `filter`, `columns` |
+| `blip_entry_purge` | Purge entries for a (tracked_app, report_type), optionally narrowed by a §7.1 filter. Deletes durable rows and reclaims their stored captures; compiled timelapse videos are independent Bin assets and are not affected. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true. | `id`, `report_type`, `filter`, `confirm_action` |
+| `blip_entry_query` | Query entries for a (tracked_app, report_type): a §7.1 filter predicate, column projection, sort, and a page (limit/offset). Pass format:"jsonl" for newline-delimited output. The durable store is authoritative; this is not the live tail. | `id`, `report_type`, `filter`, `columns`, `sort`, `limit`, `offset`, `format` |
+| `blip_entry_tail` | Incremental pull of entries for a (tracked_app, report_type) with seq > cursor, plus the new max seq for the next call. The polling complement to the realtime WebSocket tail; ideal for agents draining new telemetry on an interval. Omit cursor for the first call. | `id`, `report_type`, `cursor`, `filter`, `columns`, `limit` |
+| `blip_field_catalog_list` | List the observed-field catalog for a (tracked_app, report_type): each field path with inferred type, first/last seen, observation count, and is_metric / is_indexed flags. Powers column pickers and sort options. | `id`, `report_type` |
+| `blip_field_index` | Promote a JSONB field to an indexed field for a (tracked_app, report_type). Enqueues a worker job that builds CREATE INDEX CONCURRENTLY on ((payload->>field)) and flips is_indexed. Heavy and explicit; reserved columns are always indexed. | `id`, `report_type`, `field_path` |
+| `blip_field_set_metric` | Mark or unmark a numeric field as a Bench metric for a (tracked_app, report_type). Metric fields are included in the numeric Bench rollup. Pass is_metric:false to unmark. | `id`, `report_type`, `field_path`, `is_metric` |
+| `blip_key_create` | Mint a write-only ingest key for a tracked app. The full token (blip_<key_id>_<secret>) is returned EXACTLY ONCE in this response and never again; only an HMAC is stored. Optionally label it and set a per-key rate-limit override. | `id`, `label`, `rate_limit_override` |
+| `blip_key_list` | List a tracked app’s ingest keys (status, label, last4, fingerprint, last-used, rate-limit override). The secret is never returned. | none |
+| `blip_key_revoke` | Revoke an ingest key. TERMINAL: the token never works again (suspend is the reversible option). The row is retained so historical entries keep their attribution. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true. | `id`, `confirm_action` |
+| `blip_key_suspend` | Suspend (or resume) an ingest key. Reversible: pass resume:true to flip a suspended key back to active. A suspended key’s token is rejected at the edge within the key-cache TTL (~1s). | `id`, `resume` |
+| `blip_key_update` | Edit an ingest key’s label and/or per-key rate-limit override. | `id`, `label`, `rate_limit_override` |
+| `blip_ratelimit_set` | Set the tracked app’s DEFAULT rate limit (the per-key bucket used when a key has no override, and the per-app aggregate ceiling) plus body/batch/capture caps. | `id`, `refill_per_sec`, `burst`, `max_body_bytes`, `max_batch_count`, `max_capture_body_bytes`, `max_capture_bytes`, `max_captures_per_report` |
+| `blip_report_types_list` | List the report types observed under a tracked app (discovered from incoming data, never pre-declared). | none |
+| `blip_retention_set` | Set a retention policy for a tracked app. Omit report_type for the app-wide default; pass one to override a single (tracked_app, report_type). null on a cap removes that limit (explicit, never automatic). New apps default to max_age_days=14. | `id`, `report_type`, `max_age_days`, `max_rows`, `max_bytes` |
+| `blip_timelapse_create` | Compile an ordered, filtered collection of capture-bearing entries into an MP4 (stored as a Bin asset). The intent case is a session timelapse: filter to one session_id with captures, order by seq, one frame per capture. Enqueues a worker job; poll blip_timelapse_get or react to the timelapse.ready event. | `id`, `report_type`, `filter`, `order`, `frame_duration_sec`, `image_selection`, `max_dimension` |
+| `blip_timelapse_get` | Get a timelapse job’s status (queued\|running\|ready\|failed), frame count, and the Bin video asset ref when ready. | none |
+| `blip_timelapse_list` | List timelapse compilation jobs for a tracked app (newest first), with status and video asset refs. | none |
+| `blip_transform_set` | Set the ordered PII/redaction transform rules for a tracked app (optionally narrowed to one report_type). Rules run on the edge before tail/store. Each rule: { match: "payload:user.email" \| "glob:*token*" \| "regex:...", action: "drop"\|"mask"\|"hash"\|"truncate", params?: { keep_last?, max_len? } }. | `id`, `report_type`, `enabled`, `rules`, `match`, `action`, `params` |
+| `blip_view_create` | Create a saved view over a (tracked_app, report_type): filter + columns + sort + live-tail + page size. scope "private" is visible only to the owner; "org" to anyone who can_access the tracked app. Report types are fully usable with zero views (a default view is auto-provided). | `tracked_app_id`, `report_type`, `scope`, `spec` |
+| `blip_view_delete` | Delete a saved view (owner or admin). Views are personal/operational config, not telemetry data; no entry data is affected. | none |
+| `blip_view_list` | List saved views for a (tracked_app, report_type) visible to the caller (own private views plus org-shared views). | `id`, `report_type` |
+| `blip_view_update` | Edit a saved view’s name, scope, or spec. Editing an org-shared view requires being its owner or an admin. | `id`, `scope`, `spec` |
+| `blip_watch_create` | Create a watch on a (tracked_app, report_type) that emits a Bolt event when satisfied. kind "match" fires per-entry on a §7.1 predicate (event entry.matched); kind "window" evaluates an aggregate over a trailing window and emits window.breached / window.recovered. A per-watch cooldown caps fire frequency. | `id`, `kind`, `report_type`, `predicate`, `cooldown_sec`, `enabled` |
+| `blip_watch_delete` | Delete a watch. Two-step confirm: call with confirm_action omitted/false to preview, then again with confirm_action:true to proceed. (Use blip_watch_set_enabled to pause without deleting.) | `id`, `confirm_action` |
+| `blip_watch_get` | Get a watch’s detail: kind, predicate, cooldown, enabled state, and last-fired time. | none |
+| `blip_watch_history` | List recent firings of a watch (entry.matched / window.breached / window.recovered) with their context, newest first. | `id`, `limit` |
+| `blip_watch_list` | List watches configured for a tracked app (match and window), with enabled state and last-fired time. | none |
+| `blip_watch_set_enabled` | Enable or disable a watch without deleting it. | `id`, `enabled` |
+| `blip_watch_test` | Dry-run a watch predicate against recent entries for a (tracked_app, report_type) and return what would have matched (or the aggregate value vs threshold), so a watch can be validated before it is enabled. Does not create a watch or emit events. | `id`, `kind`, `report_type`, `predicate`, `limit` |
+| `blip_watch_update` | Edit a watch: name, description, predicate, cooldown, and/or report-type scope. | `id`, `report_type`, `predicate`, `cooldown_sec` |

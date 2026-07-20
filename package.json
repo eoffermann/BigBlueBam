@@ -46,6 +46,8 @@
     "docs:catalog:check": "node scripts/docs/build-docs-catalog.mjs --check",
     "docs:compose": "node scripts/docs/compose.mjs",
     "docs:publish": "node scripts/docs/publish.mjs",
+    "docs:readme": "node scripts/docs/publish.mjs --readme-only",
+    "docs:readme:check": "node scripts/docs/publish.mjs --check",
     "docs:manual": "node scripts/docs/build-manual.mjs",
     "docs:manual:check": "node scripts/docs/build-manual.mjs --check",
     "docs:generate": "node scripts/docs/generate.mjs"

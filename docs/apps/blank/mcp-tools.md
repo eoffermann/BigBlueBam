@@ -3,7 +3,7 @@
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `blank_add_field` | Add a single field to an existing form.  | `form_id`, `field_key`, `label`, `field_type`, `placeholder`, `required`, `min_length`, `max_length`, `options`, `scale_min`, `scale_max`, `scale_min_label`, `scale_max_label`, `conditional_on_field_id`, `conditional_operator`, `conditional_value`, `sort_order`, `page_number`, `column_span`, `default_value` |
+| `blank_add_field` | Add a single field to an existing form. `field_key` must be a safe identifier (letters, digits, underscores; starting with a letter or underscore). | `form_id`, `field_key`, `label`, `field_type`, `placeholder`, `required`, `min_length`, `max_length`, `options`, `scale_min`, `scale_max`, `scale_min_label`, `scale_max_label`, `conditional_on_field_id`, `conditional_operator`, `conditional_value`, `sort_order`, `page_number`, `column_span`, `default_value` |
 | `blank_close_form` | Close a published form to new submissions. Existing submissions are retained; the form stops accepting responses. | `id` |
 | `blank_create_form` | Create a new form with optional inline field definitions. | `slug`, `form_type`, `fields`, `field_key`, `label`, `field_type`, `required`, `options`, `scale_min`, `scale_max`, `scale_min_label`, `scale_max_label` |
 | `blank_delete_field` | Delete a single field from a form. This is destructive and removes the field definition. | `id` |

@@ -7,7 +7,7 @@
 | `brief_archive` | Archive a Brief document (soft-delete). | `id` |
 | `brief_collaborator_add` | Add a user as a collaborator on a Brief document with a given permission level. | `document_id`, `user_id`, `permission` |
 | `brief_collaborator_remove` | Remove a collaborator from a Brief document. Get the collaborator ID from brief_collaborators_list. | `collaborator_id` |
-| `brief_collaborator_update` | Update an existing collaborator | `collaborator_id`, `permission` |
+| `brief_collaborator_update` | Update an existing collaborator's permission level on a Brief document. Get the collaborator ID from brief_collaborators_list. | `collaborator_id`, `permission` |
 | `brief_collaborators_list` | List the per-user collaborators (and their permissions) on a Brief document. | `document_id` |
 | `brief_comment_add` | Add a comment to a Brief document, optionally as a reply or anchored to specific text. | `document_id`, `body`, `parent_id`, `anchor_text` |
 | `brief_comment_delete` | Delete a Brief comment. The author may delete their own comment; org admins/owners may delete any comment. | `comment_id` |
@@ -15,7 +15,7 @@
 | `brief_comment_list` | List comments on a Brief document. | `document_id` |
 | `brief_comment_react` | Add an emoji reaction to a Brief comment. | `comment_id`, `emoji` |
 | `brief_comment_resolve` | Toggle the resolved state of a comment. | `comment_id` |
-| `brief_comment_unreact` | Remove the calling user | `comment_id`, `emoji` |
+| `brief_comment_unreact` | Remove the calling user's emoji reaction from a Brief comment. | `comment_id`, `emoji` |
 | `brief_create` | Create a new Brief document. | `title`, `project_id`, `folder_id`, `template_id`, `content`, `visibility` |
 | `brief_duplicate` | Duplicate a Brief document, optionally into a different project. | `id`, `project_id` |
 | `brief_embed_delete` | Delete an embed (uploaded file/image) record from a Brief document. Get the embed ID from brief_embeds_list. | `embed_id` |
@@ -37,8 +37,8 @@
 | `brief_restore` | Restore an archived Brief document. | `id` |
 | `brief_search` | Search Brief documents by keyword or semantic similarity. | `query`, `project_id`, `status`, `semantic`, `limit` |
 | `brief_semantic_search` | Semantic (vector) search over Brief documents. Falls back to full-text search when the vector index is unavailable. | `q`, `limit` |
-| `brief_star` | Toggle the calling user | `id` |
-| `brief_starred` | List the calling user | none |
+| `brief_star` | Toggle the calling user's star on a Brief document. | `id` |
+| `brief_starred` | List the calling user's starred Brief documents. | none |
 | `brief_stats` | Get org-wide Brief document statistics (counts by status, totals, etc.). | none |
 | `brief_template_create` | Create an organization-level Brief document template. | `icon`, `category`, `html_preview`, `sort_order` |
 | `brief_template_delete` | Delete an organization Brief document template. | `id` |

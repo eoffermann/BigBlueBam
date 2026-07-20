@@ -9,8 +9,8 @@
 | `bill_create_client` | Create a new billing client for the organization. | `email`, `phone`, `address_line1`, `address_line2`, `city`, `state_region`, `postal_code`, `country`, `tax_id`, `bond_company_id`, `default_payment_terms_days`, `default_payment_instructions`, `notes` |
 | `bill_create_expense` | Log a new expense, optionally linked to a project. | `amount`, `category`, `vendor`, `project_id`, `billable` |
 | `bill_create_invoice` | Create a new blank draft invoice for a billing client. | `client_id`, `project_id`, `tax_rate`, `notes` |
-| `bill_create_invoice_from_deal` | Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info.  | `deal_id`, `client_id` |
-| `bill_create_invoice_from_time` | Generate a draft invoice from Bam time entries for a project over a date range.  | `project_id`, `client_id`, `date_from`, `date_to` |
+| `bill_create_invoice_from_deal` | Generate a draft invoice from a Bond CRM deal, pulling deal value and contact info. | `deal_id`, `client_id` |
+| `bill_create_invoice_from_time` | Generate a draft invoice from Bam time entries for a project over a date range. | `project_id`, `client_id`, `date_from`, `date_to` |
 | `bill_create_rate` | Create a billing rate, optionally scoped to a project and/or user with an effective date range. | `project_id`, `user_id`, `rate_amount`, `rate_type`, `currency`, `effective_from`, `effective_to` |
 | `bill_create_recurring_invoice` | Create a recurring/subscription invoice schedule. The daily worker generates an invoice from the line-item template each cadence period and advances next_run_at. Set auto_finalize to issue real numbered invoices instead of drafts. | `client_id`, `cadence`, `project_id`, `auto_finalize`, `currency`, `tax_rate`, `discount_amount`, `payment_terms_days`, `start_date`, `end_date`, `notes`, `line_items` |
 | `bill_delete_client` | Delete a billing client by UUID. | `client_id` |
@@ -31,7 +31,7 @@
 | `bill_get_recurring_invoice` | Get a recurring invoice schedule with its line-item template. | `recurring_id` |
 | `bill_get_revenue_summary` | Get revenue summary by month, showing total invoiced and collected. | `date_from`, `date_to` |
 | `bill_get_settings` | Get the organization billing settings (company info, default currency, tax rate, payment terms, invoice prefix). | none |
-| `bill_list_clients` | List billing clients for the organization, with optional fuzzy search across name, email, and linked Bond company name. Returns id, name, email, company_id, company_name, currency (org default), and default_payment_terms_days — the resolver surface every  | `search` |
+| `bill_list_clients` | List billing clients for the organization, with optional fuzzy search across name, email, and linked Bond company name. Returns id, name, email, company_id, company_name, currency (org default), and default_payment_terms_days — the resolver surface every "bill client X" rule needs. | `search` |
 | `bill_list_expenses` | List expenses, optionally filtered by project, category, or status. | `project_id`, `category`, `status` |
 | `bill_list_invoices` | List invoices, optionally filtered by status, client, project, or date range. | `status`, `client_id`, `project_id`, `date_from`, `date_to` |
 | `bill_list_rates` | List billing rates, optionally filtered by project or user. | `project_id`, `user_id` |

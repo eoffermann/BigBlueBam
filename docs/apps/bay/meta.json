@@ -1,22 +1,13 @@
-[
-  {
-    "id": "01-review-library",
-    "label": "Review library",
-    "theme": "light",
-    "file": "docs\\apps\\bay\\screenshots\\light\\01-review-library.png",
-    "sha256": "9ef93de9447ea791a783c5be9063bbc55f0e42062a21fb109d12d73a3590d10d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T23:21:04.385Z"
-  },
-  {
-    "id": "02-model-viewer",
-    "label": "FBX 3D review viewer",
-    "theme": "light",
-    "file": "docs\\apps\\bay\\screenshots\\light\\02-model-viewer.png",
-    "sha256": "76ac1afc67710504d0d718cd45c0d8925b5b0199c46b86e17d6ce8fac4629850",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T23:21:13.089Z"
-  }
-]
+{
+  "app": "bay",
+  "nginx_path": "/bay/",
+  "api_port": 4017,
+  "api_dir": "bay-api",
+  "route_files": 6,
+  "schema_modules": 8,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "aedfc19635ccd73e67e7d33d529b5edaeb29c9e880f54af71f29f25965c20c43",
+  "generated_at": "2026-07-20T11:04:19.413Z",
+  "mcp_tool_count": 14
+}

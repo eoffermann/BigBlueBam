@@ -61,6 +61,7 @@ const APP_REGISTRY = {
   basis:    { nginxPath: '/basis/',    apiPort: 4019, apiDir: 'basis-api',    appId: 'basis' },
   braid:    { nginxPath: '/braid/',    apiPort: 4020, apiDir: 'braid-api',    appId: 'braid' },
   bulwark:  { nginxPath: '/bulwark/',  apiPort: 4021, apiDir: 'bulwark-api',  appId: 'bulwark' },
+  burn:     { nginxPath: '/burn/',     apiPort: 4022, apiDir: 'burn-api',     appId: 'burn' },
   helpdesk: { nginxPath: '/helpdesk/', apiPort: 4001, apiDir: 'helpdesk-api', appId: 'helpdesk' },
 };
 

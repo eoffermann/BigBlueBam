@@ -25,6 +25,14 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const initMode = args.includes('--init');
+// --check regenerates the README AUTODOCS regions in memory and exits non-zero
+// if they differ from what is committed. It performs NO writes and NO side
+// effects (no marketing sync, no screenshot manifest, no regen log), mirroring
+// build-docs-catalog.mjs --check. It implies README-only.
+const checkMode = args.includes('--check');
+// --readme-only rewrites just the README AUTODOCS regions and skips the
+// marketing-site sync, screenshot manifest, and regen log side effects.
+const readmeOnly = checkMode || args.includes('--readme-only');
 const appsFlag = args.find((a) => a.startsWith('--apps='));
 const requestedApps = appsFlag ? appsFlag.split('=')[1].split(',').map((s) => s.trim()) : null;
 
@@ -177,46 +185,115 @@ function injectDocsIndexMarkers(readme) {
 // Generate per-app card for README
 // ---------------------------------------------------------------------------
 
-function generateAppCard(appName, meta) {
-  const name = displayName(appName);
+/**
+ * Read an app's help.md for its card heading and description sentence.
+ * Returns { heading, description } where:
+ *   - heading is the H1 content ("# Name - Subtitle" -> "Name - Subtitle"),
+ *   - description is the first blockquote paragraph (contiguous "> " lines
+ *     joined into one sentence), or null if there is no blockquote.
+ * Returns null entirely if the file does not exist.
+ */
+function readHelpMeta(appName) {
+  const helpPath = path.join(ROOT, 'docs', 'apps', appName, 'help.md');
+  if (!fs.existsSync(helpPath)) return null;
+  const lines = fs.readFileSync(helpPath, 'utf-8').split('\n');
 
-  // The suite introduction is not a product app: it has no routes or schemas,
-  // so give it a suite-level card instead of a "0 routes, 0 schemas" line.
-  if (appName === 'introduction') {
-    return [
-      `### ${name}`,
-      '',
-      'An overview of the whole suite: the sixteen apps, how they connect, and how AI agents work alongside your team.',
-      '',
-      `[Guide](docs/apps/${appName}/guide.md) | [Overview](docs/apps/${appName}/marketing.md)`,
-    ].join('\n');
-  }
-
-  const description = meta.mcp_tool_count > 0
-    ? `${meta.route_files} routes, ${meta.schema_modules} schemas, ${meta.mcp_tool_count} MCP tools`
-    : `${meta.route_files} routes, ${meta.schema_modules} schemas`;
-
-  // Check for hero screenshot
-  const heroPath = path.join(ROOT, 'docs', 'apps', appName, 'screenshots', 'light');
-  let heroImg = '';
-  if (fs.existsSync(heroPath)) {
-    const pngs = fs.readdirSync(heroPath).filter((f) => f.endsWith('.png')).sort();
-    if (pngs.length > 0) {
-      heroImg = `\n\n<img src="docs/apps/${appName}/screenshots/light/${pngs[0]}" width="400" alt="${name}">`;
+  let heading = null;
+  for (const line of lines) {
+    const m = line.match(/^#\s+(.+?)\s*$/);
+    if (m) {
+      heading = m[1].trim();
+      break;
     }
   }
 
-  const guideLink = `[Guide](docs/apps/${appName}/guide.md)`;
-  const marketingLink = `[Overview](docs/apps/${appName}/marketing.md)`;
-  const toolsLink = meta.mcp_tool_count > 0 ? ` | [MCP Tools](docs/apps/${appName}/mcp-tools.md)` : '';
+  // First contiguous blockquote block after the H1.
+  let description = null;
+  const quoteParts = [];
+  let inQuote = false;
+  for (const line of lines) {
+    const isQuote = /^\s*>/.test(line);
+    if (isQuote) {
+      inQuote = true;
+      quoteParts.push(line.replace(/^\s*>\s?/, '').trim());
+    } else if (inQuote) {
+      break; // end of the first blockquote paragraph
+    }
+  }
+  const joined = quoteParts.join(' ').replace(/\s+/g, ' ').trim();
+  if (joined) description = joined;
 
-  return [
-    `### ${name}`,
-    '',
-    `${description}${heroImg}`,
-    '',
-    `${guideLink} | ${marketingLink}${toolsLink}`,
-  ].join('\n');
+  return { heading, description };
+}
+
+/** Build the conditional link row for an app card (only existing files). */
+function appLinkRow(appName) {
+  const appDir = path.join(ROOT, 'docs', 'apps', appName);
+  const links = [];
+  if (fs.existsSync(path.join(appDir, 'help.md'))) {
+    links.push(`[Help](docs/apps/${appName}/help.md)`);
+  }
+  if (fs.existsSync(path.join(appDir, 'guide.md'))) {
+    links.push(`[Guide](docs/apps/${appName}/guide.md)`);
+  }
+  if (fs.existsSync(path.join(appDir, 'marketing.md'))) {
+    links.push(`[Overview](docs/apps/${appName}/marketing.md)`);
+  }
+  if (fs.existsSync(path.join(appDir, 'mcp-tools.md'))) {
+    links.push(`[MCP Tools](docs/apps/${appName}/mcp-tools.md)`);
+  }
+  return links.join(' | ');
+}
+
+function generateAppCard(appName, meta, productCount) {
+  const help = readHelpMeta(appName);
+
+  // The suite introduction is not a product app: it has no routes or schemas,
+  // so give it a suite-level card with the live app count instead of a
+  // "0 routes, 0 schemas" line.
+  if (appName === 'introduction') {
+    return [
+      `### ${displayName(appName)}`,
+      '',
+      `An overview of the whole suite: the ${productCount} apps, how they connect, and how AI agents work alongside your team.`,
+      '',
+      appLinkRow(appName),
+    ].join('\n');
+  }
+
+  // Heading: prefer the help.md H1 ("Name - Subtitle"); fall back to the
+  // hand-curated display name.
+  const heading = help && help.heading ? help.heading : displayName(appName);
+
+  // Counts line kept as a secondary detail.
+  const counts = meta.mcp_tool_count > 0
+    ? `${meta.route_files} routes, ${meta.schema_modules} schemas, ${meta.mcp_tool_count} MCP tools`
+    : `${meta.route_files} routes, ${meta.schema_modules} schemas`;
+
+  // Description sentence: prefer the help.md blockquote; otherwise the counts
+  // line stands alone (old behavior).
+  const description = help && help.description ? help.description : counts;
+
+  // Hero screenshot: prefer docs/apps/<app>/screenshots/light/<first>.png.
+  const heroDir = path.join(ROOT, 'docs', 'apps', appName, 'screenshots', 'light');
+  let heroImg = '';
+  if (fs.existsSync(heroDir)) {
+    const pngs = fs.readdirSync(heroDir).filter((f) => f.endsWith('.png')).sort();
+    if (pngs.length > 0) {
+      heroImg = `<img src="docs/apps/${appName}/screenshots/light/${pngs[0]}" width="400" alt="${heading}">`;
+    }
+  }
+
+  const parts = [`### ${heading}`, '', description];
+  // Only repeat the counts line when the description came from help.md.
+  if (help && help.description) {
+    parts.push('', counts);
+  }
+  if (heroImg) {
+    parts.push('', heroImg);
+  }
+  parts.push('', appLinkRow(appName));
+  return parts.join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -255,10 +332,18 @@ function generateDocsIndex(appNames) {
 // README rewrite
 // ---------------------------------------------------------------------------
 
-function rewriteReadme(appMetas) {
+/**
+ * Compute the rewritten README content in memory (no writes). Returns the new
+ * README string with both AUTODOCS regions replaced. `logging` controls whether
+ * progress lines are printed (suppressed in --check to keep output clean).
+ */
+function computeReadme(appMetas, { logging = true } = {}) {
   const readmePath = path.join(ROOT, 'README.md');
   let readme = fs.readFileSync(readmePath, 'utf-8');
   const appNames = Object.keys(appMetas).sort();
+  // Product apps exclude the suite "introduction" pseudo-app.
+  const productCount = appNames.filter((a) => a !== 'introduction').length;
+  const log = (msg) => { if (logging) console.log(msg); };
 
   // Check for markers. If missing and --init, inject them.
   let hasAppMarkers = readme.includes(APP_SECTIONS_START) && readme.includes(APP_SECTIONS_END);
@@ -266,31 +351,31 @@ function rewriteReadme(appMetas) {
 
   if (!hasAppMarkers) {
     if (initMode) {
-      console.log('  Injecting APP_SECTIONS markers into README.md');
+      log('  Injecting APP_SECTIONS markers into README.md');
       readme = injectAppSectionsMarkers(readme);
       hasAppMarkers = readme.includes(APP_SECTIONS_START);
     } else {
-      console.log('  WARNING: APP_SECTIONS markers not found in README.md. Run with --init to inject them.');
+      log('  WARNING: APP_SECTIONS markers not found in README.md. Run with --init to inject them.');
     }
   }
 
   if (!hasDocsMarkers) {
     if (initMode) {
-      console.log('  Injecting DOCS_INDEX markers into README.md');
+      log('  Injecting DOCS_INDEX markers into README.md');
       readme = injectDocsIndexMarkers(readme);
       hasDocsMarkers = readme.includes(DOCS_INDEX_START);
     } else {
-      console.log('  WARNING: DOCS_INDEX markers not found in README.md. Run with --init to inject them.');
+      log('  WARNING: DOCS_INDEX markers not found in README.md. Run with --init to inject them.');
     }
   }
 
   // Generate app sections content
   if (hasAppMarkers) {
-    const cards = appNames.map((app) => generateAppCard(app, appMetas[app])).join('\n\n');
+    const cards = appNames.map((app) => generateAppCard(app, appMetas[app], productCount)).join('\n\n');
     const result = replaceBetweenMarkers(readme, APP_SECTIONS_START, APP_SECTIONS_END, cards);
     if (result) {
       readme = result;
-      console.log(`  Rewrote APP_SECTIONS with ${appNames.length} app cards`);
+      log(`  Rewrote APP_SECTIONS with ${appNames.length} app cards`);
     }
   }
 
@@ -300,15 +385,43 @@ function rewriteReadme(appMetas) {
     const result = replaceBetweenMarkers(readme, DOCS_INDEX_START, DOCS_INDEX_END, docsContent);
     if (result) {
       readme = result;
-      console.log(`  Rewrote DOCS_INDEX with ${appNames.length} per-app guide links`);
+      log(`  Rewrote DOCS_INDEX with ${appNames.length} per-app guide links`);
     }
   }
+
+  return readme;
+}
+
+function rewriteReadme(appMetas) {
+  const readmePath = path.join(ROOT, 'README.md');
+  const readme = computeReadme(appMetas);
 
   if (!dryRun) {
     fs.writeFileSync(readmePath, readme, 'utf-8');
   } else {
     console.log('  [dry-run] README.md not written');
   }
+}
+
+/**
+ * --check: regenerate the README AUTODOCS regions in memory and compare against
+ * the committed file, line-ending agnostic (a Windows autocrlf checkout stores
+ * CRLF while we emit LF). Exits 1 on drift, 0 when current. No writes, no side
+ * effects.
+ */
+function checkReadme(appMetas) {
+  const readmePath = path.join(ROOT, 'README.md');
+  const norm = (s) => s.replace(/\r\n?/g, '\n');
+  const committed = fs.readFileSync(readmePath, 'utf-8');
+  const expected = computeReadme(appMetas, { logging: false });
+  if (norm(committed) !== norm(expected)) {
+    console.error(
+      '\n[stale] README.md AUTODOCS regions are out of date.\n' +
+        'Run: pnpm docs:readme  (then commit the regenerated README.md).',
+    );
+    process.exit(1);
+  }
+  console.log('README.md AUTODOCS regions are current.');
 }
 
 // ---------------------------------------------------------------------------
@@ -421,7 +534,13 @@ function appendRegenLog(appNames, startTime) {
 
 function main() {
   const startTime = Date.now();
-  console.log('Stage 5: Publish');
+  if (checkMode) {
+    console.log('Stage 5: Publish (README check)');
+  } else if (readmeOnly) {
+    console.log('Stage 5: Publish (README only)');
+  } else {
+    console.log('Stage 5: Publish');
+  }
   if (dryRun) console.log('  (dry-run mode)');
   console.log('');
 
@@ -451,10 +570,24 @@ function main() {
     }
   }
 
+  // --check: compare README AUTODOCS regions only; no writes, no side effects.
+  if (checkMode) {
+    console.log('[README check]');
+    checkReadme(appMetas);
+    return;
+  }
+
   // 1. README rewrite
   console.log('[README rewrite]');
   rewriteReadme(appMetas);
   console.log('');
+
+  // --readme-only stops here: no marketing sync, screenshot manifest, or regen
+  // log side effects.
+  if (readmeOnly) {
+    console.log('Stage 5 complete (README only).');
+    return;
+  }
 
   // 2. Marketing site sync
   console.log('[Marketing site sync]');

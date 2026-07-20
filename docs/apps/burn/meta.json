@@ -1,0 +1,13 @@
+{
+  "app": "burn",
+  "nginx_path": "/burn/",
+  "api_port": 4022,
+  "api_dir": "burn-api",
+  "route_files": 9,
+  "schema_modules": 18,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "92d2b9b0c1c2669b84a29fe85c0771afd900aa0c932e7df1179af04b4333783a",
+  "generated_at": "2026-07-20T11:04:19.476Z",
+  "mcp_tool_count": 18
+}

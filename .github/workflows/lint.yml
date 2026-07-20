@@ -82,3 +82,11 @@ jobs:
 
       - name: Check docs manual drift
         run: pnpm docs:manual:check
+
+      # README app-catalog drift guard: the README's AUTODOCS:APP_SECTIONS region is
+      # generated (scripts/docs/publish.mjs) so the repo front door always shows the whole
+      # suite - every shipped app with a description, a screencap, and a link to its
+      # docs/apps/<app>/help.md - without a trip to the marketing site. Fails if the
+      # committed README lags the roster.
+      - name: Check README app-catalog drift
+        run: pnpm docs:readme:check

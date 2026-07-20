@@ -1,122 +1,13 @@
-[
-  {
-    "id": "01-app-list",
-    "label": "App list",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\01-app-list.png",
-    "sha256": "479fcaa4997e4e6c418ed396978123248eacb46e52f57788a1157b5c0fa2b7f5",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:15:56.822Z"
-  },
-  {
-    "id": "02-app-detail",
-    "label": "App detail / health",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\02-app-detail.png",
-    "sha256": "23121232e3d80f4a79ccf7b04b4493447332e176a2034b2f010fa6b02cde0135",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:02.924Z"
-  },
-  {
-    "id": "03-key-management",
-    "label": "Key management",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\03-key-management.png",
-    "sha256": "6689b6c71c0ebe6d63e1672fe9bd836791b2aa75b8795242f88854850304856e",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:05.842Z"
-  },
-  {
-    "id": "04-client-setup",
-    "label": "Client setup",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\04-client-setup.png",
-    "sha256": "851f1e22982af76476e561b218acdfb333a52d5b651ddf226f0b08f51802e39a",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:08.560Z"
-  },
-  {
-    "id": "05-live-viewer",
-    "label": "Live viewer + custom view",
-    "theme": "dark",
-    "file": "docs\\apps\\blip\\screenshots\\dark\\05-live-viewer.png",
-    "sha256": "070621a53adf4824b3bacee4d05d90f744b415777040b5cd437ec91ae7934d49",
-    "width": 2880,
-    "height": 1800,
-    "captured_at": "2026-06-30T21:16:29.742Z"
-  },
-  {
-    "id": "05-live-viewer",
-    "label": "Live viewer + custom view",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\05-live-viewer.png",
-    "sha256": "0706295c3e7a102ba4933f05c5672b17280da049ab4c2a56dcbe9573daeeaa94",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:12.147Z"
-  },
-  {
-    "id": "06-watch-management",
-    "label": "Watch management + history",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\06-watch-management.png",
-    "sha256": "eab43abf7837760c079b143d38dd64338be967929b61d48a1d062806e3f314fe",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:15.066Z"
-  },
-  {
-    "id": "07-saved-views",
-    "label": "Saved-view management",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\07-saved-views.png",
-    "sha256": "92bea74010d8da66a166fd652fd3ccc4729056ddbd4d07068b66311b33c8f76c",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:17.760Z"
-  },
-  {
-    "id": "08-transform-editor",
-    "label": "PII transform editor",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\08-transform-editor.png",
-    "sha256": "4a75724e27bd918992ec0a16c20f95182814b72fb1a434de1166c2bc56860a57",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:20.392Z"
-  },
-  {
-    "id": "09-retention",
-    "label": "Retention / rate-limit",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\09-retention.png",
-    "sha256": "9a752daf4ab44bbcb29726938a86c1f32ae348ee9c7ad75bbf80323543a44b5d",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:23.006Z"
-  },
-  {
-    "id": "10-report-types",
-    "label": "Report-type browser + field catalog",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\10-report-types.png",
-    "sha256": "fc5a7fe8b0be61ece5e4526db1194e948e659e2fd7430d5fe82fece4ec656b68",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:16:25.886Z"
-  },
-  {
-    "id": "11-launchpad",
-    "label": "Launchpad (alphabetical)",
-    "theme": "light",
-    "file": "docs\\apps\\blip\\screenshots\\light\\11-launchpad.png",
-    "sha256": "a6573b2d69a77ce44b0ea72bdb98f52e5253eaa155736307feb754f66eecfa3b",
-    "width": 1440,
-    "height": 900,
-    "captured_at": "2026-06-30T21:15:59.854Z"
-  }
-]
+{
+  "app": "blip",
+  "nginx_path": "/blip/",
+  "api_port": 4018,
+  "api_dir": "blip-api",
+  "route_files": 12,
+  "schema_modules": 12,
+  "has_seeder": false,
+  "has_frontend": true,
+  "src_hash": "34a642c4d492e7752879b5aa84e77527da15bbe806127894cacb1f6662fdfbab",
+  "generated_at": "2026-07-20T11:04:19.427Z",
+  "mcp_tool_count": 38
+}

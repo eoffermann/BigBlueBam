@@ -86,6 +86,31 @@ function hasMcpTools(appId) {
 // Every OTHER app must have its own registered marketing section.
 const CORE_MARKETED_BY_HOMEPAGE = new Set(['b3']);
 
+// The README app-catalog region, read once. This is the generated block that
+// gives GitHub visitors the whole suite (scripts/docs/publish.mjs). A Launchpad
+// app must appear here too, so the repo front door never lags the Launchpad.
+let _readmeCatalog = null;
+function readmeCatalogText() {
+  if (_readmeCatalog !== null) return _readmeCatalog;
+  try {
+    const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
+    const start = readme.indexOf('<!-- AUTODOCS:APP_SECTIONS:START -->');
+    const end = readme.indexOf('<!-- AUTODOCS:APP_SECTIONS:END -->');
+    _readmeCatalog =
+      start !== -1 && end !== -1 && end > start
+        ? readme.slice(start, end)
+        : '';
+  } catch {
+    _readmeCatalog = '';
+  }
+  return _readmeCatalog;
+}
+
+/** README catalog: the app has a card in the generated AUTODOCS:APP_SECTIONS region. */
+function inReadmeCatalog(appId) {
+  return readmeCatalogText().includes(`docs/apps/${docDirForAppId(appId)}/`);
+}
+
 /** Marketing: a registered per-app section (or a deliberate "coming soon" stub). */
 function hasMarketingSection(appId) {
   if (CORE_MARKETED_BY_HOMEPAGE.has(appId)) return true;
@@ -134,6 +159,13 @@ const DIMENSIONS = [
       dirHasMatch(`site/public/screenshots/${docDirForAppId(id)}`, /\.png$/i),
     hint: (id) =>
       `capture User-Story screenshots into site/public/screenshots/${docDirForAppId(id)}/ (gilligan project only)`,
+  },
+  {
+    key: 'readme_catalog',
+    label: 'README catalog entry',
+    check: (id) => inReadmeCatalog(id),
+    hint: () =>
+      `regenerate the README app catalog (pnpm docs:readme) so this app appears in the AUTODOCS:APP_SECTIONS region`,
   },
 ];
 

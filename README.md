@@ -35,8 +35,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/tests-900%2B%20passing-brightgreen" alt="Tests" />
-  <img src="https://img.shields.io/badge/MCP%20tools-804-blue" alt="MCP Tools" />
-  <img src="https://img.shields.io/badge/apps-20-blueviolet" alt="Apps" />
+  <img src="https://img.shields.io/badge/MCP%20tools-865-blue" alt="MCP Tools" />
+  <img src="https://img.shields.io/badge/apps-23-blueviolet" alt="Apps" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
@@ -44,7 +44,7 @@
 
 ## The Vision
 
-Most work platforms are built for humans talking to humans. Bolt an AI agent onto one and you get a bot poking at a UI it was never meant to touch. BigBlueBam starts from the other end: it is built for **human-AI collaboration** from the ground up — a world where your team and AI agents plan projects, message each other, close deals, write docs, track goals, automate workflows, and support customers in the same suite, at the same time, with the same permissions.
+Most work platforms are built for humans talking to humans. Bolt an AI agent onto one and you get a bot poking at a UI it was never meant to touch. BigBlueBam starts from the other end: it is built for **human-AI collaboration** from the ground up - a world where your team and AI agents plan projects, message each other, close deals, write docs, track goals, automate workflows, and support customers in the same suite, at the same time, with the same permissions.
 
 **Humans** own the strategy: setting priorities, defining epics, closing deals, reviewing deliverables, talking to customers.
 
@@ -52,38 +52,41 @@ Most work platforms are built for humans talking to humans. Bolt an AI agent ont
 
 The **suite** is the shared workspace. When an AI agent creates a task, replies to a customer, updates a deal, or posts to a Banter channel, it shows up in real time, right alongside everything your team is doing. No separate dashboards. No hidden automation. Full transparency.
 
-This is made possible by **804 MCP tools** that give AI assistants (Claude, Claude Code, custom agents) full read-write access to project boards, sprints, team messaging (with scheduled posts and pattern subscriptions), helpdesk tickets, knowledge base, collaborative docs, workflow automations with runtime observability, goals and OKRs, whiteboards, CRM pipelines with dedupe, email campaigns, analytics dashboards, scheduling with mixed human-and-agent rosters, forms, invoicing, plus cross-cutting platform capabilities (cross-app search, composite subject views, entity linking, durable proposal queues, per-agent kill switches, HMAC-signed outbound webhooks). Service-account agents run behind a fail-closed policy gate with confirm-action tokens backed by Redis so destructive flows survive rolling deploys.
+This is made possible by **865 MCP tools** that give AI assistants (Claude, Claude Code, custom agents) full read-write access to project boards, sprints, team messaging (with scheduled posts and pattern subscriptions), helpdesk tickets, knowledge base, collaborative docs, workflow automations with runtime observability, goals and OKRs, whiteboards, CRM pipelines with dedupe, email campaigns, analytics dashboards, scheduling with mixed human-and-agent rosters, forms, invoicing, plus cross-cutting platform capabilities (cross-app search, composite subject views, entity linking, durable proposal queues, per-agent kill switches, HMAC-signed outbound webhooks). Service-account agents run behind a fail-closed policy gate with confirm-action tokens backed by Redis so destructive flows survive rolling deploys.
 
 ---
 
 ## The Suite at a Glance
 
-Nineteen apps, one workspace. If you've used the tools on the right you already know most of how each app works — the twist is that all nineteen live under the same auth, the same org and project permissions, and the same 804-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
+23 apps, one workspace. If you've used the tools on the right you already know most of how each app works - the twist is that all 23 live under the same auth, the same org and project permissions, and the same 865-tool MCP surface. No integration glue, no per-tool API keys, no glue-code tax: an agent that can move a card can also close a deal, publish an article, and send an invoice.
 
 | App | What it is | Comparable to |
 |-----|------------|---------------|
-| **Bam** | Project management — Kanban board, sprints, five views (board/list/timeline/calendar/workload) | Trello, Linear, Jira, Asana |
+| **Bam** | Project management - Kanban board, sprints, five views (board/list/timeline/calendar/workload) | Trello, Linear, Jira, Asana |
 | **Banter** | Team chat with LiveKit voice/video, transcripts, and AI agents as spoken call participants | Slack or Microsoft Teams, with Zoom-style voice/video built in |
-| **Bay** | Media review and approval — frame/timecode/region annotations, per-reviewer decisions, token-gated guest links, and 3D/FBX model review | Frame.io, Ziflow |
+| **Bay** | Media review and approval - frame/timecode/region annotations, per-reviewer decisions, token-gated guest links, and 3D/FBX model review | Frame.io, Ziflow |
 | **Beacon** | AI knowledge base with semantic search (Qdrant) and a graph explorer | Notion or Confluence, with an Obsidian-style graph view |
 | **Bearing** | Goals and OKRs with key results linked to Bam tasks for automatic progress | Lattice, 15Five, Quantive |
-| **Basis** | Governed metric layer — one certified definition per number, immutable version lineage, and an AI "why did it change" decomposition | dbt Semantic Layer, Cube, Looker's LookML |
+| **Basis** | Governed metric layer - one certified definition per number, immutable version lineage, and an AI "why did it change" decomposition | dbt Semantic Layer, Cube, Looker's LookML |
 | **Bench** | Analytics dashboards, widgets, ad-hoc queries, scheduled reports, anomaly detection | Metabase, Tableau, Looker |
 | **Bill** | Invoicing, expenses, recurring billing, PDF generation, profitability reports | FreshBooks, QuickBooks, Wave |
-| **Bin** | Digital asset management — object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing | Dropbox/Box, plus an Airtable-style data grid |
+| **Bin** | Digital asset management - object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing | Dropbox/Box, plus an Airtable-style data grid |
 | **Blank** | Forms with conditional logic routing, submissions export, AI-generated form definitions | Typeform, Google Forms, Tally |
 | **Blast** | Email campaigns with templates, segments, tracking pixel, click redirect, engagement analytics | Mailchimp, ConvertKit, ActiveCampaign |
-| **Blip** | App telemetry — log ingest, live viewer, saved views, watches/alerts, transforms, retention, and scheduled reports | Datadog Logs, Grafana Loki, Papertrail |
-| **Blueprint** | Structured diagrams — typed graph nodes and edges (flowcharts, org charts, ERDs, mindmaps) with ELK auto-layout and Mermaid import/export | Lucidchart, draw.io |
+| **Blip** | App telemetry - log ingest, live viewer, saved views, watches/alerts, transforms, retention, and scheduled reports | Datadog Logs, Grafana Loki, Papertrail |
+| **Blueprint** | Structured diagrams - typed graph nodes and edges (flowcharts, org charts, ERDs, mindmaps) with ELK auto-layout and Mermaid import/export | Lucidchart, draw.io |
 | **Board** | Infinite-canvas whiteboard with shapes, stickies, and audio conferencing | Miro, Mural, FigJam |
-| **Bolt** | Workflow automation — both a form-based trigger/condition/action builder and a visual node-graph editor | Zapier or Make (form side); n8n or Node-RED (graph side) |
-| **Bond** | CRM — contacts, companies, deals, pipeline stages, activity log, dedupe | HubSpot, Pipedrive, Attio |
+| **Bolt** | Workflow automation - both a form-based trigger/condition/action builder and a visual node-graph editor | Zapier or Make (form side); n8n or Node-RED (graph side) |
+| **Bond** | CRM - contacts, companies, deals, pipeline stages, activity log, dedupe | HubSpot, Pipedrive, Attio |
 | **Book** | Scheduling with public booking pages and mixed human-plus-agent availability | Calendly, Cal.com |
+| **Braid** | Identity resolution - clusters each app's copy of a person or company into one confidence-scored golden profile with human-in-the-loop merge review | Amperity, LiveRamp |
 | **Brief** | Real-time collaborative documents with versioning and inline comments | Google Docs, Notion, Dropbox Paper |
-| **Bureau** | Virtual office — a spatial floor map with rooms, live presence, knock-to-enter, teleport/summons, and LiveKit conferencing | Gather, Teamflow |
+| **Bulwark** | AI contract-obligation monitor - clause-cited obligation ledger, deadline radar, and drafted (never auto-sent) notices and vendor-compliance chases | Ironclad, ContractWorks |
+| **Bureau** | Virtual office - a spatial floor map with rooms, live presence, knock-to-enter, teleport/summons, and LiveKit conferencing | Gather, Teamflow |
+| **Burn** | Contract scope and margin monitor - reads a signed SOW into a priced deliverable ledger and attributes every unit of work against it in dollars | (SOW burn-down / margin tracking) |
 | **Helpdesk** | Customer support portal with ticket tracking, similar-ticket dedupe, and auto task creation | Zendesk, Intercom, Help Scout |
 
-**What the comparison table doesn't show:** every one of these apps is wired into the same MCP surface, so an AI agent triaging a Helpdesk ticket can upsert the requester in Bond, create a Bam task, post a Banter update to the engineering channel, and schedule a Book meeting with the customer — in one cross-app flow, with visibility preflight and a durable approval queue gating anything destructive.
+**What the comparison table doesn't show:** every one of these apps is wired into the same MCP surface, so an AI agent triaging a Helpdesk ticket can upsert the requester in Bond, create a Bam task, post a Banter update to the engineering channel, and schedule a Book meeting with the customer - in one cross-app flow, with visibility preflight and a durable approval queue gating anything destructive.
 
 ---
 
@@ -92,7 +95,7 @@ Nineteen apps, one workspace. If you've used the tools on the right you already 
 <p align="center">
   <img src="site/public/screenshots/bam/light/01-board.png" alt="Kanban Board" width="100%" />
 </p>
-<p align="center"><em>The Kanban board — the central hub where human and AI work converges.</em></p>
+<p align="center"><em>The Kanban board - the central hub where human and AI work converges.</em></p>
 
 <br/>
 
@@ -134,7 +137,7 @@ Drag-and-drop cards across 5 configurable phases with WIP limits. Each card show
 <p align="center">
   <img src="site/public/screenshots/bam/light/01-board.png" alt="Kanban Board" width="100%" />
 </p>
-<p align="center"><em>Every screen is theme-aware — light for daytime, dark for late-night deploys (see the Theme-aware UI section below).</em></p>
+<p align="center"><em>Every screen is theme-aware - light for daytime, dark for late-night deploys (see the Theme-aware UI section below).</em></p>
 
 ### Swimlanes
 
@@ -146,7 +149,7 @@ Group tasks by assignee, priority, or epic. Collapsible rows show task count and
 
 ### Five Views, One Board
 
-Every project supports five views — switch between them without losing your filters or context:
+Every project supports five views - switch between them without losing your filters or context:
 
 | View | What it shows |
 |------|--------------|
@@ -170,7 +173,7 @@ Every project supports five views — switch between them without losing your fi
 <p align="center">
   <img src="site/public/screenshots/bam/light/10-calendar.png" alt="Calendar View" width="100%" />
 </p>
-<p align="center"><em>Calendar view — monthly navigation with task due dates</em></p>
+<p align="center"><em>Calendar view - monthly navigation with task due dates</em></p>
 
 ### Task Detail
 
@@ -186,7 +189,7 @@ Create sprints, assign tasks, track velocity. When a sprint ends, the carry-forw
 
 ### Project Dashboard
 
-Charts and widgets for sprint progress, priority breakdown, overdue tasks, task distribution by phase, and team workload — all in one place.
+Charts and widgets for sprint progress, priority breakdown, overdue tasks, task distribution by phase, and team workload - all in one place.
 
 <p align="center">
   <img src="images/09-project-dashboard.png" alt="Project Analytics Dashboard" width="100%" />
@@ -210,10 +213,10 @@ Press **Ctrl+K** to open the command palette. Search tasks, switch projects, nav
 
 ### Organization Management
 
-BigBlueBam ships a dedicated **People** surface (not buried under Settings) that covers the full identity lifecycle — invite, edit, assign, disable — with strict role-based gating.
+BigBlueBam ships a dedicated **People** surface (not buried under Settings) that covers the full identity lifecycle - invite, edit, assign, disable - with strict role-based gating.
 
 <p align="center">
-  <img src="site/public/screenshots/bam/light/04-people.png" alt="People list — searchable, filterable, bulk-selectable" width="100%" />
+  <img src="site/public/screenshots/bam/light/04-people.png" alt="People list - searchable, filterable, bulk-selectable" width="100%" />
 </p>
 
 Filter by role or status, search by name or email, and act on individual members or in bulk.
@@ -226,16 +229,16 @@ Filter by role or status, search by name or email, and act on individual members
     <td width="50%"><img src="images/people-detail-projects.png" alt="Projects tab" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Overview — identity, membership, disable toggle</em></td>
-    <td align="center"><em>Projects — per-project roles, bulk assign</em></td>
+    <td align="center"><em>Overview - identity, membership, disable toggle</em></td>
+    <td align="center"><em>Projects - per-project roles, bulk assign</em></td>
   </tr>
   <tr>
     <td width="50%"><img src="images/people-detail-access.png" alt="Access tab" width="100%" /></td>
     <td width="50%"><img src="images/people-detail-activity.png" alt="Activity tab" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Access — API keys, password reset, force change</em></td>
-    <td align="center"><em>Activity — per-user audit trail</em></td>
+    <td align="center"><em>Access - API keys, password reset, force change</em></td>
+    <td align="center"><em>Activity - per-user audit trail</em></td>
   </tr>
 </table>
 
@@ -247,14 +250,14 @@ Admins can reset passwords (manual or auto-generated), mint API keys on behalf o
     <td width="50%"><img src="images/people-create-api-key-dialog.png" alt="Create API key dialog" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Reset password — auto-generate or set manually</em></td>
+    <td align="center"><em>Reset password - auto-generate or set manually</em></td>
     <td align="center"><em>Create API key on behalf of a user (one-time token reveal)</em></td>
   </tr>
 </table>
 
 #### Bulk operations
 
-Select multiple members to disable, enable, change role, remove from org, or export as CSV — all with rank-gating that mirrors the server:
+Select multiple members to disable, enable, change role, remove from org, or export as CSV - all with rank-gating that mirrors the server:
 
 <p align="center">
   <img src="images/people-bulk-toolbar.png" alt="Bulk actions toolbar" width="100%" />
@@ -262,7 +265,7 @@ Select multiple members to disable, enable, change role, remove from org, or exp
 
 #### Multi-org membership
 
-Users can belong to multiple organizations. The header shows the current org + role, and the org switcher lets multi-org users hop between them in one click — the session rotates and every query is invalidated, so the rest of the app instantly reflects the new org's data.
+Users can belong to multiple organizations. The header shows the current org + role, and the org switcher lets multi-org users hop between them in one click - the session rotates and every query is invalidated, so the rest of the app instantly reflects the new org's data.
 
 <p align="center">
   <img src="images/org-switcher.png" alt="Org switcher dropdown" width="75%" />
@@ -282,7 +285,7 @@ A separate SuperUser namespace at `/b3/superuser` gives platform operators cross
   <img src="images/superuser-overview.png" alt="SuperUser console overview" width="100%" />
 </p>
 
-**Cross-org user management** — one view of every user regardless of org:
+**Cross-org user management** - one view of every user regardless of org:
 
 <p align="center">
   <img src="images/superuser-people-list.png" alt="SuperUser cross-org people list" width="100%" />
@@ -294,7 +297,7 @@ A separate SuperUser namespace at `/b3/superuser` gives platform operators cross
     <td width="50%"><img src="images/superuser-people-sessions.png" alt="Active sessions" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Every org the user belongs to — add, remove, change role, set default</em></td>
+    <td align="center"><em>Every org the user belongs to - add, remove, change role, set default</em></td>
     <td align="center"><em>Every active session with IP, device, and revoke controls</em></td>
   </tr>
 </table>
@@ -302,7 +305,7 @@ A separate SuperUser namespace at `/b3/superuser` gives platform operators cross
 <p align="center">
   <img src="images/superuser-people-activity.png" alt="SuperUser audit log for a user" width="100%" />
 </p>
-<p align="center"><em>Audit log — every SuperUser action against this user with expandable details</em></p>
+<p align="center"><em>Audit log - every SuperUser action against this user with expandable details</em></p>
 
 When a SuperUser is context-switched into a non-native org, a red banner and chip in the header make the privileged state impossible to miss:
 
@@ -323,7 +326,7 @@ Admins can flag a user to require a password change on their next login. On sign
 Every screen adapts to light and dark mode. Most of the shots in this README are dark; here's the same People list in light mode:
 
 <p align="center">
-  <img src="images/people-list-light.png" alt="People list — light mode" width="100%" />
+  <img src="images/people-list-light.png" alt="People list - light mode" width="100%" />
 </p>
 
 #### Integrations
@@ -338,33 +341,33 @@ Configure calendar feeds, API keys, and webhooks under Settings:
 
 ## For AI Agents
 
-This is the part most work suites bolt on as an afterthought. BigBlueBam exposes **804 MCP (Model Context Protocol) tools** that give AI assistants first-class, read-write access to every app in the suite plus cross-cutting platform capabilities — the same operations a human gets through the UI, gated by the same permissions. Connect Claude, Claude Code, or any MCP-compatible agent and let it work alongside your team.
+This is the part most work suites bolt on as an afterthought. BigBlueBam exposes **865 MCP (Model Context Protocol) tools** that give AI assistants first-class, read-write access to every app in the suite plus cross-cutting platform capabilities - the same operations a human gets through the UI, gated by the same permissions. Connect Claude, Claude Code, or any MCP-compatible agent and let it work alongside your team.
 
 ### What AI Agents Can Do
 
-- **Create and manage tasks** — create tasks, set priority and assignee, move cards across phases, add subtasks, and upsert by external id for idempotent webhook/import flows
-- **Run sprints** — create sprints, assign tasks, start/complete sprints, generate sprint reports
-- **Triage helpdesk tickets** — when a customer submits a ticket, a task is auto-created; AI agents can then triage by adjusting priority, upserting the requester by email, checking for similar open tickets via the dedupe primitives, setting timelines, assigning to the right engineer, and posting responses to customers
-- **Generate reports** — velocity reports, burndown charts, cumulative flow, workload distribution, overdue task alerts, plus phrase-count trend queries across helpdesk tickets and Bam tasks
-- **Collaborate** — post comments, log time, bulk update tasks, suggest branch names
-- **Message the team via Banter** — post messages immediately or schedule for later while respecting per-channel quiet hours, manage channels, react, search conversations and call transcripts, subscribe to message patterns, and participate in voice calls as spoken participants
-- **Manage the knowledge base via Beacon** — create, publish, upsert-by-slug, search with semantic plus graph retrieval, verify content freshness, link related knowledge, manage governance policies, and save reusable queries
-- **Author collaborative documents via Brief** — create, edit, upsert-by-slug, search documents, manage version history, leave inline comments, apply templates, and graduate finished documents into Beacons
-- **Automate workflows with Bolt** — create trigger-condition-action rules, inspect executions, trace why each rule fired or skipped, browse templates, and orchestrate cross-product automations against the full 804-tool catalog
-- **Track goals and OKRs with Bearing** — create time-boxed periods, define goals with key results, link KRs to Bam tasks for automatic progress, post status updates, and generate at-risk reports
-- **Collaborate visually on Board** — create and manage whiteboard rooms, add and arrange shapes, read canvas content for AI analysis, manage participants, embed cross-product content, and run sticky-to-task pipelines
-- **Manage CRM pipeline with Bond** — create, update, upsert-by-email, merge contacts, advance deals through pipeline stages, detect likely duplicates with confidence scores, log activities, and generate pipeline reports
-- **Run email campaigns with Blast** — draft campaigns, build segments, generate templates and subject lines, schedule sends, and pull engagement analytics
-- **Bill clients with Bill** — create invoices from deals or time entries, add line items, record payments, send reminders, and surface profitability and revenue summaries
-- **Collect with Blank forms** — generate form definitions from a prompt, publish forms, export submissions, and summarize free-text responses
-- **Schedule with Book** — create, update, cancel, and RSVP to events, and find meeting times across mixed human-plus-agent rosters
-- **Analyze with Bench** — create dashboards, run ad-hoc queries, schedule reports, detect anomalies, and compare metrics across time periods
-- **Find anything with cross-app platform tools** — `search_everything` fans out across seven searchable apps with normalized scoring; `resolve_references` turns free text into ranked entity candidates; `account_view` / `project_view` / `user_view` compose full subject-centric pictures; `entity_links_list` exposes durable cross-app relationships; `activity_query` and `activity_by_actor` read a unified activity log
-- **Run responsibly** — `can_access` preflights visibility before surfacing entities to askers; `proposal_create` / `proposal_list` / `proposal_decide` drive a durable approval queue; `agent_heartbeat` tracks runner liveness; `agent_policy_set` gives operators kill switches and per-agent tool allowlists that fail closed; `agent_webhook_configure` pushes events to external runners with HMAC-signed retries, SSRF guards, and a dead-letter queue
+- **Create and manage tasks** - create tasks, set priority and assignee, move cards across phases, add subtasks, and upsert by external id for idempotent webhook/import flows
+- **Run sprints** - create sprints, assign tasks, start/complete sprints, generate sprint reports
+- **Triage helpdesk tickets** - when a customer submits a ticket, a task is auto-created; AI agents can then triage by adjusting priority, upserting the requester by email, checking for similar open tickets via the dedupe primitives, setting timelines, assigning to the right engineer, and posting responses to customers
+- **Generate reports** - velocity reports, burndown charts, cumulative flow, workload distribution, overdue task alerts, plus phrase-count trend queries across helpdesk tickets and Bam tasks
+- **Collaborate** - post comments, log time, bulk update tasks, suggest branch names
+- **Message the team via Banter** - post messages immediately or schedule for later while respecting per-channel quiet hours, manage channels, react, search conversations and call transcripts, subscribe to message patterns, and participate in voice calls as spoken participants
+- **Manage the knowledge base via Beacon** - create, publish, upsert-by-slug, search with semantic plus graph retrieval, verify content freshness, link related knowledge, manage governance policies, and save reusable queries
+- **Author collaborative documents via Brief** - create, edit, upsert-by-slug, search documents, manage version history, leave inline comments, apply templates, and graduate finished documents into Beacons
+- **Automate workflows with Bolt** - create trigger-condition-action rules, inspect executions, trace why each rule fired or skipped, browse templates, and orchestrate cross-product automations against the full 865-tool catalog
+- **Track goals and OKRs with Bearing** - create time-boxed periods, define goals with key results, link KRs to Bam tasks for automatic progress, post status updates, and generate at-risk reports
+- **Collaborate visually on Board** - create and manage whiteboard rooms, add and arrange shapes, read canvas content for AI analysis, manage participants, embed cross-product content, and run sticky-to-task pipelines
+- **Manage CRM pipeline with Bond** - create, update, upsert-by-email, merge contacts, advance deals through pipeline stages, detect likely duplicates with confidence scores, log activities, and generate pipeline reports
+- **Run email campaigns with Blast** - draft campaigns, build segments, generate templates and subject lines, schedule sends, and pull engagement analytics
+- **Bill clients with Bill** - create invoices from deals or time entries, add line items, record payments, send reminders, and surface profitability and revenue summaries
+- **Collect with Blank forms** - generate form definitions from a prompt, publish forms, export submissions, and summarize free-text responses
+- **Schedule with Book** - create, update, cancel, and RSVP to events, and find meeting times across mixed human-plus-agent rosters
+- **Analyze with Bench** - create dashboards, run ad-hoc queries, schedule reports, detect anomalies, and compare metrics across time periods
+- **Find anything with cross-app platform tools** - `search_everything` fans out across seven searchable apps with normalized scoring; `resolve_references` turns free text into ranked entity candidates; `account_view` / `project_view` / `user_view` compose full subject-centric pictures; `entity_links_list` exposes durable cross-app relationships; `activity_query` and `activity_by_actor` read a unified activity log
+- **Run responsibly** - `can_access` preflights visibility before surfacing entities to askers; `proposal_create` / `proposal_list` / `proposal_decide` drive a durable approval queue; `agent_heartbeat` tracks runner liveness; `agent_policy_set` gives operators kill switches and per-agent tool allowlists that fail closed; `agent_webhook_configure` pushes events to external runners with HMAC-signed retries, SSRF guards, and a dead-letter queue
 
 ### Example: AI-Powered Helpdesk Triage
 
-> A customer submits a bug report through the helpdesk portal. BigBlueBam automatically creates a `FRND-` prefixed task on the board. An AI agent picks up the new task, analyzes the description, sets priority to High, assigns it to the right engineer based on the related epic, adjusts the timeline, and posts a response to the customer: *"Thanks for reporting this — we've assigned task FRND-247 to the team and it's been prioritized. We'll update you when there's a fix."*
+> A customer submits a bug report through the helpdesk portal. BigBlueBam automatically creates a `FRND-` prefixed task on the board. An AI agent picks up the new task, analyzes the description, sets priority to High, assigns it to the right engineer based on the related epic, adjusts the timeline, and posts a response to the customer: *"Thanks for reporting this - we've assigned task FRND-247 to the team and it's been prioritized. We'll update you when there's a fix."*
 >
 > The engineer sees the triaged card on their board. The customer sees the response in their portal. The task was created automatically; the AI handled the triage.
 
@@ -378,11 +381,11 @@ This is the part most work suites bolt on as an afterthought. BigBlueBam exposes
 > - *Does the issue happen every time or intermittently?*
 > - *If possible, a screenshot of any error message would be very helpful."*
 >
-> The agent sets the task to `waiting_on_customer` and adds an internal note for the engineering team: *"Vague report — asked customer for repro steps, device info, and screenshots. Will re-triage once details come in."* When the customer replies with specifics, the agent updates the task description, sets the appropriate priority, and assigns it to the right engineer — all before a human touches it.
+> The agent sets the task to `waiting_on_customer` and adds an internal note for the engineering team: *"Vague report - asked customer for repro steps, device info, and screenshots. Will re-triage once details come in."* When the customer replies with specifics, the agent updates the task description, sets the appropriate priority, and assigns it to the right engineer - all before a human touches it.
 
 ### MCP Tools Reference
 
-**804 tools** across the nineteen apps plus cross-cutting agentic platform surfaces:
+**865 tools** across the 23 apps plus cross-cutting agentic platform surfaces:
 
 | Category | Count | What they cover |
 |----------|------:|-----------------|
@@ -459,175 +462,247 @@ Generate an API key from **Settings > Integrations** in the BigBlueBam UI. For s
 ---
 
 <!-- AUTODOCS:APP_SECTIONS:START -->
-### Bam (Project Management)
+### Bam - Sprint-based Kanban project and task management
 
-66 routes, 54 schemas, 123 MCP tools
+Bam is the BigBlueBam flagship: a multi-user Kanban planner where teams run projects on configurable boards, plan and close sprints, track tasks with rich detail, and report on delivery. Reach for it when a team needs to organize work into phases and time-boxed iterations.
 
-<img src="docs/apps/bam/screenshots/light/01-board.png" width="400" alt="Bam (Project Management)">
+66 routes, 54 schemas, 128 MCP tools
 
-[Guide](docs/apps/bam/guide.md) | [Overview](docs/apps/bam/marketing.md) | [MCP Tools](docs/apps/bam/mcp-tools.md)
+<img src="docs/apps/bam/screenshots/light/01-board.png" width="400" alt="Bam - Sprint-based Kanban project and task management">
 
-### Banter (Team Messaging)
+[Help](docs/apps/bam/help.md) | [Guide](docs/apps/bam/guide.md) | [Overview](docs/apps/bam/marketing.md) | [MCP Tools](docs/apps/bam/mcp-tools.md)
 
-22 routes, 23 schemas, 77 MCP tools
+### Banter - Team chat for your organization
 
-<img src="docs/apps/banter/screenshots/light/01-channel-view.png" width="400" alt="Banter (Team Messaging)">
+Banter is the chat layer of BigBlueBam. It gives your team channels, direct messages, threads, reactions, pins, and bookmarks so conversations live alongside the rest of the suite. Reach for it when work needs a back-and-forth instead of a ticket or a task.
 
-[Guide](docs/apps/banter/guide.md) | [Overview](docs/apps/banter/marketing.md) | [MCP Tools](docs/apps/banter/mcp-tools.md)
+22 routes, 23 schemas, 80 MCP tools
 
-### Bay (Media Review)
+<img src="docs/apps/banter/screenshots/light/01-channel-view.png" width="400" alt="Banter - Team chat for your organization">
 
-6 routes, 6 schemas, 14 MCP tools
+[Help](docs/apps/banter/help.md) | [Guide](docs/apps/banter/guide.md) | [Overview](docs/apps/banter/marketing.md) | [MCP Tools](docs/apps/banter/mcp-tools.md)
 
-Media review and approval — frame/timecode/region annotations, per-reviewer decisions, token-gated public guest review links, and FBX/3D model review in a three.js viewer.
+### Basis - Governed Metric Layer
 
-<img src="site/public/screenshots/bay/light/model-viewer.png" width="400" alt="Bay (Media Review)">
+Basis gives the whole suite one trusted definition per number, and an AI core that explains, in plain language, why a certified metric moved. Define a metric like "MRR" or "Pipeline" once, certify it, and every app, chart, and agent reads the same definition. Reach for Basis when different apps disagree about what a number means.
 
-[Guide](docs/apps/bay/guide.md) | [Overview](docs/apps/bay/marketing.md) | [MCP Tools](docs/apps/bay/mcp-tools.md)
+1 routes, 7 schemas, 16 MCP tools
 
-### Beacon (Knowledge Base)
+<img src="docs/apps/basis/screenshots/light/01-catalog.png" width="400" alt="Basis - Governed Metric Layer">
+
+[Help](docs/apps/basis/help.md) | [Guide](docs/apps/basis/guide.md) | [MCP Tools](docs/apps/basis/mcp-tools.md)
+
+### Bay - Media review and approval
+
+Bay is the BigBlueBam media review and approval app. It turns a file sitting in Bin into a reviewable asset: a version stack, coordinate-anchored annotations, per-reviewer decisions, and a token-gated link you can hand to an outside client. It reviews stills, video, audio, and now interactive 3D models in the same place, and an AI agent reviews through the exact same tools, identity, and audit trail as a person.
+
+6 routes, 8 schemas, 14 MCP tools
+
+<img src="docs/apps/bay/screenshots/light/01-review-library.png" width="400" alt="Bay - Media review and approval">
+
+[Help](docs/apps/bay/help.md) | [Guide](docs/apps/bay/guide.md) | [Overview](docs/apps/bay/marketing.md) | [MCP Tools](docs/apps/bay/mcp-tools.md)
+
+### Beacon - Knowledge base with freshness governance
+
+Beacon is your team's knowledge base: a place to write, search, link, and keep articles current. It is the app you reach for when knowledge needs to stay accurate over time, not just get written once and forgotten.
 
 9 routes, 12 schemas, 38 MCP tools
 
-<img src="docs/apps/beacon/screenshots/light/01-knowledge-home.png" width="400" alt="Beacon (Knowledge Base)">
+<img src="docs/apps/beacon/screenshots/light/01-knowledge-home.png" width="400" alt="Beacon - Knowledge base with freshness governance">
 
-[Guide](docs/apps/beacon/guide.md) | [Overview](docs/apps/beacon/marketing.md) | [MCP Tools](docs/apps/beacon/mcp-tools.md)
+[Help](docs/apps/beacon/help.md) | [Guide](docs/apps/beacon/guide.md) | [Overview](docs/apps/beacon/marketing.md) | [MCP Tools](docs/apps/beacon/mcp-tools.md)
 
-### Bearing (Goals & OKRs)
+### Bearing - Goals and OKRs
+
+Bearing is the goals and OKR tracker for BigBlueBam. Teams use it to set objectives for a time period, attach measurable key results, check in on progress, and surface the goals that are falling behind before the period ends.
 
 4 routes, 9 schemas, 30 MCP tools
 
-<img src="docs/apps/bearing/screenshots/light/01-dashboard.png" width="400" alt="Bearing (Goals & OKRs)">
+<img src="docs/apps/bearing/screenshots/light/01-dashboard.png" width="400" alt="Bearing - Goals and OKRs">
 
-[Guide](docs/apps/bearing/guide.md) | [Overview](docs/apps/bearing/marketing.md) | [MCP Tools](docs/apps/bearing/mcp-tools.md)
+[Help](docs/apps/bearing/help.md) | [Guide](docs/apps/bearing/guide.md) | [Overview](docs/apps/bearing/marketing.md) | [MCP Tools](docs/apps/bearing/mcp-tools.md)
 
-### Bench (Analytics)
+### Bench - Analytics and dashboards for the BigBlueBam suite
 
-6 routes, 7 schemas, 32 MCP tools
+Bench builds shared analytics dashboards and ad-hoc queries across the other BigBlueBam apps. Reach for it when you want one place to chart deals, campaigns, goals, knowledge-base activity, and other suite data, then share or schedule those views for your team.
 
-<img src="docs/apps/bench/screenshots/light/01-dashboard-list.png" width="400" alt="Bench (Analytics)">
+7 routes, 7 schemas, 32 MCP tools
 
-[Guide](docs/apps/bench/guide.md) | [Overview](docs/apps/bench/marketing.md) | [MCP Tools](docs/apps/bench/mcp-tools.md)
+<img src="docs/apps/bench/screenshots/light/01-dashboard-list.png" width="400" alt="Bench - Analytics and dashboards for the BigBlueBam suite">
 
-### Bill (Invoicing)
+[Help](docs/apps/bench/help.md) | [Guide](docs/apps/bench/guide.md) | [Overview](docs/apps/bench/marketing.md) | [MCP Tools](docs/apps/bench/mcp-tools.md)
 
-9 routes, 12 schemas, 47 MCP tools
+### Bill - Invoicing and billing for client work
 
-<img src="docs/apps/bill/screenshots/light/01-dashboard.png" width="400" alt="Bill (Invoicing)">
+Bill turns the work your team does into invoices, tracks who has paid and who is overdue, captures project expenses, and reports on revenue and profitability. Reach for it when you need to bill a client, record a payment, or close out a billing period.
 
-[Guide](docs/apps/bill/guide.md) | [Overview](docs/apps/bill/marketing.md) | [MCP Tools](docs/apps/bill/mcp-tools.md)
+10 routes, 12 schemas, 47 MCP tools
 
-### Bin (Digital Asset Management)
+<img src="docs/apps/bill/screenshots/light/01-dashboard.png" width="400" alt="Bill - Invoicing and billing for client work">
 
-4 routes, 4 schemas, 19 MCP tools
+[Help](docs/apps/bill/help.md) | [Guide](docs/apps/bill/guide.md) | [Overview](docs/apps/bill/marketing.md) | [MCP Tools](docs/apps/bill/mcp-tools.md)
 
-DAM / object-storage backbone plus a structured-data (CSV/JSON/YAML) grid/tree editor with live co-editing and virus scanning — the storage layer behind Bay and Blip.
+### Bin - Digital asset manager and structured-data editor
 
-<img src="site/public/screenshots/bin/light/asset-library.png" width="400" alt="Bin (Digital Asset Management)">
+Bin is BigBlueBam's file store and object-storage backbone. It holds your files and datasets, organizes them into folders, versions every change, gates access behind a security scan, and lets you edit CSV, JSON, and YAML data directly in the browser. Other apps stand on Bin: media hands off to Bay for review, and Blip stores its capture bytes here.
 
-_(Guide coming soon.)_
+5 routes, 6 schemas, 19 MCP tools
 
-### Blank (Forms)
+<img src="docs/apps/bin/screenshots/light/asset-library.png" width="400" alt="Bin - Digital asset manager and structured-data editor">
+
+[Help](docs/apps/bin/help.md) | [MCP Tools](docs/apps/bin/mcp-tools.md)
+
+### Blank - Forms and surveys
+
+Blank is the forms and surveys app in BigBlueBam. Build a form with drag-and-drop fields, publish it to a public URL, and collect and review responses without writing any code.
 
 4 routes, 5 schemas, 20 MCP tools
 
-<img src="docs/apps/blank/screenshots/light/01-form-list.png" width="400" alt="Blank (Forms)">
+<img src="docs/apps/blank/screenshots/light/01-form-list.png" width="400" alt="Blank - Forms and surveys">
 
-[Guide](docs/apps/blank/guide.md) | [Overview](docs/apps/blank/marketing.md) | [MCP Tools](docs/apps/blank/mcp-tools.md)
+[Help](docs/apps/blank/help.md) | [Guide](docs/apps/blank/guide.md) | [Overview](docs/apps/blank/marketing.md) | [MCP Tools](docs/apps/blank/mcp-tools.md)
 
-### Blast (Email Campaigns)
+### Blast - Email campaigns
 
-7 routes, 9 schemas, 28 MCP tools
+Blast is the email campaign tool in the BigBlueBam suite. Marketers and operators use it to design HTML emails, target groups of Bond CRM contacts, send to those contacts, and track opens, clicks, bounces, and unsubscribes.
 
-<img src="docs/apps/blast/screenshots/light/01-campaigns.png" width="400" alt="Blast (Email Campaigns)">
+8 routes, 9 schemas, 28 MCP tools
 
-[Guide](docs/apps/blast/guide.md) | [Overview](docs/apps/blast/marketing.md) | [MCP Tools](docs/apps/blast/mcp-tools.md)
+<img src="docs/apps/blast/screenshots/light/01-campaigns.png" width="400" alt="Blast - Email campaigns">
 
-### Blip (App Telemetry)
+[Help](docs/apps/blast/help.md) | [Guide](docs/apps/blast/guide.md) | [Overview](docs/apps/blast/marketing.md) | [MCP Tools](docs/apps/blast/mcp-tools.md)
+
+### Blip - Telemetry, log, and profiling intake
+
+Blip is the BigBlueBam intake and inspection layer for runtime telemetry coming from your own running software. Declare an app to track, embed an ingest key in your client, POST JSON reports, then watch them stream in live or query the accumulated history. Reach for it when you need logs, crash dumps, function timings, or custom counters from a shipped app collected inside the suite.
 
 12 routes, 12 schemas, 38 MCP tools
 
-App telemetry and observability — bearer-token log ingest, a live log viewer, saved views with field indexing, watches/alerts, transforms, retention, timelapse, and scheduled reports.
+<img src="docs/apps/blip/screenshots/light/01-app-list.png" width="400" alt="Blip - Telemetry, log, and profiling intake">
 
-<img src="site/public/screenshots/blip/light/live-viewer.png" width="400" alt="Blip (App Telemetry)">
+[Help](docs/apps/blip/help.md) | [Guide](docs/apps/blip/guide.md) | [Overview](docs/apps/blip/marketing.md) | [MCP Tools](docs/apps/blip/mcp-tools.md)
 
-[Guide](docs/apps/blip/guide.md) | [Overview](docs/apps/blip/marketing.md) | [MCP Tools](docs/apps/blip/mcp-tools.md)
+### Blueprint - Structured diagrams backed by a typed graph
 
-### Blueprint
+Blueprint is a diagram editor whose diagrams are a typed relational graph of nodes and edges, not an opaque drawing. Reach for it when you want a flowchart, graph, org chart, mind map, or system map that every teammate, and every AI agent, can read, edit, version, and turn into Bam tasks with a full audit trail.
 
-6 routes, 11 schemas, 37 MCP tools
+6 routes, 11 schemas, 36 MCP tools
 
-<img src="docs/apps/blueprint/screenshots/light/01-diagram-list.png" width="400" alt="Blueprint">
+<img src="docs/apps/blueprint/screenshots/light/01-diagram-list.png" width="400" alt="Blueprint - Structured diagrams backed by a typed graph">
 
-[Guide](docs/apps/blueprint/guide.md) | [Overview](docs/apps/blueprint/marketing.md) | [MCP Tools](docs/apps/blueprint/mcp-tools.md)
+[Help](docs/apps/blueprint/help.md) | [Guide](docs/apps/blueprint/guide.md) | [Overview](docs/apps/blueprint/marketing.md) | [MCP Tools](docs/apps/blueprint/mcp-tools.md)
 
-### Board (Visual Collaboration)
+### Board - Visual collaboration whiteboards
+
+Board gives your team an infinite canvas for sketching ideas, running retros, mapping architecture, and brainstorming together. Reach for it when a list or a document is not enough and you need to draw, group, and arrange thoughts in space.
 
 9 routes, 11 schemas, 40 MCP tools
 
-<img src="docs/apps/board/screenshots/light/01-all-boards.png" width="400" alt="Board (Visual Collaboration)">
+<img src="docs/apps/board/screenshots/light/01-all-boards.png" width="400" alt="Board - Visual collaboration whiteboards">
 
-[Guide](docs/apps/board/guide.md) | [Overview](docs/apps/board/marketing.md) | [MCP Tools](docs/apps/board/mcp-tools.md)
+[Help](docs/apps/board/help.md) | [Guide](docs/apps/board/guide.md) | [Overview](docs/apps/board/marketing.md) | [MCP Tools](docs/apps/board/mcp-tools.md)
 
-### Bolt (Workflow Automation)
+### Bolt - Workflow automation for the BigBlueBam suite
 
-7 routes, 10 schemas, 24 MCP tools
+Bolt watches for events across the BigBlueBam apps and reacts to them automatically. When something happens in one app (a task is created, a deal goes stale, a ticket breaches its SLA), Bolt runs a rule you defined and carries out one or more actions. Reach for it when you want work to happen without a person clicking a button.
 
-<img src="docs/apps/bolt/screenshots/light/01-automations.png" width="400" alt="Bolt (Workflow Automation)">
+7 routes, 10 schemas, 26 MCP tools
 
-[Guide](docs/apps/bolt/guide.md) | [Overview](docs/apps/bolt/marketing.md) | [MCP Tools](docs/apps/bolt/mcp-tools.md)
+<img src="docs/apps/bolt/screenshots/light/01-automations.png" width="400" alt="Bolt - Workflow automation for the BigBlueBam suite">
 
-### Bond (CRM)
+[Help](docs/apps/bolt/help.md) | [Guide](docs/apps/bolt/guide.md) | [Overview](docs/apps/bolt/marketing.md) | [MCP Tools](docs/apps/bolt/mcp-tools.md)
+
+### Bond - CRM for contacts, companies, and deals
+
+Bond is the BigBlueBam CRM. It tracks the people and companies you sell to, moves deals through a configurable pipeline, and reports on forecast, win rate, and stale deals. Reach for it when you need to manage relationships and close revenue.
 
 13 routes, 16 schemas, 69 MCP tools
 
-<img src="docs/apps/bond/screenshots/light/01-pipeline-board.png" width="400" alt="Bond (CRM)">
+<img src="docs/apps/bond/screenshots/light/01-pipeline-board.png" width="400" alt="Bond - CRM for contacts, companies, and deals">
 
-[Guide](docs/apps/bond/guide.md) | [Overview](docs/apps/bond/marketing.md) | [MCP Tools](docs/apps/bond/mcp-tools.md)
+[Help](docs/apps/bond/help.md) | [Guide](docs/apps/bond/guide.md) | [Overview](docs/apps/bond/marketing.md) | [MCP Tools](docs/apps/bond/mcp-tools.md)
 
-### Book (Scheduling)
+### Book - Scheduling and calendar for your team
+
+Book is the BigBlueBam scheduling app. Use it to keep personal and team calendars, view what is happening across the suite on a timeline, set the working hours that drive availability, and publish public links that let outside people book time with you.
 
 9 routes, 10 schemas, 25 MCP tools
 
-<img src="docs/apps/book/screenshots/light/01-week-view.png" width="400" alt="Book (Scheduling)">
+<img src="docs/apps/book/screenshots/light/01-week-view.png" width="400" alt="Book - Scheduling and calendar for your team">
 
-[Guide](docs/apps/book/guide.md) | [Overview](docs/apps/book/marketing.md) | [MCP Tools](docs/apps/book/mcp-tools.md)
+[Help](docs/apps/book/help.md) | [Guide](docs/apps/book/guide.md) | [Overview](docs/apps/book/marketing.md) | [MCP Tools](docs/apps/book/mcp-tools.md)
 
-### Brief (Documents)
+### Braid - Identity Resolution and Golden Records
+
+Braid braids every app's copy of a person or company into one confidence-scored golden profile, with a human-in-the-loop review queue for the merges it is not sure about. Reach for Braid when the same customer exists as a Bond contact, a Bill client, and a handful of Book attendees, and nothing in the suite decides they are one person.
+
+1 routes, 11 schemas, 13 MCP tools
+
+<img src="docs/apps/braid/screenshots/light/catalog.png" width="400" alt="Braid - Identity Resolution and Golden Records">
+
+[Help](docs/apps/braid/help.md) | [Guide](docs/apps/braid/guide.md) | [MCP Tools](docs/apps/braid/mcp-tools.md)
+
+### Brief - Collaborative documents with real-time editing
+
+Brief is your team's collaborative document editor: a place to write, format, co-edit, comment on, and organize documents, then promote the ones that matter into your knowledge base. Reach for it when you need a shared, structured document that more than one person works on at once.
 
 10 routes, 10 schemas, 48 MCP tools
 
-<img src="docs/apps/brief/screenshots/light/01-home.png" width="400" alt="Brief (Documents)">
+<img src="docs/apps/brief/screenshots/light/01-home.png" width="400" alt="Brief - Collaborative documents with real-time editing">
 
-[Guide](docs/apps/brief/guide.md) | [Overview](docs/apps/brief/marketing.md) | [MCP Tools](docs/apps/brief/mcp-tools.md)
+[Help](docs/apps/brief/help.md) | [Guide](docs/apps/brief/guide.md) | [Overview](docs/apps/brief/marketing.md) | [MCP Tools](docs/apps/brief/mcp-tools.md)
 
-### Bureau
+### Bulwark - AI contract-obligation monitor
 
-15 routes, 4 schemas, 38 MCP tools
+Bulwark reads your executed contracts, builds a clause-cited ledger of what each party owes and by when, arms a live clock on the obligations that matter, and drafts (never auto-sends) the notices and vendor-compliance chases a human then approves. Reach for it when a missed notice window or a lapsed insurance certificate would cost you a claim.
 
-<img src="docs/apps/bureau/screenshots/light/01-floor-directory.png" width="400" alt="Bureau">
+8 routes, 13 schemas, 16 MCP tools
 
-[Guide](docs/apps/bureau/guide.md) | [Overview](docs/apps/bureau/marketing.md) | [MCP Tools](docs/apps/bureau/mcp-tools.md)
+<img src="docs/apps/bulwark/screenshots/light/approval-queue.png" width="400" alt="Bulwark - AI contract-obligation monitor">
 
-### Helpdesk (Support Portal)
+[Help](docs/apps/bulwark/help.md) | [Guide](docs/apps/bulwark/guide.md) | [MCP Tools](docs/apps/bulwark/mcp-tools.md)
+
+### Bureau - Virtual office and presence
+
+Bureau is a virtual office layer that stays open around everything else you do in the suite, so that "who is around right now" and "let's all go look at this together" are one click away no matter which app you are in. Reach for it when you want a sense of presence, a quick huddle, or a way to pull your teammates onto the same screen.
+
+15 routes, 4 schemas, 37 MCP tools
+
+<img src="docs/apps/bureau/screenshots/light/01-floor-directory.png" width="400" alt="Bureau - Virtual office and presence">
+
+[Help](docs/apps/bureau/help.md) | [Guide](docs/apps/bureau/guide.md) | [Overview](docs/apps/bureau/marketing.md) | [MCP Tools](docs/apps/bureau/mcp-tools.md)
+
+### Burn - Contract Scope and Margin Monitor
+
+Burn reads a signed proposal or SOW into a priced ledger of what was sold, then watches every unit of work against that ledger in dollars, so you can see the work nobody sold before it turns into an unbilled surprise. Reach for Burn when you deliver against fixed-scope contracts and need to know, continuously, whether the work matches the money.
+
+9 routes, 18 schemas, 18 MCP tools
+
+<img src="docs/apps/burn/screenshots/light/cost-rates.png" width="400" alt="Burn - Contract Scope and Margin Monitor">
+
+[Help](docs/apps/burn/help.md) | [Guide](docs/apps/burn/guide.md) | [MCP Tools](docs/apps/burn/mcp-tools.md)
+
+### Helpdesk - Support tickets and customer portal
+
+Helpdesk is the public-facing support portal where your customers register, file tickets, track replies, and close out issues. Behind the scenes every ticket spawns a Bam task so your support staff can work it from the project board.
 
 10 routes, 13 schemas, 11 MCP tools
 
-<img src="docs/apps/helpdesk/screenshots/light/01-portal-entry.png" width="400" alt="Helpdesk (Support Portal)">
+<img src="docs/apps/helpdesk/screenshots/light/01-portal-entry.png" width="400" alt="Helpdesk - Support tickets and customer portal">
 
-[Guide](docs/apps/helpdesk/guide.md) | [Overview](docs/apps/helpdesk/marketing.md) | [MCP Tools](docs/apps/helpdesk/mcp-tools.md)
+[Help](docs/apps/helpdesk/help.md) | [Guide](docs/apps/helpdesk/guide.md) | [Overview](docs/apps/helpdesk/marketing.md) | [MCP Tools](docs/apps/helpdesk/mcp-tools.md)
 
 ### Introduction to BigBlueBam
 
-An overview of the whole suite: the nineteen apps, how they connect, and how AI agents work alongside your team.
+An overview of the whole suite: the 23 apps, how they connect, and how AI agents work alongside your team.
 
-[Guide](docs/apps/introduction/guide.md) | [Overview](docs/apps/introduction/marketing.md)
+[Help](docs/apps/introduction/help.md) | [Guide](docs/apps/introduction/guide.md) | [Overview](docs/apps/introduction/marketing.md) | [MCP Tools](docs/apps/introduction/mcp-tools.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
 ---
 
 ## AI Provider Configuration
 
-BigBlueBam features a hierarchical LLM provider configuration system that powers AI features across the suite — including Bolt's AI-assisted automation authoring, future summarization, and content generation features.
+BigBlueBam features a hierarchical LLM provider configuration system that powers AI features across the suite - including Bolt's AI-assisted automation authoring, future summarization, and content generation features.
 
 ### How It Works
 
@@ -645,12 +720,12 @@ Providers are configured at three levels, with the most specific taking preceden
 |----------|------|-------|
 | **Anthropic** | `anthropic` | Claude models. Uses default API endpoint. |
 | **OpenAI** | `openai` | GPT models. Uses default API endpoint. |
-| **OpenAI-Compatible** | `openai_compatible` | Any endpoint implementing the OpenAI Chat Completions API — Azure OpenAI, Together AI, Ollama, vLLM, local LLMs, etc. Requires custom `api_endpoint`. |
+| **OpenAI-Compatible** | `openai_compatible` | Any endpoint implementing the OpenAI Chat Completions API - Azure OpenAI, Together AI, Ollama, vLLM, local LLMs, etc. Requires custom `api_endpoint`. |
 
 ### Security
 
 - API keys are **encrypted at rest** using AES-256-GCM with the server's `SESSION_SECRET`
-- Keys are **never returned in full** — always redacted to `sk-•••XXXX` (last 4 characters only)
+- Keys are **never returned in full** - always redacted to `sk-•••XXXX` (last 4 characters only)
 - Scope-based authorization ensures only the right roles can configure each level
 - Test Connection verifies credentials work before saving
 
@@ -662,11 +737,11 @@ Configure providers in **Settings → AI Providers** in the Bam frontend. If no 
 
 ## Quick Start
 
-> **📖 Full deployment guide:** [docs/guides/deployment.md](docs/guides/deployment.md) — step-by-step walkthrough with interactive setup wizard, password generation, platform selection (Docker Compose for self-hosted; Railway for managed cloud — both fully automated), and tier progression from single-machine to Kubernetes.
+> **📖 Full deployment guide:** [docs/guides/deployment.md](docs/guides/deployment.md) - step-by-step walkthrough with interactive setup wizard, password generation, platform selection (Docker Compose for self-hosted; Railway for managed cloud - both fully automated), and tier progression from single-machine to Kubernetes.
 
 ### Guided Setup (Recommended)
 
-The interactive deploy script handles everything — installs dependencies, generates secrets, provisions infrastructure, and creates your admin account:
+The interactive deploy script handles everything - installs dependencies, generates secrets, provisions infrastructure, and creates your admin account:
 
 ```bash
 git clone https://github.com/eoffermann/BigBlueBam.git
@@ -707,7 +782,7 @@ docker compose exec api node dist/cli.js create-admin \
 
 Bolt automations and the background worker invoke MCP tools over an internal HTTP path (`POST /mcp/tools/call`) instead of holding a persistent MCP session. That path is authenticated two ways: a shared secret (`INTERNAL_SERVICE_SECRET`, already generated by `cp .env.example .env` or the deploy script) plus a bearer token tied to a dedicated service-account user that `mcp-server` uses to talk to the rest of the stack on behalf of internal callers.
 
-If `MCP_INTERNAL_API_TOKEN` is blank in your `.env`, `mcp-server` still boots and external MCP clients (Claude Desktop, Claude Code) work fine — but every call to `POST /mcp/tools/call` returns HTTP 503 with `INTERNAL_NOT_CONFIGURED`, which means **Bolt automations that invoke MCP tools will fail** and any worker job relying on the internal path won't be able to call MCP tools either. For a self-hosted single-operator setup you can leave it blank; for anything that needs Bolt-to-MCP integration, provision the token once:
+If `MCP_INTERNAL_API_TOKEN` is blank in your `.env`, `mcp-server` still boots and external MCP clients (Claude Desktop, Claude Code) work fine - but every call to `POST /mcp/tools/call` returns HTTP 503 with `INTERNAL_NOT_CONFIGURED`, which means **Bolt automations that invoke MCP tools will fail** and any worker job relying on the internal path won't be able to call MCP tools either. For a self-hosted single-operator setup you can leave it blank; for anything that needs Bolt-to-MCP integration, provision the token once:
 
 ```bash
 # 1. Mint a service account + API key (prefix bbam_svc_). The --org-slug
@@ -735,7 +810,7 @@ Open **http://localhost/b3/** to access BigBlueBam, **http://localhost/banter/**
 <p align="center">
   <img src="images/01-login.png" alt="Login Page" width="60%" />
 </p>
-<p align="center"><em>The login page — clean and branded.</em></p>
+<p align="center"><em>The login page - clean and branded.</em></p>
 
 After login, you land on the project dashboard:
 
@@ -801,7 +876,7 @@ All services are accessed through a single nginx container on port 80:
 | `/blip/api/` | Fastify `:4018` | Blip REST API |
 | `/blip/ws` | Fastify `:4018` | Blip WebSocket (live log stream) |
 | `/blip/ingest/` | Fastify `:4018` | Blip telemetry ingest (bearer-token) |
-| `/mcp/` | MCP Server `:3001` | Model Context Protocol (804 tools) |
+| `/mcp/` | MCP Server `:3001` | Model Context Protocol (865 tools) |
 
 Infrastructure services (internal, not exposed via nginx):
 
@@ -871,7 +946,7 @@ pnpm test  # 900+ tests across all packages
 ┌──────▼────┐ ┌──▼───────┐ ┌▼──────────┐ ┌──────────┐ ┌───────▼──────┐ ┌──────────┐
 │ Bam API   │ │ Banter   │ │ MCP Server│ │ Brief    │ │ Bolt API │ │ LiveKit SFU  │ │ Worker   │
 │ :4000     │ │ API :4002│ │ :3001     │ │ API :4005│ │ :4006    │ │ :7880 (voice)│ │ BullMQ   │
-│ +WebSocket│ │ +WS      │ │ 804 tools │ │ +WS      │ │          │ │ +voice-agent │ │ jobs     │
+│ +WebSocket│ │ +WS      │ │ 865 tools │ │ +WS      │ │          │ │ +voice-agent │ │ jobs     │
 └─────┬─────┘ └────┬─────┘ └─────┬─────┘ └────┬─────┘ └──────────────┘ └────┬─────┘
       │             │             │            │                  │
 ┌─────▼─────────────▼─────────────▼────────────▼───────────────────▼───┐
@@ -901,7 +976,7 @@ pnpm test  # 900+ tests across all packages
 apps/
   api/              → Bam Fastify REST API + WebSocket (project management core)
   frontend/         → Every React SPA under one container
-  mcp-server/       → MCP protocol server (804 tools, Redis-backed confirm tokens)
+  mcp-server/       → MCP protocol server (865 tools, Redis-backed confirm tokens)
   worker/           → BullMQ background jobs (emails, notifications, scheduled Banter posts, webhook dispatch + DLQ)
   helpdesk-api/     → Helpdesk Fastify API (tickets, messages, similar-tickets lookup, user upsert)
   banter-api/       → Banter Fastify API + WebSocket (channels, threads, calls, quiet hours, scheduled posts, agent subscriptions)
@@ -951,8 +1026,8 @@ site/               → Marketing site (served at /)
 
 | Metric | Count |
 |--------|-------|
-| Apps | 19 (Bam, Banter, Bay, Beacon, Bearing, Bench, Bill, Bin, Blank, Blast, Blip, Blueprint, Board, Bolt, Bond, Book, Brief, Bureau, Helpdesk) |
-| MCP tools | 804 across 49 modules (123 Bam + 77 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Beacon + 38 Blip + 38 Bureau + 37 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 25 Book + 24 Bolt + 20 Blank + 19 Bin + 14 Bay + 11 Helpdesk + 46 cross-cutting platform) |
+| Apps | 23 (Bam, Banter, Basis, Bay, Beacon, Bearing, Bench, Bill, Bin, Blank, Blast, Blip, Blueprint, Board, Bolt, Bond, Book, Braid, Brief, Bulwark, Bureau, Burn, Helpdesk) |
+| MCP tools | 865 across 53 modules (128 Bam + 80 Banter + 69 Bond + 48 Brief + 47 Bill + 40 Board + 38 Blip + 38 Beacon + 37 Bureau + 36 Blueprint + 32 Bench + 30 Bearing + 28 Blast + 26 Bolt + 25 Book + 20 Blank + 19 Bin + 18 Burn + 16 Basis + 16 Bulwark + 14 Bay + 13 Braid + 11 Helpdesk + 36 cross-cutting platform) |
 | Bolt event catalog | 122 registered events across app and platform sources |
 | Test cases | 900+ |
 | Migrations | 187 (tip 0225, additive + idempotent) |
@@ -978,22 +1053,26 @@ site/               → Marketing site (served at /)
 | **Per-App Guides** | |
 | [Bam (Project Management) Guide](docs/apps/bam/guide.md) | User guide and MCP tool reference |
 | [Banter (Team Messaging) Guide](docs/apps/banter/guide.md) | User guide and MCP tool reference |
-| [Bay (Media Review) Guide](docs/apps/bay/guide.md) | User guide and MCP tool reference |
+| [Basis Guide](docs/apps/basis/guide.md) | User guide and MCP tool reference |
+| [Bay Guide](docs/apps/bay/guide.md) | User guide and MCP tool reference |
 | [Beacon (Knowledge Base) Guide](docs/apps/beacon/guide.md) | User guide and MCP tool reference |
 | [Bearing (Goals & OKRs) Guide](docs/apps/bearing/guide.md) | User guide and MCP tool reference |
 | [Bench (Analytics) Guide](docs/apps/bench/guide.md) | User guide and MCP tool reference |
 | [Bill (Invoicing) Guide](docs/apps/bill/guide.md) | User guide and MCP tool reference |
-| Bin (Digital Asset Management) | Guide coming soon |
+| [Bin Guide](docs/apps/bin/guide.md) | User guide and MCP tool reference |
 | [Blank (Forms) Guide](docs/apps/blank/guide.md) | User guide and MCP tool reference |
 | [Blast (Email Campaigns) Guide](docs/apps/blast/guide.md) | User guide and MCP tool reference |
-| [Blip (App Telemetry) Guide](docs/apps/blip/guide.md) | User guide and MCP tool reference |
+| [Blip Guide](docs/apps/blip/guide.md) | User guide and MCP tool reference |
 | [Blueprint Guide](docs/apps/blueprint/guide.md) | User guide and MCP tool reference |
 | [Board (Visual Collaboration) Guide](docs/apps/board/guide.md) | User guide and MCP tool reference |
 | [Bolt (Workflow Automation) Guide](docs/apps/bolt/guide.md) | User guide and MCP tool reference |
 | [Bond (CRM) Guide](docs/apps/bond/guide.md) | User guide and MCP tool reference |
 | [Book (Scheduling) Guide](docs/apps/book/guide.md) | User guide and MCP tool reference |
+| [Braid Guide](docs/apps/braid/guide.md) | User guide and MCP tool reference |
 | [Brief (Documents) Guide](docs/apps/brief/guide.md) | User guide and MCP tool reference |
+| [Bulwark Guide](docs/apps/bulwark/guide.md) | User guide and MCP tool reference |
 | [Bureau Guide](docs/apps/bureau/guide.md) | User guide and MCP tool reference |
+| [Burn Guide](docs/apps/burn/guide.md) | User guide and MCP tool reference |
 | [Helpdesk (Support Portal) Guide](docs/apps/helpdesk/guide.md) | User guide and MCP tool reference |
 | [Introduction to BigBlueBam Guide](docs/apps/introduction/guide.md) | User guide and MCP tool reference |
 
