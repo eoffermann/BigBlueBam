@@ -176,12 +176,13 @@ export default async function engagementRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       try {
-        const result = await engagements.getBurndown(readViewer(request), id);
+        const caps = await request.viewerCaps();
+        const result = await engagements.getBurndown(readViewer(request), id, caps);
         // EVERY burn-down point passes through the serializer. Spec 2.4 point 17 (R3-S5) is
         // explicit that the time series is the sharpest disclosure surface in the app: ten
         // daily snapshots plus the Bam per-person hour vector solve the cost-rate vector by
         // least squares. The floored keys are absent from every point, not banded.
-        return redactFinancialFields(result, await request.viewerCaps());
+        return redactFinancialFields(result, caps);
       } catch (err) {
         if (mapServiceError(request, reply, err)) return reply;
         throw err;

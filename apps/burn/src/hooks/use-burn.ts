@@ -119,16 +119,17 @@ export interface BurndownStepUp {
 }
 export interface BurndownPoint {
   at: string;
-  attributed_billable?: number | null;
-  attributed_cost?: number | null;
-  contract_value?: number | null;
-  contract_consumption_pct: string | null;
+  // A basis-aware discriminated money block (suppressed for a member; figures for read_all),
+  // built server-side by buildMoneyBlock. Never a bare cost or a bare percentage.
+  money: BurnMoneyBlock;
 }
 export interface Burndown {
   chain_root_id: string;
   currency: string;
   step_ups: BurndownStepUp[];
   as_of: string;
+  // Chain-level money block for the surface as a whole (same discriminated union).
+  money: BurnMoneyBlock;
   points: BurndownPoint[];
 }
 

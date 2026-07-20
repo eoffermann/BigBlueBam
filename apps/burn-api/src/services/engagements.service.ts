@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { preflightAccess, preflightMany } from '@bigbluebam/shared/visibility-client';
-import type { BurnEngagementCreate, BurnEngagementUpdate } from '@bigbluebam/shared';
+import type {
+  BurnEngagementCreate,
+  BurnEngagementUpdate,
+  BurnRevenueBasis,
+  BurnStoredMetricBasis,
+} from '@bigbluebam/shared';
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
 import {
@@ -20,6 +25,10 @@ import {
 import { decodeCursor, keysetOrder, keysetPredicate, pageOf } from '../lib/pagination.js';
 import { engagementLinkSpecs, upsertEntityLinks } from '../lib/entity-links.js';
 import { resolveAccountGoldenId } from '../lib/braid-resolve.client.js';
+import { buildMoneyBlock } from '../lib/redact-financial-fields.js';
+import type { ViewerCaps } from '../lib/viewer-caps.js';
+import { revenueBasisFor } from './engines/valuation.js';
+import { loadSettings } from './settings.service.js';
 import { env } from '../env.js';
 import { isAdminViewer, type Viewer } from './types.js';
 
@@ -397,19 +406,25 @@ export async function unlinkProject(viewer: Viewer, id: string, projectId: strin
 /**
  * The burn-down series with engagement AND deliverable dated step-ups (spec 6.1).
  *
- * Every point is BANDED and carries no cost figure. Spec 2.4 point 17 (R3-S5) is explicit
- * that the time series is the sharpest disclosure surface in the app: an attacker with a
- * per-day per-person hour vector from Bam plus one aggregate cost scalar per day solves the
- * cost-rate vector by least squares in three snapshots. So `attributed_cost`,
- * `margin_amount`, `margin_pct` and `cost_rate_coverage_pct` are absent from EVERY point for
- * a non-read_all caller -- which the shared serializer enforces, since those key names are in
- * BURN_READ_ALL_FLOORED_KEYS and the walk recurses into the point array.
+ * Every money-bearing point carries a DISCRIMINATED money block built by `buildMoneyBlock`,
+ * exactly like every other financial surface (spec 1.2.2). This is what stops the burn-down
+ * from emitting a bare cost or a bare consumption percentage with no `metric_basis`: for a
+ * non-read_all caller `buildMoneyBlock` returns the `suppressed` variant, which has no cost,
+ * margin, or coverage key at all and cannot be mistaken for margin. For a read_all caller it
+ * returns `true_margin` / `contract_consumption` with the figures.
+ *
+ * The step-ups still carry raw `contract_value*` / `envelope_amount*` magnitudes; those are
+ * BURN_READ_ALL_FLOORED_KEYS, so the shared serializer strips them for a member. Spec 2.4
+ * point 17 (R3-S5): the time series is the sharpest disclosure surface, since a per-day
+ * per-person hour vector plus one aggregate cost scalar per day solves the cost-rate vector
+ * by least squares in a handful of snapshots.
  */
-export async function getBurndown(viewer: Viewer, id: string) {
+export async function getBurndown(viewer: Viewer, id: string, caps: ViewerCaps) {
   const row = await loadScopedEngagement(viewer, id);
   return runInOrgScope(viewer.org_id, async (tx) => {
     const rootId = row.chain_root_id ?? row.id;
     const ids = await chainIds(tx, viewer.org_id, rootId);
+    const settings = await loadSettings(tx, viewer.org_id);
 
     const stepUps = await tx
       .select({
@@ -462,26 +477,51 @@ export async function getBurndown(viewer: Viewer, id: string) {
       )
       .limit(1);
 
+    const revenueBasis =
+      (rollup?.revenue_basis as BurnRevenueBasis) ??
+      revenueBasisFor(row.envelope_basis as Parameters<typeof revenueBasisFor>[0]);
+    const minContributors = Number(settings.min_contributors_for_cost_aggregate ?? 3);
+
+    // One basis-aware money block per snapshot, built the SAME way as /v1/financials so a
+    // member gets `suppressed` and a read_all caller gets the figures with a discriminator.
+    const moneyFor = (r: typeof rollup | undefined) => {
+      const computedAt = r?.computed_at ? new Date(r.computed_at) : new Date();
+      return buildMoneyBlock(
+        {
+          metric_basis: (r?.metric_basis as BurnStoredMetricBasis) ?? 'contract_consumption',
+          revenue_basis: revenueBasis,
+          currency: row.currency,
+          as_of: computedAt.toISOString(),
+          revenue_amount: r ? Number(r.attributed_billable ?? 0) : null,
+          contract_value: r ? Number(r.contract_value ?? 0) : Number(row.contract_value ?? 0),
+          attributed_billable: r ? Number(r.attributed_billable ?? 0) : null,
+          attributed_cost: r ? Number(r.attributed_cost ?? 0) : null,
+          margin_amount: r?.margin_amount == null ? null : Number(r.margin_amount),
+          margin_pct: r?.margin_pct == null ? null : Number(r.margin_pct),
+          contract_consumption_pct: r?.consumption_pct == null ? null : Number(r.consumption_pct),
+          cost_rate_coverage_pct:
+            r?.cost_rate_coverage_pct == null ? null : Number(r.cost_rate_coverage_pct),
+          margin_state: (r?.margin_state as 'in_progress' | 'final' | null) ?? null,
+          distinct_contributor_count: Number(r?.distinct_contributor_count ?? 0),
+          min_contributors_for_cost_aggregate: minContributors,
+        },
+        caps,
+      );
+    };
+
     return {
       data: {
         chain_root_id: rootId,
         currency: row.currency,
         step_ups: [...stepUps, ...deliverableSteps],
         as_of: rollup?.computed_at ?? new Date(),
+        // Chain-level basis-aware money block, so the surface as a whole carries a
+        // discriminator and never a bare cost or a bare percentage.
+        money: moneyFor(rollup),
         // The series itself is materialized by the rollup worker (M6). Until then the
         // endpoint returns the step-ups and the current point, which is honest about what it
-        // knows rather than synthesizing a curve.
-        points: rollup
-          ? [
-              {
-                at: rollup.computed_at,
-                attributed_billable: rollup.attributed_billable,
-                attributed_cost: rollup.attributed_cost,
-                contract_value: rollup.contract_value,
-                contract_consumption_pct: rollup.consumption_pct,
-              },
-            ]
-          : [],
+        // knows rather than synthesizing a curve. Each point carries its OWN money block.
+        points: rollup ? [{ at: rollup.computed_at, money: moneyFor(rollup) }] : [],
       },
     };
   });
