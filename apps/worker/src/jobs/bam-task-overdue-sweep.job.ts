@@ -94,7 +94,7 @@ export async function processBamTaskOverdueSweepJob(
       t.due_date,
       (CURRENT_DATE - t.due_date)::int AS days_overdue,
       t.assignee_id,
-      u.name AS assignee_name,
+      u.display_name AS assignee_name,
       u.email AS assignee_email,
       p.name AS project_name,
       o.name AS org_name,
