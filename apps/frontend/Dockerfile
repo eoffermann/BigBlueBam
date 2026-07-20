@@ -41,152 +41,44 @@ RUN pnpm install --no-frozen-lockfile
 FROM deps AS build
 
 COPY tsconfig.base.json ./
-COPY packages/shared/src ./packages/shared/src
-COPY packages/shared/tsconfig.json packages/shared/tsup.config.ts ./packages/shared/
-
-# Shared UI components (resolved via Vite aliases)
+COPY packages/shared/ ./packages/shared/
 COPY packages/ui/ ./packages/ui/
-
-# BBB frontend
-COPY apps/frontend/src ./apps/frontend/src
-COPY apps/frontend/public ./apps/frontend/public
-COPY apps/frontend/index.html ./apps/frontend/
-COPY apps/frontend/tsconfig.json apps/frontend/tsconfig.node.json apps/frontend/vite.config.ts ./apps/frontend/
-
-# Helpdesk frontend
-COPY apps/helpdesk/src ./apps/helpdesk/src
-COPY apps/helpdesk/public ./apps/helpdesk/public
-COPY apps/helpdesk/index.html ./apps/helpdesk/
-COPY apps/helpdesk/tsconfig.json apps/helpdesk/tsconfig.node.json apps/helpdesk/vite.config.ts ./apps/helpdesk/
-
-# Banter frontend
-COPY apps/banter/src ./apps/banter/src
-COPY apps/banter/public ./apps/banter/public
-COPY apps/banter/index.html ./apps/banter/
-COPY apps/banter/tsconfig.json apps/banter/tsconfig.node.json apps/banter/vite.config.ts ./apps/banter/
-
-# Beacon frontend
-COPY apps/beacon/src ./apps/beacon/src
-COPY apps/beacon/public ./apps/beacon/public
-COPY apps/beacon/index.html ./apps/beacon/
-COPY apps/beacon/tsconfig.json apps/beacon/tsconfig.node.json apps/beacon/vite.config.ts ./apps/beacon/
-
-# Brief frontend
-COPY apps/brief/src ./apps/brief/src
-COPY apps/brief/public ./apps/brief/public
-COPY apps/brief/index.html ./apps/brief/
-COPY apps/brief/tsconfig.json apps/brief/tsconfig.node.json apps/brief/vite.config.ts ./apps/brief/
-
-# Bolt frontend
-COPY apps/bolt/src ./apps/bolt/src
-COPY apps/bolt/public ./apps/bolt/public
-COPY apps/bolt/index.html ./apps/bolt/
-COPY apps/bolt/tsconfig.json apps/bolt/tsconfig.node.json apps/bolt/vite.config.ts ./apps/bolt/
-
-# Bearing frontend
-COPY apps/bearing/src ./apps/bearing/src
-COPY apps/bearing/public ./apps/bearing/public
-COPY apps/bearing/index.html ./apps/bearing/
-COPY apps/bearing/tsconfig.json apps/bearing/tsconfig.node.json apps/bearing/vite.config.ts ./apps/bearing/
-
-# Board frontend
-COPY apps/board/src ./apps/board/src
-COPY apps/board/public ./apps/board/public
-COPY apps/board/index.html ./apps/board/
-COPY apps/board/tsconfig.json apps/board/tsconfig.node.json apps/board/vite.config.ts ./apps/board/
-
-# Bond frontend
-COPY apps/bond/src ./apps/bond/src
-COPY apps/bond/public ./apps/bond/public
-COPY apps/bond/index.html ./apps/bond/
-COPY apps/bond/tsconfig.json apps/bond/tsconfig.node.json apps/bond/vite.config.ts ./apps/bond/
-
-# Blast frontend
-COPY apps/blast/src ./apps/blast/src
-COPY apps/blast/public ./apps/blast/public
-COPY apps/blast/index.html ./apps/blast/
-COPY apps/blast/tsconfig.json apps/blast/tsconfig.node.json apps/blast/vite.config.ts ./apps/blast/
-
-# Book frontend
-COPY apps/book/src ./apps/book/src
-COPY apps/book/public ./apps/book/public
-COPY apps/book/index.html ./apps/book/
-COPY apps/book/tsconfig.json apps/book/tsconfig.node.json apps/book/vite.config.ts ./apps/book/
-
-# Bench frontend
-COPY apps/bench/src ./apps/bench/src
-COPY apps/bench/public ./apps/bench/public
-COPY apps/bench/index.html ./apps/bench/
-COPY apps/bench/tsconfig.json apps/bench/tsconfig.node.json apps/bench/vite.config.ts ./apps/bench/
-COPY apps/basis/src ./apps/basis/src
-COPY apps/basis/public ./apps/basis/public
-COPY apps/basis/index.html ./apps/basis/
-COPY apps/basis/tsconfig.json apps/basis/tsconfig.node.json apps/basis/vite.config.ts ./apps/basis/
-COPY apps/braid/src ./apps/braid/src
-COPY apps/braid/public ./apps/braid/public
-COPY apps/braid/index.html ./apps/braid/
-COPY apps/braid/tsconfig.json apps/braid/tsconfig.node.json apps/braid/vite.config.ts ./apps/braid/
-COPY apps/bulwark/src ./apps/bulwark/src
-COPY apps/bulwark/public ./apps/bulwark/public
-COPY apps/bulwark/index.html ./apps/bulwark/
-COPY apps/bulwark/tsconfig.json apps/bulwark/tsconfig.node.json apps/bulwark/vite.config.ts ./apps/bulwark/
-
-# Burn frontend
-COPY apps/burn/src ./apps/burn/src
-COPY apps/burn/public ./apps/burn/public
-COPY apps/burn/index.html ./apps/burn/
-COPY apps/burn/tsconfig.json apps/burn/tsconfig.node.json apps/burn/vite.config.ts ./apps/burn/
-
-# Bursar frontend
-COPY apps/bursar/src ./apps/bursar/src
-COPY apps/bursar/public ./apps/bursar/public
-COPY apps/bursar/index.html ./apps/bursar/
-COPY apps/bursar/tsconfig.json apps/bursar/tsconfig.node.json apps/bursar/vite.config.ts ./apps/bursar/
-
-# Bill frontend
-COPY apps/bill/src ./apps/bill/src
-COPY apps/bill/public ./apps/bill/public
-COPY apps/bill/index.html ./apps/bill/
-COPY apps/bill/tsconfig.json apps/bill/tsconfig.node.json apps/bill/vite.config.ts ./apps/bill/
-
-# Blank frontend
-COPY apps/blank/src ./apps/blank/src
-COPY apps/blank/public ./apps/blank/public
-COPY apps/blank/index.html ./apps/blank/
-COPY apps/blank/tsconfig.json apps/blank/tsconfig.node.json apps/blank/vite.config.ts ./apps/blank/
-
-# Blueprint frontend
-COPY apps/blueprint/src ./apps/blueprint/src
-COPY apps/blueprint/public ./apps/blueprint/public
-COPY apps/blueprint/index.html ./apps/blueprint/
-COPY apps/blueprint/tsconfig.json apps/blueprint/tsconfig.node.json apps/blueprint/vite.config.ts ./apps/blueprint/
-
-# Bin frontend (DAM + structured-data editor SPA)
-COPY apps/bin/src ./apps/bin/src
-COPY apps/bin/public ./apps/bin/public
-COPY apps/bin/index.html ./apps/bin/
-COPY apps/bin/tsconfig.json apps/bin/tsconfig.node.json apps/bin/vite.config.ts ./apps/bin/
-
-# Bay frontend (media review & approval SPA)
-COPY apps/bay/src ./apps/bay/src
-COPY apps/bay/public ./apps/bay/public
-COPY apps/bay/index.html ./apps/bay/
-COPY apps/bay/tsconfig.json apps/bay/tsconfig.node.json apps/bay/vite.config.ts ./apps/bay/
-
-# Blip frontend SPA
-COPY apps/blip/src ./apps/blip/src
-COPY apps/blip/public ./apps/blip/public
-COPY apps/blip/index.html ./apps/blip/
-COPY apps/blip/tsconfig.json apps/blip/tsconfig.node.json apps/blip/vite.config.ts ./apps/blip/
-
-# Bureau client SDK (consumed by the Bureau SPA + every other SPA via mountBureauClient)
 COPY packages/bureau-client/ ./packages/bureau-client/
 
-# Bureau frontend
-COPY apps/bureau/src ./apps/bureau/src
-COPY apps/bureau/public ./apps/bureau/public
-COPY apps/bureau/index.html ./apps/bureau/
-COPY apps/bureau/tsconfig.json apps/bureau/tsconfig.node.json apps/bureau/vite.config.ts ./apps/bureau/
+# Each SPA's full source is copied in ONE layer (src + public + index.html +
+# tsconfig + vite.config; node_modules and dist are excluded by .dockerignore).
+#
+# IMPORTANT: this used to be FOUR COPY instructions per app (src, public,
+# index.html, tsconfig+vite.config). With 24 SPAs that is ~96 layers, and added
+# to the deps stage it pushed the build-stage layer chain past the overlayfs
+# 128-layer maximum the moment the 24th SPA (bursar) landed - every frontend
+# image build then failed with "max depth exceeded" at a COPY step. One COPY per
+# app keeps the chain comfortably under the limit. Do NOT split these back into
+# per-file COPYs; add new SPAs as a single `COPY apps/<app>/ ./apps/<app>/` line.
+COPY apps/frontend/ ./apps/frontend/
+COPY apps/helpdesk/ ./apps/helpdesk/
+COPY apps/banter/ ./apps/banter/
+COPY apps/beacon/ ./apps/beacon/
+COPY apps/brief/ ./apps/brief/
+COPY apps/bolt/ ./apps/bolt/
+COPY apps/bearing/ ./apps/bearing/
+COPY apps/board/ ./apps/board/
+COPY apps/bond/ ./apps/bond/
+COPY apps/blast/ ./apps/blast/
+COPY apps/book/ ./apps/book/
+COPY apps/bench/ ./apps/bench/
+COPY apps/basis/ ./apps/basis/
+COPY apps/braid/ ./apps/braid/
+COPY apps/bulwark/ ./apps/bulwark/
+COPY apps/burn/ ./apps/burn/
+COPY apps/bursar/ ./apps/bursar/
+COPY apps/bill/ ./apps/bill/
+COPY apps/blank/ ./apps/blank/
+COPY apps/blueprint/ ./apps/blueprint/
+COPY apps/bin/ ./apps/bin/
+COPY apps/bay/ ./apps/bay/
+COPY apps/blip/ ./apps/blip/
+COPY apps/bureau/ ./apps/bureau/
 
 RUN pnpm --filter @bigbluebam/shared build \
  && pnpm --filter @bigbluebam/bureau-client build \
