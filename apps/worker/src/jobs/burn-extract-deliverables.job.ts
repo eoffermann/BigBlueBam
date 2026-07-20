@@ -82,3 +82,41 @@ export async function processBurnExtractDeliverablesJob(
   });
   logger.info({ jobId: job.id, organization_id, engagement_id, result: res.data, elapsedMs: Date.now() - started }, 'burn-extract-deliverables: done');
 }
+
+/**
+ * Dead-letter handler: called once BullMQ has exhausted every retry for an extraction job.
+ * Without it a run left `partial` by a transient failure (e.g. a throttle that never cleared
+ * within the retry budget) would sit `partial` forever, reading to the operator as "still
+ * extracting". Flip the latest running/partial run for the engagement to `failed` with the
+ * error so it surfaces as needing attention (a manual /extract re-enqueues a fresh run).
+ * Best-effort and never throws.
+ */
+export async function burnExtractDeliverablesDlq(
+  data: BurnExtractDeliverablesJobData,
+  err: Error,
+  logger: Logger,
+): Promise<void> {
+  try {
+    const db = getDb();
+    await db.execute(sql`
+      UPDATE burn_extraction_runs
+         SET status = 'failed',
+             error = ${String(err?.message ?? 'extraction failed after retries').slice(0, 500)},
+             finished_at = now()
+       WHERE id = (
+         SELECT id FROM burn_extraction_runs
+          WHERE organization_id = ${data.organization_id}
+            AND engagement_id = ${data.engagement_id}
+            AND status IN ('running', 'partial')
+          ORDER BY started_at DESC
+          LIMIT 1
+       )
+    `);
+    logger.error(
+      { organization_id: data.organization_id, engagement_id: data.engagement_id },
+      'burn-extract-deliverables: DLQ give-up, marked latest run failed',
+    );
+  } catch (e) {
+    logger.error({ err: e, engagement_id: data.engagement_id }, 'burn-extract-deliverables: DLQ handler failed');
+  }
+}

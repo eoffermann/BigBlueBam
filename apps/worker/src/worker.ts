@@ -274,7 +274,7 @@ import {
   type BurnExtractDeliverablesJobData,
   type BurnSweepJobData,
 } from '@bigbluebam/shared';
-import { processBurnExtractDeliverablesJob } from './jobs/burn-extract-deliverables.job.js';
+import { processBurnExtractDeliverablesJob, burnExtractDeliverablesDlq } from './jobs/burn-extract-deliverables.job.js';
 import { processBurnAttributeBatchJob } from './jobs/burn-attribute-batch.job.js';
 import { processBurnClaimReaperJob } from './jobs/burn-claim-reaper.job.js';
 import { processBurnVarianceSweepJob } from './jobs/burn-variance-sweep.job.js';
@@ -2377,6 +2377,16 @@ bulwarkRetentionQueue
 // contain an outbound HTTP call (spec 4.0 point 4).
 const BURN_ATTRIBUTE_CONCURRENCY = Number(process.env.BURN_ATTRIBUTE_CONCURRENCY ?? 2);
 
+// Shared retry/backoff/DLQ-retention options for every burn job (#99), mirroring how the
+// braid and bulwark queues configure durability. Without these a transient failure (a brief
+// burn-api restart, a DB blip) killed the job on the first attempt (BullMQ default attempts=1).
+const BURN_JOB_OPTS = {
+  attempts: 5,
+  backoff: { type: 'exponential' as const, delay: 30_000 },
+  removeOnComplete: 500,
+  removeOnFail: 1000,
+};
+
 function registerBurnSweep(
   queue: string,
   handler: (job: Job<BurnSweepJobData>, l: typeof logger) => Promise<void>,
@@ -2391,12 +2401,14 @@ function registerBurnSweep(
   });
   if (schedule) {
     const q = new Queue<BurnSweepJobData>(queue, { connection: redis });
-    q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, { name: 'run', data: {} })
+    // Each fired scheduled job carries attempts + exponential backoff, so a transient failure
+    // is retried within the tick rather than waiting a whole cron interval to run again.
+    q.upsertJobScheduler(schedule.id, { pattern: schedule.pattern }, { name: 'run', data: {}, opts: BURN_JOB_OPTS })
       .catch((err) => logger.error({ err }, `Failed to register ${queue} scheduler`));
   }
 }
 
-// Extraction: Bin bytes -> engine (checkpointed LLM extraction). Event-driven; no scheduler.
+// Extraction: Bin bytes -> engine (checkpointed LLM extraction). Event-driven; DLQ on give-up.
 const burnExtractWorker = new Worker<BurnExtractDeliverablesJobData>(
   BURN_EXTRACT_DELIVERABLES_QUEUE,
   async (job) => { await processBurnExtractDeliverablesJob(job, logger); },
@@ -2406,6 +2418,12 @@ burnExtractWorker.on('completed', (job) => { logger.info({ jobId: job.id, queue:
 burnExtractWorker.on('failed', (job, err) => {
   logger.error({ jobId: job?.id, queue: BURN_EXTRACT_DELIVERABLES_QUEUE, err }, 'Job failed');
   void recordWorkerError({ queueName: BURN_EXTRACT_DELIVERABLES_QUEUE, jobId: job?.id, jobName: job?.name, err: err as Error });
+  // On final give-up, flip the extraction run off 'partial' so it never sticks forever. The
+  // job is produced by burn-api (attempts:5 + backoff, see burn-api lib/queue.ts).
+  const maxAttempts = job?.opts?.attempts ?? 1;
+  if (job && job.attemptsMade >= maxAttempts && job.data) {
+    void burnExtractDeliverablesDlq(job.data, err as Error, logger);
+  }
 });
 
 // Attribution drain: event-driven + every 2 min. Row claims + lease renewal are the correctness
@@ -2422,7 +2440,7 @@ burnAttributeWorker.on('failed', (job, err) => {
 });
 const burnAttributeQueue = new Queue<BurnSweepJobData>(BURN_ATTRIBUTE_BATCH_QUEUE, { connection: redis });
 burnAttributeQueue
-  .upsertJobScheduler('burn-attribute-batch-2min', { pattern: '*/2 * * * *' }, { name: 'drain', data: {} })
+  .upsertJobScheduler('burn-attribute-batch-2min', { pattern: '*/2 * * * *' }, { name: 'drain', data: {}, opts: BURN_JOB_OPTS })
   .catch((err) => logger.error({ err }, 'Failed to register burn-attribute-batch scheduler'));
 
 // The SQL-only sweeps + reconcile + reaper (thin callers; locks live in burn-api).
