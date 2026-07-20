@@ -1,0 +1,122 @@
+[
+  {
+    "id": "01-vendor-portfolio",
+    "label": "Vendor portfolio",
+    "theme": "dark",
+    "file": "docs\\apps\\bursar\\screenshots\\dark\\01-vendor-portfolio.png",
+    "sha256": "f2a158d00d1637c0e78e08fdf657667ff952ca8ae6dbcc1056ccbdb269afa39b",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-07-20T21:20:46.557Z"
+  },
+  {
+    "id": "01-vendor-portfolio",
+    "label": "Vendor portfolio",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\01-vendor-portfolio.png",
+    "sha256": "e410a786e20df4364bf30079bc7ae2794b13e1aa55613317407227cc0259e20d",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:20:43.890Z"
+  },
+  {
+    "id": "02-requests-list",
+    "label": "Request list",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\02-requests-list.png",
+    "sha256": "4a4a59921b0f8dcdfbb6e2b6fd56fadeacf978a6bd9d7c81a6dc908ed0b2ae6d",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:20:49.187Z"
+  },
+  {
+    "id": "03-scope-tree",
+    "label": "Scope tree",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\03-scope-tree.png",
+    "sha256": "0952b308e56fb10505436e576e54b114cf724a3f4cc0740369e21df263ea2077",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:20:53.169Z"
+  },
+  {
+    "id": "04-leveling-matrix",
+    "label": "Leveling matrix",
+    "theme": "dark",
+    "file": "docs\\apps\\bursar\\screenshots\\dark\\04-leveling-matrix.png",
+    "sha256": "9e74539546215b65198a1bdbda82ab8762ef2c7281caea41cd8a603240317b2d",
+    "width": 2880,
+    "height": 1800,
+    "captured_at": "2026-07-20T21:21:02.774Z"
+  },
+  {
+    "id": "04-leveling-matrix",
+    "label": "Leveling matrix",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\04-leveling-matrix.png",
+    "sha256": "5ddfb3ab9a42496ef72cadb8657f133daff3e7228bc8304d894f3ae7ccd99f62",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:20:57.844Z"
+  },
+  {
+    "id": "05-exclusion-diff",
+    "label": "Exclusion diff",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\05-exclusion-diff.png",
+    "sha256": "9a52d704aa753ba93192f82eec5dc05321fff5f082a78cb292eef3a955b12bef",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:21:07.365Z"
+  },
+  {
+    "id": "06-vendor-detail",
+    "label": "Vendor detail",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\06-vendor-detail.png",
+    "sha256": "58b980a51db7fbcc6097146b92c8c1c36b866e9299f9a55e775cbf0680d25d32",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:21:26.075Z"
+  },
+  {
+    "id": "07-mismatch-inbox",
+    "label": "Mismatch inbox",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\07-mismatch-inbox.png",
+    "sha256": "8420d43b1bfde4bb8b9e66457b7a343f1741189fdb219d93f329cae7d3c6e9cf",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:21:28.456Z"
+  },
+  {
+    "id": "08-renewal-radar",
+    "label": "Renewal radar",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\08-renewal-radar.png",
+    "sha256": "65da077a3853600878c25e6163c32d94942d95270dcbbc85dd2f12872514eb3c",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:21:30.813Z"
+  },
+  {
+    "id": "09-review-queue",
+    "label": "Review queue",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\09-review-queue.png",
+    "sha256": "f3eeccd7d7bdf57920c6da7c3fa32e78842d98455ef626fb66eac3ef0bdbea1e",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:21:33.270Z"
+  },
+  {
+    "id": "10-settings",
+    "label": "Settings",
+    "theme": "light",
+    "file": "docs\\apps\\bursar\\screenshots\\light\\10-settings.png",
+    "sha256": "679f33b2a52459bca45d3e41ac62a37a795ce795826725891fc5cf7714d2d52b",
+    "width": 1440,
+    "height": 900,
+    "captured_at": "2026-07-20T21:21:35.796Z"
+  }
+]

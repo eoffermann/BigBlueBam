@@ -682,6 +682,16 @@ Burn reads a signed proposal or SOW into a priced ledger of what was sold, then 
 
 [Help](docs/apps/burn/help.md) | [Guide](docs/apps/burn/guide.md) | [MCP Tools](docs/apps/burn/mcp-tools.md)
 
+### Bursar - Vendor-side procurement and absence detection
+
+Bursar reads a request into a scope tree, then measures every vendor offer against it and tells you, in plain terms, what each offer leaves out. Reach for Bursar when you take in competing quotes and need to know which one quietly omits the thing you actually require.
+
+undefined routes, undefined schemas
+
+<img src="docs/apps/bursar/screenshots/light/01-vendor-portfolio.png" width="400" alt="Bursar - Vendor-side procurement and absence detection">
+
+[Help](docs/apps/bursar/help.md) | [Guide](docs/apps/bursar/guide.md)
+
 ### Helpdesk - Support tickets and customer portal
 
 Helpdesk is the public-facing support portal where your customers register, file tickets, track replies, and close out issues. Behind the scenes every ticket spawns a Bam task so your support staff can work it from the project board.
@@ -694,7 +704,7 @@ Helpdesk is the public-facing support portal where your customers register, file
 
 ### Introduction to BigBlueBam
 
-An overview of the whole suite: the 23 apps, how they connect, and how AI agents work alongside your team.
+An overview of the whole suite: the 24 apps, how they connect, and how AI agents work alongside your team.
 
 [Help](docs/apps/introduction/help.md) | [Guide](docs/apps/introduction/guide.md) | [Overview](docs/apps/introduction/marketing.md) | [MCP Tools](docs/apps/introduction/mcp-tools.md)
 <!-- AUTODOCS:APP_SECTIONS:END -->
@@ -1073,6 +1083,7 @@ site/               → Marketing site (served at /)
 | [Bulwark Guide](docs/apps/bulwark/guide.md) | User guide and MCP tool reference |
 | [Bureau Guide](docs/apps/bureau/guide.md) | User guide and MCP tool reference |
 | [Burn Guide](docs/apps/burn/guide.md) | User guide and MCP tool reference |
+| [Bursar Guide](docs/apps/bursar/guide.md) | User guide and MCP tool reference |
 | [Helpdesk (Support Portal) Guide](docs/apps/helpdesk/guide.md) | User guide and MCP tool reference |
 | [Introduction to BigBlueBam Guide](docs/apps/introduction/guide.md) | User guide and MCP tool reference |
 

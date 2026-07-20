@@ -28,8 +28,8 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-  expect: "Vendor Portfolio"
-  expectNot: "Please log in"
+  expect: "text=Vendor Portfolio"
+  expectNot: "text=Please log in"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 1, label: "Vendor portfolio" }
 
@@ -40,7 +40,7 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-  expect: "Vendor Portfolio"
+  expect: "text=Vendor Portfolio"
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
   doc: { order: 1, label: "Vendor portfolio" }
 
@@ -51,7 +51,7 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-  expect: "Lagoon Rescue Beacon Procurement"
+  expect: "text=Lagoon Rescue Beacon Procurement"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 2, label: "Request list" }
 
@@ -64,7 +64,7 @@
     - { action: waitFor, selector: main, optional: true }
     - { action: click, selector: "tr:has-text('Lagoon Rescue Beacon'), a:has-text('Lagoon Rescue Beacon')", optional: true }
     - { action: wait, ms: 1500 }
-  expect: "Scope nodes"
+  expect: "text=Scope nodes"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 3, label: "Scope tree" }
 
@@ -79,7 +79,7 @@
     - { action: waitFor, selector: "text=Leveling Matrix", optional: true }
     - { action: click, selector: "button:has-text('Leveling Matrix')", optional: true }
     - { action: wait, ms: 2000 }
-  expect: "Leveling Matrix"
+  expect: "text=Leveling Matrix"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 4, label: "Leveling matrix" }
 
@@ -94,7 +94,7 @@
     - { action: waitFor, selector: "text=Leveling Matrix", optional: true }
     - { action: click, selector: "button:has-text('Leveling Matrix')", optional: true }
     - { action: wait, ms: 2000 }
-  expect: "Leveling Matrix"
+  expect: "text=Leveling Matrix"
   capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
   doc: { order: 4, label: "Leveling matrix" }
 
@@ -109,7 +109,7 @@
     - { action: waitFor, selector: "text=Exclusion Diff", optional: true }
     - { action: click, selector: "button:has-text('Exclusion Diff')", optional: true }
     - { action: wait, ms: 2000 }
-  expect: "Exclusion Diff"
+  expect: "text=Exclusion Diff"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 5, label: "Exclusion diff" }
 
@@ -123,7 +123,7 @@
     - { action: click, selector: "tr:has-text('Radio Parts')", optional: true }
     - { action: click, selector: "table tbody tr", optional: true }
     - { action: wait, ms: 1500 }
-  expect: "Baseline"
+  expect: "text=Baseline"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 6, label: "Vendor detail" }
 
@@ -134,7 +134,7 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-  expect: "Mismatch Inbox"
+  expect: "text=Mismatch Inbox"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 7, label: "Mismatch inbox" }
 
@@ -145,7 +145,7 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-  expect: "Renewal Radar"
+  expect: "text=Renewal Radar"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 8, label: "Renewal radar" }
 
@@ -156,7 +156,7 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-  expect: "Review"
+  expect: "text=Review Queue"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 9, label: "Review queue" }
 
@@ -167,6 +167,6 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main, optional: true }
-  expect: "Settings"
+  expect: "text=Settings"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 10, label: "Settings" }

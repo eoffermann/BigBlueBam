@@ -13,6 +13,20 @@ function pgRows<T>(raw: unknown): T[] {
   return (Array.isArray(raw) ? raw : ((raw as { rows?: unknown[] }).rows ?? [])) as T[];
 }
 
+/**
+ * Project a mismatch row into the response shape the SPA + tests consume: the stored
+ * `dollars_at_stake_minor` (a bigint that raw SQL returns as a STRING) surfaces as a numeric
+ * `amount_minor`, and `quantified` states whether the detector could value the finding. A finding
+ * the detector cannot value keeps amount_minor null and quantified false ("not quantified"),
+ * never a fabricated 0. amount_minor is a floored key, so a non-privileged viewer still has it
+ * removed by redactFinancialFields at the route.
+ */
+function projectMismatch<T extends Record<string, unknown>>(row: T): T & { amount_minor: number | null; quantified: boolean } {
+  const raw = (row as { dollars_at_stake_minor?: unknown }).dollars_at_stake_minor;
+  const amount = raw === null || raw === undefined ? null : Number(raw);
+  return { ...row, amount_minor: amount, quantified: amount !== null };
+}
+
 export interface MismatchListParams {
   cursor?: string;
   limit: number;
@@ -40,9 +54,10 @@ export async function listMismatches(viewer: Viewer, params: MismatchListParams)
          LIMIT ${params.limit + 1}
       `),
     );
-    if (rows.length <= params.limit) return { data: rows, next_cursor: null as string | null };
-    const items = rows.slice(0, params.limit);
-    const last = items[items.length - 1]!;
+    const projected = rows.map((r) => projectMismatch(r as Record<string, unknown>));
+    if (projected.length <= params.limit) return { data: projected, next_cursor: null as string | null };
+    const items = projected.slice(0, params.limit);
+    const last = items[items.length - 1] as unknown as { created_at: string; id: string };
     return { data: items, next_cursor: encodeCursor({ createdAt: String(last.created_at), id: last.id }) };
   });
 }
@@ -53,7 +68,7 @@ export async function getMismatch(viewer: Viewer, id: string) {
       await tx.execute(sql`SELECT * FROM bursar_mismatches WHERE organization_id = ${viewer.org_id} AND id = ${id} LIMIT 1`),
     )[0];
     if (!row) throw new NotFoundError('Mismatch not found');
-    return { data: row };
+    return { data: projectMismatch(row) };
   });
 }
 

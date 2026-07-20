@@ -135,7 +135,7 @@ async function sweepOneOrg(
          )
         RETURNING id, vendor_id, normalized_payee, payee_raw, occurred_on::text AS occurred_on, amount_minor, currency
       `),
-    );
+    ).map((r) => ({ ...r, amount_minor: r.amount_minor == null ? r.amount_minor : Number(r.amount_minor) }));
 
     logger.info(
       { orgId, orgIdx, claimed: claimed.length, elapsedMs: Date.now() - started },
@@ -364,7 +364,7 @@ async function runUnbaselinedPass(
             WHERE a.organization_id = se.organization_id AND a.vendor_id = se.vendor_id AND a.status = 'active'
          )
     `),
-  );
+  ).map((r) => ({ ...r, amount_minor: r.amount_minor == null ? r.amount_minor : Number(r.amount_minor) }));
   const today = new Date().toISOString().slice(0, 10);
   const findings = detectUnbaselinedVendors(events, today);
   logger.info({ orgId, shadow_payees: findings.length, elapsedMs: Date.now() - started }, 'bursar-drift-sweep: unbaselined pass');

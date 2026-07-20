@@ -3690,6 +3690,99 @@
     ]
   },
   {
+    "id": "bursar",
+    "name": "Bursar",
+    "description": "Vendor Procurement",
+    "toolCount": 20,
+    "categories": [
+      {
+        "name": "Tools",
+        "tools": [
+          {
+            "name": "bursar_draft_clarification",
+            "description": "Draft a vendor clarification letter grounded in a request and (optionally) a specific offer (POST /drafts/clarification -> a confidential bursar_drafts row). THE DRAFT IS NEVER SENT: it lands in the owner-scoped HITL review queue and a human approves or rejects it (bursar.draft.approve, no tool). Grounding is derived server-side by buildDraftGrounding(offer_id, request_id) - you cannot supply arbitrary grounding text, only a request/offer to ground on and a human intent prompt. Two-step confirm because generating grounds confidential offer content: call once WITHOUT confirm_token to stage a token, then again WITH it to execute."
+          },
+          {
+            "name": "bursar_exclusion_diff",
+            "description": "The §4.7 exclusion diff for a request (GET /requests/:id/exclusion-diff): every mandatory scope node appears exactly once per offer, with its verdict and (for withheld rows) a withheld_reason. Blanket offers render \"this offer claims blanket coverage; here is what it does not itemize\". This is the completeness invariant - a node is never silently dropped."
+          },
+          {
+            "name": "bursar_get_baseline",
+            "description": "The FROZEN baseline ledger for an award (GET /awards/:id/baseline): the immutable snapshot of what was included, knowingly excluded (excluded_at_award), and absent at award. This is the ground truth every post-award drift finding is measured against; it is read-only, with no write path. Money is floored, so pass asker_user_id."
+          },
+          {
+            "name": "bursar_get_coverage",
+            "description": "One coverage row in full (GET /coverage/:id): the verdict, the cited offer span, the matched lines, and for an `absent` verdict the rejected candidates with reasons and any overlap / withheld_reason. Passes through the seal predicate; money is floored, so pass asker_user_id."
+          },
+          {
+            "name": "bursar_get_matrix",
+            "description": "The leveling matrix for a request (GET /requests/:id/matrix): scope nodes as rows, offers as columns, each cell a coverage verdict (covered / partial / excluded_explicit / absent / ambiguous). Passes through the shared seal predicate - a sealed offer's figures are withheld until its seal opens. Money fields are floored; pass asker_user_id."
+          },
+          {
+            "name": "bursar_get_request",
+            "description": "One request with its header, budget, category, and scope status (GET /requests/:id). Cited source records are can_access-filtered per reader; pass asker_user_id so the filter runs for the human you act for."
+          },
+          {
+            "name": "bursar_get_scope_tree",
+            "description": "The scope tree for a request (GET /requests/:id/scope): every node with its normative_strength (mandatory / should_have / nice_to_have / informational), derived_from (request / library / rival_offer / human), review_status, and citations. Rival-derived proposals are marked and are NOT counted until a human promotes them."
+          },
+          {
+            "name": "bursar_get_totals",
+            "description": "Comparable totals for a request's offers (GET /requests/:id/totals): stated total, gap_adjusted total (stated plus the valued cost of every absence), and the count of unvalued gaps. REFUSES to render a gap_adjusted number when it cannot value a gap - it reports the unpriced-gap count instead of inventing a figure. Passes through the seal predicate; money is floored, so pass asker_user_id."
+          },
+          {
+            "name": "bursar_level_quotes",
+            "description": "Run the absence engine over a request's offers: score every scope node against every offer, compute gap-adjusted comparable totals, and detect exclusions (POST /requests/:id/level). ASYNC-START: returns a run_id (202); poll bursar_list_leveling_runs for progress. Pass dry_run=true to get only the cost preflight (estimated LLM calls/tokens/wall-clock + would_exceed) without starting a run. Pass an existing run_id to continue a partial run rather than minting a new one. Not confirm-gated: leveling is a re-runnable compute trigger, not an irreversible write."
+          },
+          {
+            "name": "bursar_list_awards",
+            "description": "List awards (GET /awards): active, superseded, and terminated award headers with their vendor, request, term dates, and renewal settings. Filter by status, request_id, or vendor_id. Contract money is floored, so pass asker_user_id."
+          },
+          {
+            "name": "bursar_list_leveling_runs",
+            "description": "Authoritative progress for a request's leveling runs (GET /requests/:id/leveling-runs): status (pending / running / partial / done / failed), how many nodes/offers were scored, and the resume cursor. Poll this after bursar_level_quotes returns a run_id."
+          },
+          {
+            "name": "bursar_list_offers",
+            "description": "List the offers under a request (GET /requests/:id/offers) with their vendor, source format, normalization status, and seal state. Passes through the shared seal predicate; sealed offers withhold their figures. Money is floored, so pass asker_user_id."
+          },
+          {
+            "name": "bursar_list_requests",
+            "description": "List procurement requests (GET /requests). Filter by status."
+          },
+          {
+            "name": "bursar_mismatches",
+            "description": "The post-award mismatch inbox: price_drift, scope_divergence, unbaselined_vendor, renewal_cliff, and manipulation findings (GET /mismatches). A finding's dollars_at_stake is a money field and is floored without bursar.spend.read_all. \"Not quantified\" NEVER becomes a number."
+          },
+          {
+            "name": "bursar_renewals_due",
+            "description": "The renewal radar: awards approaching their notice deadline, banded t_minus_90/60/30/7 with an auto-renew-unreviewed severity bump (GET /renewals). Filter by status."
+          },
+          {
+            "name": "bursar_resolve_vendor",
+            "description": "Read-only alias resolution. With vendor_id: the confirmed payee aliases that resolve to that vendor (GET /vendors/:id/aliases) - use this to see which messy card strings map to a vendor. Without vendor_id: the pending alias-review queue (GET /vendors/alias-review), the payee strings the resolver could not confidently place. This tool NEVER writes an alias; confirming or deleting one is a human bursar.vendor.write action with no tool."
+          },
+          {
+            "name": "bursar_scope_gap",
+            "description": "Advisory scope-gap check on a proposed money-out subject (POST /gate/scope-gap). ADVISORY ONLY (spec 9): returns pass|advisory plus cited reason codes and records a bursar_gate_checks row. There is NO enforcement, NO bill-api preHandler, and NO blocking verdict - it never stops a charge. Use it to surface \"this vendor has no award on file\" or \"this spend has no baseline line\" as advice."
+          },
+          {
+            "name": "bursar_spend_by_vendor",
+            "description": "Per-vendor (and per-shadow-payee) spend rollup (GET /spend/by-vendor). The unmatched-payee buckets are the shadow-IT product: spend with no resolved vendor keeps vendor_id NULL and rolls up by normalized_payee. Every amount is floored without bursar.spend.read_all; pass asker_user_id so the intersection is computed for the human you act for."
+          },
+          {
+            "name": "bursar_upsert_scope_node",
+            "description": "Create a human scope node under a request, or edit an existing node (POST /requests/:id/scope/nodes when node_id is absent; PATCH /scope-nodes/:id when present). Editing the ruler a bid is scored against is consequential, so this is a two-step confirm: call once WITHOUT confirm_token to stage a Redis-backed token, then call again WITH the returned confirm_token to execute. This tool does NOT confirm scope or promote rival nodes - those are human-only gates with no tool."
+          },
+          {
+            "name": "bursar_vendor_view",
+            "description": "One vendor with its aliases, award chain, baseline, spend, findings, and orphaned-custody badge (GET /vendors/:id). Per-vendor spend and money fields are floored for a caller without bursar.spend.read_all; pass asker_user_id so the flooring is computed for the human you act for."
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "platform",
     "name": "Platform",
     "description": "Cross-cutting agent and platform tools available across every app: identity, audit, heartbeat, agent policies, proposals, visibility preflight, unified activity, cross-app search, resolvers, composite views, entity links, attachments, dedupe, expertise, webhooks, and more.",

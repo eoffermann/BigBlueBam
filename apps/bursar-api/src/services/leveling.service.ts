@@ -256,7 +256,7 @@ export async function getMatrix(viewer: Viewer, requestId: string) {
          WHERE c.organization_id = ${viewer.org_id} AND o.request_id = ${requestId}
       `),
     );
-    const totals = pgRows<Record<string, unknown>>(
+    const totalsRaw = pgRows<Record<string, unknown>>(
       await tx.execute(sql`
         SELECT t.offer_id, t.total_kind, t.amount_minor, t.renderable, t.unvalued_gap_count, t.estimated
           FROM bursar_offer_totals t
@@ -264,6 +264,12 @@ export async function getMatrix(viewer: Viewer, requestId: string) {
          WHERE t.organization_id = ${viewer.org_id} AND o.request_id = ${requestId}
       `),
     );
+    // amount_minor is a bigint column; raw SQL (not the Drizzle typed select) returns it as a
+    // string, so coerce the money field back to a number to honor the API contract (spec 10).
+    const totals = totalsRaw.map((t): Record<string, unknown> => ({
+      ...t,
+      amount_minor: t.amount_minor === null || t.amount_minor === undefined ? null : Number(t.amount_minor),
+    }));
     // gap_adjusted sorts the Matrix ONLY when renderable for every offer (spec 10.2); otherwise it
     // falls back to `stated`.
     const gapAdjusted = totals.filter((t) => t.total_kind === 'gap_adjusted');
@@ -346,7 +352,13 @@ export async function getTotals(viewer: Viewer, requestId: string) {
          ORDER BY t.offer_id, t.total_kind
       `),
     );
-    return { data: totals };
+    // amount_minor is a bigint column; coerce to a number (see getMatrix) so the money field is
+    // not serialized as a string.
+    const coerced = totals.map((t) => ({
+      ...t,
+      amount_minor: t.amount_minor === null || t.amount_minor === undefined ? null : Number(t.amount_minor),
+    }));
+    return { data: coerced };
   });
 }
 

@@ -60,6 +60,7 @@ export default defineConfig({
     appProject('bolt'),
     appProject('bulwark'),
     appProject('burn'),
+    appProject('bursar'),
     appProject('bond'),
     appProject('book'),
     appProject('braid'),

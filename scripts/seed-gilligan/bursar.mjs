@@ -575,7 +575,93 @@ async function main() {
   //    into price_drift / scope_divergence / unbaselined_vendor findings.
   await seedSpend();
 
+  // 5. The Island Weather Feed data-feed award + its priced baseline, plus the payee back-link,
+  //    so the post-award detectors light up EXACTLY as the header promises: a 40% price_drift on
+  //    the drifted feed invoice, and a t_minus_60 renewal cliff (BURSAR_SEED_EXPECTATIONS.detectors).
+  //    The imported 'ISLAND WX FEED' spend arrives with vendor_id NULL (import did not auto-link it
+  //    to the vendor the confidence-1.0 alias already resolves), so nothing is award-scoped and the
+  //    drift sweep raises no finding for it. This deterministic step back-links spend from the alias
+  //    table and freezes a $1,000 feed baseline the $1,400 invoice drifts 40% above.
+  await seedWeatherDetectors(vendorIds);
+
   console.log('[bursar] done: 14-node confirmed scope, 4 leveled offers, Radio award, detector spend');
+}
+
+// Island Weather Feed award + baseline + spend back-link (see caller). Self-contained: opens its own
+// postgres connection because main() has already closed its `sql` handle by the time spend is imported.
+// Idempotent via ON CONFLICT DO NOTHING and a null-guarded back-link, so re-runs are no-ops.
+async function seedWeatherDetectors(vendorIds) {
+  const weatherVendorId = vendorIds.weather;
+  if (!weatherVendorId) {
+    console.error('[bursar] weather vendor id missing; skipping detector award');
+    return;
+  }
+  const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+  try {
+    const [req] = await sql`
+      SELECT id, organization_id, created_by FROM bursar_requests WHERE title = ${REQUEST_TITLE} LIMIT 1
+    `;
+    if (!req) {
+      console.error('[bursar] request row not found; skipping detector award');
+      return;
+    }
+    const org = req.organization_id;
+    const dayISO = (deltaDays) =>
+      new Date(Date.now() + deltaDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const awardId = duid(req.id, 'award', 'weather');
+    const baselineId = duid(req.id, 'baseline', 'weather', '0');
+
+    await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_org_id', ${org}, true)`;
+
+      // Back-link any imported spend to the vendor its confidence-scored alias already resolves to.
+      // Fixes the ISLAND WX FEED rows that landed with vendor_id NULL; general (alias-driven), so it
+      // touches nothing that is already linked.
+      await tx`
+        UPDATE bursar_spend_events se
+           SET vendor_id = a.vendor_id
+          FROM bursar_payee_aliases a
+         WHERE se.organization_id = ${org}
+           AND a.organization_id = se.organization_id
+           AND a.normalized_payee = se.normalized_payee
+           AND a.vendor_id IS NOT NULL
+           AND se.vendor_id IS NULL
+      `;
+
+      // A bounded, active data-feed award on the same request. term_end 80d out with a 30d notice
+      // puts the notice deadline 50d out -> the t_minus_60 renewal band. chain_root_id self-roots.
+      await tx`
+        INSERT INTO bursar_awards (
+          id, organization_id, request_id, offer_id, vendor_id, chain_root_id, currency,
+          term_start, term_end, auto_renew, renewal_notice_days, timezone, status, awarded_by, awarded_at
+        ) VALUES (
+          ${awardId}, ${org}, ${req.id}, NULL, ${weatherVendorId}, ${awardId}, 'USD',
+          ${dayISO(-210)}, ${dayISO(80)}, false, 30, 'UTC', 'active', ${req.created_by}, now()
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+
+      // One priced INCLUDED baseline item. Its title normalizes to the same string as the
+      // 'ISLAND WX FEED' payee, so the deterministic line matcher pairs the $1,400 invoice to this
+      // $1,000 baseline and evaluatePriceDrift reads a 40% overage.
+      await tx`
+        INSERT INTO bursar_baseline_items (
+          id, organization_id, award_id, ordinal, kind, title, description, currency,
+          extended_minor, coverage_verdict_at_award, cited_span
+        ) VALUES (
+          ${baselineId}, ${org}, ${awardId}, 0, 'included', 'Island WX Feed',
+          'Monthly island weather + sea-state data feed subscription.', 'USD',
+          100000, 'covered', ${sql.json({})}
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+    });
+    console.log('[bursar] weather award + $1,000 feed baseline + spend back-link ready (price_drift + renewal fuel)');
+  } catch (err) {
+    console.error('[bursar] weather detector seed failed:', err.message);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
 }
 
 // Import the observed spend statement the drift detectors key off. amount_minor is signed minor
