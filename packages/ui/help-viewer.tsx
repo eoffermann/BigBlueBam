@@ -43,6 +43,27 @@ export const HelpViewer: FC<HelpViewerProps> = ({ appSlug, className, onBack }) 
     retry: 1,
   });
 
+  // Rewrite relative image/link URLs to /docs/apps/<appSlug>/ after render. guide.md
+  // uses paths like `screenshots/light/01-x.png`; without this they resolve against
+  // the SPA route (e.g. /bursar/help -> /bursar/screenshots/...) and 404. The Help
+  // Center (help-center.tsx) does the same rewrite for help.md; HelpViewer was missing
+  // it, so every app's full Help page showed broken images.
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!markdown || !root) return;
+    const base = `/docs/apps/${appSlug}/`;
+    const isAbsolute = (u: string) => /^(https?:|\/|#|data:|mailto:)/.test(u);
+    root.querySelectorAll('img').forEach((img) => {
+      const src = img.getAttribute('src') || '';
+      if (src && !isAbsolute(src)) img.setAttribute('src', base + src);
+      img.setAttribute('loading', 'lazy');
+    });
+    root.querySelectorAll('a').forEach((a) => {
+      const href = a.getAttribute('href') || '';
+      if (href && !isAbsolute(href)) a.setAttribute('href', base + href);
+    });
+  }, [markdown, appSlug]);
+
   // Scroll to anchor from URL hash after content renders
   useEffect(() => {
     if (!markdown || !contentRef.current) return;
