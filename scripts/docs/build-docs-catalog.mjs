@@ -62,6 +62,12 @@ function main() {
   const products = [];
 
   for (const app of apps) {
+    // HARD RULE: an app registered in LAUNCHPAD_CATALOG MUST be complete - it must
+    // have MCP tools (an APP_TOOL_MODULES mapping). A Launchpad app with no mapping
+    // is an incomplete app that leaked into the "ready for consumption" surface;
+    // parseAppModules pushes a structural warning and the run exits non-zero (see
+    // isStructuralWarning below). This fails CI on purpose - the Launchpad entry is
+    // the LAST thing a build adds, only once the app is genuinely ready.
     const groups = parseAppModules(app.id, warnings);
 
     // Build categories. Multi-module apps keep one category per module with a

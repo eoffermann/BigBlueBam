@@ -67,6 +67,16 @@ jobs:
       - name: Check help index drift
         run: pnpm help:check
 
+      # Launchpad completeness gate: the Launchpad is the suite's "ready for
+      # consumption" contract, so an app may appear in LAUNCHPAD_CATALOG only once
+      # it is complete to the suite-common standard (MCP tools, help doc + index,
+      # marketing section, User-Story screenshots). An app that lands in the
+      # Launchpad half-built (or whose autonomous build died mid-flight) hard-fails
+      # here on purpose - it must not reach a user. The autonomous loop treats this
+      # red as a trigger to resume engineering on the app, not to weaken the gate.
+      - name: Check Launchpad app completeness
+        run: pnpm check:app-completeness
+
       - name: Check docs catalog drift
         run: pnpm docs:catalog:check
 
