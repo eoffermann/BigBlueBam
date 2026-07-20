@@ -446,3 +446,63 @@ export interface BursarLevelJobData {
   request_id: string;
   run_id: string;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Awards + baseline freeze (M7)                                     */
+/* ------------------------------------------------------------------ */
+
+// active | superseded | terminated (mirrors the bursar_awards status CHECK).
+export const BursarAwardStatus = z.enum(['active', 'superseded', 'terminated']);
+export type BursarAwardStatus = z.infer<typeof BursarAwardStatus>;
+
+// The FROZEN baseline item kind CHECK (spec 7.1): what you got, what you knowingly excluded,
+// and what was absent at award.
+export const BursarBaselineKind = z.enum(['included', 'excluded_at_award', 'absent_at_award']);
+export type BursarBaselineKind = z.infer<typeof BursarBaselineKind>;
+
+// An ISO date (YYYY-MM-DD) or null. term_start / term_end are open-ended when null (spec 7.3).
+const bursarDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
+  .nullable();
+
+// POST /awards. Freezes the awarded offer's accepted tree into an immutable baseline in one
+// org-scoped transaction (spec 7.1). vendor_id/currency default from the offer when omitted.
+export const bursarAwardCreateSchema = z.object({
+  request_id: z.string().uuid(),
+  offer_id: z.string().uuid(),
+  vendor_id: z.string().uuid().nullable().optional(),
+  currency: z.string().length(3).optional(),
+  term_start: bursarDate.optional(),
+  term_end: bursarDate.optional(),
+  auto_renew: z.boolean().default(false),
+  renewal_notice_days: z.coerce.number().int().min(0).nullable().optional(),
+  timezone: z.string().max(64).default('UTC'),
+  contract_bin_asset_id: z.string().uuid().nullable().optional(),
+});
+export type BursarAwardCreate = z.infer<typeof bursarAwardCreateSchema>;
+
+// POST /awards/:id/amend. Records a NEW award that supersedes the target, inheriting its
+// request and chain root (spec 7.2). Every field is optional; omitted fields inherit the
+// predecessor's value. offer_id may re-award a different offer.
+export const bursarAwardAmendSchema = z
+  .object({
+    offer_id: z.string().uuid(),
+    vendor_id: z.string().uuid().nullable(),
+    currency: z.string().length(3),
+    term_start: bursarDate,
+    term_end: bursarDate,
+    auto_renew: z.boolean(),
+    renewal_notice_days: z.coerce.number().int().min(0).nullable(),
+    timezone: z.string().max(64),
+    contract_bin_asset_id: z.string().uuid().nullable(),
+  })
+  .partial();
+export type BursarAwardAmend = z.infer<typeof bursarAwardAmendSchema>;
+
+// POST /awards/:id/terminate. Flips an active award to `terminated` with an audit reason. The
+// baseline stays immutable; termination is a header-only status change (spec 7).
+export const bursarAwardTerminateSchema = z.object({
+  reason: z.string().min(1).max(2000),
+});
+export type BursarAwardTerminate = z.infer<typeof bursarAwardTerminateSchema>;

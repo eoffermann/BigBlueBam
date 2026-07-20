@@ -52,3 +52,6 @@ export { bursarDrafts } from './bursar-drafts.js';
 
 // Settings audit (migration 0252)
 export { bursarSettingsAudit } from './bursar-settings-audit.js';
+
+// Shared platform table (migration 0132) - local view Bursar writes award links into.
+export { entityLinks } from './entity-links.js';

@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, integer, date, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, boolean, integer, date, timestamp, index } from 'drizzle-orm/pg-core';
 import { organizations, users } from './bbb-refs.js';
 import { bursarRequests } from './bursar-requests.js';
 import { bursarOffers } from './bursar-offers.js';
@@ -37,6 +37,12 @@ export const bursarAwards = pgTable(
       .notNull()
       .references(() => users.id),
     awarded_at: timestamp('awarded_at', { withTimezone: true }).defaultNow().notNull(),
+    // Lifecycle stamps (migration 0256): when a predecessor is superseded by an amendment, and
+    // who/when/why an award was terminated. All nullable; set only on the respective action.
+    superseded_at: timestamp('superseded_at', { withTimezone: true }),
+    terminated_at: timestamp('terminated_at', { withTimezone: true }),
+    terminated_by: uuid('terminated_by').references(() => users.id, { onDelete: 'set null' }),
+    terminated_reason: text('terminated_reason'),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

@@ -26,6 +26,7 @@ import settingsRoutes from './routes/settings.routes.js';
 import scopeRoutes from './routes/scope.routes.js';
 import offerRoutes from './routes/offers.routes.js';
 import levelingRoutes from './routes/leveling.routes.js';
+import awardRoutes from './routes/awards.routes.js';
 import internalRoutes from './routes/internal.routes.js';
 
 // ── Boot assertion, FIRST, before anything binds a port or opens a pool (spec 13.3).
@@ -147,6 +148,8 @@ await fastify.register(
     await v1.register(offerRoutes);
     // M5: the absence engine + coverage-collapse cluster (leveling, matrix, diff, totals, review).
     await v1.register(levelingRoutes);
+    // M7: award + baseline freeze + immutability (the hinge to the post-award half).
+    await v1.register(awardRoutes);
     await v1.register(internalRoutes);
   },
   { prefix: '/v1' },

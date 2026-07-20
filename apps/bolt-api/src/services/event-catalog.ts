@@ -3365,6 +3365,33 @@ const bursarEvents: EventDefinition[] = [
       { name: 'gap_count', type: 'number', description: 'Published mandatory gaps for this offer' },
     ],
   },
+  {
+    source: 'bursar',
+    event_type: 'award.recorded',
+    description:
+      'Fired when an award is recorded and its baseline frozen (spec 7.1, 16.1, M7). The awarded offer\'s accepted tree becomes an immutable baseline in one transaction. Refs + the vendor scalar only; the frozen ledger lives on bursar_baseline_items.',
+    payload_schema: [
+      { name: 'award.id', type: 'uuid', description: 'The recorded award' },
+      { name: 'request.id', type: 'uuid', description: 'The parent request' },
+      { name: 'vendor.id', type: 'uuid', description: 'The awarded vendor (nullable)' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+  {
+    source: 'bursar',
+    event_type: 'baseline.frozen',
+    description:
+      'Fired alongside award.recorded when the immutable baseline is written (spec 7.1, 16.1, M7): one item per scope node, classified included / excluded_at_award / absent_at_award. Carries the three-way counts scalar only, never the frozen line content. This is the fixed point the M8 drift detectors measure reality against.',
+    payload_schema: [
+      { name: 'award.id', type: 'uuid', description: 'The award whose baseline froze' },
+      { name: 'request.id', type: 'uuid', description: 'The parent request' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+      { name: 'item_count', type: 'number', description: 'Total frozen baseline items (== scope node count)' },
+      { name: 'included', type: 'number', description: 'Items you got' },
+      { name: 'excluded_at_award', type: 'number', description: 'Items knowingly excluded at award' },
+      { name: 'absent_at_award', type: 'number', description: 'Items absent at award' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
