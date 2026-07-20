@@ -131,15 +131,15 @@ two failure modes are the sharpest in the spec.
 
 ## M6 - Engines, workers, events
 
-- [ ] Extraction, attribution, variance, inverse check, revaluation, change-order drafting
-- [ ] **11 queues:** `burn-extract-deliverables`, `burn-attribute-batch`, `burn-claim-reaper`, `burn-variance-sweep`, `burn-revalue`, `burn-silent-deliverable-sweep`, `burn-rollup-refresh`, `burn-calibration-recompute`, `burn-proposal-reconcile`, `burn-retention`, `burn-embed-sync`
-- [ ] `pg_advisory_xact_lock` in burn-api's sweep service. **HARD RULE: no lock-holding transaction contains an outbound HTTP call** - which is why extraction and attribute-batch use row claims, with each chunk checkpoint committed in its own transaction
-- [ ] 10 `burn` events plus 4 backfilled `bill` events in `event-catalog.ts`; `source:` precedes `event_type:` within 300 chars or the drift-guard regex misses it
-- [ ] Payloads carry refs and coarse bands only - no amounts, no `margin_pct`
-- [ ] **`burn-dispatch-hook.ts` in bolt-api**, wired into `event-ingestion.routes.ts` beside `dispatchToBraid`, forwarding to `${BURN_API_INTERNAL_URL}/v1/internal/events`, gated by a per-org Redis binding set on the `gate.service.ts` shape; plus `BURN_API_INTERNAL_URL` in bolt-api compose and catalog; plus the 16 subscriptions from §8.3
-- [ ] **LLM concurrency cap (§9.7.1):** Redis token bucket keyed `llm:bucket:<service>` in front of `POST /internal/llm/chat`; `LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE=4`, `LLM_INTERNAL_RATE_PER_MINUTE=120`, both in `env-hints.mjs` and `.env.example`; 429 + `Retry-After`; `burn-attribute-batch` defers a 429 to `pending_attribution`, never `unscoped`; extraction retries from checkpoint; done criterion is the two-service saturation test
-- [ ] `check:bolt-catalog` added to `lint.yml` (it exists in `package.json:35` and runs in no workflow today)
-- [ ] §12.1 assertions for §4, §8
+- [x] Extraction, attribution, variance, inverse check, revaluation, change-order drafting
+- [x] **11 queues:** `burn-extract-deliverables`, `burn-attribute-batch`, `burn-claim-reaper`, `burn-variance-sweep`, `burn-revalue`, `burn-silent-deliverable-sweep`, `burn-rollup-refresh`, `burn-calibration-recompute`, `burn-proposal-reconcile`, `burn-retention`, `burn-embed-sync`
+- [x] `pg_advisory_xact_lock` in burn-api's sweep service. **HARD RULE: no lock-holding transaction contains an outbound HTTP call** - which is why extraction and attribute-batch use row claims, with each chunk checkpoint committed in its own transaction
+- [x] 10 `burn` events plus 4 backfilled `bill` events in `event-catalog.ts`; `source:` precedes `event_type:` within 300 chars or the drift-guard regex misses it
+- [x] Payloads carry refs and coarse bands only - no amounts, no `margin_pct`
+- [x] **`burn-dispatch-hook.ts` in bolt-api**, wired into `event-ingestion.routes.ts` beside `dispatchToBraid`, forwarding to `${BURN_API_INTERNAL_URL}/v1/internal/events`, gated by a per-org Redis binding set on the `gate.service.ts` shape; plus `BURN_API_INTERNAL_URL` in bolt-api compose and catalog; plus the 16 subscriptions from §8.3
+- [x] **LLM concurrency cap (§9.7.1):** Redis token bucket keyed `llm:bucket:<service>` in front of `POST /internal/llm/chat`; `LLM_INTERNAL_MAX_CONCURRENT_PER_SERVICE=4`, `LLM_INTERNAL_RATE_PER_MINUTE=120`, both in `env-hints.mjs` and `.env.example`; 429 + `Retry-After`; `burn-attribute-batch` defers a 429 to `pending_attribution`, never `unscoped`; extraction retries from checkpoint; done criterion is the two-service saturation test
+- [x] `check:bolt-catalog` added to `lint.yml` (it exists in `package.json:35` and runs in no workflow today)
+- [x] §12.1 assertions for §4, §8
 
 ## M6b - bill-api gate integration (the flagship feature)
 
@@ -160,38 +160,38 @@ two failure modes are the sharpest in the spec.
 
 ## M8 - Launchpad and infra
 
-- [ ] `LAUNCHPAD_APP_IDS` + `LAUNCHPAD_CATALOG` row
-- [ ] `import { Flame } from 'lucide-react'` + a `'flame': Flame` entry in `ICONS` at `packages/ui/launchpad.tsx:65` (absent today; falls back to `Box` at `:226`)
-- [ ] Launchpad grid overflow checked; condense in this change or state explicitly it still fits and file a `best-practices` issue
-- [ ] `docker-compose.yml` burn-api service (4022, `migrate` `service_completed_successfully`, postgres/redis `service_healthy`); `frontend.depends_on: burn-api`; `/burn/` added to the `frontend` entry's `public_paths`
-- [ ] Edit **the two source nginx configs only**, then regenerate `nginx.railway.conf` via `node scripts/gen-railway-configs.mjs`. Do not hand-edit `:8080` or the `$rw_upstream_NN` index. Reconcile the pre-existing `bill`/`bay`/`blip` alternation drift in the same change
-- [ ] `apps/frontend/Dockerfile` SPA lines; `services.mjs` catalog entry with `healthcheck: '/health'`; `gen-railway-configs.mjs`; `CLAUDE.md` inventory and routes; `.env.example`
+- [x] `LAUNCHPAD_APP_IDS` + `LAUNCHPAD_CATALOG` row
+- [x] `import { Flame } from 'lucide-react'` + a `'flame': Flame` entry in `ICONS` at `packages/ui/launchpad.tsx:65` (absent today; falls back to `Box` at `:226`)
+- [x] Launchpad grid overflow checked; condense in this change or state explicitly it still fits and file a `best-practices` issue
+- [x] `docker-compose.yml` burn-api service (4022, `migrate` `service_completed_successfully`, postgres/redis `service_healthy`); `frontend.depends_on: burn-api`; `/burn/` added to the `frontend` entry's `public_paths`
+- [x] Edit **the two source nginx configs only**, then regenerate `nginx.railway.conf` via `node scripts/gen-railway-configs.mjs`. Do not hand-edit `:8080` or the `$rw_upstream_NN` index. Reconcile the pre-existing `bill`/`bay`/`blip` alternation drift in the same change
+- [x] `apps/frontend/Dockerfile` SPA lines; `services.mjs` catalog entry with `healthcheck: '/health'`; `gen-railway-configs.mjs`; `CLAUDE.md` inventory and routes; `.env.example`
 
 ## M9 - Deploy and test
 
-- [ ] Two migrate passes per §9.8
-- [ ] **Rebuild and force-recreate all ten:** `burn-api bill-api bolt-api worker mcp-server api basis-api braid-api bulwark-api frontend`. `frontend` is rebuilt **twice** - here for the SPA, and again in M10 after `help:index` for `docs/apps/` at `apps/frontend/Dockerfile:232`. Without the M9 rebuild, `/burn/` 404s and every Playwright story fails as a routing bug
-- [ ] Eleven convention gates (§12.4's ten plus M0's new `check:env-hints`)
-- [ ] §12.1 fully implemented; **no assertion deferred**
-- [ ] `appProject('burn')` in `apps/e2e/playwright.config.ts` projects array, specs at `apps/e2e/src/apps/burn/tests/` (`appProject` hardcodes `testDir: ./src/apps/${name}/tests`). Note `bin`, `bay`, `blip`, `bureau`, `blueprint` are all absent from that array today, so this failure is live in the repo and easy to repeat
-- [ ] Playwright user stories against gilligan, each verifying backend state via curl AND psql
-- [ ] `apps/integration-tests` case for the full expense → precheck → event → dispatch hook → work item → attribution → rollup chain, plus five negatives: `BURN_API_INTERNAL_URL` unset, burn-api stopped, breaker open, bill-api 404 on `/internal/rates/resolve`, Redis unreachable
-- [ ] A representative slice driven through MCP tools alone, producing the same rows and events
+- [x] Two migrate passes per §9.8
+- [x] **Rebuild and force-recreate all ten:** `burn-api bill-api bolt-api worker mcp-server api basis-api braid-api bulwark-api frontend`. `frontend` is rebuilt **twice** - here for the SPA, and again in M10 after `help:index` for `docs/apps/` at `apps/frontend/Dockerfile:232`. Without the M9 rebuild, `/burn/` 404s and every Playwright story fails as a routing bug
+- [x] Eleven convention gates (§12.4's ten plus M0's new `check:env-hints`)
+- [x] §12.1 fully implemented; **no assertion deferred**
+- [x] `appProject('burn')` in `apps/e2e/playwright.config.ts` projects array, specs at `apps/e2e/src/apps/burn/tests/` (`appProject` hardcodes `testDir: ./src/apps/${name}/tests`). Note `bin`, `bay`, `blip`, `bureau`, `blueprint` are all absent from that array today, so this failure is live in the repo and easy to repeat
+- [x] Playwright user stories against gilligan, each verifying backend state via curl AND psql
+- [x] `apps/integration-tests` case for the full expense → precheck → event → dispatch hook → work item → attribution → rollup chain, plus five negatives: `BURN_API_INTERNAL_URL` unset, burn-api stopped, breaker open, bill-api 404 on `/internal/rates/resolve`, Redis unreachable
+- [x] A representative slice driven through MCP tools alone, producing the same rows and events
 
 ## M10 - Docs, screenshots, marketing
 
-- [ ] `docs/apps/burn/help.md` + `help-index.json` + Help Center
-- [ ] `burn` row in the hardcoded `APP_REGISTRY` at `scripts/docs/extract.mjs:63` (without it `docs/apps/burn/` is never emitted at all)
-- [ ] `APP_TOOL_MODULES` entry in `scripts/docs/lib/tool-source.mjs`
-- [ ] `docs:extract`, `docs:compose`, `docs:catalog`, `docs:manual` regenerated and committed
-- [ ] `marketing.md` + `docs:publish` + `APP_ICON`/`APP_COLOR` in `site/src/pages/docs.tsx` (the one sanctioned hand-edit)
-- [ ] MCP tool counts updated everywhere. Confirm whether the deprecated `burn_margin` alias counts before committing a number `pnpm docs:catalog` will contradict
-- [ ] **Two separate seeders:** author `scripts/seed-burn.mjs` and add `'seed-burn.mjs'` to the flat `PHASE_B` array in `scripts/seed-all.mjs` after `'seed-bill.mjs'`; separately author `scripts/seed-gilligan/burn.mjs` and add a trailing `{ name: 'Margin', files: ['burn.mjs'] }` group to `PHASES` in `run-all.mjs`, which must follow both the Billing and Knowledge groups
-- [ ] Gilligan screenshots
-- [ ] `frontend` rebuilt again after `help:index`
+- [x] `docs/apps/burn/help.md` + `help-index.json` + Help Center
+- [x] `burn` row in the hardcoded `APP_REGISTRY` at `scripts/docs/extract.mjs:63` (without it `docs/apps/burn/` is never emitted at all)
+- [x] `APP_TOOL_MODULES` entry in `scripts/docs/lib/tool-source.mjs`
+- [x] `docs:extract`, `docs:compose`, `docs:catalog`, `docs:manual` regenerated and committed
+- [x] `marketing.md` + `docs:publish` + `APP_ICON`/`APP_COLOR` in `site/src/pages/docs.tsx` (the one sanctioned hand-edit)
+- [x] MCP tool counts updated everywhere. Confirm whether the deprecated `burn_margin` alias counts before committing a number `pnpm docs:catalog` will contradict
+- [x] **Two separate seeders:** author `scripts/seed-burn.mjs` and add `'seed-burn.mjs'` to the flat `PHASE_B` array in `scripts/seed-all.mjs` after `'seed-bill.mjs'`; separately author `scripts/seed-gilligan/burn.mjs` and add a trailing `{ name: 'Margin', files: ['burn.mjs'] }` group to `PHASES` in `run-all.mjs`, which must follow both the Billing and Knowledge groups
+- [x] Gilligan screenshots
+- [x] `frontend` rebuilt again after `help:index`
 
 ## M11 - Close-out
 
-- [ ] `close-out` skill passes every line
-- [ ] `BUILD_REPORT` written
-- [ ] Lock released
+- [x] `close-out` skill passes every line
+- [x] `BUILD_REPORT` written
+- [x] Lock released
