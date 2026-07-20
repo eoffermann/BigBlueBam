@@ -754,6 +754,25 @@ export const INFRA_SERVICES = [
     managed_on_railway: true,
     required: true,
     volume: null, // managed
+    // Connection ceiling. docker-compose.yml runs this image with
+    //   postgres -c max_connections=200 -c shared_buffers=512MB
+    // because the stock 100 is oversubscribed across 20+ API services, each holding a
+    // write pool plus an optional read pool. Exhaustion does NOT present as a fault in
+    // whichever service crossed the line; it presents as `too many clients already` in an
+    // unrelated app, historically Bond or Bill.
+    //
+    // ⚠ NOT YET APPLIED ON RAILWAY. Railway Postgres is a MANAGED plan
+    // (managed_on_railway: true above), so this file cannot set it and the deploy adapters
+    // do not touch managed-plan parameters. Until an operator raises the connection limit
+    // on the managed plan to match, the local fix is cosmetic and production keeps the
+    // stock ceiling. Recorded here so it is visible in the catalog rather than living only
+    // in a build report.
+    tuning: {
+      max_connections: 200,
+      shared_buffers: '512MB',
+      applied_locally: true,
+      applied_on_railway: false,
+    },
   },
   {
     name: 'redis',
