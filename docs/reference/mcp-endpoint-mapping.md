@@ -61,8 +61,9 @@ A tool/command "corresponds" to the endpoint(s) its handler calls. Sections are 
 | Helpdesk | 38 | 15 | 23 | 0 |
 | Basis | 17 | 15 | 2 | 0 |
 | Braid | 21 | 12 | 9 | 1 |
+| Bursar | 79 | 22 | 57 | 0 |
 | Cross-app platform | 41 | 32 | 9 | 6 |
-| **Total** | **1103** | **816** | **287** | **17** |
+| **Total** | **1182** | **838** | **344** | **17** |
 
 _Counts are summed from the per-section tables (each row's REST endpoint counted once even when several MCP tools share it). After the `feat/mcp-endpoint-parity` build the "with an MCP tool" total roughly doubled (≈334 → ≈690). Of the ~247 endpoints still tool-less, the large majority are now annotated `— _(skip: …)_` with a reason — auth/OAuth/session, public-inbound (forms/booking/portal/tracking), multipart/binary upload, binary export (PDF/SVG/CSV/.ics), raw credential/API-key admin, SuperUser/permission/account admin (Bam org/admin held to a deliberately conservative scope this pass), Yjs/scene/WebSocket realtime sync, internal/service-to-service routes, and slug/name resolvers done internally — plus the deferred Helpdesk `X-Agent-Key` agent routes. Some endpoints are shared by multiple MCP tools and many are internal / webhook / public-inbound (not user-facing), so treat the totals as close approximations of the surface size, not an exact public-API inventory. The remaining intentional gaps cluster in **Bam org/admin** (SuperUser & permissions admin, integrations, credentials — UI/CLI-only) and a few per-app binary/upload/realtime tails._
 
@@ -2086,3 +2087,100 @@ AI margin / envelope-attribution monitor. 17 `burn_*` tools plus one deprecated 
 | `GET /health`, `GET /health/ready` | — _(skip: probe)_ | Health / readiness | — |
 
 `burn_precheck` (flagship) backs `POST /v1/precheck` and is the same engine bill-api reaches through `POST /v1/internal/precheck`. `burn_extract_deliverables` backs two endpoints (`POST /v1/engagements` and `POST /v1/engagements/:id/extract`). `burn_financials` backs two (`GET /v1/financials` and `/financials/accounts` via `all_accounts`), and `burn_margin` is a deprecated alias for it that returns the identical discriminated response. `PATCH /v1/deliverables/:id` backs two tools by intent (`burn_confirm_deliverable` for content/status, `burn_reject_deliverable` for reject, which is confirm-gated). Section counts: 47 REST endpoint rows (45 distinct paths; PATCH deliverables counted twice by intent, and the multi-endpoint tools counted per row), 14 rows with a `burn_*` tool, the remainder skip-annotated — 17 `burn_*` tools total plus one deprecated alias.
+
+---
+
+## Bursar (app)
+
+- **Service:** `apps/bursar-api` · external `/bursar/api/` · MCP module(s): `apps/mcp-server/src/tools/bursar-tools.ts` (M9) · added on the `suite-brainstorm` branch.
+
+AI procurement leveling & spend-baseline monitor. 20 `bursar_*` tools (spec section 12 of `docs/brainstorming/2026_07_19_20_05_APP_DESIGN_bursar.md`), registered via `registerBursarTools` in `apps/mcp-server/src/server.ts` (env `BURSAR_API_URL`), the client shaped like `createBurnClient` and forwarding the caller's bearer token. All `bursar_*` tools are fail-closed under `agent_policies` until an operator allowlists `bursar.*`; following the basis/braid/bulwark/burn satellite pattern, `bursar_*` is intentionally NOT added to `EXPLICIT_TOOL_OVERRIDES`.
+
+**Two things about this section are unlike the other apps.**
+
+1. **The four coverage/totals/matrix/offer read tools pass through the shared seal predicate (§5.6), and `asker_user_id` narrows both row visibility AND financial flooring.** bursar-api takes the **intersection** of the bearer's and the asker's capabilities, because mcp-server cannot backstop it (`register-tool.ts` reads `BBB_PERMISSIONS_ENFORCE` from its own env, compose default `warn`), so bursar-api is the only enforcing layer. A sealed offer's numbers stay withheld until its `sealed_until` opens or it is unsealed (a floored, confirm-gated human act with no tool).
+2. **The Launchpad tile is deliberately withheld until the gilligan screenshots exist.** The 20 `bursar_*` tools are live and registered, but `bursar` is intentionally NOT yet added to the marketing `/docs` `LAUNCHPAD_CATALOG`-derived catalog; the completeness gate blocks the tile until the Docker-gated screenshot capture runs. That is a release-sequencing choice, not a missing surface.
+
+| REST endpoint | MCP tool | Description | UI call site |
+| --- | --- | --- | --- |
+| `GET /v1/vendors` | — _(skip: portfolio list SPA-surfaced; the deep read is `bursar_vendor_view` and cross-vendor spend is `bursar_spend_by_vendor`)_ | List vendors; award status is a first-class column | `VendorPortfolioPage` |
+| `POST /v1/vendors` | — _(skip: vendor create SPA-surfaced)_ | Create a vendor | `VendorPortfolioPage` "Add vendor" |
+| `GET /v1/vendors/alias-review` | `bursar_resolve_vendor` | Payee→vendor aliases pending review (alias resolution, read-only) | `ReviewQueuePage` (alias review) |
+| `GET /v1/vendors/:id` | `bursar_vendor_view` | Vendor detail: aliases, award chain, baseline, spend, findings, `orphaned_custody` | `VendorDetailPage` |
+| `PATCH /v1/vendors/:id` | — _(skip: metadata edit SPA-surfaced)_ | Update a vendor | `VendorDetailPage` |
+| `DELETE /v1/vendors/:id` | — _(skip: archive; `bursar.vendor.delete` floored + destructive + confirm, human)_ | Archive a vendor | `VendorDetailPage` |
+| `GET /v1/vendors/:id/aliases` | `bursar_resolve_vendor` | List a vendor's payee aliases | `VendorDetailPage` (aliases) |
+| `POST /v1/vendors/:id/aliases` | — _(skip: human alias confirmation; always source=human at confidence 1.0)_ | Confirm/correct a payee→vendor alias | `ReviewQueuePage` / `VendorDetailPage` |
+| `DELETE /v1/vendors/:id/aliases/:alias_id` | — _(skip: alias write, human)_ | Remove an alias | `VendorDetailPage` |
+| `GET /v1/requests` | `bursar_list_requests` | List procurement requests | `RequestsListPage` |
+| `POST /v1/requests` | — _(skip: request create SPA-surfaced; a Bin source doc is §5.8 access-checked + version-pinned on write)_ | Create a request | `RequestsListPage` "New request" |
+| `GET /v1/requests/:id` | `bursar_get_request` | Request detail (header + scope status) | `RequestScopePage` |
+| `PATCH /v1/requests/:id` | — _(skip: metadata edit SPA-surfaced; re-attaching a Bin doc re-runs the §5.8 check)_ | Update a request | `RequestScopePage` |
+| `GET /v1/requests/:id/scope` | `bursar_get_scope_tree` | The scope tree (nodes, citations, latest run, rival queue) | `RequestScopePage` |
+| `POST /v1/requests/:id/derive-scope` | — _(skip: async-start derivation kickoff; SPA/worker-driven, 202 + run id)_ | Kick off scope derivation | `RequestScopePage` "Derive scope" |
+| `POST /v1/requests/:id/scope/nodes` | `bursar_upsert_scope_node` | Add a human scope node | `RequestScopePage` |
+| `PATCH /v1/scope-nodes/:id` | `bursar_upsert_scope_node` | Edit a scope node (title / strength / quantity / review_status) | `RequestScopePage` |
+| `DELETE /v1/scope-nodes/:id` | — _(skip: archive; `bursar.scope.write` destructive)_ | Archive a scope node | `RequestScopePage` |
+| `POST /v1/requests/:id/scope/apply-library` | — _(skip: applies library entries as should_have nodes; SPA-surfaced)_ | Apply library entries into the tree | `RequestScopePage` "Apply" |
+| `POST /v1/requests/:id/scope/confirm` | — _(skip: human gate; 409 while deriving, blocked while injection_suspected)_ | Confirm the scope (freeze the ruler) | `RequestScopePage` "Confirm scope" |
+| `POST /v1/scope-nodes/:id/promote-rival` | — _(skip: human gate; `bursar.scope.promote_rival` floored + confirm, echoes contributing_offer_ids)_ | Promote a rival-derived node into the counted tree | `RequestScopePage` "Promote" |
+| `GET /v1/requests/:id/offers` | `bursar_list_offers` | List offers under a request | `LevelingMatrixPage` |
+| `POST /v1/requests/:id/offers` | — _(skip: offer create SPA-surfaced; byte source is a §5.8-checked Bin asset or inline text)_ | Create an offer | `LevelingMatrixPage` |
+| `POST /v1/offers/:id/upload` | — _(skip: multipart/binary ingest; content-type-pinned)_ | Upload/attach offer bytes and parse | `LevelingMatrixPage` |
+| `GET /v1/offers/:id` | — _(skip: single-item read; `bursar_list_offers` is the agent slice, `bursar_get_matrix` carries per-offer coverage)_ | Offer detail | `LevelingMatrixPage` (offer header) |
+| `GET /v1/offers/:id/lines` | — _(skip: parsed-line detail; the coverage/citation view is `bursar_get_matrix`)_ | Parsed offer lines | `LevelingMatrixPage` (cell detail) |
+| `POST /v1/offers/:id/reparse` | — _(skip: reprocessing kickoff SPA-surfaced)_ | Re-run the deterministic parse | `LevelingMatrixPage` |
+| `POST /v1/offers/:id/unseal` | — _(skip: `bursar.offer.unseal` floored + confirm; every unseal audits and publishes offer.unsealed)_ | Unseal a sealed bid | `ReviewQueuePage` |
+| `DELETE /v1/offers/:id` | — _(skip: `bursar.offer.write` destructive)_ | Delete an offer | `LevelingMatrixPage` |
+| `POST /v1/requests/:id/level` | `bursar_level_quotes` | Cost preflight + async-start leveling (202 + run id; 422 rejected_limits; 409 on a live lease) | `LevelingMatrixPage` "Level offers" |
+| `GET /v1/requests/:id/leveling-runs` | `bursar_list_leveling_runs` | Authoritative leveling progress (offer n/N, node m/M, window w/W) | `LevelingMatrixPage` (progress) |
+| `GET /v1/requests/:id/matrix` | `bursar_get_matrix` | The leveling matrix (offers × nodes, coverage, totals, sort key) | `LevelingMatrixPage` |
+| `GET /v1/requests/:id/exclusion-diff` | `bursar_exclusion_diff` | The §4.7 diff: every mandatory node exactly once, blocking banner, blanket framing | `ExclusionDiffPage` |
+| `GET /v1/requests/:id/totals` | `bursar_get_totals` | Per-offer totals incl. admissibility and renderable=false | `LevelingMatrixPage` (offer headers) |
+| `GET /v1/coverage/:id` | `bursar_get_coverage` | One coverage row: rejected candidates, overlap, `withheld_reason` | `LevelingMatrixPage` (cell detail) |
+| `POST /v1/coverage/:id/override` | — _(skip: human adjudication is the calibration ground truth; `bursar.coverage.override` floored)_ | Override a coverage verdict | `ReviewQueuePage` |
+| `GET /v1/review` | — _(skip: HITL aggregate SPA-surfaced; the per-queue reads are the agent slices)_ | The review queue (coverage, alias, rival, drafts) | `ReviewQueuePage` |
+| `POST /v1/awards` | — _(skip: the freeze is a human act; `bursar.award.create` floored + confirm)_ | Record an award and freeze the baseline | `LevelingMatrixPage` / `RequestScopePage` |
+| `GET /v1/awards` | `bursar_list_awards` | List awards | `VendorPortfolioPage` / `VendorDetailPage` |
+| `GET /v1/awards/:id` | — _(skip: single-item read; `bursar_list_awards` + `bursar_get_baseline` are the agent slices)_ | Award detail | `VendorDetailPage` |
+| `GET /v1/awards/:id/baseline` | `bursar_get_baseline` | The frozen baseline items (included / excluded_at_award / absent_at_award) | `VendorDetailPage` (baseline) |
+| `POST /v1/awards/:id/amend` | — _(skip: award write; `bursar.award.amend` floored + destructive + confirm)_ | Amend (supersede) an award | `VendorDetailPage` |
+| `POST /v1/awards/:id/terminate` | — _(skip: award write; `bursar.award.terminate` floored + destructive + confirm)_ | Terminate an award | `VendorDetailPage` |
+| `GET /v1/spend` | — _(skip: spend ledger read floored on `bursar.spend.read_all`; `bursar_spend_by_vendor` is the agent slice)_ | The observed spend stream | `VendorDetailPage` (spend) |
+| `GET /v1/spend/by-vendor` | `bursar_spend_by_vendor` | Spend rolled up by resolved vendor (floored on `spend.read_all`) | `VendorDetailPage` / `VendorPortfolioPage` |
+| `POST /v1/spend/import` | — _(skip: multipart/bulk import; `file_sha256` resumable upsert)_ | Import parsed statement rows | Settings / import surface |
+| `GET /v1/spend/imports` | — _(skip: import-history read floored; SPA-surfaced)_ | List spend imports | import surface |
+| `GET /v1/spend/export` | — _(skip: CSV export, neutralized)_ | CSV export of spend | `VendorDetailPage` "Export CSV" |
+| `GET /v1/mismatches` | `bursar_mismatches` | The detector inbox (drift findings, ranked by severity) | `MismatchInboxPage` |
+| `GET /v1/mismatches/:id` | — _(skip: single-item read; `bursar_mismatches` is the agent slice)_ | Mismatch detail | `MismatchInboxPage` |
+| `POST /v1/mismatches/:id/resolve` | — _(skip: human adjudication)_ | Resolve a mismatch | `MismatchInboxPage` "Resolve" |
+| `POST /v1/mismatches/:id/dismiss` | — _(skip: human adjudication, destructive)_ | Dismiss a mismatch | `MismatchInboxPage` "Dismiss" |
+| `POST /v1/mismatches/:id/mark-wrong` | — _(skip: human calibration ground truth; `bursar.detector.mark_wrong` floored, feeds threshold calibration)_ | Mark a detector firing wrong | `MismatchInboxPage` "Mark wrong" |
+| `GET /v1/renewals` | `bursar_renewals_due` | The renewal radar (awards approaching renewal, lead bands) | `RenewalRadarPage` |
+| `POST /v1/renewals/:id/decide` | — _(skip: human decision; renew / let_lapse / defer)_ | Decide a renewal | `RenewalRadarPage` |
+| `GET /v1/drafts` | — _(skip: owner-scoped confidential read (§5.7); `bursar.draft.read` is not a viewer grant)_ | List drafts (owner-scoped) | `ReviewQueuePage` |
+| `GET /v1/drafts/:id` | — _(skip: single-item owner-scoped read)_ | Draft detail | `ReviewQueuePage` |
+| `POST /v1/drafts/clarification` | `bursar_draft_clarification` | Draft a clarification into a `bursar_drafts` row (grounding derived server-side) | `ReviewQueuePage` |
+| `POST /v1/drafts/negotiation-brief` | — _(skip: draft create; `bursar_draft_clarification` is the agent slice, grounding derived server-side)_ | Draft a negotiation brief | `ReviewQueuePage` |
+| `POST /v1/drafts/:id/approve` | — _(skip: human gate; `bursar.draft.approve` floored)_ | Approve a draft | `ReviewQueuePage` |
+| `POST /v1/drafts/:id/reject` | — _(skip: human gate)_ | Reject a draft | `ReviewQueuePage` |
+| `POST /v1/gate/scope-gap` | `bursar_scope_gap` | Advisory scope-gap check (pass\|advisory + cited reason codes; NO enforcement) | `VendorDetailPage` / inline advisory |
+| `GET /v1/gate/checks` | — _(skip: advisory-check log SPA-surfaced; `bursar_scope_gap` is the agent slice)_ | The gate-check log | advisory surface |
+| `GET /v1/library` | — _(skip: library read SPA-surfaced under Settings)_ | List library entries | `SettingsPage` |
+| `POST /v1/library` | — _(skip: `bursar.library.write` floored; global rows rejected)_ | Create a library entry | `SettingsPage` |
+| `PATCH /v1/library/:id` | — _(skip: `bursar.library.write` floored)_ | Update a library entry | `SettingsPage` |
+| `DELETE /v1/library/:id` | — _(skip: `bursar.library.write` floored)_ | Delete a library entry | `SettingsPage` |
+| `GET /v1/settings` | — _(skip: settings read SPA-surfaced)_ | Org thresholds, weights, lexicons | `SettingsPage` |
+| `GET /v1/settings/audit` | — _(skip: settings audit read SPA-surfaced; every knob change is before/after audited)_ | Settings change audit | `SettingsPage` |
+| `PATCH /v1/settings` | — _(skip: `bursar.settings.write` floored; audited before/after)_ | Update settings | `SettingsPage` |
+| `GET /v1/requests/:id/diff/export` | — _(skip: CSV export, neutralized)_ | CSV export of the exclusion diff | `ExclusionDiffPage` |
+| `POST /v1/internal/run-derivation` | — _(skip: internal service-to-service; org from validated payload, 202)_ | Worker derivation transport | — |
+| `POST /v1/internal/run-reaper` | — _(skip: internal service-to-service; run reaper)_ | Reaper transport | — |
+| `POST /v1/internal/parse-offer` | — _(skip: internal service-to-service; deterministic parse)_ | Worker offer-parse transport | — |
+| `POST /v1/internal/run-leveling` | — _(skip: internal service-to-service; org from validated payload, 202)_ | Worker leveling transport | — |
+| `POST /v1/internal/events` | — _(skip: internal service-to-service; bolt-api dispatch-hook ingest → bursar_ingest_events)_ | Event inbox from bolt-api | — |
+| `POST /v1/internal/engines/:name` | — _(skip: internal service-to-service; named-engine dispatch)_ | Named-engine dispatch | — |
+| `/bursar/ws` | — _(skip: realtime/ws transport; org/request/vendor-scoped scope.progress, leveling.progress, matrix.updated frames; the 5s leveling-runs poll is the authoritative fallback)_ | Redis-PubSub scoped notifications | — |
+| `GET /health`, `GET /health/ready`, `GET /metrics` | — _(skip: probe)_ | Health / readiness / metrics | — |
+
+`bursar_upsert_scope_node` backs two rows (`POST /v1/requests/:id/scope/nodes` and `PATCH /v1/scope-nodes/:id`); `bursar_resolve_vendor` backs two rows (`GET /v1/vendors/:id/aliases` and `GET /v1/vendors/alias-review`). Section counts: 79 REST endpoint rows covering every bursar-api route plus the WS transport and the combined health/metrics row, 22 rows with a `bursar_*` tool, the remainder skip-annotated — 20 `bursar_*` tools total. No MCP-only tools.

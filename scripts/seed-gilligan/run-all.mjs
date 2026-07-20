@@ -29,6 +29,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
+import { BURSAR_SEED_EXPECTATIONS } from './bursar.expectations.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const t0 = Date.now();
@@ -65,7 +66,11 @@ const PHASES = [
   // rate-limited, so those two are marked soft (won't fail the overall run).
   { name: 'Communication', soft: ['blank.mjs', 'blank-submissions.mjs'], files: ['banter.mjs', 'banter-supplement.mjs', 'blank.mjs', 'blank-submissions.mjs', 'brief.mjs'] },
   { name: 'Knowledge & analytics', files: ['beacon.mjs', 'beacon-fixup.mjs', 'bench.mjs', 'bench-supplement.mjs', 'bin.mjs', 'bay.mjs'] },
-  { name: 'Billing', files: ['bill.mjs', 'bill-supplement.mjs', 'bill-recurring.mjs'] },
+  // bursar.mjs runs here because it needs bond.mjs companies and bill.mjs expenses;
+  // it drives its own bursar-api (vendors, request, offers, award) and imports observed
+  // spend that the detectors key off. run-all injects BURSAR_EXPECTATIONS so the seeder
+  // and the Playwright suite read one canonical number set (spec 19.3).
+  { name: 'Billing', files: ['bill.mjs', 'bill-supplement.mjs', 'bill-recurring.mjs', 'bursar.mjs'] },
   { name: 'Spatial & async', files: ['board.mjs', 'book.mjs', 'book-connections.mjs', 'bureau.mjs', 'bureau-presence.mjs'] },
   // basis.mjs runs here because it defines governed metrics OVER data that must
   // already exist: bam.tasks (Foundation) and bill.invoices (Billing), both of
@@ -225,6 +230,9 @@ async function main() {
       if (file === 'smtp.mjs') {
         env.SU_KEY = suKey;
         env.ORG_ADMIN_KEY = orgAdminKey;
+      }
+      if (file === 'bursar.mjs') {
+        env.BURSAR_EXPECTATIONS = JSON.stringify(BURSAR_SEED_EXPECTATIONS);
       }
       const soft = (phase.soft || []).includes(file);
       const ok = runSeeder(file, env);

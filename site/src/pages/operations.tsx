@@ -8,6 +8,7 @@ import { BasisSection } from '@/components/sections/basis-section';
 import { BraidSection } from '@/components/sections/braid-section';
 import { BulwarkSection } from '@/components/sections/bulwark-section';
 import { BurnSection } from '@/components/sections/burn-section';
+import { BursarSection } from '@/components/sections/bursar-section';
 import { BookSection } from '@/components/sections/book-section';
 import { BlankSection } from '@/components/sections/blank-section';
 import { BillSection } from '@/components/sections/bill-section';
@@ -54,6 +55,7 @@ export function OperationsPage() {
         <BraidSection />
         <BulwarkSection />
         <BurnSection />
+        <BursarSection />
         <BookSection />
         <BlankSection />
         <BillSection />

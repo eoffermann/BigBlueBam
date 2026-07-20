@@ -1,0 +1,172 @@
+# Bursar - AI procurement leveling & spend-baseline monitor.
+#
+# Recipes drive the docs-capture engine (NOT the bespoke braid/bulwark capture
+# scripts - spec 14.1). Every route is confirmed against apps/bursar/src/app.tsx
+# parseRoute: /bursar/ (Vendor Portfolio), /bursar/requests, /bursar/requests/:id
+# (Scope Tree), /bursar/requests/:id/level (Leveling Matrix),
+# /bursar/requests/:id/diff (Exclusion Diff), /bursar/vendors/:id, /bursar/mismatches,
+# /bursar/renewals, /bursar/review, /bursar/settings. None invented.
+#
+# Identity is `admin`, which the docs-capture environment resolves to the gilligan
+# cast (skipper@gilligantravel.example) - GILLIGAN data only, never the generic
+# e2e org. The stack is seeded by scripts/seed-gilligan/bursar.mjs before capture,
+# so no `content` blocks: each view captures the seeded "Lagoon Rescue Beacon
+# Procurement" request, its four offers, the Radio Parts award/baseline, and the
+# post-award detector findings.
+#
+# Detail routes (:id) need a runtime id, so they are reached by clicking a seeded
+# list row rather than a hardcoded path. Live dates are masked so re-runs stay
+# byte-stable. The `-dark` siblings share their light sibling's `doc.order` so the
+# bridge pairs them into screenshots/light and screenshots/dark. The doc-marked
+# `id`s (vendor-portfolio, leveling-matrix, exclusion-diff, mismatch-inbox) match
+# the filenames the marketing site references under site/public/screenshots/bursar.
+
+- id: vendor-portfolio
+  app: bursar
+  demonstrates: "The Vendor Portfolio: every vendor with award status as a first-class column; a vendor with spend but no award on file is called out."
+  route: /bursar/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "Vendor Portfolio"
+  expectNot: "Please log in"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 1, label: "Vendor portfolio" }
+
+- id: vendor-portfolio-dark
+  app: bursar
+  demonstrates: "The Vendor Portfolio in dark theme (marketing/retina)."
+  route: /bursar/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "Vendor Portfolio"
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 1, label: "Vendor portfolio" }
+
+- id: requests-list
+  app: bursar
+  demonstrates: "The Requests list, with the seeded Lagoon Rescue Beacon Procurement request."
+  route: /bursar/requests
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "Lagoon Rescue Beacon Procurement"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 2, label: "Request list" }
+
+- id: scope-tree
+  app: bursar
+  demonstrates: "The Scope Tree editor: 14 cited scope nodes (the ruler), the rival-promotion queue, and Confirm scope."
+  route: /bursar/requests
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: click, selector: "tr:has-text('Lagoon Rescue Beacon'), a:has-text('Lagoon Rescue Beacon')", optional: true }
+    - { action: wait, ms: 1500 }
+  expect: "Scope nodes"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 3, label: "Scope tree" }
+
+- id: leveling-matrix
+  app: bursar
+  demonstrates: "The Leveling Matrix: four offer columns, scope nodes as rows, covered/partial/excluded/absent verdicts, and a gap-adjusted comparable total per offer."
+  route: /bursar/requests
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: click, selector: "tr:has-text('Lagoon Rescue Beacon'), a:has-text('Lagoon Rescue Beacon')", optional: true }
+    - { action: waitFor, selector: "text=Leveling Matrix", optional: true }
+    - { action: click, selector: "button:has-text('Leveling Matrix')", optional: true }
+    - { action: wait, ms: 2000 }
+  expect: "Leveling Matrix"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 4, label: "Leveling matrix" }
+
+- id: leveling-matrix-dark
+  app: bursar
+  demonstrates: "The Leveling Matrix in dark theme (marketing/retina)."
+  route: /bursar/requests
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: click, selector: "tr:has-text('Lagoon Rescue Beacon'), a:has-text('Lagoon Rescue Beacon')", optional: true }
+    - { action: waitFor, selector: "text=Leveling Matrix", optional: true }
+    - { action: click, selector: "button:has-text('Leveling Matrix')", optional: true }
+    - { action: wait, ms: 2000 }
+  expect: "Leveling Matrix"
+  capture: { target: fullPage, viewport: desktop-1440, theme: dark, deviceScaleFactor: 2 }
+  doc: { order: 4, label: "Leveling matrix" }
+
+- id: exclusion-diff
+  app: bursar
+  demonstrates: "The Exclusion Diff: every mandatory node exactly once per offer, the blocking banner while any node is unverified, and the blanket-claim callout on Professor's Lab Supply."
+  route: /bursar/requests
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: click, selector: "tr:has-text('Lagoon Rescue Beacon'), a:has-text('Lagoon Rescue Beacon')", optional: true }
+    - { action: waitFor, selector: "text=Exclusion Diff", optional: true }
+    - { action: click, selector: "button:has-text('Exclusion Diff')", optional: true }
+    - { action: wait, ms: 2000 }
+  expect: "Exclusion Diff"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 5, label: "Exclusion diff" }
+
+- id: vendor-detail
+  app: bursar
+  demonstrates: "A vendor detail page: aliases, award chain, the frozen baseline, spend, and findings."
+  route: /bursar/
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+    - { action: click, selector: "tr:has-text('Radio Parts')", optional: true }
+    - { action: click, selector: "table tbody tr", optional: true }
+    - { action: wait, ms: 1500 }
+  expect: "Baseline"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 6, label: "Vendor detail" }
+
+- id: mismatch-inbox
+  app: bursar
+  demonstrates: "The Mismatch Inbox: drift findings ranked by severity; an amount the detector cannot value reads as 'not quantified', never a fabricated number."
+  route: /bursar/mismatches
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "Mismatch Inbox"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 7, label: "Mismatch inbox" }
+
+- id: renewal-radar
+  app: bursar
+  demonstrates: "The Renewal Radar: awards approaching renewal grouped by notice lead band, with Island Weather Feed inside its band."
+  route: /bursar/renewals
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "Renewal Radar"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 8, label: "Renewal radar" }
+
+- id: review-queue
+  app: bursar
+  demonstrates: "The HITL Review Queue: coverage adjudication, alias review, rival promotion, and drafts."
+  route: /bursar/review
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "Review"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 9, label: "Review queue" }
+
+- id: settings
+  app: bursar
+  demonstrates: "Bursar settings: thresholds, weights, lexicons, and the scope library (global rows read-only)."
+  route: /bursar/settings
+  identity: admin
+  interactions:
+    - { action: waitFor, selector: main, optional: true }
+  expect: "Settings"
+  capture: { target: fullPage, viewport: desktop-1440, theme: light }
+  doc: { order: 10, label: "Settings" }
