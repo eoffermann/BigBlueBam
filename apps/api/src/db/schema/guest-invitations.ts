@@ -16,7 +16,7 @@ export const guestInvitations = pgTable(
     role: varchar('role', { length: 20 }).default('guest').notNull(),
     project_ids: text('project_ids').array(), // uuid[] stored as text[]
     channel_ids: text('channel_ids').array(), // banter channel ids stored as text[]
-    token: text('token').unique().notNull(),
+    token: varchar('token', { length: 100 }).unique().notNull(),
     accepted_at: timestamp('accepted_at', { withTimezone: true }),
     revoked_at: timestamp('revoked_at', { withTimezone: true }),
     expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),

@@ -24,6 +24,7 @@
 
 import {
   pgTable,
+  pgEnum,
   uuid,
   varchar,
   text,
@@ -32,6 +33,20 @@ import {
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
+
+// Peer-app enums (owned by brief-api / beacon-api; declared here only so these
+// stub columns match the real DB enum type and db:check reports no type drift).
+export const briefVisibilityStubEnum = pgEnum('brief_visibility', [
+  'private',
+  'project',
+  'organization',
+]);
+export const beaconVisibilityStubEnum = pgEnum('beacon_visibility', [
+  'Public',
+  'Organization',
+  'Project',
+  'Private',
+]);
 
 // ---------------------------------------------------------------------------
 // helpdesk - tickets
@@ -93,7 +108,7 @@ export const briefDocumentsStub = pgTable('brief_documents', {
   org_id: uuid('org_id').notNull(),
   project_id: uuid('project_id'),
   created_by: uuid('created_by').notNull(),
-  visibility: varchar('visibility', { length: 30 }).notNull(),
+  visibility: briefVisibilityStubEnum('visibility').notNull(),
 });
 
 export const briefCollaboratorsStub = pgTable('brief_collaborators', {
@@ -113,7 +128,7 @@ export const beaconEntriesStub = pgTable('beacon_entries', {
   project_id: uuid('project_id'),
   created_by: uuid('created_by').notNull(),
   owned_by: uuid('owned_by').notNull(),
-  visibility: varchar('visibility', { length: 30 }).notNull(),
+  visibility: beaconVisibilityStubEnum('visibility').notNull(),
 });
 
 // ---------------------------------------------------------------------------
@@ -426,7 +441,7 @@ export const blipSavedViewsStub = pgTable(
     org_id: uuid('org_id').notNull(),
     tracked_app_id: uuid('tracked_app_id').notNull(),
     owner_id: uuid('owner_id').notNull(),
-    scope: varchar('scope', { length: 20 }).notNull(),
+    scope: text('scope').notNull(),
   },
   (table) => [index('pas_blip_saved_views_app_idx').on(table.tracked_app_id)],
 );

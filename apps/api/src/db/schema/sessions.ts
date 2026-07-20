@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, inet, uuid, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 import { organizations } from './organizations.js';
 
@@ -16,7 +16,7 @@ export const sessions = pgTable(
     }),
     created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     last_used_at: timestamp('last_used_at', { withTimezone: true }),
-    ip_address: text('ip_address'),
+    ip_address: inet('ip_address'),
     user_agent: text('user_agent'),
   },
   (table) => [
