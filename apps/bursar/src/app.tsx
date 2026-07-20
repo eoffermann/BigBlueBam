@@ -1,14 +1,19 @@
 import { ShoppingCart } from 'lucide-react';
+import { RequestScopePage } from './pages/request-scope';
 
 /**
- * M0 SCAFFOLD SHELL.
+ * M0 scaffold shell + the M3 Scope Tree editor route.
  *
- * This exists so `/bursar/` serves a real document rather than a white screen the moment the
- * nginx blocks and the frontend image land. The full shell (sidebar, top bar with the shared
- * Launchpad / org switcher / notifications bell / Help Center, and the Matrix, Diff, review
- * queue, and settings pages) arrives in later milestones alongside the routes that feed it.
+ * The full shell (sidebar, top bar with the shared Launchpad / org switcher / notifications bell /
+ * Help Center, and the Matrix, Diff, review queue, and settings pages) arrives in M6. For now a
+ * minimal path router serves the Scope Tree editor at /bursar/requests/:id, which is enough to
+ * drive the M3 API (derive, review citations, apply library, promote rivals, confirm).
  */
-export function App() {
+
+// Matches /bursar/requests/<uuid-ish> and captures the id.
+const REQUEST_SCOPE_RE = /\/bursar\/requests\/([0-9a-fA-F-]{8,})\/?$/;
+
+function ScaffoldShell() {
   return (
     <div className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-md text-center space-y-4">
@@ -20,9 +25,15 @@ export function App() {
           Vendor-side procurement: exclusion diffing, scope coverage, and the spend baseline.
         </p>
         <p className="text-xs text-zinc-500 dark:text-zinc-500">
-          Scaffold is live. The application shell is under construction.
+          Open a request at <code>/bursar/requests/&lt;id&gt;</code> to derive and confirm its scope tree.
         </p>
       </div>
     </div>
   );
+}
+
+export function App() {
+  const match = REQUEST_SCOPE_RE.exec(window.location.pathname);
+  if (match) return <RequestScopePage requestId={match[1]!} />;
+  return <ScaffoldShell />;
 }

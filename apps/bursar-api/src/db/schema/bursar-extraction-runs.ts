@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, integer, text, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, integer, text, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
 import { organizations } from './bbb-refs.js';
 import { bursarRequests } from './bursar-requests.js';
 
@@ -22,6 +22,9 @@ export const bursarExtractionRuns = pgTable(
     chunk_count: integer('chunk_count'),
     last_processed_chunk: integer('last_processed_chunk').notNull().default(-1),
     chunks_failed: integer('chunks_failed').notNull().default(0),
+    // Char ranges of chunks the derivation could not read (migration 0253); drives the
+    // "we could not read N sections" partial-run surface.
+    failed_chunks: jsonb('failed_chunks').notNull().default([]),
     nodes_extracted: integer('nodes_extracted').notNull().default(0),
     low_confidence_count: integer('low_confidence_count').notNull().default(0),
     llm_calls_used: integer('llm_calls_used').notNull().default(0),

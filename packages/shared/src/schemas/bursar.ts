@@ -153,3 +153,131 @@ export const BURSAR_AUDITED_SETTING_KEYS = [
   'retention_days',
 ] as const;
 export type BursarAuditedSettingKey = (typeof BURSAR_AUDITED_SETTING_KEYS)[number];
+
+/* ------------------------------------------------------------------ */
+/*  Scope tree (M3): derivation, nodes, library, confirm, promote     */
+/* ------------------------------------------------------------------ */
+
+// The derived_from precedence (spec 3.2): a request node is `mandatory` by default; a library
+// node is `should_have`; a rival-offer node is `nice_to_have` and never auto-published; a human
+// node carries the strength it is given.
+export const BursarNormativeStrength = z.enum([
+  'mandatory',
+  'should_have',
+  'nice_to_have',
+  'informational',
+]);
+export type BursarNormativeStrength = z.infer<typeof BursarNormativeStrength>;
+
+export const BursarDerivedFrom = z.enum(['request', 'library', 'rival_offer', 'human']);
+export type BursarDerivedFrom = z.infer<typeof BursarDerivedFrom>;
+
+// The scope_status state machine (spec 3.2): pending -> deriving -> derived -> confirmed.
+// `none` is the migration's resting default and is treated as equivalent to `pending`; `awarded`
+// is a downstream state used post-award.
+export const BursarScopeStatus = z.enum([
+  'none',
+  'pending',
+  'deriving',
+  'derived',
+  'confirmed',
+  'awarded',
+]);
+export type BursarScopeStatus = z.infer<typeof BursarScopeStatus>;
+
+// Kick off async-start derivation. An optional inline `source_text` overrides the Bin document
+// (used when the request carries no Bin asset and for tests); otherwise the worker reads the
+// pinned Bin bytes.
+export const bursarDeriveScopeSchema = z
+  .object({
+    source_text: z.string().max(2_000_000),
+  })
+  .partial();
+export type BursarDeriveScope = z.infer<typeof bursarDeriveScopeSchema>;
+
+// A hand-added scope node (derived_from = 'human').
+export const bursarScopeNodeCreateSchema = z.object({
+  title: z.string().min(1).max(512),
+  description: z.string().max(4000).nullable().optional(),
+  node_kind: z.string().max(32).default('requirement'),
+  normative_strength: BursarNormativeStrength.default('mandatory'),
+  unit: z.string().max(32).nullable().optional(),
+  quantity: z.coerce.number().nullable().optional(),
+  parent_id: z.string().uuid().nullable().optional(),
+});
+export type BursarScopeNodeCreate = z.infer<typeof bursarScopeNodeCreateSchema>;
+
+export const bursarScopeNodeUpdateSchema = z
+  .object({
+    title: z.string().min(1).max(512),
+    description: z.string().max(4000).nullable(),
+    node_kind: z.string().max(32),
+    normative_strength: BursarNormativeStrength,
+    unit: z.string().max(32).nullable(),
+    quantity: z.coerce.number().nullable(),
+    review_status: z.enum(['pending_review', 'confirmed']),
+  })
+  .partial();
+export type BursarScopeNodeUpdate = z.infer<typeof bursarScopeNodeUpdateSchema>;
+
+// Apply one or more library entries (built-in globals or the org's own) into the tree as
+// `should_have` nodes.
+export const bursarApplyLibrarySchema = z.object({
+  library_ids: z.array(z.string().uuid()).min(1).max(200),
+});
+export type BursarApplyLibrary = z.infer<typeof bursarApplyLibrarySchema>;
+
+// Confirm the tree. `clear_injection` lets an admin acknowledge and clear the flagged
+// injection spans in the same floored action, so the confirm is not permanently wedged; without
+// it, a request with `injection_suspected` is blocked (spec 5.5).
+export const bursarConfirmScopeSchema = z
+  .object({
+    clear_injection: z.boolean(),
+  })
+  .partial();
+export type BursarConfirmScope = z.infer<typeof bursarConfirmScopeSchema>;
+
+// Promote a rival-derived proposal into the counted tree. The promoter acknowledges the
+// supporting offers they were shown; the server echoes `contributing_offer_ids` into the audit
+// (spec 4.5).
+export const bursarPromoteRivalSchema = z
+  .object({
+    acknowledged_offer_ids: z.array(z.string().uuid()).max(50),
+  })
+  .partial();
+export type BursarPromoteRival = z.infer<typeof bursarPromoteRivalSchema>;
+
+/* ------------------------------------------------------------------ */
+/*  Internal engine transport (M3)                                    */
+/* ------------------------------------------------------------------ */
+
+// The org comes from the VALIDATED payload on these session-less internal routes.
+export const bursarRunDerivationSchema = z.object({
+  organization_id: z.string().uuid(),
+  request_id: z.string().uuid(),
+  run_id: z.string().uuid(),
+  source_text: z.string().max(4_000_000),
+  source_doc_hash: z.string().max(64).nullable().optional(),
+  claimant: z.string().min(1).max(64),
+});
+export type BursarRunDerivation = z.infer<typeof bursarRunDerivationSchema>;
+
+export const bursarRunReaperSchema = z
+  .object({
+    // Omit to sweep every org that has stale work.
+    organization_id: z.string().uuid().optional(),
+    lease_ms: z.coerce.number().int().positive().max(3_600_000).optional(),
+  })
+  .partial();
+export type BursarRunReaper = z.infer<typeof bursarRunReaperSchema>;
+
+// BullMQ queue for async-start derivation. bursar-api is the producer; the worker consumer
+// registration lands in M8.
+export const BURSAR_DERIVE_SCOPE_QUEUE = 'bursar-derive-scope';
+export interface BursarDeriveScopeJobData {
+  organization_id: string;
+  request_id: string;
+  run_id: string;
+  /** Inline source text; absent when the worker must read the pinned Bin bytes itself. */
+  source_text?: string;
+}

@@ -3282,6 +3282,19 @@ const burnEvents: EventDefinition[] = [
   },
 ];
 
+const bursarEvents: EventDefinition[] = [
+  {
+    source: 'bursar',
+    event_type: 'scope.confirmed',
+    description:
+      'Fired when a request\'s scope tree is human-confirmed (spec 3.2). An UNCONFIRMED tree yields only provisional verdicts and publishes NO event; this fires only on the pending/derived -> confirmed transition. Refs + node counts only, never requirement text.',
+    payload_schema: [
+      { name: 'request.id', type: 'uuid', description: 'The request whose scope tree was confirmed' },
+      { name: 'org.id', type: 'uuid', description: 'Organization ID' },
+    ],
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -3309,6 +3322,7 @@ const ALL_EVENTS: EventDefinition[] = [
   ...braidEvents,
   ...bulwarkEvents,
   ...burnEvents,
+  ...bursarEvents,
 ];
 
 export function getAllEvents(): EventDefinition[] {

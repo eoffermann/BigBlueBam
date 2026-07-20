@@ -22,6 +22,8 @@ import rlsPlugin from './plugins/rls.js';
 import vendorRoutes from './routes/vendors.routes.js';
 import requestRoutes from './routes/requests.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import scopeRoutes from './routes/scope.routes.js';
+import internalRoutes from './routes/internal.routes.js';
 
 // ── Boot assertion, FIRST, before anything binds a port or opens a pool (spec 13.3).
 // bursar-api, like burn-api, has no legacy requireAuth+role gate behind the permission plugin,
@@ -127,6 +129,10 @@ await fastify.register(
     await v1.register(vendorRoutes);
     await v1.register(requestRoutes);
     await v1.register(settingsRoutes);
+    // M3: scope derivation + the confirmed tree, and the /internal/* engine transport
+    // (run-derivation async-start + the run-reaper).
+    await v1.register(scopeRoutes);
+    await v1.register(internalRoutes);
   },
   { prefix: '/v1' },
 );

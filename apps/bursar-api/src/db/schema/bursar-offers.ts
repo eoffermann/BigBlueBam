@@ -34,6 +34,9 @@ export const bursarOffers = pgTable(
     vendor_id: uuid('vendor_id').references(() => bursarVendors.id, { onDelete: 'set null' }),
     label: varchar('label', { length: 512 }),
     status: varchar('status', { length: 16 }).notNull().default('received'),
+    // Deterministic-parse lifecycle (M4). Nullable until a parse starts; the M3 reaper reverts a
+    // stuck 'parsing' offer so a crashed parse is never a permanent wedge (migration 0253).
+    normalization_status: varchar('normalization_status', { length: 16 }),
     parse_quality: numeric('parse_quality', { precision: 5, scale: 4 }),
     injection_suspected: boolean('injection_suspected').notNull().default(false),
     injection_signals: jsonb('injection_signals').notNull().default({}),
