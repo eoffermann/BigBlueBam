@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { publishBoltEvent } from '@bigbluebam/shared';
 import type { DbTx } from '../../db/index.js';
 import { runInOrgScope } from '../../plugins/rls.js';
 import { tryOrgSweepLock } from '../../lib/advisory-lock.js';
@@ -8,6 +9,20 @@ import {
   marginFrom,
   type EnvelopeBasis,
 } from './valuation.js';
+
+/**
+ * Coarse consumption band from a consumption percentage (spec 8.2 consumption.threshold_crossed:
+ * carries the band ONLY, never the percentage). `none` means there is no contract value to
+ * consume against, so no band and no crossing.
+ */
+type ConsumptionBand = 'under' | 'nearing' | 'at' | 'over';
+function consumptionBandFromPct(pct: number | null): ConsumptionBand | 'none' {
+  if (pct == null) return 'none';
+  if (pct < 75) return 'under';
+  if (pct < 95) return 'nearing';
+  if (pct <= 100) return 'at';
+  return 'over';
+}
 
 /**
  * Per-chain financial rollup refresh (spec 4.3 / 8.1 rollup-refresh). One idempotent upsert per
@@ -243,7 +258,7 @@ export async function refreshRollups(
     const res = await runInOrgScope(oid, async (tx) => {
       if (!(await tryOrgSweepLock(tx, oid))) {
         log.info({ org_id: oid }, 'burn rollup-refresh: skipped, org sweep lock held by another sweep');
-        return { skipped: true, chains: 0 };
+        return { skipped: true, chains: 0, crossings: [] as Array<{ chain_root_id: string; band: ConsumptionBand }> };
       }
       const chainRoots = rows<{ chain_root_id: string }>(
         await tx.execute(sql`
@@ -252,15 +267,46 @@ export async function refreshRollups(
         `),
       );
       let n = 0;
+      const crossings: Array<{ chain_root_id: string; band: ConsumptionBand }> = [];
       for (const c of chainRoots) {
+        // Read the prior (non-frozen) consumption band before recomputing, so a band crossing
+        // can be detected. A frozen row returns nothing here, so a crossing is never emitted
+        // for a frozen chain.
+        const prior = rows<{ consumption_pct: number | null }>(
+          await tx.execute(sql`
+            SELECT consumption_pct FROM burn_engagement_rollups
+             WHERE organization_id = ${oid} AND chain_root_id = ${c.chain_root_id} AND frozen_at IS NULL
+          `),
+        )[0];
         const computed = await computeChainRollup(tx, oid, c.chain_root_id);
         await upsertRollup(tx, oid, computed, 'in_progress');
         n += 1;
+        if (prior) {
+          const oldBand = consumptionBandFromPct(prior.consumption_pct);
+          const newBand = consumptionBandFromPct(computed.consumption_pct);
+          if (oldBand !== 'none' && newBand !== 'none' && oldBand !== newBand) {
+            crossings.push({ chain_root_id: c.chain_root_id, band: newBand });
+          }
+        }
       }
-      return { skipped: false, chains: n };
+      return { skipped: false, chains: n, crossings };
     });
-    if (res.skipped) skipped += 1;
-    else chains += res.chains;
+    if (res.skipped) {
+      skipped += 1;
+      continue;
+    }
+    chains += res.chains;
+    // Emit consumption.threshold_crossed AFTER the sweep transaction commits (refs + coarse
+    // band only, never the percentage or amount), mirroring the variance sweep's emit-after
+    // pattern so no outbound call runs inside the lock-holding transaction.
+    for (const cr of res.crossings) {
+      await publishBoltEvent(
+        'consumption.threshold_crossed',
+        'burn',
+        { 'engagement.id': cr.chain_root_id, chain_root_id: cr.chain_root_id, band: cr.band, 'org.id': oid },
+        oid,
+      ).catch(() => {});
+    }
   }
   log.info({ orgs: orgIds.length, chains, skipped, elapsedMs: Date.now() - started }, 'burn rollup-refresh: done');
   return { orgs: orgIds.length, chains, skipped_locked: skipped };

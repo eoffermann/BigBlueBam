@@ -1,9 +1,10 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type {
-  BurnPrecheckRequest,
-  BurnPrecheckResponse,
-  BurnPrecheckVerdict,
-  BurnPrecheckVerdictReason,
+import {
+  publishBoltEvent,
+  type BurnPrecheckRequest,
+  type BurnPrecheckResponse,
+  type BurnPrecheckVerdict,
+  type BurnPrecheckVerdictReason,
 } from '@bigbluebam/shared';
 import { runInOrgScope } from '../plugins/rls.js';
 import type { DbTx } from '../db/index.js';
@@ -365,7 +366,7 @@ export async function runPrecheck(args: RunPrecheckArgs): Promise<BurnPrecheckRe
   const started = Date.now();
   const { caller, req, orgId } = args;
 
-  return runInOrgScope(orgId, async (tx) => {
+  const response = await runInOrgScope(orgId, async (tx) => {
     const settings = await loadSettings(tx, orgId);
 
     // ── Idempotency, and the BANKED-VERDICT ATTACK ──────────────────────────────────
@@ -592,6 +593,28 @@ export async function runPrecheck(args: RunPrecheckArgs): Promise<BurnPrecheckRe
 
     return toResponse(inserted!, settings, caller.canReadAll, Date.now() - started);
   });
+
+  // Emit precheck.blocked on an ENFORCED deny (spec 8.2). Emitted after the transaction, refs
+  // + coarse consumption band only - never the contract value, the overage, or any amount.
+  // This is the one signal that says "the gate actually stopped money", produced from the same
+  // place for both the user route and the bill-api gate (both call runPrecheck).
+  if (response.enforced && response.verdict === 'deny') {
+    await publishBoltEvent(
+      'precheck.blocked',
+      'burn',
+      {
+        'precheck.id': response.precheck_id,
+        'engagement.id': response.engagement_id,
+        'deliverable.id': response.deliverable_id,
+        verdict_reason: response.verdict_reason,
+        band: response.consumption_band,
+        'org.id': orgId,
+      },
+      orgId,
+    ).catch(() => {});
+  }
+
+  return response;
 }
 
 async function raiseProbingVariance(
@@ -736,7 +759,7 @@ export async function overridePrecheck(
   id: string,
   body: { override_reason_code: string; override_reason_text: string },
 ) {
-  return runInOrgScope(viewer.org_id, async (tx) => {
+  const result = await runInOrgScope(viewer.org_id, async (tx) => {
     const settings = await loadSettings(tx, viewer.org_id);
     const minChars = Number(settings.override_reason_min_chars ?? 20);
     if (body.override_reason_text.trim().length < minChars) {
@@ -785,6 +808,25 @@ export async function overridePrecheck(
       .returning();
     return { data: updated };
   });
+
+  // Emit precheck.overridden after the transaction (spec 8.2): refs + reason code + a coarse
+  // consumption band only, never the envelope, overage, or any amount.
+  const row = result.data;
+  if (row) {
+    await publishBoltEvent(
+      'precheck.overridden',
+      'burn',
+      {
+        'precheck.id': row.id,
+        override_reason_code: body.override_reason_code,
+        band: consumptionBand(Number(row.envelope_consumed ?? 0), row.envelope_amount === null ? null : Number(row.envelope_amount)),
+        'org.id': viewer.org_id,
+      },
+      viewer.org_id,
+    ).catch(() => {});
+  }
+
+  return result;
 }
 
 export interface LabelInput {
