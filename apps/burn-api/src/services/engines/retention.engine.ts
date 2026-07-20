@@ -38,12 +38,22 @@ export async function runRetention(
   log.info({ orgs: orgIds.length }, 'burn retention: starting (recompute -> freeze -> purge, one tx per chain)');
 
   for (const oid of orgIds) {
-    // Closed chains eligible for freeze+purge.
+    // Closed chains eligible for freeze+purge, EXCLUDING any chain whose rollup is already
+    // frozen (R2-T5 / #94). A frozen rollup is the immutable final record and its work items
+    // were already purged in the same transaction that froze it, so re-selecting it on a
+    // later nightly run would recompute over the purged rows and overwrite the correct final
+    // figures with zeros. A frozen chain is done: skip it entirely.
     const closedChains = await runInOrgScope(oid, async (tx) =>
       rows<{ chain_root_id: string }>(
         await tx.execute(sql`
-          SELECT DISTINCT chain_root_id FROM burn_engagements
-           WHERE organization_id = ${oid} AND status = 'closed'
+          SELECT DISTINCT e.chain_root_id FROM burn_engagements e
+           WHERE e.organization_id = ${oid} AND e.status = 'closed'
+             AND NOT EXISTS (
+               SELECT 1 FROM burn_engagement_rollups r
+                WHERE r.organization_id = ${oid}
+                  AND r.chain_root_id = e.chain_root_id
+                  AND r.frozen_at IS NOT NULL
+             )
         `),
       ),
     );
@@ -53,7 +63,10 @@ export async function runRetention(
         if (!(await tryOrgSweepLock(tx, oid))) return { skipped: true, purged: 0 };
         // 1. recompute to final (pre-purge figure).
         const computed = await computeChainRollup(tx, oid, c.chain_root_id);
-        // 2. freeze upsert (creates a missing row; overwrites even a frozen row's figure to final).
+        // 2. freeze upsert (creates a missing row; NEVER overwrites an already-frozen row -
+        //    the DO UPDATE carries the `frozen_at IS NULL` guard, mirroring rollup.engine.ts,
+        //    so even if a concurrent freeze slipped in after the closed-chain select above the
+        //    final figures stay immutable).
         await tx.execute(sql`
           INSERT INTO burn_engagement_rollups (
             organization_id, chain_root_id, contract_value, attributed_billable, attributed_cost,
@@ -75,6 +88,7 @@ export async function runRetention(
             attributed_cost = EXCLUDED.attributed_cost, margin_amount = EXCLUDED.margin_amount,
             margin_pct = EXCLUDED.margin_pct, consumption_pct = EXCLUDED.consumption_pct,
             margin_state = 'final', frozen_at = COALESCE(burn_engagement_rollups.frozen_at, now()), computed_at = now()
+          WHERE burn_engagement_rollups.frozen_at IS NULL
         `);
         // 3. purge work items for this closed chain (attributions cascade via FK).
         const del = rows<{ id: string }>(

@@ -532,6 +532,138 @@ describe.skipIf(!DATABASE_URL)('section 3 live constraints', () => {
     });
   });
 
+  describe('retention freeze immutability (#94, R2-T5)', () => {
+    // These mirror the two guarded statements in
+    // apps/burn-api/src/services/engines/retention.engine.ts: (1) the closed-chain selection
+    // that EXCLUDES chains whose rollup is already frozen, and (2) the freeze upsert whose
+    // DO UPDATE carries `WHERE frozen_at IS NULL`. Together they guarantee a frozen rollup is
+    // immutable, so a second nightly retention run cannot recompute over the purged work
+    // items and overwrite the correct final figures with zeros.
+    const closedChainRoot = () => uuid();
+
+    async function seedClosedFrozen(rootId: string) {
+      await sql`
+        INSERT INTO burn_engagements (id, organization_id, title, chain_root_id, status, created_by)
+        VALUES (${rootId}, ${ORG_ID}, 'Closed frozen chain', ${rootId}, 'closed', ${USER_ID})`;
+      await sql`
+        INSERT INTO burn_engagement_rollups ${sql({
+          organization_id: ORG_ID,
+          chain_root_id: rootId,
+          metric_basis: 'true_margin',
+          revenue_basis: 'contract_value',
+          contract_value: 100000,
+          attributed_billable: 50000,
+          attributed_cost: 20000,
+          margin_amount: 30000,
+          margin_pct: 60,
+          consumption_pct: 50,
+          margin_state: 'final',
+          frozen_at: sql`now()` as unknown as string,
+        })} RETURNING id`;
+    }
+
+    // The exact guarded upsert from retention.engine.ts, run with ZERO figures (what a
+    // recompute-over-purged-rows produces). The guard must leave a frozen row untouched.
+    async function guardedFreezeUpsert(rootId: string) {
+      await sql`
+        INSERT INTO burn_engagement_rollups (
+          organization_id, chain_root_id, contract_value, attributed_billable, attributed_cost,
+          consumption_pct, margin_amount, margin_pct, metric_basis, revenue_basis, margin_state,
+          frozen_at, computed_at
+        ) VALUES (
+          ${ORG_ID}, ${rootId}, 0, 0, 0, 0, 0, 0, 'contract_consumption', 'contract_value',
+          'final', now(), now()
+        )
+        ON CONFLICT (organization_id, chain_root_id) DO UPDATE SET
+          contract_value = EXCLUDED.contract_value, attributed_billable = EXCLUDED.attributed_billable,
+          attributed_cost = EXCLUDED.attributed_cost, margin_amount = EXCLUDED.margin_amount,
+          margin_pct = EXCLUDED.margin_pct, consumption_pct = EXCLUDED.consumption_pct,
+          margin_state = 'final', frozen_at = COALESCE(burn_engagement_rollups.frozen_at, now()), computed_at = now()
+        WHERE burn_engagement_rollups.frozen_at IS NULL`;
+    }
+
+    it('a second retention run does NOT change a frozen rollup figures', async () => {
+      const rootId = closedChainRoot();
+      await seedClosedFrozen(rootId);
+
+      await guardedFreezeUpsert(rootId); // the "night two" recompute-to-zero attempt
+
+      const [row] = await sql`
+        SELECT attributed_billable, attributed_cost, margin_amount, margin_pct, consumption_pct,
+               contract_value, metric_basis
+          FROM burn_engagement_rollups
+         WHERE organization_id = ${ORG_ID} AND chain_root_id = ${rootId}`;
+      // Every figure is the ORIGINAL frozen value, not the zero the recompute would have written.
+      expect(Number(row.attributed_billable)).toBe(50000);
+      expect(Number(row.attributed_cost)).toBe(20000);
+      expect(Number(row.margin_amount)).toBe(30000);
+      expect(Number(row.margin_pct)).toBe(60);
+      expect(Number(row.consumption_pct)).toBe(50);
+      expect(Number(row.contract_value)).toBe(100000);
+      expect(row.metric_basis).toBe('true_margin');
+
+      await sql`DELETE FROM burn_engagements WHERE id = ${rootId}`;
+    });
+
+    it('the closed-chain selection EXCLUDES a chain whose rollup is already frozen', async () => {
+      const rootId = closedChainRoot();
+      await seedClosedFrozen(rootId);
+
+      const selected = await sql<{ chain_root_id: string }[]>`
+        SELECT DISTINCT e.chain_root_id FROM burn_engagements e
+         WHERE e.organization_id = ${ORG_ID} AND e.status = 'closed'
+           AND NOT EXISTS (
+             SELECT 1 FROM burn_engagement_rollups r
+              WHERE r.organization_id = ${ORG_ID}
+                AND r.chain_root_id = e.chain_root_id
+                AND r.frozen_at IS NOT NULL
+           )`;
+      expect(selected.map((r) => r.chain_root_id)).not.toContain(rootId);
+
+      await sql`DELETE FROM burn_engagements WHERE id = ${rootId}`;
+    });
+
+    it('the SAME upsert DOES freeze a not-yet-frozen closed chain (positive path)', async () => {
+      const rootId = closedChainRoot();
+      await sql`
+        INSERT INTO burn_engagements (id, organization_id, title, chain_root_id, status, created_by)
+        VALUES (${rootId}, ${ORG_ID}, 'Closed, live rollup', ${rootId}, 'closed', ${USER_ID})`;
+      // A live (in_progress, not-frozen) rollup, as burn-rollup-refresh would have left it.
+      await sql`
+        INSERT INTO burn_engagement_rollups ${sql({
+          organization_id: ORG_ID,
+          chain_root_id: rootId,
+          metric_basis: 'contract_consumption',
+          revenue_basis: 'contract_value',
+          attributed_billable: 12345,
+          margin_state: 'in_progress',
+        })}`;
+
+      // The upsert writes the recomputed figures AND stamps frozen_at, because frozen_at was null.
+      await sql`
+        INSERT INTO burn_engagement_rollups (
+          organization_id, chain_root_id, attributed_billable, metric_basis, revenue_basis,
+          margin_state, frozen_at, computed_at
+        ) VALUES (
+          ${ORG_ID}, ${rootId}, 99999, 'contract_consumption', 'contract_value', 'final', now(), now()
+        )
+        ON CONFLICT (organization_id, chain_root_id) DO UPDATE SET
+          attributed_billable = EXCLUDED.attributed_billable, margin_state = 'final',
+          frozen_at = COALESCE(burn_engagement_rollups.frozen_at, now()), computed_at = now()
+        WHERE burn_engagement_rollups.frozen_at IS NULL`;
+
+      const [row] = await sql`
+        SELECT attributed_billable, margin_state, frozen_at
+          FROM burn_engagement_rollups
+         WHERE organization_id = ${ORG_ID} AND chain_root_id = ${rootId}`;
+      expect(Number(row.attributed_billable)).toBe(99999);
+      expect(row.margin_state).toBe('final');
+      expect(row.frozen_at).not.toBeNull();
+
+      await sql`DELETE FROM burn_engagements WHERE id = ${rootId}`;
+    });
+  });
+
   describe('the project-scope predicate has no null fallback (R2-S6)', () => {
     it('resolves a zero-project chain to zero members through the EXISTS predicate', async () => {
       // A chain with no linked projects is read_all-only BY CONSTRUCTION: the predicate
