@@ -8,34 +8,46 @@
  * award is frozen into a baseline, and post-award the detectors light up on the
  * Island Weather Feed's price drift and renewal cliff.
  *
- * Depends on bond.mjs (companies) and bill.mjs (expenses) having run first - it is
- * registered in run-all.mjs's Billing phase. Idempotent: skips the request (and its
- * whole offer/award chain) if the "Lagoon Rescue Beacon Procurement" request already
- * exists, and skips vendors already present by name.
+ * DETERMINISTIC materialization (no live LLM). The original seed drove the async
+ * derive-scope -> level engines, which call the internal LLM proxy: non-deterministic,
+ * provider-dependent, and (with no provider seeded) it left the request stuck at
+ * scope_status='pending' with 5 nodes, no leveling, no coverage, and no award. This
+ * seeder instead writes the FULL settled end-state directly via SQL - the 14-node
+ * confirmed scope tree, the four leveling runs, the per-(offer, node) coverage matrix,
+ * the comparable totals, and the split-blanket manipulation finding - then calls the
+ * REAL POST /awards route so the Radio Parts baseline (hash, entity_links, events) is
+ * produced authentically from the coverage it reads. The result reproduces
+ * BURSAR_SEED_EXPECTATIONS exactly, so the Matrix/Diff UI, screenshots, and the 12-step
+ * Playwright suite all settle on one canonical state.
  *
- * Run via run-all.mjs, which injects BURSAR_EXPECTATIONS (the canonical number set
- * from bursar.expectations.mjs) so this seeder and the Playwright suite agree on one
- * source (spec 19.3). Standalone:
+ * Depends on bond.mjs (companies) and bill.mjs (expenses) having run first - it is
+ * registered in run-all.mjs's Billing phase. Idempotent: if an award already exists on
+ * the request the whole build is skipped; otherwise it CLEANS the request's prior
+ * offers/nodes/coverage/runs/mismatches and rebuilds from scratch (safe to re-run).
+ * Every insert carries the gilligan organization_id (resolved from the request row).
+ *
+ * Runs INSIDE the api container (`docker compose exec -T api node -`), so it can do BOTH
+ * HTTP calls to bursar-api (vendors, the award route) AND direct SQL via the `postgres`
+ * driver on DATABASE_URL (the pattern bay.mjs already uses). Bursar internal host is
+ * http://bursar-api:4023 and ALL routes register under /v1. Money is in MINOR units
+ * (cents). NEVER seed the generic e2e org - gilligan only.
+ *
+ * Run via run-all.mjs, which injects BURSAR_EXPECTATIONS (the canonical number set from
+ * bursar.expectations.mjs) so this seeder and the Playwright suite agree on one source
+ * (spec 19.3). Standalone:
  *   GKEYS=$(node -e '<load scripts/.gilligan-keys.env to JSON>') \
  *   docker compose exec -T -e GKEYS="$GKEYS" api node - < scripts/seed-gilligan/bursar.mjs
- *
- * Bursar internal host is http://bursar-api:4023 and ALL routes register under /v1
- * (apps/bursar-api/src/server.ts), so the base is /v1. Cast API keys authenticate via
- * Bearer, which scopes to the gilligan org. Money is in MINOR units (cents).
- *
- * NOTE: derivation and leveling run asynchronously through the worker engines, so the
- * coverage matrix / totals materialize a few seconds after this seeder returns. This
- * script drives the sequence and is best-effort per step (like the other per-app
- * seeders); the Playwright suite asserts the settled state against a fully-seeded
- * stack. NEVER seed the generic e2e org - gilligan only.
  */
+
+import { createHash } from 'node:crypto';
+import postgres from 'postgres';
 
 const BASE = 'http://bursar-api:4023/v1';
 const KEYS = JSON.parse(process.env.GKEYS || '{}');
 
-// Canonical numbers, injected by run-all.mjs from bursar.expectations.mjs. Absent on a
-// standalone run; the seeder still builds the same data from its inline definitions
-// below (the offer documents live here because only prose produces parsed totals).
+// Canonical numbers, injected by run-all.mjs from bursar.expectations.mjs (spec 19.3).
+// Absent on a standalone run; the inline INLINE_* fallbacks below mirror the same figures
+// so the seeder builds the identical state either way.
 const EXP = (() => {
   try {
     return JSON.parse(process.env.BURSAR_EXPECTATIONS || '{}');
@@ -46,6 +58,20 @@ const EXP = (() => {
 
 // Cast owner (Skipper) - the request owner and the identity the Playwright suite runs as.
 const OWNER = 'skipper';
+const REQUEST_TITLE = 'Lagoon Rescue Beacon Procurement';
+
+function sha256(s) {
+  return createHash('sha256').update(s).digest('hex');
+}
+
+// A deterministic, valid UUID (v5-shaped) from stable parts, so every re-run computes the
+// same ids and the natural unique keys line up. Not a real namespaced v5 - just a stable,
+// well-formed uuid for seed rows.
+function duid(...parts) {
+  const h = sha256(parts.join('|'));
+  const y = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${y}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
 
 function H(who, hasBody) {
   const h = { Authorization: `Bearer ${KEYS[who]}` };
@@ -61,13 +87,6 @@ async function api(who, method, path, body) {
   });
   const data = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, data: data?.data ?? data, raw: data };
-}
-
-// A tiny sha256 helper for the spend-import resumability key (node crypto is available
-// in the api container runtime).
-import { createHash } from 'node:crypto';
-function sha256(s) {
-  return createHash('sha256').update(s).digest('hex');
 }
 
 // ── Vendors (5), with the messy aliases spec 19 calls out ──────────────
@@ -105,120 +124,93 @@ const VENDORS = [
     display_name: "Professor's Lab Supply",
     category: 'hardware',
     criticality: 'standard',
-    aliases: ["PROF LAB SUPPLY", "Professors Laboratory Supply"],
+    aliases: ['PROF LAB SUPPLY', 'Professors Laboratory Supply'],
   },
 ];
 
-// The RFP text the scope tree is derived from. Written so a deterministic pre-pass +
-// classifier yields the three named mandatory nodes plus the request-level nodes; the
-// two should_have nodes come from the library apply-step.
-const RFP_TEXT = `LAGOON RESCUE BEACON PROCUREMENT - Statement of Requirements
-Budget ceiling: USD 18,000. Category: hardware_purchase. Owner: The Skipper.
-
-The vendor SHALL supply one (1) marine rescue beacon system for the lagoon, meeting
-all of the following MANDATORY requirements:
-1. On-island installation and commissioning of the beacon, performed on site.
-2. Crew training for six (6) crew members on operation and emergency use.
-3. A 24-month parts warranty covering all supplied hardware.
-4. Weatherproof beacon enclosure rated for tropical marine exposure.
-5. Solar charging array with a 72-hour battery reserve.
-6. Dual-band distress transmitter (121.5 and 406 MHz).
-7. GPS position encoding in the distress signal.
-8. Automatic activation on water immersion.
-9. Manual activation switch accessible from the deck.
-10. Documented test/inspection procedure at handover.
-11. Spare-parts kit sufficient for one field repair.
-12. Operating manual in printed and digital form.
-
-Delivery to the lagoon dock. Award will be made on best overall value, not lowest price.`;
-
-// Human scope nodes we add after derivation to GUARANTEE the three named mandatory
-// nodes exist verbatim (spec 19), independent of derivation nondeterminism.
-const MANDATORY_ADDS = [
-  'On-island installation and commissioning',
-  'Crew training for six',
-  '24-month parts warranty',
+// ── The 14-node confirmed scope tree ────────────────────────────────────
+// 12 mandatory (3 named verbatim + 9 request-derived) + 2 library should_have. `quote` is the
+// cited span the Scope Tree popover shows (spec 20.3 step 1 asserts at least one non-empty).
+const NODES = [
+  { title: 'On-island installation and commissioning', strength: 'mandatory', derived: 'request_document', quote: 'On-island installation and commissioning of the beacon, performed on site.' },
+  { title: 'Crew training for six', strength: 'mandatory', derived: 'request_document', quote: 'Crew training for six (6) crew members on operation and emergency use.' },
+  { title: '24-month parts warranty', strength: 'mandatory', derived: 'request_document', quote: 'A 24-month parts warranty covering all supplied hardware.' },
+  { title: 'Weatherproof beacon enclosure', strength: 'mandatory', derived: 'request_document', quote: 'Weatherproof beacon enclosure rated for tropical marine exposure.' },
+  { title: 'Solar charging array with 72-hour battery reserve', strength: 'mandatory', derived: 'request_document', quote: 'Solar charging array with a 72-hour battery reserve.' },
+  { title: 'Dual-band distress transmitter (121.5 and 406 MHz)', strength: 'mandatory', derived: 'request_document', quote: 'Dual-band distress transmitter (121.5 and 406 MHz).' },
+  { title: 'GPS position encoding in the distress signal', strength: 'mandatory', derived: 'request_document', quote: 'GPS position encoding in the distress signal.' },
+  { title: 'Automatic activation on water immersion', strength: 'mandatory', derived: 'request_document', quote: 'Automatic activation on water immersion.' },
+  { title: 'Manual activation switch accessible from the deck', strength: 'mandatory', derived: 'request_document', quote: 'Manual activation switch accessible from the deck.' },
+  { title: 'Documented test and inspection procedure at handover', strength: 'mandatory', derived: 'request_document', quote: 'Documented test/inspection procedure at handover.' },
+  { title: 'Spare-parts kit sufficient for one field repair', strength: 'mandatory', derived: 'request_document', quote: 'Spare-parts kit sufficient for one field repair.' },
+  { title: 'Operating manual in printed and digital form', strength: 'mandatory', derived: 'request_document', quote: 'Operating manual in printed and digital form.' },
+  { title: 'Data export on termination', strength: 'should_have', derived: 'library', quote: 'On termination, the vendor shall export all data in a portable format.' },
+  { title: 'Price escalation cap', strength: 'should_have', derived: 'library', quote: 'Annual price escalation shall be capped at a stated percentage.' },
 ];
 
-// The four offers. `source_format` matches the declared provenance (spec 19.1). Each
-// body is written so the deterministic parse + absence engine reproduce the documented
-// gaps and gap_adjusted totals.
+// ── The four offers (spec 19.1). `lines` are the parsed offer-line ledger; `stated` is the
+//    sticker total (minor); `gapAdjusted` is the comparable total after valuing gaps (null when
+//    withheld). Each offer's source_text produces the parsed lines and the source_doc_hash. ──
 const OFFERS = [
   {
-    key: 'howell',
-    label: 'Howell Industries Salvage',
-    vendor: 'howell',
-    source_format: 'pdf',
-    // stated $16,400. Crew training ABSENT (not mentioned). Installation EXCLUDED_EXPLICIT.
-    source_text: `HOWELL INDUSTRIES SALVAGE - Beacon Bid
-Total price: USD 16,400.
-Included: weatherproof beacon enclosure; solar charging array with 72-hour reserve;
-dual-band 121.5/406 MHz distress transmitter; GPS position encoding; automatic water
-activation; manual deck switch; documented handover test; spare-parts kit; printed and
-digital operating manual; 24-month parts warranty.
-Exclusions: On-island installation and commissioning is NOT included; installation by
-others. Delivery to lagoon dock only.`,
+    key: 'howell', label: 'Howell Industries Salvage', vendor: 'howell', source_format: 'pdf',
+    stated: 1_640_000, gapAdjusted: 2_195_000, blanket: false,
+    source_text: 'HOWELL INDUSTRIES SALVAGE - Beacon Bid. Total price: USD 16,400. Installation by others.',
+    lines: [
+      { role: 'base', amount: 1_640_000, text: 'Total price: USD 16,400. Included: enclosure, solar array, dual-band transmitter, GPS, water activation, deck switch, handover test, spare-parts kit, operating manual, 24-month parts warranty.' },
+      { role: 'exclusion', amount: null, exclusion: true, text: 'On-island installation and commissioning is NOT included; installation by others.' },
+    ],
   },
   {
-    key: 'radio',
-    label: 'Radio Parts & Coconut Wire Co',
-    vendor: 'radio',
-    source_format: 'csv',
-    // stated $19,100. Warranty PARTIAL (12 vs 24 mo, delta_kind=term). Own optional line
-    // "24-month warranty upgrade +600" makes the term-delta rung 1 (one observation).
-    source_text: `line_item,role,amount_usd
-Rescue beacon system (base),base,19100
-On-island installation and commissioning,base,included
-Crew training for six,base,included
-12-month parts warranty (standard),base,included
-24-month warranty upgrade,option,600
-Weatherproof enclosure,base,included
-Solar array 72h reserve,base,included
-Dual-band 121.5/406 transmitter,base,included
-GPS position encoding,base,included
-Automatic water activation,base,included
-Manual deck switch,base,included
-Handover test procedure,base,included
-Spare-parts kit,base,included
-Operating manual (print+digital),base,included`,
+    key: 'radio', label: 'Radio Parts & Coconut Wire Co', vendor: 'radio', source_format: 'csv',
+    stated: 1_910_000, gapAdjusted: 1_970_000, blanket: false,
+    source_text: 'Radio Parts & Coconut Wire Co - exported bid spreadsheet. Base 19100; 24-month warranty upgrade 600.',
+    lines: [
+      { role: 'base', amount: 1_910_000, text: 'Rescue beacon system (base): USD 19,100. Installation, crew training, enclosure, solar array, transmitter, GPS, activation, deck switch, handover test, spare-parts kit, manual all included.' },
+      { role: 'option', amount: 60_000, unit: 60_000, text: '24-month warranty upgrade: +USD 600 (upgrades the standard 12-month parts warranty to 24 months).' },
+      { role: 'base', amount: null, text: '12-month parts warranty (standard): included.' },
+    ],
   },
   {
-    key: 'lagoon',
-    label: 'Lagoon Freight Lines',
-    vendor: 'lagoon',
-    source_format: 'email',
-    // stated $17,800. Warranty ABSENT (mandatory). Escalation cap ABSENT (should_have, unvalued).
-    source_text: `From: sales@lagoonfreight.example
-Subject: Rescue Beacon Quote
-
-Hi Skipper,
-
-Our all-in price for the lagoon rescue beacon is USD 17,800. That covers on-island
-installation and commissioning, crew training for six, the weatherproof enclosure, the
-solar array with 72-hour reserve, the dual-band 121.5/406 MHz transmitter, GPS encoding,
-automatic water activation, the manual deck switch, the handover test, a spare-parts kit,
-and the printed and digital manual.
-
-Delivery to the lagoon dock is included.
-
-- Lagoon Freight Lines`,
+    key: 'lagoon', label: 'Lagoon Freight Lines', vendor: 'lagoon', source_format: 'email',
+    stated: 1_780_000, gapAdjusted: 1_900_000, blanket: false,
+    source_text: 'Lagoon Freight Lines - all-in rescue beacon quote USD 17,800; delivery to the lagoon dock included.',
+    lines: [
+      { role: 'base', amount: 1_780_000, text: 'All-in price USD 17,800: on-island installation and commissioning, crew training for six, enclosure, solar array, transmitter, GPS, water activation, deck switch, handover test, spare-parts kit, and manual.' },
+    ],
   },
   {
-    key: 'professor',
-    label: "Professor's Lab Supply",
-    vendor: 'professor',
-    source_format: 'pdf',
-    // stated $15,900. The SPLIT-BLANKET demo: four coordinated lines, 3-4 nodes each, NO
-    // lexicon token. Trips the cumulative fan-out + evidence-concentration caps -> zero
-    // auto-published covered, offer_manipulation_suspected, all mandatory nodes withheld.
-    source_text: `PROFESSOR'S LAB SUPPLY - Rescue Beacon Proposal
-Total: USD 15,900.
-Installation, crew training and the 24-month warranty are provided at no additional charge.
-Data export, escalation cap and commissioning are provided at no additional charge.
-The enclosure, solar array and dual-band transmitter are provided at no additional charge.
-GPS encoding, water activation, the manual switch and the handover test are provided at no additional charge.`,
+    key: 'professor', label: "Professor's Lab Supply", vendor: 'professor', source_format: 'pdf',
+    stated: 1_590_000, gapAdjusted: null, blanket: true,
+    source_text: "Professor's Lab Supply - Rescue Beacon Proposal. Total USD 15,900. Everything provided at no additional charge.",
+    lines: [
+      { role: 'base', blanket: true, amount: null, text: 'Installation, crew training and the 24-month warranty are provided at no additional charge.' },
+      { role: 'base', blanket: true, amount: null, text: 'Data export, escalation cap and commissioning are provided at no additional charge.' },
+      { role: 'base', blanket: true, amount: null, text: 'The enclosure, solar array and dual-band transmitter are provided at no additional charge.' },
+      { role: 'base', blanket: true, amount: null, text: 'GPS encoding, water activation, the manual switch and the handover test are provided at no additional charge.' },
+    ],
   },
 ];
+
+// ── The coverage gaps per offer, keyed by node title. Everything not listed is `covered`
+//    (published, high band). Professor is the split-blanket demo: EVERY node is capped to
+//    needs_review with withheld_reason='blanket_cap' (0 auto-published covered). ──
+const GAPS = {
+  howell: {
+    'Crew training for six': { verdict: 'absent', priced: 250_000, rejected: true },
+    'On-island installation and commissioning': { verdict: 'excluded_explicit', priced: 305_000, line: 'exclusion' },
+  },
+  radio: {
+    '24-month parts warranty': { verdict: 'partial', delta_kind: 'term', delta: 60_000, priced: 60_000, line: 'option' },
+  },
+  lagoon: {
+    '24-month parts warranty': { verdict: 'absent', priced: 120_000, rejected: true },
+    // should_have supplement, absent + unvalued: routes to review (non-mandatory absent), so it is
+    // NOT in the exclusion diff (mandatory-only) and NOT a counted headline gap.
+    'Price escalation cap': { verdict: 'absent', priced: null, rejected: true, review: 'needs_review', band: 'low', withheld: 'band' },
+  },
+  professor: '__blanket__',
+};
 
 // ── helpers ────────────────────────────────────────────────────────────
 async function ensureVendors() {
@@ -243,7 +235,6 @@ async function ensureVendors() {
       console.log(`[bursar] vendor ${v.display_name} (${row.id})`);
     }
     ids[v.key] = row.id;
-    // Aliases (idempotent server-side by normalized payee).
     for (const raw of v.aliases) {
       await api(OWNER, 'POST', `/vendors/${row.id}/aliases`, { raw_payee: raw });
     }
@@ -254,16 +245,250 @@ async function ensureVendors() {
 async function findRequest() {
   const r = await api(OWNER, 'GET', '/requests?limit=200');
   const list = Array.isArray(r.data) ? r.data : [];
-  return list.find((x) => x.title === 'Lagoon Rescue Beacon Procurement') ?? null;
+  return list.find((x) => x.title === REQUEST_TITLE) ?? null;
 }
 
-async function poll(fn, pred, tries = 15, delayMs = 1200) {
-  for (let i = 0; i < tries; i++) {
-    const v = await fn();
-    if (pred(v)) return v;
-    await new Promise((res) => setTimeout(res, delayMs));
+function dedupKey(title) {
+  return sha256(title).slice(0, 40);
+}
+
+// The canonical numbers, EXP-first with inline fallback so both run-all and standalone build
+// the identical state (spec 19.3 - one source for the numbers).
+function expOffer(key) {
+  return (EXP.offers || []).find((o) => o.key === key) || {};
+}
+function statedOf(o) {
+  return expOffer(o.key).statedMinor ?? o.stated;
+}
+function gapAdjustedOf(o) {
+  const e = expOffer(o.key);
+  return 'gapAdjustedMinor' in e ? e.gapAdjustedMinor : o.gapAdjusted;
+}
+
+/**
+ * Materialize the whole settled end-state for the request directly in one transaction, then
+ * (outside it) call the real award route. Idempotent: if an award already exists the build is
+ * skipped; otherwise the request's prior offer/scope/coverage graph is cleaned and rebuilt.
+ */
+async function materialize(sql, req, vendorIds) {
+  const org = req.organization_id;
+  const rid = req.id;
+  const skipper = req.created_by;
+
+  // Skip a fully-built request (award present == everything downstream is frozen).
+  const [{ n: awardCount }] = await sql`
+    SELECT count(*)::int AS n FROM bursar_awards WHERE organization_id = ${org} AND request_id = ${rid}
+  `;
+  if (awardCount > 0) {
+    console.log('[bursar] award already present; deterministic build is idempotent, skipping rebuild');
+    return { built: false };
   }
-  return null;
+
+  // ── Clean any prior (LLM-path or half-built) graph for this request. No award exists, so
+  //    nothing is immutable. Deleting offers cascades their lines/coverage/window-results/totals;
+  //    then the nodes have no referencing coverage and can be removed. ──
+  await sql.begin(async (tx) => {
+    await tx`SELECT set_config('app.current_org_id', ${org}, true)`;
+    await tx`DELETE FROM bursar_mismatches WHERE organization_id = ${org} AND request_id = ${rid}`;
+    await tx`DELETE FROM bursar_offers WHERE organization_id = ${org} AND request_id = ${rid}`;
+    await tx`DELETE FROM bursar_leveling_runs WHERE organization_id = ${org} AND request_id = ${rid}`;
+    await tx`UPDATE bursar_scope_nodes SET parent_id = NULL WHERE organization_id = ${org} AND request_id = ${rid}`;
+    await tx`DELETE FROM bursar_scope_nodes WHERE organization_id = ${org} AND request_id = ${rid}`;
+  });
+
+  // ── Build in one transaction ────────────────────────────────────────
+  await sql.begin(async (tx) => {
+    await tx`SELECT set_config('app.current_org_id', ${org}, true)`;
+
+    // 1. The 14-node confirmed scope tree.
+    const nodeIdByTitle = new Map();
+    let ordinal = 0;
+    for (const n of NODES) {
+      const id = duid(rid, 'node', n.title);
+      nodeIdByTitle.set(n.title, id);
+      await tx`
+        INSERT INTO bursar_scope_nodes (
+          id, organization_id, request_id, ordinal, title, node_kind, normative_strength,
+          derived_from, cited_span, confidence, review_status, dedup_key
+        ) VALUES (
+          ${id}, ${org}, ${rid}, ${ordinal}, ${n.title}, 'requirement', ${n.strength},
+          ${n.derived}, ${sql.json({ quote: n.quote })}, 96.00, 'confirmed', ${dedupKey(n.title)}
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+      ordinal += 1;
+    }
+
+    // 2. Freeze the ruler: the request is confirmed.
+    await tx`
+      UPDATE bursar_requests
+         SET scope_status = 'confirmed', scope_confirmed_at = now(), scope_confirmed_by = ${skipper},
+             updated_at = now()
+       WHERE organization_id = ${org} AND id = ${rid}
+    `;
+
+    // 3-7. Per offer: the offer row, its parsed lines, a succeeded leveling run, the coverage
+    //      matrix over all 14 nodes, and the comparable totals.
+    for (const o of OFFERS) {
+      const offerId = duid(rid, 'offer', o.key);
+      const stated = statedOf(o);
+      const gapAdjusted = gapAdjustedOf(o);
+
+      await tx`
+        INSERT INTO bursar_offers (
+          id, organization_id, request_id, vendor_id, label, status, normalization_status,
+          parse_quality, blanket_suspected, unsubpriced_mandatory_count, evidence_concentration,
+          source_format, source_doc_hash, currency, created_by, parsed_at
+        ) VALUES (
+          ${offerId}, ${org}, ${rid}, ${vendorIds[o.vendor] ?? null}, ${o.label}, 'received', 'parsed',
+          ${o.blanket ? 0.9 : 0.96}, ${o.blanket}, ${o.blanket ? 12 : 0}, ${o.blanket ? 0.2857 : null},
+          ${o.source_format}, ${sha256(o.source_text)}, 'USD', ${skipper}, now()
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+
+      // Parsed lines; remember one id per role so coverage can cite a real line.
+      const lineIdByRole = {};
+      let lord = 0;
+      for (const ln of o.lines) {
+        const lineId = duid(rid, 'line', o.key, String(lord));
+        if (!(ln.role in lineIdByRole)) lineIdByRole[ln.role] = lineId;
+        await tx`
+          INSERT INTO bursar_offer_lines (
+            id, organization_id, offer_id, ordinal, raw_text, unit_price_minor, extended_minor,
+            currency, line_role, blanket_claim, exclusion_hit, parsed_by
+          ) VALUES (
+            ${lineId}, ${org}, ${offerId}, ${lord}, ${ln.text}, ${ln.unit ?? null}, ${ln.amount ?? null},
+            'USD', ${ln.role}, ${!!ln.blanket}, ${!!ln.exclusion}, 'deterministic'
+          )
+          ON CONFLICT (id) DO NOTHING
+        `;
+        lord += 1;
+      }
+      const baseLine = lineIdByRole.base ?? Object.values(lineIdByRole)[0];
+
+      // A succeeded leveling run per offer (4 runs total).
+      const runId = duid(rid, 'run', o.key);
+      await tx`
+        INSERT INTO bursar_leveling_runs (
+          id, organization_id, request_id, status, last_processed_offer_index,
+          last_processed_node_index, last_processed_window_index, offer_count, node_count,
+          coverage_written, claimed_by, heartbeat_at, started_at, finished_at
+        ) VALUES (
+          ${runId}, ${org}, ${rid}, 'succeeded', 0, ${NODES.length - 1}, 0, 1, ${NODES.length},
+          ${NODES.length}, 'gilligan-seed', now(), now(), now()
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+
+      // Coverage for every (offer, node).
+      const gapSpec = GAPS[o.key];
+      for (const n of NODES) {
+        const nodeId = nodeIdByTitle.get(n.title);
+        let verdict = 'covered';
+        let review = 'published';
+        let band = 'high';
+        let withheld = null;
+        let deltaKind = null;
+        let delta = null;
+        let priced = null;
+        let matched = [baseLine];
+        let rejected = [];
+        let blanketSuspected = false;
+
+        if (gapSpec === '__blanket__') {
+          // Every node is a capped blanket claim: covered but withheld to review.
+          verdict = 'covered';
+          review = 'needs_review';
+          band = 'low';
+          withheld = 'blanket_cap';
+          blanketSuspected = true;
+          matched = [lineIdByRole.base ?? baseLine];
+        } else if (gapSpec && gapSpec[n.title]) {
+          const g = gapSpec[n.title];
+          verdict = g.verdict;
+          review = g.review ?? 'published';
+          band = g.band ?? 'high';
+          withheld = g.withheld ?? null;
+          deltaKind = g.delta_kind ?? null;
+          delta = g.delta ?? null;
+          priced = g.priced ?? null;
+          if (g.line && lineIdByRole[g.line]) matched = [lineIdByRole[g.line]];
+          if (g.verdict === 'absent') {
+            matched = [];
+            rejected = [{ offer_line_id: baseLine, reason: `no line prices "${n.title}"` }];
+          }
+        }
+
+        const covId = duid(rid, 'cov', o.key, n.title);
+        await tx`
+          INSERT INTO bursar_offer_coverage (
+            id, organization_id, offer_id, scope_node_id, leveling_run_id, verdict, decided_by,
+            matched_line_ids, rejected_candidates, composite_confidence, confidence_band,
+            review_status, withheld_reason, blanket_suspected, delta_kind, delta_amount_minor,
+            priced_amount_minor
+          ) VALUES (
+            ${covId}, ${org}, ${offerId}, ${nodeId}, ${runId}, ${verdict}, 'deterministic',
+            ${matched}::uuid[], ${sql.json(rejected)}, ${band === 'high' ? 0.9 : 0.4}, ${band},
+            ${review}, ${withheld}, ${blanketSuspected}, ${deltaKind}, ${delta}, ${priced}
+          )
+          ON CONFLICT (organization_id, offer_id, scope_node_id) DO NOTHING
+        `;
+      }
+
+      // Comparable totals (spec 10). gap_adjusted is renderable for the three clean offers and
+      // withheld (renderable=false) for the split-blanket Professor.
+      const renderable = gapAdjusted != null;
+      const unvaluedGaps = o.key === 'lagoon' ? 1 : o.key === 'professor' ? 12 : 0;
+      const totals = [
+        { kind: 'stated', amount: stated, renderable: true, unvalued: 0, estimated: false },
+        { kind: 'base_only', amount: stated, renderable: true, unvalued: 0, estimated: false },
+        { kind: 'gap_adjusted', amount: gapAdjusted, renderable, unvalued: unvaluedGaps, estimated: !renderable },
+      ];
+      if (o.key === 'lagoon') {
+        totals.push({ kind: 'should_have_supplement', amount: null, renderable: false, unvalued: 1, estimated: true });
+      }
+      for (const t of totals) {
+        await tx`
+          INSERT INTO bursar_offer_totals (
+            id, organization_id, offer_id, total_kind, currency, amount_minor, estimated,
+            unvalued_gap_count, renderable
+          ) VALUES (
+            ${duid(rid, 'total', o.key, t.kind)}, ${org}, ${offerId}, ${t.kind}, 'USD', ${t.amount},
+            ${t.estimated}, ${t.unvalued}, ${t.renderable}
+          )
+          ON CONFLICT (organization_id, offer_id, total_kind) DO NOTHING
+        `;
+      }
+
+      // The split-blanket product finding (spec 5.3), mirroring parse.store.ts.
+      if (o.blanket) {
+        const details = {
+          reasons: ['split_blanket'],
+          cap_reasons: ['cumulative_cap', 'evidence_concentration'],
+          unsubpriced_mandatory_count: 12,
+          evidence_concentration: 0.2857,
+          blanket_lines: o.lines.map((l) => l.text),
+        };
+        const dk = sha256(`offer_manipulation_suspected|${offerId}`);
+        await tx`
+          INSERT INTO bursar_mismatches (
+            organization_id, detector, severity, status, dedup_key, evidence_hash, request_id,
+            offer_id, cited_span, details
+          ) VALUES (
+            ${org}, 'offer_manipulation_suspected', 'high', 'open', ${dk}, ${sha256(JSON.stringify(details))},
+            ${rid}, ${offerId}, ${sql.json({ spans: [] })}, ${sql.json(details)}
+          )
+          ON CONFLICT (organization_id, dedup_key) DO UPDATE SET
+            status = CASE WHEN bursar_mismatches.status = 'dismissed' THEN bursar_mismatches.status ELSE 'open' END,
+            evidence_hash = EXCLUDED.evidence_hash, details = EXCLUDED.details, cited_span = EXCLUDED.cited_span,
+            last_seen_at = now(), updated_at = now()
+        `;
+      }
+    }
+  });
+
+  return { built: true, offerId: duid(rid, 'offer', 'radio') };
 }
 
 // ── main ────────────────────────────────────────────────────────────────
@@ -272,146 +497,96 @@ async function main() {
     console.error('[bursar] no cast API keys in GKEYS; skipping');
     return;
   }
+  if (!process.env.DATABASE_URL) {
+    console.error('[bursar] DATABASE_URL not set (run inside the api container); skipping');
+    return;
+  }
   if (!EXP.request) {
-    console.log('[bursar] BURSAR_EXPECTATIONS not injected; using inline definitions (standalone run)');
+    console.log('[bursar] BURSAR_EXPECTATIONS not injected; using inline figures (standalone run)');
   }
 
   const vendorIds = await ensureVendors();
 
+  // 1. Ensure the request exists (created via the real route so its org/owner are authentic).
   let request = await findRequest();
-  if (request) {
-    console.log(`[bursar] request already exists (${request.id}); seed is idempotent, skipping build`);
-    return;
+  if (!request) {
+    const cr = await api(OWNER, 'POST', '/requests', {
+      title: REQUEST_TITLE,
+      description:
+        'Marine rescue beacon for the lagoon. Budget ceiling USD 18,000. Category: hardware_purchase. Best overall value, not lowest price.',
+      currency: 'USD',
+    });
+    if (!cr.ok) {
+      console.error(`[bursar] request create -> ${cr.status} ${JSON.stringify(cr.raw).slice(0, 200)}`);
+      return;
+    }
+    request = cr.data;
+    console.log(`[bursar] request created (${request.id})`);
   }
 
-  // 1. Create the request.
-  const cr = await api(OWNER, 'POST', '/requests', {
-    title: 'Lagoon Rescue Beacon Procurement',
-    description:
-      'Marine rescue beacon for the lagoon. Budget ceiling USD 18,000. Category: hardware_purchase. Best overall value, not lowest price.',
-    currency: 'USD',
-  });
-  if (!cr.ok) {
-    console.error(`[bursar] request create -> ${cr.status} ${JSON.stringify(cr.raw).slice(0, 200)}`);
-    return;
-  }
-  request = cr.data;
-  const rid = request.id;
-  console.log(`[bursar] request created (${rid})`);
+  // The route response may not carry organization_id/created_by; resolve them from the row.
+  const sql = postgres(process.env.DATABASE_URL, { max: 1 });
+  try {
+    const [row] = await sql`
+      SELECT id, organization_id, created_by FROM bursar_requests WHERE id = ${request.id} LIMIT 1
+    `;
+    if (!row) {
+      console.error('[bursar] request row not found after create; aborting');
+      return;
+    }
 
-  // 2. Derive scope from the RFP text (async-start; poll to `derived`).
-  await api(OWNER, 'POST', `/requests/${rid}/derive-scope`, { source_text: RFP_TEXT });
-  await poll(
-    () => api(OWNER, 'GET', `/requests/${rid}/scope`),
-    (r) => r.ok && ['derived', 'confirmed'].includes(r.data?.request?.scope_status),
-  );
+    // 2. Deterministically materialize the full settled state.
+    const result = await materialize(sql, row, vendorIds);
 
-  // 3. Guarantee the three named mandatory nodes verbatim (idempotent by title).
-  const scope = await api(OWNER, 'GET', `/requests/${rid}/scope`);
-  const haveTitles = new Set((scope.data?.nodes ?? []).map((n) => n.title));
-  for (const title of MANDATORY_ADDS) {
-    if (!haveTitles.has(title)) {
-      await api(OWNER, 'POST', `/requests/${rid}/scope/nodes`, {
-        title,
-        normative_strength: 'mandatory',
-        node_kind: 'requirement',
+    // 3. Award to Radio Parts via the REAL route (reads the coverage we inserted to build the
+    //    immutable baseline: 14 included, warranty carrying a term delta). Guarded: skip if an
+    //    award already exists.
+    const [{ n: awards }] = await sql`
+      SELECT count(*)::int AS n FROM bursar_awards WHERE organization_id = ${row.organization_id} AND request_id = ${row.id}
+    `;
+    if (awards === 0) {
+      const today = new Date();
+      const termStart = today.toISOString().slice(0, 10);
+      const termEnd = new Date(today.getTime() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const aw = await api(OWNER, 'POST', '/awards', {
+        request_id: row.id,
+        offer_id: result.offerId ?? duid(row.id, 'offer', 'radio'),
+        vendor_id: vendorIds.radio,
+        currency: 'USD',
+        term_start: termStart,
+        term_end: termEnd,
+        auto_renew: true,
+        renewal_notice_days: 60,
+        timezone: 'UTC',
       });
-    }
-  }
-
-  // 4. Apply the two library should_have nodes ("Data export on termination", "Price
-  //    escalation cap"). Resolve library ids by title; skip gracefully if the library is
-  //    not seeded (the request-level nodes still carry the tree).
-  const lib = await api(OWNER, 'GET', '/library?limit=200');
-  const wantLib = ['Data export on termination', 'Price escalation cap'];
-  const libIds = (Array.isArray(lib.data) ? lib.data : [])
-    .filter((e) => wantLib.includes(e.title))
-    .map((e) => e.id);
-  if (libIds.length) {
-    await api(OWNER, 'POST', `/requests/${rid}/scope/apply-library`, { library_ids: libIds });
-  } else {
-    // Fall back to adding them as should_have human nodes so the 14-node tree is complete.
-    for (const title of wantLib) {
-      if (!haveTitles.has(title)) {
-        await api(OWNER, 'POST', `/requests/${rid}/scope/nodes`, {
-          title,
-          normative_strength: 'should_have',
-          node_kind: 'requirement',
-        });
+      if (aw.ok) {
+        console.log(`[bursar] award -> Radio Parts (${aw.data?.id ?? 'ok'}); baseline_counts=${JSON.stringify(aw.raw?.baseline_counts ?? {})}`);
+      } else {
+        console.error(`[bursar] award -> ${aw.status} ${JSON.stringify(aw.raw).slice(0, 300)}`);
       }
+    } else {
+      console.log('[bursar] award already present; skipping award call');
     }
+  } finally {
+    await sql.end({ timeout: 5 });
   }
 
-  // 5. Confirm the scope (freeze the ruler).
-  await api(OWNER, 'POST', `/requests/${rid}/scope/confirm`, {});
-
-  // 6. Create the four offers (inline source_text + declared format).
-  const offerIds = {};
-  for (const o of OFFERS) {
-    const c = await api(OWNER, 'POST', `/requests/${rid}/offers`, {
-      vendor_id: vendorIds[o.vendor] ?? null,
-      label: o.label,
-      currency: 'USD',
-      source_text: o.source_text,
-      source_format: o.source_format,
-    });
-    if (!c.ok) {
-      console.error(`[bursar] offer ${o.label} -> ${c.status}`);
-      continue;
-    }
-    offerIds[o.key] = c.data.id;
-    console.log(`[bursar] offer ${o.label} (${c.data.id})`);
-  }
-
-  // 7. Level the offers (async-start; the matrix materializes a few seconds later).
-  await api(OWNER, 'POST', `/requests/${rid}/level`, {});
-  await poll(
-    () => api(OWNER, 'GET', `/requests/${rid}/leveling-runs`),
-    (r) => r.ok && (r.data ?? []).some((run) => ['done', 'partial'].includes(run.status)),
-    20,
-    1500,
-  );
-
-  // 8. Award to Radio Parts (NOT the lowest gap_adjusted - spec 19.1). Freezes the baseline.
-  if (offerIds.radio) {
-    const today = new Date();
-    const termStart = today.toISOString().slice(0, 10);
-    const termEnd = new Date(today.getTime() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-    const aw = await api(OWNER, 'POST', '/awards', {
-      request_id: rid,
-      offer_id: offerIds.radio,
-      vendor_id: vendorIds.radio,
-      currency: 'USD',
-      term_start: termStart,
-      term_end: termEnd,
-      auto_renew: true,
-      renewal_notice_days: 60,
-      timezone: 'UTC',
-    });
-    if (aw.ok) console.log(`[bursar] award -> Radio Parts (${aw.data?.id ?? 'ok'})`);
-    else console.error(`[bursar] award -> ${aw.status} ${JSON.stringify(aw.raw).slice(0, 200)}`);
-  }
-
-  // 9. Post-award detector fuel: import observed spend rows (spec 19.3). The drift sweep
-  //    turns these into price_drift / scope_divergence / unbaselined_vendor findings, and
-  //    the Island Weather award below produces a renewal_cliff at t_minus_60.
+  // 4. Post-award detector fuel: import observed spend (spec 19.3). The drift sweep turns these
+  //    into price_drift / scope_divergence / unbaselined_vendor findings.
   await seedSpend();
 
-  console.log('[bursar] done: request, scope, 4 offers, Radio award, and detector spend seeded');
+  console.log('[bursar] done: 14-node confirmed scope, 4 leveled offers, Radio award, detector spend');
 }
 
-// Import the observed spend statement that the drift detectors key off. amount_minor is
-// signed minor units. Idempotent: the same file_sha256 RESUMES the upsert, never doubles.
+// Import the observed spend statement the drift detectors key off. amount_minor is signed minor
+// units. Idempotent: the same file_sha256 RESUMES the upsert, never doubles.
 async function seedSpend() {
   const today = new Date();
   const d = (daysAgo) => new Date(today.getTime() - daysAgo * 24 * 3600 * 1000).toISOString().slice(0, 10);
   const rows = [
-    // price_drift: Island Weather Feed billed ~40% above its baseline unit.
     { payee_raw: 'ISLAND WX FEED', occurred_on: d(20), amount_minor: 140_000, currency: 'USD', external_ref: 'IWF-DRIFT-1' },
     { payee_raw: 'ISLAND WX FEED', occurred_on: d(200), amount_minor: 100_000, currency: 'USD', external_ref: 'IWF-BASE-1' },
-    // scope_divergence: an "expedited lagoon delivery" charge with no baseline line.
     { payee_raw: 'RADIO PARTS+COCONUT', occurred_on: d(10), amount_minor: 45_000, currency: 'USD', external_ref: 'EXPEDITED-LAGOON-DELIVERY' },
-    // unbaselined_vendor: Professor's Lab Supply, four recurring charges, no award on file.
     { payee_raw: 'PROF LAB SUPPLY', occurred_on: d(90), amount_minor: 30_000, currency: 'USD', external_ref: 'PLS-REC-1' },
     { payee_raw: 'PROF LAB SUPPLY', occurred_on: d(60), amount_minor: 30_000, currency: 'USD', external_ref: 'PLS-REC-2' },
     { payee_raw: 'PROF LAB SUPPLY', occurred_on: d(30), amount_minor: 30_000, currency: 'USD', external_ref: 'PLS-REC-3' },

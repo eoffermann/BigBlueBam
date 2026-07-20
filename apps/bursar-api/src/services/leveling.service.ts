@@ -248,8 +248,9 @@ export async function getMatrix(viewer: Viewer, requestId: string) {
     );
     const coverage = pgRows<Record<string, unknown>>(
       await tx.execute(sql`
-        SELECT c.offer_id, c.scope_node_id, c.verdict, c.confidence_band, c.review_status,
-               c.withheld_reason, c.derived_covered, c.delta_kind, c.delta_amount_minor
+        SELECT c.id, c.offer_id, c.scope_node_id, c.verdict, c.confidence_band, c.review_status,
+               c.withheld_reason, c.derived_covered, c.delta_kind, c.delta_amount_minor,
+               c.cited_span, c.matched_line_ids, c.rejected_candidates
           FROM bursar_offer_coverage c
           JOIN bursar_offers o ON o.id = c.offer_id AND o.organization_id = c.organization_id
          WHERE c.organization_id = ${viewer.org_id} AND o.request_id = ${requestId}
