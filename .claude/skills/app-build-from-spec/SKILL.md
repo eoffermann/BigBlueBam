@@ -247,6 +247,22 @@ complete - regardless of how finished the REST and UI layers look.
 
 A new app is not "added" until it appears in the **Launchpad** and the stack can serve it.
 
+> **⚠ The `LAUNCHPAD_CATALOG` entry is the LAST thing you add, and only once the app is
+> genuinely COMPLETE.** The Launchpad is the suite's public "ready for consumption" contract:
+> a user can click any Launchpad tile and land on that app, and an agent sees every Launchpad
+> app advertised as drivable. An app that appears there half-built - no MCP tools, no help
+> docs, no marketing, no screenshots - is a consumer-facing defect, not an in-progress state.
+> Therefore **do NOT register the app in `LAUNCHPAD_CATALOG` at M1/M2 (scaffold time).** Do all
+> the scaffold + schema + routes + tools + SPA + docs + screenshots + marketing work first,
+> and add the `LAUNCHPAD_CATALOG` row near the end (this Phase 2 runs after M5 tools and
+> alongside/after M9-M11 docs+marketing). This is enforced by `pnpm check:app-completeness`
+> (`scripts/check-app-completeness.mjs`, wired into CI's lint workflow): for every app in
+> `LAUNCHPAD_CATALOG` it hard-fails unless the app has MCP tools, `docs/apps/<app>/help.md` +
+> `help-index.json`, a `site/src/components/sections/<app>-section.tsx` marketing section, and
+> `site/public/screenshots/<app>/` User-Story screenshots. If you catch yourself adding the
+> Launchpad entry before those exist, you will red the build - finish the app first. Run
+> `pnpm check:app-completeness` yourself before calling this phase done; it must exit 0.
+
 **Launchpad (required for every new app):**
 - Add the app id to `LAUNCHPAD_APP_IDS` and a metadata row to `LAUNCHPAD_CATALOG` in
   `apps/api/src/routes/system-settings.routes.ts` (`{ id, name, description, icon_name

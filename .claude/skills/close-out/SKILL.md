@@ -198,6 +198,15 @@ backticks are the objective checks - run them, do not eyeball.
 
 ### G. Launchpad + infra wiring (app-build-from-spec Phase 2 + Railway memory)
 
+- [ ] **Completeness gate is GREEN:** `pnpm check:app-completeness` exits 0
+      (`scripts/check-app-completeness.mjs`). This is the hard rule that an app appears in
+      `LAUNCHPAD_CATALOG` only once it is complete to the suite-common standard - it fails
+      unless the app has MCP tools, `docs/apps/<app>/help.md` + `help-index.json`, a
+      `site/src/components/sections/<app>-section.tsx` marketing section, and
+      `site/public/screenshots/<app>/` User-Story screenshots. If the app is in the catalog
+      but this gate is RED, the app is NOT done: the missing pieces are yours to build now
+      (resume the milestones), never to wave off. Only if the app is being genuinely pulled
+      do you instead remove its `LAUNCHPAD_CATALOG` entry. Do not weaken the gate to pass.
 - [ ] `<app>` in `LAUNCHPAD_APP_IDS` + a `LAUNCHPAD_CATALOG` row; the `icon_name` exists in
       the `ICONS` map in `packages/ui/launchpad.tsx` (imported); `api` rebuilt so
       `/launchpad/apps` serves it (curl shows it). Launchpad grid still fits (condense if the

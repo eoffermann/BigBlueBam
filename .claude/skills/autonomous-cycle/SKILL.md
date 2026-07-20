@@ -78,6 +78,22 @@ With the lock held:
    local Docker dev stack, and run the **extensive tests including the Playwright
    user-story + backend-verification pass**. If the app needs configuration only a human
    can provide, write `docs/brainstorming/<stamp>_HUMAN_SETUP_<app>.md` and keep going.
+4a. **Launchpad-completeness is a hard gate; a failing gate RESUMES engineering, it does
+   not ship.** An app is registered in `LAUNCHPAD_CATALOG` only once it is complete to the
+   suite-common standard (MCP tools, help doc + index, marketing section, User-Story
+   screenshots). `pnpm check:app-completeness` enforces this and fails CI otherwise. If a
+   cycle dies mid-build (a previous fire crashed, or the build was interrupted) an app can
+   be left in the Launchpad half-finished - this is a defect, never an acceptable resting
+   state. When you detect a Launchpad app that fails `check:app-completeness` (this one or a
+   leftover from an earlier fire), you MUST: (a) run an **agentic readiness review** of that
+   app's plan (its `*_APP_DESIGN_<app>.md` spec) and current functionality - is the plan
+   sound and worth completing, or should the app be pulled; then (b) if worth completing,
+   **resume automated engineering** and finish every missing milestone (schema/migrations,
+   MCP tool parity, SPA, permissions, help docs + Help Center, gilligan screenshots,
+   marketing section, tests) exactly as `app-build-from-spec` would for a fresh build, until
+   the gate is green; or (c) if the review says pull it, remove its `LAUNCHPAD_CATALOG` entry
+   (and its scaffold/nginx/compose wiring) so nothing incomplete remains consumer-facing.
+   Do not weaken the gate, and do not release the lock with any Launchpad app red.
 5. **Run the `close-out` skill BEFORE releasing the lock.** Invoke `close-out` (via the
    Skill tool) with the app id + stamp. It is the completion audit: it re-checks every
    requirement of this whole process against the real repo + running stack and picks up
