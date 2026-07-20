@@ -148,7 +148,14 @@ export async function listUnscoped(
     // entitled to see even though they are in the project; denied items are DROPPED, and the
     // count is reported rather than silently swallowed, because "3 hidden by permissions" is
     // an answer and a short list with no explanation is a bug report.
-    const visible = await filterCitedSources(viewer.id, filtered);
+    //
+    // This is a MEMBER disclosure control. An org admin / owner (the `admin` branch, which
+    // also skips project scoping above) is entitled to every cited record in the org, so the
+    // per-record preflight is bypassed for them - otherwise a source type can_access cannot
+    // resolve would fail-closed even the owner's own queue. Members get the fail-closed filter.
+    const visible = admin
+      ? { rows: filtered, hidden: 0 }
+      : await filterCitedSources(viewer.id, filtered);
 
     const page = visible.rows.slice(0, params.limit);
     return {
@@ -160,21 +167,22 @@ export async function listUnscoped(
 }
 
 /**
- * Work-item source types that map onto a REGISTERED visibility entity type.
+ * Work-item source types that map onto a REGISTERED can_access visibility entity type
+ * (apps/api/src/services/visibility.service.ts SUPPORTED_ENTITY_TYPES). Burn cites five
+ * source types; the two that are registered map 1:1 and can be preflighted per reader.
  *
- * Only `bam.task` qualifies today. `bam.time_entry`, `bill.expense`, `bill.line_item` and
- * `bill.invoice` line items are NOT in SUPPORTED_ENTITY_TYPES, and inventing a mapping (e.g.
- * preflighting an expense id as a `bill.invoice`) would query the wrong table, resolve
- * nothing, and -- because the client fails closed -- silently drop EVERY expense-sourced row
- * from the queue. A queue that is empty for the wrong reason is worse than one that is
- * honest about what it could not check.
- *
- * Rows whose source type is absent here are still project-scoped by the predicate that has
- * already run; they are simply not additionally can_access-filtered. This matches the
- * "handling of unsupported types" rule in docs/reference/agent-conventions.md.
+ * `bam.time_entry`, `bill.expense` and `bill.invoice_line` are NOT in
+ * SUPPORTED_ENTITY_TYPES, and their ids are not resolvable by can_access (a time-entry id is
+ * not a task id, an expense id is not an invoice id), so there is no meaningful preflight for
+ * them. Per the per-reader / hidden-count contract (spec 2.4 point 4) an un-preflightable
+ * cited record must NEVER be surfaced to a member, so a row whose source type is absent here
+ * FAILS CLOSED for a member: it is dropped and counted in `hidden_by_permissions`, exactly
+ * like a record the reader was explicitly denied. (Admins bypass this filter entirely at the
+ * call site, so this only ever drops member-visible rows.)
  */
 const CITED_ENTITY_TYPES: Record<string, string> = {
   'bam.task': 'bam.task',
+  'helpdesk.ticket': 'helpdesk.ticket',
 };
 
 async function filterCitedSources<T extends { work_item: { source_type: string; source_id: string } }>(
@@ -185,15 +193,14 @@ async function filterCitedSources<T extends { work_item: { source_type: string; 
   const byType = new Map<string, string[]>();
   for (const r of rows) {
     const entityType = CITED_ENTITY_TYPES[r.work_item.source_type];
-    // A source type with no registered visibility entity type is NOT droppable: there is no
-    // preflight that could answer for it, and dropping every such row would silently empty
-    // the queue. Those rows stay, scoped by the project predicate that already ran.
+    // A source type with no registered visibility entity type cannot be preflighted. It is
+    // NOT batched here and, below, is dropped rather than kept: showing an un-preflighted
+    // cited record to a member is the exact hole this filter closes.
     if (!entityType) continue;
     const list = byType.get(entityType) ?? [];
     list.push(r.work_item.source_id);
     byType.set(entityType, list);
   }
-  if (byType.size === 0) return { rows, hidden: 0 };
 
   const allowedByType = new Map<string, Set<string>>();
   for (const [entityType, ids] of byType) {
@@ -201,7 +208,8 @@ async function filterCitedSources<T extends { work_item: { source_type: string; 
   }
   const kept = rows.filter((r) => {
     const entityType = CITED_ENTITY_TYPES[r.work_item.source_type];
-    if (!entityType) return true;
+    // Fail closed: an unmapped (un-preflightable) cited source is never kept for a member.
+    if (!entityType) return false;
     return allowedByType.get(entityType)?.has(r.work_item.source_id) ?? false;
   });
   return { rows: kept, hidden: rows.length - kept.length };
