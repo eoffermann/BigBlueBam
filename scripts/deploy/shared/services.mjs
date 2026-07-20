@@ -667,7 +667,7 @@ export const APP_SERVICES = [
       'bench-api', 'basis-api', 'braid-api', 'bulwark-api', 'burn-api', 'book-api', 'blank-api', 'bill-api', 'blueprint-api',
       'bureau-api', 'mcp-server', 'site',
     ],
-    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/burn/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/'],
+    public_paths: ['/', '/b3/', '/helpdesk/', '/banter/', '/beacon/', '/brief/', '/bolt/', '/bearing/', '/board/', '/bond/', '/blast/', '/bench/', '/basis/', '/braid/', '/bulwark/', '/burn/', '/book/', '/blank/', '/bill/', '/blueprint/', '/bureau/', '/blip/', '/bin/', '/bay/'],
     env: { required: [], optional: ['HTTP_PORT', 'HTTPS_PORT'] },
   },
 ];
