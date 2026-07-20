@@ -62,7 +62,12 @@ export const LAUNCHPAD_APP_IDS = [
   'braid',
   'bulwark',
   'burn',
-  'bursar',
+  // 'bursar' is intentionally hidden from the Launchpad: its autonomous build died
+  // at M0 (scaffold only - no MCP tools, migrations, help, or marketing), so it is
+  // NOT ready for consumption and must not appear as a clickable tile. Re-add it
+  // here AND in LAUNCHPAD_CATALOG below at the end of the resumed build, once
+  // `pnpm check:app-completeness` passes for bursar. The bursar-api container,
+  // nginx blocks, and root-redirect entries below stay so the upstream resolves.
 ] as const;
 
 export type LaunchpadAppId = (typeof LAUNCHPAD_APP_IDS)[number];
@@ -102,7 +107,9 @@ export const LAUNCHPAD_CATALOG: readonly LaunchpadAppEntry[] = [
   { id: 'braid', name: 'Braid', description: 'Customer Identity', icon_name: 'git-merge', color: '#4338ca', path: '/braid/' },
   { id: 'bulwark', name: 'Bulwark', description: 'Contract Obligations', icon_name: 'shield-check', color: '#1d4ed8', path: '/bulwark/' },
   { id: 'burn', name: 'Burn', description: 'Scope and Margin', icon_name: 'flame', color: '#ea580c', path: '/burn/' },
-  { id: 'bursar', name: 'Bursar', description: 'Vendor Procurement', icon_name: 'shopping-cart', color: '#0f766e', path: '/bursar/' },
+  // 'bursar' tile intentionally withheld: the app is scaffold-only (M0) and not yet
+  // ready for consumption. Re-add this row (and the LAUNCHPAD_APP_IDS entry above)
+  // at the end of the resumed build, once `pnpm check:app-completeness` passes.
 ];
 
 // Valid values for the root_redirect setting
