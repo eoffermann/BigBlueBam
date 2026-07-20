@@ -111,15 +111,87 @@ function inReadmeCatalog(appId) {
   return readmeCatalogText().includes(`docs/apps/${docDirForAppId(appId)}/`);
 }
 
-/** Marketing: a registered per-app section (or a deliberate "coming soon" stub). */
+/** All site page source under site/src/pages, concatenated and cached. */
+let _sitePagesSrc = null;
+function sitePagesSrc() {
+  if (_sitePagesSrc !== null) return _sitePagesSrc;
+  const dir = path.join(ROOT, 'site', 'src', 'pages');
+  let out = '';
+  const walk = (d) => {
+    if (!fs.existsSync(d)) return;
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+        try {
+          out += fs.readFileSync(full, 'utf-8') + '\n';
+        } catch {
+          /* ignore unreadable */
+        }
+      }
+    }
+  };
+  walk(dir);
+  _sitePagesSrc = out;
+  return _sitePagesSrc;
+}
+
+/**
+ * Marketing: a per-app section (or deliberate "coming soon" stub) that BOTH exists
+ * AND is imported/registered on a marketing page. Checking only the file's existence
+ * let a section land un-wired (never rendered), so the source could pass this gate
+ * while the live page showed nothing. This does not - and a static check cannot -
+ * verify the `site` CONTAINER was rebuilt/redeployed after the change; that runtime
+ * check lives in the close-out skill (rebuild `site`, then Playwright/curl the live
+ * marketing page for the app's name). See close-out section J.
+ */
 function hasMarketingSection(appId) {
   if (CORE_MARKETED_BY_HOMEPAGE.has(appId)) return true;
   const dir = docDirForAppId(appId);
-  return (
+  const sectionFile =
     fileExists(`site/src/components/sections/${appId}-section.tsx`) ||
     fileExists(`site/src/components/sections/${dir}-section.tsx`) ||
-    fileExists(`site/src/components/sections/${appId}-stub.tsx`)
+    fileExists(`site/src/components/sections/${appId}-stub.tsx`);
+  if (!sectionFile) return false;
+  // The section must be imported on a page, not just exist as an orphan file.
+  const pages = sitePagesSrc();
+  return (
+    pages.includes(`sections/${appId}-section`) ||
+    pages.includes(`sections/${dir}-section`) ||
+    pages.includes(`sections/${appId}-stub`)
   );
+}
+
+/**
+ * Every image referenced by the app's help.md (and guide.md) must resolve to a file
+ * that actually exists, so the in-app Help Center never shows a broken image. This
+ * catches the exact mismatch that shipped once: help.md referenced
+ * `screenshots/light/vendor-portfolio.png` while the docs-capture bridge wrote
+ * NUMBERED files (`01-vendor-portfolio.png`), so every help image 404'd. Only local
+ * relative refs are checked (http/https and data: URIs are ignored).
+ */
+function helpImagesResolve(appId) {
+  const dir = docDirForAppId(appId);
+  const docDir = path.join(ROOT, 'docs', 'apps', dir);
+  for (const md of ['help.md', 'guide.md']) {
+    const mdPath = path.join(docDir, md);
+    if (!fs.existsSync(mdPath)) continue;
+    let text = '';
+    try {
+      text = fs.readFileSync(mdPath, 'utf-8');
+    } catch {
+      continue;
+    }
+    for (const m of text.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
+      const ref = m[1].trim().split(/\s+/)[0].replace(/^<|>$/g, '');
+      if (/^(https?:|data:|#|mailto:)/i.test(ref)) continue;
+      const target = ref.startsWith('/')
+        ? path.join(ROOT, ref.replace(/^\//, ''))
+        : path.join(docDir, ref);
+      if (!fs.existsSync(target)) return false;
+    }
+  }
+  return true;
 }
 
 /** The completeness dimensions, in report order. */
@@ -146,11 +218,18 @@ const DIMENSIONS = [
       `build docs/apps/${docDirForAppId(id)}/help-index.json (node scripts/help/build-help-index.mjs --apps ${id})`,
   },
   {
+    key: 'help_images',
+    label: 'Help images resolve',
+    check: (id) => helpImagesResolve(id),
+    hint: (id) =>
+      `every image referenced in docs/apps/${docDirForAppId(id)}/{help,guide}.md must point to a file that exists (the docs-capture bridge writes NUMBERED files like 01-<name>.png - match them)`,
+  },
+  {
     key: 'marketing',
     label: 'Marketing section',
     check: (id) => hasMarketingSection(id),
     hint: (id) =>
-      `add site/src/components/sections/${id}-section.tsx and register it on a marketing page`,
+      `add site/src/components/sections/${id}-section.tsx AND import/render it on a marketing page under site/src/pages/`,
   },
   {
     key: 'screenshots',

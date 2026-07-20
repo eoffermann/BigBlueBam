@@ -281,6 +281,23 @@ backticks are the objective checks - run them, do not eyeball.
       the app-count narrative reconciled if it drifted (do not leave "N apps" copy stale just
       because it predates this app - that is exactly the kind of pre-existing item that is
       still yours to fix or, if genuinely large, to record with the specific edit needed).
+- [ ] **The `site` container was REDEPLOYED and the LIVE marketing page renders the section.**
+      `site` bakes `site/public/` and its content into the image at BUILD time and is NOT
+      hot-reloaded, so adding `<AppSection />` to the source is invisible until you rebuild:
+      `docker compose build site && docker compose up -d --force-recreate site`. Then PROVE it
+      on the running page, not in the source - drive the page the section is registered on with
+      Playwright/curl and assert the app's name actually renders (e.g. for `/operations`,
+      `page.innerText` contains "Bursar"). A source import that never got redeployed is the
+      exact gap that let a "complete" gate pass while the live page was stale; the static
+      `check:app-completeness` verifies the section is imported on a page but CANNOT verify the
+      container was rebuilt - that runtime proof is this line's job.
+- [ ] **The in-app Help Center images actually load.** Every image referenced by
+      `docs/apps/<app>/help.md` + `guide.md` must resolve to a file that exists AND serve 200 at
+      `/docs/apps/<app>/<path>` on the running stack (the `./docs/apps` bind mount serves them
+      live). `check:app-completeness` (the `help_images` dimension) verifies the files exist;
+      also `curl` one from the running frontend to confirm the path serves. The docs-capture
+      bridge writes NUMBERED files (`01-<name>.png`), so a help.md that references the un-numbered
+      name silently 404s every image - open the app's Help panel and look.
 - [ ] **The `/docs` MCP tool catalog includes the app.** `/docs` is AUTO-GENERATED from the
       per-app tool sources (`pnpm docs:catalog` -> committed `site/src/content/docs-catalog.generated.json`,
       consumed by `site/src/pages/docs.tsx`) - it is NOT hand-maintained. Verify the app's

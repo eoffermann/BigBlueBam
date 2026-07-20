@@ -389,8 +389,19 @@ not as an acceptable gap.
   project only; seed gilligan data for the new app first if needed. Never generic data.
 - **Marketing site:** add the app to the `site/` marketing content (card/section, and the
   manual/book artifacts if the pipeline covers it). MCP Tool Counts should be updated
-  in the Marketing site anywhere that it mentions them. Note that `site` bakes `site/public/`
-  and its content at image build time, so rebuild the `site` service to see it locally.
+  in the Marketing site anywhere that it mentions them. `site` bakes `site/public/` and its
+  content into the image at BUILD time and is NOT hot-reloaded, so adding `<AppSection />` to
+  the source is invisible until you **rebuild AND recreate the container** (`docker compose
+  build site && docker compose up -d --force-recreate site`) - then PROVE the section renders
+  on the live page with Playwright/curl (assert the app name appears at its registered route,
+  e.g. `/operations`). Do not report the marketing section done off the source import alone;
+  a committed-but-not-redeployed section is a stale live page.
+- **Help images:** every image referenced by `docs/apps/<app>/help.md` + `guide.md` must
+  resolve to a file that exists AND serve 200 at `/docs/apps/<app>/<path>` on the running
+  frontend (the `./docs/apps` bind mount serves them live). The docs-capture bridge writes
+  NUMBERED files (`01-<name>.png`); a ref to the un-numbered name 404s silently in the Help
+  Center. `check:app-completeness` (the `help_images` dimension) enforces the files exist -
+  open the app's Help panel and confirm the images actually load.
 
 ## Phase 6 - Close-out audit, THEN record the cycle (do NOT stop or wait)
 
