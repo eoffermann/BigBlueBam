@@ -45,6 +45,12 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
   });
 
   fastify.addHook('preHandler', async (request: FastifyRequest) => {
+    // WebSocket upgrades never fire onResponse/onError/onTimeout, so a connection reserved here
+    // would never be released - leaking one pooled connection per WS connect until the pool is
+    // exhausted (issue #102). Skip the reserve for upgrades; WS handlers that need org scope must
+    // bind it per-operation (the runInOrgScope transaction model) rather than rely on this pin.
+    if (request.headers.upgrade?.toLowerCase() === 'websocket') return;
+
     const user = request.user;
     if (!user?.active_org_id) return;
     const store = rlsStorage.getStore();
@@ -70,7 +76,9 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
         await readReserved`select set_config('app.current_org_id', ${orgId}, false)`;
       } catch {
         readReserved.release();
-        // Leave the write binding in place; readDb falls back to the pool for this request.
+        // Degrade reads to the (already org-bound) write connection rather than leaving readDb on
+        // an unbound pool connection that would return empty results as success (issue #106).
+        store.readDb = store.db;
         return;
       }
       store.readReserved = readReserved;
@@ -89,7 +97,11 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
     for (const conn of [reserved, readReserved]) {
       if (!conn) continue;
       try {
-        await conn`select set_config('app.current_org_id', '', false)`;
+        // Nil-UUID sentinel, not '': a custom GUC cannot be unset to NULL (RESET/set_config(NULL)
+        // both leave ''), and ''::uuid throws 22P02 in the policies, so a later unreserved pool
+        // query on this connection would 500 (issue #104). The nil UUID casts cleanly and matches
+        // no real org, so a fallback query fails closed to zero rows instead.
+        await conn`select set_config('app.current_org_id', '00000000-0000-0000-0000-000000000000', false)`;
       } catch {
         // Best-effort; release regardless so the pool never leaks.
       }

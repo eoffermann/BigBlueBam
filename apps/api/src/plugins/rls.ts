@@ -47,6 +47,14 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
 
   // Reserve a connection and bind the org GUC once the authenticated user is known.
   fastify.addHook('preHandler', async (request: FastifyRequest) => {
+    // WebSocket upgrades never fire onResponse/onError/onTimeout, so a connection reserved here
+    // would never be released - leaking one pooled connection per WS connect until the pool is
+    // exhausted (issue #102). WS connections also must not hold a pooled connection for their whole
+    // (potentially long-lived) lifetime. Skip the reserve for upgrades; WS handlers that need org
+    // scope must bind it per-operation (the runInOrgScope transaction model) rather than rely on
+    // this request-wide pin.
+    if (request.headers.upgrade?.toLowerCase() === 'websocket') return;
+
     const user = request.user;
     if (!user?.active_org_id) return;
     const store = rlsStorage.getStore();
@@ -72,8 +80,12 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
     store.reserved = null;
     store.db = null;
     try {
-      // Clear the org before the connection returns to the pool so a later reuse cannot inherit it.
-      await reserved`select set_config('app.current_org_id', '', false)`;
+      // Reset the org to the nil-UUID sentinel (not '') before the connection returns to the pool.
+      // A custom GUC cannot be truly unset to NULL - RESET and set_config(NULL) both leave '',
+      // and ''::uuid throws 22P02 in the policies, so a later unreserved pool query on this
+      // connection would 500 (issue #104). The nil UUID casts cleanly and matches no real org
+      // (orgs use gen_random_uuid()), so a fallback query fails closed to zero rows instead.
+      await reserved`select set_config('app.current_org_id', '00000000-0000-0000-0000-000000000000', false)`;
     } catch {
       // Best-effort; the connection is released regardless so the pool never leaks.
     }
