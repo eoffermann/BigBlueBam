@@ -784,7 +784,118 @@ had disagreed about this on the record, with Seat F arguing for a clean split at
 Seat E arguing that separating find-the-problem from fix-the-problem yields "a worse product twice." A
 merge negotiation was opened between exactly those two seats under the 10-turn rule.
 
-_(Negotiation transcript and outcome recorded below.)_
+### The Badge merge negotiation (closed at turn 4 of 10)
+
+**Turn 1, Seat A:** *"Merge, not split. Seat E is right that 'one product finds it, another fixes it'
+is a worse product twice, and F's seam is clean in theory but cuts through the middle of a single
+customer moment: a person leaves, and grant-revocation is one of about nine things that must
+happen."* A argued for lifecycle framing on ballot-math grounds ("compliance-evidence framing is the
+single most crowded space on this board... lifecycle people-ops is a zero-app census category with
+no rival bid. Same code, same scope, materially better score"), conceded E's entire read-and-adjudicate
+side, and offered E the name. Its one non-negotiable: ownership succession.
+
+**Turn 2, Seat E:** *"I hold to the merge. Seat F's seam is drawn in the wrong place. It cuts between
+finding a problem and fixing it, which is exactly the boundary that makes GRC products useless in
+practice: the finding without the actuator is a PDF, and the actuator without the finding is a
+checklist someone runs from memory."* E conceded the name outright on turn 1 (*"I will trade the app
+name away... The name is worth less to me than the mechanic, and I would rather converge in three
+turns than five"*) and conceded the succession engine to A as *"A's invention and the best single
+mechanic in this cluster."* Its one non-negotiable: the grant-versus-usage join over real behavior,
+with agents and service accounts in the same principal table as humans.
+
+**Orchestrator note.** Both seats accepted the merge on turn 1, and their non-negotiables proved
+disjoint and simultaneously satisfiable, so nothing had to be traded away. A courteous deadlock had
+to be broken: each seat had offered the name to the other. Resolution relayed on turn 2 and accepted
+by both without amendment on turns 3 and 4: **name Badge** (E conceded it unconditionally),
+**framing E's** (a governance control plane whose clock is the lifecycle, which answers A's
+"fourth Bastion" worry better than A's own proposal did, because the app becomes a principal-lifecycle
+product that produces evidence rather than a compliance-evidence product), **dual whitespace
+category**, and **both non-negotiables verbatim in scope-in**.
+
+**Outcome: MERGED.** Seat A: *"Accepted, no amendments. Banking it."* Seat E: *"I accept your
+resolution in full. Nothing to amend. Banking it."* No app was discarded. Surviving slate: **six**.
+
+## Phase 5 - Voting
+
+Each seat scored every finalist 1-5, abstaining on any app it owned or co-owned. Coverage
+contribution was an explicit scoring dimension alongside innovation, customer fit, reuse, and wedge
+strength.
+
+### Scorecard matrix
+
+| App (owner) | A | B | C | D | E | F | G | **Total** | Voters | Mean |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Beeline** (D) | 5 | 4 | 5 | *abs* | 4 | 5 | 4 | **27** | 6 | **4.50** |
+| **Bulletin** (C) | 4 | 4 | *abs* | 5 | 5 | 4 | 3 | **25** | 6 | 4.17 |
+| **Badge** (A+E) | *abs* | 5 | 4 | 4 | *abs* | 4 | 5 | **22** | 5 | 4.40 |
+| **Beckon** (F) | 3 | 3 | 4 | 4 | 4 | *abs* | 4 | **22** | 6 | 3.67 |
+| **Buzz** (G) | 4 | 3 | 3 | 3 | 3 | 3 | *abs* | **19** | 6 | 3.17 |
+| **Bevy** (B) | 3 | *abs* | 3 | 3 | 3 | 3 | 3 | **18** | 6 | 3.00 |
+
+Top picks: **Beeline 3** (A, C, F), **Badge 2** (B, G), **Bulletin 2** (D, E).
+
+### Note on the abstention asymmetry
+
+Badge carried only five scorers because it has two co-owners, while every other finalist had six.
+That is a structural handicap of roughly one score, so both total and mean were computed. It did not
+change the outcome: Beeline leads on **total** (27 vs 25 and 22) *and* on **mean** (4.50 vs Badge's
+4.40 and Bulletin's 4.17), and it took the most top picks. Had the two measures disagreed, the mean
+would have governed, since raw totals are not comparable across unequal voter counts. No tie
+occurred and no runoff round was required.
+
+### What the voters actually argued
+
+**For Beeline** (A, 5): *"The only finalist that sells a first app rather than app #25, into a large
+genuinely unserved vertical, with the AI as spine and a refusal gate lifted from a pattern this
+platform has already shipped twice; ServiceTitan and Jobber schedule the visit, none of them refuse
+it."* (C, 5): *"The only mechanic on this ballot that changes the customer's economics rather than
+their reporting... the requirement graph corrected by callback post-mortems means the AI degrades the
+product if you remove it."* (F, 5): *"An AI that declines the dispatch and names the missing permit is
+worth more than one that predicts the job."*
+
+**Against Beeline**, on the record and worth carrying into the spec. Seat G (4) called it the most
+overrated finalist: *"Six seats are going to reward the market-expansion line because it is the only
+new-customer story in the room, but that argument is strategy, not product, and it quietly commits
+the suite to a field-service go-to-market, an offline-capable mobile client, and a permit/licensing
+data problem none of which exist today."* Seat E (4) noted *"ServiceTitan and Jobber already serve
+this buyer at SMB prices, so the wedge is a better gate inside a served category rather than an
+unserved one, and it is the heaviest v1 with the least existing substrate."* Seat A, despite scoring
+it 5, attached a scoping caveat: *"the 'can this truck finish it' half needs parts and permit state
+that no shipped app holds, so v1 should gate on capability and permit status only and treat truck
+stock as a later input rather than pretending the inventory exists."*
+
+These objections are **not** dismissed by the win. They are the sharpest available critique of the
+winner and are carried forward as explicit constraints on the design spec: v1 must not presuppose a
+parts-inventory app, must not require an offline mobile client, and must treat jurisdictional permit
+data as a bounded, human-seedable input rather than a scraped statutory corpus.
+
+**Most-overrated votes** (each seat named one): Beckon (A), Buzz (B, C, E, F), Badge (D), Beeline (G).
+Buzz drew four of the seven, all on the same ground: the category is new to the suite's census but not
+to the market. Seat E put it most directly: *"That the census does not list answer-engine visibility
+measures our census, not the market, where Profound and a wave of SEO vendors already sell this exact
+panel-and-delta loop; being new to us is not the same as being unserved."*
+
+---
+
+## WINNER: Beeline
+
+**Field service / dispatch readiness. Category status: whitespace, zero of 24 apps.**
+
+Before a truck rolls, Beeline predicts what the job actually is from the customer's own words and
+refuses the dispatch if that technician, that truck, and that permit status cannot finish it in one
+visit. It turns the raw intake artifact into a typed job hypothesis with per-claim citations, then
+runs `beeline_precheck` - a deterministic, circuit-broken gate modeled on the shipped `burn_precheck`
+- against the proposed assignment, returning fit / short / blocked with the exact missing item and a
+named remedy. Blocked is the product. Two loops compound: callback post-mortems correct the
+requirement graph, and the capability half of the gate is an earned skill matrix derived from closed
+work with recency decay rather than from course completions.
+
+**Runner-up: Bulletin** (Seat C, 25 points) - communication debt, the gap between what each client
+stakeholder believes and what is actually true.
+
+**Files:**
+- Session log: `docs/brainstorming/2026_07_21_03_00_BRAINSTORMING_SESSION.md`
+- Design spec: `docs/brainstorming/2026_07_21_03_00_APP_DESIGN_beeline.md`
 
 ## Phase 4 - Overlap resolution
 
