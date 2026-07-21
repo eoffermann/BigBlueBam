@@ -524,11 +524,267 @@ Ballast, Bailiwick, Boast, Bloc, the trades wedge) can survive against a bloc.
 
 ## Phase 2 - Debate
 
-_(pending)_
+One round was run. Each seat received the full 35-proposal slate with its own collisions named
+explicitly and was asked to take ALIGN / OPPOSE / IGNORE stances, revise its block, and state a
+strategy. A second round was not needed: the seats consolidated harder and faster than the
+protocol requires, and by the end of round one the three convergent blocs had largely resolved
+themselves through voluntary withdrawal rather than orchestrator intervention.
+
+### The withdrawal ledger
+
+Seats withdrew or reframed nine of their own proposals unprompted:
+
+| Withdrawn / reframed | Seat | Conceded to | Stated reason |
+| --- | --- | --- | --- |
+| Blaze-A | A | Blaze-F | "Five seats proposed incident command; the version that closes the loop into executable detectors should win, and it is not mine. I am dropping my entry rather than diluting the field." |
+| Badge's access-review half | A | Bastion-E | Removed itself from the four-way GRC pile-up; Badge became pure lifecycle execution. |
+| Bastion-B | B | Bastion-F + Bastion-E | "Bastion-E's permission-catalog join beats my control-to-query mapping." Contributed the agent-governance evidence pack. |
+| Blaze-B | B | Blaze-F | "My defect memory is signature retrieval, theirs turns the finding into a live detector with a guard-efficacy ledger." Contributed Qdrant signature retrieval. |
+| Bellwether-C | C | Boast | "Boast's consent/NDA/expiry/fatigue ledger is a real mechanism I did not have." Handed over the utterance corpus for free. |
+| Bulletin (reframed) | C | n/a | Pulled out of the incident bloc entirely and rebuilt as communication debt. |
+| Bequest | D | Baton-A / Bolster winner | "I am not going to spend my seat defending the third-best version of it." |
+| Brigade | E | Blaze-F | "I am dropping Brigade rather than run a fifth entrant in the densest cluster on the slate." |
+| Bastion-F | F | Bastion-E | "I am not going to defend a weaker fourth entrant out of pride." Donated questionnaire answering and the `schema_migrations` checksum probe. |
+| Billet-G | G | Billet-F | "It was the weakest of five." |
+
+### Seat-by-seat calls
+
+**Seat A** conceded the incident bloc outright and amputated Badge's access-review half, repositioning
+Badge as uncontested people-ops lifecycle execution with ownership succession as the novel core. It
+opposed Bastion-B and Bastion-F as "reports and probes over a ledger another app has to produce,"
+opposed Bailiff as a fifth contracts-clock app, and opposed both Babels as a thin wedge at 2-50
+people. Strategy, in its words: "I am not going to win a five-way bloc on framing alone, so I spent
+that capital to buy credibility and moved my weight to the one place on this board nobody else
+occupies."
+
+**Seat B** withdrew two of its three bloc entries and spent the freed slots on uncontested
+whitespace, introducing a new proposal, **Bevy** (recruiting where the requisition is generated from
+a proven capacity shortfall priced in margin, the bar is calibrated on the firm's own shipped
+artifacts, and the model is corrected by whether the hire actually ramped). Its stated portfolio
+thesis: "Billet tells you how short you are, Bevy fills the gap against a bar calibrated on your own
+work, Bloom measures whether the hire actually delivered, and Bellwether watches whether the revenue
+paying for all of it is quietly rotting." It kept exactly two non-negotiables in the capacity merge:
+effective capacity learned from `time_entries` actuals versus plan, and a cost-versus-price margin
+consequence on every proposed assignment.
+
+**Seat C** merged Babel on Seat G's framing, conceded Bellwether-C to Boast without a fight, merged
+Bolster with Baton-A, and made the round's most consequential move: **pulling Bulletin out of the
+incident bloc and rebuilding it as communication debt**, the gap between what each client stakeholder
+believes and what is actually true. Its argument: "the interesting half of my idea was never the
+incident at all: it was the belief-versus-truth gap, which applies on an ordinary Tuesday when a
+project quietly slipped and nobody told the client." It also flagged a structural observation the
+other seats picked up: seven proposals across six seats independently reinvented artifact-derived
+skill inference, which "means that is a platform capability, not an app" - `expertise_for_topic`
+already ships half of it.
+
+**Seat D** withdrew Bequest, ceded the contested Bellwether name (renaming to Bedrock), and refused
+to concede the vertical. Its case: "five independent seats reaching for staffing-capacity and five
+for incident-command did not discover latent customer demand; they landed in the densest,
+most-written-about regions of horizontal SaaS," and the blocs "will now spend the merge round sanding
+each other's edges." Its distribution argument was the sharpest single point in the round: every
+horizontal proposal sells app #25 to a customer who already bought 24, whereas a trades wedge "makes
+the existing 24 apps sellable to a company that cannot use BigBlueBam at all today." It also
+conceded openly that it was not leading with Bailiff, its most portable engine, precisely because
+portability would land it inside the four-seat GRC crowd.
+
+**Seat E** dropped Brigade, narrowed Berth to a single question ("can we say yes to this deal" on
+unsigned pipeline, a verdict rather than a grid), and offered an unusually candid merge position on
+Bastion: "if the choice is a merged Bastion with Seat F leading versus no Bastion in the Final 7, I
+take the merge and hand F the pen. I would rather co-own the best app on the slate than solo-own the
+third best." It concentrated on its estate-reconciliation app, renamed Bedrock, as "0-app
+whitespace, the only entrant in its category."
+
+**Seat F** conceded GRC leadership to Seat E and capacity leadership to Seat B, holding exactly two
+components hostage through the capacity merge (Monte Carlo P50/P90 from observed cycle-time
+distributions, and collision detection against Burn's priced envelopes). It made one hard objection
+inside the incident merge it otherwise leads: **on-call rotation scheduling is the clone surface**,
+"the one component that makes the merged app describable as PagerDuty without changing a word."
+It then concentrated everything behind Ballast and widened it to absorb release and change
+management, converting the buyer from "an engineer who likes tests" to "the delivery lead who eats
+rework cost and the founder who has to prove change control to a client."
+
+**Seat G** withdrew Billet-G, merged Babel, offered to layer Bloc on top of Bridge rather than
+compete with it, and consolidated rights-and-licensing clearance into Baton, "which turns my flagship
+from a taste argument into a dollar-exposure argument." It introduced a new proposal, **Buzz**
+(instrumenting what AI assistants tell a buyer who asks "who should I hire for this," then closing
+each gap and re-running the panel to prove the delta), noting its entire infrastructure already sits
+in the monorepo unused for this purpose.
+
+### Cross-seat endorsements given without self-interest
+
+Several seats went out of their way to praise rivals on the record, which is signal worth preserving:
+
+- **Beeline** (D) drew unsolicited praise from C ("the most original single sentence on this slate"),
+  E ("refusal is what separates AI-native from AI-decorated"), F ("the strongest single mechanic on
+  the whole slate; an AI that declines is more valuable than one that predicts"), and G.
+- **Beckon** (F) was endorsed by C ("the best single mechanism on the slate outside my own"), D ("if
+  a horizontal wins, it should be this one"), E, and G.
+- **Bridge** (C) was endorsed by E ("the most genuinely new category on the slate that is not mine")
+  and A (complementary to Badge).
+- **Bloom** (B) drew respect from F and non-contest from A.
+
+### Orchestrator note
+
+The debate produced far more consolidation than a normal round. Ten proposals were withdrawn or
+reframed by their own authors, three name collisions were resolved voluntarily, and the three
+convergent blocs each produced a clear consensus leader (Blaze-F for incident, Bastion-E for GRC, a
+merged Billet built on B's effective-capacity spine and F's Monte Carlo for capacity). Notably,
+multiple seats independently arrived at the same structural insight about the vote itself: a merged
+bloc app reaches the ballot with its sharpest mechanic traded away *and* with every co-owner
+abstaining from scoring it, while a single-seat app is scored on its merits by six voters. That
+insight visibly shaped where seats placed their final bets, and it pushed the strongest players
+toward uncontested categories rather than toward the crowded consensus.
+
+One new name collision was created during the round: Seat D renamed Bellwether-D to **Bedrock** and
+Seat E renamed Bailiwick to **Bedrock** in the same round, unaware of each other. Flagged to both at
+submission time.
 
 ## Phase 3 - Submissions
 
-_(pending)_
+Each seat was asked for its single strongest app as ballot text. Two seats (B and C) had
+hedged in debate and were forced to choose; two seats (F and G) overrode their own stated
+debate champions on ballot arithmetic.
+
+| Seat | Submission | Category | Census status |
+| --- | --- | --- | --- |
+| A | **Badge** | HR / people-ops: workforce lifecycle execution and ownership succession | Whitespace |
+| B | **Bevy** | Recruiting / talent acquisition | Whitespace |
+| C | **Bulletin** | Stakeholder communication assurance (communication debt) | Whitespace |
+| D | **Beeline** | Field service / dispatch / work orders | Whitespace |
+| E | **Bastion** | GRC / security compliance and access governance | Whitespace |
+| F | **Beckon** | Product demand intake and roadmap prioritization | Whitespace |
+| G | **Buzz** | External market perception / answer-engine visibility | Whitespace (not even on the census list) |
+
+Every one of the seven landed in a whitespace category. The steer held completely.
+
+### The two overrides
+
+**Seat F dropped Ballast for Beckon**, in its own words: *"I said Ballast in debate; three seats
+endorsing Beckon on the record changes the ballot math, and Beckon sits in a listed whitespace
+category with a horizontal buyer while Ballast's buyer is only the subset of firms that ship
+software. Ballast's zero rivals meant no competition; it also meant no constituency."*
+
+**Seat G dropped Baton for Buzz**, in its own words: *"Baton is the safer app; Buzz is the app no
+other seat could have proposed. With 22 of 35 proposals sitting in four dogpiles that will split
+their own votes, the scored winner is the entrant with no rival, no name collision, and a category
+the census does not even list - and Buzz's infrastructure argument is stronger than Baton's
+precedent argument, because 'the pattern has been proven elsewhere' is weaker than 'the three
+components already exist and are running.'"*
+
+### Ballot text (abridged; full submissions were relayed to every voting seat)
+
+**Badge (Seat A)** - The day someone joins, changes role, or walks out the door, an agent executes
+the entire 24-app consequence, finds the forty things they silently owned, and proves the sweep
+actually finished. The novel core is ownership succession: a departing person is the sole owner of
+Bench dashboards and scheduled reports, Bolt rules, Bill recurring invoice schedules, Blast
+campaigns, Blip watches, API keys, and agent runners. Badge enumerates all of it, ranks each orphan
+by blast radius (does it move money, does it email a client, does it fire unattended), reasons about
+the successor from co-activity and topical expertise, and routes every transfer through the HITL
+queue. Onboarding runs in reverse: provision from a peer's observed access profile, not a role
+template nobody maintains. *"The damage this prevents is not a security finding, it is a recurring
+invoice that quietly stops generating and a scheduled report that dies six weeks after someone left,
+discovered by a client rather than by the firm."*
+
+**Bevy (Seat B)** - Hiring where the requisition must prove itself in dollars before it opens, the
+bar is calibrated on the firm's own shipped work, and the scoring model is corrected by whether the
+hire actually ramped. The tracker is explicitly the throwaway half; the product is the two ends
+nobody owns. A requisition cannot be opened by assertion: Bevy derives the shortfall from time-entry
+actuals against working hours, committed work, and probability-weighted pipeline, prices it against
+cost and bill rates, and issues a requisition that auto-expires when the shortfall closes. Work
+samples are scored against the distribution of what the team actually shipped, per criterion, with
+citations. At 90 and 180 days each hire's observed ramp is compared to the forecast that justified
+the requisition and the scoring weights are corrected by outcome. Continuous four-fifths
+adverse-impact monitoring can halt a requisition; no candidate is ever auto-rejected.
+
+**Bulletin (Seat C)** - Tracks the gap between what each client stakeholder currently believes and
+what is actually true, and tells you who is owed a conversation before the silence costs you the
+account. Models communication debt as a first-class liability: a per-stakeholder *belief state*
+inferred from what actually left the building (sends and their delivery signal, review threads,
+meetings and transcripts, invoices delivered, notices), held against *truth state* from schedules,
+scope and margin, balances, and obligations. A materiality classifier scores each divergence by
+consequence and by role, so a two-day slip is noise to a client CFO and urgent to their delivery
+lead. *"Every CRM, PSA, and project tool on the market records the interactions that happened.
+Bulletin's atomic unit is the interaction that should have happened and did not."* Third instance of
+a shape this codebase already validated twice: Burn's `unscoped` bucket and Bursar's absence engine.
+
+**Beeline (Seat D)** - Before a truck rolls, predicts what the job actually is from the customer's
+own words and refuses the dispatch if that technician, that truck, and that permit status cannot
+finish it in one visit. Turns raw intake (call transcript, form, ticket, customer photo) into a typed
+job hypothesis with per-claim citations, then runs `beeline_precheck`, a deterministic circuit-broken
+gate modeled on the shipped `burn_precheck`, returning fit / short / blocked with the exact missing
+item and a named remedy. *"Blocked is the product. Every scheduling tool ever built accepts the
+dispatcher's guess as fact."* Carries the session's only market-expansion argument: every other
+finalist sells app #25 to a customer who already bought 24; Beeline sells the first app to a
+nine-truck HVAC contractor who cannot use the suite at all today.
+
+**Bastion (Seat E)** - Continuous least-privilege adjudication and audit evidence for every human,
+agent, and service account, proving not just who can act but whether they should still be able to.
+Reads what each principal is granted from the generated 1,481-action permission catalog, reads what
+each principal actually did from the unified activity view, and adjudicates the delta in cited plain
+language. Control posture is verified by executable probes against the running system rather than
+asserted in a document. The flagship is non-human-identity governance: agents and service accounts as
+first-class reviewable principals with allowlist blast radius, heartbeat staleness, and kill-switch
+state as reviewable facts. *"No shipping GRC product governs autonomous agents, and that is exactly
+the risk a customer assumes on the day they enable 885 MCP tools with write access."* Three seats
+donated their strongest mechanics into this entry.
+
+**Beckon (Seat F)** - Never asks a customer to file a request; infers what they need from
+conversations that already happened, refuses any claim it cannot cite, and prices each surviving
+demand cluster in real dollars. Three moves no request-collection tool makes: grounding refusal (an
+asserted belief without a citable source is discarded rather than smoothed into plausible narrative),
+dollar attribution (clusters resolved through golden ids so twelve mentions from three accounts count
+as three, then priced by pipeline at risk, account revenue, and support hours consumed), and the
+deflection test (retrieve the knowledge base before anything enters the roadmap, and route satisfiable
+clusters to enablement with the citation that proves it). *"Every product-request tool ever built
+starts by asking someone to file the request, which is why the corpus is always a biased fraction of
+what customers said. Beckon has no intake surface at all."*
+
+**Buzz (Seat G)** - Find out what AI assistants tell a buyer who asks "who should I hire for this,"
+then fix the specific gap and prove the fix worked. Runs a scheduled panel of buyer-intent prompts
+across the org's configured LLM providers, extracts entity-resolved mentions of the firm and its
+competitors, and scores share of answer, sentiment, factual-error rate against a ground-truth fact
+sheet, and which sources the model cited. Then closes the loop: each gap is attributed to a fixable
+substrate, the remediation is drafted for a human, and after it ships Buzz re-runs the identical panel
+and reports the delta. *"The measurement instrument and the product are the same thing; the data does
+not exist until Buzz generates it by probing a system you do not control, and the output is a
+controlled before/after experiment rather than a chart."*
+
+## Phase 4 - Overlap resolution
+
+### Step 1: near-duplication screen against the shipped 24
+
+Each submission was screened against the existing suite before any pairwise comparison. **All seven
+survived.** None is a second CRM, knowledge base, analytics layer, contract monitor, or ticketing
+system:
+
+| Submission | Closest shipped app | Verdict |
+| --- | --- | --- |
+| Badge | Bam's `/b3/people` (a member-admin screen for one app, no lifecycle concept, no cross-app ownership) | Different category: lifecycle execution |
+| Bevy | Bond (a pipeline for revenue) | Different category: a pipeline for capacity; no app holds a candidate |
+| Bulletin | Bond (records interactions that occurred) | Different category: its unit is the interaction that did not occur |
+| Beeline | Book (sells time slots against stated availability) | Different category: asserts capability and blocks work |
+| Bastion | Bulwark (obligations under a signed contract) and `agent_policies` (a config surface) | Different category: internal control adjudication, inputs are DB and permission state, not PDFs |
+| Beckon | Bam (executes work already decided) | Different category: intake and prioritization upstream of the tracker |
+| Buzz | Bench (charts data you own), Blip (observes your own logs) | Different category: probes a system you do not control and manufactures the data |
+
+No submission was cut for near-duplication.
+
+### Step 2: pairwise comparison
+
+Six of the seven are mutually distinct. Adjacencies worth noting but not requiring merge:
+
+- **Bevy and Badge** are both people-shaped but disjoint by explicit scope: Bevy ends at accepted
+  offer and excludes onboarding runbooks; Badge begins at joiner and excludes recruiting.
+- **Bulletin and Beckon** both read unstructured cross-app signal, but their outputs share nothing:
+  a per-stakeholder belief gap versus a priced demand cluster.
+
+**One genuine collision: Badge (A) vs Bastion (E).** Bastion's scope-in list contains "Joiner-mover-leaver
+runbooks as the remediation actuator, cross-app, HITL-gated," which is Badge's core mechanism. The seats
+had disagreed about this on the record, with Seat F arguing for a clean split at the point of grant and
+Seat E arguing that separating find-the-problem from fix-the-problem yields "a worse product twice." A
+merge negotiation was opened between exactly those two seats under the 10-turn rule.
+
+_(Negotiation transcript and outcome recorded below.)_
 
 ## Phase 4 - Overlap resolution
 
