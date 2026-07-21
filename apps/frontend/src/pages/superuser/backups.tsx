@@ -289,10 +289,11 @@ function RestoreModal({
             restore runs.
           </p>
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">
+            <label htmlFor="restore-phrase" className="block text-xs text-zinc-500 mb-1">
               Type <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-200">{backup.restore_confirmation}</span> to confirm
             </label>
             <input
+              id="restore-phrase"
               type="text"
               value={phrase}
               onChange={(e) => setPhrase(e.target.value)}

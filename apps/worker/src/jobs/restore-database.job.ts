@@ -187,7 +187,7 @@ export async function processRestoreJob(
   try {
     await getDb().execute(sql`
       INSERT INTO platform_restores (backup_id, status, requested_by_user_id, confirmation_phrase, started_at, completed_at)
-      VALUES (${backupId}, 'completed', NULL, ${'restore ' + restore_id + ' (marker re-created after whole-db swap)'}, now(), now())
+      VALUES (${backupId}, 'completed', NULL, ${`restore ${restore_id} (marker re-created after whole-db swap)`}, now(), now())
     `);
   } catch (err) {
     logger.warn(
