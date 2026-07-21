@@ -16,7 +16,7 @@ import { OfflineBanner } from '@/components/offline-banner';
 import { ws } from '@/lib/websocket';
 import { useBrowserNotifications } from '@/hooks/use-browser-notifications';
 import { useMutationRetry } from '@/hooks/use-mutation-retry';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -26,8 +26,7 @@ type Route =
   | { page: 'verify' }
   | { page: 'tickets' }
   | { page: 'new-ticket' }
-  | { page: 'ticket-detail'; ticketId: string }
-  | { page: 'help' };
+  | { page: 'ticket-detail'; ticketId: string };
 
 const BASE_PATH = '/helpdesk';
 
@@ -75,7 +74,6 @@ function parseRoute(
     }
     if (legacy === '/tickets/new') return { page: 'new-ticket' };
     if (legacy === '/tickets') return { page: 'tickets' };
-    if (legacy === '/help') return { page: 'help' };
     if (legacy === '/register') return { page: 'register' };
     if (legacy === '/verify') return { page: 'verify' };
     if (legacy === '/login') return { page: 'login' };
@@ -89,7 +87,6 @@ function parseRoute(
   }
   if (p === '/tickets/new') return { page: 'new-ticket' };
   if (p === '/tickets') return { page: 'tickets' };
-  if (p === '/help') return { page: 'help' };
   if (p === '/register') return { page: 'register' };
   if (p === '/verify') return { page: 'verify' };
   if (p === '/login') return { page: 'login' };
@@ -212,7 +209,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('helpdesk');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -247,10 +244,6 @@ export function App() {
       return <RegisterPage onNavigate={navigate} />;
     }
     return <LoginPage onNavigate={navigate} />;
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="helpdesk" onBack={() => navigate('/tickets')} />;
   }
 
   return (

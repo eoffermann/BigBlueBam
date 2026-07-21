@@ -6,7 +6,7 @@ import { GoalDetailPage } from '@/pages/GoalDetailPage';
 import { PeriodListPage } from '@/pages/PeriodListPage';
 import { AtRiskPage } from '@/pages/AtRiskPage';
 import { MyGoalsPage } from '@/pages/MyGoalsPage';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -14,8 +14,7 @@ type Route =
   | { page: 'periods' }
   | { page: 'goal-detail'; id: string }
   | { page: 'at-risk' }
-  | { page: 'my-goals' }
-  | { page: 'help' };
+  | { page: 'my-goals' };
 
 const BASE_PATH = '/bearing';
 
@@ -33,7 +32,6 @@ function parseRoute(path: string): Route {
   if (p === '/periods') return { page: 'periods' };
   if (p === '/at-risk') return { page: 'at-risk' };
   if (p === '/my-goals') return { page: 'my-goals' };
-  if (p === '/help') return { page: 'help' };
 
   // /goals/:id
   const goalMatch = p.match(/^\/goals\/([^/]+)$/);
@@ -85,7 +83,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bearing');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -119,9 +117,6 @@ export function App() {
     );
   }
 
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bearing" onBack={() => navigate('/')} />;
-  }
 
   const renderPage = () => {
     switch (route.page) {

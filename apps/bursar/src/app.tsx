@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ShoppingCart, Loader2 } from 'lucide-react';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { useAuthStore } from '@/stores/auth.store';
 import { BursarLayout, type ActiveRoute } from '@/components/layout/bursar-layout';
 import { VendorPortfolioPage } from '@/pages/vendor-portfolio';
@@ -24,8 +24,7 @@ type Route =
   | { page: 'mismatches' }
   | { page: 'renewals' }
   | { page: 'review' }
-  | { page: 'settings' }
-  | { page: 'help' };
+  | { page: 'settings' };
 
 const BASE_PATH = '/bursar';
 
@@ -38,7 +37,6 @@ function parseRoute(path: string): Route {
   const p = stripBase((path.split('?')[0] ?? path).replace(/\/+$/, '') || '/');
 
   if (p === '/' || p === '') return { page: 'board' };
-  if (p === '/help') return { page: 'help' };
   if (p === '/requests') return { page: 'requests' };
   if (p === '/mismatches') return { page: 'mismatches' };
   if (p === '/renewals') return { page: 'renewals' };
@@ -117,7 +115,7 @@ export function App() {
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bursar');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -152,10 +150,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bursar" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

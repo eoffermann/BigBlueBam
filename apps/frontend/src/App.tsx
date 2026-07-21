@@ -37,7 +37,7 @@ import { BetaNotifyPage } from '@/pages/beta-notify';
 import { SuperuserBootstrapPage } from '@/pages/superuser-bootstrap';
 import { usePublicConfig } from '@/hooks/use-public-config';
 import { HelpdeskAgentQueuePage } from '@/pages/helpdesk-agent-queue';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -69,8 +69,7 @@ type Route =
   | { page: 'helpdesk-queue' }
   | { page: 'beta-gate' }
   | { page: 'beta-notify' }
-  | { page: 'bootstrap' }
-  | { page: 'help' };
+  | { page: 'bootstrap' };
 
 const BASE_PATH = '/b3';
 
@@ -151,7 +150,6 @@ function parseRoute(path: string): Route {
   }
   if (p === '/people' || p === '/people/') return { page: 'people' };
   if (p === '/helpdesk-queue') return { page: 'helpdesk-queue' };
-  if (p === '/help') return { page: 'help' };
   if (p === '/register') return { page: 'register' };
   if (p === '/bootstrap') return { page: 'bootstrap' };
   if (p === '/beta-gate') return { page: 'beta-gate' };
@@ -239,7 +237,7 @@ export function App() {
         target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bam');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -406,8 +404,6 @@ export function App() {
       return <HelpdeskAgentQueuePage onNavigate={navigate} />;
     case 'task-ref':
       return <TaskRefResolverPage ref={route.ref} onNavigate={navigate} />;
-    case 'help':
-      return <HelpViewer appSlug="bam" onBack={() => navigate('/')} />;
     case 'login':
     case 'register':
     case 'dashboard':

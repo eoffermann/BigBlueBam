@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useState } from 'react';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { useChannelStore } from '@/stores/channel.store';
 
 /**
@@ -9,7 +10,7 @@ import { useChannelStore } from '@/stores/channel.store';
  * - Escape: Close thread panel
  * - Up arrow in empty compose: Edit last message
  */
-export function useKeyboardShortcuts(navigate: (path: string) => void) {
+export function useKeyboardShortcuts() {
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const closeThread = useChannelStore((s) => s.closeThread);
 
@@ -58,7 +59,7 @@ export function useKeyboardShortcuts(navigate: (path: string) => void) {
       // ? key: Open Help
       if (e.key === '?' && !isInInput && !isModifier) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('banter');
         return;
       }
 

@@ -9,7 +9,7 @@ import { VersionHistoryPage } from '@/pages/version-history';
 import { TemplateBrowserPage } from '@/pages/template-browser';
 import { StarredBoardsPage } from '@/pages/starred-boards';
 import { ArchivedBoardsPage } from '@/pages/archived-boards';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -19,8 +19,7 @@ type Route =
   | { page: 'versions'; id: string }
   | { page: 'templates' }
   | { page: 'starred' }
-  | { page: 'archived' }
-  | { page: 'help' };
+  | { page: 'archived' };
 
 const BASE_PATH = '/board';
 
@@ -39,7 +38,6 @@ function parseRoute(path: string): Route {
   if (p === '/templates') return { page: 'templates' };
   if (p === '/starred') return { page: 'starred' };
   if (p === '/archived') return { page: 'archived' };
-  if (p === '/help') return { page: 'help' };
 
   // /:id/versions
   const versionsMatch = p.match(/^\/([^/]+)\/versions$/);
@@ -112,7 +110,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('board');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -144,10 +142,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="board" onBack={() => navigate('/')} />;
   }
 
   // Canvas page is full-screen -- no layout wrapper

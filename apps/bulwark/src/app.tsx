@@ -7,7 +7,7 @@ import { DeadlineRadarPage } from '@/pages/deadline-radar';
 import { NoticeReviewQueuePage } from '@/pages/notice-review-queue';
 import { VendorComplianceMatrixPage } from '@/pages/vendor-compliance-matrix';
 import { SettingsPage } from '@/pages/settings';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -16,8 +16,7 @@ type Route =
   | { page: 'radar' }
   | { page: 'notices' }
   | { page: 'compliance' }
-  | { page: 'settings' }
-  | { page: 'help' };
+  | { page: 'settings' };
 
 const BASE_PATH = '/bulwark';
 
@@ -32,7 +31,6 @@ function parseRoute(path: string): Route {
   const p = stripBase(path);
 
   if (p === '/' || p === '') return { page: 'ledger' };
-  if (p === '/help') return { page: 'help' };
   if (p === '/radar') return { page: 'radar' };
   if (p === '/notices') return { page: 'notices' };
   if (p === '/compliance') return { page: 'compliance' };
@@ -101,7 +99,7 @@ export function App() {
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bulwark');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -136,10 +134,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bulwark" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

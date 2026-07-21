@@ -10,7 +10,7 @@ import { CompanyDetailPage } from '@/pages/company-detail';
 import { AnalyticsPage } from '@/pages/analytics';
 import { SettingsPage } from '@/pages/settings';
 import { ErrorBoundary } from '@/components/common/error-boundary';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -22,8 +22,7 @@ type Route =
   | { page: 'companies' }
   | { page: 'company-detail'; id: string }
   | { page: 'analytics' }
-  | { page: 'settings'; tab: 'pipelines' | 'fields' | 'scoring' | 'email' }
-  | { page: 'help' };
+  | { page: 'settings'; tab: 'pipelines' | 'fields' | 'scoring' | 'email' };
 
 const BASE_PATH = '/bond';
 
@@ -38,7 +37,6 @@ function parseRoute(path: string): Route {
   const p = stripBase(path);
 
   if (p === '/' || p === '') return { page: 'pipeline' };
-  if (p === '/help') return { page: 'help' };
   if (p === '/contacts') return { page: 'contacts' };
   if (p === '/companies') return { page: 'companies' };
   if (p === '/analytics') return { page: 'analytics' };
@@ -123,7 +121,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bond');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -155,10 +153,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bond" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

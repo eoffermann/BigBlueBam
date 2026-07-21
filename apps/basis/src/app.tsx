@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import type { CreateBasisMetricInput } from '@bigbluebam/shared';
 import { useAuthStore } from '@/stores/auth.store';
 import { BasisLayout, type ActiveRoute } from '@/components/layout/basis-layout';
@@ -10,7 +10,7 @@ import { api, getDataSources, type Metric } from './lib/api';
 const BASE_PATH = '/basis';
 
 /* ----------------------------- routing (lean) ---------------------------- */
-type Route = { page: 'catalog' } | { page: 'metric'; id: string } | { page: 'help' };
+type Route = { page: 'catalog' } | { page: 'metric'; id: string };
 
 function stripBase(path: string): string {
   if (path.startsWith(BASE_PATH)) return path.slice(BASE_PATH.length) || '/';
@@ -19,7 +19,6 @@ function stripBase(path: string): string {
 
 function parseRoute(path: string): Route {
   const p = stripBase(path);
-  if (p === '/help') return { page: 'help' };
   const m = p.match(/^\/metrics\/([^/]+)/);
   if (m) return { page: 'metric', id: m[1]! };
   return { page: 'catalog' };
@@ -568,7 +567,7 @@ export function App() {
       const inInput = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable;
       if (e.key === '?' && !inInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('basis');
       }
     };
     window.addEventListener('keydown', onKey);
@@ -612,10 +611,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="basis" onBack={() => navigate('/')} />;
   }
 
   const activeRoute: ActiveRoute =

@@ -11,7 +11,7 @@ import { SavedViewsPage } from '@/pages/saved-views';
 import { WatchManagementPage } from '@/pages/watch-management';
 import { TransformEditorPage } from '@/pages/transform-editor';
 import { RetentionSettingsPage } from '@/pages/retention-settings';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -24,8 +24,7 @@ type Route =
   | { page: 'transform'; id: string }
   | { page: 'retention'; id: string }
   | { page: 'types'; id: string }
-  | { page: 'viewer'; id: string; reportType: string }
-  | { page: 'help' };
+  | { page: 'viewer'; id: string; reportType: string };
 
 const BASE_PATH = '/blip';
 
@@ -40,7 +39,6 @@ function parseRoute(path: string): Route {
   const p = stripBase(path);
 
   if (p === '/' || p === '') return { page: 'apps' };
-  if (p === '/help') return { page: 'help' };
 
   // /apps/:id/types/:t — live viewer (checked before the bare /types route)
   const viewerMatch = p.match(/^\/apps\/([^/]+)\/types\/([^/]+)$/);
@@ -131,7 +129,7 @@ export function App() {
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('blip');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -166,10 +164,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="blip" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

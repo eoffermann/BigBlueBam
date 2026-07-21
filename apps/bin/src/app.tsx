@@ -3,13 +3,12 @@ import { useAuthStore } from '@/stores/auth.store';
 import { BinLayout } from '@/components/layout/bin-layout';
 import { AssetLibraryPage } from '@/pages/asset-library';
 import { AssetDataPage } from '@/pages/asset-data';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
   | { page: 'assets' }
-  | { page: 'asset-data'; id: string }
-  | { page: 'help' };
+  | { page: 'asset-data'; id: string };
 
 const BASE_PATH = '/bin';
 
@@ -24,7 +23,6 @@ function parseRoute(path: string): Route {
   const p = stripBase(path);
 
   if (p === '/' || p === '') return { page: 'assets' };
-  if (p === '/help') return { page: 'help' };
 
   // /assets/:id — structured-data view
   const dataMatch = p.match(/^\/assets\/([^/]+)$/);
@@ -75,7 +73,7 @@ export function App() {
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bin');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -110,10 +108,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bin" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

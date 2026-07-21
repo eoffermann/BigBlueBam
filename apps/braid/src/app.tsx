@@ -6,7 +6,7 @@ import { ProfileDetailPage } from '@/pages/profile-detail';
 import { ReviewQueuePage } from '@/pages/review-queue';
 import { SurvivorshipRulesPage } from '@/pages/survivorship-rules';
 import { SettingsPage } from '@/pages/settings';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -14,8 +14,7 @@ type Route =
   | { page: 'profile-detail'; id: string }
   | { page: 'review-queue' }
   | { page: 'survivorship' }
-  | { page: 'settings' }
-  | { page: 'help' };
+  | { page: 'settings' };
 
 const BASE_PATH = '/braid';
 
@@ -30,7 +29,6 @@ function parseRoute(path: string): Route {
   const p = stripBase(path);
 
   if (p === '/' || p === '') return { page: 'profiles' };
-  if (p === '/help') return { page: 'help' };
   if (p === '/review-queue') return { page: 'review-queue' };
   if (p === '/survivorship') return { page: 'survivorship' };
   if (p === '/settings') return { page: 'settings' };
@@ -97,7 +95,7 @@ export function App() {
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('braid');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -132,10 +130,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="braid" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

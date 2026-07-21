@@ -5,15 +5,14 @@ import { ReviewLibraryPage } from '@/pages/review-library';
 import { ReviewAssetPage } from '@/pages/review-asset';
 import { ReviewByBinAsset } from '@/pages/review-by-bin';
 import { GuestReviewPage } from '@/pages/guest-review';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
   | { page: 'assets' }
   | { page: 'review'; id: string }
   | { page: 'review-by-bin'; binAssetId: string }
-  | { page: 'guest-review'; token: string }
-  | { page: 'help' };
+  | { page: 'guest-review'; token: string };
 
 const BASE_PATH = '/bay';
 
@@ -28,7 +27,6 @@ function parseRoute(path: string): Route {
   const p = stripBase(path);
 
   if (p === '/' || p === '') return { page: 'assets' };
-  if (p === '/help') return { page: 'help' };
 
   // /r/:token — public guest review (no auth). Checked early; rendered before
   // the auth guard so anonymous browsers can open shared links.
@@ -89,7 +87,7 @@ export function App() {
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bay');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -132,9 +130,6 @@ export function App() {
     );
   }
 
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bay" onBack={() => navigate('/')} />;
-  }
 
   const renderPage = () => {
     switch (route.page) {

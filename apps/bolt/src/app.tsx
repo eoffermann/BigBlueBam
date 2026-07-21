@@ -7,7 +7,7 @@ import { AutomationExecutionsPage } from '@/pages/automation-executions';
 import { ExecutionLogPage } from '@/pages/execution-log';
 import { ExecutionDetailPage } from '@/pages/execution-detail';
 import { TemplateBrowserPage } from '@/pages/template-browser';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -17,8 +17,7 @@ type Route =
   | { page: 'automation-executions'; id: string }
   | { page: 'executions' }
   | { page: 'execution-detail'; id: string }
-  | { page: 'templates' }
-  | { page: 'help' };
+  | { page: 'templates' };
 
 const BASE_PATH = '/bolt';
 
@@ -36,7 +35,6 @@ function parseRoute(path: string): Route {
   if (p === '/new') return { page: 'new' };
   if (p === '/templates') return { page: 'templates' };
   if (p === '/executions') return { page: 'executions' };
-  if (p === '/help') return { page: 'help' };
 
   // /automations/:id/executions
   const automationExecMatch = p.match(/^\/automations\/([^/]+)\/executions$/);
@@ -100,7 +98,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bolt');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -132,10 +130,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bolt" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { useAuthStore } from '@/stores/auth.store';
 import { BlueprintLayout } from '@/components/layout/blueprint-layout';
 import { DiagramListPage } from '@/pages/list';
@@ -10,8 +10,7 @@ import type { DiagramFilterKey } from '@/components/layout/blueprint-sidebar';
 
 type Route =
   | { page: 'list' }
-  | { page: 'editor'; id: string }
-  | { page: 'help' };
+  | { page: 'editor'; id: string };
 
 const BASE_PATH = '/blueprint';
 
@@ -25,7 +24,6 @@ function stripBase(path: string): string {
 function parseRoute(path: string): Route {
   const p = stripBase(path);
   if (p === '/' || p === '') return { page: 'list' };
-  if (p === '/help') return { page: 'help' };
   const editorMatch = p.match(/^\/d\/([^/]+)$/);
   if (editorMatch) return { page: 'editor', id: editorMatch[1]! };
   return { page: 'list' };
@@ -97,7 +95,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('blueprint');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -129,10 +127,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="blueprint" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

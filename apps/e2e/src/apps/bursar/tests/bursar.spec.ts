@@ -362,13 +362,15 @@ test.describe('Bursar - procurement leveling & spend baseline', () => {
     }
   });
 
-  // Step 12: Help - the HelpTrigger opens and the Bursar guide loads.
-  test('12. the Help Center opens the Bursar guide', async ({ page }) => {
+  // Step 12: Help - the "?" shortcut opens the shared Help Center modal (not a page nav).
+  test('12. the Help Center modal opens the Bursar guide', async ({ page }) => {
     await page.goto('/bursar/');
     await expect(page.getByRole('heading', { name: 'Vendor Portfolio' })).toBeVisible();
-    // The shared HelpTrigger ("?" key also opens Help - app.tsx binds it).
+    // The shared HelpTrigger ("?" key opens the Help Center overlay - app.tsx binds it
+    // to openHelpCenter('bursar'); there is no longer a full-page /bursar/help route).
     await page.keyboard.press('?');
-    // The HelpViewer for the Bursar guide mounts.
-    await expect(page.getByText(/Bursar/i).first()).toBeVisible();
+    // The Help Center overlay (role="dialog") mounts with the Bursar guide.
+    await expect(page.getByRole('dialog').first()).toBeVisible();
+    await expect(page.getByRole('dialog').getByText(/Bursar/i).first()).toBeVisible();
   });
 });

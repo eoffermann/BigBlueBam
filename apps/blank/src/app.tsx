@@ -9,7 +9,7 @@ import { FormAnalyticsPage } from '@/pages/form-analytics';
 import { FormSettingsPage } from '@/pages/form-settings';
 import { SettingsPage } from '@/pages/settings';
 import { PublicFormPage } from '@/pages/public-form';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -20,8 +20,7 @@ type Route =
   | { page: 'form-analytics'; id: string }
   | { page: 'form-settings'; id: string }
   | { page: 'settings' }
-  | { page: 'public-form'; slug: string }
-  | { page: 'help' };
+  | { page: 'public-form'; slug: string };
 
 const BASE_PATH = '/blank';
 
@@ -37,7 +36,6 @@ function parseRoute(path: string): Route {
 
   if (p === '/' || p === '') return { page: 'forms' };
   if (p === '/settings') return { page: 'settings' };
-  if (p === '/help') return { page: 'help' };
 
   // /f/:slug — public form render (no auth required)
   const publicMatch = p.match(/^\/f\/([^/]+)$/);
@@ -116,7 +114,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('blank');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -148,10 +146,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="blank" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

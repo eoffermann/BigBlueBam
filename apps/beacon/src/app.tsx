@@ -10,7 +10,7 @@ import { BeaconEditorPage } from '@/pages/beacon-editor';
 import { GraphExplorerPage } from '@/pages/graph-explorer';
 import { BeaconDashboardPage } from '@/pages/beacon-dashboard';
 import { BeaconSettingsPage } from '@/pages/beacon-settings';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -22,8 +22,7 @@ type Route =
   | { page: 'edit'; idOrSlug: string }
   | { page: 'graph'; focalId?: string }
   | { page: 'dashboard' }
-  | { page: 'settings' }
-  | { page: 'help' };
+  | { page: 'settings' };
 
 const BASE_PATH = '/beacon';
 
@@ -43,7 +42,6 @@ function parseRoute(path: string): Route {
   if (p === '/create') return { page: 'create' };
   if (p === '/dashboard') return { page: 'dashboard' };
   if (p === '/settings') return { page: 'settings' };
-  if (p === '/help') return { page: 'help' };
 
   const editMatch = p.match(/^\/([^/]+)\/edit$/);
   if (editMatch) {
@@ -104,7 +102,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('beacon');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -163,9 +161,6 @@ export function App() {
     }
   };
 
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="beacon" onBack={() => navigate('/')} />;
-  }
 
   // Build a stable key from the current route so the boundary auto-resets
   // when the user navigates away from a crashed page.

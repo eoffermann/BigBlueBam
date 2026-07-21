@@ -10,7 +10,7 @@ import { ExplorerPage } from '@/pages/explorer';
 import { ReportsPage } from '@/pages/reports';
 import { SavedQueriesPage } from '@/pages/saved-queries';
 import { SettingsPage } from '@/pages/settings';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -22,8 +22,7 @@ type Route =
   | { page: 'explorer' }
   | { page: 'reports' }
   | { page: 'saved-queries' }
-  | { page: 'settings' }
-  | { page: 'help' };
+  | { page: 'settings' };
 
 const BASE_PATH = '/bench';
 
@@ -44,7 +43,6 @@ function parseRoute(path: string): Route {
   if (p === '/reports') return { page: 'reports' };
   if (p === '/saved-queries') return { page: 'saved-queries' };
   if (p === '/settings') return { page: 'settings' };
-  if (p === '/help') return { page: 'help' };
   // /dashboards/:id/widgets/new
   const widgetNewMatch = p.match(/^\/dashboards\/([^/]+)\/widgets\/new$/);
   if (widgetNewMatch) return { page: 'widget-new', dashboardId: widgetNewMatch[1]! };
@@ -108,7 +106,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('bench');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -140,10 +138,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="bench" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

@@ -15,7 +15,6 @@ export default defineConfig({
       '@bigbluebam/ui/help-center': resolve(__dirname, '../../packages/ui/help-center.tsx'),
       '@bigbluebam/ui/user-menu': resolve(__dirname, '../../packages/ui/user-menu.tsx'),
       '@bigbluebam/ui/sidebar-footer': resolve(__dirname, '../../packages/ui/sidebar-footer.tsx'),
-      '@bigbluebam/ui/help-viewer': resolve(__dirname, '../../packages/ui/help-viewer.tsx'),
       '@bigbluebam/ui/permissions-context': resolve(__dirname, '../../packages/ui/permissions-context.tsx'),
       '@bigbluebam/ui/use-can': resolve(__dirname, '../../packages/ui/use-can.tsx'),
     },

@@ -11,7 +11,7 @@ import { SegmentBuilderPage } from '@/pages/segment-builder';
 import { AnalyticsDashboardPage } from '@/pages/analytics-dashboard';
 import { DomainSettingsPage } from '@/pages/domain-settings';
 import { SmtpSettingsPage } from '@/pages/smtp-settings';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -25,8 +25,7 @@ type Route =
   | { page: 'segment-new' }
   | { page: 'analytics' }
   | { page: 'domain-settings' }
-  | { page: 'smtp-settings' }
-  | { page: 'help' };
+  | { page: 'smtp-settings' };
 
 const BASE_PATH = '/blast';
 
@@ -49,7 +48,6 @@ function parseRoute(path: string): Route {
   if (p === '/analytics') return { page: 'analytics' };
   if (p === '/settings/domains') return { page: 'domain-settings' };
   if (p === '/settings/smtp') return { page: 'smtp-settings' };
-  if (p === '/help') return { page: 'help' };
 
   const campaignMatch = p.match(/^\/campaigns\/([^/]+)$/);
   if (campaignMatch) return { page: 'campaign-detail', id: campaignMatch[1]! };
@@ -100,7 +98,7 @@ export function App() {
       const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('blast');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -132,10 +130,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="blast" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {

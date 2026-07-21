@@ -14,7 +14,7 @@ export default defineConfig({
     // cherry-picked. The frontend Dockerfile chains all 24 SPA builds with `&&`, so a single
     // unresolved alias here breaks the ENTIRE frontend image, not just Bursar. The one that
     // bites is @bigbluebam/ui/markdown, which nothing in this app imports directly -- it is
-    // pulled in transitively by help-center.tsx and help-viewer.tsx. Rule is "copy them all".
+    // pulled in transitively by help-center.tsx. Rule is "copy them all".
     alias: {
       '@': resolve(__dirname, 'src'),
       '@bigbluebam/ui/launchpad': resolve(__dirname, '../../packages/ui/launchpad.tsx'),
@@ -26,7 +26,6 @@ export default defineConfig({
       '@bigbluebam/ui/help-center': resolve(__dirname, '../../packages/ui/help-center.tsx'),
       '@bigbluebam/ui/user-menu': resolve(__dirname, '../../packages/ui/user-menu.tsx'),
       '@bigbluebam/ui/sidebar-footer': resolve(__dirname, '../../packages/ui/sidebar-footer.tsx'),
-      '@bigbluebam/ui/help-viewer': resolve(__dirname, '../../packages/ui/help-viewer.tsx'),
       '@bigbluebam/ui/markdown': resolve(__dirname, '../../packages/ui/markdown.ts'),
       '@bigbluebam/ui/presence-chip-strip': resolve(
         __dirname,

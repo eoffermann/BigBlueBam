@@ -14,7 +14,6 @@ import { AdminCallingSettingsPage } from '@/pages/admin-calling-settings';
 import { CallPlaybackPage } from '@/pages/call-playback';
 import { ws } from '@/lib/websocket';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
 import { Loader2 } from 'lucide-react';
 
 type Route =
@@ -30,8 +29,7 @@ type Route =
   | { page: 'admin' }
   | { page: 'admin-calling' }
   | { page: 'call'; id: string }
-  | { page: 'redirect' }
-  | { page: 'help' };
+  | { page: 'redirect' };
 
 const BASE_PATH = '/banter';
 
@@ -82,7 +80,6 @@ function parseRoute(path: string): Route {
   if (p === '/settings') return { page: 'settings' };
   if (p === '/admin/calling') return { page: 'admin-calling' };
   if (p === '/admin') return { page: 'admin' };
-  if (p === '/help') return { page: 'help' };
 
   return { page: 'redirect' };
 }
@@ -192,7 +189,7 @@ export function App() {
   }, [isAuthenticated, route.page, navigate]);
 
   // Register keyboard shortcuts
-  useKeyboardShortcuts(navigate);
+  useKeyboardShortcuts();
 
   if (isLoading) {
     return (
@@ -220,11 +217,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  // Help page renders outside the layout
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="banter" onBack={() => navigate('/channels/general')} />;
   }
 
   // Channel-id resolver — show a loader while we look the channel up.

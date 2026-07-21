@@ -9,7 +9,7 @@ import { VariancesPage } from '@/pages/variances';
 import { CostRatesPage } from '@/pages/cost-rates';
 import { SettingsPage } from '@/pages/settings';
 import { RulesPage } from '@/pages/rules';
-import { HelpViewer } from '@bigbluebam/ui/help-viewer';
+import { openHelpCenter } from '@bigbluebam/ui/help-center';
 import { Flame, Loader2 } from 'lucide-react';
 
 type Route =
@@ -20,8 +20,7 @@ type Route =
   | { page: 'variances' }
   | { page: 'cost-rates' }
   | { page: 'settings' }
-  | { page: 'rules' }
-  | { page: 'help' };
+  | { page: 'rules' };
 
 const BASE_PATH = '/burn';
 
@@ -36,7 +35,6 @@ function parseRoute(path: string): Route {
   const p = stripBase(path.split('?')[0] ?? path);
 
   if (p === '/' || p === '') return { page: 'board' };
-  if (p === '/help') return { page: 'help' };
   if (p === '/unscoped') return { page: 'unscoped' };
   if (p === '/gate') return { page: 'gate' };
   if (p === '/variances') return { page: 'variances' };
@@ -109,7 +107,7 @@ export function App() {
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
       if (e.key === '?' && !isInInput && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        navigate('/help');
+        openHelpCenter('burn');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -144,10 +142,6 @@ export function App() {
         </div>
       </div>
     );
-  }
-
-  if (route.page === 'help') {
-    return <HelpViewer appSlug="burn" onBack={() => navigate('/')} />;
   }
 
   const renderPage = () => {
