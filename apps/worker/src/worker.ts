@@ -11,6 +11,8 @@ import { processSprintCloseJob, type SprintCloseJobData } from './jobs/sprint-cl
 import { processExportJob, type ExportJobData } from './jobs/export.job.js';
 import { processBanterNotificationJob, type BanterNotificationJobData } from './jobs/banter-notification.job.js';
 import { processBanterRetentionJob, type BanterRetentionJobData } from './jobs/banter-retention.job.js';
+import { processBackupJob, type BackupJobData } from './jobs/backup-database.job.js';
+import { processRestoreJob, type RestoreJobData } from './jobs/restore-database.job.js';
 import { processBanterTranscriptionJob, type BanterTranscriptionJobData } from './jobs/banter-transcription.job.js';
 import { processHelpdeskTaskCreateJob, type HelpdeskTaskCreateJobData } from './jobs/helpdesk-task-create.job.js';
 import { processBeaconVectorSyncJob, type BeaconVectorSyncJobData } from './jobs/beacon-vector-sync.job.js';
@@ -2043,8 +2045,56 @@ reconcileScheduledPosts(
   logger.error({ err }, 'banter-scheduled-post: startup reconciler failed');
 });
 
+// ── Database backup / restore (Backup app, Platform scope) ──────────────
+// Nightly scheduled pg_dump plus on-demand backups the api enqueues, and the
+// destructive restore the api enqueues after a SuperUser confirmation phrase.
+const backupQueue = new Queue('backup-database', { connection: redis });
+backupQueue
+  .upsertJobScheduler(
+    'nightly-database-backup',
+    { pattern: env.BACKUP_SCHEDULE_CRON },
+    { name: 'scheduled-backup', data: { kind: 'scheduled' } },
+  )
+  .catch((err) => logger.error({ err }, 'Failed to register nightly database backup scheduler'));
+
+const backupWorker = new Worker<BackupJobData>(
+  'backup-database',
+  async (job: Job<BackupJobData>) => {
+    await processBackupJob(job, logger, env);
+  },
+  { ...connection, concurrency: 1 }, // never run two dumps at once
+);
+
+backupWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'backup-database' }, 'Job completed');
+});
+
+backupWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'backup-database', err }, 'Job failed');
+  void recordWorkerError({ queueName: 'backup-database', jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
+const restoreWorker = new Worker<RestoreJobData>(
+  'restore-database',
+  async (job: Job<RestoreJobData>) => {
+    await processRestoreJob(job, logger, env);
+  },
+  { ...connection, concurrency: 1 }, // one restore at a time; it is destructive
+);
+
+restoreWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, queue: 'restore-database' }, 'Job completed');
+});
+
+restoreWorker.on('failed', (job, err) => {
+  logger.error({ jobId: job?.id, queue: 'restore-database', err }, 'Job failed');
+  void recordWorkerError({ queueName: 'restore-database', jobId: job?.id, jobName: job?.name, err: err as Error });
+});
+
 // Collect all workers for graceful shutdown
 const workers = [
+  backupWorker,
+  restoreWorker,
   emailWorker,
   notificationWorker,
   sprintCloseWorker,
