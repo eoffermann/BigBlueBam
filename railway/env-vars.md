@@ -191,6 +191,7 @@ with **R**, optional with `o`.
 | o | `BRAID_API_INTERNAL_URL` | computed | `http://braid-api.railway.internal:8080` |  |
 | o | `BULWARK_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
 | o | `BURN_API_INTERNAL_URL` | computed | `http://burn-api.railway.internal:8080` |  |
+| o | `BURSAR_API_INTERNAL_URL` | computed | `http://bursar-api.railway.internal:8080` |  |
 
 ### bearing-api
 
@@ -352,6 +353,27 @@ with **R**, optional with `o`.
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `MAX_DOC_BYTES` | literal | `26214400` |  |
 | o | `MAX_DOC_PAGES` | literal | `300` |  |
+
+### bursar-api
+
+*Bursar API — vendor-side procurement, exclusion diff, spend baseline*
+
+| R/o | Variable | Kind | Value | Note |
+|---|---|---|---|---|
+| **R** | `DATABASE_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Reference the Railway Postgres plugin |
+| **R** | `REDIS_URL` | plugin | `${{Redis.REDIS_URL}}` | Reference the Railway Redis plugin |
+| **R** | `SESSION_SECRET` | secret | `<generate>` | openssl rand -hex 32 — must be IDENTICAL on every API service so they share sessions |
+| **R** | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
+| **R** | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
+| **R** | `BOLT_API_INTERNAL_URL` | computed | `http://bolt-api.railway.internal:8080` |  |
+| o | `DATABASE_READ_URL` | plugin | `${{Postgres.DATABASE_URL}}` | Same as DATABASE_URL unless you set up a read replica |
+| o | `BRAID_API_INTERNAL_URL` | computed | `http://braid-api.railway.internal:8080` |  |
+| o | `CORS_ORIGIN` | public | `<frontend-public-url>` |  |
+| o | `LOG_LEVEL` | literal | `info` |  |
+| o | `MAX_DOC_BYTES` | literal | `26214400` |  |
+| o | `MAX_DOC_PAGES` | literal | `300` |  |
+| o | `BURSAR_LLM_TIMEOUT_MS` | literal | `60000` |  |
+| o | `BURSAR_ENGINE_TIMEOUT_MS` | literal | `30000` |  |
 
 ### book-api
 
@@ -556,6 +578,7 @@ with **R**, optional with `o`.
 | o | `BRAID_API_URL` | unknown | `<see app docs>` |  |
 | o | `BULWARK_API_URL` | unknown | `<see app docs>` |  |
 | o | `BURN_API_URL` | computed | `http://burn-api.railway.internal:8080/v1` |  |
+| o | `BURSAR_API_URL` | computed | `http://bursar-api.railway.internal:8080/v1` |  |
 | o | `MCP_AUTH_REQUIRED` | literal | `true` | Recommended for production deployments |
 | o | `LOG_LEVEL` | literal | `info` |  |
 | o | `INTERNAL_SERVICE_SECRET` | secret | `<generate>` | openssl rand -hex 32 — protects internal service-to-service calls (bolt-api event ingestion, MCP /tools/call). Validated min(32); use 64 hex chars. |
@@ -590,6 +613,8 @@ with **R**, optional with `o`.
 | o | `BBB_API_INTERNAL_URL` | computed | `http://api.railway.internal:8080` |  |
 | o | `BRAID_API_INTERNAL_URL` | computed | `http://braid-api.railway.internal:8080` |  |
 | o | `BULWARK_API_INTERNAL_URL` | unknown | `<see app docs>` |  |
+| o | `BURN_API_INTERNAL_URL` | computed | `http://burn-api.railway.internal:8080` |  |
+| o | `BURSAR_API_INTERNAL_URL` | computed | `http://bursar-api.railway.internal:8080` |  |
 | o | `LIVEKIT_TURN_CHECK_TARGET` | user | `<turn.your-domain:port>` | Set on the worker so the daily turn-cert-expiry watchdog can warn before the TURN cert lapses. Format: turn.example.com:<tls-port>. |
 
 ### voice-agent
@@ -662,8 +687,8 @@ _No environment variables required._
 These are the secrets and references that MUST be identical across
 several services. Set them once, then copy/reference everywhere.
 
-- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, braid-api, bulwark-api, burn-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
+- `SESSION_SECRET` — api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, basis-api, braid-api, bulwark-api, burn-api, bursar-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api
 - `INTERNAL_HELPDESK_SECRET` — api, helpdesk-api
-- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, braid-api, bulwark-api, burn-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
+- `INTERNAL_SERVICE_SECRET` — api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, basis-api, braid-api, bulwark-api, burn-api, bursar-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, blip-api, mcp-server, worker, livekit
 - `LIVEKIT_API_KEY` — banter-api, board-api, bureau-api, livekit
 - `LIVEKIT_API_SECRET` — banter-api, board-api, bureau-api, livekit
