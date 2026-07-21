@@ -1,6 +1,7 @@
 import type { Job } from 'bullmq';
 import type { Logger } from 'pino';
 import { sql } from 'drizzle-orm';
+import { neutralizeCsvValue } from '@bigbluebam/shared';
 import { getDb } from '../utils/db.js';
 
 export interface ExportJobData {
@@ -42,8 +43,9 @@ function tasksToCsv(tasks: TaskRow[]): string {
   ];
 
   const escapeCsv = (val: unknown): string => {
-    if (val === null || val === undefined) return '';
-    const str = String(val);
+    // neutralizeCsvValue handles null/undefined -> '', numbers pass through un-neutralized,
+    // and string-origin values beginning with = + - @ get an apostrophe guard.
+    const str = neutralizeCsvValue(val);
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
       return `"${str.replace(/"/g, '""')}"`;
     }

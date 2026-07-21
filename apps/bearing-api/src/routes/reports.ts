@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { neutralizeCsvValue } from '@bigbluebam/shared';
 import { requireAuth } from '../plugins/auth.js';
 import { shadowOnly } from '../middleware/dual-read.js';
 import * as reportGenerator from '../services/report-generator.js';
@@ -260,10 +261,11 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   );
 }
 
-/** Escape a string value for CSV output. */
+/** Escape a string value for CSV output, neutralizing spreadsheet formula injection first. */
 function csvEscape(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const v = neutralizeCsvValue(value);
+  if (v.includes(',') || v.includes('"') || v.includes('\n')) {
+    return `"${v.replace(/"/g, '""')}"`;
   }
-  return value;
+  return v;
 }

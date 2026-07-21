@@ -15,6 +15,26 @@
 const FORMULA_TRIGGERS = new Set(['=', '+', '-', '@', '\t', '\r']);
 
 /**
+ * Neutralize a single value against spreadsheet formula injection WITHOUT applying CSV structural
+ * escaping. Prepends a single apostrophe (the spreadsheet "this is text, not a formula"
+ * convention) when a string-origin value begins with a trigger character. Numbers and booleans are
+ * left alone (a bare number is never a formula); `null`/`undefined` become an empty string.
+ *
+ * Use this at call sites that already do their own RFC 4180 quoting (so they do not double-escape),
+ * so the ONLY change is the formula guard. Sites that want both steps should use neutralizeCsvField.
+ */
+export function neutralizeCsvValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const s = typeof value === 'string' ? value : String(value);
+  // Only string-origin values are neutralized. A numeric/boolean coercion like "-5" from a real
+  // number is never a formula, so the typeof gate leaves it untouched.
+  if (typeof value === 'string' && s.length > 0 && FORMULA_TRIGGERS.has(s[0]!)) {
+    return `'${s}`;
+  }
+  return s;
+}
+
+/**
  * Neutralize a single field value so a spreadsheet cannot interpret it as a formula, THEN escape
  * it for CSV structure. The neutralization prepends a single apostrophe (the spreadsheet
  * convention for "this is text, not a formula") when the value begins with a trigger character.
@@ -25,16 +45,10 @@ const FORMULA_TRIGGERS = new Set(['=', '+', '-', '@', '\t', '\r']);
  * still pass through CSV escaping. `null`/`undefined` become an empty field.
  */
 export function neutralizeCsvField(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  let s = typeof value === 'string' ? value : String(value);
-  // Formula neutralization applies only to string-origin values that begin with a trigger. A
-  // numeric/boolean coercion like "-5" from a real number is left alone below via the typeof gate.
-  if (typeof value === 'string' && s.length > 0 && FORMULA_TRIGGERS.has(s[0]!)) {
-    s = `'${s}`;
-  }
+  const s = neutralizeCsvValue(value);
   // CSV structural escaping: quote when the field contains a delimiter, quote, or newline.
   if (/[",\r\n]/.test(s)) {
-    s = `"${s.replace(/"/g, '""')}"`;
+    return `"${s.replace(/"/g, '""')}"`;
   }
   return s;
 }

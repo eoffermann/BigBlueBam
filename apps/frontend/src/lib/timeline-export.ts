@@ -28,6 +28,7 @@ import {
   startOfDay,
 } from 'date-fns';
 import type { Phase, Task } from '@bigbluebam/shared';
+import { neutralizeCsvValue } from '@bigbluebam/shared';
 
 export type GanttGroupBy = 'phase' | 'assignee';
 export type GanttColorScheme = 'priority' | 'phase' | 'monochrome';
@@ -140,8 +141,9 @@ function xmlEscape(s: string): string {
 }
 
 function csvEscape(s: string | number | null | undefined): string {
-  if (s == null) return '';
-  const str = String(s);
+  // neutralizeCsvValue coerces null/undefined -> '', leaves numbers un-neutralized, and guards
+  // string-origin values that begin with a spreadsheet formula trigger (= + - @).
+  const str = neutralizeCsvValue(s);
   if (/[,"\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
   return str;
 }

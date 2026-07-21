@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { neutralizeCsvField, toCsvRow, toCsv } from './csv-safe.js';
+import { neutralizeCsvField, neutralizeCsvValue, toCsvRow, toCsv } from './csv-safe.js';
 
 describe('neutralizeCsvField', () => {
   it('prefixes an apostrophe to a formula-triggering leading =', () => {
@@ -44,6 +44,28 @@ describe('neutralizeCsvField', () => {
   it('renders null and undefined as empty fields', () => {
     expect(neutralizeCsvField(null)).toBe('');
     expect(neutralizeCsvField(undefined)).toBe('');
+  });
+});
+
+describe('neutralizeCsvValue (neutralize only, no structural escaping)', () => {
+  it('prefixes an apostrophe to each leading trigger but does NOT quote-wrap', () => {
+    expect(neutralizeCsvValue('=1+1')).toBe("'=1+1");
+    expect(neutralizeCsvValue('+1')).toBe("'+1");
+    expect(neutralizeCsvValue('-1')).toBe("'-1");
+    expect(neutralizeCsvValue('@x')).toBe("'@x");
+  });
+
+  it('does not add structural quotes even when the value contains a comma or quote', () => {
+    // This is the whole point: callers that do their own quoting must not get double-escaped.
+    expect(neutralizeCsvValue('a,b')).toBe('a,b');
+    expect(neutralizeCsvValue('=a,b')).toBe("'=a,b");
+    expect(neutralizeCsvValue('say "hi"')).toBe('say "hi"');
+  });
+
+  it('leaves benign strings and numeric-origin values untouched', () => {
+    expect(neutralizeCsvValue('Acme')).toBe('Acme');
+    expect(neutralizeCsvValue(-25)).toBe('-25');
+    expect(neutralizeCsvValue(null)).toBe('');
   });
 });
 

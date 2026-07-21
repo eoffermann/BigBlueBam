@@ -1,4 +1,5 @@
 import { eq, and, desc, sql, asc } from 'drizzle-orm';
+import { neutralizeCsvValue } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { blankSubmissions, blankForms, blankFormFields } from '../db/schema/index.js';
 import { notFound, badRequest, conflict } from '../lib/utils.js';
@@ -426,10 +427,12 @@ export async function exportSubmissions(formId: string, orgId: string) {
     ];
   });
 
+  // neutralizeCsvValue guards against spreadsheet formula injection (a form answer like
+  // `=cmd|'/c calc'!A1` executing when a CFO opens the export) before the always-quote wrap.
   const csvLines = [
-    headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','),
+    headers.map((h) => `"${neutralizeCsvValue(h).replace(/"/g, '""')}"`).join(','),
     ...rows.map((row) =>
-      row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','),
+      row.map((cell) => `"${neutralizeCsvValue(cell).replace(/"/g, '""')}"`).join(','),
     ),
   ];
 

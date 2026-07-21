@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TaskLink } from '@bigbluebam/shared';
+import { neutralizeCsvValue } from '@bigbluebam/shared';
 import { db } from '../db/index.js';
 import { tasks } from '../db/schema/tasks.js';
 import { customFieldDefinitions } from '../db/schema/custom-fields.js';
@@ -28,9 +29,10 @@ function formatLinksForCsv(raw: unknown): string {
     .join('; ');
 }
 
-/** Quote a CSV cell: wrap in double-quotes and double any embedded quotes. */
+/** Quote a CSV cell: neutralize spreadsheet formula injection, then wrap in double-quotes. */
 function csvQuote(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
+  const v = neutralizeCsvValue(value);
+  return `"${v.replace(/"/g, '""')}"`;
 }
 
 /**

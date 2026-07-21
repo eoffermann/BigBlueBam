@@ -1,3 +1,4 @@
+import { neutralizeCsvValue } from '@bigbluebam/shared';
 import type { CsvRow } from './csv-parse';
 
 // One failed/warned row for the downloadable error report (Phase 2, §5.4.7).
@@ -10,10 +11,11 @@ export interface ErrorReportEntry {
 // Quote a single CSV field per RFC 4180: wrap in quotes when it contains a
 // comma, quote, or newline; double embedded quotes.
 function csvCell(value: string): string {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const v = neutralizeCsvValue(value);
+  if (/[",\n\r]/.test(v)) {
+    return `"${v.replace(/"/g, '""')}"`;
   }
-  return value;
+  return v;
 }
 
 /**

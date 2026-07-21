@@ -9,6 +9,8 @@
  * - Other non-string values are coerced via String().
  */
 
+import { neutralizeCsvValue } from '@bigbluebam/shared';
+
 export interface CsvColumn<T> {
   /** Header label written to row 1. */
   header: string;
@@ -20,7 +22,9 @@ function serializeCell(v: unknown): string {
   if (v === null || v === undefined) return '';
   if (v instanceof Date) return v.toISOString();
   if (typeof v === 'boolean') return v ? 'true' : 'false';
-  return String(v);
+  // neutralizeCsvValue guards string-origin values that begin with a spreadsheet formula trigger
+  // (= + - @) while leaving real numbers un-neutralized, so negative numbers are not mangled.
+  return neutralizeCsvValue(v);
 }
 
 function escapeField(raw: string): string {
@@ -33,7 +37,7 @@ function escapeField(raw: string): string {
 /** Serialize rows to RFC 4180 CSV text (no BOM). */
 export function rowsToCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
   const lines: string[] = [];
-  lines.push(columns.map((c) => escapeField(c.header)).join(','));
+  lines.push(columns.map((c) => escapeField(neutralizeCsvValue(c.header))).join(','));
   for (const row of rows) {
     lines.push(
       columns
