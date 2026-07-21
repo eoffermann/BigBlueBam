@@ -18,12 +18,13 @@ import { PasswordPolicyCard } from '@/components/superuser/password-policy-card'
 import { SmtpSettingsCard } from '@/components/superuser/smtp-settings-card';
 import { AvScanSettingsCard } from '@/components/superuser/av-scan-settings-card';
 import { SuperuserLogsTab } from './logs';
+import { SuperuserBackupsTab } from './backups';
 
 interface SuperuserPageProps {
   onNavigate: (path: string) => void;
 }
 
-type Tab = 'overview' | 'organizations' | 'platform' | 'logs' | 'beta-signups' | 'permissions';
+type Tab = 'overview' | 'organizations' | 'platform' | 'logs' | 'backups' | 'beta-signups' | 'permissions';
 type PermissionsSubTab = 'groups' | 'users' | 'divergences';
 
 export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
@@ -80,6 +81,9 @@ export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
           <TabButton active={tab === 'logs'} onClick={() => setTab('logs')}>
             Logs
           </TabButton>
+          <TabButton active={tab === 'backups'} onClick={() => setTab('backups')}>
+            Backups
+          </TabButton>
           <TabButton active={tab === 'beta-signups'} onClick={() => setTab('beta-signups')}>
             Beta Signups
           </TabButton>
@@ -94,6 +98,7 @@ export function SuperuserPage({ onNavigate }: SuperuserPageProps) {
         {tab === 'organizations' && <OrganizationsTab onNavigate={onNavigate} />}
         {tab === 'platform' && <PlatformTab />}
         {tab === 'logs' && <SuperuserLogsTab />}
+        {tab === 'backups' && <SuperuserBackupsTab />}
         {tab === 'beta-signups' && <BetaSignupsTab />}
         {tab === 'permissions' && (
           <PermissionsTab
