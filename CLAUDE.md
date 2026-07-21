@@ -91,7 +91,7 @@ packages/
   bureau-client/    Suite-wide React LiveKit "docked box" client: ActiveCallManager, chat panel, knock/ring/summon handlers, cross-app navigation, presence widgets (@bigbluebam/bureau-client).
   smtp-resolver/    Pure shared SMTP-config precedence resolver used by api + worker to agree on whether SMTP is configured (@bigbluebam/smtp-resolver).
 infra/
-  postgres/         migrations/ (numbered, idempotent SQL migrations). 180 files as of tip 0218_permissions_seed_actions_delta_017.sql.
+  postgres/         migrations/ (numbered, idempotent SQL migrations). 221 files as of tip 0259_bursar_builtin_group_defaults.sql.
   nginx/            nginx.conf, certs.
   livekit/          LiveKit SFU configuration (livekit.yaml).
 scripts/            Utility scripts: deploy adapters, seed-all.mjs master orchestrator, per-app seeders, check-bolt-catalog.mjs drift guard, db-check.mjs, lint-migrations.mjs, and screenshot generators.
@@ -237,7 +237,7 @@ If the work is purely internal (refactor, comment cleanup, no observable behavio
 
 ## Database Schema and Migrations
 
-**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 180 migration files with tip `0218_permissions_seed_actions_delta_017.sql`.
+**Single source of truth:** `infra/postgres/migrations/NNNN_*.sql`, append-only, idempotent numbered migration files. `0000_init.sql` is the canonical baseline; subsequent files layer schema evolution on top. There is no `init.sql`: the postgres container boots with an empty DB and the `migrate` service creates everything. As of this refresh the tree has 221 migration files with tip `0259_bursar_builtin_group_defaults.sql`. **Do not anchor a new migration number on this line without verifying it** (`ls infra/postgres/migrations/*.sql | tail -1`); it documents a point in time and goes stale every time an app ships.
 
 The `migrate` service (reuses the api image, runs `node dist/migrate.js`) is a `service_completed_successfully` dependency of every DB-using service: api, helpdesk-api, banter-api, beacon-api, brief-api, bolt-api, bearing-api, board-api, bond-api, blast-api, bench-api, book-api, blank-api, bill-api, blueprint-api, bureau-api, bin-api, bay-api, bursar-api, worker. It runs automatically on every `docker compose up`, tracks applied migrations in the `schema_migrations` table with SHA-256 checksums, and is a no-op once the DB is current.
 
