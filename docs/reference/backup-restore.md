@@ -28,14 +28,33 @@ Backups run two ways:
 
 ## Restoring
 
-Restore is **destructive**: it runs `pg_restore --clean --if-exists`, which drops
-and recreates every object, replacing the entire current database with the
-snapshot. In the Backups tab, click **Restore** on a completed backup, read the
-warning, and type the exact per-backup confirmation phrase
+Restore is **destructive**. In the Backups tab, click **Restore** on a completed
+backup, read the warning, and type the exact per-backup confirmation phrase
 (`RESTORE <first 8 chars of the backup id>`) to enable the button.
 
-Run a restore during a maintenance window - connected users and in-flight work are
-disrupted while it runs.
+**How the restore works (restore-into-temp, then swap).** The worker restores the
+archive into a fresh *temporary* database first, and only if that fully succeeds
+does it atomically swap it in - `DROP DATABASE <live> WITH (FORCE)` (which
+terminates connections) followed by `ALTER DATABASE <temp> RENAME TO <live>`. This
+is the only approach that is both correct and safe for this schema:
+
+- **Correct.** A plain `pg_restore --clean --if-exists` in place does NOT work
+  here: the schema has enum types that columns depend on and partitioned/inherited
+  tables, so `--clean` cannot drop them in dependency order. The failed DROPs leave
+  the old objects, the CREATEs then collide, and data COPY hits duplicate keys -
+  leaving a corrupt half-restore. Restoring into an empty temp db avoids all of it.
+- **Safe.** A corrupt or unreadable archive can never destroy the live database:
+  if the temp restore fails, the live db is untouched and the restore is marked
+  failed. The live db is dropped only after a good restore is proven in the temp db.
+
+Run a restore during a maintenance window: the live database is dropped and
+replaced, so connected users and in-flight work are cut off, and services should be
+restarted afterward.
+
+Because a whole-database restore also replaces `platform_restores`, the original
+"running" restore row lives in the pre-swap database and is gone after the swap; on
+success the job writes a fresh "completed" marker row into the restored database.
+Confirm a restore succeeded by the app coming back up on the restored data.
 
 ### The three restore targets
 
