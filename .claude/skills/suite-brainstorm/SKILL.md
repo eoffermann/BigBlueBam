@@ -36,6 +36,20 @@ failure modes to actively design against every session:
   that thickens a leg we already have. Fleshing out coverage beats going all-in on
   one narrow subject area.
 
+**Essentials before verticals - the second hard steer, and the one that matters most
+this session.** Breadth does not mean "anything the suite lacks." It means the
+horizontal WorkOS capabilities that *most* companies need - the ones large firms
+staff whole departments for and small firms just wing: people/HR, onboarding,
+learning & enablement / training, compliance & GRC, health & safety, the office /
+productivity suite, and the advertising / social / marketing-communication /
+branding surface. These rank ABOVE a single-industry vertical. A niche vertical that
+serves only one trade (field-service dispatch, fleet management, logistics,
+construction, restaurant/POS, and the like) is DEFERRED - it is not whitespace worth
+taking this session, no matter how clever the AI angle. When a seat proposes a
+vertical, it must justify why the slot is better spent there than on an unbuilt
+horizontal essential; if it cannot, the essential wins. Drill down into the support
+every company needs before venturing out into any one industry.
+
 The coverage census (Setup step 4) is where you turn this into a concrete, per-session
 steer; the vote (Phase 5) scores coverage contribution explicitly.
 
@@ -76,27 +90,38 @@ steer; the vote (Phase 5) scores coverage contribution explicitly.
      forms, billing/finance, contracts/compliance, diagrams, DAM/storage, media
      review, observability, identity/CDP, virtual-office, helpdesk, ...). Mark each
      category **dense** (2+ apps), **covered** (1 app), or **whitespace** (0 apps).
-   - **The whitespace list:** the categories a small-to-medium services firm needs
-     that the suite has little or nothing for yet. Think broadly - HR/people-ops,
-     recruiting/ATS, learning/enablement, procurement/vendor-spend, inventory/assets,
-     field-service/dispatch, IT/asset management, GRC/security-compliance, customer
-     feedback/surveys, community/forum, product/roadmap, expense/travel, e-signature,
-     payroll, and so on. This list is derived fresh each session, not hardcoded.
+   - **The whitespace list, essentials first:** the horizontal categories a typical
+     small-to-medium company needs that the suite has little or nothing for yet, in
+     rough priority order - people/HR, onboarding, learning & enablement / training,
+     compliance & GRC, health & safety, the office / productivity suite (documents,
+     spreadsheets, presentations, email/calendar essentials), advertising / social /
+     marketing-communication / branding, recruiting/ATS, procurement/vendor-spend,
+     IT/asset management, expense/travel, e-signature, surveys/feedback, payroll, and
+     the like. These are what large firms staff departments for and small firms wing.
+     Derived fresh each session, not hardcoded.
+   - **The deferred bucket (do NOT take this session):** single-industry verticals
+     that serve one trade rather than most companies - field-service/dispatch, fleet
+     management, logistics, construction-specific, restaurant/POS, and similar. Name
+     them so the seats can see they were considered and consciously set aside until
+     the horizontal essentials above are covered.
    - **The per-session steer** you will hand every seat: "prefer the whitespace
      categories; a near-duplicate of an existing app or a third app in a dense
      category is disfavored." Name the currently-dense categories explicitly so the
      seats know what NOT to pile onto.
 5. **Assign seven distinct lenses**, one per seat. Use these unless the user asks
-   for others. Bias each lens toward the whitespace from step 4 (e.g. Seat D's
-   vertical, and any lens, should reach into an under-served category rather than a
-   dense one):
+   for others. Bias each lens toward the essentials-first whitespace from step 4 -
+   the horizontal capabilities most companies need (people/HR, onboarding, training,
+   compliance, health & safety, office/productivity, marketing/branding) - and away
+   from single-industry verticals, which are deferred this session:
    - Seat A - **AI-native automation & autonomous agent workflows**
    - Seat B - **Data, intelligence & analytics**
    - Seat C - **Communication, collaboration & community**
-   - Seat D - **A vertical / industry wedge** (pick one under-served vertical)
+   - Seat D - **People, HR & workplace operations** (hiring/onboarding, training &
+     enablement, compliance & GRC, health & safety - the essentials most firms wing)
    - Seat E - **Operator / developer experience & platform tooling**
    - Seat F - **Engineering & Software Development**
-   - Seat G - **Creative & Marketing**
+   - Seat G - **Creative, Marketing & Brand** (advertising, social, marketing comms,
+     branding)
 
 ## Phase 1 - Ideation (seven seats × five apps)
 
@@ -108,9 +133,10 @@ near-duplicate of an existing app or a third app in a dense category is disfavor
 steer, with the dense categories named** - the naming convention (single word,
 "B-" alliterative family preferred), and the required output shape (see the agent
 def). Tell each seat that at least the majority of its five proposals must land in
-a whitespace or covered (not dense) category, and each proposal must name the
-closest existing app and say why it is a different category, not a better version
-of it. Collect each seat's five-app block.
+a horizontal-essential whitespace or covered (not dense) category - NOT a
+single-industry vertical, which is deferred this session - and each proposal must
+name the closest existing app and say why it is a different category, not a better
+version of it. Collect each seat's five-app block.
 
 Append all five blocks **verbatim** to the session doc under "Phase 1 - Initial
 proposals," labeled by seat and lens.
