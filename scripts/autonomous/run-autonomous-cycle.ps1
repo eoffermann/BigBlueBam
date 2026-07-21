@@ -6,8 +6,8 @@
   suite-brainstorm branch. Never merges to main (the cycle enforces that).
 
 .NOTES
-  Registered by scripts/autonomous/register-autonomous-task.ps1 to run every
-  6 hours, independent of any interactive Claude session. Emits flushed
+  Registered by scripts/autonomous/register-autonomous-task.ps1 to run once
+  daily at 8pm, independent of any interactive Claude session. Emits flushed
   progress to a per-run log so a stalled run is obvious. A process-level lock
   prevents two headless cycles from overlapping if one run overruns the window
   (the cycle skill also keeps its own scratchpad lock).

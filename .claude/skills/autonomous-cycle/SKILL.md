@@ -1,13 +1,13 @@
 ---
 name: autonomous-cycle
-description: The scheduled entry point for the "Startup in a Box" loop. One invocation runs one full cycle - brainstorm a new app, harden its spec, then build/deploy/test it via app-build-from-spec - guarded by a concurrency lock so a new cycle never starts while the previous one is still running. Invoked every 6 hours by the Windows Task Scheduler job "BigBlueBam Autonomous Cycle"; can also be run manually. Never merges to main.
+description: The scheduled entry point for the "Startup in a Box" loop. One invocation runs one full cycle - brainstorm a new app, harden its spec, then build/deploy/test it via app-build-from-spec - guarded by a concurrency lock so a new cycle never starts while the previous one is still running. Invoked once daily at 8pm by the Windows Task Scheduler job "BigBlueBam Autonomous Cycle"; can also be run manually. Never merges to main.
 ---
 
 # Autonomous cycle (scheduled Startup-in-a-Box loop)
 
 One run of this skill performs **one complete cycle**: pick a new app by brainstorm,
 harden its design spec, then build, deploy, and test it - all on `suite-brainstorm`,
-never merging to `main`. It is what the every-6-hours **Windows Task Scheduler** job fires
+never merging to `main`. It is what the daily-at-8pm **Windows Task Scheduler** job fires
 (the task "BigBlueBam Autonomous Cycle", registered by
 `scripts/autonomous/register-autonomous-task.ps1`, which launches `claude` headless via
 `scripts/autonomous/run-autonomous-cycle.ps1`). Its one added job over running the phases
@@ -36,8 +36,8 @@ On each run:
 2. **If a cycle is genuinely in flight** (lock present and `updated_at` within 3h):
    **skip this run** - log "cycle still running (updated <3h ago), skipping this window"
    and exit cleanly. Do NOT try to schedule a delayed re-check: this is a headless one-shot
-   run with no persistent session, and the next Windows Task Scheduler fire (~6 hours out,
-   or the 02:00/08:00/14:00/20:00 cadence) is the retry. Never run two cycles at once.
+   run with no persistent session, and the next Windows Task Scheduler fire (~24 hours out,
+   the daily 20:00/8pm cadence) is the retry. Never run two cycles at once.
 3. Do not delete another live cycle's lock. Only a lock older than 3h may be taken over.
 4. **Acquire the lock:** write it with `status: "running"`, `phase: "brainstorm"`,
    fresh timestamps. Refresh `updated_at` (and `phase`/`app`) at each major phase so a
@@ -131,7 +131,7 @@ This loop is fired by a **Windows Task Scheduler** job ("BigBlueBam Autonomous C
 that runs independently of any Claude session, needs no session to stay alive, and does
 not expire. It is registered once by `scripts/autonomous/register-autonomous-task.ps1`
 (S4U logon, so it runs whether or not the user is logged in) and launches a headless
-`claude` per fire via `scripts/autonomous/run-autonomous-cycle.ps1`, every 6 hours. This
+`claude` per fire via `scripts/autonomous/run-autonomous-cycle.ps1`, once daily at 8pm. This
 replaced the earlier session-only in-session cron (which only lived while a Claude session
 was open and auto-expired after 7 days, so it silently stopped). If the loop ever needs
 to change cadence or be paused, re-run the register script (or disable/enable the task in
