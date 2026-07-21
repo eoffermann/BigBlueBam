@@ -37,8 +37,6 @@ function breadcrumbsFor(route: ActiveRoute): Crumb[] {
         { label: 'Diagrams', href: '/' },
         { label: 'Editor' },
       ];
-    case 'help':
-      return [{ label: 'Help' }];
     default:
       return [];
   }

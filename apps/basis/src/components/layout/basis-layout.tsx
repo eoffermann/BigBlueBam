@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth.store';
 
 // The metric title (when on a detail page) rides along so the breadcrumb can
 // show "Metric Catalog > <name>" the way /b3/ shows "Projects > <name>".
-export type ActiveRoute = { page: 'catalog' | 'metric' | 'help'; id?: string; label?: string };
+export type ActiveRoute = { page: 'catalog' | 'metric'; id?: string; label?: string };
 
 interface BasisLayoutProps {
   children: ReactNode;
