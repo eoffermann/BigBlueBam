@@ -8,8 +8,9 @@ import { env } from '../env.js';
  * Row-level security binding for bursar-api (spec 6.3).
  *
  * This is burn-api's `runInOrgScope` mechanism, adopted deliberately rather than the older
- * standalone form used by apps/api, basis-api, braid-api, and bulwark-api. Those four issue,
- * as a preHandler:
+ * standalone form apps/api, basis-api, braid-api, and bulwark-api originally used. (Update, issue
+ * #87: those four have since been fixed to bind correctly via a per-request reserved connection;
+ * the description below is the historical inert state.) That older form issued, as a preHandler:
  *
  *     await db.execute(sql`SELECT set_config('app.current_org_id', $1, true)`)
  *

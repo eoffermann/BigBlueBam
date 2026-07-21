@@ -10,9 +10,13 @@ import { env } from '../env.js';
  * ─────────────────────────────────────────────────────────────────────────────
  * WHICH MECHANISM WE CHOSE, AND WHY (this is the load-bearing comment).
  *
- * Burn deliberately does NOT copy the four existing rls plugins
- * (`apps/api/src/plugins/rls.ts:38`, basis `:29`, braid `:30`, bulwark `:30`). All four
- * issue, as a preHandler:
+ * (Update, issue #87: api/basis/braid/bulwark have SINCE been fixed to bind correctly - they now
+ * reserve a connection per request and set the GUC on it via a transparent db proxy. The
+ * description below is the historical inert state that motivated Burn's choice; Burn still prefers
+ * the transaction primitive for the leak-proofing and snapshot reasons given.)
+ *
+ * Burn deliberately does NOT copy the older standalone rls plugin form the four services above
+ * originally used. That form issued, as a preHandler:
  *
  *     await db.execute(sql`SELECT set_config('app.current_org_id', $1, true)`)
  *
