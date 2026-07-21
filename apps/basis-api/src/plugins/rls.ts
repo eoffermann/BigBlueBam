@@ -68,7 +68,7 @@ const rlsPlugin = fp(async (fastify: FastifyInstance) => {
       const readReserved = await readClient.reserve();
       try {
         await readReserved`select set_config('app.current_org_id', ${orgId}, false)`;
-      } catch (err) {
+      } catch {
         readReserved.release();
         // Leave the write binding in place; readDb falls back to the pool for this request.
         return;
