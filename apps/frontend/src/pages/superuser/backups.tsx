@@ -30,6 +30,7 @@ interface BackupRow {
   created_at: string;
   completed_at: string | null;
   restore_confirmation: string;
+  download_filename: string;
 }
 
 interface RestoreRow {
@@ -168,8 +169,9 @@ export function SuperuserBackupsTab() {
                         <>
                           <a
                             href={`/b3/api/superuser/backups/${b.id}/download`}
+                            download={b.download_filename}
                             className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                            title="Download archive"
+                            title={`Save as "${b.download_filename}"`}
                           >
                             <Download className="h-3.5 w-3.5" /> Download
                           </a>

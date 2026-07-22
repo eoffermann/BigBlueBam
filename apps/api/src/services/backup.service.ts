@@ -85,6 +85,74 @@ export async function deleteBackup(id: string): Promise<boolean> {
   return true;
 }
 
+// ── Download filenames ────────────────────────────────────────────────
+// The object key is a machine-friendly UUID path, but the file an operator
+// downloads has to explain itself sitting in a Downloads folder six months from
+// now, to someone who is not a DBA: what it backs up, which site, and when.
+// Deliberately plain English with a self-describing ".backup" extension - the
+// archive is only ever read back by pg_restore via its storage key, so nothing
+// downstream depends on this name.
+
+// Characters Windows and macOS reject in a filename.
+const FILENAME_ILLEGAL = /[<>:"/\\|?*]/g;
+
+function sanitizeFilenamePart(raw: string): string {
+  const printable = raw
+    .split('')
+    .filter((ch) => ch.charCodeAt(0) >= 0x20)
+    .join('');
+  return printable.replace(FILENAME_ILLEGAL, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+/** Which deployment this archive came from, e.g. "bigbluebam.com" or "localhost". */
+function deploymentLabel(): string {
+  const raw = (env as { PUBLIC_URL?: string }).PUBLIC_URL ?? '';
+  let host = raw;
+  try {
+    host = new URL(raw).hostname || raw;
+  } catch {
+    // PUBLIC_URL is not a parseable URL; fall back to whatever it is.
+  }
+  return sanitizeFilenamePart(host) || 'this site';
+}
+
+/** "2026-07-22 1940 UTC" - sorts chronologically and still reads as a date. */
+function humanStamp(iso: string | null): string {
+  const parsed = iso ? new Date(iso) : new Date();
+  const d = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ` +
+    `${p(d.getUTCHours())}${p(d.getUTCMinutes())} UTC`
+  );
+}
+
+/** How a scope reads in a filename. Organization/Project are the deferred levels. */
+function scopeLabel(scope: string, subject: string | null): string {
+  const named = subject ? sanitizeFilenamePart(subject) : '';
+  if (scope === 'organization' || scope === 'org') {
+    return named ? `Organization ${named}` : 'One Organization';
+  }
+  if (scope === 'project') return named ? `Project ${named}` : 'One Project';
+  return 'Entire Site';
+}
+
+/**
+ * The human-facing download name, e.g.
+ *   "BigBlueBam Backup - Entire Site - bigbluebam.com - 2026-07-22 1940 UTC.backup"
+ */
+export function backupDownloadFilename(
+  b: Pick<BackupRow, 'scope' | 'created_at' | 'completed_at'> & { scope_subject?: string | null },
+): string {
+  const parts = [
+    'BigBlueBam Backup',
+    scopeLabel(b.scope || 'platform', b.scope_subject ?? null),
+    deploymentLabel(),
+    humanStamp(b.completed_at ?? b.created_at),
+  ];
+  return `${parts.join(' - ')}.backup`;
+}
+
 /** Stream a completed backup archive for download through the api. */
 export async function getBackupStream(
   id: string,
@@ -92,8 +160,7 @@ export async function getBackupStream(
   const b = await getBackup(id);
   if (!b?.storage_key || b.status !== 'completed') return null;
   const { stream, size } = await getFileStream(env.S3_BUCKET, b.storage_key);
-  const filename = b.storage_key.split('/').pop() ?? `backup-${id}.dump`;
-  return { stream, size, filename };
+  return { stream, size, filename: backupDownloadFilename(b) };
 }
 
 /** The exact phrase a SuperUser must type to authorize restoring this backup. */

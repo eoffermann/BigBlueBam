@@ -32,7 +32,13 @@ function requireSuperuser(
 }
 
 function withPhrase(b: backupService.BackupRow) {
-  return { ...b, restore_confirmation: backupService.restoreConfirmationPhrase(b.id) };
+  return {
+    ...b,
+    restore_confirmation: backupService.restoreConfirmationPhrase(b.id),
+    // The UI puts this on the download link's `download` attribute so the saved
+    // file is named the same way no matter how the browser treats the header.
+    download_filename: backupService.backupDownloadFilename(b),
+  };
 }
 
 const restoreBody = z.object({ confirmation_phrase: z.string().min(1).max(200) });
@@ -93,7 +99,12 @@ export default async function superuserBackupsRoutes(fastify: FastifyInstance) {
         userAgent: request.headers['user-agent'] ?? undefined,
       });
       reply.header('Content-Type', 'application/octet-stream');
-      reply.header('Content-Disposition', `attachment; filename="${result.filename}"`);
+      // Send both forms: the quoted one for older clients, the RFC 5987 encoded
+      // one so the spaces in the human-readable name survive every browser.
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="${result.filename}"; filename*=UTF-8''${encodeURIComponent(result.filename)}`,
+      );
       reply.header('Content-Length', String(result.size));
       return reply.send(result.stream);
     },
