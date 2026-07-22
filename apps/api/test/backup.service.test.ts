@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock env, the db, the enqueue lib, and the storage helper so the service under
 // test runs without a real database, Redis, or object store.
 vi.mock('../src/env.js', () => ({
-  env: { S3_BUCKET: 'test-bucket', REDIS_URL: 'redis://localhost:6379' },
+  env: {
+    S3_BUCKET: 'test-bucket',
+    REDIS_URL: 'redis://localhost:6379',
+    PUBLIC_URL: 'https://bigbluebam.com',
+  },
 }));
 
 const execute = vi.fn();
@@ -41,6 +45,59 @@ beforeEach(() => {
   execute.mockReset();
   enqueueBackup.mockReset();
   enqueueRestore.mockReset();
+});
+
+describe('backupDownloadFilename', () => {
+  it('names a platform archive in plain English with the site and a UTC datestamp', () => {
+    expect(svc.backupDownloadFilename({ ...completedBackup, completed_at: null })).toBe(
+      'BigBlueBam Backup - Entire Site - bigbluebam.com - 2026-07-21 0000 UTC.backup',
+    );
+  });
+
+  it('prefers when the backup finished over when it was queued', () => {
+    expect(
+      svc.backupDownloadFilename({
+        ...completedBackup,
+        completed_at: '2026-07-22T19:40:10Z',
+      }),
+    ).toBe('BigBlueBam Backup - Entire Site - bigbluebam.com - 2026-07-22 1940 UTC.backup');
+  });
+
+  it('says which organization or project a scoped backup covers', () => {
+    expect(
+      svc.backupDownloadFilename({
+        ...completedBackup,
+        scope: 'organization',
+        scope_subject: 'Gilligan Travel Ltd',
+        completed_at: null,
+      }),
+    ).toBe(
+      'BigBlueBam Backup - Organization Gilligan Travel Ltd - bigbluebam.com - 2026-07-21 0000 UTC.backup',
+    );
+    expect(
+      svc.backupDownloadFilename({
+        ...completedBackup,
+        scope: 'project',
+        scope_subject: 'Coconut Radio',
+        completed_at: null,
+      }),
+    ).toBe(
+      'BigBlueBam Backup - Project Coconut Radio - bigbluebam.com - 2026-07-21 0000 UTC.backup',
+    );
+  });
+
+  it('strips characters Windows and macOS reject in a filename', () => {
+    const name = svc.backupDownloadFilename({
+      ...completedBackup,
+      scope: 'project',
+      scope_subject: 'Q3/Q4: "Rescue" plan?',
+      completed_at: null,
+    });
+    expect(name).toBe(
+      'BigBlueBam Backup - Project Q3 Q4 Rescue plan - bigbluebam.com - 2026-07-21 0000 UTC.backup',
+    );
+    expect(name).not.toMatch(/[<>:"/\\|?*]/);
+  });
 });
 
 describe('restoreConfirmationPhrase', () => {

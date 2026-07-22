@@ -26,6 +26,26 @@ Backups run two ways:
   most recent `BACKUP_RETENTION_COUNT` (default 14).
 - **On demand**, via **Back up now** in the Backups tab.
 
+## What the downloaded file is called
+
+**Download** saves a file named so you can tell what it is months later without
+knowing anything about databases:
+
+```
+BigBlueBam Backup - Entire Site - bigbluebam.com - 2026-07-22 1940 UTC.backup
+```
+
+Four parts, always in this order: the product, **what it covers**, **which site**
+it came from (so archives from two deployments never get confused in one folder),
+and **when it was taken** (UTC, in a form that sorts correctly). Organization- and
+project-scoped backups name their subject in the second slot, for example
+`... - Organization Gilligan Travel Ltd - ...`.
+
+The name is built at download time from the backup's scope and timestamp, so
+older backups get the friendly name too. The object stored in the bucket keeps its
+machine-generated key (`backups/platform/<timestamp>-<uuid>.dump`) - that is an
+internal address, never something an operator has to read or type.
+
 ## Restoring
 
 Restore is **destructive**. In the Backups tab, click **Restore** on a completed
