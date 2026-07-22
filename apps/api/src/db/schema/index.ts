@@ -59,3 +59,5 @@ export {
   accountGroupMemberships,
   permissionsDivergenceLog,
 } from './permissions.js';
+
+export { platformBackups, platformRestores } from './platform-backups.js';

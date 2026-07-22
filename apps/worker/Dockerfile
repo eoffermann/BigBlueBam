@@ -33,8 +33,9 @@ RUN pnpm --filter @bigbluebam/worker deploy --prod /app/deployed
 # ── Stage: dev ────────────────────────────────────────────────────
 FROM deps AS dev
 
-# ffmpeg/ffprobe for the bin-transcode job (media proxies + posters).
-RUN apk add --no-cache ffmpeg
+# ffmpeg/ffprobe for the bin-transcode job (media proxies + posters);
+# postgresql16-client (pg_dump/pg_restore) for the database backup/restore jobs.
+RUN apk add --no-cache ffmpeg postgresql16-client
 
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
@@ -48,8 +49,9 @@ CMD ["npx", "tsx", "watch", "src/worker.ts"]
 # ── Stage: production ────────────────────────────────────────────
 FROM node:22-alpine AS production
 
-# tini+curl for PID1/healthcheck; ffmpeg/ffprobe for the bin-transcode job.
-RUN apk add --no-cache tini curl ffmpeg
+# tini+curl for PID1/healthcheck; ffmpeg/ffprobe for the bin-transcode job;
+# postgresql16-client (pg_dump/pg_restore) for the database backup/restore jobs.
+RUN apk add --no-cache tini curl ffmpeg postgresql16-client
 
 WORKDIR /app
 
