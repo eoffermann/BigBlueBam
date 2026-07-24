@@ -320,6 +320,26 @@ describe('Query Builder', () => {
       ).toThrow('JSONB path not allowed');
     });
 
+    it('folds NULL/empty JSONB dimension values into a labeled bucket', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'blip',
+        'entries',
+        {
+          measures: [{ field: 'id', agg: 'count', alias: 'reports' }],
+          dimensions: [
+            { field: 'payload', path: ['device', 'device_model'], alias: 'device_model', null_label: 'Unknown device' },
+          ],
+        },
+        ORG_ID,
+      );
+      // Older payloads with no device_model become an explicit "Unknown device"
+      // group rather than a blank bar.
+      expect(pq.text).toMatch(/COALESCE\(NULLIF\(\(payload #>> \$\d+::text\[\]\)::text, ''\), \$\d+\) AS device_model/);
+      expect(pq.text).toContain('GROUP BY device_model');
+      expect(pq.params).toContain('Unknown device');
+    });
+
     it('keeps a malicious path segment inside the bound parameter, not the SQL', async () => {
       const { buildQuery } = await import('../src/services/query.service.js');
       const evil = "x'; DROP TABLE blip_entries;--";

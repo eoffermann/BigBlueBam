@@ -30,6 +30,12 @@ export interface FieldRef {
   cast?: FieldCast;
 }
 
+// A dimension whose value is missing (NULL) or empty groups into one bucket. By
+// default that bucket renders blank in a chart; setting `null_label` on a
+// dimension folds those rows into an explicit, labeled category (e.g. older Blip
+// payloads with no device.device_model become "Unknown device") so the slice is
+// tracked instead of hidden.
+
 export interface QueryMeasure extends FieldRef {
   // count/sum/avg/min/max plus continuous percentiles (p50/p90/p95/p99), which
   // are what latency telemetry actually needs — an average hides the tail.
@@ -39,6 +45,8 @@ export interface QueryMeasure extends FieldRef {
 
 export interface QueryDimension extends FieldRef {
   alias?: string;
+  /** Fold NULL/empty values into this labeled bucket instead of a blank group. */
+  null_label?: string;
 }
 
 export interface QueryFilter extends FieldRef {
@@ -328,9 +336,18 @@ export function buildQuery(
     for (const dim of config.dimensions) {
       // #>> already returns text; only an explicit dim.cast (e.g. integer RAM)
       // adds a cast, so a plain categorical dimension stays clean.
-      const expr = resolveFieldExpr(dim, source, pq);
-      const alias = dim.alias ? validateIdent(dim.alias) : dim.path ? aliasFromPath(dim.path) : expr;
-      selectParts.push(alias === expr ? expr : `${expr} AS ${alias}`);
+      const baseExpr = resolveFieldExpr(dim, source, pq);
+      const alias = dim.alias
+        ? validateIdent(dim.alias)
+        : dim.path
+          ? aliasFromPath(dim.path)
+          : validateIdent(dim.field);
+      // Fold NULL/empty into a labeled bucket when requested (e.g. "Unknown device").
+      const expr =
+        dim.null_label !== undefined
+          ? `COALESCE(NULLIF(${baseExpr}::text, ''), ${addParam(pq, dim.null_label)})`
+          : baseExpr;
+      selectParts.push(expr === alias ? expr : `${expr} AS ${alias}`);
       groupByAliases.push(alias);
     }
   }
