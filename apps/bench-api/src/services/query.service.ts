@@ -8,25 +8,45 @@ import { badRequest } from '../lib/utils.js';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface QueryMeasure {
+// ---------------------------------------------------------------------------
+// Field references
+// ---------------------------------------------------------------------------
+// A field is normally a plain column, but any measure/dimension/filter/time
+// field may instead reach into a JSONB column by supplying `path` — the list of
+// keys to walk (e.g. ['metrics','total_processing_ms']). This is what lets Bench
+// chart Blip telemetry (all in blip_entries.payload) WITHOUT flattening every
+// new tracked field into its own DB column: new payload keys are instantly
+// queryable, no migration. The path is bound as a parameter (never interpolated)
+// and the JSONB column must be allow-listed on the source (`jsonbColumns`), so
+// this adds reach, not injection surface. `cast` coerces the extracted text to a
+// typed value for aggregation/comparison (default numeric for measures, text for
+// dimensions/filters, timestamptz for a time dimension).
+export type FieldCast =
+  | 'numeric' | 'integer' | 'bigint' | 'double' | 'boolean' | 'text' | 'timestamptz' | 'date';
+
+export interface FieldRef {
   field: string;
-  agg: 'count' | 'sum' | 'avg' | 'min' | 'max';
+  path?: string[];
+  cast?: FieldCast;
+}
+
+export interface QueryMeasure extends FieldRef {
+  // count/sum/avg/min/max plus continuous percentiles (p50/p90/p95/p99), which
+  // are what latency telemetry actually needs — an average hides the tail.
+  agg: 'count' | 'sum' | 'avg' | 'min' | 'max' | 'p50' | 'p90' | 'p95' | 'p99';
   alias?: string;
 }
 
-export interface QueryDimension {
-  field: string;
+export interface QueryDimension extends FieldRef {
   alias?: string;
 }
 
-export interface QueryFilter {
-  field: string;
+export interface QueryFilter extends FieldRef {
   op: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'is_null' | 'is_not_null' | 'between' | 'like';
   value?: unknown;
 }
 
-export interface TimeDimension {
-  field: string;
+export interface TimeDimension extends FieldRef {
   granularity: 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 }
 
@@ -89,8 +109,105 @@ function addParam(pq: ParameterizedQuery, value: string): string {
   return `$${pq.params.length}`;
 }
 
-function buildFilterClause(f: QueryFilter, pq: ParameterizedQuery): string {
-  const field = validateIdent(f.field);
+// Allow-listed casts → the exact SQL type keyword. User input never reaches SQL
+// as a type; it only selects one of these fixed keywords.
+const CAST_SQL: Record<FieldCast, string> = {
+  numeric: 'numeric',
+  integer: 'integer',
+  bigint: 'bigint',
+  double: 'double precision',
+  boolean: 'boolean',
+  text: 'text',
+  timestamptz: 'timestamptz',
+  date: 'date',
+};
+
+const MAX_PATH_SEGMENTS = 16;
+
+/** Build a safe Postgres text[] literal, e.g. ['a','b"c'] -> {"a","b\"c"}. */
+function pgTextArrayLiteral(segments: string[]): string {
+  const quoted = segments.map((s) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+  return `{${quoted.join(',')}}`;
+}
+
+/** Derive a valid SQL identifier alias from a JSONB path's last segment. */
+function aliasFromPath(path: string[]): string {
+  const last = path[path.length - 1] ?? 'value';
+  const cleaned = last.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^([0-9])/, '_$1');
+  return ALLOWED_IDENTS.test(cleaned) ? cleaned : 'value';
+}
+
+/**
+ * Resolve a field reference to a SQL expression, appending any bound parameters.
+ * Plain columns pass through validateIdent unchanged (existing behavior). JSONB
+ * fields become `(col #>> $n::text[])` with an optional typed cast; the path is a
+ * bound parameter and the column must be allow-listed on the source.
+ */
+function resolveFieldExpr(
+  ref: FieldRef,
+  source: BenchDataSource,
+  pq: ParameterizedQuery,
+  defaultCast?: FieldCast,
+): string {
+  if (!ref.path || ref.path.length === 0) {
+    // Plain column; a cast may still be requested (rare, but harmless).
+    const col = validateIdent(ref.field);
+    if (ref.cast) return `${col}::${CAST_SQL[ref.cast] ?? invalidCast(ref.cast)}`;
+    return col;
+  }
+  const col = validateIdent(ref.field);
+  if (!source.jsonbColumns?.includes(col)) {
+    throw badRequest(`JSONB path not allowed on column: ${col}`);
+  }
+  if (ref.path.length > MAX_PATH_SEGMENTS) {
+    throw badRequest(`JSONB path too deep (max ${MAX_PATH_SEGMENTS} segments)`);
+  }
+  for (const seg of ref.path) {
+    if (typeof seg !== 'string' || seg.length === 0 || seg.length > 128) {
+      throw badRequest(`Invalid JSONB path segment: ${String(seg)}`);
+    }
+  }
+  const pathParam = addParam(pq, pgTextArrayLiteral(ref.path));
+  const base = `(${col} #>> ${pathParam}::text[])`;
+  const cast = ref.cast ?? defaultCast;
+  if (!cast) return base;
+  const sqlType = CAST_SQL[cast] ?? invalidCast(cast);
+  return `${base}::${sqlType}`;
+}
+
+function invalidCast(cast: string): never {
+  throw badRequest(`Invalid cast: ${cast}`);
+}
+
+const PERCENTILE_FRACTION: Record<string, number> = { p50: 0.5, p90: 0.9, p95: 0.95, p99: 0.99 };
+
+/**
+ * SQL for one measure's aggregate (without the trailing ` AS alias`). COUNT works
+ * on the raw extracted value; every other aggregate needs a number, so a JSONB
+ * measure defaults to a numeric cast. Percentiles use percentile_cont — the tail
+ * that averages hide, which is the point of tracking latency.
+ */
+function measureSql(m: QueryMeasure, source: BenchDataSource, pq: ParameterizedQuery): string {
+  if (m.agg === 'count') {
+    // Count of non-null values; no cast needed (a JSONB miss extracts to NULL).
+    return `COUNT(${resolveFieldExpr(m, source, pq)})`;
+  }
+  const numericDefault: FieldCast = 'numeric';
+  const expr = resolveFieldExpr(m, source, pq, m.path ? m.cast ?? numericDefault : m.cast);
+  const frac = PERCENTILE_FRACTION[m.agg];
+  if (frac !== undefined) {
+    return `percentile_cont(${frac}) WITHIN GROUP (ORDER BY ${expr})`;
+  }
+  return `${m.agg.toUpperCase()}(${expr})`;
+}
+
+function buildFilterClause(f: QueryFilter, pq: ParameterizedQuery, source: BenchDataSource): string {
+  // Numeric comparisons cast the extracted JSONB text to a number; equality /
+  // membership / pattern ops compare as text. Explicit f.cast always wins.
+  // #>> already yields text, so equality/pattern ops need no cast; only numeric
+  // comparisons default to a numeric cast (an explicit f.cast always wins).
+  const numericOp = f.op === 'gt' || f.op === 'gte' || f.op === 'lt' || f.op === 'lte' || f.op === 'between';
+  const field = resolveFieldExpr(f, source, pq, numericOp ? 'numeric' : undefined);
   switch (f.op) {
     case 'eq': return `${field} = ${addParam(pq, String(f.value))}`;
     case 'neq': return `${field} != ${addParam(pq, String(f.value))}`;
@@ -190,10 +307,18 @@ export function buildQuery(
 
   // Build SELECT columns
   const selectParts: string[] = [];
+  // GROUP BY references the SELECT aliases (Postgres allows grouping by output
+  // name), so a JSONB dimension expression is emitted once and never duplicated.
+  const groupByAliases: string[] = [];
 
-  // Time dimension
+  // Time dimension — plain column or a JSONB path cast to a timestamp.
   if (config.time_dimension) {
-    const tf = validateIdent(config.time_dimension.field);
+    const tf = resolveFieldExpr(
+      config.time_dimension,
+      source,
+      pq,
+      config.time_dimension.path ? 'timestamptz' : undefined,
+    );
     const gran = validateIdent(config.time_dimension.granularity);
     selectParts.push(`date_trunc('${gran}', ${tf}) AS time_bucket`);
   }
@@ -201,21 +326,19 @@ export function buildQuery(
   // Dimensions
   if (config.dimensions) {
     for (const dim of config.dimensions) {
-      const f = validateIdent(dim.field);
-      const alias = dim.alias ? validateIdent(dim.alias) : f;
-      selectParts.push(alias === f ? f : `${f} AS ${alias}`);
+      // #>> already returns text; only an explicit dim.cast (e.g. integer RAM)
+      // adds a cast, so a plain categorical dimension stays clean.
+      const expr = resolveFieldExpr(dim, source, pq);
+      const alias = dim.alias ? validateIdent(dim.alias) : dim.path ? aliasFromPath(dim.path) : expr;
+      selectParts.push(alias === expr ? expr : `${expr} AS ${alias}`);
+      groupByAliases.push(alias);
     }
   }
 
   // Measures
   for (const m of config.measures) {
-    const f = validateIdent(m.field);
-    const alias = m.alias ? validateIdent(m.alias) : `${m.agg}_${f}`;
-    if (m.agg === 'count') {
-      selectParts.push(`COUNT(${f}) AS ${validateIdent(alias)}`);
-    } else {
-      selectParts.push(`${m.agg.toUpperCase()}(${f}) AS ${validateIdent(alias)}`);
-    }
+    const alias = validateIdent(m.alias ?? `${m.agg}_${m.path ? aliasFromPath(m.path) : m.field}`);
+    selectParts.push(`${measureSql(m, source, pq)} AS ${alias}`);
   }
 
   if (selectParts.length === 0) throw badRequest('Query must have at least one measure');
@@ -229,7 +352,7 @@ export function buildQuery(
 
   if (config.filters) {
     for (const f of config.filters) {
-      whereParts.push(buildFilterClause(f, pq));
+      whereParts.push(buildFilterClause(f, pq, source));
     }
   }
 
@@ -241,25 +364,32 @@ export function buildQuery(
   if (config.date_range) {
     const range = resolveDateRange(config.date_range);
     if (range) {
-      const temporalField = config.time_dimension
-        ? config.time_dimension.field
-        : resolveTemporalColumn(source);
-      if (temporalField) {
-        const tf = validateIdent(temporalField);
+      // Scope against the explicit time_dimension (which may be a JSONB path) or,
+      // failing that, the source's declared temporal column.
+      let tf: string | null = null;
+      if (config.time_dimension) {
+        tf = resolveFieldExpr(
+          config.time_dimension,
+          source,
+          pq,
+          config.time_dimension.path ? 'timestamptz' : undefined,
+        );
+      } else {
+        const col = resolveTemporalColumn(source);
+        tf = col ? validateIdent(col) : null;
+      }
+      if (tf) {
         whereParts.push(`${tf} >= ${addParam(pq, range.start)}`);
         whereParts.push(`${tf} <= ${addParam(pq, range.end)}`);
       }
     }
   }
 
-  // Build GROUP BY
+  // Build GROUP BY — references the SELECT-list aliases emitted above so JSONB
+  // dimension expressions are never duplicated (and never mismatched).
   const groupByParts: string[] = [];
   if (config.time_dimension) groupByParts.push('time_bucket');
-  if (config.dimensions) {
-    for (const dim of config.dimensions) {
-      groupByParts.push(validateIdent(dim.field));
-    }
-  }
+  groupByParts.push(...groupByAliases);
 
   // Build ORDER BY
   let orderBy = '';
@@ -347,8 +477,9 @@ export async function executeQuery(
     }
 
     return output;
-  } catch (err: any) {
-    if (err.message?.includes('statement timeout')) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('statement timeout')) {
       throw badRequest('Query exceeded timeout. Try narrowing your filters or reducing the date range.');
     }
     throw err;
