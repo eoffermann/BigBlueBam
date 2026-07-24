@@ -22,6 +22,29 @@ const minioClient = new Minio.Client({
   region: process.env.S3_REGION ?? 'us-east-1',
 });
 
+// The shared `bigbluebam-uploads` bucket is created lazily on first write. Every
+// other storage-writing service (api, banter-api, beacon-api) does this via its
+// own ensureBucket(); the worker previously assumed some other service had
+// already created it. That held locally (the api creates it on first upload) but
+// broke the database-backup job on a fresh stack where the worker was the first
+// writer: fPutObject failed with "The specified bucket does not exist". The
+// worker now ensures the bucket itself before every write, matching the pattern.
+const ensuredBuckets = new Set<string>();
+
+export async function ensureBucket(bucketName: string = S3_BUCKET): Promise<void> {
+  if (ensuredBuckets.has(bucketName)) return;
+  const exists = await minioClient.bucketExists(bucketName);
+  if (!exists) {
+    await minioClient.makeBucket(bucketName, process.env.S3_REGION ?? 'us-east-1');
+  }
+  ensuredBuckets.add(bucketName);
+}
+
+/** Test-only: clear the ensure-once cache so each test starts fresh. */
+export function __resetEnsuredBucketsForTest(): void {
+  ensuredBuckets.clear();
+}
+
 export interface StoredObjectStat {
   size: number;
   contentType: string | null;
@@ -86,6 +109,7 @@ export async function putObjectFromFile(
   srcPath: string,
   contentType: string,
 ): Promise<void> {
+  await ensureBucket();
   await minioClient.fPutObject(S3_BUCKET, key, srcPath, { 'Content-Type': contentType });
 }
 
@@ -114,6 +138,7 @@ export async function putObjectBuffer(
   body: Buffer,
   contentType: string,
 ): Promise<void> {
+  await ensureBucket();
   await minioClient.putObject(S3_BUCKET, key, body, body.length, {
     'Content-Type': contentType,
   });
