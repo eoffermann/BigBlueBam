@@ -8,14 +8,24 @@
 export interface MeasureDefinition {
   field: string;
   label: string;
-  aggregations: ('count' | 'sum' | 'avg' | 'min' | 'max')[];
+  aggregations: ('count' | 'sum' | 'avg' | 'min' | 'max' | 'p50' | 'p90' | 'p95' | 'p99')[];
   type: 'integer' | 'numeric' | 'boolean';
+  /**
+   * Optional JSONB path into `field` (which must appear in the source's
+   * `jsonbColumns`). Present for metrics that live inside a JSONB payload — e.g.
+   * Blip telemetry — so a widget can `avg`/`p95` them without a dedicated column.
+   */
+  path?: string[];
+  cast?: 'numeric' | 'integer' | 'bigint' | 'double' | 'boolean' | 'text' | 'timestamptz' | 'date';
 }
 
 export interface DimensionDefinition {
   field: string;
   label: string;
   type: 'categorical' | 'temporal' | 'boolean';
+  /** Optional JSONB path into `field` (see MeasureDefinition.path). */
+  path?: string[];
+  cast?: 'numeric' | 'integer' | 'bigint' | 'double' | 'boolean' | 'text' | 'timestamptz' | 'date';
 }
 
 export interface FilterDefinition {
@@ -24,6 +34,9 @@ export interface FilterDefinition {
   operators: string[];
   type: 'string' | 'number' | 'date' | 'boolean' | 'enum';
   enumValues?: string[];
+  /** Optional JSONB path into `field` (see MeasureDefinition.path). */
+  path?: string[];
+  cast?: 'numeric' | 'integer' | 'bigint' | 'double' | 'boolean' | 'text' | 'timestamptz' | 'date';
 }
 
 export interface JoinDefinition {
@@ -53,6 +66,15 @@ export interface BenchDataSource {
    * just overrides this field instead of touching query.service.ts.
    */
   orgColumn?: string;
+
+  /**
+   * Columns of type JSONB that the query builder is allowed to reach into via a
+   * `path`. Any measure/dimension/filter can then target a key inside one of
+   * these columns (e.g. `payload.metrics.total_processing_ms`) WITHOUT a schema
+   * migration — new tracked fields are queryable the moment they arrive. Only
+   * columns listed here are drillable; everything else stays plain-column only.
+   */
+  jsonbColumns?: string[];
 }
 
 /** Default tenant-isolation column when a source doesn't override `orgColumn`. */
@@ -282,6 +304,59 @@ const DATA_SOURCES: BenchDataSource[] = [
     filters: [
       { field: 'floor_id', label: 'Floor', operators: ['eq', 'in'], type: 'string' },
       { field: 'day', label: 'Day', operators: ['gte', 'lte', 'between'], type: 'date' },
+    ],
+  },
+
+  // ── Blip telemetry (app performance / latency / memory / thermals) ──
+  // blip_entries.payload is JSONB, so device specs and every metric are reached
+  // via `path` rather than dedicated columns — new tracked fields chart with no
+  // migration. Isolated by org_id. The declared measures/dimensions below are the
+  // common ones for the explorer UI; the query builder also accepts any other
+  // payload path on the fly.
+  {
+    product: 'blip',
+    entity: 'entries',
+    label: 'App Telemetry (Blip)',
+    description: 'Performance, latency, memory-pressure and thermal telemetry from instrumented apps',
+    baseTable: 'blip_entries',
+    orgColumn: 'org_id',
+    jsonbColumns: ['payload'],
+    measures: [
+      { field: 'id', label: 'Report Count', aggregations: ['count'], type: 'integer' },
+      { field: 'payload', path: ['metrics', 'fps'], label: 'FPS', aggregations: ['avg', 'min', 'p50', 'p95'], type: 'numeric', cast: 'numeric' },
+      { field: 'payload', path: ['metrics', 'frame_time_ms'], label: 'Frame Time (ms)', aggregations: ['avg', 'max', 'p95'], type: 'numeric', cast: 'numeric' },
+      { field: 'payload', path: ['metrics', 'total_processing_ms'], label: 'AI Total Processing (ms)', aggregations: ['avg', 'max', 'p50', 'p95', 'p99'], type: 'numeric', cast: 'numeric' },
+      { field: 'payload', path: ['metrics', 'model_runtime_ms'], label: 'AI Model Runtime (ms)', aggregations: ['avg', 'p95'], type: 'numeric', cast: 'numeric' },
+      { field: 'payload', path: ['metrics', 'model_runtime_per_chunk_ms'], label: 'AI Runtime / Chunk (ms)', aggregations: ['avg', 'p95'], type: 'numeric', cast: 'numeric' },
+      { field: 'payload', path: ['metrics', 'fbank_processing_ms'], label: 'AI FBank Processing (ms)', aggregations: ['avg', 'p95'], type: 'numeric', cast: 'numeric' },
+      { field: 'payload', path: ['runtime', 'resident_memory_bytes'], label: 'Resident Memory (bytes)', aggregations: ['avg', 'max', 'p95'], type: 'numeric', cast: 'bigint' },
+      { field: 'payload', path: ['runtime', 'peak_native_memory_bytes'], label: 'Peak Native Memory (bytes)', aggregations: ['max', 'avg'], type: 'numeric', cast: 'bigint' },
+      { field: 'payload', path: ['metrics', 'managed_used_bytes'], label: 'Unity Managed Used (bytes)', aggregations: ['avg', 'max'], type: 'numeric', cast: 'bigint' },
+      { field: 'payload', path: ['runtime', 'battery_level'], label: 'Battery Level', aggregations: ['avg', 'min'], type: 'numeric', cast: 'numeric' },
+    ],
+    dimensions: [
+      { field: 'received_at', label: 'Received At', type: 'temporal' },
+      { field: 'report_type', label: 'Report Type', type: 'categorical' },
+      { field: 'platform', label: 'Platform', type: 'categorical' },
+      { field: 'app_version', label: 'App Version', type: 'categorical' },
+      { field: 'payload', path: ['device', 'device_model'], label: 'Device Model', type: 'categorical' },
+      { field: 'payload', path: ['device', 'operating_system'], label: 'OS Version', type: 'categorical' },
+      { field: 'payload', path: ['device', 'graphics_device_name'], label: 'GPU', type: 'categorical' },
+      { field: 'payload', path: ['device', 'system_memory_mb'], label: 'Device RAM (MB)', type: 'categorical', cast: 'integer' },
+      { field: 'payload', path: ['metrics', 'thermal_state'], label: 'Thermal State', type: 'categorical' },
+      { field: 'payload', path: ['metrics', 'memory_usage'], label: 'Memory Pressure', type: 'categorical' },
+      { field: 'payload', path: ['metrics', 'event'], label: 'Lifecycle Event', type: 'categorical' },
+      { field: 'payload', path: ['metrics', 'backend_type'], label: 'AI Backend', type: 'categorical' },
+    ],
+    filters: [
+      { field: 'report_type', label: 'Report Type', operators: ['eq', 'in'], type: 'string' },
+      { field: 'platform', label: 'Platform', operators: ['eq', 'in'], type: 'string' },
+      { field: 'app_version', label: 'App Version', operators: ['eq', 'in'], type: 'string' },
+      { field: 'received_at', label: 'Received At', operators: ['gte', 'lte', 'between'], type: 'date' },
+      { field: 'payload', path: ['device', 'device_model'], label: 'Device Model', operators: ['eq', 'in'], type: 'string' },
+      { field: 'payload', path: ['device', 'operating_system'], label: 'OS Version', operators: ['eq', 'in'], type: 'string' },
+      { field: 'payload', path: ['metrics', 'thermal_state'], label: 'Thermal State', operators: ['eq', 'in'], type: 'string' },
+      { field: 'payload', path: ['metrics', 'memory_usage'], label: 'Memory Pressure', operators: ['eq', 'in'], type: 'string' },
     ],
   },
 

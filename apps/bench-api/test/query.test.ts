@@ -238,4 +238,123 @@ describe('Query Builder', () => {
       expect(pq.text).toMatch(/day <= \$\d+/);
     });
   });
+
+  // JSONB payload aggregation — the Blip enablement. blip/entries exposes
+  // `payload` as a drillable JSONB column (jsonbColumns), so metrics and device
+  // dimensions are reached by `path` with no dedicated columns.
+  describe('JSONB path aggregation', () => {
+    it('groups a JSONB dimension via a parameterized #>> path', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'blip',
+        'entries',
+        {
+          measures: [{ field: 'id', agg: 'count', alias: 'reports' }],
+          dimensions: [{ field: 'payload', path: ['device', 'device_model'], alias: 'device_model' }],
+        },
+        ORG_ID,
+      );
+      // Path is bound as a text[] parameter, never interpolated into SQL.
+      expect(pq.text).toMatch(/\(payload #>> \$\d+::text\[\]\) AS device_model/);
+      expect(pq.text).toContain('GROUP BY device_model');
+      expect(pq.params).toContain('{"device","device_model"}');
+      // org isolation still on org_id
+      expect(pq.text).toMatch(/WHERE org_id = \$\d+/);
+    });
+
+    it('casts a JSONB measure to numeric for aggregation', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'blip',
+        'entries',
+        { measures: [{ field: 'payload', path: ['metrics', 'fps'], agg: 'avg', alias: 'avg_fps' }] },
+        ORG_ID,
+      );
+      expect(pq.text).toMatch(/AVG\(\(payload #>> \$\d+::text\[\]\)::numeric\) AS avg_fps/);
+      expect(pq.params).toContain('{"metrics","fps"}');
+    });
+
+    it('emits percentile_cont for p95 latency', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'blip',
+        'entries',
+        {
+          measures: [
+            { field: 'payload', path: ['metrics', 'total_processing_ms'], agg: 'p95', alias: 'p95_ms' },
+          ],
+          dimensions: [{ field: 'payload', path: ['device', 'device_model'], alias: 'device_model' }],
+        },
+        ORG_ID,
+      );
+      expect(pq.text).toMatch(
+        /percentile_cont\(0\.95\) WITHIN GROUP \(ORDER BY \(payload #>> \$\d+::text\[\]\)::numeric\) AS p95_ms/,
+      );
+    });
+
+    it('numeric-casts a JSONB comparison filter and parameterizes the value', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'blip',
+        'entries',
+        {
+          measures: [{ field: 'id', agg: 'count' }],
+          filters: [{ field: 'payload', path: ['metrics', 'frame_time_ms'], op: 'gt', value: 33 }],
+        },
+        ORG_ID,
+      );
+      expect(pq.text).toMatch(/\(payload #>> \$\d+::text\[\]\)::numeric > \$\d+/);
+      expect(pq.params).toContain('33');
+    });
+
+    it('rejects a JSONB path on a column not allow-listed as jsonb', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      // bam/tasks declares no jsonbColumns, so any path is refused.
+      expect(() =>
+        buildQuery(
+          'bam',
+          'tasks',
+          { measures: [{ field: 'title', path: ['a', 'b'], agg: 'count' }] },
+          ORG_ID,
+        ),
+      ).toThrow('JSONB path not allowed');
+    });
+
+    it('folds NULL/empty JSONB dimension values into a labeled bucket', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const pq = buildQuery(
+        'blip',
+        'entries',
+        {
+          measures: [{ field: 'id', agg: 'count', alias: 'reports' }],
+          dimensions: [
+            { field: 'payload', path: ['device', 'device_model'], alias: 'device_model', null_label: 'Unknown device' },
+          ],
+        },
+        ORG_ID,
+      );
+      // Older payloads with no device_model become an explicit "Unknown device"
+      // group rather than a blank bar.
+      expect(pq.text).toMatch(/COALESCE\(NULLIF\(\(payload #>> \$\d+::text\[\]\)::text, ''\), \$\d+\) AS device_model/);
+      expect(pq.text).toContain('GROUP BY device_model');
+      expect(pq.params).toContain('Unknown device');
+    });
+
+    it('keeps a malicious path segment inside the bound parameter, not the SQL', async () => {
+      const { buildQuery } = await import('../src/services/query.service.js');
+      const evil = "x'; DROP TABLE blip_entries;--";
+      const pq = buildQuery(
+        'blip',
+        'entries',
+        {
+          measures: [{ field: 'id', agg: 'count' }],
+          dimensions: [{ field: 'payload', path: [evil], alias: 'd' }],
+        },
+        ORG_ID,
+      );
+      // The SQL never contains the injected text; it lives only in a parameter.
+      expect(pq.text).not.toContain('DROP TABLE');
+      expect(pq.params.some((p) => p.includes('DROP TABLE'))).toBe(true);
+    });
+  });
 });
