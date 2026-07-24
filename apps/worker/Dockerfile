@@ -34,8 +34,12 @@ RUN pnpm --filter @bigbluebam/worker deploy --prod /app/deployed
 FROM deps AS dev
 
 # ffmpeg/ffprobe for the bin-transcode job (media proxies + posters);
-# postgresql16-client (pg_dump/pg_restore) for the database backup/restore jobs.
-RUN apk add --no-cache ffmpeg postgresql16-client
+# postgresql18-client (pg_dump/pg_restore) for the database backup/restore jobs.
+# The client MAJOR must be >= the managed Postgres server major: pg_dump refuses
+# to dump a server newer than itself. Prod runs Postgres 18.x (Railway managed),
+# so the client is pinned to 18; an 18 client also dumps the local 16 dev server.
+# When the managed server moves to 19, bump this to postgresql19-client.
+RUN apk add --no-cache ffmpeg postgresql18-client
 
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
@@ -50,8 +54,10 @@ CMD ["npx", "tsx", "watch", "src/worker.ts"]
 FROM node:22-alpine AS production
 
 # tini+curl for PID1/healthcheck; ffmpeg/ffprobe for the bin-transcode job;
-# postgresql16-client (pg_dump/pg_restore) for the database backup/restore jobs.
-RUN apk add --no-cache tini curl ffmpeg postgresql16-client
+# postgresql18-client (pg_dump/pg_restore) for the database backup/restore jobs.
+# The client MAJOR must be >= the managed Postgres server major (pg_dump refuses
+# to dump a newer server). Prod is Postgres 18.x; bump to 19 when the server does.
+RUN apk add --no-cache tini curl ffmpeg postgresql18-client
 
 WORKDIR /app
 

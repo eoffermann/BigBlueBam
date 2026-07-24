@@ -99,8 +99,12 @@ portable, self-contained copy of the database:
 | `BACKUP_KEY_PREFIX` | `backups/platform` | Object-key prefix in the shared bucket. |
 | `S3_*` | (shared) | Bucket/credentials, same as the rest of the platform. |
 
-The worker image includes `postgresql16-client` (pg_dump/pg_restore 16) to match
-the Postgres 16 server.
+The worker image includes `postgresql18-client` (pg_dump/pg_restore 18). The
+client's major version must be **at least** the server's, because `pg_dump`
+refuses to dump a server newer than itself (a client can always dump an *older*
+server). Production runs Postgres 18.x (Railway managed); local dev runs 16, and
+the 18 client dumps it fine. When the managed server is upgraded to a new major,
+bump the client to match in `apps/worker/Dockerfile`.
 
 ## Data model
 
