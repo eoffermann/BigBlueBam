@@ -8,10 +8,24 @@ import { requireAuth, requireScope } from '../plugins/auth.js';
 import { sendError } from '../lib/send-error.js';
 import * as transformService from '../services/transform.service.js';
 
+// Validate rules on write: an unknown action or period used to be stored as-is
+// and then silently let the raw value through at ingest.
+const ruleSchema = z.object({
+  match: z.string().min(1),
+  action: z.enum(['drop', 'mask', 'hash', 'truncate', 'pseudonymize']),
+  params: z
+    .object({
+      keep_last: z.number().int().min(0).optional(),
+      max_len: z.number().int().min(0).optional(),
+      period: z.enum(['day', 'week', 'month']).optional(),
+    })
+    .optional(),
+});
+
 const setTransformSchema = z.object({
   report_type: z.string().min(1).nullable().optional(),
   enabled: z.boolean().optional(),
-  rules: z.array(z.unknown()),
+  rules: z.array(ruleSchema),
 });
 
 export default async function transformsRoutes(fastify: FastifyInstance) {

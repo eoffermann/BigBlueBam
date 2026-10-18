@@ -23,7 +23,7 @@ This document describes what Blip does today. Where an action exists only throug
 - **Reserved field** - a blessed key that is promoted to a typed, indexed column when present: `timestamp`, `level`, `session_id`, `app_version`, `platform`, `elapsed_ms`, and `screen_captures`. Everything else stays in the payload.
 - **Saved view** - a reusable filter + columns + sort + live-tail flag over one `(tracked app, report type)`. Optional; a report type is fully usable without any.
 - **Watch** - a server-side condition that emits a Bolt event when satisfied. Two kinds: a **match watch** (per entry) and a **window watch** (an aggregate over a sliding window).
-- **Transform** - ordered redaction rules (drop, mask, hash, truncate) applied on the edge before tail and storage.
+- **Transform** - ordered redaction rules (drop, mask, hash, truncate, pseudonymize) applied on the edge before tail and storage.
 - **Capture** - a base64 JPEG screenshot attached to a report under the `screen_captures` key. Offloaded to object storage on write; the row keeps a lightweight reference.
 - **Timelapse** - a video stitched from an ordered, filtered run of capture-bearing entries (one frame per capture).
 
@@ -124,10 +124,11 @@ Mobile logs routinely carry secrets and personal data, and Blip is a long-lived 
 
 - **drop** - remove the key entirely.
 - **mask** - replace with a fixed token, optionally keeping the last N characters.
-- **hash** - HMAC the value so identical values still correlate without exposing the value.
+- **hash** - HMAC the value so identical values still correlate without exposing the value. The code never changes, so anyone who holds the raw value somewhere else (for example a device ID your sign-in service also stores) can hash it the same way and match records. Use **pseudonymize** for user, install, or device IDs.
 - **truncate** - cap string length.
+- **pseudonymize** - replace an ID with a code that stays the same for the rest of the period (a UTC day, week, or calendar month; month by default) and then changes. Within the period you can still count unique users and follow one install's reports. The secret behind each period's codes exists only in Redis and is deleted the moment the period ends, after which the codes cannot be linked to anyone, by Blip or by you. If that secret is ever unavailable, the field is dropped rather than stored raw.
 
-A global per-string length cap is always applied as a floor regardless of rules, so a runaway log line can never store unbounded text. A transform can also target `screen_captures` to drop it entirely (an app that must never retain screenshots) or cap the list length. Pixel-level redaction inside an image is out of scope; the lever is keep-or-drop at the attachment level.
+A rule with an action Blip does not recognize drops the field instead of storing it. A global per-string length cap is always applied as a floor regardless of rules, so a runaway log line can never store unbounded text. A transform can also target `screen_captures` to drop it entirely (an app that must never retain screenshots) or cap the list length. Pixel-level redaction inside an image is out of scope; the lever is keep-or-drop at the attachment level.
 
 ### Rate limiting and retention
 

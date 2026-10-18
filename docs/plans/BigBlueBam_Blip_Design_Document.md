@@ -523,7 +523,11 @@ export const blipTransforms = pgTable('blip_transforms', {
 
 Actions: `drop` (remove the key), `mask` (replace with a fixed token, optionally
 keeping the last N chars), `hash` (HMAC the value so identical values still
-correlate without exposing the value), `truncate` (cap string length). Matching
+correlate without exposing the value), `truncate` (cap string length),
+`pseudonymize` (HMAC keyed by a random per-period salt, `params.period`
+day|week|month, held only in Redis with a TTL ending at the period boundary, so
+codes are stable within the period and unlinkable after it; field dropped if no
+salt is available; added 2026-10-18). Unknown actions drop the field. Matching
 is by explicit field path, glob, or regex on keys. A global per-string length
 cap is always applied as a floor regardless of rules, so a runaway log line can
 never store unbounded text.
