@@ -7,7 +7,10 @@
 -- with the new ingest rules:
 --   * user.device_unique_identifier  -> removed
 --   * device.device_name             -> removed
---   * metrics.message                -> removed (free text; could hold HTTP bodies)
+--   * metrics.message                -> removed (free text; could hold HTTP bodies),
+--                                       except in reports whose
+--                                       metadata.privacy_version >= 2 (builds that
+--                                       strip bodies and URLs client-side)
 --   * user.user_id                   -> replaced by sha256(month_salt || id), where
 --                                       month_salt is random per UTC calendar month
 --                                       of the row and exists only inside this
@@ -42,8 +45,17 @@ SELECT id, name, org_id FROM blip_tracked_apps WHERE id = :'app_id';
 
 CREATE TEMP TABLE month_salts (month text PRIMARY KEY, salt text NOT NULL) ON COMMIT DROP;
 
--- Recursively scrub one jsonb document with the salt for its month.
-CREATE FUNCTION pg_temp.blip_scrub(doc jsonb, salt text) RETURNS jsonb
+-- True when a report object came from a build that cleans metrics.message itself.
+CREATE FUNCTION pg_temp.blip_clean_build(doc jsonb) RETURNS boolean
+LANGUAGE sql IMMUTABLE AS $fn$
+  SELECT jsonb_typeof(doc #> '{metadata,privacy_version}') = 'number'
+     AND (doc #>> '{metadata,privacy_version}')::numeric >= 2
+$fn$;
+
+-- Recursively scrub one jsonb document with the salt for its month. keep_msg
+-- carries "this subtree is a privacy_version >= 2 report" down to its metrics.
+CREATE FUNCTION pg_temp.blip_scrub(doc jsonb, salt text, keep_msg boolean DEFAULT false)
+RETURNS jsonb
 LANGUAGE plpgsql AS $fn$
 DECLARE
   k text;
@@ -53,12 +65,13 @@ BEGIN
   IF doc IS NULL THEN
     RETURN NULL;
   ELSIF jsonb_typeof(doc) = 'array' THEN
-    SELECT COALESCE(jsonb_agg(pg_temp.blip_scrub(e, salt)), '[]'::jsonb) INTO out
+    SELECT COALESCE(jsonb_agg(pg_temp.blip_scrub(e, salt, keep_msg)), '[]'::jsonb) INTO out
       FROM jsonb_array_elements(doc) AS e;
     RETURN out;
   ELSIF jsonb_typeof(doc) <> 'object' THEN
     RETURN doc;
   END IF;
+  keep_msg := keep_msg OR COALESCE(pg_temp.blip_clean_build(doc), false);
   out := '{}'::jsonb;
   FOR k, v IN SELECT * FROM jsonb_each(doc) LOOP
     IF k IN ('device_unique_identifier', 'device_name') THEN
@@ -72,9 +85,12 @@ BEGIN
       END IF;
       out := out || jsonb_build_object(k, v);
     ELSIF k = 'metrics' AND jsonb_typeof(v) = 'object' THEN
-      out := out || jsonb_build_object(k, pg_temp.blip_scrub(v - 'message', salt));
+      IF NOT keep_msg THEN
+        v := v - 'message';
+      END IF;
+      out := out || jsonb_build_object(k, pg_temp.blip_scrub(v, salt, keep_msg));
     ELSE
-      out := out || jsonb_build_object(k, pg_temp.blip_scrub(v, salt));
+      out := out || jsonb_build_object(k, pg_temp.blip_scrub(v, salt, keep_msg));
     END IF;
   END LOOP;
   RETURN out;
@@ -98,7 +114,7 @@ SELECT count(*) AS months FROM month_salts;
 SELECT
   (SELECT count(*) FROM blip_entries WHERE tracked_app_id = :'app_id'
      AND (payload::text ~ '"(device_unique_identifier|device_name)"'
-          OR payload -> 'metrics' ? 'message'
+          OR (payload -> 'metrics' ? 'message' AND NOT COALESCE(pg_temp.blip_clean_build(payload), false))
           OR (payload -> 'user' ->> 'user_id') !~ '^[0-9a-f]{32}$')) AS entries,
   (SELECT count(*) FROM blip_watch_events WHERE tracked_app_id = :'app_id'
      AND context::text ~ '"(device_unique_identifier|device_name|user_id|message)"') AS watch_events,
@@ -130,7 +146,7 @@ UPDATE bolt_executions b
 SELECT
   (SELECT count(*) FROM blip_entries WHERE tracked_app_id = :'app_id'
      AND (payload::text ~ '"(device_unique_identifier|device_name)"'
-          OR payload -> 'metrics' ? 'message'
+          OR (payload -> 'metrics' ? 'message' AND NOT COALESCE(pg_temp.blip_clean_build(payload), false))
           OR (payload -> 'user' ->> 'user_id') !~ '^[0-9a-f]{32}$')) AS entries,
   (SELECT count(*) FROM blip_watch_events WHERE tracked_app_id = :'app_id'
      AND context::text ~ '"(device_unique_identifier|device_name)"') AS watch_events,

@@ -18,6 +18,7 @@ const ruleSchema = z.object({
       keep_last: z.number().int().min(0).optional(),
       max_len: z.number().int().min(0).optional(),
       period: z.enum(['day', 'week', 'month']).optional(),
+      unless: z.object({ field: z.string().min(1), at_least: z.number() }).optional(),
     })
     .optional(),
 });

@@ -527,7 +527,11 @@ correlate without exposing the value), `truncate` (cap string length),
 `pseudonymize` (HMAC keyed by a random per-period salt, `params.period`
 day|week|month, held only in Redis with a TTL ending at the period boundary, so
 codes are stable within the period and unlinkable after it; field dropped if no
-salt is available; added 2026-10-18). Unknown actions drop the field. Matching
+salt is available; added 2026-10-18). Unknown actions drop the field. Any rule
+may carry `params.unless: { field, at_least }`: it is skipped for payloads whose
+numeric field (dot path from the report root, read before any rule runs) is at
+least that value, and applies when the field is missing or non-numeric (added
+2026-10-19 so client builds that clean a field themselves keep it). Matching
 is by explicit field path, glob, or regex on keys. A global per-string length
 cap is always applied as a floor regardless of rules, so a runaway log line can
 never store unbounded text.

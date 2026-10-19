@@ -582,7 +582,12 @@ export type PseudonymPeriod = 'day' | 'week' | 'month';
 export interface TransformRule {
   match: string; // 'payload:user.email' | 'glob:*token*' | 'regex:...'
   action: TransformAction;
-  params?: { keep_last?: number; max_len?: number; period?: PseudonymPeriod };
+  params?: {
+    keep_last?: number;
+    max_len?: number;
+    period?: PseudonymPeriod;
+    unless?: { field: string; at_least: number };
+  };
 }
 
 export interface TransformSet {

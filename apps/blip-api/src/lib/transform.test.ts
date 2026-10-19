@@ -11,7 +11,11 @@ const FRNDO_RULES: TransformRule[] = [
   { match: 'payload:user.user_id', action: 'pseudonymize', params: { period: 'month' } },
   { match: 'payload:user.device_unique_identifier', action: 'drop' },
   { match: 'payload:device.device_name', action: 'drop' },
-  { match: 'payload:metrics.message', action: 'drop' },
+  {
+    match: 'payload:metrics.message',
+    action: 'drop',
+    params: { unless: { field: 'metadata.privacy_version', at_least: 2 } },
+  },
 ];
 
 const event = () => ({
@@ -59,6 +63,21 @@ describe('pseudonymize transform', () => {
     expect(out.user.user_id).toBeUndefined();
     const noLookup = t.apply(event()) as Ev;
     expect(noLookup.user.user_id).toBeUndefined();
+  });
+
+  it('keeps metrics.message only for builds at privacy_version >= 2', () => {
+    const salts = saltsOf({ month: 'salt-oct' });
+    const withVersion = (v: unknown) => ({ ...event(), metadata: { privacy_version: v } });
+    const msg = (p: Record<string, unknown>) => (t.apply(p, salts) as Ev).metrics.message;
+    expect(msg(withVersion(2))).toBe('{"body":"sensitive"}');
+    expect(msg(withVersion(3))).toBe('{"body":"sensitive"}');
+    expect(msg(withVersion(1))).toBeUndefined();
+    expect(msg(withVersion('2'))).toBeUndefined(); // non-numeric: rule applies
+    expect(msg(event())).toBeUndefined(); // no metadata: rule applies
+    // The condition only gates its own rule: ids are still handled on v2 builds.
+    const v2 = t.apply(withVersion(2), salts) as Ev;
+    expect(v2.user.device_unique_identifier).toBeUndefined();
+    expect(v2.user.user_id).toMatch(/^[0-9a-f]{32}$/);
   });
 
   it('fails closed on an unknown action', () => {

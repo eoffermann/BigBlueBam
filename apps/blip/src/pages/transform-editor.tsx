@@ -152,6 +152,13 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
                     />
                   </label>
                 )}
+                {rule.params?.unless && (
+                  <span className="basis-full text-xs text-zinc-500">
+                    Skipped for reports where{' '}
+                    <code className="font-mono">{rule.params.unless.field}</code> is{' '}
+                    {rule.params.unless.at_least} or higher.
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setRules((rs) => rs.filter((_, idx) => idx !== i))}

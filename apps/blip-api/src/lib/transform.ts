@@ -13,17 +13,41 @@
  * Within a period the same input maps to the same pseudonym (unique counts,
  * retention, per-install grouping keep working); once the salt is gone, past
  * pseudonyms cannot be linked to anything. Unknown actions drop the field
- * (fail closed) rather than storing the raw value.
+ * (fail closed) rather than storing the raw value. A rule with
+ * `params.unless: { field, at_least }` is skipped for payloads whose numeric
+ * field is at least that value (e.g. builds that already clean the field).
  */
 import { createHmac } from 'node:crypto';
 
 export type PseudonymPeriod = 'day' | 'week' | 'month';
 
+/**
+ * Skip a rule for payloads whose numeric field (dot path from the payload root)
+ * is at least `at_least`, e.g. clients that already clean a field themselves
+ * from some schema version on. A missing or non-numeric field means the rule
+ * applies (fail closed).
+ */
+export type RuleCondition = { field: string; at_least: number };
+
 export type TransformRule = {
   match: string; // 'payload:user.email' | 'glob:*token*' | 'regex:...'
   action: 'drop' | 'mask' | 'hash' | 'truncate' | 'pseudonymize';
-  params?: { keep_last?: number; max_len?: number; period?: PseudonymPeriod };
+  params?: {
+    keep_last?: number;
+    max_len?: number;
+    period?: PseudonymPeriod;
+    unless?: RuleCondition;
+  };
 };
+
+function conditionMet(payload: Record<string, unknown>, cond: RuleCondition): boolean {
+  let v: unknown = payload;
+  for (const k of cond.field.split('.')) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+    v = (v as Record<string, unknown>)[k];
+  }
+  return typeof v === 'number' && Number.isFinite(v) && v >= cond.at_least;
+}
 
 /** Per-batch salt lookup for `pseudonymize`; null means no salt (drop the field). */
 export type SaltLookup = (period: PseudonymPeriod) => string | null;
@@ -134,22 +158,25 @@ export function compileTransform(
     }
   }
 
+  type Compiled = (typeof compiled)[number];
+
   function walk(
     obj: Record<string, unknown>,
     prefix: string,
+    active: Compiled[],
     salts?: SaltLookup,
   ): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
       const keyPath = prefix ? `${prefix}.${k}` : k;
-      const rule = compiled.find((r) => r.matcher(keyPath));
+      const rule = active.find((r) => r.matcher(keyPath));
       if (rule) {
         const masked = maskValue(rule, v, salts);
         if (masked !== undefined) out[k] = capStrings(masked);
         continue; // dropped or replaced; do not recurse into a redacted subtree
       }
       if (v && typeof v === 'object' && !Array.isArray(v)) {
-        out[k] = walk(v as Record<string, unknown>, keyPath, salts);
+        out[k] = walk(v as Record<string, unknown>, keyPath, active, salts);
       } else {
         out[k] = capStrings(v);
       }
@@ -164,6 +191,13 @@ export function compileTransform(
 
   return {
     version,
-    apply: (payload, salts) => walk(payload, '', salts),
+    apply: (payload, salts) => {
+      // Conditions read the untransformed payload, so a rule earlier in the list
+      // cannot switch a later one off by rewriting the field it checks.
+      const active = compiled.filter(
+        (r) => !r.params?.unless || !conditionMet(payload, r.params.unless),
+      );
+      return walk(payload, '', active, salts);
+    },
   };
 }
