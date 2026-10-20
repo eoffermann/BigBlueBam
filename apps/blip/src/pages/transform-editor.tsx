@@ -20,6 +20,9 @@ const PERIODS: { value: PseudonymPeriod; label: string }[] = [
   { value: 'month', label: 'New code every month' },
 ];
 
+// The convention Frndo uses: builds from privacy_version 2 clean fields themselves.
+const DEFAULT_CONDITION = { field: 'metadata.privacy_version', at_least: 2 };
+
 const emptyRule = (): TransformRule => ({ match: '', action: 'mask', params: {} });
 
 export function TransformEditorPage({ appId }: TransformEditorPageProps) {
@@ -152,13 +155,66 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
                     />
                   </label>
                 )}
-                {rule.params?.unless && (
-                  <span className="basis-full text-xs text-zinc-500">
-                    Skipped for reports where{' '}
-                    <code className="font-mono">{rule.params.unless.field}</code> is{' '}
-                    {rule.params.unless.at_least} or higher.
-                  </span>
-                )}
+                <div className="basis-full flex flex-wrap items-end gap-2">
+                  <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300 mb-1.5">
+                    <input
+                      type="checkbox"
+                      checked={!!rule.params?.unless}
+                      onChange={(e) => {
+                        const { unless: _drop, ...rest } = rule.params ?? {};
+                        update(i, {
+                          params: e.target.checked ? { ...rest, unless: DEFAULT_CONDITION } : rest,
+                        });
+                      }}
+                    />
+                    Only for older app versions
+                  </label>
+                  {rule.params?.unless && (
+                    <>
+                      <label className="flex flex-col flex-1 min-w-[180px]">
+                        <span className="text-xs text-zinc-500 mb-1">Version field</span>
+                        <input
+                          value={rule.params.unless.field}
+                          onChange={(e) =>
+                            update(i, {
+                              params: {
+                                ...rule.params,
+                                unless: { at_least: 0, ...rule.params?.unless, field: e.target.value },
+                              },
+                            })
+                          }
+                          placeholder={DEFAULT_CONDITION.field}
+                          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm font-mono"
+                        />
+                      </label>
+                      <label className="flex flex-col">
+                        <span className="text-xs text-zinc-500 mb-1">Skip from version</span>
+                        <input
+                          type="number"
+                          value={rule.params.unless.at_least}
+                          onChange={(e) =>
+                            update(i, {
+                              params: {
+                                ...rule.params,
+                                unless: {
+                                  field: '',
+                                  ...rule.params?.unless,
+                                  at_least: Number(e.target.value),
+                                },
+                              },
+                            })
+                          }
+                          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm w-24"
+                        />
+                      </label>
+                      <span className="basis-full text-xs text-zinc-500">
+                        Applies to reports where{' '}
+                        <code className="font-mono">{rule.params.unless.field || '…'}</code> is
+                        missing or below {rule.params.unless.at_least}. Newer reports keep the field.
+                      </span>
+                    </>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setRules((rs) => rs.filter((_, idx) => idx !== i))}

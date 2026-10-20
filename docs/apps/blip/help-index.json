@@ -192,7 +192,7 @@
     {
       "anchor": "transforms-pii-redaction",
       "title": "Transforms (PII redaction)",
-      "text": "Mobile logs routinely carry secrets and personal data, and Blip is a long-lived sink, so redaction runs on the edge before tail publish and before queueing. A transform is an ordered list of rules; each rule matches by explicit field path, glob, or regex on keys and applies an action: - drop - remove the key entirely. - mask - replace with a fixed token, optionally keeping the last N characters. - hash - HMAC the value so identical values still correlate without exposing the value. The code never changes, so anyone who holds the raw value somewhere else (for example a device ID your sign-in service also stores) can hash it the same way and match records. Use pseudonymize for user, install, or device IDs. - truncate - cap string length. - pseudonymize - replace an ID with a code that stays the same for the rest of the period (a UTC day, week, or calendar month; month by default) and then changes. Within the period you can still count unique users and follow one install's reports. The secret behind each period's codes exists only in Redis and is deleted the moment the period ends, after which the codes cannot be linked to anyone, by Blip or by you. If that secret is ever unavailable, the field is dropped rather than stored raw. A rule can be limited to older app builds. If your app sends a version number with each report (for example metadata.privacyversion) and newer builds already clean a field themselves, give the rule a condition such as \"skip when metadata.privacyversion is 2 or higher\". Reports from newer builds then keep that field, and reports from older builds, or with no version at all, still have the rule applied. The transform editor shows the condition under the rule; set it through bliptransformset (params.unless). A rule with an action Blip does not recognize drops the field instead of storing it. A global per-string length cap is always applied as a floor regardless of rules, so a runaway log line can never store unbounded text. A transform can also target screencaptures to drop it entirely (an app that must never retain screenshots) or cap the list length. Pixel-level redaction inside an image is out of scope; the lever is keep-or-drop at the attachment level."
+      "text": "Mobile logs routinely carry secrets and personal data, and Blip is a long-lived sink, so redaction runs on the edge before tail publish and before queueing. A transform is an ordered list of rules; each rule matches by explicit field path, glob, or regex on keys and applies an action: - drop - remove the key entirely. - mask - replace with a fixed token, optionally keeping the last N characters. - hash - HMAC the value so identical values still correlate without exposing the value. The code never changes, so anyone who holds the raw value somewhere else (for example a device ID your sign-in service also stores) can hash it the same way and match records. Use pseudonymize for user, install, or device IDs. - truncate - cap string length. - pseudonymize - replace an ID with a code that stays the same for the rest of the period (a UTC day, week, or calendar month; month by default) and then changes. Within the period you can still count unique users and follow one install's reports. The secret behind each period's codes exists only in Redis and is deleted the moment the period ends, after which the codes cannot be linked to anyone, by Blip or by you. If that secret is ever unavailable, the field is dropped rather than stored raw. A rule can be limited to older app builds. If your app sends a version number with each report (for example metadata.privacyversion) and newer builds already clean a field themselves, tick Only for older app versions on the rule, then set Version field (for example metadata.privacyversion) and Skip from version (for example 2). Reports from newer builds then keep that field, and reports from older builds, or with no version at all, still have the rule applied. Agents can set the same condition through bliptransformset (params.unless). A rule with an action Blip does not recognize drops the field instead of storing it. A global per-string length cap is always applied as a floor regardless of rules, so a runaway log line can never store unbounded text. A transform can also target screencaptures to drop it entirely (an app that must never retain screenshots) or cap the list length. Pixel-level redaction inside an image is out of scope; the lever is keep-or-drop at the attachment level."
     },
     {
       "anchor": "rate-limiting-and-retention",
@@ -275,6 +275,7 @@
     "Live debugging": "overview",
     "Mint Key": "story-track-your-first-app-and-send-a-report",
     "New Tracked App": "story-track-your-first-app-and-send-a-report",
+    "Only for older app versions": "transforms-pii-redaction",
     "Pause": "story-watch-a-build-live-while-you-debug",
     "Report type": "key-concepts",
     "Reserved field": "key-concepts",
@@ -282,11 +283,13 @@
     "Revoke": "ingest-keys",
     "Rotation": "ingest-keys",
     "Saved view": "key-concepts",
+    "Skip from version": "transforms-pii-redaction",
     "Suspend": "ingest-keys",
     "Test": "story-alert-when-frames-get-slow",
     "Timelapse": "key-concepts",
     "Tracked app": "key-concepts",
     "Transform": "key-concepts",
+    "Version field": "transforms-pii-redaction",
     "Watch": "key-concepts",
     "admin": "where-to-find-it",
     "backfill": "live-tail",

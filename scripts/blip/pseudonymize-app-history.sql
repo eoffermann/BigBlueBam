@@ -11,13 +11,13 @@
 --                                       except in reports whose
 --                                       metadata.privacy_version >= 2 (builds that
 --                                       strip bodies and URLs client-side)
---   * user.user_id                   -> replaced by sha256(month_salt || id), where
---                                       month_salt is random per UTC calendar month
---                                       of the row and exists only inside this
---                                       transaction (pg_temp), then is gone. Same
---                                       install in the same month keeps one code
---                                       (unique counts per month still work);
---                                       nothing can link the codes back.
+--   * user.user_id                   -> replaced by a code made the same way ingest
+--                                       makes one (HMAC-SHA256, first 32 hex chars),
+--                                       keyed by a salt that is random per UTC
+--                                       calendar month of the row and exists only
+--                                       inside this transaction (pg_temp), then is
+--                                       gone. Same install in the same month keeps
+--                                       one code; nothing can link the codes back.
 --
 -- Covers: blip_entries.payload, blip_watch_events.context (match snapshots), and
 -- bolt_executions.trigger_event rows fired by blip watches on this app.
@@ -81,7 +81,8 @@ BEGIN
       IF v ? 'user_id' AND jsonb_typeof(v -> 'user_id') = 'string'
          AND (v ->> 'user_id') !~ '^[0-9a-f]{32}$' THEN
         v := jsonb_set(v, '{user_id}',
-          to_jsonb(left(encode(sha256(convert_to(salt || (v ->> 'user_id'), 'UTF8')), 'hex'), 32)));
+          to_jsonb(left(encode(hmac(convert_to(v ->> 'user_id', 'UTF8'),
+                                  convert_to(salt, 'UTF8'), 'sha256'), 'hex'), 32)));
       END IF;
       out := out || jsonb_build_object(k, v);
     ELSIF k = 'metrics' AND jsonb_typeof(v) = 'object' THEN
