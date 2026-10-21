@@ -4,6 +4,8 @@
 
 <h1 align="center">BigBlueBam</h1>
 
+> **Project page:** [BigBlueBam and the B-Suite](https://bigblueceiling.com/projects/bigbluebam/) on [Big Blue Ceiling](https://bigblueceiling.com/)
+
 <p align="center">
   <strong>The work suite built for human-AI teams.</strong><br/>
   Your team sets the strategy. AI agents handle the routine. Everyone works in the same place.
