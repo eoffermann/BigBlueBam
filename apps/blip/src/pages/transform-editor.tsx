@@ -5,13 +5,23 @@ import {
   useSetTransform,
   type TransformRule,
   type TransformAction,
+  type PseudonymPeriod,
 } from '@/hooks/use-blip';
 
 interface TransformEditorPageProps {
   appId: string;
 }
 
-const ACTIONS: TransformAction[] = ['drop', 'mask', 'hash', 'truncate'];
+const ACTIONS: TransformAction[] = ['drop', 'mask', 'hash', 'truncate', 'pseudonymize'];
+
+const PERIODS: { value: PseudonymPeriod; label: string }[] = [
+  { value: 'day', label: 'New code every day' },
+  { value: 'week', label: 'New code every week' },
+  { value: 'month', label: 'New code every month' },
+];
+
+// The convention Frndo uses: builds from privacy_version 2 clean fields themselves.
+const DEFAULT_CONDITION = { field: 'metadata.privacy_version', at_least: 2 };
 
 const emptyRule = (): TransformRule => ({ match: '', action: 'mask', params: {} });
 
@@ -45,6 +55,13 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
           field ever leaves the request thread. Match by explicit field path, <code className="font-mono">glob:</code>,
           or <code className="font-mono">regex:</code>.
         </p>
+        <p className="text-sm text-zinc-500 mt-1">
+          <strong>pseudonymize</strong> replaces an ID (such as a user or install ID) with a code.
+          The same ID gets the same code until the period ends, so you can still count unique users
+          and follow one install's reports. After that the secret behind the codes is deleted and
+          they can no longer be linked to anyone. <strong>hash</strong> never changes, so it can be
+          matched back to a raw ID stored somewhere else.
+        </p>
       </div>
 
       {isLoading ? (
@@ -69,17 +86,17 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
                 key={i}
                 className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3"
               >
-                <div className="flex flex-col flex-1 min-w-[200px]">
-                  <label className="text-xs text-zinc-500 mb-1">Match</label>
+                <label className="flex flex-col flex-1 min-w-[200px]">
+                  <span className="text-xs text-zinc-500 mb-1">Match</span>
                   <input
                     value={rule.match}
                     onChange={(e) => update(i, { match: e.target.value })}
                     placeholder="payload:user.email or glob:*token*"
                     className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm font-mono"
                   />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs text-zinc-500 mb-1">Action</label>
+                </label>
+                <label className="flex flex-col">
+                  <span className="text-xs text-zinc-500 mb-1">Action</span>
                   <select
                     value={rule.action}
                     onChange={(e) => update(i, { action: e.target.value as TransformAction })}
@@ -91,10 +108,10 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
                       </option>
                     ))}
                   </select>
-                </div>
+                </label>
                 {rule.action === 'mask' && (
-                  <div className="flex flex-col">
-                    <label className="text-xs text-zinc-500 mb-1">keep_last</label>
+                  <label className="flex flex-col">
+                    <span className="text-xs text-zinc-500 mb-1">keep_last</span>
                     <input
                       type="number"
                       value={rule.params?.keep_last ?? ''}
@@ -103,11 +120,31 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
                       }
                       className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm w-20"
                     />
-                  </div>
+                  </label>
+                )}
+                {rule.action === 'pseudonymize' && (
+                  <label className="flex flex-col">
+                    <span className="text-xs text-zinc-500 mb-1">Linkable for</span>
+                    <select
+                      value={rule.params?.period ?? 'month'}
+                      onChange={(e) =>
+                        update(i, {
+                          params: { ...rule.params, period: e.target.value as PseudonymPeriod },
+                        })
+                      }
+                      className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm"
+                    >
+                      {PERIODS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 )}
                 {rule.action === 'truncate' && (
-                  <div className="flex flex-col">
-                    <label className="text-xs text-zinc-500 mb-1">max_len</label>
+                  <label className="flex flex-col">
+                    <span className="text-xs text-zinc-500 mb-1">max_len</span>
                     <input
                       type="number"
                       value={rule.params?.max_len ?? ''}
@@ -116,8 +153,68 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
                       }
                       className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm w-24"
                     />
-                  </div>
+                  </label>
                 )}
+                <div className="basis-full flex flex-wrap items-end gap-2">
+                  <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300 mb-1.5">
+                    <input
+                      type="checkbox"
+                      checked={!!rule.params?.unless}
+                      onChange={(e) => {
+                        const { unless: _drop, ...rest } = rule.params ?? {};
+                        update(i, {
+                          params: e.target.checked ? { ...rest, unless: DEFAULT_CONDITION } : rest,
+                        });
+                      }}
+                    />
+                    Only for older app versions
+                  </label>
+                  {rule.params?.unless && (
+                    <>
+                      <label className="flex flex-col flex-1 min-w-[180px]">
+                        <span className="text-xs text-zinc-500 mb-1">Version field</span>
+                        <input
+                          value={rule.params.unless.field}
+                          onChange={(e) =>
+                            update(i, {
+                              params: {
+                                ...rule.params,
+                                unless: { at_least: 0, ...rule.params?.unless, field: e.target.value },
+                              },
+                            })
+                          }
+                          placeholder={DEFAULT_CONDITION.field}
+                          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm font-mono"
+                        />
+                      </label>
+                      <label className="flex flex-col">
+                        <span className="text-xs text-zinc-500 mb-1">Skip from version</span>
+                        <input
+                          type="number"
+                          value={rule.params.unless.at_least}
+                          onChange={(e) =>
+                            update(i, {
+                              params: {
+                                ...rule.params,
+                                unless: {
+                                  field: '',
+                                  ...rule.params?.unless,
+                                  at_least: Number(e.target.value),
+                                },
+                              },
+                            })
+                          }
+                          className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm w-24"
+                        />
+                      </label>
+                      <span className="basis-full text-xs text-zinc-500">
+                        Applies to reports where{' '}
+                        <code className="font-mono">{rule.params.unless.field || '…'}</code> is
+                        missing or below {rule.params.unless.at_least}. Newer reports keep the field.
+                      </span>
+                    </>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setRules((rs) => rs.filter((_, idx) => idx !== i))}

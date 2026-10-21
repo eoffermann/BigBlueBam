@@ -17,7 +17,14 @@ import {
   KEY_CACHE_TTL_SEC,
   type KeyCacheEntry,
 } from '../lib/ingest-keys.js';
-import { compileTransform, type CompiledTransform, type TransformRule } from '../lib/transform.js';
+import {
+  compileTransform,
+  pseudonymPeriods,
+  type CompiledTransform,
+  type PseudonymPeriod,
+  type TransformRule,
+} from '../lib/transform.js';
+import { resolveSalts } from '../lib/pseudonym-salts.js';
 import { publishTail, type TailEntry } from '../lib/broadcast.js';
 import { evaluateWatches } from '../lib/watch-eval.js';
 import { enqueueIngest } from '../lib/queue.js';
@@ -72,22 +79,28 @@ export async function resolveKey(redis: Redis, keyId: string): Promise<KeyCacheE
 }
 
 // Compiled-transform cache keyed by `${trackedAppId}:${version}`.
-const transformCache = new Map<string, { at: number; transforms: CompiledTransform[] }>();
+type LoadedTransforms = { transforms: CompiledTransform[]; periods: PseudonymPeriod[] };
+const transformCache = new Map<string, { at: number } & LoadedTransforms>();
 const TRANSFORM_TTL_MS = 30_000;
 
-async function loadTransforms(trackedAppId: string, version: number): Promise<CompiledTransform[]> {
+async function loadTransforms(trackedAppId: string, version: number): Promise<LoadedTransforms> {
   const key = `${trackedAppId}:${version}`;
   const cached = transformCache.get(key);
-  if (cached && Date.now() - cached.at < TRANSFORM_TTL_MS) return cached.transforms;
+  if (cached && Date.now() - cached.at < TRANSFORM_TTL_MS) return cached;
   const rows = await db
     .select()
     .from(blipTransforms)
     .where(eq(blipTransforms.tracked_app_id, trackedAppId));
-  const transforms = rows
-    .filter((r) => r.enabled)
-    .map((r) => compileTransform(r.rules as TransformRule[], r.version, env.BLIP_INGEST_PEPPER));
-  transformCache.set(key, { at: Date.now(), transforms });
-  return transforms;
+  const enabled = rows.filter((r) => r.enabled);
+  const transforms = enabled.map((r) =>
+    compileTransform(r.rules as TransformRule[], r.version, env.BLIP_INGEST_PEPPER),
+  );
+  const periods = [
+    ...new Set(enabled.flatMap((r) => pseudonymPeriods(r.rules as TransformRule[]))),
+  ];
+  const loaded = { at: Date.now(), transforms, periods };
+  transformCache.set(key, loaded);
+  return loaded;
 }
 
 /** Drop the compiled-transform cache for an app (after transform edits). */
@@ -108,8 +121,12 @@ export async function processBatch(
   ctx: { key: KeyCacheEntry },
   elements: unknown[],
 ): Promise<IngestResult> {
-  const transforms = await loadTransforms(ctx.key.tracked_app_id, ctx.key.transform_version);
+  const { transforms, periods } = await loadTransforms(
+    ctx.key.tracked_app_id,
+    ctx.key.transform_version,
+  );
   const receivedAt = new Date();
+  const salts = await resolveSalts(redis, ctx.key.tracked_app_id, periods, receivedAt);
   const receivedIso = receivedAt.toISOString();
   const queued: BlipQueuedEntry[] = [];
   const rejected_index: number[] = [];
@@ -130,7 +147,7 @@ export async function processBatch(
 
     // Apply compiled PII transforms in order (edge redaction, Blip §9).
     let redacted = obj;
-    for (const t of transforms) redacted = t.apply(redacted);
+    for (const t of transforms) redacted = t.apply(redacted, salts);
 
     // Build the tail copy: strip screen_captures to lightweight descriptors.
     const tailPayload = stripCapturesForTail(redacted);

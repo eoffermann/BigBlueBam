@@ -575,12 +575,19 @@ export function useDeleteView(appId: string | undefined, reportType: string | un
 // Transform (PII rules) + Retention
 // ---------------------------------------------------------------------------
 
-export type TransformAction = 'drop' | 'mask' | 'hash' | 'truncate';
+export type TransformAction = 'drop' | 'mask' | 'hash' | 'truncate' | 'pseudonymize';
+
+export type PseudonymPeriod = 'day' | 'week' | 'month';
 
 export interface TransformRule {
   match: string; // 'payload:user.email' | 'glob:*token*' | 'regex:...'
   action: TransformAction;
-  params?: { keep_last?: number; max_len?: number };
+  params?: {
+    keep_last?: number;
+    max_len?: number;
+    period?: PseudonymPeriod;
+    unless?: { field: string; at_least: number };
+  };
 }
 
 export interface TransformSet {

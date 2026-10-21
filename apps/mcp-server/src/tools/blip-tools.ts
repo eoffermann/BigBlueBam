@@ -318,7 +318,7 @@ export function registerBlipTools(server: McpServer, api: ApiClient, blipApiUrl:
   registerTool(server, {
     name: 'blip_transform_set',
     description:
-      'Set the ordered PII/redaction transform rules for a tracked app (optionally narrowed to one report_type). Rules run on the edge before tail/store. Each rule: { match: "payload:user.email" | "glob:*token*" | "regex:...", action: "drop"|"mask"|"hash"|"truncate", params?: { keep_last?, max_len? } }.',
+      'Set the ordered PII/redaction transform rules for a tracked app (optionally narrowed to one report_type). Rules run on the edge before tail/store. Each rule: { match: "payload:user.email" | "glob:*token*" | "regex:...", action: "drop"|"mask"|"hash"|"truncate"|"pseudonymize", params?: { keep_last?, max_len?, period?, unless? } }. params.unless { field: "metadata.privacy_version", at_least: 2 } skips the rule for payloads whose numeric field is at least that value (missing field: the rule applies). Use "pseudonymize" (params.period "day"|"week"|"month", default month) for user/install ids: stable within the UTC period, unlinkable once it ends. "hash" is stable forever and re-linkable by anyone holding the raw value.',
     input: {
       id: z.string().uuid().describe('Tracked app ID'),
       report_type: z.string().nullable().optional().describe('null/omit = applies to all report types'),
@@ -327,8 +327,11 @@ export function registerBlipTools(server: McpServer, api: ApiClient, blipApiUrl:
         .array(
           z.object({
             match: z.string().describe('field path, glob:..., or regex:...'),
-            action: z.enum(['drop', 'mask', 'hash', 'truncate']),
-            params: z.record(z.unknown()).optional().describe('e.g. { keep_last: 4, max_len: 256 }'),
+            action: z.enum(['drop', 'mask', 'hash', 'truncate', 'pseudonymize']),
+            params: z
+              .record(z.unknown())
+              .optional()
+              .describe('e.g. { keep_last: 4 } for mask, { max_len: 256 } for truncate, { period: "month" } for pseudonymize, { unless: { field, at_least } } on any action'),
           }),
         )
         .describe('Ordered rule list; empty array clears redaction (the global length floor still applies)'),
