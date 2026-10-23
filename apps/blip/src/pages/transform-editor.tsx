@@ -23,20 +23,27 @@ const PERIODS: { value: PseudonymPeriod; label: string }[] = [
 // The convention Frndo uses: builds from privacy_version 2 clean fields themselves.
 const DEFAULT_CONDITION = { field: 'metadata.privacy_version', at_least: 2 };
 
-const emptyRule = (): TransformRule => ({ match: '', action: 'mask', params: {} });
+// A client-only key gives each rule row a stable React identity, so deleting a
+// rule does not shift input state onto its neighbour. Stripped before saving.
+type EditableRule = TransformRule & { _key: string };
+
+let nextKey = 0;
+const withKey = (rule: TransformRule): EditableRule => ({ ...rule, _key: `rule-${nextKey++}` });
+
+const emptyRule = (): EditableRule => withKey({ match: '', action: 'mask', params: {} });
 
 export function TransformEditorPage({ appId }: TransformEditorPageProps) {
   const { data, isLoading } = useTransform(appId);
   const save = useSetTransform(appId);
 
   const [enabled, setEnabled] = useState(true);
-  const [rules, setRules] = useState<TransformRule[]>([]);
+  const [rules, setRules] = useState<EditableRule[]>([]);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (data?.data) {
       setEnabled(data.data.enabled);
-      setRules(data.data.rules ?? []);
+      setRules((data.data.rules ?? []).map(withKey));
     }
   }, [data]);
 
@@ -83,7 +90,7 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
             )}
             {rules.map((rule, i) => (
               <div
-                key={i}
+                key={rule._key}
                 className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3"
               >
                 <label className="flex flex-col flex-1 min-w-[200px]">
@@ -239,7 +246,7 @@ export function TransformEditorPage({ appId }: TransformEditorPageProps) {
               disabled={save.isPending}
               onClick={() =>
                 save.mutate(
-                  { enabled, rules },
+                  { enabled, rules: rules.map(({ _key, ...rule }) => rule) },
                   {
                     onSuccess: () => {
                       setSaved(true);

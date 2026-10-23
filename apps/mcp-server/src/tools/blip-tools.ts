@@ -25,7 +25,7 @@ function createBlipClient(blipApiUrl: string, api: ApiClient) {
     const url = `${baseUrl}${path}`;
     const headers: Record<string, string> = {};
     const token = (api as unknown as { token?: string }).token;
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
     const init: RequestInit = { method, headers };
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';

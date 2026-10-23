@@ -2,7 +2,7 @@
  * Blip transform routes (Blip §9, §15). PUT the PII / payload redaction ruleset
  * for a tracked app (optionally narrowed to one report_type). Admin authority.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireScope } from '../plugins/auth.js';
 import { sendError } from '../lib/send-error.js';
@@ -29,6 +29,10 @@ const setTransformSchema = z.object({
   rules: z.array(ruleSchema),
 });
 
+// requireAuth runs first on every route here, so the user is always set.
+const authedUser = (request: FastifyRequest) =>
+  request.user as NonNullable<FastifyRequest['user']>;
+
 export default async function transformsRoutes(fastify: FastifyInstance) {
   // GET the app-wide transform ruleset (member read). Without this the SPA's
   // transform editor 404s on load and can never display the saved rules.
@@ -39,7 +43,7 @@ export default async function transformsRoutes(fastify: FastifyInstance) {
       try {
         const row = await transformService.getTransform(
           request.params.id,
-          request.user!.active_org_id,
+          authedUser(request).active_org_id,
         );
         return reply.send({ data: row });
       } catch (err) {
@@ -56,10 +60,11 @@ export default async function transformsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const body = setTransformSchema.parse(request.body);
+        const user = authedUser(request);
         const row = await transformService.setTransform(
           request.params.id,
-          request.user!.active_org_id,
-          request.user!.id,
+          user.active_org_id,
+          user.id,
           body,
         );
         return reply.send({ data: row });
