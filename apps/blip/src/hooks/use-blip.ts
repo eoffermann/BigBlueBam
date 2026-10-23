@@ -239,7 +239,7 @@ export function useFieldCatalog(appId: string | undefined, reportType: string | 
     queryKey: ['blip', 'fields', appId, reportType],
     queryFn: () =>
       api.get<{ data: FieldCatalogEntry[] }>(
-        `/apps/${appId}/types/${encodeURIComponent(reportType!)}/fields`,
+        `/apps/${appId}/types/${encodeURIComponent(reportType ?? '')}/fields`,
       ),
     enabled: !!appId && !!reportType,
   });
@@ -250,7 +250,7 @@ export function useIndexField(appId: string | undefined, reportType: string | un
   return useMutation({
     mutationFn: (fieldPath: string) =>
       api.post<{ data: FieldCatalogEntry }>(
-        `/apps/${appId}/types/${encodeURIComponent(reportType!)}/fields/${encodeURIComponent(fieldPath)}/index`,
+        `/apps/${appId}/types/${encodeURIComponent(reportType ?? '')}/fields/${encodeURIComponent(fieldPath)}/index`,
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['blip', 'fields', appId, reportType] }),
   });
@@ -261,7 +261,7 @@ export function useSetMetric(appId: string | undefined, reportType: string | und
   return useMutation({
     mutationFn: ({ fieldPath, is_metric }: { fieldPath: string; is_metric: boolean }) =>
       api.post<{ data: FieldCatalogEntry }>(
-        `/apps/${appId}/types/${encodeURIComponent(reportType!)}/fields/${encodeURIComponent(fieldPath)}/metric`,
+        `/apps/${appId}/types/${encodeURIComponent(reportType ?? '')}/fields/${encodeURIComponent(fieldPath)}/metric`,
         { is_metric },
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['blip', 'fields', appId, reportType] }),
@@ -541,7 +541,7 @@ export function useViews(appId: string | undefined, reportType: string | undefin
     queryKey: ['blip', 'views', appId, reportType],
     queryFn: () =>
       api.get<{ data: SavedView[] }>(
-        `/apps/${appId}/types/${encodeURIComponent(reportType!)}/views`,
+        `/apps/${appId}/types/${encodeURIComponent(reportType ?? '')}/views`,
       ),
     enabled: !!appId && !!reportType,
   });
