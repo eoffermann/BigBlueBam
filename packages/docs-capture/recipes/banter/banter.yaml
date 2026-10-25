@@ -32,11 +32,14 @@
 
 - id: banter-channel-list
   app: banter
-  demonstrates: "The Banter sidebar (channels + DMs) and the default #general channel on first load"
-  route: /banter/
+  demonstrates: "The Banter sidebar (channels + DMs) with a channel open"
+  # /banter/ now opens the Feed, so open a channel explicitly.
+  route: /banter/channels/castaways
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
+    - { action: wait, ms: 1500 }
+  expectNot: "text=Your feed is quiet"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 2, label: "Channels & sidebar" }
   masks:
@@ -82,16 +85,16 @@
 - id: banter-thread
   app: banter
   demonstrates: "The right-hand Thread panel opened off a parent message's replies"
-  route: /banter/
+  # #rescue-ops has seeded threads; /banter/ now opens the Feed instead.
+  route: /banter/channels/rescue-ops
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
     - { action: wait, ms: 1500 }
-    # Prefer the visible "N replies" link; fall back to the hover action bar.
-    - { action: click, selector: "main button:has-text('repl')", optional: true }
-    - { action: hover, selector: "main div.group.relative.flex.gap-3", optional: true }
-    - { action: click, selector: "main [title='Reply in thread']", optional: true }
+    - { action: click, selector: "main button:has-text('repl')" }
     - { action: wait, ms: 1500 }
+  expect: "text=Thread"
+  expectNot: "text=Your feed is quiet"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 3, label: "Threaded replies" }
   masks:
@@ -173,9 +176,12 @@
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
-    - { action: fill, selector: "input[placeholder*='earch' i], input[type='search']", value: "raft", optional: true }
-    - { action: press, selector: "input[placeholder*='earch' i], input[type='search']", value: "Enter", optional: true }
+    # Scope to main: the header also has a "Search messages" box, and typing
+    # there navigated away from the search page.
+    - { action: fill, selector: "main input[placeholder*='earch' i]", value: "raft" }
+    - { action: press, selector: "main input[placeholder*='earch' i]", value: "Enter" }
     - { action: wait, ms: 2000 }
+  expectNot: "text=Your feed is quiet"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 5, label: "Message search" }
   masks:
