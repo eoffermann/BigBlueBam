@@ -60,15 +60,14 @@
 - id: brief-detail
   app: brief
   demonstrates: "A document detail/reader page: body, action bar, and the metadata + comments sidebar"
-  route: /brief/documents
+  # Open a known Gilligan doc by slug. The old optional card-click chain could
+  # silently land elsewhere and still produce an image.
+  route: /brief/documents/signal-fire-standard-operating-procedure
   identity: admin
   interactions:
     - { action: waitFor, selector: main }
-    - { action: wait, ms: 1500 }
-    - { action: click, selector: "button.w-full.text-left", optional: true }
-    - { action: click, selector: "main button[class*='rounded-xl']", optional: true }
-    - { action: click, selector: "button:has(h3)", optional: true }
     - { action: wait, ms: 2500 }
+  expect: "text=Signal Fire Standard Operating Procedure"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 3, label: "Document reader" }
   masks:
@@ -78,19 +77,14 @@
 - id: brief-editor
   app: brief
   demonstrates: "A real document open in the editor: title, formatting toolbar, body content, and the Settings sidebar"
-  route: /brief/documents
+  # A known Gilligan doc straight in edit mode. The old optional click chain
+  # captured the Bam People page here on 2026-06-24 and nothing noticed.
+  route: /brief/documents/signal-fire-standard-operating-procedure/edit
   identity: admin
   interactions:
-    - { action: waitFor, selector: main }
-    - { action: wait, ms: 1500 }
-    # Open a real seeded doc (same proven card-click chain as brief-detail), then
-    # enter edit mode — instead of the blank /new editor.
-    - { action: click, selector: "button.w-full.text-left", optional: true }
-    - { action: click, selector: "main button[class*='rounded-xl']", optional: true }
-    - { action: click, selector: "button:has(h3)", optional: true }
+    - { action: waitFor, selector: ".ProseMirror" }
     - { action: wait, ms: 2000 }
-    - { action: click, selector: "button:has-text('Edit')", optional: true }
-    - { action: wait, ms: 2000 }
+  expect: ".ProseMirror"
   capture: { target: fullPage, viewport: desktop-1440, theme: light }
   doc: { order: 4, label: "Document editor" }
 
