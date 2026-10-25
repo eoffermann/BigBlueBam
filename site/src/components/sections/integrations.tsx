@@ -2,6 +2,7 @@ import { FileSpreadsheet, Trello, Github, Bug, CalendarDays, Bot, Key } from 'lu
 import { SectionWrapper } from '@/components/ui/section-wrapper';
 import { AnimatedReveal } from '@/components/ui/animated-reveal';
 import { Badge } from '@/components/ui/badge';
+import { MCP_TOOL_COUNT } from '@/lib/facts';
 
 const importSources = [
   { icon: FileSpreadsheet, label: 'CSV' },
@@ -61,7 +62,7 @@ export function Integrations() {
               </div>
               <div>
                 <h3 className="text-base font-semibold text-zinc-900">MCP Server</h3>
-                <Badge variant="blue">804 tools</Badge>
+                <Badge variant="blue">{MCP_TOOL_COUNT} tools</Badge>
               </div>
             </div>
             <p className="mb-4 text-sm text-zinc-600">

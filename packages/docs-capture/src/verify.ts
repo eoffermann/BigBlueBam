@@ -36,6 +36,45 @@ export interface VerifyResult {
   reason?: string;
 }
 
+/**
+ * Shipped captures must show only demo identities. These are the reserved
+ * demo/test domains (RFC 2606 / 6761); any other email domain is treated as a
+ * real person and fails the capture. Incident of record: on 2026-06-24 the
+ * Brief and Banter captures shipped real names and addresses because the
+ * workspace still had real members and nothing checked the image's content.
+ */
+const DEMO_EMAIL_DOMAIN = /(\.example|\.test|\.invalid|\.localhost|\.local|^example\.(com|org|net))$/i;
+const EMAIL = /[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)/g;
+
+export function isDemoEmail(email: string): boolean {
+  const domain = email.split('@')[1] ?? '';
+  return DEMO_EMAIL_DOMAIN.test(domain.toLowerCase());
+}
+
+/** Every email address in `text` whose domain is not a reserved demo domain. */
+export function findRealEmails(text: string): string[] {
+  const found = new Set<string>();
+  for (const m of text.matchAll(EMAIL)) {
+    if (!isDemoEmail(m[0])) found.add(m[0]);
+  }
+  return [...found];
+}
+
+/** First path segment, e.g. "/brief/documents/x" -> "brief". */
+export function firstSegment(pathname: string): string {
+  return pathname.split('/').filter(Boolean)[0] ?? '';
+}
+
+export interface VerifyOptions {
+  /**
+   * The app the recipe is for, as the first segment of its route (e.g. "brief").
+   * When set, the page must still be inside that app at capture time. Catches
+   * a click chain that silently lands in another app (the 2026-06-24 Brief
+   * "editor" capture was actually the Bam People page).
+   */
+  appSegment?: string;
+}
+
 export function toArray(v: string | string[] | undefined): string[] {
   if (!v) return [];
   return Array.isArray(v) ? v : [v];
@@ -45,13 +84,29 @@ export async function verifyBeforeCapture(
   page: Page,
   expect: string[],
   expectNot: string[],
+  opts: VerifyOptions = {},
 ): Promise<VerifyResult> {
+  // 0. Still inside the recipe's own app.
+  if (opts.appSegment) {
+    const here = firstSegment(new URL(page.url()).pathname);
+    if (here !== opts.appSegment) {
+      return { ok: false, reason: `left the app: expected /${opts.appSegment}/, page is at ${new URL(page.url()).pathname}` };
+    }
+  }
+
   // 1. Built-in error-state guard.
-  const bodyText = (await page.evaluate(() => document.body?.innerText ?? '').catch(() => '')).toLowerCase();
+  const rawText = await page.evaluate(() => document.body?.innerText ?? '').catch(() => '');
+  const bodyText = rawText.toLowerCase();
   for (const phrase of ERROR_PHRASES) {
     if (bodyText.includes(phrase)) {
       return { ok: false, reason: `error state on page (matched "${phrase}")` };
     }
+  }
+
+  // 1b. No real person's email address may appear in a shipped capture.
+  const real = findRealEmails(rawText);
+  if (real.length > 0) {
+    return { ok: false, reason: `real email address on page (${real.length} found; only demo domains are allowed)` };
   }
 
   // 2a. expect — each must be visible (short grace wait).

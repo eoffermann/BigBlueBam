@@ -136,6 +136,12 @@ export const RecipeSchema = z.object({
    * error states (invalid-credentials, page-not-found, error boundary).
    */
   expectNot: z.union([z.string(), z.array(z.string())]).optional(),
+  /**
+   * By default the page must still be in the recipe's app (the first segment of
+   * `route`) at capture time. Set true only for a shot that deliberately ends in
+   * another app.
+   */
+  allowOffApp: z.boolean().default(false),
   /** Selectors whose contents are redacted/frozen before capture. */
   masks: z.array(z.string()).default([]),
   /** Optional output path override (relative to the shared screenshots root). */

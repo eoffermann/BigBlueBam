@@ -1,5 +1,6 @@
 import { ArrowLeft, Cloud, Server, Terminal, CheckCircle2, AlertTriangle, Info, ChevronDown, ChevronRight, Rocket } from 'lucide-react';
 import { useState } from 'react';
+import { MCP_TOOL_COUNT } from '@/lib/facts';
 
 /* ------------------------------------------------------------------ */
 /*  Reusable components                                                */
@@ -124,7 +125,7 @@ const services = [
   { name: 'bill-api', role: 'Bill invoicing & expenses API', type: 'API' },
   { name: 'helpdesk-api', role: 'Helpdesk portal API', type: 'API' },
   { name: 'worker', role: 'Background job processor (email, notifications, exports, webhook delivery)', type: 'API' },
-  { name: 'mcp-server', role: 'AI tool server (804 MCP tools)', type: 'API' },
+  { name: 'mcp-server', role: `AI tool server (${MCP_TOOL_COUNT} MCP tools)`, type: 'API' },
   { name: 'voice-agent', role: 'AI voice agent (LiveKit)', type: 'API' },
   { name: 'frontend', role: 'All SPAs (Bam, Banter, Beacon, Bearing, Bench, Bill, Blank, Blast, Board, Bolt, Bond, Book, Brief, Helpdesk)', type: 'Frontend' },
   { name: 'migrate', role: 'Database migration runner (runs on startup, then exits)', type: 'Utility' },
