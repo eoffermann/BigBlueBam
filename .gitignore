@@ -65,3 +65,7 @@ scripts/.gilligan-keys.env
 site/public/downloads/*
 !site/public/downloads/BigBlueBam-Manual.pdf
 !site/public/downloads/BigBlueBam-Manual.docx
+
+# Local scratch output and autonomous-cycle logs (never committed)
+/tmp/
+/.autonomous-logs/
