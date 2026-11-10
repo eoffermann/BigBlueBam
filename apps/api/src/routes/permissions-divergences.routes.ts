@@ -11,8 +11,12 @@ import { sql, desc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { permissionsDivergenceLog } from '../db/schema/index.js';
 import { requireAuth } from '../plugins/auth.js';
+import { requirePlatformSuperuser } from '../middleware/require-platform-superuser.js';
 
 export default async function permissionsDivergencesRoutes(fastify: FastifyInstance) {
+  // Every route in this file is SuperUser-only. requireCan alone does not
+  // block unless BBB_PERMISSIONS_ENFORCE=on, so enforce it here.
+  fastify.addHook('preHandler', requirePlatformSuperuser);
   // ─── GET /superuser/permissions/divergences/summary ─────────────
   // Returns one row per (permission_id, route_method, route_path) pair,
   // with counts of total observations and divergent observations. The
