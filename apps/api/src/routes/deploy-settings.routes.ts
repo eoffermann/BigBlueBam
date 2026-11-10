@@ -22,6 +22,7 @@ import {
   saveDeploySettings,
   type SaveDeploySettingsInput,
 } from '../services/deploy-settings.service.js';
+import { requirePlatformSuperuser } from '../middleware/require-platform-superuser.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // PUT body schema.
@@ -87,6 +88,9 @@ export function parseGitHubRepoUrl(
 // Routes
 // ─────────────────────────────────────────────────────────────────────
 export default async function deploySettingsRoutes(fastify: FastifyInstance) {
+  // Every route in this file is SuperUser-only. requireCan alone does not
+  // block unless BBB_PERMISSIONS_ENFORCE=on, so enforce it here.
+  fastify.addHook('preHandler', requirePlatformSuperuser);
   // ── GET /superuser/deploy/settings ────────────────────────────────
   fastify.get(
     '/superuser/deploy/settings',

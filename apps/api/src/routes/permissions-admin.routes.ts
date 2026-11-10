@@ -43,6 +43,7 @@ import {
 import { requireAuth } from '../plugins/auth.js';
 import { invalidatePermissionsForUser } from '../services/permissions.service.js';
 import { logSuperuserAction } from '../services/superuser-audit.service.js';
+import { requirePlatformSuperuser } from '../middleware/require-platform-superuser.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared helpers (F.1.b user-permissions section)
@@ -118,6 +119,9 @@ async function invalidateUser(fastify: FastifyInstance, userId: string) {
 }
 
 export default async function permissionsAdminRoutes(fastify: FastifyInstance) {
+  // Every route in this file is SuperUser-only. requireCan alone does not
+  // block unless BBB_PERMISSIONS_ENFORCE=on, so enforce it here.
+  fastify.addHook('preHandler', requirePlatformSuperuser);
   // ─── Catalog browse section ─────────────────────────────────────
   //
   // GET /superuser/permissions/catalog
