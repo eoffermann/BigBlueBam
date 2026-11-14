@@ -10,7 +10,7 @@
  *
  * Mount prefix: /internal/helpdesk
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -441,65 +441,149 @@ export default async function internalHelpdeskRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // ── GET /internal/helpdesk/queue ──────────────────────────────────────
-  // Session-authenticated proxy: the Bam frontend (helpdesk-agent-queue
-  // page) calls this to fetch the ticket queue from helpdesk-api.  Auth
-  // is the caller's Bam session cookie (requireAuth), NOT the service
-  // token. We forward the request to helpdesk-api with the shared
-  // INTERNAL_HELPDESK_SECRET so helpdesk-api trusts the call.
+  // ── Session-authenticated agent proxies ───────────────────────────────
+  // The Bam SPA (task drawer Helpdesk tab, /b3/helpdesk-queue page) reads
+  // and answers tickets through these routes. The browser never talks to
+  // helpdesk-api's agent surface directly: that surface requires either a
+  // per-agent X-Agent-Key or, for these proxies, the shared internal token
+  // plus the acting user and org that Bam has already authenticated.
+  // Bam is the authority on org membership (requireAuth resolves
+  // request.user.org_id to an org the caller belongs to); helpdesk-api
+  // still scopes every ticket to that org.
+  const ticketParamsSchema = z.object({ id: z.string().uuid() });
+  const agentReplySchema = z.object({
+    body: z.string().min(1).max(50_000),
+    is_internal: z.boolean().default(false),
+  });
+
   fastify.get(
     '/queue',
     { preHandler: [requireAuth] },
     async (request, reply) => {
-      try {
-        const url = new URL('/helpdesk/agents/queue', env.HELPDESK_API_INTERNAL_URL);
+      const qs = request.url.split('?')[1];
+      return proxyAgentRequest(request, reply, 'GET', '/helpdesk/agents/agents/queue', {
+        query: qs ? new URLSearchParams(qs) : undefined,
+      });
+    },
+  );
 
-        // Forward query-string filters from the frontend
-        const qs = request.url.split('?')[1];
-        if (qs) {
-          for (const [k, v] of new URLSearchParams(qs)) {
-            url.searchParams.set(k, v);
-          }
-        }
+  fastify.get(
+    '/tickets/:id',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const parsed = ticketParamsSchema.safeParse(request.params);
+      if (!parsed.success) return sendNotFound(request, reply);
+      return proxyAgentRequest(request, reply, 'GET', `/helpdesk/agents/tickets/${parsed.data.id}`);
+    },
+  );
 
-        const res = await fetch(url.toString(), {
-          method: 'GET',
-          headers: {
-            'x-internal-token': env.INTERNAL_HELPDESK_SECRET,
-            'Content-Type': 'application/json',
-          },
-          signal: AbortSignal.timeout(10000),
-        });
-
-        if (!res.ok) {
-          const errBody = await res.text().catch(() => '');
-          request.log.warn(
-            { status: res.status, body: errBody.slice(0, 300) },
-            'internal-helpdesk: queue proxy upstream error',
-          );
-          return reply.status(res.status).send({
-            error: {
-              code: 'UPSTREAM_ERROR',
-              message: `Helpdesk API returned HTTP ${res.status}`,
-              details: [],
-              request_id: request.id,
-            },
-          });
-        }
-
-        const body = await res.json();
-        return reply.send(body);
-      } catch (err) {
-        request.log.error({ err }, 'internal-helpdesk: queue proxy failed');
-        return reply.status(502).send({
+  fastify.post(
+    '/tickets/:id/messages',
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      const parsed = ticketParamsSchema.safeParse(request.params);
+      if (!parsed.success) return sendNotFound(request, reply);
+      const body = agentReplySchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({
           error: {
-            code: 'UPSTREAM_ERROR',
-            message: 'Failed to reach helpdesk API',
-            details: [],
+            code: 'VALIDATION_ERROR',
+            message: 'A non-empty message body is required',
+            details: body.error.issues.map((i) => ({ field: i.path.join('.'), issue: i.message })),
             request_id: request.id,
           },
         });
       }
+      // Only body + is_internal are forwarded. Authorship comes from the
+      // acting-user headers, never from the client.
+      return proxyAgentRequest(
+        request,
+        reply,
+        'POST',
+        `/helpdesk/agents/tickets/${parsed.data.id}/messages`,
+        { body: body.data },
+      );
     },
   );
+}
+
+function sendNotFound(request: FastifyRequest, reply: FastifyReply) {
+  return reply.status(404).send({
+    error: { code: 'NOT_FOUND', message: 'Ticket not found', details: [], request_id: request.id },
+  });
+}
+
+async function proxyAgentRequest(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  method: 'GET' | 'POST',
+  path: string,
+  opts: { query?: URLSearchParams; body?: unknown } = {},
+) {
+  const user = request.user;
+  if (!user) {
+    return reply.status(401).send({
+      error: { code: 'UNAUTHORIZED', message: 'Sign in required', details: [], request_id: request.id },
+    });
+  }
+  try {
+    const url = new URL(path, env.HELPDESK_API_INTERNAL_URL);
+    if (opts.query) {
+      for (const [k, v] of opts.query) url.searchParams.set(k, v);
+    }
+
+    const headers: Record<string, string> = {
+      'x-internal-token': env.INTERNAL_HELPDESK_SECRET,
+      'x-acting-user-id': user.id,
+      'x-acting-org-id': user.org_id,
+    };
+    if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+
+    const res = await fetch(url.toString(), {
+      method,
+      headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      signal: AbortSignal.timeout(10000),
+    });
+
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+
+    if (!res.ok) {
+      request.log.warn(
+        { status: res.status, path, body: text.slice(0, 300) },
+        'internal-helpdesk: agent proxy upstream error',
+      );
+      // Pass through helpdesk-api's own error envelope when it sent one so
+      // the UI can show a meaningful message (e.g. "Ticket not found").
+      if (json && typeof json === 'object' && 'error' in json) {
+        return reply.status(res.status).send(json);
+      }
+      return reply.status(res.status).send({
+        error: {
+          code: 'UPSTREAM_ERROR',
+          message: `Helpdesk API returned HTTP ${res.status}`,
+          details: [],
+          request_id: request.id,
+        },
+      });
+    }
+
+    return reply.status(res.status).send(json ?? {});
+  } catch (err) {
+    request.log.error({ err, path }, 'internal-helpdesk: agent proxy failed');
+    return reply.status(502).send({
+      error: {
+        code: 'UPSTREAM_ERROR',
+        message: 'Failed to reach helpdesk API',
+        details: [],
+        request_id: request.id,
+      },
+    });
+  }
 }
