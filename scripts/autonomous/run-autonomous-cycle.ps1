@@ -14,7 +14,7 @@
 #>
 
 $ErrorActionPreference = 'Stop'
-$RepoRoot   = 'H:\BigBlueBam'
+$RepoRoot   = 'V:\github\BigBlueBam-autonomous'   # dedicated worktree on suite-brainstorm
 $ClaudeExe  = 'C:\Users\eoffe\.local\bin\claude.exe'
 $LogDir     = Join-Path $RepoRoot '.autonomous-logs'
 $LockFile   = Join-Path $LogDir 'cycle.lock'

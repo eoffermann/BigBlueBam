@@ -9,7 +9,9 @@
 
   Logon type S4U: the task runs whether or not the user is interactively
   logged on, and needs NO stored password. The repo lives on a LOCAL disk
-  (H:, DriveType=3) so S4U's lack of network-share access is not a problem;
+  (V:, in its own worktree V:\github\BigBlueBam-autonomous on the
+  suite-brainstorm branch, so it never switches the shared main checkout)
+  so S4U's lack of network-share access is not a problem;
   outbound HTTPS (the Anthropic API) works fine under S4U.
 
   Schedule: fires once daily at 20:00 (8 PM local). Change $AnchorHour to move
@@ -23,7 +25,7 @@
 $ErrorActionPreference = 'Stop'
 
 $TaskName   = 'BigBlueBam Autonomous Cycle'
-$RepoRoot   = 'H:\BigBlueBam'
+$RepoRoot   = 'V:\github\BigBlueBam-autonomous'   # dedicated worktree on suite-brainstorm
 $Wrapper    = Join-Path $RepoRoot 'scripts\autonomous\run-autonomous-cycle.ps1'
 $AnchorHour = 20   # 8 PM local; fires once daily at this hour
 
