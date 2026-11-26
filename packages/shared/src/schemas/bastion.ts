@@ -466,3 +466,240 @@ export const BASTION_AUDITOR_ROOM_MAX_DAYS = 180;
 
 export const BastionExportStatus = z.enum(['queued', 'running', 'succeeded', 'failed', 'expired']);
 export type BastionExportStatus = z.infer<typeof BastionExportStatus>;
+
+/* ------------------------------------------------------------------ */
+/*  M3 route bodies: frameworks, controls, assertions, setup          */
+/* ------------------------------------------------------------------ */
+
+/** The built-in framework templates shipped in apps/bastion-api/src/library (spec 2.1). */
+export const BASTION_TEMPLATE_KEYS = ['soc2', 'iso27001'] as const;
+export const BastionTemplateKey = z.enum(BASTION_TEMPLATE_KEYS);
+export type BastionTemplateKey = z.infer<typeof BastionTemplateKey>;
+
+/**
+ * Which connected set a population probe's expected_population is drawn from. The
+ * deterministic compile proposes the connected set; a human confirms "This is the complete list".
+ */
+export const BastionPopulationKind = z.enum(['github_repos', 'blip_apps']);
+export type BastionPopulationKind = z.infer<typeof BastionPopulationKind>;
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2027-03-31');
+
+/** POST /frameworks: adopt a built-in framework. */
+export const bastionAdoptFrameworkSchema = z
+  .object({
+    template_key: BastionTemplateKey,
+    audit_target_date: isoDate.nullable().optional(),
+    period_start: isoDate.nullable().optional(),
+    period_end: isoDate.nullable().optional(),
+  })
+  .strict();
+export type BastionAdoptFramework = z.infer<typeof bastionAdoptFrameworkSchema>;
+
+/** PATCH /frameworks/:id. */
+export const bastionFrameworkUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(256).optional(),
+    audit_target_date: isoDate.nullable().optional(),
+    period_start: isoDate.nullable().optional(),
+    period_end: isoDate.nullable().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type BastionFrameworkUpdate = z.infer<typeof bastionFrameworkUpdateSchema>;
+
+/** POST /frameworks/:id/archive. Destructive (retires single-framework controls): needs confirm. */
+export const bastionArchiveFrameworkSchema = z.object({ confirm: z.literal(true) }).strict();
+export type BastionArchiveFramework = z.infer<typeof bastionArchiveFrameworkSchema>;
+
+/** POST /frameworks/:id/compile. M3 runs the deterministic compile only (spec 2.1 step 5). */
+export const bastionCompileFrameworkSchema = z.object({}).strict();
+export type BastionCompileFramework = z.infer<typeof bastionCompileFrameworkSchema>;
+
+/** PATCH /control-requirements/:id (one link's Statement of Applicability decision). */
+export const bastionRequirementApplicabilitySchema = z
+  .object({
+    applicability: BastionRequirementApplicability,
+    not_applicable_reason: z.string().trim().max(2000).nullable().optional(),
+  })
+  .strict()
+  .refine((b) => b.applicability === 'applicable' || (b.not_applicable_reason ?? '').trim().length > 0, {
+    message: 'Say why this does not apply',
+    path: ['not_applicable_reason'],
+  });
+export type BastionRequirementApplicabilityUpdate =z.infer<typeof bastionRequirementApplicabilitySchema>;
+
+/** POST /frameworks/:id/applicability: decide several requirements (every link of each ref code). */
+export const bastionBulkApplicabilitySchema = z
+  .object({
+    decisions: z
+      .array(
+        z
+          .object({
+            ref_code: z.string().trim().min(1).max(64),
+            applicability: BastionRequirementApplicability,
+            not_applicable_reason: z.string().trim().max(2000).nullable().optional(),
+          })
+          .strict()
+          .refine(
+            (d) => d.applicability === 'applicable' || (d.not_applicable_reason ?? '').trim().length > 0,
+            { message: 'Say why this does not apply', path: ['not_applicable_reason'] },
+          ),
+      )
+      .min(1)
+      .max(500),
+  })
+  .strict();
+export type BastionBulkApplicability = z.infer<typeof bastionBulkApplicabilitySchema>;
+
+const controlSlug = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_.-]{1,62}$/, 'Use lower-case letters, digits, dots, dashes or underscores');
+
+/** POST /controls: an org-authored custom control (`control_key = custom:<slug>`). */
+export const bastionControlCreateSchema = z
+  .object({
+    slug: controlSlug,
+    title: z.string().trim().min(1).max(512),
+    plain_summary: z.string().trim().max(4000).nullable().optional(),
+    category: z.string().trim().max(64).nullable().optional(),
+    risk_weight: z.number().int().min(1).max(5).optional(),
+    owner_user_id: z.string().uuid().nullable().optional(),
+    requirement_links: z
+      .array(z.object({ framework_id: z.string().uuid(), ref_code: z.string().trim().min(1).max(64) }).strict())
+      .max(50)
+      .optional(),
+  })
+  .strict();
+export type BastionControlCreate = z.infer<typeof bastionControlCreateSchema>;
+
+/** PATCH /controls/:id. */
+export const bastionControlUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(512).optional(),
+    plain_summary: z.string().trim().max(4000).nullable().optional(),
+    category: z.string().trim().max(64).nullable().optional(),
+    risk_weight: z.number().int().min(1).max(5).optional(),
+    owner_user_id: z.string().uuid().nullable().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type BastionControlUpdate = z.infer<typeof bastionControlUpdateSchema>;
+
+/** What a manual assertion asks a person to provide (bastion_assertions.manual_evidence_spec). */
+export const bastionManualEvidenceSpecSchema = z
+  .object({
+    title: z.string().trim().min(1).max(256),
+    description: z.string().trim().max(2000),
+    kind: BastionManualEvidenceKind,
+    /** How often fresh evidence is needed, in days. */
+    cadence_days: z.number().int().min(1).max(1095),
+  })
+  .strict();
+export type BastionManualEvidenceSpec = z.infer<typeof bastionManualEvidenceSpecSchema>;
+
+/**
+ * Probe parameters at the API boundary. The probe's own schema (apps/bastion-api/src/library/
+ * probe-catalog.ts) validates the keys server-side; unknown probe keys or out-of-range values are
+ * refused (spec 2.1 step 3).
+ */
+export const bastionProbeParamsSchema = z.record(z.unknown());
+
+const plainStatement = z.string().trim().min(1).max(2000);
+
+/** POST /controls/:id/assertions. */
+export const bastionAssertionProposeSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('probe'),
+      probe_key: BastionProbeKey,
+      params: bastionProbeParamsSchema.optional(),
+      plain_statement: plainStatement,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('manual'),
+      manual_evidence_spec: bastionManualEvidenceSpecSchema,
+      plain_statement: plainStatement,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('feed'),
+      feed_id: z.string().uuid(),
+      plain_statement: plainStatement,
+    })
+    .strict(),
+]);
+export type BastionAssertionPropose = z.infer<typeof bastionAssertionProposeSchema>;
+
+/**
+ * POST /assertions/:id/revise: files a superseding proposed assertion. Only the fields given
+ * change; the kind and the probe stay. `expected_population` replaces the population (adding a
+ * repository that was missing from the connected set, spec 2.1 step 5).
+ */
+export const bastionAssertionReviseSchema = z
+  .object({
+    plain_statement: plainStatement.optional(),
+    params: bastionProbeParamsSchema.optional(),
+    expected_population: z.array(z.string().trim().min(1).max(256)).max(500).optional(),
+    manual_evidence_spec: bastionManualEvidenceSpecSchema.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type BastionAssertionRevise = z.infer<typeof bastionAssertionReviseSchema>;
+
+/**
+ * POST /assertions/:id/confirm. A population assertion needs `population_confirmed: true`, the
+ * "This is the complete list" confirmation (stored as population_confirmed_at/by in the params).
+ */
+export const bastionAssertionConfirmSchema = z
+  .object({ population_confirmed: z.boolean().optional() })
+  .strict();
+export type BastionAssertionConfirm = z.infer<typeof bastionAssertionConfirmSchema>;
+
+/** POST /assertions/:id/reject. */
+export const bastionAssertionRejectSchema = z
+  .object({ reason: z.string().trim().max(2000).optional() })
+  .strict();
+export type BastionAssertionReject = z.infer<typeof bastionAssertionRejectSchema>;
+
+/** The ten plain company-profile questions of the setup interview (spec 2.1 step 1). */
+export const bastionCompanyProfileSchema = z
+  .object({
+    company_size: z.enum(['1-10', '11-50', '51-200', '201+']).optional(),
+    work_style: z.enum(['office', 'remote', 'mixed']).optional(),
+    has_own_premises: z.boolean().optional(),
+    builds_software: z.boolean().optional(),
+    uses_github: z.boolean().optional(),
+    stores_customer_personal_data: z.boolean().optional(),
+    takes_card_payments: z.boolean().optional(),
+    uses_cloud_hosting: z.boolean().optional(),
+    has_contractors: z.boolean().optional(),
+    issues_company_laptops: z.boolean().optional(),
+  })
+  .strict();
+export type BastionCompanyProfile = z.infer<typeof bastionCompanyProfileSchema>;
+export const BASTION_COMPANY_PROFILE_QUESTION_COUNT = 10;
+
+/** POST /setup/compliance-project: the required Compliance project (spec 2.5). */
+export const bastionSetupComplianceProjectSchema = z
+  .object({ project_id: z.string().uuid() })
+  .strict();
+export type BastionSetupComplianceProject = z.infer<typeof bastionSetupComplianceProjectSchema>;
+
+/** List filters shared by GET /controls and the bastion_list_controls tool. */
+export const bastionControlListQuerySchema = z
+  .object({
+    framework_id: z.string().uuid().optional(),
+    lifecycle: BastionControlLifecycle.optional(),
+    setup: z.enum(['set_up', 'not_set_up', 'not_applicable']).optional(),
+    q: z.string().trim().max(200).optional(),
+  })
+  .strict();
+export type BastionControlListQuery = z.infer<typeof bastionControlListQuerySchema>;
+
+/** Whether a control has a confirmed way to be checked (spec 2.3 "Not set up yet"). */
+export const BastionSetupState = z.enum(['set_up', 'not_set_up', 'not_applicable']);
+export type BastionSetupState = z.infer<typeof BastionSetupState>;
