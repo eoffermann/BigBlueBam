@@ -475,7 +475,522 @@ The name "Bastion" was used by four seats for three different apps, and "Baton" 
 
 ## Phase 2 - Debate
 
-_(pending)_
+One debate round. Each seat read all seven Phase 1 blocks from this document (rather than having them relayed seven times) along with the orchestrator note on clustering, then took align/oppose/ignore stances and revised its five. Replies below are verbatim.
+
+### Seat A - debate reply
+
+### Bevy (agent-run people ops and employee request desk, for a mixed human and agent workforce)
+- **Names:** Bevy · Bellhop · Roster
+- **One-line pitch:** You get an HR and ops department without hiring one. Employees ask in plain language for time off, a role change, access, equipment or a policy answer, and an agent decides and carries out the request within policy, with a manager approving only the exceptions.
+- **Description:** Bevy is the suite's missing people system of record: person and agent records, org chart, managers, roles, employment status, leave balances. On top of it sits a request desk where every request type is a catalog item with a policy and an MCP action plan. The agent reads the policy from Beacon, checks coverage in Bam and Book, applies the approval chain, then carries the request out through the MCP catalog: it books leave, adds the person to a project, rotates a key, or opens a checklist task for a physical step. Exceptions go through agent_proposals. AI agents (`users.kind = agent`) are on the same roster with a human owner, a scope linked to agent_policies, a review date and a cost, so the question "who works here" includes the bots.
+- **Scope (in):** person and agent records and org chart; status and role changes, which emit Bolt `person.*` events that the joiner/mover/leaver app consumes; time off with coverage-aware auto-approval; a request catalog with per-item policy, auto-approve rules and MCP execution under agent_policies; cited policy Q&A; acknowledgements; agent owner and review records; a "requests we could not resolve" gap report.
+- **Scope (out):** payroll, benefits, recruiting, performance reviews, the cross-app ownership handover itself (Baton/Berth), external customer support (Helpdesk).
+- **Why build it:** Under 50 people, HR and IT are the founder's inbox. BambooHR and Gusto are form-and-approval CRUD apps. Freshservice and JSM are queues where a human still does the work. Bevy resolves the request itself, because each resolution is an MCP call it is already allowed to make. Axes: **staffing** (no HR/IT headcount), **speed** (seconds, not days), and **first-mover on governing agents as workforce members**.
+- **Reuses:** users / users.kind, agent_runners, agent_policies, MCP catalog and internal /tools/call, agent_proposals, Beacon, Book, Bam, Banter (intake), Blank (catalog forms), Bolt, permissions, can_access.
+- **Lens fit:** an autonomous agent decides and executes the request; humans handle exceptions only.
+- **Closest existing app:** Bam /b3/people. That screen is account and membership CRUD. Bevy is the HR system of record plus an agent that executes employee requests, and Helpdesk serves external customers only.
+
+### Baton / Berth (joiner / mover / leaver autopilot, merged-ready)
+- **Names:** Baton · Berth · Bridle
+- **One-line pitch:** When someone joins, changes role or leaves, an agent works out everything they own or can reach across all apps, runs the handoff, and proves nothing was orphaned and no access remains.
+- **Description:** A lifecycle event, from Bevy or entered manually, is compiled into a typed, reversible plan. The plan covers grants and revocations (memberships, API keys, guest links, agent_policies) and successor assignment for every owned object (deals, tasks, tickets, Bolt rules, Book pages, Bulwark obligations), with successors chosen by expertise_for_topic and current load. The agent executes the plan through MCP, with destructive steps routed through agent_proposals. It then re-scans and issues an access-zero / orphan-zero certificate checked against @bigbluebam/permissions. For joiners and movers, the role template is learned from what peers in the same role actually hold.
+- **Scope (in):** cross-app footprint scanner; plan compiler with a dry-run diff; peer-learned role templates; successor proposals; HITL execution through MCP; a residue re-scan and a dated certificate (which the GRC app ingests as evidence); a bus-factor view of sole-owned assets; a cited handover dossier.
+- **Scope (out):** HRIS records (Bevy); payroll; MDM; external SaaS connectors in v1 (those become tracked manual steps).
+- **Why build it:** Rippling and Okta Workflows stop at account creation and cannot see a departing rep's Bolt rules or Bay guest links. Axis: **completeness and provability**.
+- **Reuses:** permissions, api_keys, entity_links, v_activity_unified, expertise_for_topic, MCP catalog, agent_proposals, Bolt, Beacon (dossier).
+- **Lens fit:** one intent becomes a verified autonomous multi-app run.
+- **Closest existing app:** Bolt. Bolt runs rules a human authors. This app generates a per-person plan and verifies the end state.
+
+### Bastion (continuous controls agent; I back the merged GRC entry)
+- **Names:** Bastion · Binder · Attest
+- **One-line pitch:** SOC 2 / ISO 27001 where agents re-test every control against what actually happened in the suite and tell you which controls nothing can currently prove.
+- **Description:** This is the merged form of B, D, E, F and my own version. The framework is compiled into typed control assertions, each bound to queries over the suite's own data. Assertions are re-tested on a schedule, with evidence frozen and hashed in Bin. A "no data" list names the controls nothing can prove. Drift produces remediation proposals. Security questionnaires are auto-answered from cited evidence, and auditors get a token-gated evidence room.
+- **Scope (in):** framework-to-assertion compiler; scheduled tests; immutable evidence; unprovable-control list; drift into Bam tasks; questionnaire autofill; auditor room; ingestion of the Baton certificate and the Bevy access-review / acknowledgement records.
+- **Scope (out):** contract obligations (Bulwark), vendor risk, pentesting, attestation issuance.
+- **Why build it:** Vanta and Drata cost $10-40k a year and depend on connectors. Here the evidence is native. Axis: **cost and integration depth**.
+- **Reuses:** v_activity_unified, permissions, api_keys, agent_audit, Blip, Beacon, Bin, Bam, Bolt, agent_proposals.
+- **Lens fit:** the audit becomes a continuous agent-run test suite.
+- **Closest existing app:** Bulwark. Bulwark covers obligations to counterparties, while Bastion covers internal controls proven to an auditor.
+
+### Brevet (enablement aimed at measured friction, retrained on source change)
+- **Names:** Brevet · Bloom · Primer
+- **One-line pitch:** Training that writes itself from your own docs, goes only to the people whose work shows a gap, and retrains only the affected people when a policy changes.
+- **Description:** Two triggers start a lesson. The first is friction signals (repeat Banter questions, reopened tickets, Bay rejections, low-confidence Beacon searches), clustered into skill gaps. The second is material source changes (beacon_versions diffs). The agent compiles cited micro-lessons and scenario checks with an LLM grader, assigns them to exactly the affected people, and certifies a skill only when the person's friction signal drops.
+- **Scope (in):** gap clustering; cited lesson generation; delta recertification; role paths seeded from Bevy roles; outcome-based certification; completion and attestation records exported to Bastion.
+- **Scope (out):** SCORM marketplace, video authoring, external certifications, performance management.
+- **Why build it:** In TalentLMS or Trainual, content goes stale and nobody authors it. Axis: **zero authoring cost and proven impact**.
+- **Reuses:** Beacon/Brief + Qdrant, Helpdesk, Banter, phrase-count tools, expertise_for_topic, Blank, Bolt, Bench.
+- **Lens fit:** a closed detect, teach, verify loop that runs without an L&D staff.
+- **Closest existing app:** Beacon. Beacon stores knowledge, while Brevet proves who knows it.
+
+### Beckon (agent-run recruiting pipeline; replaces my Bullhorn)
+- **Names:** Beckon · Bounty · Scout
+- **One-line pitch:** Open a role and an agent writes the job post from what the job actually involves, screens applicants against a cited rubric, books the interview loop and drafts the decision packet. A human makes every hire/no-hire call.
+- **Description:** This is the only ATS on the board. The requisition is grounded in the work graph: what the predecessor and peers actually do in Bam, Bond and Helpdesk becomes the job description and a structured, job-related rubric. Applications arrive through a Blank-backed careers page. The agent scores each one against the rubric with cited evidence, never on demographics. It schedules panels via `book_find_meeting_time_for_users`, collects structured scorecards, and flags inconsistent or biased scorecard language. On offer accept it creates the Bevy record and fires the joiner event.
+- **Scope (in):** requisitions with work-grounded JD and rubric; careers page and intake; cited rubric screening with mandatory human disposition; interview-loop scheduling; scorecards and calibration; adverse-impact monitoring report (NYC LL144 / EU AI Act aware); candidate comms drafted and sent via the worker; hire handoff to Bevy and Baton.
+- **Scope (out):** sourcing and job-board scraping, background checks, offer e-signature, automated rejection without human review.
+- **Why build it:** Greenhouse and Lever are priced and built for recruiting teams. A 15-person firm hires from a spreadsheet and an inbox, and loses candidates to slow scheduling. Axes: **speed to hire** and **structured, auditable fairness** at SMB cost. It is also whitespace that no other seat proposed.
+- **Reuses:** Blank, Book, Bond-style contact model, Braid (dedupe candidates), Bin (resumes), v_activity_unified, agent_proposals, Bolt (`candidate.*`), permissions (hiring-team ACL).
+- **Lens fit:** the agent runs the pipeline end to end, and the human keeps the decision.
+- **Closest existing app:** Bond. Bond manages sales prospects. Beckon manages candidates under employment-law constraints, with interview loops and scorecards. It is a different object and a different legal regime.
+
+**Debate notes (Seat A)**
+
+**Align:**
+- **D Baton, B Baton, C Baton, E Bastion-JML.** I fold my Berth into D's Baton, the HR-lens framing with the widest footprint list. I contribute the plan compiler with dry-run diff, the access-zero certificate, and B's bus-factor dossier. One joiner/mover/leaver entry should reach the final, not five.
+- **B Baseline, D Bastion, E Binder, F Bastion.** I back a single merged GRC entry. B's "unprovable controls" list and D's questionnaire autofill are the strongest parts, and my own Bastion adds nothing beyond them. I concede authorship to whoever submits it.
+- **D Bloom + B Boost + F Bootcamp.** The strongest learning app combines friction-triggered gaps (Boost/Brevet) with delta recertification on source change (Bloom). That is what my revised Brevet now is.
+- **E Butler.** Butler is the request-execution half of Bevy. The merge is a people-and-workplace request desk that also holds the employee and agent record, which is stronger than either half alone. I invite E to merge.
+- **G Bugle.** I withdraw my Bullhorn in favor of G, whose marketing lens makes G the natural owner. Fold C's Bullhorn (press and crisis) into G's Byline.
+
+**Oppose:**
+- **B Badge, F Badge, E Bastion-access as a standalone app.** Access review is the leaver step of the joiner/mover/leaver app plus one evidence feed of the GRC app. A third app would be a near-duplicate of whichever of those two wins.
+- **E Bosun.** This is product onboarding for the suite itself, not a horizontal capability a customer buys. It belongs in the platform as a feature.
+- **F Bespoke.** An internal-tools builder overlaps Bolt and Blank and is not an essential department function. It is a Retool alternative with no named whitespace.
+- **C Buddy.** Splits between Baton (provisioning) and Brevet/Bloom (ramp curriculum), leaving no distinct core.
+
+**Ignore:** Bellwether/Barometer (they should merge with each other), Brace, Bravo, Brick, Backdrop, Blazon, Billboard, Byline, Bulletin, Bugle-internal.
+
+**Strategy:** Three of the five clusters (GRC, joiner/mover/leaver, learning) will each collapse to one finalist, and my versions there add little beyond D's and B's. So I concede authorship in those clusters and put my weight on two uncontested apps in the essentials list. **Bevy** is the only HR-core proposal, the first essential on the census, and is agent-executed by construction, which matters more if it absorbs Butler. **Beckon** takes recruiting/ATS, which no other seat claimed. I will submit Bevy, framed as the system of record that every lifecycle app (Baton, Bastion, Brevet, Beckon) feeds on, so it reaches the final as infrastructure the other winners need rather than as a rival to them.
+
+### Seat B - debate reply
+
+### Baseline
+- **Names:** Baseline · Attest · Bastion
+- **One-line pitch:** Every night your SOC 2 / ISO 27001 controls are checked against what actually happened in the suite. The audit binder writes itself, and the controls nothing can prove are listed first.
+- **Description:** An LLM compiles a framework (SOC 2, ISO 27001, or a custom policy set) into typed, testable control assertions. A human confirms each one. Each assertion is bound to an evidence query over data the suite already holds: `v_activity_unified`, permission grants, API-key age, `agent_policies`, Blip retention, Bolt executions, and Beacon policy acknowledgements. A nightly evaluator freezes cited evidence snapshots (hashed Bin objects, each recording the query that produced it) and labels every control pass, fail, or **unprovable**. The data-lens core is the **evidence coverage graph**: which controls have native proof, which rely on manual uploads, and which have nothing. It ranks gaps by audit risk and drafts the cheapest fix for each into `agent_proposals`, whether that is a Bolt rule, a policy draft, or an owner request. The same evidence graph autofills inbound security questionnaires, citing evidence for every answer.
+- **Scope (in):** framework-to-assertion compiler; control library with owners; nightly evaluator with immutable cited snapshots; evidence coverage graph + gap ranking; drift alerts as Bolt `control.drifted`; Beacon policy attestation; security-questionnaire autofill with citations; token-gated auditor room + export packet; MCP `baseline_control_status`, `baseline_evidence_for`, `baseline_coverage_gaps`.
+- **Scope (out):** customer/vendor contract obligations (Bulwark); vendor-risk questionnaires sent outward (Bursar territory); acting as a certification body; pentest, CSPM, or endpoint scanning (uploaded evidence only); access reviews themselves (consumes Badge output as evidence).
+- **Why build it:** The axis is **cost + evidence trust**. Vanta and Drata cost $10-40k/yr, need connectors, and mostly collect screenshots. Here the evidence source is the system of record itself, each snapshot cites its query, and the "unprovable" list tells a 15-person firm exactly what to fix before its first enterprise security review.
+- **Reuses:** shared DB + RLS, `v_activity_unified`, `agent_audit`, @bigbluebam/permissions, `api_keys`, `agent_policies`, Bin/@bigbluebam/storage, Beacon, Bam (remediation tasks), Bolt, `agent_proposals`, Bay-style token links, MCP.
+- **Closest existing app:** Bulwark. Bulwark tracks clauses owed to outside counterparties. Baseline proves internal controls to an auditor, so the object, buyer, and evidence source are all different.
+- **Lens fit:** Compliance becomes a continuously evaluated query, with a measured coverage map over the suite's operational data.
+
+### Badge
+- **Names:** Badge · Keyring · Bouncer
+- **One-line pitch:** One graph of everything each person (or agent) can reach and owns. It runs joiners, movers, and leavers end to end and turns quarterly access reviews into a pre-decided ten-minute sign-off.
+- **Description:** This merges my Badge and Baton. Badge keeps a person-to-entitlement-and-ownership graph that covers both what someone can access and what work they own:
+  - **What they can access:** suite grants via @bigbluebam/permissions, project/channel memberships, API keys, service accounts, `oauth_user_links`, and imported SaaS seat lists.
+  - **What they own:** tasks, deals, tickets, Bolt rules, Book pages, Bay guest links, Beacon verifier roles, and Bulwark obligations, via `entity_links` and `v_activity_unified`.
+
+  The data-lens mechanisms are:
+  1. **Peer-group baselines** inferred from what people in the same role actually hold and use. These drive joiner/mover deltas and flag grants that are anomalous for the role.
+  2. **Usage-versus-grant scoring.** Reviews arrive pre-decided ("revoke: 0 uses in 94 days, no peer holds it"), so managers confirm in bulk.
+  3. **Bus-factor scoring.** Sole-owned assets surface before anyone leaves.
+
+  On a leaver event, Badge drafts a reassignment plan with successors chosen by expertise and current load, plus a revocation plan, into `agent_proposals`. It runs a short knowledge-capture interview on the gaps the records do not cover, then re-scans and issues an access-zero residue report. AI agents (`users.kind = agent`) are reviewed on the same graph.
+- **Scope (in):** access + ownership graph; peer-baseline role templates; JML plans executed through the MCP catalog with HITL; orphan and residue sweeps; bus-factor heatmap; access-review campaigns with an immutable record; stale-key and dormant-seat report with SaaS seat-cost waste; Bolt `person.left`, `access.anomaly`; MCP `badge_footprint`, `badge_review_queue`, `badge_explain_grant`.
+- **Scope (out):** IdP/SSO; SCIM write-connectors in v1 (external revocations are confirm-tracked tasks); MDM/devices; HRIS record of truth, payroll, benefits; onboarding curricula (the learning app).
+- **Why build it:** The axis is **completeness + cost**. Okta IGA, ConductorOne, and Rippling are enterprise-priced and cannot see a departing rep's Bolt automations, open Bay guest links, or sole-owned customer relationships. Badge can, because the suite is the system of record. Reclaimed seat spend pays for it.
+- **Reuses:** permissions resolver + Redis PermissionContext, `api_keys`, `oauth_user_links`, `agent_policies`, `entity_links`, `v_activity_unified`, `activity_by_actor`, `expertise_for_topic`, Braid (external contacts owned), Bin (CSV import), Bolt, `agent_proposals`, MCP as executor.
+- **Closest existing app:** Bam `/b3/people`, which is account and membership CRUD. Badge is cross-app access governance plus ownership transfer, the IT/identity category the suite lacks.
+- **Lens fit:** Least-privilege and handover decisions are inferred from usage, peer baselines, and ownership concentration, not from someone's memory.
+
+### Bellwether
+- **Names:** Bellwether · Barometer · Pulse
+- **One-line pitch:** Bellwether catches team-level overload and disengagement weeks early from how work is flowing, and sends people a 3-question check-in only when the signal says to ask.
+- **Description:** This is engagement intelligence with privacy built in. It reports team-level aggregates only, the server enforces a k-anonymity floor of 5, and no per-person score exists anywhere. A change-point model watches transparent leading indicators: after-hours share, carry-forward streaks, WIP per head, Book meeting load, Helpdesk backlog per agent, and response-latency drift. When a team's pattern shifts, an adaptive conversational check-in (C's Barometer mechanism) asks that team only the 2-3 questions the signal cannot answer. Free text is themed, and the manager gets a "you said, we did" action brief through HITL. Bellwether then measures whether the signal recovered after the action.
+- **Scope (in):** published signal catalog with formulas; team change-point detection; adaptive check-ins via Banter/Blank; anonymous theming; manager action briefs into Bam via `agent_proposals`; did-it-work follow-through; employee-visible "what we measure" page; MCP `bellwether_team_signals`.
+- **Scope (out):** individual scoring or surveillance (structurally impossible); message content (metadata only); performance reviews; compensation; generic survey builder (Blank).
+- **Why build it:** The axis is **signal latency + survey fatigue**. Culture Amp and Lattice charge per seat for quarterly self-report that lags reality by months. Bellwether reads the leading signal already in the system and spends survey questions only where they buy information.
+- **Reuses:** `activity_log`, Bam sprints/carry-forward, Book, Helpdesk, Banter (delivery + metadata), Blank, Bolt, `agent_proposals`, permissions (manager vs HR scopes), RLS.
+- **Closest existing app:** Blank or Bench. Blank builds forms and Bench charts metrics. Bellwether is a listening system with its own questioning agent, an anonymity guarantee, and intervention tracking.
+- **Lens fit:** Engagement becomes privacy-bounded inference over work exhaust, and survey questions are spent only where the data cannot answer.
+
+### Boost
+- **Names:** Boost · Bootcamp · Primer
+- **One-line pitch:** Training that targets the skill gaps your work data reveals, writes itself from your own docs, retrains only the people affected when a policy changes, and proves it worked.
+- **Description:** This combines A Brevet, D Bloom, and F Bootcamp around one discriminator: **outcome-measured learning**. Gap detection mines failure signals: escalated or reopened tickets by topic, review bounce-backs, repeat "how do I" threads, and low-confidence Beacon searches. It clusters them into a per-team skill-gap map. Micro-modules are generated only from citable Beacon/Brief sources. When a source changes (`beacon_versions`), a materiality diff triggers recertification of just the delta for just the affected roles. New-hire ramp plans are the same engine pointed at a role. Effectiveness is a before/after comparison of the triggering failure rate for completers versus non-completers, so a lesson that does not move the outcome is flagged for rewrite.
+- **Scope (in):** friction-gap clustering; cited lesson + scenario-check generation; delta recertification on source change; role ramp plans with `expertise_for_topic` buddies; outcome-based effectiveness; required-training/attestation records (exported as Baseline evidence); nudges via Banter; MCP `boost_gaps`, `boost_assign`, `boost_effect`.
+- **Scope (out):** SCORM marketplace, video authoring, external certifications, performance management, HR records.
+- **Why build it:** The axis is **zero authoring cost + proof of impact**. TalentLMS and Trainual sit empty because nobody writes content, and they measure completion, not behavior. Boost writes content from what exists and shows whether it changed the work.
+- **Reuses:** Helpdesk + `helpdesk_find_similar_tickets`, `*_count_by_phrase`, Beacon/Brief + Qdrant, `beacon_versions`, Banter, Blank, Bolt, `can_access`, `agent_proposals`.
+- **Closest existing app:** Beacon. Beacon stores what is true. Boost decides who needs it, teaches it, and measures whether behavior changed.
+- **Lens fit:** Learning is aimed by operational data and judged by operational data.
+
+### Billet (new, replaces solo Baton, which folded into Badge)
+- **Names:** Billet · Beckon · Bullpen
+- **One-line pitch:** Billet is hiring where the role profile is derived from what successful people in that role actually do, every candidate is scored on structured evidence, and an adverse-impact monitor runs on every stage.
+- **Description:** Billet is an AI-native recruiting system (ATS). It derives a job's competency profile from the work graph of current incumbents (what they own, which skills `expertise_for_topic` attributes to them, and what their first 90 days contained), not from a recycled job description. It generates the posting and a structured interview kit tied to that profile. It summarizes each interviewer's notes into rubric-anchored evidence and flags ungrounded ratings ("culture fit" with no cited behavior). The data-lens core is a **continuous adverse-impact monitor**: selection-rate ratios per stage (the four-fifths rule) and rubric-drift detection between interviewers. This produces the bias-audit artifact that NYC LL144-style rules now require of automated hiring tools. AI never auto-rejects. Every advance or decline goes through human decision, logged.
+- **Scope (in):** requisitions with work-graph-derived profiles; posting generation + careers page; applicant intake (Blank); structured kits + scorecards; interview scheduling via Book; evidence-anchored debrief summaries; adverse-impact and interviewer-calibration dashboard; offer approval via `agent_proposals`; hand-off to Badge `person.joined` on hire; MCP `billet_pipeline`, `billet_debrief`.
+- **Scope (out):** sourcing and scraping of candidates, job-board programmatic ad buying, background checks, e-signature of offers (export), payroll/HRIS.
+- **Why build it:** The axis is **hire quality + legal defensibility at SMB price**. Greenhouse and Ashby are $6-25k/yr and their AI features add bias risk without an audit. Small firms hire from inboxes with unstructured interviews. Billet is the only option whose role profile comes from real work data and that produces its own fairness audit.
+- **Reuses:** Blank (application forms), Book (`book_find_meeting_time_for_users`), Bond-style contact model via Braid (dedupe candidates), `expertise_for_topic`, `v_activity_unified`, Bin (resumes), Bolt (`candidate.stage_changed`, `hire.made`), `agent_proposals`, permissions (hiring-team scoping), RLS.
+- **Closest existing app:** Bond. Bond is a sales pipeline of customers. Billet is a hiring pipeline with structured evaluation, fairness auditing, and candidate-privacy rules a CRM lacks, which puts it in the recruiting/ATS whitespace no seat has covered.
+- **Lens fit:** Hiring decisions are grounded in incumbent work data and continuously audited for statistical fairness.
+
+**Debate notes (Seat B)**
+
+- **Align: A Bastion, D Bastion, E Binder, F Bastion with my Baseline.** It is one app in five framings. The merged version should keep my evidence-coverage graph with "unprovable" ranking, D's questionnaire autofill, F's GitHub-integration evidence, and A/E's token-gated auditor room.
+- **Align: E Bastion-IAM, F Badge with my Badge.** One access-governance app. My Badge now absorbs JML ownership transfer, so it also aligns with **A Berth, C Baton, D Baton**. Access and ownership are one graph about the same person, so merging the two clusters frees a slate seat instead of spending two.
+- **Align: C Barometer with my Bellwether.** C's adaptive conversational check-in plus my passive change-point trigger is stronger than either: ask only when the data shifts, and ask only what the data cannot answer.
+- **Align: A Brevet, D Bloom, F Bootcamp with my Boost.** Combined: Brevet's friction gaps, Bloom's delta recertification, Bootcamp's ramp plans, and my outcome-effect measurement as the discriminator. **C Buddy** belongs inside this, not as a separate app.
+- **Align: D Brace.** This is the only health-and-safety/ER proposal, it is horizontal, and the statutory clocks plus cross-case pattern detection are genuinely AI-native.
+- **Align: E Brick.** It is the strongest office-productivity entry. Live permission-scoped suite cells are a wedge no sheet vendor has.
+- **Align: G Backdrop.** Same office-productivity reasoning: data-bound decks are a real trust axis.
+- **Oppose: A Bevy.** Time-off, org chart, and a policy Q&A chatbot is BambooHR plus chat. The agent-workforce roster is the only novel piece, and it belongs inside Badge (agents reviewed on the same graph).
+- **Oppose: E Butler.** An internal request queue is Helpdesk pointed inward, and its access requests duplicate the Badge/JML cluster.
+- **Oppose: E Bosun.** This is platform administration, not a customer business function; it should be a feature of the platform, not an app.
+- **Oppose: F Bespoke.** It overlaps Bolt + Blank + Brick, and "internal tools builder" is not a horizontal essential.
+- **Oppose: F Bulletin.** Release notes only serve software companies, which makes it a near-vertical; its customer-notice half is Blast.
+- **Oppose: G Byline.** PR desks are a lower-frequency need than social; fold the crisis-statement trigger into the winning social app.
+- **Oppose: D Bravo.** It sits closest to "productivity surveillance". A cited per-person work ledger at review time will fail trust with SMB staff, and Lattice already owns the category.
+- **Align: G Bugle, A/C Bullhorn.** One social app; G's reply-routing into Helpdesk/Bond is the best version.
+- **Align: G Blazon.** Brand governance is a credible standalone essential and the gate every agent passes.
+- **Ignore: C Bugle (announcements), G Billboard.**
+
+**Strategy:** Every one of my Phase 1 ideas landed in a crowded cluster, so I am playing two ways at once. (1) **Win the merges.** I bring a distinct data-lens discriminator into each cluster: Baseline's evidence coverage graph with "unprovable" ranking; Badge's merged access + ownership graph with peer baselines and bus-factor; Boost's outcome-measured effectiveness; Bellwether's signal-triggered listening. These are concrete pieces the merged spec cannot drop, which makes me a necessary co-owner. (2) **Add an unclaimed singleton.** I folded Baton into Badge to collapse two clusters into one slot, and used the freed seat for Billet. Recruiting/ATS is listed whitespace that no seat proposed, and its adverse-impact monitor is a data-lens mechanism with a regulatory wedge. If forced to pick one submission, I expect it to be Badge (the broadest merged app, spanning two clusters) or Billet (no competition), depending on how the orchestrator collapses clusters.
+
+### Seat C - debate reply
+
+### Bellman: announcements that confirm they were understood
+- **Names:** Bellman · Clarion · Broadcast
+- **One-line pitch:** Send a company announcement once, and Bellman makes sure each person got it, understood it, and did what it asked.
+- **Description:** A leader writes one source message (a policy change, reorg, office closure, incident notice or launch). An agent rewrites it for each audience by role, team and locale, and picks each person's channel (Banter, email or digest). Each recipient answers a one- or two-question understanding check instead of clicking "I read it." The agent groups the follow-up questions that come back through Banter threads and Helpdesk, finds which sentences confused which teams, and drafts a clarification for the sender to approve. It shows understanding by team as a heatmap, and enforces required-acknowledgment deadlines with escalating nudges.
+- **Scope (in):** one source message, rewritten per audience; targeting from org, team and role; understanding checks; required acknowledgments with deadlines and nudges; grouping of confusion signals; drafted clarifications routed to agent_proposals; an understanding dashboard by team; signed acknowledgment records that GRC and learning apps can use as evidence of policy delivery; MCP tools `bellman_draft`, `bellman_target`, `bellman_status`.
+- **Scope (out):** chat (Banter); external email marketing (Blast); wiki or policy storage (Beacon); skill training and course paths (the learning app); control testing (the GRC app).
+- **Why build it:** The axis is **closed-loop proof that a message landed.** Small firms post in a channel and hope people saw it. Staffbase and Simpplr are priced for enterprises and only measure opens. Nothing at SMB price measures understanding and then fixes the gaps it finds. It is also the rail that the GRC and learning finalists would otherwise each rebuild separately: "did everyone acknowledge the new policy?"
+- **Reuses:** auth/RLS, org and team membership, Banter channels and `banter_schedule_post`, the worker email queue, Helpdesk (inbound questions), Bolt (`announcement.published`, `ack.overdue`), agent_proposals, can_access, Bench.
+- **Lens fit:** internal communication from the company to employees, which the suite does not have.
+- **Closest existing app:** Banter. Banter is many-to-many conversation. Bellman is one-to-many communication that is tracked per person, has deadlines and verifies understanding. It is a different job, not a better chat.
+
+### Barometer: continuous employee listening (offered as a merge with Seat B's Bellwether)
+- **Names:** Barometer · Bellwether · Pulse
+- **One-line pitch:** Know how each team is really doing weeks before people quit, and ask people questions only when there is a reason to.
+- **Description:** **Detection:** team-level leading signals from work metadata only (after-hours activity share, carry-forward streaks, WIP, meeting load from Book, ticket backlog), run through change-point detection. This is Bellwether's engine. **Asking:** when a team's pattern shifts, an agent runs a short adaptive conversational check-in with that team only. My Barometer contributes this part. **Privacy:** a k-anonymity floor of 5, enforced server-side, so no per-person scores ever exist. **Closing the loop:** the agent groups the answers into themes, drafts a manager action brief for approval, and publishes a "you said, we did" reply. It then tracks whether the signal recovers.
+- **Scope (in):** a transparent signal catalog; change-point detection per team; adaptive conversational pulses (Banter or Blank); anonymous free-text theming; the k-anonymity gate; manager briefs routed to agent_proposals; action follow-up as Bam tasks; an employee-visible "what we measure" page.
+- **Scope (out):** individual scoring or surveillance (structurally impossible); reading message content (metadata only); performance reviews and compensation.
+- **Why build it:** The axis is **signal latency and survey fatigue.** Culture Amp and Lattice run quarterly self-report surveys that lag reality. This product reads the leading signal first, spends questions only where they matter, and closes the loop. Closing the loop is the step that actually keeps people from leaving.
+- **Reuses:** activity_log, Bam, Book, Helpdesk, Banter, Blank, Bolt (`theme.emerged`), agent_proposals, permissions (manager and HR scopes), Basis/Bench.
+- **Lens fit:** upward communication, the employee's voice reaching leadership without anyone having to ask for it first.
+- **Closest existing app:** Blank and Bench. Blank builds forms and Bench charts metrics. Barometer is an engagement system with its own privacy model, its own questioning agent and an action loop.
+
+### Bouquet: recognition for work nobody else noticed
+- **Names:** Bouquet · Beam · Kudos
+- **One-line pitch:** Bouquet finds the people quietly holding the team together and makes sure they get thanked.
+- **Description:** An agent reads the work graph for help that normally goes unseen: a question answered in Banter that unblocked a task, a reviewer who caught a defect, a Helpdesk save, a Beacon article that deflected tickets. It prompts the person who was helped with a drafted one-tap thank-you, and that person can edit or skip it. Recognitions build up into a values-tagged feed and a per-team "who is unseen" view, which corrects the visibility bias where loud work gets credit and glue work does not. With the employee's consent, the history flows to performance reviews as cited evidence.
+- **Scope (in):** helped-by detection from Banter, Bam, Helpdesk and Beacon; drafted thank-you prompts; the peer recognition feed; company-value tagging; a team-level recognition distribution, including who is never recognized; manager nudges; an employee-owned export to a review app; MCP `bouquet_recognize`.
+- **Scope (out):** points and gift-card marketplaces (v2 at most); performance ratings; compensation.
+- **Why build it:** The axis is **coverage and fairness.** Bonusly and Kudos depend on people remembering to give thanks, so recognition goes to the visible few. Only a suite that holds the work graph can see the invisible contributions. Recognition is also the cheapest retention lever a small firm has.
+- **Reuses:** v_activity_unified, entity_links, `expertise_for_topic`, Banter, Helpdesk, Beacon, Bolt (`recognition.given`), can_access (so a thank-you never cites something the reader cannot see), Bench.
+- **Lens fit:** community inside the company, making peer-to-peer appreciation automatic.
+- **Closest existing app:** Banter. Banter has reactions on messages. Bouquet detects help that happened anywhere across the suite and turns it into recognition. It belongs to employee engagement, not chat.
+
+### Baton: handover of work and knowledge (my Buddy and Baton combined; aligned with Seat B's Baton)
+- **Names:** Baton · Relay · Bequest
+- **One-line pitch:** When someone leaves or changes roles, everything they owned and knew moves to the right people, and their successor gets a ramp plan built from it.
+- **Description:** **Ownership graph:** a continuously updated map of who owns what across the suite, with a bus-factor score showing where one person is the only owner. **Departure:** on a departure trigger, the agent proposes successors by expertise and current load, runs an exit interview aimed at what the records do not show, and writes a cited handover dossier. It drafts introductions for external contacts (drafts only). **Arrival:** the incoming person's 30/60/90 plan is built from that dossier, with introductions booked through Book and a cited Q&A companion that answers their questions.
+- **Scope (in):** the ownership graph with bus-factor scores; successor proposals with batch reassignment through agent_proposals; the exit knowledge interview; the dossier published to Beacon; drafted external handoffs; a successor ramp plan; an orphan sweep.
+- **Scope (out):** granting and revoking access (Badge/Bastion's job); HRIS records (Bevy); payroll; devices.
+- **Why build it:** The axis is **risk of losing what departing people own and know.** No HR or IT tool can see who is the only owner of a Bolt rule or a deal relationship.
+- **Reuses:** entity_links, v_activity_unified, `expertise_for_topic`, Book, Beacon, the per-app MCP reassign tools, agent_proposals, Bolt.
+- **Lens fit:** passing context and relationships from one person to the next.
+- **Closest existing app:** Bam `/b3/people`. That screen is account and membership management. Baton transfers work and knowledge.
+
+### Bonfire: an AI-moderated customer community
+- **Names:** Bonfire · Bazaar · Commons
+- **One-line pitch:** A branded community where customers help each other, an agent answers from your docs, and every bug, idea and champion lands in the right app.
+- **Description:** Bonfire is a public or members-only forum. An agent drafts answers from Beacon in-thread and labels them as AI answers. It holds a draft back when its confidence is low and asks a human expert instead. It turns threads into Helpdesk tickets, Bam bugs or feature-demand counts, and spots customer champions, which it writes to Bond via Braid. Good answers from community members are proposed as Beacon articles, so the community grows the knowledge base.
+- **Scope (in):** spaces and threads; SSO or magic-link membership; the cited AI answer agent with confidence gating; routing to Helpdesk, Bam and Bond; champion scoring; community-to-Beacon article proposals; moderation, including spam and toxicity checks.
+- **Scope (out):** internal chat (Banter); 1:1 support (Helpdesk); courses and paid memberships; social networks (Bugle).
+- **Why build it:** The axis is **integration plus deflection.** Discourse and Circle are standalone islands, and Khoros is enterprise-priced. Bonfire's answers come from the KB and its threads feed the CRM and the backlog automatically.
+- **Reuses:** Beacon/Qdrant, Helpdesk, Bam, Bond, Braid, Blazon (voice), agent_proposals, Bolt, the public-token pattern from Bay.
+- **Lens fit:** an external community, many-to-many with customers.
+- **Closest existing app:** Helpdesk. Helpdesk handles private 1:1 tickets. Bonfire is a public many-to-many community that cuts down tickets.
+
+**Debate notes (Seat C)**
+
+| Seat / app | Stance | Reason |
+|---|---|---|
+| G Bugle | **Align** (I withdraw my Bullhorn) | Three seats proposed event-driven social publishing. G's marketing lens owns it, and G's version adds inbox routing to Helpdesk and Bond. I am releasing the "Bugle" name to G and renaming my internal-comms app Bellman. |
+| A Bullhorn | **Align** | Same app as G Bugle. It should merge into Bugle. |
+| G Byline | **Oppose** | PR and media relations are less essential horizontally than social for a 2-50 person firm (the Cision buyer is mid-market and up). Its "internal announcement versions posted to Banter" overlaps Bellman. Crisis holding statements should be a feature of Bugle. |
+| F Bulletin | **Oppose** | This is a release-notes feature split between two homes. The customer-facing changelog belongs in Bugle and the internal sales/support brief belongs in Bellman. On its own it is narrower than either. |
+| B Bellwether | **Align** | Merge with my Barometer as described above. Bellwether's detection engine plus Barometer's adaptive conversational asking and "you said, we did" loop beats either half alone. I will accept Bellwether as the name. |
+| B Baton | **Align** | I folded my Buddy and Baton into this. The work graph plus ownership-transfer plus successor-ramp version is the strongest in the joiner/mover/leaver cluster. |
+| A Berth, D Baton | **Align** | They should merge into B Baton. |
+| E Bastion (JML part) | **Oppose** | Bundling the access lifecycle with the transfer of work recreates two apps in one. Access governance should be Badge; work and knowledge handover should be Baton. |
+| B Badge / F Badge | **Align** | Badge is the clean home for access governance. |
+| GRC cluster (A Bastion, B Baseline, D Bastion, E Binder, F Bastion) | **Ignore**, with one note | Back one survivor. Baseline's "no data" control set is the sharpest framing. Policy-acknowledgment delivery should consume Bellman's signed understanding records rather than each GRC app building its own attestation UI. |
+| D Bloom | **Align**, with a boundary | Bloom's delta recertification is the right learning app, but it teaches skills. Notifying people that a policy changed, and checking they understood, is Bellman's rail, which Bloom should call. |
+| A Brevet, B Boost, F Bootcamp | **Align** | Merge into one learning finalist with Bloom. My Buddy is withdrawn from that cluster. |
+| D Bravo | **Align** | Bouquet feeds Bravo cited recognition evidence, with the employee's consent. The two are complementary, not duplicates. |
+
+**Strategy:** My best bet for the final seven is **Bellman**. After the merges it is the only app in internal communications, and it is the one category in my lens that nobody else proposed. It is an SMB-essential function (every firm announces things and none can prove the message landed). It is AI-native at its core (per-audience rewriting, understanding checks, grouping of confusion, drafted fixes). It is also a shared rail the likely GRC and learning finalists need, which gives other seats a reason to vote for it rather than against it. My second path is the Barometer/Bellwether merge, where I concede the name and keep the asking agent and the closed loop. I left the social, joiner/mover/leaver and learning clusters to the seats that own them, so I am not splitting votes against my own entries.
+
+### Orchestrator note on Phase 2
+
+The debate did most of the overlap work itself. Each crowded cluster now has a clear survivor or named owner: GRC converges on **Baseline** (B), with D, E and A explicitly conceding and F offering its GitHub-evidence and questionnaire pieces; social publishing converges on **Bullhorn** (G's merged social + PR desk), with A and C withdrawing; engagement converges on a merged **Bellwether/Barometer** (B + C). Two clusters remain contested on boundaries: joiner/mover/leaver vs. access governance (B folded them into one **Badge**; C, D and E argue they are two apps: Baton for work handover, Badge for access), and learning (B **Boost**, A **Brevet** and D's re-aimed **Bloom** for mandated training). Several seats pivoted into unclaimed whitespace: recruiting (A **Beckon**, B **Billet**, D **Beckon**, so recruiting itself is now a three-seat cluster), e-signature (E **Biro**), customer proof (G **Boast**), recognition (C **Bouquet**), customer community (C **Bonfire**). One round was enough: seats are converging rather than colliding, so a second round would add text but not resolution.
+
+### Seat D - debate reply
+
+### Brace (workplace incident, speak-up and employee-relations case desk). FLAGSHIP
+- **Names:** Brace · Buoy · Casebook
+- **One-line pitch:** One confidential intake for injuries, near-misses, harassment, grievances and whistleblower reports. An agent classifies each report, starts the legal clocks it triggers, and drives the case to a documented close.
+- **Description:** Reports come in through a Blank form, a Banter DM to a bot, a voice note, or an anonymous tokenized link. The reporter gets a reply channel without being identified. An agent classifies each report and cites the rule text it relied on. **Injury cases:** recordable or not under OSHA 300/301-style criteria, and whether a short regulator-notification window applies (8 hours for a fatality, 24 hours for an in-patient hospitalization, amputation or loss of an eye). **Whistleblower cases:** for firms with 50 or more staff in the EU, the 7-day acknowledgement and 3-month feedback duties. **Other cases:** near-miss, harassment, policy breach or grievance. Brace then scopes visibility to need-to-know, starts the deadline clocks, and drafts an investigation plan, interview questions and corrective actions. Corrective actions become Bam tasks. Across cases it detects patterns, such as the same location, manager, hazard or retaliation timing, that no single case shows. Every conclusion, notification and closure is a HITL proposal. Nothing goes to a regulator or an accused party unattended.
+- **Scope (in):** multi-channel and anonymous intake with a two-way anonymous mailbox; classification with citations; jurisdiction-aware statutory and policy clocks; a per-case confidentiality ACL that is stricter than org RLS, with conflict-of-interest exclusion (the accused and their manager chain are auto-excluded); an investigation workspace and an evidence locker in Bin with hashes; corrective actions linked to Bam, with effectiveness checks; incident-log export in 300/300A form; cross-case pattern and retaliation alerts; MCP tools `brace_case_status`, `brace_clock_due`, `brace_pattern_scan`.
+- **Scope (out):** workers' comp claim filing; legal advice (it flags the case for counsel); hazard modules for a single industry; customer complaints (Helpdesk); general employee requests (Butler).
+- **Why build it:** Axis: **legal-deadline trust at SMB cost**. Every employer, office-only ones included, owes duty-of-care reporting and an investigation trail. Small firms run it in email, miss the 8-hour and 24-hour windows, and cannot show a retaliation-free process later. Enterprise tools (Intelex, HR Acuity, NAVEX) are priced for compliance departments.
+- **Reuses:** Blank (intake), Banter (bot intake), voice-agent, Bin and @bigbluebam/storage (evidence), @bigbluebam/permissions (case ACL), the can_access preflight, Bam (corrective actions), Bolt (`case.clock_due`, `case.pattern_detected`), agent_proposals, and the control-evidence app's feeds (incident-response controls).
+- **Closest existing app:** Helpdesk. Helpdesk serves external customers' requests in a shared queue. Brace handles internal duty-of-care cases where confidentiality, conflict exclusion and statutory clocks are the product, which a ticket queue structurally cannot offer.
+- **Lens fit:** health and safety plus employee relations is the people-risk function the law requires of every employer, and small firms improvise it.
+
+### Beckon (structured, bias-audited hiring). NEW, replaces my Bastion
+- **Names:** Beckon · Bullpen · Scout
+- **One-line pitch:** Hiring where the scorecard comes from what the role actually does, every screening judgment cites the résumé line it rests on, and an adverse-impact monitor runs before anyone is rejected.
+- **Description:** A hiring manager names a role. Beckon drafts a competency scorecard and job description from two inputs: the work current holders of that role actually do (aggregate patterns in v_activity_unified, filtered by can_access) and a short intake interview. Applications arrive through a Blank form, and résumés are stored in Bin. The agent scores each candidate against the scorecard with cited evidence, in a blind mode that redacts name, school, dates and photo. It proposes structured interview kits and schedules panels through Book. Panelist feedback stays sealed until each panelist submits, which prevents anchoring. A four-fifths-rule adverse-impact monitor runs on every stage transition. The AI advises and never auto-rejects: every disposition is a human decision, and each one is logged to support NYC LL144-style automated-employment-decision-tool (AEDT) bias audits and candidate notice. A hire emits `candidate.hired`, which is the joiner event for the handover app.
+- **Scope (in):** scorecards derived from real work; job description drafts; application intake; cited blind screening; interview kits; panel scheduling; sealed scorecards; an adverse-impact dashboard; candidate-data retention and deletion sweeps (GDPR); offer-stage handoff; MCP tools `beckon_pipeline`, `beckon_explain_score`.
+- **Scope (out):** job-board ad buying (a Billboard-type concern); background checks; e-signature on offers; payroll setup; sourcing by scraping.
+- **Why build it:** Axis: **quality of hire plus legal safety of AI screening**. Greenhouse and Lever start at about $6k a year and add AI screening as a black box. Small firms hire from an inbox and a spreadsheet. Beckon's scorecard is grounded in the org's own work graph, which no standalone ATS holds. Its audit trail makes it safe to use AI in hiring at all. No other seat covers recruiting.
+- **Reuses:** Blank, Bin, Book (`book_find_meeting_time_for_users`), Banter (panel nudges), v_activity_unified, expertise_for_topic (panel selection), the can_access preflight, agent_proposals, Bolt, Bench, and the retention-sweep pattern from Blip.
+- **Closest existing app:** Bond. Bond runs a sales pipeline of customers. Candidates carry different legal duties (adverse-impact, AEDT notice, deletion), have a different evaluator and follow a different lifecycle. A recruiting pipeline built on CRM is exactly the shortcut that creates liability.
+- **Lens fit:** recruiting is the start of the people lifecycle, and it is pure whitespace in the census.
+
+### Bravo (performance reviews from cited evidence, owned by the employee)
+- **Names:** Bravo · Brag · Tally
+- **One-line pitch:** Review season without the blank page. Each person curates a cited record of what they shipped and moved, and the manager's draft review can only cite what the employee's record and their own access support.
+- **Description:** Bravo is employee-first by construction. The ledger (closed Bam work, moved Bearing KRs, Helpdesk CSAT, authored Brief and Beacon pages, Bay approvals) is visible to its owner, who annotates it, adds work the suite never saw, and chooses what to share. At cycle time the agent drafts self and manager reviews in which every sentence cites evidence. It lints for recency bias, gendered or uneven language across a team, and invisible glue work. Calibration compares ratings against evidence density. No scores, rankings or real-time metrics exist anywhere, which stops it becoming a surveillance tool.
+- **Scope (in):** an evidence ledger the employee curates; review cycles; cited drafts; bias and consistency lint; calibration; Blank-based peer input; can_access filtering on every citation.
+- **Scope (out):** compensation; productivity scoring; continuous monitoring; team engagement (Bellwether/Barometer).
+- **Why build it:** Axis: **manager-hours and fairness**. Lattice and 15Five start from memory. Bravo starts from cited records the suite already holds and cuts 4 to 8 hours of reconstruction per report per cycle.
+- **Reuses:** v_activity_unified, Bam, Bearing, Helpdesk, Brief, Beacon, Bay, can_access, llm-provider, Blank, agent_proposals.
+- **Closest existing app:** Bearing. Bearing tracks team goals. Bravo evaluates individuals across all work, including work outside any goal.
+- **Lens fit:** performance management, the people-ops cycle small firms fake.
+
+### Bloom (mandatory training and policy recertification, retrained only on what changed). Re-aimed
+- **Names:** Bloom · Bootcamp · Primer
+- **One-line pitch:** Required training (harassment prevention, security awareness, safety, policy handbooks) generated from your own policies and kept legally current. When a policy changes, only the affected people retrain, and only on the change.
+- **Description:** Bloom is re-aimed away from friction-driven learning (Boost, Brevet and Bootcamp own that) to the mandated-training obligation. **Policy-bound courses:** it compiles policy-bound modules from Beacon and Brief sources, with cited scenario checks graded by an LLM against a rubric. **Jurisdiction rules:** it tracks requirements by jurisdiction and role, for example the California, New York and Illinois harassment-prevention mandates, plus annual security awareness for SOC 2. **Delta recertification:** when a source changes (beacon_versions), the agent diffs it, judges whether the change is material, and assigns recertification on just the delta to just the people whose role path covers it. Completions and attestations are signed evidence for the control-evidence app and for Brace's corrective actions ("retrain team X").
+- **Scope (in):** a mandate catalog by jurisdiction and role; modules generated from policy, with citations; scored scenario checks; delta recertification; attestation; due-date clocks and nudges; an evidence export.
+- **Scope (out):** friction-driven skill-gap learning; SCORM authoring; video production; external certifications.
+- **Why build it:** Axis: **cost of staying compliant**. Firms buy generic off-the-shelf compliance courses (KnowBe4, EasyLlama) that do not reflect their actual policy, then re-send the whole course to everyone on every change.
+- **Reuses:** Beacon (entries, versions, verifications), Brief, Qdrant, llm-provider, Bolt (`entry.updated`), Banter nudges, Bench, agent_proposals.
+- **Closest existing app:** Beacon. Beacon stores policy. Bloom proves who has been trained on which version, as legally required.
+- **Lens fit:** compliance training, which every employer owes and small firms skip.
+
+### Baton (joiner/mover/leaver handover). Offered to the merge
+- **Names:** Baton · Berth · Handover
+- **One-line pitch:** When someone joins, moves or leaves, an agent finds everything they own or can reach across the suite, runs the handoff, and proves nothing was left behind.
+- **Description:** Baton takes a cross-app footprint scan (tasks, deals, queues, Bolt rules, API keys, Book pages, Bin shares, Bay guest links, Bulwark obligations) and drafts reassignment and revocation proposals through agent_proposals. It learns role templates from peers. My differentiator is the post-execution **residue re-scan** with an access-zero certificate. I will fold this into the cluster winner.
+- **Scope (in):** lifecycle events (including `candidate.hired` from Beckon); footprint scan; HITL plan execution via MCP; role templates; residue re-scan; audit packet.
+- **Scope (out):** payroll; HRIS master record; MDM; external SaaS beyond a checklist.
+- **Why build it:** Axis: **completeness**. Only a suite-native agent can enumerate a leaver's Bolt rules and Bay guest links.
+- **Reuses:** permissions, api_keys, entity_links, v_activity_unified, agent_proposals, MCP, Bolt, Braid.
+- **Closest existing app:** Bam /b3/people. That screen is user CRUD. Baton is the cross-app ownership transfer.
+- **Lens fit:** onboarding and offboarding.
+
+**Debate notes (Seat D)**
+
+**Align:** **Seat B Baseline:** align. Its "no data" set of controls is the sharpest mechanism among the five GRC entries, so I withdraw my Bastion in its favor. Bloom attestations and Brace incident-response records feed its evidence. **Seats A Bastion, E Binder, F Bastion (GRC):** align, folding into Baseline. Five seats claiming one idea means one survivor, and Baseline has the most distinctive mechanism. **Seat B Baton:** align. The bus-factor ownership graph plus measured ramp is the strongest JML framing. My residue re-scan and access-zero certificate (shared with Seat A's Berth) should be merged into it. **Seat A Berth, Seat C Baton:** align into the single JML app above. Neither is distinct enough to justify its own seat. **Seat A Bevy:** align, as an adjacency rather than an overlap. A people-core record (who is employed, role, manager) is what Brace's conflict exclusion, Beckon's hire event and Bravo's cycle all key off. If Bevy survives, my apps get stronger. **Seat C Bugle (announcements):** align. Its understanding check plus Bloom's delta recertification would together give a "policy change, proven understood" loop. I am open to Bloom being the training half of that. **Seats B Boost, A Brevet, F Bootcamp:** align with each other. I re-aimed Bloom out of their cluster to mandated training, which none of them cover. **Seat C Buddy:** align. It is onboarding, so it belongs in the JML cluster or Boost, not as a standalone app. **Seat E Butler:** align as a neighbor. It is the general employee request desk, and Brace explicitly excludes those requests while taking confidential cases.
+
+**Oppose:** **Seat E Bastion (identity and access with JML):** oppose as framed. It fuses two clusters (access governance and JML) into one app. Last session's merge record found that access lifecycle and human handover are different categories, and fusing them blurs both. **Seat B Bellwether vs. Seat C Barometer:** neither opposed nor aligned with my apps, but they are near-duplicates of each other and should collapse into one. Bravo stays out of their way: it covers individuals, uses no metrics, and is owned by the employee.
+
+**Ignore:** G Billboard, G Byline, G Backdrop, E Brick, E Bosun, F Bespoke, F Bulletin, and the social-publishing trio. None is a threat or an ally to my lens.
+
+**Strategy:** five of the seven slots are being fought over by clusters of five near-identical apps, and each cluster will collapse to one owner. Co-claiming them is a losing position, so I conceded GRC to Baseline and JML to Seat B's Baton, and I am supplying mechanisms (residue re-scan, attestation evidence) to make those winners stronger. My bet is on the two whitespace slots nobody else touched: **Brace**, my flagship (health and safety plus employee relations is explicitly an essential in the census, it is legally mandated for every employer, it has hard statutory clocks that make the AI's value measurable, and it overlaps no other seat), and **Beckon**, recruiting (census whitespace, also unclaimed, and defensible because it is grounded in the work graph and audited for adverse impact). Bravo and the re-aimed Bloom are kept as distinct backups that do not collide with any cluster.
+
+### Seat E - debate reply
+
+### Badge: access and SaaS-seat governance for teams with no IT staff
+- **Names:** Badge · Bouncer · Keyring
+- **One-line pitch:** One inventory of who can get into what, in the suite and across your SaaS and devices, with an agent that runs access reviews and recovers wasted seats.
+- **Description:** Badge builds an access graph per person and per agent. It takes suite-native grants from `@bigbluebam/permissions`, API keys, service accounts, `oauth_user_links` and `agent_policies`. It adds external SaaS seats from imported lists or read connectors, plus seats inferred from Bill expense lines, and a lightweight device and asset register. Each grant is scored against actual use (`v_activity_unified`) and against what peers in the same role hold. Review campaigns arrive pre-decided ("revoke: 0 uses in 94 days"), so a manager confirms in bulk. Revocations go out as `agent_proposals`, and each campaign is saved as an immutable review record. Badge does not run the joiner/mover/leaver process. It consumes the `person.*` events from whichever lifecycle app wins, and it supplies the "access-zero" check that app needs.
+- **Scope (in):** entitlement inventory (suite plus CSV/connector SaaS seats plus a device/asset register); usage-vs-grant and peer-outlier scoring; stale-key and orphaned-account sweeps; agent identities reviewed like humans; review campaigns with an immutable record; seat-waste roll-up in dollars; `badge_access_zero(person)` verification tool; Bolt `access.anomaly`.
+- **Scope (out):** joiner/mover/leaver orchestration and handover of owned work (the lifecycle cluster); IdP/SSO; MDM enforcement; procurement and renewals (Bursar).
+- **Why build it:** Small firms skip access reviews until an auditor or a breach forces them, and Okta IGA and ConductorOne are priced for enterprises. Axis: **cost**. Recovered seats pay for the product, and suite grants need no connector.
+- **Reuses:** permissions plus Redis PermissionContext, api_keys and rotation, `oauth_user_links`, `agent_policies` and `agent_runners`, `v_activity_unified`, Bill expenses, Bin imports, Bolt, `agent_proposals`.
+- **Closest existing app:** Bursar. Bursar levels vendor bids and watches spend against a baseline. Badge governs who holds access versus what they use, which is IT and identity governance.
+- **Lens fit:** this is the operator's core security chore, run as a decision engine instead of a spreadsheet.
+
+### Butler: internal service desk that resolves requests itself
+- **Names:** Butler · Bellhop · Concierge
+- **One-line pitch:** Employees ask for what they need in plain language ("add me to the Acme project", "new keyboard", "how do I file travel?") and an agent fulfils most of it within policy in seconds.
+- **Description:** Butler is employee service management for IT, ops and facilities requests, with fulfilment done by an agent instead of a ticket queue. Each catalog item is a policy plus an MCP action plan: who may ask, what auto-approves, what needs a manager's approval through `agent_proposals`, and which tools execute it. The agent answers from Beacon with citations and executes permitted actions directly (memberships, channels, Bureau rooms, key rotation, Badge grants), keeping an audit trail of every step. Its deflection-gap report is the product's feedback loop: the top unresolved request types become drafted catalog items or Beacon articles for an operator to approve.
+- **Scope (in):** a request catalog with policy for each item; intake via Banter DM, a web form and email; execution through MCP under `agent_policies` allowlists; manager approvals; cited answers; gap mining that turns unresolved requests into proposed catalog items; SLA and analytics.
+- **Scope (out):** external customer support (Helpdesk); HR records and leave (an HR-core app's domain, which Butler can front); ITIL CMDB; purchasing (Bursar).
+- **Why build it:** Freshservice and JSM queue tickets for humans to work. In a 20-person firm the "service desk" is the founder's DMs. Axis: **speed and staffing**. Resolution takes seconds and no desk is staffed, because every fix is an MCP call the agent is already permitted to make.
+- **Reuses:** MCP catalog plus `/tools/call`, `agent_policies`, `agent_proposals`, `can_access`, Banter, Beacon/Qdrant, Blank, Bolt, Badge.
+- **Closest existing app:** Helpdesk. Helpdesk is humans answering external customers. Butler serves internal staff and carries out the resolution itself.
+- **Lens fit:** the operator's inbox, made agent-operable from start to finish.
+
+### Brick: agent-native spreadsheet (absorbs Seat F Bespoke)
+- **Names:** Brick · Bento · Grid
+- **One-line pitch:** A spreadsheet whose cells can be live, permission-correct queries into the suite, whose columns an agent can fill in, and whose buttons can take real actions, so trackers stop going stale and simple internal tools need no builder.
+- **Description:** Brick is a collaborative grid built on `@bigbluebam/structured-data` (Yjs). `=SUITE()` formulas call read-only MCP tools or certified Basis metrics, and results are filtered through `can_access` for each viewer. Agent columns apply a natural-language instruction per row, show where each value came from, and recompute when the relevant Bolt event fires. Action cells bind a row to an MCP write tool and run as the clicking user, so bulk writes go through `agent_proposals`. This covers Bespoke's "PTO screen / inventory checklist" use case in the most familiar productivity surface there is, without generating new code.
+- **Scope (in):** grid, formulas and import/export (CSV/XLSX); live suite-query cells; agent columns with provenance; event-driven recompute; action cells and staged bulk writes; sheet templates (tracker, checklist, approval log); MCP `brick_read/write/fill_column`.
+- **Scope (out):** charts and dashboards (Bench); metric definitions (Basis); presentations (Backdrop); macros or VBA parity; free-form app UIs.
+- **Why build it:** Teams run on Google Sheets pasted from their tools, so the data is wrong by Tuesday and leaks rows the viewer shouldn't see. Retool and Airtable need a builder plus connectors. Axis: **trust and integration**. Cells are live, scoped to each viewer, and need zero connectors.
+- **Reuses:** `@bigbluebam/structured-data`, MCP read/write tools, Basis, `can_access`, Bolt, `agent_proposals`, Bin.
+- **Closest existing app:** Bin. Bin edits stored data files. Brick is a computational sheet (formulas, live queries, agent columns, actions), which places it in the office/productivity whitespace.
+- **Lens fit:** the operator's real tool, wired into the platform's tool catalog instead of exported from it.
+
+### Bosun: suite configuration from intent
+- **Names:** Bosun · Ballast · Keel
+- **One-line pitch:** Describe your company and an agent configures all 24 apps to fit, then catches drift and misconfiguration before it bites.
+- **Description:** Bosun treats every app's settings (project templates, pipelines, Bill terms, Bolt rules, permission groups, channels, retention) as one declarative workspace plan. An agent drafts the plan from an interview, shows a diff against the live state, and applies it through MCP in staged, reversible proposals. A continuous linter flags orphaned Bolt rules, empty permission groups, apps that are on but unused, and settings that contradict each other.
+- **Scope (in):** a plan schema covering all apps; drafting the plan from an interview; diff, apply and rollback through `agent_proposals`; a drift and misconfiguration linter; templates by company shape.
+- **Scope (out):** infrastructure and deploys; automation authoring (Bolt); data migration from other vendors.
+- **Why build it:** The suite's breadth is its weakness on day one, and the buyer has no administrator. Axis: **time-to-value** (hours, not weeks).
+- **Reuses:** full MCP catalog, `agent_proposals`, `agent_policies`, `catalog.drift_detected`, permissions, `LAUNCHPAD_CATALOG`.
+- **Closest existing app:** Bolt. Bolt runs event rules; Bosun reconciles the configuration of every app. It is platform administration.
+- **Lens fit:** administration through intent, the most direct platform-tooling play.
+
+### Biro: suite-wide e-signature (replaces Binder; Binder conceded to the GRC cluster)
+- **Names:** Biro · Blot · Inkwell
+- **One-line pitch:** Send anything in the suite for signature, an offer letter, an SOW, a policy acknowledgement or a quote, and an agent prepares the packet, checks it, chases the signers and files the executed copy where it belongs.
+- **Description:** Biro is a single signing service that every app can call through `biro_request_signature(entity)`. An agent assembles the packet from the source record, places fields, diffs the document against the org's approved template to flag changed clauses before it is sent, and works out the signing order from roles. Executed copies are hashed into Bin with an audit certificate. A Bolt `document.signed` event then hands off to the apps downstream: Bulwark extracts obligations, Burn reads the SOW, a lifecycle app starts onboarding.
+- **Scope (in):** signing packets and field placement; template-deviation check; signer routing and reminders; token-gated guest signing (the Bay guest-link pattern); a tamper-evident audit certificate; executed copy stored in Bin; Bolt events; MCP tools.
+- **Scope (out):** contract negotiation and redlining; obligation tracking (Bulwark); notarization and qualified e-signatures in v1.
+- **Why build it:** DocuSign charges per envelope and per seat and knows nothing about the record being signed. Axis: **cost and integration**. Signing is a platform primitive the suite's contract apps already need upstream.
+- **Reuses:** Bin/`@bigbluebam/storage`, the Bay guest-token pattern, Bolt, `agent_proposals`, permissions, Bond and Book contacts.
+- **Closest existing app:** Bulwark. Bulwark monitors contracts after they are executed; Biro gets them executed. It is an e-signature whitespace category.
+- **Lens fit:** a shared, agent-callable platform primitive that other apps build on.
+
+**Debate notes (Seat E)**
+
+**Align:** **D Bastion (GRC):** this is the strongest of the five GRC framings, because questionnaire autofill with citations and joiner/mover/leaver residue as evidence are concrete wedges. I withdraw Binder and back D's Bastion as the cluster's survivor. Badge feeds it the access-review evidence. **B Badge / F Badge (access governance):** these overlap my original Bastion. My revised Badge is the merge: suite-native grants, SaaS and device inventory, seat-waste dollars and `access_zero`. It gives joiner/mover/leaver to the lifecycle cluster so it does not collide with it. I am offering the merged block to B and F. **D Baton / A Berth (joiner/mover/leaver):** I conceded lifecycle orchestration. Badge provides the access-zero verification and Butler can serve as the front door for move requests. Either should win the cluster, and D Baton's cited footprint scan is the most complete. **F Bespoke:** I absorbed it into Brick. A grid with action cells delivers the internal-tools wedge on a surface every SMB already uses, and Brick also fills the spreadsheet gap in the office suite. **G Backdrop:** I align as a sibling, not a merge. Presentations and spreadsheets are the two missing office essentials, and they should share the data-binding approach (`can_access`, Basis bindings). **A Bevy:** a complement rather than a conflict. Bevy owns the HR record and leave, while Butler is the fulfilment front door that can route HR asks to it.
+
+**Oppose:** **F Bespoke standalone:** "describe a tool, get a mini-app" is Retool AI or Airtable Interfaces re-skinned. Without a familiar surface it is a builder looking for users, and the wedge survives only inside Brick. **B Baseline, A Bastion, F Bastion:** each is near-identical to D Bastion. Only one GRC app should reach the slate, and splitting the cluster's votes risks losing it. **A Bullhorn / C Bullhorn:** near-duplicates of G Bugle, which is the most complete of the three because it routes replies into Helpdesk and Bond. **G Billboard:** it depends on connectors to three ad platforms plus spend autonomy, so its v1 wedge relies more on integrations than on the AI, and it carries real money risk for SMBs.
+
+**Strategy:** I moved my weight out of the three crowded clusters, where I would only split votes, and into categories no other seat holds. Butler (internal service desk) and Brick (office spreadsheet plus internal tools) are singletons in whitespace categories. Badge is the obvious merge home for access governance. Biro fills e-signature as a platform primitive the contract apps already need upstream. Bosun is a long shot. My likely submission is Butler or Brick. Butler shows the AI-native thesis most clearly (fulfilment instead of a queue) and no other seat proposed it. Brick wins on how essential it is, and it has a ready ally in F if Bespoke does not advance.
+
+### Seat F - debate reply
+
+### Bulletin: product change communications autopilot (releases, incidents, doc drift)
+- **Names:** Bulletin · Broadcast · Herald
+- **One-line pitch:** Every change you ship, and every outage you have, becomes the right message for each audience (changelog, in-app "what's new", status page, customer notice, internal sales/support brief, updated help articles) without anyone writing it four times.
+- **Description:** Bulletin listens to merged PRs (via Bam's existing GitHub integration), completed Bam tasks, sprint closes, and Blip watch alerts. An agent clusters these into *change events* (a release or an incident) and classifies each item by which audience it affects. It then drafts tiered artifacts: a public changelog with an embeddable widget, a hosted status page with incident updates, an internal support/sales brief, and line-level diffs against every Beacon and Helpdesk KB article the change made stale. A "you asked, we shipped" pass traces Helpdesk tickets and Bond accounts through `entity_links` to the change and drafts targeted notices to the exact customers who requested it. Every artifact passes the `agent_proposals` queue before it publishes.
+- **Scope (in):** change ingest and clustering; audience-impact classification; changelog, in-app feed, and status page; incident update drafting from Blip alerts; stale-doc detection with suggested edits; requester matching and closed-loop notices; HITL publish; MCP tools (`bulletin_draft_release`, `bulletin_stale_docs`, `bulletin_incident_update`).
+- **Scope (out):** public social posting (it emits a `release.published` event that a social app can consume); bulk email delivery (handed to Blast); feature flags or deployment; uptime probing itself (Blip owns signals).
+- **Why build it:** Small software teams skip release notes, leave help articles wrong for months, and never tell the customer who asked for a feature that it shipped. LaunchNotes, Beamer, and Statuspage are separate editors, and none of them can see tickets, CRM, and code at once. The axis is **closed-loop customer communication plus speed**, from cross-app data no standalone tool has.
+- **Reuses:** Bam GitHub integration (`github-integration.service.ts`, webhook routes), Bam tasks/sprints, Blip watches, Helpdesk tickets, Bond contacts, `entity_links`, Beacon/Helpdesk KB, Blast (send), `agent_proposals`, Bolt (`release.published`, `incident.updated`).
+- **Closest existing app:** Blast. Blast sends campaigns a human authors to a list. Bulletin *derives* product-change messaging from shipped work and incidents and routes it per audience, including fixing stale docs. That is product communication, not an email tool, and it is not social publishing either.
+- **Lens fit:** It turns the engineering output stream into customer and internal communication.
+
+### Bastion: continuous compliance evidence, plus an outward trust center (merge-ready)
+- **Names:** Bastion · Binder · Attest
+- **One-line pitch:** SOC 2 / ISO 27001 readiness that collects its own evidence from your repos, deploys, and suite activity, then answers your customers' security questionnaires from that same evidence.
+- **Description:** Same core as the GRC cluster: framework library, AI control-to-evidence mapping, scheduled re-tests, drift remediation proposed into `agent_proposals`, and an auditor evidence room. Two engineering-specific parts that the other framings lack. First, change-management controls are tested straight from the GitHub integration (review-before-merge, branch protection, deploy-to-ticket traceability). Second, an outward trust center plus a questionnaire autopilot answers inbound security questionnaires (SIG, CAIQ, custom spreadsheets) with citations to live control status, sending low-confidence answers to a human.
+- **Scope (in):** controls, evidence, drift, and remediation; policy attestation via Beacon; auditor room; trust-center page; questionnaire ingest (Bin) and cited answer drafting; MCP tools.
+- **Scope (out):** vendor/customer contract obligations (Bulwark); vulnerability scanning; CSPM.
+- **Why build it:** Vanta/Drata plus SafeBase/Conveyor costs over $20k/yr. Small B2B teams lose deals while they wait on questionnaires. The axis is **cost, and sales velocity from the same evidence**.
+- **Reuses:** GitHub integration, `activity_log`/`v_activity_unified`, Beacon, Blip retention, Bin, Bond (which deal is waiting on the questionnaire), `agent_proposals`, Bolt.
+- **Closest existing app:** Bulwark. Bulwark covers obligations owed to counterparties under contracts; Bastion proves internal controls and turns that proof into sales trust.
+- **Lens fit:** Engineering systems of record become compliance proof and sales collateral.
+
+### Badge: access and credential governance (folds into the JML merge)
+- **Names:** Badge · Keyring · Bouncer
+- **One-line pitch:** Know who, and which agent, holds access to what across the suite and your SaaS, with access reviews and leaver revocation done for you.
+- **Description:** An entitlement graph with peer-group baselines, stale-access and toxic-combination detection, review campaigns, and JML revocation plans as proposals. The engineering-specific part, which I hold as non-negotiable in any merge, is **non-human credentials**: `bbam_`/`bbam_svc_` keys, rotation grace windows, `agent_policies` allowlists, and service accounts with no living owner.
+- **Scope (in):** entitlement inventory (suite plus GitHub/Google/Slack read connectors); agent and service-account credential hygiene; reviews; revocation proposals; seat-waste report.
+- **Scope (out):** IdP/SSO; MDM; HRIS records.
+- **Why build it:** Small teams offboard by memory, and nobody owns the agent credentials that are now multiplying. The axis is **trust and cost** (the seat savings pay for it).
+- **Reuses:** `users.kind`, API-key rotation (0117), `agent_policies`, `agent_runners`, oauth_providers, @bigbluebam/permissions, `agent_proposals`, Bolt.
+- **Closest existing app:** none. `/b3/people` is suite user CRUD only.
+- **Lens fit:** Secrets and identity hygiene for a mixed human and agent workforce.
+
+### Bespoke: agent-built internal tools (offered to the Brick merge)
+- **Names:** Bespoke · Bodge · Toolsmith
+- **One-line pitch:** Describe the internal tool you need and an agent assembles a governed mini-app (table, form, action buttons, schedule) over suite data and the MCP tool catalog.
+- **Description:** The output is a declarative spec, not free code. Each button binds to an MCP tool and runs under the builder's permissions and `can_access`. Tools are versioned and diffable, and the agent repairs them when a tool schema changes.
+- **Scope (in):** natural language to spec; component set; permission-scoped execution; versioning; schema-drift self-repair.
+- **Scope (out):** arbitrary code; external DB connectors; public sites.
+- **Why build it:** The axis is **zero-connector integration and trust**, against Retool/Airtable Interfaces.
+- **Reuses:** MCP catalog and `/tools/call`, `agent_policies`, `can_access`, Bin structured data, Bolt schedules, @bigbluebam/ui.
+- **Closest existing app:** Bolt. Bolt automates headless rules; Bespoke builds human-facing screens.
+- **Lens fit:** The developer platform surface, handed to non-engineers.
+
+### Bonafide: security questionnaire and trust-center desk (standalone fallback if GRC collapses without it)
+- **Names:** Bonafide · Bona · Vouch
+- **One-line pitch:** Drop in a customer's 300-row security questionnaire and get it back cited and 80% answered in an hour, with a public trust page that answers most of them before they get sent.
+- **Description:** Bonafide keeps an answer library grounded in Beacon policies, engineering facts (from the GitHub integration, Blip retention settings, and backup configuration), and prior answered questionnaires stored in Bin. An agent maps each incoming question to that library, cites its sources, flags answers whose source has changed since they were last given, and routes low-confidence rows to the owner identified by `expertise_for_topic`. The response is tied to the Bond deal, so sales can see which deal the questionnaire is blocking.
+- **Scope (in):** questionnaire ingest (xlsx/csv/portal paste); cited answer drafting; answer library with staleness tracking; trust page with gated NDA documents; per-deal tracking; HITL.
+- **Scope (out):** control monitoring or audits (the GRC app); contract negotiation (Bulwark).
+- **Why build it:** Questionnaires stall small B2B deals for weeks, and SafeBase/Conveyor are enterprise-priced. The axis is **sales cycle speed**.
+- **Reuses:** Beacon/Qdrant, Bin, Bond, `expertise_for_topic`, `agent_proposals`, Bolt.
+- **Closest existing app:** Helpdesk. Helpdesk answers customer support requests, whereas Bonafide answers security due-diligence questions with citations and owners. The work is different and so is the buyer.
+- **Lens fit:** Engineering facts, translated for buyers' security teams.
+
+**Debate notes (Seat F)**
+
+**Align:** **GRC cluster (A Bastion, B Baseline, D Bastion, E Binder):** Align on a single compliance app. My non-negotiables in that merge are GitHub-sourced change-management controls and the questionnaire/trust-center output, which turn a cost centre into a sales tool. **JML cluster (A Berth, B/C/D Baton, E Bastion-IAM) with access governance (B Badge):** Align on one lifecycle app. Revoking a leaver's access *is* the handover's last step, so splitting them yields two weak apps. My Badge contributes non-human credential governance, which nobody else covered. **Learning cluster (A Brevet, B Boost, D Bloom, C Buddy):** Align, and I withdraw Bootcamp. Brevet/Boost's friction-driven targeting is the strongest framing. Bootcamp's "measure ramp from real activity (first merged PR, first resolved ticket)" should be folded in. **E Brick:** Align with Bespoke. A spreadsheet whose rows grow action buttons bound to MCP tools is a stronger office/productivity entry than either app alone. **C Bugle (internal announcements):** Conditional align with Bulletin as "change communications" (internal plus product changes). I would merge only if the release/incident/doc-drift core survives.
+
+**Oppose:** **E Bosun:** Oppose. Suite self-configuration is an admin convenience, not a horizontal essential that firms staff departments for. It belongs as a platform feature. **B Bellwether:** Oppose. Inferring burnout from work telemetry is a trust liability for 10-person teams. C Barometer's consent-based listening is the safer version of the same category.
+
+**Ignore:** A Bevy, D Brace, D Bravo, E Butler, G Blazon, G Billboard, G Byline, G Backdrop.
+
+**Boundary note:** A/C Bullhorn and G Bugle (social publishing) do not overlap Bulletin. Bulletin emits `release.published` for them to consume, and it owns the in-product changelog, status page, and doc drift, which social tools do not touch.
+
+**Strategy:** My best shot at the final seven is **Bulletin**. It is the only release/incident/doc-drift communication app in the field, it sits clearly in the comms whitespace, and only this suite can do it, because it needs code, tickets, CRM, and KB in one tenant. I am deliberately feeding my clustered ideas (Bastion, Badge, Bootcamp, Bespoke) into the merges where they add a distinct, defensible part (engineering evidence plus questionnaires, agent-credential governance, ramp metrics, MCP-bound actions). That way I have a stake in whichever merged apps survive without spending my submission on a five-way collision. Bonafide is a fallback in case the GRC merge drops the outward-facing trust work.
+
+### Seat G - debate reply
+
+### Bullhorn: social and PR desk that drafts from what the business actually did (my Bugle and Byline merged, aligned with A and C Bullhorn)
+- **Names:** Bullhorn · Byline · Broadside
+- **One-line pitch:** Your company's real wins, like releases, deals, events and hires, become on-brand social posts and press pitches, and a holding statement is ready before a crisis lands. You approve; you don't write.
+- **Description:** An agent subscribes to Bolt events across the suite (a Bam release, a Bond win with publicity consent, a Book webinar, a Bearing milestone, a Blip outage) and turns each one into a story candidate. It writes channel-native social variants and, when the story is newsworthy enough, a press release plus personalized pitches to journalists, scored by how relevant each journalist's recent coverage is. Every draft passes a Blazon brand and claims check and lands in `agent_proposals`. Replies and mentions are routed: complaints to Helpdesk, buying signals to Bond, coverage into a clip book that is scored against a versioned message house. Incident events trigger drafted holding statements for human sign-off.
+- **Scope (in):** an event-to-story feed; social variants per channel (LinkedIn, X, Bluesky, Threads, Meta); a message house and spokesperson registry; release and pitch drafts; a media list stored as Bond contacts with a press role; an approval queue; a schedule and publish worker; a mention inbox with AI routing; a coverage clip book; crisis drafts triggered by Bolt events; engagement written to Bench; MCP tools (`bullhorn_draft_from_entity`, `bullhorn_schedule`, `bullhorn_crisis_draft`).
+- **Scope (out):** paid boosting (Billboard); newswire distribution (export only); buying journalist databases; broad web listening; email (Blast); internal announcements (C's Bugle).
+- **Why build it:** Buffer, Hootsuite and Sprout give you an empty calendar, and Cision and Muck Rack cost $7k to $20k a year. Small teams skip both because the bottleneck is knowing what to say. The axis is **content supply plus speed in a crisis**: the suite already knows the wins and sees the outage first.
+- **Reuses:** Bolt, `agent_proposals`, Bin, Bay (visual sign-off), Bond, Braid, Helpdesk, Blip, Beacon (facts), Blazon, Bench, the worker, `can_access`.
+- **Closest existing app:** Blast. Blast is owned email to a consented list. Bullhorn covers public social and earned media, with two-way conversations and a different risk profile.
+- **Lens fit:** This is the core of external marketing comms and PR for a firm with no comms staff.
+
+### Blazon: brand and claims governance as an executable policy every agent must pass
+- **Names:** Blazon · Brandbook · Hallmark
+- **One-line pitch:** Your brand guidelines and approved claims become a live checker that reviews every email, post, deck, doc and image before it leaves the building, and fixes what it can.
+- **Description:** Blazon compiles a brand book into a versioned, typed policy. The text rules cover voice, terminology, product naming and required disclaimers. The visual rules cover logo clear-space, palette and contrast. Its most distinctive object is a **claims register**: every public statement of fact ("40% faster", "SOC 2 compliant", "trusted by Acme") is bound to its proof (a Basis metric, a Bond consent flag, a Bin document) and expires when the proof does. `brand_check(artifact)` is an MCP tool and a pre-send hook on Blast, Bullhorn, Bay, Backdrop and public Brief docs. It returns findings that cite the broken rule, plus suggested fixes, and blocks or warns depending on per-org settings. Agents are the main users, and that is the point: once agents write most outbound content, Blazon is what keeps them on brand and keeps their claims true.
+- **Scope (in):** ingesting and authoring policy with version lineage; text and vision checks; auto-fix suggestions; a claims register with proof bindings and expiry (a Basis metric moving or a Bond consent being revoked invalidates the claim everywhere it is used); pre-send gates; an override flow through `agent_proposals`; a drift report by app, team and agent; MCP `brand_check`, `brand_fix`, `claim_verify`.
+- **Scope (out):** asset storage (Bin); human approval workflow (Bay); generating creative; trademark clearance.
+- **Why build it:** Frontify, Acrolinx and Writer cost $20k to $100k+ a year. Small firms have a PDF nobody opens, and now agents publish at machine speed. The axis is **trust**: no SMB tool ties public claims to live proof. A FTC or advertising-standards problem from a stale "40% faster" is a real liability, and Blazon catches it at the moment of sending.
+- **Reuses:** Bin, the llm-provider, the MCP register-tool hook pattern, Basis (proof), Bond (consent), Blast, Bay and Bullhorn as gates, `agent_proposals`, Bolt (`claim.expired`, `brand.violation`), permissions.
+- **Closest existing app:** Bay. Bay is a person approving one asset. Blazon is automatic policy plus proof-of-claim across every app and agent. It shortens Bay reviews rather than duplicating them.
+- **Lens fit:** This is the brand function itself, with the claims discipline that large firms staff legal and marketing ops for.
+
+### Billboard: guardrailed autonomous ad operations judged on revenue
+- **Names:** Billboard · Bidder · Beam
+- **One-line pitch:** An ad agent that runs your Google, Meta and LinkedIn campaigns within hard budget rules and judges them on paid invoices, not clicks.
+- **Description:** Billboard pulls spend and performance from ad accounts. Using Braid, it joins conversions to Bond deals and Bill payments, so each campaign carries a real cost per won deal and a payback period. Inside hard guardrails (a daily cap, a maximum percentage shift per action, allowlisted channels), the agent paces budget, pauses losers and rotates in new creative variants that have passed Blazon. Anything outside those limits becomes a proposal. Every change is logged with the reason the agent gave. It also uploads Bond stage changes back to the platforms as offline conversions, so the platforms' own bidding starts optimizing for revenue.
+- **Scope (in):** v1 connectors for Google Ads, Meta and LinkedIn (read plus a narrow write set covering budget, status and ad rotation); offline conversion upload; revenue attribution through Braid, Bond and Bill (deterministic first-touch and last-touch); a guardrail policy engine; autonomous pacing; creative variants; an audit trail; MCP `ads_status`, `ads_propose_shift`, `ads_cost_per_won_deal`.
+- **Scope (out):** DSP and programmatic buying; offline media; agency billing; a modeled multi-touch attribution engine.
+- **Why build it:** Small firms pay agencies 10 to 20% of spend or let Smart Campaigns optimize toward clicks they can't tie to money. The axis is **outcome truth plus cost**: only the suite holds the CRM and invoice data that closes the loop. Platform API access (Google developer token, Meta app review) is a known one-time gating cost, not a design risk.
+- **Reuses:** Braid, Bond, Bill, Basis (certified CAC), Bench, Bolt (`campaign.underperforming`), `agent_proposals`, Blazon, Bin, the worker.
+- **Closest existing app:** Blast. Blast is owned email to people already in Bond. Billboard is paid reach to strangers, with budget autonomy as its core mechanism.
+- **Lens fit:** This is advertising, the largest marketing line item small firms run blind.
+
+### Backdrop: presentations built from live suite data, kept current
+- **Names:** Backdrop · Brio · Podium
+- **One-line pitch:** Ask for "the Q4 board deck" or "the Acme renewal pitch" and get an on-brand presentation whose every number traces to its source and stays current.
+- **Description:** A deck is a typed graph of slides. Each slide is bound to sources: a Basis certified metric, Bearing goals, a Bond account view, a Bench chart, Beacon passages. An agent assembles a deck from an intent plus the Blazon theme. Before each presentation it re-checks the bindings, flags and offers to refresh any slide whose figure has moved, and redacts anything the current viewer can't see (`can_access`). The result is one deck that can be shown to the board, the team or a customer, each audience seeing a correctly scoped version.
+- **Scope (in):** a slide editor (layouts, text, images, charts); source-bound blocks with freshness badges; generation from intent and from templates; theme enforcement; per-viewer redaction; PPTX and PDF export and PPTX import; present mode with speaker notes; MCP `deck_generate`, `deck_refresh`, `slide_bind`.
+- **Scope (out):** rich animation; webinar hosting; full PowerPoint parity; free-form canvas (Board); spreadsheets (Brick).
+- **Why build it:** Presentations are the office-suite gap. Every QBR and board update is rebuilt by hand from stale screenshots, and Gamma and Tome generate pretty slides with no ground truth behind them. The axis is **trust**: governed, refreshable, permission-scoped numbers.
+- **Reuses:** Basis, Bench, Bearing, Bond, Beacon, Blazon, Bin, `can_access`, Bolt (`metric.changed`), permissions. It shares a live-binding cell primitive with E's Brick if both are built.
+- **Closest existing app:** Board. Board is a free-form collaborative canvas. Backdrop is a linear, audience-facing narrative bound to data. Bench renders charts, and Backdrop tells the story with them.
+- **Lens fit:** The deck is the most-used brand and sales artifact a company produces.
+
+### Boast: customer proof engine (case studies, testimonials, references)
+- **Names:** Boast · Bouquet · Proofpoint
+- **One-line pitch:** The suite notices which customers are winning with you, asks them at the right moment, and turns their yes into approved case studies, quotes and reference calls.
+- **Description:** An agent scores advocacy readiness from signals no standalone tool sees together: Helpdesk CSAT and closed-without-escalation streaks, Bond renewals and expansions, Bill paid-on-time history, Bearing outcomes shared with the client, and positive mentions surfaced by Bullhorn. At a high moment (just renewed, ticket praised) it drafts a personalized ask, then runs the consent flow (a Blank form with usage scopes: logo, quote, named case study, reference calls). It drafts the case study from the actual engagement record with cited metrics. Each approved quote is registered as a claim in Blazon, so it expires when consent is revoked, and is offered to Bullhorn, Backdrop and Blast. Reference requests from Bond deals are matched to the best-fit advocate and rate-limited so no customer is overused.
+- **Scope (in):** advocacy scoring; ask timing and drafts through `agent_proposals`; scoped consent capture and revocation; case study and testimonial drafting with cited metrics; a proof library with usage tracking; reference matching with per-advocate fatigue caps; MCP `proof_find`, `proof_request_reference`.
+- **Scope (out):** review-site management (G2/Capterra posting); incentive and reward stores; a community forum; NPS survey building (Blank).
+- **Why build it:** UserEvidence, Influitive and Champion cost $15k+ a year, and small firms ask for testimonials ad hoc and at bad times. The axis is **timing and consent integrity**: the suite knows exactly when a customer is happy and holds consent in one place that every outbound channel respects.
+- **Reuses:** Helpdesk, Bond, Bill, Braid (one customer across apps), Blank (consent), Bearing, Blazon (claims register), Bullhorn, Backdrop, Blast, Bolt (`advocate.ready`, `consent.revoked`), `agent_proposals`.
+- **Closest existing app:** Bond. Bond tracks deals and relationships. Boast turns post-sale success into consented, reusable marketing proof, which is a product-marketing function and not a CRM view.
+- **Lens fit:** Customer proof is the highest-converting marketing asset and the one small firms collect worst.
+
+**Debate notes (Seat G)**
+
+- **A Bullhorn: Align.** It is the same core as my Bugle. The merged Bullhorn above adds PR, message house and crisis, which makes it a full external-comms desk rather than a scheduler. I offer to co-own it.
+- **C Bullhorn: Align.** This is the closest match: social plus PR plus crisis is exactly my Bugle+Byline merge. The merged block above is my proposed shared text.
+- **F Bulletin: Align (as a source, not a merge).** Release clustering and requester matching are strong, but they are product communication. Bullhorn should consume `release.published` from it rather than absorb it. If only one survives, Bulletin's release stream folds into Bullhorn's event feed.
+- **E Brick: Align (as siblings).** Brick and Backdrop are the two office-suite gaps and share the same live, `can_access`-scoped binding primitive. They are complementary rather than competing, and both should survive the overlap phase as separate categories.
+- **C Bugle (internal announcements): Ignore, but keep the boundary.** It is internal comms, mine is external. I renamed mine to avoid the name clash.
+- **E Bespoke: Oppose (mild).** Natural language to internal tools on top of MCP overlaps heavily with Bolt plus Blank plus Brick. Its category is "Retool for the suite", which is not a horizontal business function that firms staff departments for.
+- **Five-way GRC cluster (A Bastion, B Baseline, D Bastion, E Binder, F Bastion): Ignore on substance.** It is a strong essential and should collapse to one. I note Blazon's claims register is marketing-claims substantiation, not internal controls, so it is not in that cluster.
+
+**Strategy:** Social publishing is a three-seat cluster that will be collapsed, so I am aligning with A and C behind one merged Bullhorn instead of fighting for my own Bugle. I am also folding my Byline into it so the merged app is clearly stronger than any single version. That frees my submission slot for an app nobody else proposed. My lead candidates are **Blazon** (brand and claims governance, an uncontested singleton, and the gate every other outbound app and agent calls) and **Backdrop** (presentations, the office-suite essential, distinct from Brick). Billboard and Boast stay in my five as distinct, defensible lens coverage, and both feed Blazon's claims register, so the portfolio holds together.
 
 ## Phase 3 - Submissions
 
